@@ -1,0 +1,39 @@
+# Sistema operativo
+*.DS_Store
+Thumbs.db
+
+# Logs y temporales
+*.log
+*.tmp
+*.temp
+.cache/
+
+# Directorios de sistema
+AppData/
+Downloads/
+Documents/
+Desktop/
+OneDrive/
+Microsoft/
+Music/
+Pictures/
+Videos/
+Favorites/
+Links/
+Searches/
+Recorded Calls/
+Saved Games/
+WPS Cloud Files/
+
+# Archivos de Windows
+NTUSER.*
+ntuser.*
+
+# Directorios de desarrollo
+.vscode/
+.docker/
+node_modules/
+__pycache__/
+
+# Archivos ejecutables
+*.exe
