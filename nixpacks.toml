@@ -1,15 +1,10 @@
 [phases.setup]
-nixPkgs = ["python311", "postgresql"]
+nixPkgs = ["python311", "postgresql_16"]
 
 [phases.install]
 cmds = [
-    "cd backend && pip install --upgrade pip",
-    "cd backend && pip install -r requirements.txt"
-]
-
-[phases.build]
-cmds = [
-    "cd backend && alembic upgrade head"
+    "pip install --upgrade pip",
+    "pip install -r backend/requirements.txt"
 ]
 
 [start]
