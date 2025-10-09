@@ -1,2 +1,1 @@
-web: cd PAGOS && npm run start
-
+web: npm run start
