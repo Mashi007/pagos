@@ -1,24 +1,22 @@
 # Dependencias
-PAGOS/node_modules/
 node_modules/
 
 # Variables de entorno
-PAGOS/.env
-PAGOS/.env.local
-PAGOS/.env.production
 .env
 .env.local
 .env.production
+.env.*.local
 
 # Logs
-PAGOS/logs/
-PAGOS/*.log
+logs/
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Build
-PAGOS/dist/
-PAGOS/build/
+dist/
+build/
 
 # Sistema operativo
 .DS_Store
@@ -29,13 +27,14 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+*.sublime-*
 
 # Railway
 .railway/
 
 # Archivos temporales
-PAGOS/temp/
-PAGOS/tmp/
+temp/
+tmp/
 *.tmp
 
 # Base de datos local
@@ -45,3 +44,4 @@ PAGOS/tmp/
 # Cache
 .npm
 .cache
+.eslintcache
