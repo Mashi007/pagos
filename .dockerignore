@@ -1,0 +1,44 @@
+# Dependencias
+PAGOS/node_modules/
+node_modules/
+
+# Archivos de entorno
+PAGOS/.env*
+.env*
+
+# Git
+.git/
+.gitignore
+
+# Documentación
+*.md
+README.md
+PAGOS/README.md
+
+# Tests
+PAGOS/tests/
+PAGOS/__tests__/
+PAGOS/**/*.test.js
+PAGOS/**/*.spec.js
+
+# Logs
+PAGOS/*.log
+*.log
+
+# Cache
+.npm/
+.cache/
+PAGOS/.npm/
+
+# IDEs
+.vscode/
+.idea/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Railway
+.railway/
+railway.json
+nixpacks.toml
