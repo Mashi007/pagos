@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import List
+from typing import List, Optional
 import os
 
 class Settings(BaseSettings):
@@ -10,47 +10,42 @@ class Settings(BaseSettings):
     # Información general
     APP_NAME: str = "Sistema de Pagos y Cobranza"
     VERSION: str = "1.0.0"
-    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "production")
+    ENVIRONMENT: str = "production"
     
-    # Base de datos
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+    # Base de datos (opcional para el arranque inicial)
+    DATABASE_URL: Optional[str] = None
     
     # Servidor
-    PORT: int = int(os.getenv("PORT", 8000))
+    PORT: int = 8000
     HOST: str = "0.0.0.0"
     
-    # CORS
-    ALLOWED_ORIGINS: List[str] = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "https://*.railway.app",
-        os.getenv("FRONTEND_URL", "")
-    ]
+    # CORS - más permisivo para Railway
+    ALLOWED_ORIGINS: List[str] = ["*"]
     
     # JWT y Seguridad
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+    SECRET_KEY: str = "temporary-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 horas
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # WhatsApp (opcional)
-    WHATSAPP_API_TOKEN: str = os.getenv("WHATSAPP_API_TOKEN", "")
-    WHATSAPP_PHONE_ID: str = os.getenv("WHATSAPP_PHONE_ID", "")
-    WHATSAPP_BUSINESS_ID: str = os.getenv("WHATSAPP_BUSINESS_ID", "")
-    VERIFY_TOKEN: str = os.getenv("VERIFY_TOKEN", "")
+    WHATSAPP_API_TOKEN: Optional[str] = None
+    WHATSAPP_PHONE_ID: Optional[str] = None
+    WHATSAPP_BUSINESS_ID: Optional[str] = None
+    VERIFY_TOKEN: Optional[str] = None
     
     # OpenAI (opcional)
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_API_KEY: Optional[str] = None
     
     # Email (opcional)
-    SMTP_HOST: str = os.getenv("SMTP_HOST", "")
-    SMTP_PORT: int = int(os.getenv("SMTP_PORT", 587))
-    SMTP_USER: str = os.getenv("SMTP_USER", "")
-    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
-    EMAIL_FROM: str = os.getenv("EMAIL_FROM", "")
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    EMAIL_FROM: Optional[str] = None
     
     # Configuración de notificaciones
-    NOTIFICACIONES_ACTIVAS: bool = True
+    NOTIFICACIONES_ACTIVAS: bool = False  # Desactivado por defecto
     DIAS_RECORDATORIO_PREVIO: List[int] = [3, 1]
     DIAS_RECORDATORIO_MORA: List[int] = [1, 3, 5]
     
@@ -61,6 +56,8 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        # No fallar si no existe .env
+        env_file_encoding = "utf-8"
 
 # Instancia global de configuración
 settings = Settings()
