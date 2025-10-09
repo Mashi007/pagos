@@ -2,10 +2,10 @@
 nixPkgs = ['nodejs_20', 'python3', 'postgresql']
 
 [phases.install]
-cmds = ['cd PAGOS && npm ci']
+cmds = ['npm ci']
 
 [phases.build]
-cmds = ['cd PAGOS && npm run build']
+cmds = ['npm run build']
 
 [start]
-cmd = 'cd PAGOS && npm run start'
+cmd = 'npm run start'
