@@ -1,11 +1,11 @@
 [phases.setup]
-nixPkgs = ["python311", "postgresql_16"]
+nixPkgs = ['nodejs_20', 'python3', 'postgresql']
 
 [phases.install]
-cmds = [
-    "pip install --upgrade pip",
-    "pip install -r backend/requirements.txt"
-]
+cmds = ['cd pagos && npm ci']
+
+[phases.build]
+cmds = ['cd pagos && npm run build']
 
 [start]
-cmd = "cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+cmd = 'cd pagos && npm run start'
