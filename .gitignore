@@ -1,47 +1,47 @@
-# Dependencias
-node_modules/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
 
 # Variables de entorno
 .env
 .env.local
 .env.production
-.env.*.local
+
+# Base de datos
+*.db
+*.sqlite
+*.sqlite3
 
 # Logs
 logs/
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
-# Build
-dist/
-build/
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Railway
+.railway/
 
 # Sistema operativo
 .DS_Store
 Thumbs.db
 
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*.sublime-*
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
 
-# Railway
-.railway/
-
-# Archivos temporales
+# Temporal
 temp/
 tmp/
 *.tmp
-
-# Base de datos local
-*.db
-*.sqlite
-
-# Cache
-.npm
-.cache
-.eslintcache
