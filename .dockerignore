@@ -1,9 +1,7 @@
 # Dependencias
-PAGOS/node_modules/
 node_modules/
 
 # Archivos de entorno
-PAGOS/.env*
 .env*
 
 # Git
@@ -13,22 +11,19 @@ PAGOS/.env*
 # Documentación
 *.md
 README.md
-PAGOS/README.md
 
 # Tests
-PAGOS/tests/
-PAGOS/__tests__/
-PAGOS/**/*.test.js
-PAGOS/**/*.spec.js
+tests/
+__tests__/
+**/*.test.js
+**/*.spec.js
 
 # Logs
-PAGOS/*.log
 *.log
 
 # Cache
 .npm/
 .cache/
-PAGOS/.npm/
 
 # IDEs
 .vscode/
