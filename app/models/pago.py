@@ -1,62 +1,29 @@
 # app/models/pago.py
-"""
-Modelo Pago - basado en pestaña "Pagos" del Excel
-Campos del Excel:
-- Columna A: Cédula (Foreign Key)
-- Columna B: Fecha que debió pagar
-- Columna C: Fecha de pago efectiva
-- Columna D: Monto pagado
-- Columna E: Documento/Referencia
-"""
-from sqlalchemy import Column, String, Integer, Float, Date, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from app.db.base import Base
+from app.db.session import Base
 
 class Pago(Base):
     __tablename__ = "pagos"
     
-    # ID autoincremental
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, index=True)
+    prestamo_id = Column(Integer, ForeignKey("prestamos.id"), nullable=False)
     
-    # Relación con cliente (Foreign Key a Cédula)
-    cedula_cliente = Column(
-        String(20), 
-        ForeignKey("clientes.cedula", ondelete="CASCADE"), 
-        nullable=False, 
-        index=True,
-        comment="Cédula del cliente"
-    )
+    # Información del pago
+    monto_pagado = Column(Numeric(10, 2), nullable=False)
+    numero_cuota = Column(Integer, nullable=False)
+    fecha_pago = Column(DateTime, nullable=False)
     
-    # Fechas
-    fecha_programada = Column(Date, nullable=False, index=True, comment="Fecha que debió pagar")
-    fecha_efectiva = Column(Date, nullable=True, index=True, comment="Fecha que realmente pagó")
-    
-    # Montos
-    monto_pagado = Column(Float, default=0, comment="Monto efectivamente pagado")
-    
-    # Documento de respaldo
-    documento_referencia = Column(String(100), comment="Número de documento/referencia bancaria")
-    tipo_pago = Column(String(50), comment="Transferencia, Efectivo, Cheque, etc.")
-    banco = Column(String(100), comment="Banco de origen del pago")
-    
-    # Estado del pago
-    pagado = Column(Integer, default=0, comment="0=No pagado, 1=Pagado")
-    dias_retraso = Column(Integer, default=0, comment="Días de retraso respecto a fecha programada")
-    
-    # Conciliación bancaria
-    conciliado = Column(Integer, default=0, comment="0=No conciliado, 1=Conciliado")
-    fecha_conciliacion = Column(Date, nullable=True, comment="Fecha de conciliación bancaria")
-    
-    # Notas
-    observaciones = Column(Text, comment="Observaciones del pago")
+    # Referencias
+    documento_referencia = Column(String, nullable=True)
+    registrado_por = Column(String, default="Sistema")
     
     # Auditoría
-    fecha_registro = Column(DateTime, default=datetime.utcnow)
-    fecha_actualizacion = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    fecha_creacion = Column(DateTime, default=datetime.utcnow)
     
-    # Relación con cliente
-    cliente = relationship("Cliente", back_populates="pagos")
+    # Relaciones
+    prestamo = relationship("Prestamo", back_populates="pagos")
     
     def __repr__(self):
-        return f"<Pago {self.id} - Cliente {self.cedula_cliente} - ${self.monto_pagado}>"
+        return f"<Pago #{self.id} - Préstamo #{self.prestamo_id} - ${self.monto_pagado}>"
