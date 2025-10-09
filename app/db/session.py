@@ -1,16 +1,22 @@
 # app/db/session.py
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from app.config import settings
+
+# Obtener DATABASE_URL directamente desde variables de entorno
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise ValueError("❌ DATABASE_URL no está configurada en las variables de entorno")
 
 # Motor de base de datos
 engine = create_engine(
-    settings.DATABASE_URL,
+    DATABASE_URL,
     pool_pre_ping=True,
     pool_size=5,
     max_overflow=10,
-    echo=settings.ENVIRONMENT == "development"
+    echo=os.getenv("ENVIRONMENT", "production") == "development"
 )
 
 # Sesión local
