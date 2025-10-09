@@ -1,0 +1,47 @@
+# Dependencias
+PAGOS/node_modules/
+node_modules/
+
+# Variables de entorno
+PAGOS/.env
+PAGOS/.env.local
+PAGOS/.env.production
+.env
+.env.local
+.env.production
+
+# Logs
+PAGOS/logs/
+PAGOS/*.log
+*.log
+npm-debug.log*
+
+# Build
+PAGOS/dist/
+PAGOS/build/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Railway
+.railway/
+
+# Archivos temporales
+PAGOS/temp/
+PAGOS/tmp/
+*.tmp
+
+# Base de datos local
+*.db
+*.sqlite
+
+# Cache
+.npm
+.cache
