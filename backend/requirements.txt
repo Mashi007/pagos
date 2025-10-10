@@ -1,33 +1,46 @@
-# ==========================================
+# Backend - Requirements
 # Sistema de Préstamos y Cobranza
-# Dependencias para producción (Railway)
-# ==========================================
 
-# Framework
-fastapi==0.115.5
-uvicorn[standard]==0.32.1
-python-multipart==0.0.18
+# Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
 
-# Base de datos
-sqlalchemy==2.0.36
-psycopg2-binary==2.9.10
-alembic==1.14.0
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.12.1
 
-# Seguridad y autenticación
+# Authentication & Security (FASE 2)
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-cryptography==44.0.0
+python-multipart==0.0.6
 
-# Validación y configuración
-pydantic==2.10.3
-pydantic-settings==2.6.1
-email-validator==2.2.0
+# Validation
+pydantic==2.5.0
+pydantic-settings==2.1.0
+email-validator==2.1.0
 
-# Utilidades
-python-dotenv==1.0.1
-python-dateutil==2.9.0.post0
-pytz==2024.2
+# Utilities
+python-dotenv==1.0.0
 
-# Monitoreo (opcional para producción)
-prometheus-fastapi-instrumentator==7.0.0
-sentry-sdk[fastapi]==2.19.2
+# Date/Time
+python-dateutil==2.8.2
+
+# Excel handling (para futuras fases)
+openpyxl==3.1.2
+pandas==2.1.3
+
+# PDF generation (para futuras fases)
+reportlab==4.0.7
+
+# Email (para futuras fases)
+aiosmtplib==3.0.1
+jinja2==3.1.2
+
+# HTTP Client
+httpx==0.25.2
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
