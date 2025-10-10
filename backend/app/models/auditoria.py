@@ -2,18 +2,18 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
-
 from app.db.session import Base
 from app.core.constants import TipoMovimiento
 
 
 class Auditoria(Base):
     __tablename__ = "auditorias"
+    __table_args__ = {"schema": "pagos_sistema"}  # ✅ AGREGAR SCHEMA
     
     id = Column(Integer, primary_key=True, index=True)
     
     # Usuario que realizó la acción
-    usuario_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    usuario_id = Column(Integer, ForeignKey("pagos_sistema.users.id"), nullable=False)  # ✅ CON SCHEMA
     
     # Tipo de acción
     tipo_movimiento = Column(String, nullable=False)  # CREACION, ACTUALIZACION, etc.
