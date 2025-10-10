@@ -1,72 +1,46 @@
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
-from datetime import datetime
+# backend/app/schemas/pago.py
+from pydantic import BaseModel, Field
+from typing import Optional
+from datetime import date, time, datetime
 from decimal import Decimal
 
 
 class PagoBase(BaseModel):
     """Schema base para Pago"""
-    monto: Decimal = Field(gt=0, decimal_places=2, description="Monto del pago")
-    fecha_pago: datetime = Field(description="Fecha del pago")
-    metodo_pago: str = Field(default="EFECTIVO", max_length=20)
-    referencia: Optional[str] = Field(None, max_length=100)
+    prestamo_id: int
+    monto_pagado: Decimal = Field(..., gt=0, decimal_places=2)
+    monto_capital: Decimal = Field(default=Decimal("0.00"), ge=0, decimal_places=2)
+    monto_interes: Decimal = Field(default=Decimal("0.00"), ge=0, decimal_places=2)
+    monto_mora: Decimal = Field(default=Decimal("0.00"), ge=0, decimal_places=2)
+    descuento: Decimal = Field(default=Decimal("0.00"), ge=0, decimal_places=2)
+    fecha_pago: date
+    fecha_vencimiento: date
+    metodo_pago: str = Field(default="EFECTIVO")
+    numero_operacion: Optional[str] = Field(None, max_length=50)
+    comprobante: Optional[str] = Field(None, max_length=50)
+    banco: Optional[str] = Field(None, max_length=50)
     observaciones: Optional[str] = None
 
 
 class PagoCreate(PagoBase):
     """Schema para crear un pago"""
-    prestamo_id: int = Field(gt=0, description="ID del préstamo")
+    pass
 
 
-class PagoUpdate(BaseModel):
-    """Schema para actualizar un pago"""
-    monto: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
-    fecha_pago: Optional[datetime] = None
-    metodo_pago: Optional[str] = Field(None, max_length=20)
-    referencia: Optional[str] = Field(None, max_length=100)
-    observaciones: Optional[str] = None
-    estado: Optional[str] = Field(None, max_length=20)
-    
-    model_config = ConfigDict(from_attributes=True)
-
-
-class PagoResponse(BaseModel):
-    """Schema para respuesta de un pago"""
+class PagoResponse(PagoBase):
+    """Schema para respuesta de pago"""
     id: int
-    prestamo_id: int
-    monto: Decimal
-    fecha_pago: datetime
-    metodo_pago: str
-    referencia: Optional[str]
+    numero_cuota: int
+    codigo_pago: Optional[str] = None
+    monto_cuota_programado: Decimal
+    monto_total: Decimal
+    hora_pago: Optional[time] = None
+    dias_mora: int
+    tasa_mora: Decimal
     estado: str
-    monto_capital: Decimal
-    monto_interes: Decimal
-    saldo_restante: Decimal
+    tipo_pago: str
+    usuario_registro: Optional[str] = None
     creado_en: datetime
-    actualizado_en: Optional[datetime]
-    
-    model_config = ConfigDict(from_attributes=True)
 
-
-class PagoList(BaseModel):
-    """Schema para lista paginada de pagos"""
-    items: List[PagoResponse]
-    total: int
-    page: int = Field(default=1, ge=1)
-    page_size: int = Field(default=50, ge=1, le=100)
-    total_pages: int
-    
-    model_config = ConfigDict(from_attributes=True)
-    
-    @classmethod
-    def create(cls, items: List[PagoResponse], total: int, page: int = 1, page_size: int = 50):
-        """Helper para crear instancia con cálculo automático de páginas"""
-        import math
-        total_pages = math.ceil(total / page_size) if page_size > 0 else 0
-        return cls(
-            items=items,
-            total=total,
-            page=page,
-            page_size=page_size,
-            total_pages=total_pages
-        )
+    class Config:
+        from_attributes = True
