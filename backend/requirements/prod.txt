@@ -1,5 +1,5 @@
 # Incluir dependencias base (ruta desde raíz del proyecto)
--r requirements/base.txt
+-r base.txt
 
 # Monitoreo producción
 prometheus-fastapi-instrumentator==7.0.0
