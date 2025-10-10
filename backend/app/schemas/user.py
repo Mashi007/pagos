@@ -1,226 +1,128 @@
 # backend/app/schemas/user.py
 """
-Schemas de Usuario: Create, Update, Response, Authentication y Password Management
+Schemas de usuario y autenticación.
+Compatible con Pydantic v2.
 """
-from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
-from app.core.permissions import UserRole
+from enum import Enum
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 
 # ============================================
-# SCHEMAS BASE DE USUARIO
+# ENUMS
 # ============================================
+class UserRole(str, Enum):
+    """Roles de usuario en el sistema."""
+    ADMIN = "admin"
+    USER = "user"
+    VIEWER = "viewer"
 
+
+# ============================================
+# SCHEMAS BASE
+# ============================================
 class UserBase(BaseModel):
-    """Schema base de usuario"""
+    """Schema base de usuario (campos comunes)."""
     email: EmailStr
-    nombre: str = Field(..., min_length=1, max_length=100)
-    apellido: str = Field(..., min_length=1, max_length=100)
-    rol: UserRole
+    full_name: str = Field(..., min_length=1, max_length=100)
     is_active: bool = True
+    role: UserRole = UserRole.USER
 
 
 class UserCreate(UserBase):
-    """Schema para crear usuario"""
-    password: str = Field(..., min_length=8, description="Contraseña del usuario")
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "email": "usuario@sistema.com",
-                "nombre": "Juan",
-                "apellido": "Pérez",
-                "rol": "ASESOR",
-                "password": "Password123!",
-                "is_active": True
-            }
-        }
+    """Schema para crear usuario."""
+    password: str = Field(..., min_length=8, max_length=100)
 
 
 class UserUpdate(BaseModel):
-    """Schema para actualizar usuario"""
+    """Schema para actualizar usuario (todos los campos opcionales)."""
     email: Optional[EmailStr] = None
-    nombre: Optional[str] = Field(None, min_length=1, max_length=100)
-    apellido: Optional[str] = Field(None, min_length=1, max_length=100)
-    rol: Optional[UserRole] = None
+    full_name: Optional[str] = Field(None, min_length=1, max_length=100)
     is_active: Optional[bool] = None
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "nombre": "Juan Carlos",
-                "apellido": "Pérez López",
-                "rol": "COBRANZAS"
-            }
-        }
+    role: Optional[UserRole] = None
+    password: Optional[str] = Field(None, min_length=8, max_length=100)
 
 
 class UserResponse(UserBase):
-    """Schema para respuesta de usuario (sin password)"""
+    """Schema de respuesta de usuario (sin contraseña)."""
     id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
-    last_login: Optional[datetime] = None
     
-    class Config:
-        from_attributes = True
-        json_schema_extra = {
-            "example": {
-                "id": 1,
-                "email": "usuario@sistema.com",
-                "nombre": "Juan",
-                "apellido": "Pérez",
-                "rol": "ASESOR",
-                "is_active": True,
-                "created_at": "2025-10-10T10:00:00",
-                "updated_at": "2025-10-10T15:30:00",
-                "last_login": "2025-10-10T16:45:00"
-            }
-        }
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserListResponse(BaseModel):
-    """Schema para lista de usuarios"""
+    """Schema para lista de usuarios."""
     users: list[UserResponse]
     total: int
-    page: int = 1
-    page_size: int = 10
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "users": [
-                    {
-                        "id": 1,
-                        "email": "admin@sistema.com",
-                        "nombre": "Admin",
-                        "apellido": "Sistema",
-                        "rol": "ADMIN",
-                        "is_active": True,
-                        "created_at": "2025-10-10T10:00:00"
-                    }
-                ],
-                "total": 1,
-                "page": 1,
-                "page_size": 10
-            }
-        }
+    page: int
+    page_size: int
 
 
 class UserMeResponse(UserResponse):
-    """Schema para respuesta de usuario actual (con info adicional)"""
-    permissions: list[str] = []
-    
-    class Config:
-        from_attributes = True
-        json_schema_extra = {
-            "example": {
-                "id": 1,
-                "email": "admin@sistema.com",
-                "nombre": "Admin",
-                "apellido": "Sistema",
-                "rol": "ADMIN",
-                "is_active": True,
-                "created_at": "2025-10-10T10:00:00",
-                "last_login": "2025-10-10T16:45:00",
-                "permissions": [
-                    "user:create",
-                    "user:read",
-                    "cliente:create",
-                    "prestamo:approve"
-                ]
-            }
-        }
+    """Schema para el usuario actual (puede incluir info adicional)."""
+    pass
 
 
 # ============================================
 # SCHEMAS DE AUTENTICACIÓN
 # ============================================
-
 class LoginRequest(BaseModel):
-    """Schema para login de usuario"""
+    """Schema para solicitud de login."""
     email: EmailStr
-    password: str
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "email": "usuario@sistema.com",
-                "password": "Password123!"
-            }
-        }
+    password: str = Field(..., min_length=1)
 
 
 class Token(BaseModel):
-    """Schema para respuesta de token JWT"""
+    """Schema de respuesta de token."""
     access_token: str
-    refresh_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
-    expires_in: int
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                "token_type": "bearer",
-                "expires_in": 3600
-            }
-        }
+    expires_in: Optional[int] = None
 
 
 class RefreshTokenRequest(BaseModel):
-    """Schema para renovar token"""
+    """Schema para renovar token."""
     refresh_token: str
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-            }
-        }
 
 
 # ============================================
 # SCHEMAS DE GESTIÓN DE CONTRASEÑAS
 # ============================================
-
 class PasswordChange(BaseModel):
-    """Schema para cambio de contraseña"""
-    current_password: str
-    new_password: str = Field(..., min_length=8)
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "current_password": "OldPassword123!",
-                "new_password": "NewPassword456!"
-            }
-        }
+    """Schema para cambio de contraseña."""
+    old_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8, max_length=100)
 
 
 class PasswordReset(BaseModel):
-    """Schema para solicitar reset de contraseña"""
+    """Schema para solicitud de reseteo de contraseña."""
     email: EmailStr
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "email": "usuario@sistema.com"
-            }
-        }
 
 
 class PasswordResetConfirm(BaseModel):
-    """Schema para confirmar reset de contraseña"""
+    """Schema para confirmar reseteo de contraseña."""
     token: str
-    new_password: str = Field(..., min_length=8)
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "token": "abc123def456",
-                "new_password": "NewPassword789!"
-            }
-        }
+    new_password: str = Field(..., min_length=8, max_length=100)
+
+
+# ============================================
+# EXPORTS
+# ============================================
+__all__ = [
+    "UserRole",
+    "UserBase",
+    "UserCreate",
+    "UserUpdate",
+    "UserResponse",
+    "UserListResponse",
+    "UserMeResponse",
+    "LoginRequest",
+    "Token",
+    "RefreshTokenRequest",
+    "PasswordChange",
+    "PasswordReset",
+    "PasswordResetConfirm",
+]
