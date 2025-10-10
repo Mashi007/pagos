@@ -17,8 +17,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Copiar requirements e instalar dependencias Python
+# ✅ CORRECCIÓN: Copiar carpeta requirements ANTES de requirements.txt
+COPY requirements/ ./requirements/
 COPY requirements.txt .
+
+# Instalar dependencias Python
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
@@ -28,6 +31,7 @@ COPY . .
 # Crear usuario no-root
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app
+
 USER appuser
 
 # Railway asigna PORT dinámicamente
