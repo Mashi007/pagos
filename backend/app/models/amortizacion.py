@@ -3,7 +3,7 @@
 Modelo de Cuota/Amortización
 Representa cada cuota de un préstamo con su detalle de capital, interés y saldos
 """
-from sqlalchemy import Column, Integer, String, Numeric, Date, ForeignKey, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, Numeric, Date, ForeignKey, DateTime, Boolean, Table
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from decimal import Decimal
@@ -194,9 +194,16 @@ class Cuota(Base):
             self.estado = "PENDIENTE"
 
 
-# Tabla de asociación entre Pagos y Cuotas (many-to-many)
-from sqlalchemy import Table
+# ============================================
+# ALIAS PARA COMPATIBILIDAD
+# ============================================
+# Algunos endpoints/services pueden referenciar "Amortizacion"
+Amortizacion = Cuota
 
+
+# ============================================
+# TABLA DE ASOCIACIÓN PAGO-CUOTAS
+# ============================================
 pago_cuotas = Table(
     'pago_cuotas',
     Base.metadata,
