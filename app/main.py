@@ -1,26 +1,15 @@
-# app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime
-import logging
-
 from app.config import settings
 from app.api.v1.endpoints import health, clientes, prestamos, pagos
 
-# Configurar logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-# Crear aplicación FastAPI
+# Crear aplicación
 app = FastAPI(
     title=settings.APP_NAME,
-    version=settings.VERSION,
-    description="API REST para gestión de préstamos, pagos y cobranza",
-    docs_url="/docs",
-    redoc_url="/redoc"
+    version=settings.APP_VERSION,
+    description="Microservicio de Gestión de Pagos",
+    docs_url="/docs" if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
 )
 
 # Configurar CORS
@@ -34,34 +23,31 @@ app.add_middleware(
 
 # Incluir routers
 app.include_router(health.router, tags=["Health"])
-app.include_router(clientes.router, prefix="/api/v1/clientes", tags=["Clientes"])
-app.include_router(prestamos.router, prefix="/api/v1/prestamos", tags=["Préstamos"])
-app.include_router(pagos.router, prefix="/api/v1/pagos", tags=["Pagos"])
+app.include_router(
+    clientes.router,
+    prefix=f"{settings.API_PREFIX}/clientes",
+    tags=["Clientes"]
+)
+app.include_router(
+    prestamos.router,
+    prefix=f"{settings.API_PREFIX}/prestamos",
+    tags=["Préstamos"]
+)
+app.include_router(
+    pagos.router,
+    prefix=f"{settings.API_PREFIX}/pagos",
+    tags=["Pagos"]
+)
+
 
 @app.on_event("startup")
 async def startup_event():
-    """Evento de inicio"""
-    logger.info("=" * 50)
-    logger.info(f"🚀 {settings.APP_NAME} v{settings.VERSION}")
-    logger.info(f"📅 {datetime.now().isoformat()}")
-    logger.info(f"🌐 Ambiente: {settings.ENVIRONMENT}")
-    logger.info(f"🗄️  Database: {'✓ Configurado' if settings.DATABASE_URL else '✗ No configurado'}")
-    logger.info(f"📝 Docs: /docs")
-    logger.info(f"💚 Health: /health")
-    logger.info("=" * 50)
+    """Evento ejecutado al iniciar la aplicación"""
+    print(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION} iniciado")
+    print(f"📝 Documentación disponible en: /docs")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Evento de cierre"""
-    logger.info("👋 Cerrando aplicación...")
-
-@app.get("/")
-async def root():
-    """Endpoint raíz"""
-    return {
-        "app": settings.APP_NAME,
-        "version": settings.VERSION,
-        "status": "running",
-        "docs": "/docs",
-        "health": "/health"
-    }
+    """Evento ejecutado al detener la aplicación"""
+    print(f"🛑 {settings.APP_NAME} detenido")
