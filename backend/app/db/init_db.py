@@ -1,6 +1,6 @@
 # app/db/init_db.py
 from sqlalchemy import text
-from app.db.session import engine, Base
+from app.db.session import Base, init_db as init_db_session, engine as _engine
 from app.models import cliente, prestamo, pago
 import logging
 
@@ -10,6 +10,9 @@ def init_database():
     """Inicializa las tablas de la base de datos"""
     try:
         logger.info("📊 Iniciando creación de tablas...")
+        
+        # ✅ CAMBIO: Obtener engine de forma segura
+        engine = init_db_session()
         
         # Crear todas las tablas
         Base.metadata.create_all(bind=engine)
@@ -24,6 +27,9 @@ def init_database():
 def check_database_connection():
     """Verifica la conexión a la base de datos"""
     try:
+        # ✅ CAMBIO: Obtener engine de forma segura
+        engine = init_db_session()
+        
         with engine.connect() as conn:
             result = conn.execute(text("SELECT 1"))
             result.fetchone()
