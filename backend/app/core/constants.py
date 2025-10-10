@@ -10,7 +10,7 @@ class UserRole(str, Enum):
     CONTADOR = "CONTADOR"
 
 
-# Alias para compatibilidad con user.py existente
+# Alias para compatibilidad
 Roles = UserRole
 
 
@@ -72,6 +72,32 @@ class EstadoNotificacion(str, Enum):
     PENDIENTE = "PENDIENTE"
     ENVIADA = "ENVIADA"
     FALLIDA = "FALLIDA"
+
+
+class TipoMovimiento(str, Enum):
+    """Tipos de movimiento para auditoría"""
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
+    DELETE = "DELETE"
+    LOGIN = "LOGIN"
+    LOGOUT = "LOGOUT"
+    APPROVE = "APPROVE"
+    REJECT = "REJECT"
+
+
+class EstadoAprobacion(str, Enum):
+    """Estados de aprobación"""
+    PENDIENTE = "PENDIENTE"
+    APROBADO = "APROBADO"
+    RECHAZADO = "RECHAZADO"
+
+
+class TipoPago(str, Enum):
+    """Tipos de pago"""
+    EFECTIVO = "EFECTIVO"
+    TRANSFERENCIA = "TRANSFERENCIA"
+    CHEQUE = "CHEQUE"
+    TARJETA = "TARJETA"
 
 
 # Configuraciones por defecto
