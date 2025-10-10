@@ -1,6 +1,6 @@
 # app/db/init_db.py
 from sqlalchemy import text
-from app.db.session import engine, SessionLocal, Base  # ✅ Importar Base directo
+from app.db.session import engine, SessionLocal, Base
 from app.config import get_settings
 import logging
 
@@ -28,9 +28,28 @@ def check_database_connection() -> bool:
         return False
 
 
+def create_schema():
+    """
+    Crea el schema pagos_sistema si no existe
+    
+    Returns:
+        bool: True si el schema fue creado/verificado exitosamente
+    """
+    try:
+        db = SessionLocal()
+        db.execute(text("CREATE SCHEMA IF NOT EXISTS pagos_sistema"))
+        db.commit()
+        db.close()
+        logger.info("✅ Schema 'pagos_sistema' verificado/creado")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Error creando schema: {str(e)}")
+        return False
+
+
 def init_database() -> bool:
     """
-    Inicializa la base de datos creando todas las tablas
+    Inicializa la base de datos creando el schema y todas las tablas
     
     Returns:
         bool: True si la inicialización fue exitosa
@@ -38,6 +57,13 @@ def init_database() -> bool:
     try:
         settings = get_settings()
         
+        # ✅ PASO 1: Crear schema primero
+        logger.info("🔄 Verificando schema...")
+        if not create_schema():
+            logger.error("❌ No se pudo crear el schema")
+            return False
+        
+        # ✅ PASO 2: Crear tablas
         logger.info("🔄 Iniciando creación de tablas...")
         
         # ✅ CRÍTICO: Importar modelos AQUÍ DENTRO (lazy loading)
@@ -70,6 +96,9 @@ def create_tables():
     Función auxiliar para crear tablas (sin logging extensivo)
     """
     try:
+        # ✅ Crear schema primero
+        create_schema()
+        
         # ✅ Importar modelos dentro de la función
         from app.models.cliente import Cliente
         from app.models.prestamo import Prestamo
