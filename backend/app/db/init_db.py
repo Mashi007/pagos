@@ -34,23 +34,32 @@ def create_schema():
 
 
 def drop_tables():
-    """Elimina todas las tablas"""
+    """Elimina TODAS las tablas - FORZADO"""
     try:
         db = SessionLocal()
-        logger.info("🗑️  Eliminando tablas...")
+        logger.info("🗑️  FORZANDO eliminación de tablas...")
         
-        # Orden correcto para evitar errores de foreign key
-        db.execute(text("DROP TABLE IF EXISTS pagos_sistema.pagos CASCADE"))
-        db.execute(text("DROP TABLE IF EXISTS pagos_sistema.prestamos CASCADE"))
-        db.execute(text("DROP TABLE IF EXISTS pagos_sistema.notificaciones CASCADE"))
-        db.execute(text("DROP TABLE IF EXISTS pagos_sistema.aprobaciones CASCADE"))
-        db.execute(text("DROP TABLE IF EXISTS pagos_sistema.auditorias CASCADE"))
-        db.execute(text("DROP TABLE IF EXISTS pagos_sistema.clientes CASCADE"))
-        db.execute(text("DROP TABLE IF EXISTS pagos_sistema.users CASCADE"))
+        # Eliminar en orden inverso de dependencias
+        tables = [
+            "pagos",
+            "prestamos", 
+            "notificaciones",
+            "aprobaciones",
+            "auditorias",
+            "clientes",
+            "users"
+        ]
+        
+        for table in tables:
+            try:
+                db.execute(text(f"DROP TABLE IF EXISTS pagos_sistema.{table} CASCADE"))
+                logger.info(f"  ✅ Eliminada: {table}")
+            except Exception as e:
+                logger.warning(f"  ⚠️  No se pudo eliminar {table}: {e}")
         
         db.commit()
         db.close()
-        logger.info("✅ Tablas eliminadas")
+        logger.info("✅ Todas las tablas eliminadas")
         return True
     except Exception as e:
         logger.error(f"❌ Error eliminando tablas: {str(e)}")
@@ -66,11 +75,13 @@ def init_database() -> bool:
         if not create_schema():
             return False
         
-        # PASO 2: Eliminar tablas viejas SIEMPRE
-        drop_tables()
+        # PASO 2: FORZAR eliminación si está activado
+        if settings.FORCE_RECREATE_TABLES:
+            logger.info("⚠️  FORCE_RECREATE_TABLES=true - Eliminando tablas...")
+            drop_tables()
         
         # PASO 3: Crear tablas
-        logger.info("🔄 Creando tablas...")
+        logger.info("🔄 Creando tablas con nueva estructura...")
         
         # Importar modelos
         from app.models.cliente import Cliente
@@ -99,7 +110,6 @@ def init_database() -> bool:
 def create_tables():
     try:
         create_schema()
-        drop_tables()
         
         from app.models.cliente import Cliente
         from app.models.prestamo import Prestamo
