@@ -2,13 +2,13 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Text, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from datetime import datetime
-
 from app.db.session import Base
 from app.core.constants import TipoNotificacion, EstadoNotificacion
 
 
 class Notificacion(Base):
     __tablename__ = "notificaciones"
+    __table_args__ = {"schema": "pagos_sistema"}  # ✅ AGREGAR SCHEMA
     
     id = Column(Integer, primary_key=True, index=True)
     
@@ -17,7 +17,7 @@ class Notificacion(Base):
     estado = Column(SQLEnum(EstadoNotificacion), default=EstadoNotificacion.PENDIENTE)
     
     # Destinatario
-    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True)
+    cliente_id = Column(Integer, ForeignKey("pagos_sistema.clientes.id"), nullable=True)  # ✅ CON SCHEMA
     email_destinatario = Column(String, nullable=True)
     telefono_destinatario = Column(String, nullable=True)
     
@@ -27,8 +27,8 @@ class Notificacion(Base):
     template_id = Column(String, nullable=True)  # recordatorio_3d, mora_1d, etc.
     
     # Referencia
-    prestamo_id = Column(Integer, ForeignKey("prestamos.id"), nullable=True)
-    pago_id = Column(Integer, ForeignKey("pagos.id"), nullable=True)
+    prestamo_id = Column(Integer, ForeignKey("pagos_sistema.prestamos.id"), nullable=True)  # ✅ CON SCHEMA
+    pago_id = Column(Integer, ForeignKey("pagos_sistema.pagos.id"), nullable=True)  # ✅ CON SCHEMA
     
     # Metadata de envío
     fecha_programada = Column(DateTime, nullable=True)
@@ -37,7 +37,7 @@ class Notificacion(Base):
     error_mensaje = Column(Text, nullable=True)
     
     # Quién la envió
-    enviado_por = Column(Integer, ForeignKey("users.id"), nullable=True)
+    enviado_por = Column(Integer, ForeignKey("pagos_sistema.users.id"), nullable=True)  # ✅ CON SCHEMA
     
     # Auditoría
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
