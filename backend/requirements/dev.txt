@@ -1,5 +1,5 @@
-# Incluir dependencias base
--r base.txt
+# Incluir dependencias base (ruta desde raíz del proyecto)
+-r requirements/base.txt
 
 # Testing
 pytest==8.3.4
