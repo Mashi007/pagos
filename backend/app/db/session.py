@@ -15,9 +15,7 @@ logger = logging.getLogger(__name__)
 def get_url() -> str:
     """
     Obtiene DATABASE_URL con normalización y reintentos.
-    
-    Normaliza automáticamente postgres:// a postgresql:// para 
-    compatibilidad con SQLAlchemy 1.4+.
+    Prioriza DATABASE_PUBLIC_URL sobre DATABASE_URL para Railway.
     
     Returns:
         str: URL de conexión normalizada a la base de datos.
@@ -29,13 +27,27 @@ def get_url() -> str:
     wait_seconds = 2
     
     for attempt in range(1, max_attempts + 1):
-        database_url = os.environ.get("DATABASE_URL")
+        # ✅ PRIORIZAR: DATABASE_PUBLIC_URL > DATABASE_URL
+        database_url = os.environ.get("DATABASE_PUBLIC_URL") or os.environ.get("DATABASE_URL")
         
         if database_url:
             # Normalizar: Railway puede usar postgres://, SQLAlchemy necesita postgresql://
             if database_url.startswith("postgres://"):
                 database_url = database_url.replace("postgres://", "postgresql://", 1)
                 logger.info("🔧 DATABASE_URL normalizada: postgres:// → postgresql://")
+            
+            # Verificar que no sea la URL interna
+            if "railway.internal" in database_url:
+                logger.warning("⚠️  Detectada URL interna de Railway, buscando alternativa...")
+                # Intentar usar solo DATABASE_PUBLIC_URL
+                public_url = os.environ.get("DATABASE_PUBLIC_URL")
+                if public_url:
+                    database_url = public_url
+                    if database_url.startswith("postgres://"):
+                        database_url = database_url.replace("postgres://", "postgresql://", 1)
+                    logger.info("✅ Usando DATABASE_PUBLIC_URL")
+                else:
+                    logger.error("❌ No se encontró DATABASE_PUBLIC_URL")
             
             logger.info(f"✅ DATABASE_URL encontrada (intento {attempt}/{max_attempts})")
             return database_url
@@ -72,7 +84,7 @@ def get_url() -> str:
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "1. Verifica que el servicio PostgreSQL esté vinculado al proyecto\n"
         "2. Ve a: Settings → Variables\n"
-        "3. DATABASE_URL debe aparecer automáticamente al vincular PostgreSQL\n"
+        "3. DATABASE_URL o DATABASE_PUBLIC_URL debe aparecer automáticamente\n"
         "4. Si falta, regenera la vinculación desde el panel de PostgreSQL\n\n"
         "🔍 DESARROLLO LOCAL:\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
