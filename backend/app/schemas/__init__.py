@@ -1,25 +1,35 @@
-"""
-Schemas de la aplicación
-"""
-
-# Importar en orden de dependencias
+# backend/app/schemas/__init__.py
 from app.schemas.cliente import ClienteCreate, ClienteUpdate, ClienteResponse
 from app.schemas.prestamo import PrestamoCreate, PrestamoUpdate, PrestamoResponse
-from app.schemas.pago import PagoBase, PagoCreate, PagoUpdate, PagoResponse, PagoList
+from app.schemas.pago import PagoCreate, PagoResponse
+from app.schemas.user import (
+    UserCreate,
+    UserUpdate,
+    UserResponse,
+    UserProfile,
+    Token,
+    LoginRequest,
+    RefreshTokenRequest
+)
 
 __all__ = [
     # Cliente
-    'ClienteCreate',
-    'ClienteUpdate', 
-    'ClienteResponse',
+    "ClienteCreate",
+    "ClienteUpdate",
+    "ClienteResponse",
     # Préstamo
-    'PrestamoCreate',
-    'PrestamoUpdate',
-    'PrestamoResponse',
+    "PrestamoCreate",
+    "PrestamoUpdate",
+    "PrestamoResponse",
     # Pago
-    'PagoBase',
-    'PagoCreate',
-    'PagoUpdate',
-    'PagoResponse',
-    'PagoList',
+    "PagoCreate",
+    "PagoResponse",
+    # Usuario
+    "UserCreate",
+    "UserUpdate",
+    "UserResponse",
+    "UserProfile",
+    "Token",
+    "LoginRequest",
+    "RefreshTokenRequest",
 ]
