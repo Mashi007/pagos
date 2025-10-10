@@ -11,12 +11,13 @@ class Settings:
     
     def __init__(self):
         # ===== BASE DE DATOS =====
-        self.DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL")
+        # Intentar primero DATABASE_URL, luego DATABASE_PUBLIC_URL
+        self.DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL") or os.getenv("DATABASE_PUBLIC_URL")
         
         # Validar que exista
         if not self.DATABASE_URL:
             raise ValueError(
-                "❌ DATABASE_URL no está configurada. "
+                "❌ DATABASE_URL o DATABASE_PUBLIC_URL no están configuradas. "
                 "En Railway, asegúrate de vincular el servicio Postgres."
             )
         
