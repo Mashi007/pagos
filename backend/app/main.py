@@ -15,27 +15,58 @@ async def lifespan(app: FastAPI):
     Manejo del ciclo de vida de la aplicación.
     """
     from app.config import get_settings
-    from app.db.session import init_db
+    from app.db.init_db import init_database, check_database_connection  # ✅ CORRECCIÓN
     
     settings = get_settings()
     
+    # Startup
+    print("\n" + "=" * 50)
+    print(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION}")
+    print("=" * 50)
+    
+    # Mostrar DATABASE_URL (ocultando contraseña)
+    db_url = settings.DATABASE_URL
+    if '@' in db_url:
+        parts = db_url.split('@')
+        user_part = parts[0].split('://')
+        if len(user_part) > 1:
+            protocol = user_part[0]
+            user = user_part[1].split(':')[0]
+            db_url_safe = f"{protocol}://{user}:***@{parts[1]}"
+        else:
+            db_url_safe = "***"
+    else:
+        db_url_safe = "No configurada"
+    
+    print(f"🗄️  Base de datos: {db_url_safe}")
+    
+    # Inicializar tablas
     try:
-        init_db()
-        print("=" * 50)
-        print(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION}")
-        print("=" * 50)
-        print(f"🗄️  Base de datos: {settings.DATABASE_URL[:30]}...")
-        print("✅ Base de datos inicializada correctamente")
-        print(f"🌍 Entorno: {settings.ENVIRONMENT}")
-        print(f"📝 Documentación: /docs")
-        print("=" * 50)
+        if init_database():
+            print("✅ Base de datos inicializada correctamente")
+        else:
+            print("⚠️  Advertencia: Error inicializando tablas")
     except Exception as e:
         print(f"❌ Error al inicializar BD: {e}")
-        raise
+        import traceback
+        if settings.DEBUG:
+            traceback.print_exc()
+    
+    # Verificar conexión
+    if check_database_connection():
+        print("✅ Conexión a base de datos verificada")
+    else:
+        print("❌ Error: No se pudo conectar a la base de datos")
+    
+    print(f"🌍 Entorno: {settings.ENVIRONMENT}")
+    print(f"📝 Documentación: /docs")
+    print(f"🔧 Debug mode: {'ON' if settings.DEBUG else 'OFF'}")
+    print("=" * 50 + "\n")
     
     yield
     
-    print(f"🛑 {settings.APP_NAME} detenido")
+    # Shutdown
+    print(f"\n🛑 {settings.APP_NAME} detenido")
 
 
 app = FastAPI(
@@ -114,9 +145,12 @@ app.include_router(
 @app.get("/", include_in_schema=False)
 async def root():
     """Endpoint raíz"""
+    from app.config import get_settings
+    settings = get_settings()
+    
     return {
-        "app": os.getenv("APP_NAME", "Sistema de Préstamos y Cobranza"),
-        "version": os.getenv("APP_VERSION", "1.0.0"),
+        "app": settings.APP_NAME,
+        "version": settings.APP_VERSION,
         "status": "running",
         "docs": "/docs",
         "health": "/health"
