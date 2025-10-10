@@ -1,12 +1,14 @@
-# app/api/v1/endpoints/clientes.py
+# backend/app/api/v1/endpoints/clientes.py
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
+
 from app.db.session import get_db
 from app.models.cliente import Cliente
 from app.schemas.cliente import ClienteCreate, ClienteUpdate, ClienteResponse
 
 router = APIRouter()
+
 
 @router.post("/", response_model=ClienteResponse, status_code=201)
 def crear_cliente(cliente: ClienteCreate, db: Session = Depends(get_db)):
@@ -24,6 +26,7 @@ def crear_cliente(cliente: ClienteCreate, db: Session = Depends(get_db)):
     
     return db_cliente
 
+
 @router.get("/", response_model=List[ClienteResponse])
 def listar_clientes(
     skip: int = Query(0, ge=0),
@@ -40,6 +43,7 @@ def listar_clientes(
     clientes = query.offset(skip).limit(limit).all()
     return clientes
 
+
 @router.get("/{cliente_id}", response_model=ClienteResponse)
 def obtener_cliente(cliente_id: int, db: Session = Depends(get_db)):
     """Obtener un cliente por ID"""
@@ -47,6 +51,16 @@ def obtener_cliente(cliente_id: int, db: Session = Depends(get_db)):
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     return cliente
+
+
+@router.get("/cedula/{cedula}", response_model=ClienteResponse)
+def buscar_por_cedula(cedula: str, db: Session = Depends(get_db)):
+    """Buscar cliente por cédula"""
+    cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    return cliente
+
 
 @router.put("/{cliente_id}", response_model=ClienteResponse)
 def actualizar_cliente(
@@ -66,13 +80,15 @@ def actualizar_cliente(
     db.refresh(cliente)
     return cliente
 
+
 @router.delete("/{cliente_id}", status_code=204)
 def eliminar_cliente(cliente_id: int, db: Session = Depends(get_db)):
-    """Desactivar un cliente"""
+    """Desactivar un cliente (soft delete)"""
     cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     
     cliente.activo = False
+    cliente.estado = "INACTIVO"
     db.commit()
     return None
