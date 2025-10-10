@@ -5,8 +5,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import os
 
-# ✅ Importar endpoints existentes SOLAMENTE
-from app.api.v1.endpoints import health, clientes, prestamos, pagos
+# ✅ Importar TODOS los endpoints existentes
+from app.api.v1.endpoints import (
+    health,
+    clientes,
+    prestamos,
+    pagos,
+    auth,
+    users,
+    amortizacion,
+)
 
 
 @asynccontextmanager
@@ -15,7 +23,7 @@ async def lifespan(app: FastAPI):
     Manejo del ciclo de vida de la aplicación.
     """
     from app.config import get_settings
-    from app.db.init_db import init_database, check_database_connection  # ✅ CORRECCIÓN
+    from app.db.init_db import init_database, check_database_connection
     
     settings = get_settings()
     
@@ -25,19 +33,7 @@ async def lifespan(app: FastAPI):
     print("=" * 50)
     
     # Mostrar DATABASE_URL (ocultando contraseña)
-    db_url = settings.DATABASE_URL
-    if '@' in db_url:
-        parts = db_url.split('@')
-        user_part = parts[0].split('://')
-        if len(user_part) > 1:
-            protocol = user_part[0]
-            user = user_part[1].split(':')[0]
-            db_url_safe = f"{protocol}://{user}:***@{parts[1]}"
-        else:
-            db_url_safe = "***"
-    else:
-        db_url_safe = "No configurada"
-    
+    db_url_safe = settings.get_database_url(hide_password=True)
     print(f"🗄️  Base de datos: {db_url_safe}")
     
     # Inicializar tablas
@@ -82,76 +78,114 @@ app = FastAPI(
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Captura todas las excepciones no manejadas"""
-    debug = os.getenv("DEBUG", "false").lower() == "true"
+    from app.config import get_settings
+    settings = get_settings()
+    
     print(f"❌ Error no manejado: {exc}")
     
     import traceback
-    if debug:
+    if settings.DEBUG:
         traceback.print_exc()
     
     return JSONResponse(
         status_code=500,
         content={
             "detail": "Error interno del servidor",
-            "error": str(exc) if debug else "Internal Server Error"
+            "error": str(exc) if settings.DEBUG else "Internal Server Error"
         }
     )
 
 
 # CORS
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
-if allowed_origins != ["*"]:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=allowed_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-else:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+from app.config import get_settings
+settings = get_settings()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins_list,
+    allow_credentials=True if settings.allowed_origins_list != ["*"] else False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
-# Routers
+# ============================================
+# ROUTERS
+# ============================================
 api_prefix = os.getenv("API_PREFIX", "/api/v1")
 
-app.include_router(health.router, tags=["Health"])
+# Health Check (sin prefijo)
+app.include_router(
+    health.router,
+    tags=["Health"]
+)
 
+# Autenticación (sin autenticación requerida)
+app.include_router(
+    auth.router,
+    prefix=f"{api_prefix}/auth",
+    tags=["Autenticación"]
+)
+
+# Usuarios (requiere autenticación - configurado en el router)
+app.include_router(
+    users.router,
+    prefix=f"{api_prefix}/users",
+    tags=["Usuarios"]
+)
+
+# Clientes
 app.include_router(
     clientes.router,
     prefix=f"{api_prefix}/clientes",
     tags=["Clientes"]
 )
 
+# Préstamos
 app.include_router(
     prestamos.router,
     prefix=f"{api_prefix}/prestamos",
     tags=["Préstamos"]
 )
 
+# Pagos
 app.include_router(
     pagos.router,
     prefix=f"{api_prefix}/pagos",
     tags=["Pagos"]
 )
 
+# Amortización
+app.include_router(
+    amortizacion.router,
+    prefix=f"{api_prefix}/amortizacion",
+    tags=["Amortización"]
+)
+
 
 @app.get("/", include_in_schema=False)
 async def root():
-    """Endpoint raíz"""
+    """Endpoint raíz con información del sistema"""
     from app.config import get_settings
     settings = get_settings()
     
     return {
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
+        "environment": settings.ENVIRONMENT,
         "status": "running",
         "docs": "/docs",
-        "health": "/health"
+        "redoc": "/redoc",
+        "health": "/health",
+        "api": {
+            "v1": api_prefix
+        },
+        "endpoints": {
+            "auth": f"{api_prefix}/auth",
+            "users": f"{api_prefix}/users",
+            "clientes": f"{api_prefix}/clientes",
+            "prestamos": f"{api_prefix}/prestamos",
+            "pagos": f"{api_prefix}/pagos",
+            "amortizacion": f"{api_prefix}/amortizacion",
+        }
     }
