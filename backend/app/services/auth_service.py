@@ -1,21 +1,24 @@
 # backend/app/services/auth_service.py
-from datetime import datetime, timedelta
-from typing import Optional
+"""
+Servicio de autenticación
+Lógica de negocio para login, logout, refresh tokens
+"""
+from typing import Optional, Tuple
+from datetime import datetime
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
+from app.models.user import User
+from app.schemas.auth import LoginRequest, Token
 from app.core.security import (
     verify_password,
     get_password_hash,
     create_access_token,
     create_refresh_token,
-    verify_token
+    decode_token,
+    validate_password_strength
 )
-from app.models.user import User
-from app.schemas.auth import Token, LoginRequest
-import logging
-
-logger = logging.getLogger(__name__)
+from app.core.permissions import get_role_permissions, UserRole
 
 
 class AuthService:
@@ -24,7 +27,7 @@ class AuthService:
     @staticmethod
     def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
         """
-        Autenticar usuario por email y contraseña
+        Autentica un usuario con email y contraseña
         
         Args:
             db: Sesión de base de datos
@@ -32,47 +35,37 @@ class AuthService:
             password: Contraseña en texto plano
             
         Returns:
-            Usuario si las credenciales son correctas, None si no
+            Usuario si la autenticación es exitosa, None si no
         """
         user = db.query(User).filter(User.email == email).first()
         
         if not user:
-            logger.warning(f"Intento de login con email inexistente: {email}")
             return None
         
-        if not user.activo:
-            logger.warning(f"Intento de login de usuario inactivo: {email}")
+        if not verify_password(password, user.hashed_password):
             return None
         
-        if not verify_password(password, user.password):
-            logger.warning(f"Contraseña incorrecta para usuario: {email}")
-            return None
-        
-        # Actualizar última conexión
-        user.ultima_conexion = datetime.utcnow()
-        db.commit()
-        
-        logger.info(f"Login exitoso: {email}")
         return user
     
     @staticmethod
-    def login(db: Session, login_data: LoginRequest) -> Token:
+    def login(db: Session, login_data: LoginRequest) -> Tuple[Token, User]:
         """
-        Procesar login y generar tokens
+        Realiza el login de un usuario
         
         Args:
             db: Sesión de base de datos
-            login_data: Datos de login
+            login_data: Datos de login (email, password)
             
         Returns:
-            Token JWT de acceso y refresh
+            Tupla de (Token, User)
             
         Raises:
-            HTTPException: Si las credenciales son incorrectas
+            HTTPException: Si las credenciales son inválidas o el usuario está inactivo
         """
+        # Autenticar usuario
         user = AuthService.authenticate_user(
-            db, 
-            login_data.email, 
+            db,
+            login_data.email,
             login_data.password
         )
         
@@ -83,115 +76,160 @@ class AuthService:
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
+        # Verificar que el usuario esté activo
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Usuario inactivo. Contacte al administrador."
+            )
+        
+        # Actualizar last_login
+        user.last_login = datetime.utcnow()
+        db.commit()
+        
         # Crear tokens
-        token_data = {
-            "sub": str(user.id),
-            "email": user.email,
-            "role": user.rol
-        }
+        access_token = create_access_token(
+            subject=user.id,
+            additional_claims={
+                "rol": user.rol,
+                "email": user.email
+            }
+        )
+        refresh_token = create_refresh_token(subject=user.id)
         
-        access_token = create_access_token(token_data)
-        refresh_token = create_refresh_token({"sub": str(user.id)})
-        
-        return Token(
+        token = Token(
             access_token=access_token,
             refresh_token=refresh_token,
-            token_type="bearer",
-            expires_in=1800  # 30 minutos
+            token_type="bearer"
         )
+        
+        return token, user
     
     @staticmethod
     def refresh_access_token(db: Session, refresh_token: str) -> Token:
         """
-        Refrescar access token usando refresh token
+        Genera un nuevo access token usando un refresh token
         
         Args:
             db: Sesión de base de datos
             refresh_token: Refresh token válido
             
         Returns:
-            Nuevo access token
+            Nuevo par de tokens
             
         Raises:
-            HTTPException: Si el token es inválido
+            HTTPException: Si el refresh token es inválido
         """
-        payload = verify_token(refresh_token)
-        
-        if not payload or payload.get("type") != "refresh":
+        try:
+            payload = decode_token(refresh_token)
+            
+            # Verificar que sea un refresh token
+            if payload.get("type") != "refresh":
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token inválido"
+                )
+            
+            user_id = payload.get("sub")
+            if not user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token inválido"
+                )
+            
+            # Buscar usuario
+            user = db.query(User).filter(User.id == int(user_id)).first()
+            
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Usuario no encontrado"
+                )
+            
+            if not user.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Usuario inactivo"
+                )
+            
+            # Crear nuevos tokens
+            new_access_token = create_access_token(
+                subject=user.id,
+                additional_claims={
+                    "rol": user.rol,
+                    "email": user.email
+                }
+            )
+            new_refresh_token = create_refresh_token(subject=user.id)
+            
+            return Token(
+                access_token=new_access_token,
+                refresh_token=new_refresh_token,
+                token_type="bearer"
+            )
+            
+        except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Refresh token inválido",
-                headers={"WWW-Authenticate": "Bearer"},
+                detail=f"Error procesando token: {str(e)}"
             )
-        
-        user_id = payload.get("sub")
-        user = db.query(User).filter(User.id == int(user_id)).first()
-        
-        if not user or not user.activo:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuario inválido o inactivo"
-            )
-        
-        # Crear nuevo access token
-        token_data = {
-            "sub": str(user.id),
-            "email": user.email,
-            "role": user.rol
-        }
-        
-        new_access_token = create_access_token(token_data)
-        
-        return Token(
-            access_token=new_access_token,
-            refresh_token=refresh_token,  # Mantener el mismo refresh token
-            token_type="bearer",
-            expires_in=1800
-        )
     
     @staticmethod
-    def create_user(db: Session, email: str, password: str, nombre: str, 
-                   apellido: str, rol: str) -> User:
+    def change_password(
+        db: Session,
+        user: User,
+        current_password: str,
+        new_password: str
+    ) -> User:
         """
-        Crear nuevo usuario
+        Cambia la contraseña de un usuario
         
         Args:
             db: Sesión de base de datos
-            email: Email del usuario
-            password: Contraseña en texto plano
-            nombre: Nombre del usuario
-            apellido: Apellido del usuario
-            rol: Rol del usuario
+            user: Usuario actual
+            current_password: Contraseña actual
+            new_password: Nueva contraseña
             
         Returns:
-            Usuario creado
+            Usuario actualizado
             
         Raises:
-            HTTPException: Si el email ya existe
+            HTTPException: Si la contraseña actual es incorrecta o la nueva es débil
         """
-        # Verificar si el email ya existe
-        existing_user = db.query(User).filter(User.email == email).first()
-        if existing_user:
+        # Verificar contraseña actual
+        if not verify_password(current_password, user.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El email ya está registrado"
+                detail="Contraseña actual incorrecta"
             )
         
-        # Crear usuario
-        hashed_password = get_password_hash(password)
-        new_user = User(
-            email=email,
-            password=hashed_password,
-            nombre=nombre,
-            apellido=apellido,
-            rol=rol,
-            activo=True,
-            fecha_creacion=datetime.utcnow()
-        )
+        # Validar fortaleza de nueva contraseña
+        is_valid, message = validate_password_strength(new_password)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=message
+            )
         
-        db.add(new_user)
+        # Actualizar contraseña
+        user.hashed_password = get_password_hash(new_password)
+        user.updated_at = datetime.utcnow()
         db.commit()
-        db.refresh(new_user)
+        db.refresh(user)
         
-        logger.info(f"Usuario creado: {email} ({rol})")
-        return new_user
+        return user
+    
+    @staticmethod
+    def get_user_permissions(user: User) -> list[str]:
+        """
+        Obtiene los permisos de un usuario basado en su rol
+        
+        Args:
+            user: Usuario
+            
+        Returns:
+            Lista de permisos (strings)
+        """
+        user_role = UserRole(user.rol)
+        permissions = get_role_permissions(user_role)
+        return [perm.value for perm in permissions]
