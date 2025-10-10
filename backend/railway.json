@@ -1,13 +1,11 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
-    "builder": "DOCKERFILE",
-    "dockerfilePath": "Dockerfile"
+    "builder": "NIXPACKS"
   },
   "deploy": {
+    "startCommand": "uvicorn app.main:app --host 0.0.0.0 --port $PORT",
     "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 3,
-    "healthcheckPath": "/health",
-    "healthcheckTimeout": 100
+    "restartPolicyMaxRetries": 10
   }
 }
