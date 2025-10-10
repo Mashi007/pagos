@@ -1,99 +1,153 @@
-# backend/app/api/v1/auth.py
+# backend/app/api/v1/endpoints/auth.py
+"""
+Endpoints de autenticación
+Login, logout, refresh token, cambio de contraseña
+"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_user
-from app.schemas.user import (
+from app.db.session import get_db
+from app.api.deps import get_current_user
+from app.models.user import User
+from app.schemas.auth import (
     LoginRequest,
     Token,
     RefreshTokenRequest,
-    UserResponse,
-    UserProfile
+    ChangePasswordRequest
 )
+from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
-from app.models.user import User
-from app.config import settings
 
 
 router = APIRouter()
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=Token, summary="Login de usuario")
 def login(
     login_data: LoginRequest,
     db: Session = Depends(get_db)
 ):
     """
-    Login con username y password
+    Login de usuario con email y contraseña
     
     Retorna access_token y refresh_token
+    
+    - **email**: Email del usuario
+    - **password**: Contraseña del usuario
     """
-    auth_service = AuthService(db, settings.SECRET_KEY, settings.ALGORITHM)
+    token, user = AuthService.login(db, login_data)
     
-    # Autenticar usuario
-    user = auth_service.authenticate_user(
-        login_data.username,
-        login_data.password
-    )
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciales incorrectas",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # Crear tokens
-    tokens = auth_service.create_tokens(user.id)
-    
-    return tokens
+    return token
 
 
-@router.post("/refresh", response_model=Token)
+@router.post("/refresh", response_model=Token, summary="Refresh token")
 def refresh_token(
     refresh_data: RefreshTokenRequest,
     db: Session = Depends(get_db)
 ):
     """
-    Refrescar access token usando refresh token
+    Genera un nuevo access token usando un refresh token válido
     
-    Retorna nuevo access_token y refresh_token
+    - **refresh_token**: Refresh token válido
     """
-    auth_service = AuthService(db, settings.SECRET_KEY, settings.ALGORITHM)
+    token = AuthService.refresh_access_token(db, refresh_data.refresh_token)
     
-    tokens = auth_service.refresh_access_token(refresh_data.refresh_token)
-    
-    return tokens
+    return token
 
 
-@router.post("/logout")
-def logout(current_user: User = Depends(get_current_user)):
+@router.get("/me", response_model=UserMeResponse, summary="Usuario actual")
+def get_current_user_info(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    Logout (invalidar token en el cliente)
+    Obtiene la información del usuario actualmente autenticado
     
-    Nota: JWT es stateless, el cliente debe eliminar el token
+    Incluye permisos basados en el rol del usuario
     """
-    return {"message": "Logout exitoso"}
+    # Obtener permisos del usuario
+    permissions = AuthService.get_user_permissions(current_user)
+    
+    # Crear respuesta
+    user_response = UserMeResponse(
+        id=current_user.id,
+        email=current_user.email,
+        nombre=current_user.nombre,
+        apellido=current_user.apellido,
+        rol=current_user.rol,
+        is_active=current_user.is_active,
+        created_at=current_user.created_at,
+        updated_at=current_user.updated_at,
+        last_login=current_user.last_login,
+        permissions=permissions
+    )
+    
+    return user_response
 
 
-@router.get("/me", response_model=UserProfile)
-def get_current_user_profile(
+@router.post("/change-password", summary="Cambiar contraseña")
+def change_password(
+    password_data: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Cambia la contraseña del usuario actual
+    
+    - **current_password**: Contraseña actual
+    - **new_password**: Nueva contraseña
+    - **confirm_password**: Confirmación de nueva contraseña
+    """
+    # Verificar que las contraseñas coincidan
+    if password_data.new_password != password_data.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Las contraseñas no coinciden"
+        )
+    
+    # Cambiar contraseña
+    AuthService.change_password(
+        db,
+        current_user,
+        password_data.current_password,
+        password_data.new_password
+    )
+    
+    return {
+        "message": "Contraseña actualizada exitosamente"
+    }
+
+
+@router.post("/logout", summary="Logout de usuario")
+def logout(
     current_user: User = Depends(get_current_user)
 ):
-    """Obtener perfil del usuario actual"""
-    return current_user
-
-
-@router.get("/verify")
-def verify_token(current_user: User = Depends(get_current_user)):
     """
-    Verificar si el token es válido
+    Logout de usuario
     
-    Útil para el frontend para validar sesión
+    Nota: En esta implementación, el logout es del lado del cliente
+    (eliminar tokens del almacenamiento local).
+    
+    Para invalidar tokens del lado del servidor, se requeriría
+    implementar una blacklist de tokens en Redis o similar.
+    """
+    return {
+        "message": f"Usuario {current_user.email} cerró sesión exitosamente"
+    }
+
+
+@router.get("/verify", summary="Verificar token")
+def verify_token(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Verifica si el token actual es válido
+    
+    Útil para verificar la sesión desde el frontend
     """
     return {
         "valid": True,
         "user_id": current_user.id,
-        "username": current_user.username,
+        "email": current_user.email,
         "rol": current_user.rol
     }
