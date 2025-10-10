@@ -1,5 +1,8 @@
 # backend/app/db/base.py
-# Importar Base y todos los modelos para que Alembic los detecte
+"""
+Importar Base y todos los modelos para que Alembic los detecte.
+Este módulo centraliza todos los modelos para las migraciones.
+"""
 
 from app.db.session import Base
 
@@ -11,3 +14,15 @@ from app.models.user import User
 from app.models.auditoria import Auditoria
 from app.models.notificacion import Notificacion
 from app.models.aprobacion import Aprobacion
+
+# Export explícito para mejor control
+__all__ = [
+    "Base",
+    "Cliente",
+    "Prestamo",
+    "Pago",
+    "User",
+    "Auditoria",
+    "Notificacion",
+    "Aprobacion",
+]
