@@ -1,19 +1,23 @@
 # backend/app/schemas/prestamo.py
 from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import Optional
+from typing import Optional, Annotated
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
+
+
+# ✅ Definir constraint personalizado para Decimal con 2 decimales
+DecimalAmount = Annotated[Decimal, Field(ge=0)]
 
 
 class PrestamoBase(BaseModel):
     """Schema base para Préstamo"""
     cliente_id: int
-    monto_total: Decimal = Field(..., gt=0, decimal_places=2, description="Monto total del préstamo")
-    monto_financiado: Decimal = Field(..., gt=0, decimal_places=2, description="Monto financiado")
-    monto_inicial: Decimal = Field(default=Decimal("0.00"), ge=0, decimal_places=2, description="Monto inicial/cuota inicial")
-    tasa_interes: Decimal = Field(default=Decimal("0.00"), ge=0, le=100, decimal_places=2, description="Tasa de interés anual (%)")
+    monto_total: DecimalAmount = Field(..., gt=0, description="Monto total del préstamo")
+    monto_financiado: DecimalAmount = Field(..., gt=0, description="Monto financiado")
+    monto_inicial: DecimalAmount = Field(default=Decimal("0.00"), description="Monto inicial/cuota inicial")
+    tasa_interes: Decimal = Field(default=Decimal("0.00"), ge=0, le=100, description="Tasa de interés anual (%)")
     numero_cuotas: int = Field(..., gt=0, description="Número de cuotas")
-    monto_cuota: Decimal = Field(..., gt=0, decimal_places=2, description="Monto de cada cuota")
+    monto_cuota: DecimalAmount = Field(..., gt=0, description="Monto de cada cuota")
     fecha_aprobacion: date
     fecha_desembolso: Optional[date] = None
     fecha_primer_vencimiento: date
@@ -24,26 +28,22 @@ class PrestamoBase(BaseModel):
     
     @field_validator('monto_total', 'monto_financiado', 'monto_inicial', 'monto_cuota', mode='before')
     @classmethod
-    def validate_decimal_places(cls, v) -> Decimal:
+    def validate_decimal_places(cls, v):
         """Validar que los montos tengan máximo 2 decimales"""
         if v is None:
             return v
-        # Convertir a Decimal si no lo es
         if not isinstance(v, Decimal):
             v = Decimal(str(v))
-        # Redondear a 2 decimales
         return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     
     @field_validator('tasa_interes', mode='before')
     @classmethod
-    def validate_tasa_interes(cls, v) -> Decimal:
+    def validate_tasa_interes(cls, v):
         """Validar que la tasa de interés tenga máximo 2 decimales"""
         if v is None:
             return v
-        # Convertir a Decimal si no lo es
         if not isinstance(v, Decimal):
             v = Decimal(str(v))
-        # Redondear a 2 decimales
         return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
 
@@ -54,30 +54,28 @@ class PrestamoCreate(PrestamoBase):
 
 class PrestamoUpdate(BaseModel):
     """Schema para actualizar un préstamo"""
-    monto_total: Optional[Decimal] = Field(None, gt=0, decimal_places=2, description="Monto total del préstamo")
-    tasa_interes: Optional[Decimal] = Field(None, ge=0, le=100, decimal_places=2, description="Tasa de interés anual (%)")
+    monto_total: Optional[DecimalAmount] = Field(None, gt=0, description="Monto total del préstamo")
+    tasa_interes: Optional[Decimal] = Field(None, ge=0, le=100, description="Tasa de interés anual (%)")
     estado: Optional[str] = None
     categoria: Optional[str] = None
     observaciones: Optional[str] = None
     
     @field_validator('monto_total', mode='before')
     @classmethod
-    def validate_monto_total(cls, v) -> Optional[Decimal]:
+    def validate_monto_total(cls, v):
         """Validar que el monto total tenga máximo 2 decimales"""
         if v is None:
             return v
-        # Convertir a Decimal si no lo es
         if not isinstance(v, Decimal):
             v = Decimal(str(v))
         return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     
     @field_validator('tasa_interes', mode='before')
     @classmethod
-    def validate_tasa_interes(cls, v) -> Optional[Decimal]:
+    def validate_tasa_interes(cls, v):
         """Validar que la tasa de interés tenga máximo 2 decimales"""
         if v is None:
             return v
-        # Convertir a Decimal si no lo es
         if not isinstance(v, Decimal):
             v = Decimal(str(v))
         return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
@@ -87,10 +85,10 @@ class PrestamoResponse(PrestamoBase):
     """Schema para respuesta de préstamo"""
     id: int
     codigo_prestamo: Optional[str] = None
-    saldo_pendiente: Decimal = Field(decimal_places=2)
-    saldo_capital: Decimal = Field(decimal_places=2)
-    saldo_interes: Decimal = Field(decimal_places=2)
-    total_pagado: Decimal = Field(decimal_places=2)
+    saldo_pendiente: DecimalAmount
+    saldo_capital: DecimalAmount
+    saldo_interes: DecimalAmount
+    total_pagado: DecimalAmount
     estado: str
     categoria: str
     cuotas_pagadas: int
