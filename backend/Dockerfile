@@ -9,6 +9,10 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Copiar y hacer ejecutable el script de entrada PRIMERO
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 # Copiar requirements e instalar dependencias
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
@@ -16,10 +20,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Copiar código de la aplicación
 COPY . .
-
-# Copiar y hacer ejecutable el script de entrada
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
 
 # Puerto por defecto
 EXPOSE 8080
