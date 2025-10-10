@@ -1,3 +1,4 @@
+# app/db/session.py
 """
 Configuración de la sesión de base de datos y creación de Base.
 """
@@ -6,6 +7,9 @@ import time
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_url() -> str:
@@ -25,41 +29,42 @@ def get_url() -> str:
     wait_seconds = 2
     
     for attempt in range(1, max_attempts + 1):
-        database_url = os.getenv("DATABASE_URL")
+        database_url = os.environ.get("DATABASE_URL")
         
         if database_url:
             # Normalizar: Railway puede usar postgres://, SQLAlchemy necesita postgresql://
             if database_url.startswith("postgres://"):
                 database_url = database_url.replace("postgres://", "postgresql://", 1)
+                logger.info("🔧 DATABASE_URL normalizada: postgres:// → postgresql://")
             
-            print(f"✅ DATABASE_URL encontrada (intento {attempt}/{max_attempts})")
+            logger.info(f"✅ DATABASE_URL encontrada (intento {attempt}/{max_attempts})")
             return database_url
         
         if attempt < max_attempts:
-            print(
-                f"⏳ DATABASE_URL no encontrada, reintentando en {wait_seconds}s... "
+            logger.warning(
+                f"⏳ DATABASE_URL no encontrada, esperando {wait_seconds}s... "
                 f"(intento {attempt}/{max_attempts})"
             )
             time.sleep(wait_seconds)
     
-    # DATABASE_URL no encontrada después de todos los reintentos
-    print("\n" + "=" * 70)
-    print("❌ DATABASE_URL no está configurada")
-    print("=" * 70)
-    print("\n📋 Variables de entorno relacionadas encontradas:")
+    # Si llegamos aquí, no se encontró DATABASE_URL
+    logger.error("=" * 70)
+    logger.error("❌ DATABASE_URL no está configurada")
+    logger.error("=" * 70)
+    logger.error("\n📋 Variables de entorno relacionadas encontradas:")
     
     found_vars = False
     for key in sorted(os.environ.keys()):
         if any(term in key.upper() for term in ["DATA", "POSTGRES", "DB", "SQL"]):
             value = os.environ[key]
             masked = f"{value[:8]}...{value[-4:]}" if len(value) > 20 else "***"
-            print(f"  • {key} = {masked}")
+            logger.error(f"  • {key} = {masked}")
             found_vars = True
     
     if not found_vars:
-        print("  ⚠️  Ninguna variable relacionada encontrada")
+        logger.error("  ⚠️  Ninguna variable relacionada encontrada")
     
-    print("=" * 70 + "\n")
+    logger.error("=" * 70)
     
     raise ValueError(
         "DATABASE_URL no está configurada después de múltiples reintentos.\n\n"
@@ -78,16 +83,20 @@ def get_url() -> str:
     )
 
 
-# Obtener DATABASE_URL
+# Obtener DATABASE_URL al momento de import
 DATABASE_URL = get_url()
+
+# Configuración del engine según el entorno
+IS_PRODUCTION = os.getenv("ENVIRONMENT", "production") == "production"
 
 # Crear engine de SQLAlchemy
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,       # Verifica conexiones antes de usarlas
-    pool_size=10,              # Tamaño del pool de conexiones
-    max_overflow=20,           # Conexiones adicionales permitidas
-    echo=False,                # True para ver SQL queries (debug)
+    pool_pre_ping=True,        # Verifica conexiones antes de usarlas
+    pool_size=10,               # Tamaño del pool de conexiones
+    max_overflow=20,            # Conexiones adicionales permitidas
+    echo=not IS_PRODUCTION,     # SQL queries solo en desarrollo
+    pool_recycle=3600,          # Reciclar conexiones cada hora
 )
 
 # Crear SessionLocal para instancias de sesión
@@ -97,11 +106,10 @@ SessionLocal = sessionmaker(
     bind=engine
 )
 
-# Crear Base declarativa - CRÍTICO: esto es lo que importa base.py
+# Crear Base declarativa - CRÍTICO: Esto es lo que todos los modelos importan
 Base = declarative_base()
 
 
-# Dependency para FastAPI
 def get_db():
     """
     Generador de sesión de base de datos para dependencias de FastAPI.
