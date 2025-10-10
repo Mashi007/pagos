@@ -57,8 +57,8 @@ class Notificacion(Base):
     asunto = Column(String(255), nullable=True)
     mensaje = Column(Text, nullable=False)
     
-    # Datos adicionales (JSON)
-    metadata = Column(JSON, nullable=True)
+    # Datos adicionales (JSON) - Renombrado de 'metadata' a 'extra_data' para evitar conflicto con SQLAlchemy
+    extra_data = Column(JSON, nullable=True)
     
     # Estado de envío
     estado = Column(
