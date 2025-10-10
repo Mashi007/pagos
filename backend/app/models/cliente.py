@@ -10,9 +10,8 @@ class Cliente(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     
-    # Documentos - DEBE COINCIDIR CON SCHEMA
-    numero_documento = Column(String(20), unique=True, nullable=False, index=True)
-    tipo_documento = Column(String(10), default="DNI")
+    # Documento de identidad
+    cedula = Column(String(20), unique=True, nullable=False, index=True)
     
     # Datos personales
     nombres = Column(String(100), nullable=False)
@@ -24,7 +23,8 @@ class Cliente(Base):
     ocupacion = Column(String(100))
     
     # Estado
-    estado = Column(String(20), default="ACTIVO")  # ← DEBE EXISTIR
+    estado = Column(String(20), default="ACTIVO")
+    activo = Column(Boolean, default=True)
     
     # Auditoría
     fecha_registro = Column(TIMESTAMP, server_default=func.now())
@@ -33,3 +33,6 @@ class Cliente(Base):
     
     # Notas
     notas = Column(Text)
+    
+    def __repr__(self):
+        return f"<Cliente {self.nombres} {self.apellidos} - {self.cedula}>"
