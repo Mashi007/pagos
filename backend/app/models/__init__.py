@@ -6,8 +6,6 @@ IMPORTANTE: Importar todos los modelos aquí para que:
 1. Alembic los detecte al generar migraciones
 2. SQLAlchemy los registre en metadata
 3. init_db.py pueda crear todas las tablas
-
-Si creas un nuevo modelo, SIEMPRE agregarlo aquí.
 """
 
 # Importar TODOS los modelos existentes
@@ -15,7 +13,7 @@ from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.pago import Pago
 from app.models.user import User
-from app.models.amortizacion import Amortizacion
+from app.models.amortizacion import Cuota  # ✅ CORREGIDO: Se llama Cuota, no Amortizacion
 from app.models.aprobacion import Aprobacion
 from app.models.auditoria import Auditoria
 from app.models.notificacion import Notificacion
@@ -30,8 +28,8 @@ __all__ = [
     # Autenticación
     "User",
     
-    # Cálculos
-    "Amortizacion",
+    # Cálculos (Tabla de Amortización)
+    "Cuota",
     
     # Workflow
     "Aprobacion",
