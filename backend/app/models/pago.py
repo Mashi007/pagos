@@ -1,14 +1,15 @@
+# backend/app/models/pago.py
 from sqlalchemy import Column, Integer, String, Date, Time, TIMESTAMP, Numeric, ForeignKey, Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from app.db.session import Base
+from app.db.base import Base
+
 
 class Pago(Base):
     __tablename__ = "pagos"
-    __table_args__ = {"schema": "pagos_sistema"}
     
     id = Column(Integer, primary_key=True, index=True)
-    prestamo_id = Column(Integer, ForeignKey("pagos_sistema.prestamos.id"), nullable=False)
+    prestamo_id = Column(Integer, ForeignKey("prestamos.id"), nullable=False)
     
     # Información del pago
     numero_cuota = Column(Integer, nullable=False)
@@ -50,4 +51,10 @@ class Pago(Base):
     creado_en = Column(TIMESTAMP, server_default=func.now())
     
     # Relaciones
-    prestamo = relationship("Prestamo", backref="pagos")
+    prestamo = relationship("Prestamo", back_populates="pagos")
+    cuotas = relationship(
+        "Cuota",
+        secondary="pago_cuotas",
+        back_populates="pagos",
+        overlaps="pagos,cuota"
+    )
