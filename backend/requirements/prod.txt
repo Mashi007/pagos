@@ -1,75 +1,64 @@
-# Backend - Production Requirements
-# Sistema de Préstamos y Cobranza - Producción
-# =============================================
-# Optimizado para Railway, Docker y servidores de producción
+# Backend - Requirements Production
+# Sistema de Préstamos y Cobranza - Railway
+# =================================
+# Optimizado para Railway deployment
 
-# ==========================================
-# DEPENDENCIAS BASE
-# ==========================================
+# Instalar base primero
 -r base.txt
 
-# ==========================================
-# PRODUCTION SERVER
-# ==========================================
-gunicorn==21.2.0                    # WSGI server para producción
-gevent==24.2.1                      # Async worker para gunicorn
+# ============================================
+# PRODUCCIÓN - SERVIDOR
+# ============================================
+gunicorn==21.2.0             # Production WSGI server
+setproctitle==1.3.3          # Para naming de procesos
 
-# ==========================================
-# MONITORING & OBSERVABILITY
-# ==========================================
-prometheus-fastapi-instrumentator==7.0.0    # ⬆️ Actualizado (de 6.1.0)
-prometheus-client==0.19.0                    # 🆕 Cliente Prometheus
-sentry-sdk[fastapi]==2.19.2                 # ⬆️ Actualizado - Error tracking
+# ============================================
+# PRODUCCIÓN - MONITOREO
+# ============================================
+# Error Tracking
+sentry-sdk[fastapi]==1.40.0
 
-# ==========================================
-# PERFORMANCE & CACHING
-# ==========================================
-redis==5.0.1                        # 🆕 Para cache y sessions
-hiredis==2.3.2                      # 🆕 Parser rápido para redis (opcional)
+# Métricas
+prometheus-client==0.19.0
+prometheus-fastapi-instrumentator==6.1.0
 
-# ==========================================
-# HEALTH CHECKS & RELIABILITY
-# ==========================================
-psutil==5.9.7                       # 🆕 System metrics
-tenacity==8.2.3                     # 🆕 Retry logic
+# ============================================
+# PRODUCCIÓN - CACHE (Opcional)
+# ============================================
+# Redis para cache
+# redis==5.0.1
+# aioredis==2.0.1
 
-# ==========================================
-# SECURITY (Producción)
-# ==========================================
-python-multipart==0.0.6             # Form data parsing seguro
+# ============================================
+# PRODUCCIÓN - NOTIFICACIONES (Opcional)
+# ============================================
+# WhatsApp/SMS con Twilio
+# twilio==8.11.1
 
-# ==========================================
-# LOGGING AVANZADO (Producción)
-# ==========================================
-loguru==0.7.2                       # 🆕 Logging mejorado
-python-json-logger==2.0.7
+# ============================================
+# PRODUCCIÓN - OPTIMIZACIÓN
+# ============================================
+# Compresión HTTP
+brotli==1.1.0
+ujson==5.9.0                 # JSON más rápido
 
-# ==========================================
-# COMPRESSION
-# ==========================================
-brotli==1.1.0                       # 🆕 Compresión HTTP
-python-snappy==0.6.1                # 🆕 Compresión datos (opcional)
+# ============================================
+# PRODUCCIÓN - SEGURIDAD
+# ============================================
+cryptography==41.0.7         # Ya incluida en python-jose, pero explícita
 
-# ==========================================
-# CONFIGURACIÓN
-# ==========================================
-# Variables de entorno para producción
-# Ver .env.production.example
-
-# SENTRY_DSN=https://...@sentry.io/...
-# REDIS_URL=redis://localhost:6379/0
-# PROMETHEUS_ENABLED=true
-# LOG_LEVEL=INFO
-# WORKERS=4
-
-# ==========================================
-# NOTAS DE DEPLOYMENT
-# ==========================================
-# Railway/Docker:
-# - Usar gunicorn con uvicorn workers
-# - Configurar SENTRY_DSN en variables de entorno
-# - Habilitar Prometheus en /metrics
-# - Redis opcional pero recomendado para cache
+# ============================================
+# NOTAS RAILWAY:
+# ============================================
+# Railway usa Nixpacks que detecta requirements.txt
+# 
+# Para usar estructura modular en Railway:
+# 1. Renombrar prod.txt a requirements.txt
+# 2. O configurar Nixpacks para usar:
+#    pip install -r requirements/prod.txt
 #
-# Comando de inicio recomendado:
-# gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8080
+# Variables de Railway requeridas:
+# - DATABASE_URL (automático)
+# - SECRET_KEY (configurar manualmente)
+# - SENTRY_DSN (opcional)
+# - ALLOWED_ORIGINS (configurar con dominio)
