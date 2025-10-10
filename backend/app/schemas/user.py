@@ -5,58 +5,54 @@ from datetime import datetime
 
 
 class UserBase(BaseModel):
-    """Schema base para Usuario"""
+    """Base de usuario"""
     email: EmailStr
-    username: str = Field(..., min_length=3, max_length=50)
-    nombre_completo: str = Field(..., min_length=3)
-    telefono: Optional[str] = None
-    rol: str = "ASESOR"  # ADMIN, COBRANZAS, ASESOR, VALIDADOR, SOLO_LECTURA
+    nombre: str = Field(..., min_length=2, max_length=100)
+    apellido: str = Field(..., min_length=2, max_length=100)
+    rol: str = Field(..., description="ADMIN, ASESOR, COBRANZAS, CONTADOR")
 
 
 class UserCreate(UserBase):
-    """Schema para crear usuario"""
-    password: str = Field(..., min_length=8)
+    """Crear usuario"""
+    password: str = Field(..., min_length=8, description="Mínimo 8 caracteres")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "usuario@example.com",
+                "nombre": "Juan",
+                "apellido": "Pérez",
+                "rol": "ASESOR",
+                "password": "password123"
+            }
+        }
 
 
 class UserUpdate(BaseModel):
-    """Schema para actualizar usuario"""
+    """Actualizar usuario"""
     email: Optional[EmailStr] = None
-    nombre_completo: Optional[str] = None
-    telefono: Optional[str] = None
+    nombre: Optional[str] = Field(None, min_length=2, max_length=100)
+    apellido: Optional[str] = Field(None, min_length=2, max_length=100)
     rol: Optional[str] = None
+    activo: Optional[bool] = None
 
 
-class UserResponse(UserBase):
-    """Schema para respuesta de usuario"""
+class UserResponse(BaseModel):
+    """Respuesta de usuario"""
     id: int
-    estado: str
-    is_superuser: bool
+    email: str
+    nombre: str
+    apellido: str
+    rol: str
+    activo: bool
     fecha_creacion: datetime
-    ultimo_login: Optional[datetime] = None
-
+    ultima_conexion: Optional[datetime] = None
+    
     class Config:
         from_attributes = True
 
 
-class UserProfile(UserResponse):
-    """Schema para perfil completo de usuario"""
-    avatar_url: Optional[str] = None
-    debe_cambiar_password: bool
-
-
-class Token(BaseModel):
-    """Schema para token JWT"""
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-
-
-class LoginRequest(BaseModel):
-    """Schema para login"""
-    username: str
-    password: str
-
-
-class RefreshTokenRequest(BaseModel):
-    """Schema para refresh token"""
-    refresh_token: str
+class UserListResponse(BaseModel):
+    """Lista de usuarios"""
+    total: int
+    usuarios: list[UserResponse]
