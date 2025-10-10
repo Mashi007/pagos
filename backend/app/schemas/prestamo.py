@@ -1,5 +1,5 @@
 # backend/app/schemas/prestamo.py
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
@@ -21,7 +21,7 @@ class PrestamoBase(BaseModel):
     modalidad: str = Field(default="MENSUAL")  # SEMANAL, QUINCENAL, MENSUAL
     destino_credito: Optional[str] = None
     observaciones: Optional[str] = None
-
+    
     @field_validator('monto_total', 'monto_financiado', 'monto_inicial', 'monto_cuota')
     @classmethod
     def validate_decimal_places(cls, v: Decimal) -> Decimal:
@@ -53,7 +53,7 @@ class PrestamoUpdate(BaseModel):
     estado: Optional[str] = None
     categoria: Optional[str] = None
     observaciones: Optional[str] = None
-
+    
     @field_validator('monto_total')
     @classmethod
     def validate_monto_total(cls, v: Optional[Decimal]) -> Optional[Decimal]:
@@ -86,5 +86,5 @@ class PrestamoResponse(PrestamoBase):
     creado_en: datetime
     actualizado_en: Optional[datetime] = None
     
-    class Config:
-        from_attributes = True
+    # ✅ CAMBIO: Usar ConfigDict en lugar de class Config
+    model_config = ConfigDict(from_attributes=True)
