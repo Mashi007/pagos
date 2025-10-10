@@ -1,7 +1,7 @@
 # app/schemas/cliente.py
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 class ClienteBase(BaseModel):
     nombre: str = Field(..., min_length=3, max_length=100)
@@ -25,6 +25,18 @@ class ClienteResponse(ClienteBase):
     activo: bool
     fecha_creacion: datetime
     fecha_actualizacion: datetime
+    
+    class Config:
+        from_attributes = True
+
+# ✅ AGREGADO: Schema para lista de clientes
+class ClienteList(BaseModel):
+    """Schema para respuesta paginada de clientes"""
+    items: List[ClienteResponse]
+    total: int
+    page: int
+    size: int
+    pages: int
     
     class Config:
         from_attributes = True
