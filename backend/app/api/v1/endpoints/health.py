@@ -1,5 +1,5 @@
 # backend/app/api/v1/endpoints/health.py
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.db.session import get_db, Base, engine
@@ -28,16 +28,16 @@ async def health_check(db: Session = Depends(get_db)):
     }
 
 
-@router.post("/admin/recreate-database")
-async def recreate_database(db: Session = Depends(get_db)):
+@router.post("/test/init-db")
+async def initialize_database(db: Session = Depends(get_db)):
     """
-    ⚠️ PELIGRO: Elimina y recrea TODAS las tablas
-    Solo para desarrollo/testing
+    Endpoint para RECREAR la base de datos
+    ⚠️ ELIMINA todas las tablas y las vuelve a crear
     """
     try:
-        logger.info("🗑️  Iniciando eliminación de tablas...")
+        # PASO 1: Eliminar tablas
+        logger.info("🗑️  Eliminando tablas...")
         
-        # Eliminar tablas en orden
         tables_to_drop = [
             "pagos",
             "prestamos",
@@ -58,7 +58,7 @@ async def recreate_database(db: Session = Depends(get_db)):
         db.commit()
         logger.info("✅ Tablas eliminadas")
         
-        # Recrear tablas
+        # PASO 2: Recrear tablas
         logger.info("🔄 Recreando tablas...")
         
         # Importar modelos
@@ -78,10 +78,10 @@ async def recreate_database(db: Session = Depends(get_db)):
         return {
             "status": "success",
             "message": "✅ Base de datos recreada exitosamente",
-            "tables_dropped": tables_to_drop,
+            "tables_dropped": len(tables_to_drop),
             "tables_created": len(Base.metadata.tables)
         }
-            
+        
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Error: {str(e)}")
@@ -89,18 +89,3 @@ async def recreate_database(db: Session = Depends(get_db)):
             "status": "error",
             "message": f"❌ Error: {str(e)}"
         }
-
-
-@router.post("/test/init-db")
-async def initialize_database():
-    """Endpoint para inicializar la base de datos"""
-    from app.db.init_db import init_database
-    
-    try:
-        success = init_database()
-        if success:
-            return {"status": "success", "message": "✅ Base de datos inicializada"}
-        else:
-            return {"status": "error", "message": "❌ Error inicializando base de datos"}
-    except Exception as e:
-        return {"status": "error", "message": f"❌ Error: {str(e)}"}
