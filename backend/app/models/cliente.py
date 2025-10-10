@@ -1,12 +1,12 @@
 # backend/app/models/cliente.py
 from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Text, Boolean
 from sqlalchemy.sql import func
-from app.db.session import Base
+from sqlalchemy.orm import relationship
+from app.db.base import Base
 
 
 class Cliente(Base):
     __tablename__ = "clientes"
-    __table_args__ = {"schema": "pagos_sistema"}
     
     id = Column(Integer, primary_key=True, index=True)
     
@@ -33,6 +33,10 @@ class Cliente(Base):
     
     # Notas
     notas = Column(Text, nullable=True)
+    
+    # Relaciones
+    prestamos = relationship("Prestamo", back_populates="cliente")
+    notificaciones = relationship("Notificacion", back_populates="cliente")
     
     def __repr__(self):
         return f"<Cliente {self.nombres} {self.apellidos} - {self.cedula}>"
