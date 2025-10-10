@@ -1,12 +1,25 @@
-# app/schemas/__init__.py
-from app.schemas.cliente import ClienteCreate, ClienteUpdate, ClienteResponse, ClienteList
-from app.schemas.prestamo import PrestamoCreate, PrestamoUpdate, PrestamoResponse, PrestamoList
-from app.schemas.pago import PagoCreate, PagoUpdate, PagoResponse, PagoList
-from app.schemas.common import PaginatedResponse, MessageResponse
+"""
+Schemas de la aplicación
+"""
+
+# Importar en orden de dependencias
+from app.schemas.cliente import ClienteCreate, ClienteUpdate, ClienteResponse
+from app.schemas.prestamo import PrestamoCreate, PrestamoUpdate, PrestamoResponse
+from app.schemas.pago import PagoBase, PagoCreate, PagoUpdate, PagoResponse, PagoList
 
 __all__ = [
-    "ClienteCreate", "ClienteUpdate", "ClienteResponse", "ClienteList",
-    "PrestamoCreate", "PrestamoUpdate", "PrestamoResponse", "PrestamoList",
-    "PagoCreate", "PagoUpdate", "PagoResponse", "PagoList",
-    "PaginatedResponse", "MessageResponse"
+    # Cliente
+    'ClienteCreate',
+    'ClienteUpdate', 
+    'ClienteResponse',
+    # Préstamo
+    'PrestamoCreate',
+    'PrestamoUpdate',
+    'PrestamoResponse',
+    # Pago
+    'PagoBase',
+    'PagoCreate',
+    'PagoUpdate',
+    'PagoResponse',
+    'PagoList',
 ]
