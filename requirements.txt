@@ -1,2 +1,0 @@
-# Para Railway, usar solo las de producción
--r requirements/prod.txt
