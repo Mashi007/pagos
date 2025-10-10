@@ -1,7 +1,7 @@
 # app/schemas/prestamo.py
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from decimal import Decimal
 from app.models.prestamo import EstadoPrestamo, ModalidadPago
 
@@ -31,6 +31,18 @@ class PrestamoResponse(PrestamoBase):
     proxima_fecha_pago: Optional[datetime]
     fecha_creacion: datetime
     fecha_actualizacion: datetime
+    
+    class Config:
+        from_attributes = True
+
+# ✅ AGREGADO: Schema para lista de préstamos
+class PrestamoList(BaseModel):
+    """Schema para respuesta paginada de préstamos"""
+    items: List[PrestamoResponse]
+    total: int
+    page: int
+    size: int
+    pages: int
     
     class Config:
         from_attributes = True
