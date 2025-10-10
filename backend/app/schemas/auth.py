@@ -1,59 +1,72 @@
 # backend/app/schemas/auth.py
+"""
+Schemas de autenticación: Login, Token, Register
+"""
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
-from datetime import datetime
 
 
 class Token(BaseModel):
-    """Respuesta de token JWT"""
+    """Schema para respuesta de token"""
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
-    expires_in: int = 1800  # 30 minutos en segundos
 
 
-class TokenData(BaseModel):
-    """Datos extraídos del token"""
-    user_id: Optional[int] = None
-    email: Optional[str] = None
-    role: Optional[str] = None
+class TokenPayload(BaseModel):
+    """Schema para el payload del token"""
+    sub: Optional[str] = None
+    exp: Optional[int] = None
+    type: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
-    """Request para login"""
+    """Schema para request de login"""
     email: EmailStr = Field(..., description="Email del usuario")
-    password: str = Field(..., min_length=6, description="Contraseña del usuario")
+    password: str = Field(..., min_length=1, description="Contraseña del usuario")
     
     class Config:
         json_schema_extra = {
             "example": {
-                "email": "admin@example.com",
-                "password": "admin123"
+                "email": "admin@sistema.com",
+                "password": "Admin123!"
             }
         }
 
 
 class RefreshTokenRequest(BaseModel):
-    """Request para refresh token"""
-    refresh_token: str = Field(..., description="Refresh token válido")
+    """Schema para refresh token"""
+    refresh_token: str = Field(..., description="Refresh token")
 
 
 class ChangePasswordRequest(BaseModel):
-    """Request para cambiar contraseña"""
-    current_password: str = Field(..., min_length=6)
-    new_password: str = Field(..., min_length=8)
-    confirm_password: str = Field(..., min_length=8)
-
-
-class UserResponse(BaseModel):
-    """Respuesta con datos del usuario"""
-    id: int
-    email: str
-    nombre: str
-    apellido: str
-    rol: str
-    activo: bool
-    fecha_creacion: datetime
+    """Schema para cambio de contraseña"""
+    current_password: str = Field(..., min_length=8, description="Contraseña actual")
+    new_password: str = Field(..., min_length=8, description="Nueva contraseña")
+    confirm_password: str = Field(..., min_length=8, description="Confirmar nueva contraseña")
     
     class Config:
-        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "current_password": "OldPassword123!",
+                "new_password": "NewPassword123!",
+                "confirm_password": "NewPassword123!"
+            }
+        }
+
+
+class PasswordResetRequest(BaseModel):
+    """Schema para solicitud de reset de contraseña"""
+    email: EmailStr = Field(..., description="Email del usuario")
+
+
+class PasswordResetConfirm(BaseModel):
+    """Schema para confirmar reset de contraseña"""
+    token: str = Field(..., description="Token de reset")
+    new_password: str = Field(..., min_length=8, description="Nueva contraseña")
+    confirm_password: str = Field(..., min_length=8, description="Confirmar nueva contraseña")
+
+
+class LogoutRequest(BaseModel):
+    """Schema para logout (opcional, por si se implementa blacklist de tokens)"""
+    refresh_token: Optional[str] = None
