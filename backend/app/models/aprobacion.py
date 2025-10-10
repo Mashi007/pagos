@@ -2,13 +2,13 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from datetime import datetime
-
 from app.db.session import Base
 from app.core.constants import EstadoAprobacion
 
 
 class Aprobacion(Base):
     __tablename__ = "aprobaciones"
+    __table_args__ = {"schema": "pagos_sistema"}  # ✅ AGREGAR SCHEMA
     
     id = Column(Integer, primary_key=True, index=True)
     
@@ -16,8 +16,8 @@ class Aprobacion(Base):
     estado = Column(SQLEnum(EstadoAprobacion), default=EstadoAprobacion.PENDIENTE)
     
     # Solicitante y revisor
-    solicitante_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    revisor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    solicitante_id = Column(Integer, ForeignKey("pagos_sistema.users.id"), nullable=False)  # ✅ CON SCHEMA
+    revisor_id = Column(Integer, ForeignKey("pagos_sistema.users.id"), nullable=True)  # ✅ CON SCHEMA
     
     # Detalles de la solicitud
     tipo_solicitud = Column(String, nullable=False)  # PRESTAMO, MODIFICACION_MONTO, etc.
