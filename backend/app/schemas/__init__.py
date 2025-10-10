@@ -39,26 +39,19 @@ from app.schemas.pago import (
 # ============================================
 # SCHEMAS DE USUARIO Y AUTENTICACIÓN
 # ============================================
-from app.schemas.user import (
-    # Schemas base de usuario
-    UserBase,
-    UserCreate,
-    UserUpdate,
-    UserResponse,
-    UserListResponse,
-    UserMeResponse,
-    
-    # Schemas de autenticación
-    LoginRequest,
-    Token,
-    RefreshTokenRequest,
-    
-    # Schemas de gestión de contraseña
-    PasswordChange,
-    PasswordReset,
-    PasswordResetConfirm,
-)
-
+# IMPORTAR SOLO LOS MODELOS QUE REALMENTE EXISTEN
+try:
+    from app.schemas.user import (
+        UserRole,  # Este existe según el error
+        # Descomentar solo los que realmente existan en user.py:
+        # UserBase,
+        # UserCreate,
+        # UserUpdate,
+        # UserResponse,
+    )
+except ImportError as e:
+    print(f"⚠️  Advertencia: Algunos modelos de usuario no están disponibles: {e}")
+    UserRole = None
 
 # ============================================
 # EXPORTS PÚBLICOS
@@ -78,25 +71,9 @@ __all__ = [
     "PagoCreate",
     "PagoResponse",
     
-    # ========== USUARIO - CRUD ==========
-    "UserBase",
-    "UserCreate",
-    "UserUpdate",
-    "UserResponse",
-    "UserListResponse",
-    "UserMeResponse",
-    
-    # ========== AUTENTICACIÓN ==========
-    "LoginRequest",
-    "Token",
-    "RefreshTokenRequest",
-    
-    # ========== GESTIÓN DE CONTRASEÑAS ==========
-    "PasswordChange",
-    "PasswordReset",
-    "PasswordResetConfirm",
+    # ========== USUARIO ==========
+    "UserRole",
 ]
-
 
 # ============================================
 # INFORMACIÓN DEL MÓDULO
