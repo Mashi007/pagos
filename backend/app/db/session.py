@@ -1,141 +1,159 @@
-# app/db/session.py
-"""
-Configuración de la sesión de base de datos y creación de Base.
-"""
-import os
-import time
-from sqlalchemy import create_engine
+# backend/app/db/session.py
+from sqlalchemy import create_engine, event
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.pool import NullPool, QueuePool
+from app.config import get_settings
 import logging
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
+# ============================================
+# CONFIGURACIÓN DEL ENGINE
+# ============================================
 
-def get_url() -> str:
-    """
-    Obtiene DATABASE_URL con normalización y reintentos.
-    Prioriza DATABASE_PUBLIC_URL sobre DATABASE_URL para Railway.
-    
-    Returns:
-        str: URL de conexión normalizada a la base de datos.
-        
-    Raises:
-        ValueError: Si DATABASE_URL no está configurada después de reintentos.
-    """
-    max_attempts = 3
-    wait_seconds = 2
-    
-    for attempt in range(1, max_attempts + 1):
-        # ✅ PRIORIZAR: DATABASE_PUBLIC_URL > DATABASE_URL
-        database_url = os.environ.get("DATABASE_PUBLIC_URL") or os.environ.get("DATABASE_URL")
-        
-        if database_url:
-            # Normalizar: Railway puede usar postgres://, SQLAlchemy necesita postgresql://
-            if database_url.startswith("postgres://"):
-                database_url = database_url.replace("postgres://", "postgresql://", 1)
-                logger.info("🔧 DATABASE_URL normalizada: postgres:// → postgresql://")
-            
-            # Verificar que no sea la URL interna
-            if "railway.internal" in database_url:
-                logger.warning("⚠️  Detectada URL interna de Railway, buscando alternativa...")
-                # Intentar usar solo DATABASE_PUBLIC_URL
-                public_url = os.environ.get("DATABASE_PUBLIC_URL")
-                if public_url:
-                    database_url = public_url
-                    if database_url.startswith("postgres://"):
-                        database_url = database_url.replace("postgres://", "postgresql://", 1)
-                    logger.info("✅ Usando DATABASE_PUBLIC_URL")
-                else:
-                    logger.error("❌ No se encontró DATABASE_PUBLIC_URL")
-            
-            logger.info(f"✅ DATABASE_URL encontrada (intento {attempt}/{max_attempts})")
-            return database_url
-        
-        if attempt < max_attempts:
-            logger.warning(
-                f"⏳ DATABASE_URL no encontrada, esperando {wait_seconds}s... "
-                f"(intento {attempt}/{max_attempts})"
-            )
-            time.sleep(wait_seconds)
-    
-    # Si llegamos aquí, no se encontró DATABASE_URL
-    logger.error("=" * 70)
-    logger.error("❌ DATABASE_URL no está configurada")
-    logger.error("=" * 70)
-    logger.error("\n📋 Variables de entorno relacionadas encontradas:")
-    
-    found_vars = False
-    for key in sorted(os.environ.keys()):
-        if any(term in key.upper() for term in ["DATA", "POSTGRES", "DB", "SQL"]):
-            value = os.environ[key]
-            masked = f"{value[:8]}...{value[-4:]}" if len(value) > 20 else "***"
-            logger.error(f"  • {key} = {masked}")
-            found_vars = True
-    
-    if not found_vars:
-        logger.error("  ⚠️  Ninguna variable relacionada encontrada")
-    
-    logger.error("=" * 70)
-    
-    raise ValueError(
-        "DATABASE_URL no está configurada después de múltiples reintentos.\n\n"
-        "🔧 SOLUCIÓN EN RAILWAY:\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "1. Verifica que el servicio PostgreSQL esté vinculado al proyecto\n"
-        "2. Ve a: Settings → Variables\n"
-        "3. DATABASE_URL o DATABASE_PUBLIC_URL debe aparecer automáticamente\n"
-        "4. Si falta, regenera la vinculación desde el panel de PostgreSQL\n\n"
-        "🔍 DESARROLLO LOCAL:\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "1. Crea archivo .env con:\n"
-        "   DATABASE_URL=postgresql://user:password@localhost:5432/dbname\n"
-        "2. Asegúrate de cargar dotenv antes de llamar get_url()\n\n"
-        "💡 Formato: postgresql://usuario:contraseña@host:puerto/base_datos"
+# Argumentos base del engine
+engine_args = {
+    "echo": settings.DB_ECHO,
+    "future": True,  # SQLAlchemy 2.0 style
+}
+
+# En producción, usar pool de conexiones
+if settings.is_production:
+    engine_args.update({
+        "poolclass": QueuePool,
+        "pool_size": settings.DB_POOL_SIZE,
+        "max_overflow": settings.DB_MAX_OVERFLOW,
+        "pool_timeout": settings.DB_POOL_TIMEOUT,
+        "pool_recycle": settings.DB_POOL_RECYCLE,
+        "pool_pre_ping": True,  # Verifica conexiones antes de usarlas
+    })
+    logger.info(f"🔵 DB Pool configurado: size={settings.DB_POOL_SIZE}, max_overflow={settings.DB_MAX_OVERFLOW}")
+else:
+    # En desarrollo, pool simple o sin pool
+    engine_args["poolclass"] = NullPool
+    logger.info("🟡 DB Pool deshabilitado (desarrollo)")
+
+# Crear engine
+try:
+    engine = create_engine(
+        settings.DATABASE_URL,
+        **engine_args
     )
+    logger.info(f"✅ Engine creado: {settings.get_database_url(hide_password=True)}")
+except Exception as e:
+    logger.error(f"❌ Error creando engine: {e}")
+    raise
 
+# ============================================
+# SESSION FACTORY
+# ============================================
 
-# Obtener DATABASE_URL al momento de import
-DATABASE_URL = get_url()
-
-# Configuración del engine según el entorno
-IS_PRODUCTION = os.getenv("ENVIRONMENT", "production") == "production"
-
-# Crear engine de SQLAlchemy
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,        # Verifica conexiones antes de usarlas
-    pool_size=10,               # Tamaño del pool de conexiones
-    max_overflow=20,            # Conexiones adicionales permitidas
-    echo=not IS_PRODUCTION,     # SQL queries solo en desarrollo
-    pool_recycle=3600,          # Reciclar conexiones cada hora
-)
-
-# Crear SessionLocal para instancias de sesión
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
-    bind=engine
+    bind=engine,
+    expire_on_commit=False  # Mejor performance
 )
 
-# Crear Base declarativa - CRÍTICO: Esto es lo que todos los modelos importan
+# ============================================
+# BASE PARA MODELOS
+# ============================================
+
 Base = declarative_base()
 
+# ============================================
+# EVENTOS DE CONEXIÓN (Logging y Debugging)
+# ============================================
+
+@event.listens_for(engine, "connect")
+def receive_connect(dbapi_conn, connection_record):
+    """Evento cuando se establece una nueva conexión"""
+    if settings.DEBUG:
+        logger.debug(f"🔗 Nueva conexión DB establecida")
+
+
+@event.listens_for(engine, "checkout")
+def receive_checkout(dbapi_conn, connection_record, connection_proxy):
+    """Evento cuando se obtiene una conexión del pool"""
+    if settings.DEBUG:
+        logger.debug(f"📤 Conexión obtenida del pool")
+
+
+@event.listens_for(engine, "checkin")
+def receive_checkin(dbapi_conn, connection_record):
+    """Evento cuando se devuelve una conexión al pool"""
+    if settings.DEBUG:
+        logger.debug(f"📥 Conexión devuelta al pool")
+
+
+# ============================================
+# DEPENDENCY INJECTION
+# ============================================
 
 def get_db():
     """
-    Generador de sesión de base de datos para dependencias de FastAPI.
+    Dependency para FastAPI
+    Crea y cierra sesiones automáticamente
     
-    Yields:
-        Session: Sesión de base de datos activa.
-        
-    Example:
-        @app.get("/users")
-        def get_users(db: Session = Depends(get_db)):
-            return db.query(User).all()
+    Usage:
+        @app.get("/items")
+        def get_items(db: Session = Depends(get_db)):
+            return db.query(Item).all()
     """
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+
+
+# ============================================
+# UTILIDADES
+# ============================================
+
+def get_db_info() -> dict:
+    """
+    Retorna información sobre el pool de conexiones
+    Útil para debugging y monitoreo
+    """
+    pool = engine.pool
+    
+    info = {
+        "pool_size": getattr(pool, "size", lambda: 0)(),
+        "checked_out": getattr(pool, "checkedout", lambda: 0)(),
+        "overflow": getattr(pool, "overflow", lambda: 0)(),
+        "checkedin": getattr(pool, "checkedin", lambda: 0)(),
+        "is_production": settings.is_production,
+        "pool_class": pool.__class__.__name__,
+    }
+    
+    return info
+
+
+async def check_db_connection() -> bool:
+    """
+    Verifica si la conexión a la base de datos está funcionando
+    Útil para health checks
+    """
+    try:
+        db = SessionLocal()
+        db.execute("SELECT 1")
+        db.close()
+        return True
+    except Exception as e:
+        logger.error(f"❌ Error verificando conexión DB: {e}")
+        return False
+
+
+def close_db_connections():
+    """
+    Cierra todas las conexiones del pool
+    Útil para shutdown graceful
+    """
+    try:
+        engine.dispose()
+        logger.info("✅ Conexiones DB cerradas correctamente")
+    except Exception as e:
+        logger.error(f"❌ Error cerrando conexiones: {e}")
