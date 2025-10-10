@@ -1,52 +1,172 @@
 # backend/app/models/notificacion.py
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Text, Enum as SQLEnum
+"""
+Modelo de Notificación
+Sistema de notificaciones por email, SMS o WhatsApp
+"""
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, JSON
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from datetime import datetime
-from app.db.session import Base
-from app.core.constants import TipoNotificacion, EstadoNotificacion
+
+from app.db.base import Base
 
 
 class Notificacion(Base):
+    """
+    Modelo de Notificación para comunicaciones con usuarios/clientes
+    """
     __tablename__ = "notificaciones"
-    __table_args__ = {"schema": "pagos_sistema"}  # ✅ AGREGAR SCHEMA
     
+    # Identificación
     id = Column(Integer, primary_key=True, index=True)
     
-    # Tipo y estado
-    tipo = Column(SQLEnum(TipoNotificacion), nullable=False)
-    estado = Column(SQLEnum(EstadoNotificacion), default=EstadoNotificacion.PENDIENTE)
+    # Destinatario (puede ser un User o un Cliente por email/teléfono)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True
+    )
+    cliente_id = Column(
+        Integer,
+        ForeignKey("clientes.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True
+    )
     
-    # Destinatario
-    cliente_id = Column(Integer, ForeignKey("pagos_sistema.clientes.id"), nullable=True)  # ✅ CON SCHEMA
-    email_destinatario = Column(String, nullable=True)
-    telefono_destinatario = Column(String, nullable=True)
+    # Destinatario manual (si no es user ni cliente registrado)
+    destinatario_email = Column(String(255), nullable=True)
+    destinatario_telefono = Column(String(20), nullable=True)
+    destinatario_nombre = Column(String(255), nullable=True)
+    
+    # Tipo de notificación
+    tipo = Column(
+        String(50),
+        nullable=False,
+        index=True
+    )  # EMAIL, SMS, WHATSAPP, PUSH
+    
+    # Categoría
+    categoria = Column(
+        String(50),
+        nullable=False,
+        index=True
+    )  # RECORDATORIO_PAGO, PRESTAMO_APROBADO, CUOTA_VENCIDA, etc.
     
     # Contenido
-    asunto = Column(String, nullable=True)
+    asunto = Column(String(255), nullable=True)
     mensaje = Column(Text, nullable=False)
-    template_id = Column(String, nullable=True)  # recordatorio_3d, mora_1d, etc.
     
-    # Referencia
-    prestamo_id = Column(Integer, ForeignKey("pagos_sistema.prestamos.id"), nullable=True)  # ✅ CON SCHEMA
-    pago_id = Column(Integer, ForeignKey("pagos_sistema.pagos.id"), nullable=True)  # ✅ CON SCHEMA
+    # Datos adicionales (JSON)
+    metadata = Column(JSON, nullable=True)
     
-    # Metadata de envío
-    fecha_programada = Column(DateTime, nullable=True)
-    fecha_enviada = Column(DateTime, nullable=True)
-    intentos_envio = Column(Integer, default=0)
+    # Estado de envío
+    estado = Column(
+        String(20),
+        nullable=False,
+        default="PENDIENTE",
+        index=True
+    )  # PENDIENTE, ENVIADA, FALLIDA, LEIDA
+    
+    # Intentos de envío
+    intentos = Column(Integer, default=0)
+    max_intentos = Column(Integer, default=3)
+    
+    # Fechas
+    programada_para = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True
+    )  # Para notificaciones programadas
+    
+    enviada_en = Column(DateTime(timezone=True), nullable=True)
+    leida_en = Column(DateTime(timezone=True), nullable=True)
+    
+    # Respuesta del servicio de envío
+    respuesta_servicio = Column(Text, nullable=True)
     error_mensaje = Column(Text, nullable=True)
     
-    # Quién la envió
-    enviado_por = Column(Integer, ForeignKey("pagos_sistema.users.id"), nullable=True)  # ✅ CON SCHEMA
+    # Prioridad
+    prioridad = Column(
+        String(10),
+        nullable=False,
+        default="NORMAL"
+    )  # BAJA, NORMAL, ALTA, URGENTE
     
     # Auditoría
-    fecha_creacion = Column(DateTime, default=datetime.utcnow)
+    creado_en = Column(DateTime(timezone=True), server_default=func.now())
+    actualizado_en = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relaciones
-    cliente = relationship("Cliente", backref="notificaciones")
-    prestamo = relationship("Prestamo", backref="notificaciones")
-    pago = relationship("Pago", backref="notificaciones")
-    enviado_por_usuario = relationship("User", back_populates="notificaciones_enviadas")
+    user = relationship("User", back_populates="notificaciones")
+    cliente = relationship("Cliente", back_populates="notificaciones")
     
     def __repr__(self):
-        return f"<Notificacion {self.tipo} - {self.estado}>"
+        return f"<Notificacion {self.tipo} - {self.categoria} - {self.estado}>"
+    
+    @property
+    def esta_pendiente(self) -> bool:
+        """Verifica si la notificación está pendiente"""
+        return self.estado == "PENDIENTE"
+    
+    @property
+    def fue_enviada(self) -> bool:
+        """Verifica si la notificación fue enviada"""
+        return self.estado == "ENVIADA"
+    
+    @property
+    def fallo(self) -> bool:
+        """Verifica si la notificación falló"""
+        return self.estado == "FALLIDA"
+    
+    @property
+    def puede_reintentar(self) -> bool:
+        """Verifica si se puede reintentar el envío"""
+        return self.intentos < self.max_intentos and self.fallo
+    
+    def marcar_enviada(self, respuesta: str = None):
+        """Marca la notificación como enviada"""
+        self.estado = "ENVIADA"
+        self.enviada_en = datetime.utcnow()
+        self.respuesta_servicio = respuesta
+    
+    def marcar_fallida(self, error: str):
+        """Marca la notificación como fallida"""
+        self.estado = "FALLIDA"
+        self.error_mensaje = error
+        self.intentos += 1
+    
+    def marcar_leida(self):
+        """Marca la notificación como leída"""
+        if self.estado == "ENVIADA":
+            self.leida_en = datetime.utcnow()
+    
+    @classmethod
+    def crear_recordatorio_pago(
+        cls,
+        cliente_id: int,
+        tipo: str,
+        mensaje: str,
+        programada_para: datetime = None
+    ):
+        """
+        Helper para crear notificaciones de recordatorio de pago
+        
+        Args:
+            cliente_id: ID del cliente
+            tipo: EMAIL, SMS o WHATSAPP
+            mensaje: Mensaje de la notificación
+            programada_para: Fecha/hora programada (opcional)
+            
+        Returns:
+            Notificacion: Instancia de notificación
+        """
+        return cls(
+            cliente_id=cliente_id,
+            tipo=tipo,
+            categoria="RECORDATORIO_PAGO",
+            asunto="Recordatorio de Pago",
+            mensaje=mensaje,
+            programada_para=programada_para,
+            prioridad="ALTA"
+        )
