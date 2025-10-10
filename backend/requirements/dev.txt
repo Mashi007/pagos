@@ -1,17 +1,50 @@
-# Incluir dependencias base (ruta desde raíz del proyecto)
--r requirements/base.txt
+# Backend - Development Requirements
+# Sistema de Préstamos y Cobranza - Entorno de Desarrollo
+# ========================================================
 
-# Testing
-pytest==8.3.4
-pytest-asyncio==0.24.0
-pytest-cov==6.0.0
-httpx==0.28.1
+# Incluir todas las dependencias de producción
+-r requirements.txt
 
-# Linting y formateo
-black==24.10.0
-flake8==7.1.1
-mypy==1.13.0
-isort==5.13.2
+# Development Tools
+# -----------------
+black==23.12.1                      # Formateo automático de código
+flake8==7.0.0                       # Linting
+isort==5.13.2                       # Ordenamiento de imports
+mypy==1.8.0                         # Type checking estático
+pylint==3.0.3                       # Análisis de código
+
+# Testing Avanzado
+# ----------------
+pytest-xdist==3.5.0                 # Tests paralelos
+pytest-mock==3.12.0                 # Mocking
+pytest-watch==4.2.0                 # Auto-run tests
+coverage==7.4.0                     # Coverage detallado
 
 # Debugging
-ipython==8.30.0
+# ---------
+ipython==8.20.0                     # REPL mejorado
+ipdb==0.13.13                       # Debugger interactivo
+rich==13.7.0                        # Output formateado en terminal
+
+# Database Tools
+# --------------
+sqlalchemy-utils==0.41.1            # Utilidades para SQLAlchemy
+psycopg2-binary==2.9.9              # PostgreSQL adapter
+
+# API Development
+# ---------------
+httpie==3.2.2                       # HTTP client CLI
+locust==2.20.0                      # Load testing (opcional)
+
+# Documentation
+# -------------
+mkdocs==1.5.3                       # Documentación
+mkdocs-material==9.5.3              # Theme para docs
+
+# Git Hooks
+# ---------
+pre-commit==3.6.0                   # Git hooks automation
+
+# Monitoring Development
+# ----------------------
+watchfiles==0.21.0                  # File watching para hot reload
