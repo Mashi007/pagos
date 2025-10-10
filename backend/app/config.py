@@ -1,6 +1,7 @@
 # app/config.py
 import os
-from typing import List
+from typing import List, Optional
+from functools import lru_cache
 
 class Settings:
     """Configuración centralizada de la aplicación"""
@@ -61,9 +62,30 @@ class Settings:
         print(f"🌐 CORS origins: {self.ALLOWED_ORIGINS}")
         print("="*60 + "\n")
 
+
+# Variable global para caché manual
+_settings_instance: Optional[Settings] = None
+
+
+@lru_cache()
 def get_settings() -> Settings:
-    """Factory para obtener instancia de Settings"""
+    """
+    Factory cacheada para obtener instancia de Settings.
+    Solo se ejecuta cuando realmente se necesita.
+    """
     return Settings()
 
-# Instancia global para importar
-settings = Settings()
+
+def settings() -> Settings:
+    """
+    Función helper para compatibilidad con código existente.
+    Permite usar: from app.config import settings
+    """
+    global _settings_instance
+    if _settings_instance is None:
+        _settings_instance = get_settings()
+    return _settings_instance
+
+
+# IMPORTANTE: NO instanciar aquí para evitar errores en import-time
+# Los archivos que usen settings deben llamar get_settings() o settings()
