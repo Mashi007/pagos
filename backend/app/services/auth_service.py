@@ -1,209 +1,197 @@
 # backend/app/services/auth_service.py
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
-from app.models.user import User
-from app.schemas.user import UserCreate, Token
 from app.core.security import (
     verify_password,
     get_password_hash,
     create_access_token,
     create_refresh_token,
-    decode_token,
-    verify_token_type
+    verify_token
 )
-from app.core.constants import EstadoUsuario
+from app.models.user import User
+from app.schemas.auth import Token, LoginRequest
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
     """Servicio de autenticación"""
     
-    def __init__(self, db: Session, secret_key: str, algorithm: str):
-        self.db = db
-        self.secret_key = secret_key
-        self.algorithm = algorithm
-    
-    def authenticate_user(self, username: str, password: str) -> Optional[User]:
+    @staticmethod
+    def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
         """
-        Autenticar usuario con username y password
+        Autenticar usuario por email y contraseña
         
+        Args:
+            db: Sesión de base de datos
+            email: Email del usuario
+            password: Contraseña en texto plano
+            
         Returns:
-            User si las credenciales son correctas, None si no
+            Usuario si las credenciales son correctas, None si no
         """
-        user = self.db.query(User).filter(
-            User.username == username.lower()
-        ).first()
+        user = db.query(User).filter(User.email == email).first()
         
         if not user:
+            logger.warning(f"Intento de login con email inexistente: {email}")
             return None
         
-        # Verificar si está bloqueado
-        if user.is_blocked:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Usuario bloqueado hasta {user.bloqueado_hasta}"
-            )
-        
-        # Verificar contraseña
-        if not verify_password(password, user.hashed_password):
-            # Incrementar intentos fallidos
-            user.intentos_fallidos += 1
-            
-            # Bloquear después de 5 intentos
-            if user.intentos_fallidos >= 5:
-                user.bloqueado_hasta = datetime.utcnow() + timedelta(minutes=30)
-                self.db.commit()
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Demasiados intentos fallidos. Usuario bloqueado por 30 minutos"
-                )
-            
-            self.db.commit()
+        if not user.activo:
+            logger.warning(f"Intento de login de usuario inactivo: {email}")
             return None
         
-        # Verificar estado
-        if user.estado != EstadoUsuario.ACTIVO:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Usuario {user.estado.value}"
-            )
+        if not verify_password(password, user.password):
+            logger.warning(f"Contraseña incorrecta para usuario: {email}")
+            return None
         
-        # Login exitoso - resetear intentos
-        user.intentos_fallidos = 0
-        user.ultimo_login = datetime.utcnow()
-        self.db.commit()
+        # Actualizar última conexión
+        user.ultima_conexion = datetime.utcnow()
+        db.commit()
         
+        logger.info(f"Login exitoso: {email}")
         return user
     
-    def create_tokens(self, user_id: int) -> Token:
-        """Crear access token y refresh token"""
+    @staticmethod
+    def login(db: Session, login_data: LoginRequest) -> Token:
+        """
+        Procesar login y generar tokens
         
-        access_token = create_access_token(
-            data={"sub": str(user_id)},
-            secret_key=self.secret_key,
-            algorithm=self.algorithm,
-            expires_delta=timedelta(minutes=30)
+        Args:
+            db: Sesión de base de datos
+            login_data: Datos de login
+            
+        Returns:
+            Token JWT de acceso y refresh
+            
+        Raises:
+            HTTPException: Si las credenciales son incorrectas
+        """
+        user = AuthService.authenticate_user(
+            db, 
+            login_data.email, 
+            login_data.password
         )
         
-        refresh_token = create_refresh_token(
-            data={"sub": str(user_id)},
-            secret_key=self.secret_key,
-            algorithm=self.algorithm,
-            expires_delta=timedelta(days=7)
-        )
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Email o contraseña incorrectos",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Crear tokens
+        token_data = {
+            "sub": str(user.id),
+            "email": user.email,
+            "role": user.rol
+        }
+        
+        access_token = create_access_token(token_data)
+        refresh_token = create_refresh_token({"sub": str(user.id)})
         
         return Token(
             access_token=access_token,
-            refresh_token=refresh_token
+            refresh_token=refresh_token,
+            token_type="bearer",
+            expires_in=1800  # 30 minutos
         )
     
-    def refresh_access_token(self, refresh_token: str) -> Token:
-        """Refrescar access token usando refresh token"""
+    @staticmethod
+    def refresh_access_token(db: Session, refresh_token: str) -> Token:
+        """
+        Refrescar access token usando refresh token
         
-        # Decodificar refresh token
-        payload = decode_token(refresh_token, self.secret_key, self.algorithm)
+        Args:
+            db: Sesión de base de datos
+            refresh_token: Refresh token válido
+            
+        Returns:
+            Nuevo access token
+            
+        Raises:
+            HTTPException: Si el token es inválido
+        """
+        payload = verify_token(refresh_token)
         
-        # Verificar que sea refresh token
-        verify_token_type(payload, "refresh")
-        
-        # Obtener user_id
-        user_id = int(payload.get("sub"))
-        
-        # Verificar que el usuario existe y está activo
-        user = self.db.query(User).filter(User.id == user_id).first()
-        if not user or user.estado != EstadoUsuario.ACTIVO:
+        if not payload or payload.get("type") != "refresh":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuario no válido"
+                detail="Refresh token inválido",
+                headers={"WWW-Authenticate": "Bearer"},
             )
         
-        # Crear nuevos tokens
-        return self.create_tokens(user_id)
-    
-    def create_user(self, user_data: UserCreate, created_by: Optional[int] = None) -> User:
-        """Crear nuevo usuario"""
+        user_id = payload.get("sub")
+        user = db.query(User).filter(User.id == int(user_id)).first()
         
-        # Verificar que no exista el email
-        existing_email = self.db.query(User).filter(
-            User.email == user_data.email
-        ).first()
-        if existing_email:
+        if not user or not user.activo:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Usuario inválido o inactivo"
+            )
+        
+        # Crear nuevo access token
+        token_data = {
+            "sub": str(user.id),
+            "email": user.email,
+            "role": user.rol
+        }
+        
+        new_access_token = create_access_token(token_data)
+        
+        return Token(
+            access_token=new_access_token,
+            refresh_token=refresh_token,  # Mantener el mismo refresh token
+            token_type="bearer",
+            expires_in=1800
+        )
+    
+    @staticmethod
+    def create_user(db: Session, email: str, password: str, nombre: str, 
+                   apellido: str, rol: str) -> User:
+        """
+        Crear nuevo usuario
+        
+        Args:
+            db: Sesión de base de datos
+            email: Email del usuario
+            password: Contraseña en texto plano
+            nombre: Nombre del usuario
+            apellido: Apellido del usuario
+            rol: Rol del usuario
+            
+        Returns:
+            Usuario creado
+            
+        Raises:
+            HTTPException: Si el email ya existe
+        """
+        # Verificar si el email ya existe
+        existing_user = db.query(User).filter(User.email == email).first()
+        if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="El email ya está registrado"
             )
         
-        # Verificar que no exista el username
-        existing_username = self.db.query(User).filter(
-            User.username == user_data.username.lower()
-        ).first()
-        if existing_username:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El username ya está registrado"
-            )
-        
         # Crear usuario
-        db_user = User(
-            email=user_data.email,
-            username=user_data.username.lower(),
-            nombre_completo=user_data.nombre_completo,
-            telefono=user_data.telefono,
-            rol=user_data.rol,
-            hashed_password=get_password_hash(user_data.password),
-            estado=EstadoUsuario.ACTIVO,
-            debe_cambiar_password=True,
-            creado_por=created_by
+        hashed_password = get_password_hash(password)
+        new_user = User(
+            email=email,
+            password=hashed_password,
+            nombre=nombre,
+            apellido=apellido,
+            rol=rol,
+            activo=True,
+            fecha_creacion=datetime.utcnow()
         )
         
-        self.db.add(db_user)
-        self.db.commit()
-        self.db.refresh(db_user)
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
         
-        return db_user
-    
-    def change_password(
-        self,
-        user: User,
-        current_password: str,
-        new_password: str
-    ) -> User:
-        """Cambiar contraseña de usuario"""
-        
-        # Verificar contraseña actual
-        if not verify_password(current_password, user.hashed_password):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Contraseña actual incorrecta"
-            )
-        
-        # Actualizar contraseña
-        user.hashed_password = get_password_hash(new_password)
-        user.debe_cambiar_password = False
-        
-        self.db.commit()
-        self.db.refresh(user)
-        
-        return user
-    
-    def reset_password(self, user_id: int, new_password: str) -> User:
-        """Resetear contraseña (solo admin)"""
-        
-        user = self.db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Usuario no encontrado"
-            )
-        
-        user.hashed_password = get_password_hash(new_password)
-        user.debe_cambiar_password = True
-        user.intentos_fallidos = 0
-        user.bloqueado_hasta = None
-        
-        self.db.commit()
-        self.db.refresh(user)
-        
-        return user
+        logger.info(f"Usuario creado: {email} ({rol})")
+        return new_user
