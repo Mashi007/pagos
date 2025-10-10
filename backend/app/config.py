@@ -36,15 +36,27 @@ class Settings:
         
         # Logging
         self.LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+        
+        # JWT
+        self.SECRET_KEY: str = os.getenv("SECRET_KEY", "")
+        self.ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
+        self.ACCESS_TOKEN_EXPIRE_MINUTES: int = int(
+            os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
+        )
 
     def display_config(self):
         """Muestra la configuración (sin datos sensibles)"""
+        db_display = self.DATABASE_URL.split('@')[1] if '@' in self.DATABASE_URL else '***'
+        secret_display = "✅ Configurada" if self.SECRET_KEY else "⚠️  No configurada"
+        
         print("\n" + "="*60)
         print(f"🚀 {self.APP_NAME} v{self.APP_VERSION}")
         print("="*60)
         print(f"🌍 Entorno: {self.ENVIRONMENT}")
         print(f"🔌 Puerto: {self.PORT}")
-        print(f"🗄️  Base de datos: {self.DATABASE_URL.split('@')[1] if '@' in self.DATABASE_URL else 'configurada'}")
+        print(f"🗄️  Base de datos: postgresql://***:***@{db_display}")
+        print(f"🔐 SECRET_KEY: {secret_display}")
+        print(f"🔑 JWT: {'✅ Configurado' if self.SECRET_KEY else '⚠️  Pendiente'}")
         print(f"📝 Log level: {self.LOG_LEVEL}")
         print(f"🌐 CORS origins: {self.ALLOWED_ORIGINS}")
         print("="*60 + "\n")
@@ -55,5 +67,6 @@ def get_settings() -> Settings:
     return Settings()
 
 
-# ⚠️ NO crear instancia global aquí
-# settings = Settings()  # ❌ ELIMINAR ESTA LÍNEA
+# ❌❌❌ NO AGREGAR NADA MÁS DESPUÉS DE ESTA LÍNEA ❌❌❌
+# ❌ ESPECIALMENTE NO AGREGAR: settings = get_settings()
+# ❌ ESPECIALMENTE NO AGREGAR: settings = Settings()
