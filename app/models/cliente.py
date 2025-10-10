@@ -1,25 +1,23 @@
-# app/models/cliente.py
-from sqlalchemy import Column, Integer, String, DateTime, Boolean
-from sqlalchemy.orm import relationship
-from datetime import datetime
+from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Text
+from sqlalchemy.sql import func
 from app.db.session import Base
 
 class Cliente(Base):
     __tablename__ = "clientes"
+    __table_args__ = {"schema": "pagos_sistema"}
     
     id = Column(Integer, primary_key=True, index=True)
-    nombre = Column(String, nullable=False, index=True)
-    cedula = Column(String, unique=True, nullable=False, index=True)
-    telefono = Column(String, nullable=False)
-    email = Column(String, nullable=True)
-    direccion = Column(String, nullable=True)
-    activo = Column(Boolean, default=True)
-    
-    fecha_creacion = Column(DateTime, default=datetime.utcnow)
-    fecha_actualizacion = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Relaciones
-    prestamos = relationship("Prestamo", back_populates="cliente")
-    
-    def __repr__(self):
-        return f"<Cliente {self.nombre} - {self.cedula}>"
+    numero_documento = Column(String(20), unique=True, nullable=False, index=True)
+    tipo_documento = Column(String(10), default="DNI")
+    nombres = Column(String(100), nullable=False)
+    apellidos = Column(String(100), nullable=False)
+    telefono = Column(String(15))
+    email = Column(String(100))
+    direccion = Column(Text)
+    fecha_nacimiento = Column(Date)
+    ocupacion = Column(String(100))
+    estado = Column(String(20), default="ACTIVO")
+    fecha_registro = Column(TIMESTAMP, server_default=func.now())
+    fecha_actualizacion = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+    usuario_registro = Column(String(50))
+    notas = Column(Text)
