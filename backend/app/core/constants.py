@@ -2,6 +2,33 @@
 from enum import Enum
 
 
+class UserRole(str, Enum):
+    """Roles de usuario en el sistema"""
+    ADMIN = "ADMIN"
+    ASESOR = "ASESOR"
+    COBRANZAS = "COBRANZAS"
+    CONTADOR = "CONTADOR"
+
+
+# Alias para compatibilidad con user.py existente
+Roles = UserRole
+
+
+class EstadoUsuario(str, Enum):
+    """Estados de usuario"""
+    ACTIVO = "ACTIVO"
+    INACTIVO = "INACTIVO"
+    SUSPENDIDO = "SUSPENDIDO"
+
+
+class EstadoCliente(str, Enum):
+    """Estados de cliente"""
+    ACTIVO = "ACTIVO"
+    INACTIVO = "INACTIVO"
+    MOROSO = "MOROSO"
+    BLOQUEADO = "BLOQUEADO"
+
+
 class EstadoPrestamo(str, Enum):
     """Estados posibles de un préstamo"""
     PENDIENTE = "PENDIENTE"
