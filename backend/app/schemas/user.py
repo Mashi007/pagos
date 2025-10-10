@@ -1,12 +1,16 @@
 # backend/app/schemas/user.py
 """
-Schemas de Usuario: Create, Update, Response
+Schemas de Usuario: Create, Update, Response, Authentication y Password Management
 """
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
 from app.core.permissions import UserRole
 
+
+# ============================================
+# SCHEMAS BASE DE USUARIO
+# ============================================
 
 class UserBase(BaseModel):
     """Schema base de usuario"""
@@ -126,5 +130,97 @@ class UserMeResponse(UserResponse):
                     "cliente:create",
                     "prestamo:approve"
                 ]
+            }
+        }
+
+
+# ============================================
+# SCHEMAS DE AUTENTICACIÓN
+# ============================================
+
+class LoginRequest(BaseModel):
+    """Schema para login de usuario"""
+    email: EmailStr
+    password: str
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "usuario@sistema.com",
+                "password": "Password123!"
+            }
+        }
+
+
+class Token(BaseModel):
+    """Schema para respuesta de token JWT"""
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "token_type": "bearer",
+                "expires_in": 3600
+            }
+        }
+
+
+class RefreshTokenRequest(BaseModel):
+    """Schema para renovar token"""
+    refresh_token: str
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            }
+        }
+
+
+# ============================================
+# SCHEMAS DE GESTIÓN DE CONTRASEÑAS
+# ============================================
+
+class PasswordChange(BaseModel):
+    """Schema para cambio de contraseña"""
+    current_password: str
+    new_password: str = Field(..., min_length=8)
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "current_password": "OldPassword123!",
+                "new_password": "NewPassword456!"
+            }
+        }
+
+
+class PasswordReset(BaseModel):
+    """Schema para solicitar reset de contraseña"""
+    email: EmailStr
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "usuario@sistema.com"
+            }
+        }
+
+
+class PasswordResetConfirm(BaseModel):
+    """Schema para confirmar reset de contraseña"""
+    token: str
+    new_password: str = Field(..., min_length=8)
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "token": "abc123def456",
+                "new_password": "NewPassword789!"
             }
         }
