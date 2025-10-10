@@ -14,7 +14,10 @@ wait_for_database_url() {
     while [ $attempt -le $max_attempts ]; do
         if [ ! -z "$DATABASE_URL" ]; then
             echo "✅ DATABASE_URL encontrada en intento $attempt"
-            echo "🔗 Host: $(echo $DATABASE_URL | grep -oP '(?<=@)[^:]+' || echo 'N/A')"
+            # Mostrar info de conexión (sin credenciales)
+            local host=$(echo $DATABASE_URL | grep -oP '(?<=@)[^:/]+' || echo 'unknown')
+            local port=$(echo $DATABASE_URL | grep -oP '(?<=:)\d+(?=/)' || echo '5432')
+            echo "🔗 Conectando a: $host:$port"
             return 0
         fi
         
@@ -24,14 +27,19 @@ wait_for_database_url() {
     done
     
     echo "❌ ERROR: DATABASE_URL no disponible después de $max_attempts intentos"
-    echo "📋 Variables disponibles:"
+    echo "📋 Variables de entorno disponibles relacionadas con DB:"
     env | grep -iE "postgres|database|railway" || echo "  Ninguna variable de DB encontrada"
     return 1
 }
 
 # Esperar a que DATABASE_URL esté disponible
 if ! wait_for_database_url; then
-    echo "❌ Fallo crítico: No se puede continuar sin DATABASE_URL"
+    echo ""
+    echo "❌ FALLO CRÍTICO: No se puede continuar sin DATABASE_URL"
+    echo ""
+    echo "Verifica en Railway:"
+    echo "  1. Settings > Variables > DATABASE_URL debe existir"
+    echo "  2. O conecta el servicio PostgreSQL"
     exit 1
 fi
 
@@ -48,15 +56,20 @@ max_migration_attempts=3
 migration_attempt=1
 
 while [ $migration_attempt -le $max_migration_attempts ]; do
-    echo "Intento de migración $migration_attempt de $max_migration_attempts..."
+    echo "📝 Intento de migración $migration_attempt de $max_migration_attempts..."
     
     if alembic upgrade head 2>&1; then
         echo "✅ Migraciones completadas exitosamente"
         break
     else
         if [ $migration_attempt -eq $max_migration_attempts ]; then
+            echo ""
             echo "❌ ERROR: Migraciones fallaron después de $max_migration_attempts intentos"
-            echo "Revisa tu configuración de Alembic y la conexión a la base de datos"
+            echo "Posibles causas:"
+            echo "  - Base de datos no accesible"
+            echo "  - Credenciales incorrectas"
+            echo "  - Error en archivos de migración"
+            echo ""
             exit 1
         fi
         echo "⚠️  Intento fallido, reintentando en 5 segundos..."
@@ -70,9 +83,12 @@ echo ""
 echo "=========================================="
 echo "🚀 Iniciando aplicación FastAPI"
 echo "=========================================="
-echo "Puerto: ${PORT:-8080}"
-echo "Workers: 1"
+echo "📍 Host: 0.0.0.0"
+echo "🔌 Puerto: ${PORT:-8080}"
+echo "👷 Workers: 1"
+echo "📊 Log level: info"
 echo "=========================================="
+echo ""
 
 exec uvicorn app.main:app \
     --host 0.0.0.0 \
