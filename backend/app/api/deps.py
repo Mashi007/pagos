@@ -1,27 +1,16 @@
 # backend/app/api/deps.py
-from typing import Generator
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import JWTError, jwt
 from sqlalchemy.orm import Session
+from typing import Optional
 
-from app.db.session import SessionLocal
+from app.db.session import get_db
 from app.models.user import User
-from app.core.security import decode_token, verify_token_type
-from app.core.constants import EstadoUsuario
-from app.config import settings
+from app.config import get_settings
+from app.core.constants import Roles
 
-
-# Security scheme
 security = HTTPBearer()
-
-
-def get_db() -> Generator:
-    """Dependency para obtener sesión de base de datos"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 def get_current_user(
@@ -29,63 +18,118 @@ def get_current_user(
     db: Session = Depends(get_db)
 ) -> User:
     """
-    Obtener usuario actual desde JWT token
+    Obtener usuario actual desde el JWT token
     
-    Dependencia para proteger endpoints que requieren autenticación
+    Raises:
+        HTTPException: Si el token es inválido o el usuario no existe
     """
-    token = credentials.credentials
+    settings = get_settings()
     
-    # Decodificar token
-    payload = decode_token(token, settings.SECRET_KEY, settings.ALGORITHM)
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="No se pudo validar las credenciales",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     
-    # Verificar que sea access token
-    verify_token_type(payload, "access")
-    
-    # Obtener user_id
-    user_id: int = int(payload.get("sub"))
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No se pudo validar el token",
-            headers={"WWW-Authenticate": "Bearer"},
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(
+            token, 
+            settings.SECRET_KEY, 
+            algorithms=[settings.ALGORITHM]
         )
+        user_id: int = payload.get("sub")
+        
+        if user_id is None:
+            raise credentials_exception
+            
+    except JWTError:
+        raise credentials_exception
     
-    # Obtener usuario de BD
     user = db.query(User).filter(User.id == user_id).first()
+    
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado"
-        )
+        raise credentials_exception
     
-    # Verificar que esté activo
-    if user.estado != EstadoUsuario.ACTIVO:
+    if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Usuario {user.estado.value}"
-        )
-    
-    # Verificar si está bloqueado
-    if user.is_blocked:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Usuario bloqueado hasta {user.bloqueado_hasta}"
+            detail="Usuario inactivo"
         )
     
     return user
 
 
-def get_current_active_superuser(
-    current_user: User = Depends(get_current_user),
+def get_current_active_user(
+    current_user: User = Depends(get_current_user)
 ) -> User:
-    """
-    Verificar que el usuario actual sea superusuario
-    
-    Dependencia para endpoints que solo superusers pueden acceder
-    """
-    if not current_user.is_superuser:
+    """Verificar que el usuario esté activo"""
+    if not current_user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tiene permisos de superusuario"
+            detail="Usuario inactivo"
         )
     return current_user
+
+
+def require_role(allowed_roles: list[Roles]):
+    """
+    Decorator para requerir roles específicos
+    
+    Usage:
+        @router.get("/admin")
+        def admin_endpoint(user: User = Depends(require_role([Roles.ADMIN]))):
+            ...
+    """
+    def role_checker(current_user: User = Depends(get_current_user)) -> User:
+        if current_user.rol not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Requiere uno de los roles: {[r.value for r in allowed_roles]}"
+            )
+        return current_user
+    
+    return role_checker
+
+
+def get_current_admin(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """Verificar que el usuario sea administrador"""
+    if current_user.rol != Roles.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Requiere rol de administrador"
+        )
+    return current_user
+
+
+def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    """
+    Obtener usuario opcional (no requiere autenticación)
+    Útil para endpoints públicos que pueden tener funcionalidad extra si hay usuario
+    """
+    if credentials is None:
+        return None
+    
+    try:
+        settings = get_settings()
+        token = credentials.credentials
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM]
+        )
+        user_id: int = payload.get("sub")
+        
+        if user_id is None:
+            return None
+        
+        user = db.query(User).filter(User.id == user_id).first()
+        return user
+        
+    except JWTError:
+        return None
