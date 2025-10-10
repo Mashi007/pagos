@@ -1,68 +1,42 @@
 # backend/app/models/user.py
+"""
+Modelo de Usuario
+Tabla de usuarios del sistema con autenticación y roles
+"""
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum as SQLEnum
-from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from datetime import datetime
 from app.db.session import Base
-from app.core.constants import Roles, EstadoUsuario
+from app.core.permissions import UserRole
 
 
 class User(Base):
+    """Modelo de Usuario"""
+    
     __tablename__ = "users"
-    __table_args__ = {"schema": "pagos_sistema"}  # ✅ AGREGAR SCHEMA
+    __table_args__ = {"schema": "pagos_sistema"}
     
     id = Column(Integer, primary_key=True, index=True)
-    
-    # Información básica
-    email = Column(String, unique=True, index=True, nullable=False)
-    username = Column(String, unique=True, index=True, nullable=False)
-    nombre_completo = Column(String, nullable=False)
-    hashed_password = Column(String, nullable=False)
-    
-    # Rol y estado
-    rol = Column(SQLEnum(Roles), nullable=False, default=Roles.ASESOR)
-    estado = Column(SQLEnum(EstadoUsuario), default=EstadoUsuario.ACTIVO)
-    
-    # Información adicional
-    telefono = Column(String, nullable=True)
-    avatar_url = Column(String, nullable=True)
-    
-    # Seguridad
-    is_superuser = Column(Boolean, default=False)
-    debe_cambiar_password = Column(Boolean, default=True)
-    ultimo_login = Column(DateTime, nullable=True)
-    intentos_fallidos = Column(Integer, default=0)
-    bloqueado_hasta = Column(DateTime, nullable=True)
-    
-    # Auditoría
-    fecha_creacion = Column(DateTime, default=datetime.utcnow)
-    fecha_actualizacion = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    creado_por = Column(Integer, nullable=True)
-    
-    # Relaciones
-    auditorias = relationship("Auditoria", back_populates="usuario", foreign_keys="Auditoria.usuario_id")
-    notificaciones_enviadas = relationship("Notificacion", back_populates="enviado_por_usuario")
-    aprobaciones_solicitadas = relationship(
-        "Aprobacion", 
-        back_populates="solicitante",
-        foreign_keys="Aprobacion.solicitante_id"
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    nombre = Column(String(100), nullable=False)
+    apellido = Column(String(100), nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    rol = Column(
+        SQLEnum(UserRole, name="user_role_enum", create_type=True),
+        nullable=False,
+        default=UserRole.ASESOR
     )
-    aprobaciones_revisadas = relationship(
-        "Aprobacion",
-        back_populates="revisor",
-        foreign_keys="Aprobacion.revisor_id"
-    )
+    is_active = Column(Boolean, default=True, nullable=False)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    last_login = Column(DateTime(timezone=True))
     
     def __repr__(self):
-        return f"<User {self.username} - {self.rol}>"
+        return f"<User(id={self.id}, email='{self.email}', rol='{self.rol}')>"
     
     @property
-    def is_active(self) -> bool:
-        """Verificar si el usuario está activo"""
-        return self.estado == EstadoUsuario.ACTIVO
-    
-    @property
-    def is_blocked(self) -> bool:
-        """Verificar si el usuario está bloqueado"""
-        if self.bloqueado_hasta is None:
-            return False
-        return datetime.utcnow() < self.bloqueado_hasta
+    def full_name(self) -> str:
+        """Retorna el nombre completo del usuario"""
+        return f"{self.nombre} {self.apellido}"
