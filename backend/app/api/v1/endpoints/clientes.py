@@ -44,19 +44,19 @@ def listar_clientes(
     return clientes
 
 
-@router.get("/{cliente_id}", response_model=ClienteResponse)
-def obtener_cliente(cliente_id: int, db: Session = Depends(get_db)):
-    """Obtener un cliente por ID"""
-    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+@router.get("/cedula/{cedula}", response_model=ClienteResponse)
+def buscar_por_cedula(cedula: str, db: Session = Depends(get_db)):
+    """Buscar cliente por cédula"""
+    cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     return cliente
 
 
-@router.get("/cedula/{cedula}", response_model=ClienteResponse)
-def buscar_por_cedula(cedula: str, db: Session = Depends(get_db)):
-    """Buscar cliente por cédula"""
-    cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
+@router.get("/{cliente_id}", response_model=ClienteResponse)
+def obtener_cliente(cliente_id: int, db: Session = Depends(get_db)):
+    """Obtener un cliente por ID"""
+    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     return cliente
