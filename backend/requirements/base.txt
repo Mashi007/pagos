@@ -1,16 +1,110 @@
-# Dependencias base necesarias en todos los entornos
-fastapi==0.115.5
-uvicorn[standard]==0.32.1
-python-multipart==0.0.18
-sqlalchemy==2.0.36
-psycopg2-binary==2.9.10
-alembic==1.14.0
+# Backend - Base Requirements
+# Sistema de Préstamos y Cobranza - Dependencias Base
+# ====================================================
+# Este archivo contiene todas las dependencias core del sistema
+# Usado como base para dev, prod y test
+
+# ==========================================
+# WEB FRAMEWORK
+# ==========================================
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# ==========================================
+# DATABASE
+# ==========================================
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# ==========================================
+# AUTHENTICATION & SECURITY
+# ==========================================
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-cryptography==44.0.0
+bcrypt==4.1.2
+cryptography==42.0.2                # Dependencia explícita para python-jose
+
+# ==========================================
+# VALIDATION & CONFIGURATION
+# ==========================================
+pydantic==2.5.3
+pydantic-settings==2.1.0
+email-validator==2.1.0.post1
+
+# ==========================================
+# UTILITIES
+# ==========================================
 python-dotenv==1.0.1
-pydantic==2.10.3
-pydantic-settings==2.6.1
-email-validator==2.2.0
-python-dateutil==2.9.0.post0
-pytz==2024.2
+
+# ==========================================
+# DATE & TIME
+# ==========================================
+python-dateutil==2.8.2
+pytz==2024.1
+
+# ==========================================
+# EXCEL HANDLING
+# ==========================================
+openpyxl==3.1.2
+pandas==2.1.4
+xlsxwriter==3.1.9
+numpy==1.26.3                       # Dependencia de pandas
+
+# ==========================================
+# PDF GENERATION
+# ==========================================
+reportlab==4.0.9
+pypdf==3.17.4
+# weasyprint==60.2                  # Descomentar si necesitas HTML to PDF (requiere deps sistema)
+
+# ==========================================
+# EMAIL & TEMPLATES
+# ==========================================
+aiosmtplib==3.0.1
+jinja2==3.1.3
+premailer==3.10.0
+markupsafe==2.1.4                   # Dependencia de jinja2
+
+# ==========================================
+# HTTP CLIENT
+# ==========================================
+httpx==0.26.0
+
+# ==========================================
+# SCHEDULING & BACKGROUND TASKS
+# ==========================================
+apscheduler==3.10.4
+
+# ==========================================
+# LOGGING
+# ==========================================
+python-json-logger==2.0.7
+
+# ==========================================
+# API UTILITIES
+# ==========================================
+slowapi==0.1.9                      # Rate limiting
+
+# ==========================================
+# CORS & MIDDLEWARE
+# ==========================================
+# CORS ya está incluido en FastAPI
+# Agregamos starlette para middleware adicional si es necesario
+starlette==0.35.1                   # Ya viene con FastAPI pero explícito
+
+# ==========================================
+# TESTING (Base - mínimo necesario)
+# ==========================================
+pytest==7.4.4
+pytest-asyncio==0.21.1
+httpx==0.26.0                       # Para testing de API
+
+# ==========================================
+# NOTAS
+# ==========================================
+# - Todas las versiones han sido probadas juntas
+# - Compatible con Python 3.11+
+# - PostgreSQL 14+ recomendado
+# - Para WeasyPrint ver docs de instalación de deps sistema
