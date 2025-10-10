@@ -1,9 +1,11 @@
 # app/db/init_db.py
 from sqlalchemy import text
-from app.db.session import engine, SessionLocal, Base  # ✅ Importar Base directo de session
+from app.db.session import engine, SessionLocal, Base  # ✅ Importar Base directo
+from app.config import get_settings
 import logging
 
 logger = logging.getLogger(__name__)
+
 
 def check_database_connection() -> bool:
     """
@@ -34,9 +36,12 @@ def init_database() -> bool:
         bool: True si la inicialización fue exitosa
     """
     try:
+        settings = get_settings()
+        
         logger.info("🔄 Iniciando creación de tablas...")
         
-        # ✅ Importar modelos DENTRO de la función (lazy loading)
+        # ✅ CRÍTICO: Importar modelos AQUÍ DENTRO (lazy loading)
+        # Esto evita el ciclo circular durante el startup
         from app.models.cliente import Cliente
         from app.models.prestamo import Prestamo
         from app.models.pago import Pago
@@ -49,6 +54,8 @@ def init_database() -> bool:
         Base.metadata.create_all(bind=engine)
         
         logger.info("✅ Tablas creadas exitosamente")
+        logger.info(f"📊 Total de tablas: {len(Base.metadata.tables)}")
+        
         return True
         
     except Exception as e:
@@ -63,7 +70,7 @@ def create_tables():
     Función auxiliar para crear tablas (sin logging extensivo)
     """
     try:
-        # ✅ Importar modelos DENTRO de la función
+        # ✅ Importar modelos dentro de la función
         from app.models.cliente import Cliente
         from app.models.prestamo import Prestamo
         from app.models.pago import Pago
