@@ -36,7 +36,7 @@ EXPOSE 8000
 # Comando de inicio con migraciones automáticas
 CMD ["sh", "-c", "\
     echo '🚀 Iniciando aplicación...' && \
-    echo '📊 Ejecutando migraciones...' && \
+    echo '📊 Ejecutando migraciones de base de datos...' && \
     alembic upgrade head && \
     echo '✅ Migraciones completadas' && \
     echo '🌐 Iniciando servidor en puerto ${PORT:-8000}...' && \
