@@ -1,50 +1,119 @@
 # Backend - Development Requirements
-# Sistema de Préstamos y Cobranza - Entorno de Desarrollo
-# ========================================================
+# Sistema de Préstamos y Cobranza - Desarrollo
+# =============================================
 
-# Incluir todas las dependencias de producción
--r requirements.txt
+# ==========================================
+# DEPENDENCIAS BASE
+# ==========================================
+-r base.txt
 
-# Development Tools
-# -----------------
-black==23.12.1                      # Formateo automático de código
-flake8==7.0.0                       # Linting
+# ==========================================
+# CODE QUALITY & FORMATTING
+# ==========================================
+black==24.1.1                       # ⬆️ Actualizado - Formateo de código
 isort==5.13.2                       # Ordenamiento de imports
-mypy==1.8.0                         # Type checking estático
-pylint==3.0.3                       # Análisis de código
+flake8==7.0.0                       # Linting
+pylint==3.0.3                       # Análisis estático
+autopep8==2.0.4                     # 🆕 Auto-formatting adicional
 
-# Testing Avanzado
-# ----------------
+# ==========================================
+# TYPE CHECKING
+# ==========================================
+mypy==1.8.0                         # Type checking estático
+types-python-dateutil==2.8.19.20240106  # 🆕 Type hints para dateutil
+types-pytz==2024.1.0.20240203       # 🆕 Type hints para pytz
+
+# ==========================================
+# TESTING AVANZADO
+# ==========================================
+pytest==7.4.4
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0                   # Coverage
 pytest-xdist==3.5.0                 # Tests paralelos
 pytest-mock==3.12.0                 # Mocking
 pytest-watch==4.2.0                 # Auto-run tests
-coverage==7.4.0                     # Coverage detallado
+pytest-timeout==2.2.0               # 🆕 Timeout para tests
+pytest-env==1.1.3                   # 🆕 Variables de entorno en tests
+faker==22.6.0                       # Datos de prueba
+factory-boy==3.3.0                  # 🆕 Factories para testing
 
-# Debugging
-# ---------
+# ==========================================
+# DEBUGGING
+# ==========================================
 ipython==8.20.0                     # REPL mejorado
 ipdb==0.13.13                       # Debugger interactivo
-rich==13.7.0                        # Output formateado en terminal
+rich==13.7.0                        # Output formateado
+icecream==2.1.3                     # 🆕 Debugging prints mejorados
 
-# Database Tools
-# --------------
-sqlalchemy-utils==0.41.1            # Utilidades para SQLAlchemy
-psycopg2-binary==2.9.9              # PostgreSQL adapter
+# ==========================================
+# DATABASE TOOLS
+# ==========================================
+sqlalchemy-utils==0.41.1            # Utilidades SQLAlchemy
+faker==22.6.0                       # Para seed data
 
-# API Development
-# ---------------
+# ==========================================
+# API DEVELOPMENT TOOLS
+# ==========================================
 httpie==3.2.2                       # HTTP client CLI
-locust==2.20.0                      # Load testing (opcional)
+locust==2.20.1                      # 🆕 Load testing
+requests==2.31.0                    # 🆕 Testing HTTP simple
 
-# Documentation
-# -------------
+# ==========================================
+# DOCUMENTATION
+# ==========================================
 mkdocs==1.5.3                       # Documentación
-mkdocs-material==9.5.3              # Theme para docs
+mkdocs-material==9.5.6              # ⬆️ Actualizado - Theme
+mkdocs-swagger-ui-tag==0.6.8        # 🆕 Swagger en docs
 
-# Git Hooks
-# ---------
-pre-commit==3.6.0                   # Git hooks automation
+# ==========================================
+# GIT HOOKS & AUTOMATION
+# ==========================================
+pre-commit==3.6.0                   # Git hooks
+commitizen==3.13.0                  # 🆕 Conventional commits
 
-# Monitoring Development
-# ----------------------
-watchfiles==0.21.0                  # File watching para hot reload
+# ==========================================
+# FILE WATCHING & HOT RELOAD
+# ==========================================
+watchfiles==0.21.0                  # File watching
+
+# ==========================================
+# PROFILING & PERFORMANCE
+# ==========================================
+py-spy==0.3.14                      # 🆕 Profiler
+memory-profiler==0.61.0             # 🆕 Memory profiling
+line-profiler==4.1.1                # 🆕 Line-by-line profiling
+
+# ==========================================
+# ENVIRONMENT MANAGEMENT
+# ==========================================
+python-dotenv==1.0.1                # Ya está en base, pero importante
+
+# ==========================================
+# SECURITY SCANNING
+# ==========================================
+bandit==1.7.6                       # 🆕 Security linter
+safety==3.0.1                       # 🆕 Vulnerability checker
+
+# ==========================================
+# DATA GENERATION & FIXTURES
+# ==========================================
+mimesis==13.1.0                     # 🆕 Data generator alternativo a Faker
+
+# ==========================================
+# NOTAS DE DESARROLLO
+# ==========================================
+# Pre-commit hooks recomendados:
+# - black (formatting)
+# - isort (imports)
+# - flake8 (linting)
+# - mypy (type checking)
+# - bandit (security)
+#
+# Ver .pre-commit-config.yaml para configuración
+#
+# Comandos útiles:
+# - pytest --cov=app tests/                    # Tests con coverage
+# - black app/ tests/                          # Format code
+# - mypy app/                                  # Type check
+# - locust -f tests/load/locustfile.py         # Load testing
+# - bandit -r app/                             # Security check
