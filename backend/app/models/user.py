@@ -2,13 +2,13 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from datetime import datetime
-
 from app.db.session import Base
 from app.core.constants import Roles, EstadoUsuario
 
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = {"schema": "pagos_sistema"}  # ✅ AGREGAR SCHEMA
     
     id = Column(Integer, primary_key=True, index=True)
     
