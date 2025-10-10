@@ -43,7 +43,7 @@ class Settings:
         self.ACCESS_TOKEN_EXPIRE_MINUTES: int = int(
             os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
         )
-
+    
     def display_config(self):
         """Muestra la configuración (sin datos sensibles)"""
         db_display = self.DATABASE_URL.split('@')[1] if '@' in self.DATABASE_URL else '***'
@@ -61,12 +61,9 @@ class Settings:
         print(f"🌐 CORS origins: {self.ALLOWED_ORIGINS}")
         print("="*60 + "\n")
 
-
 def get_settings() -> Settings:
     """Factory para obtener instancia de Settings"""
     return Settings()
 
-
-# ❌❌❌ NO AGREGAR NADA MÁS DESPUÉS DE ESTA LÍNEA ❌❌❌
-# ❌ ESPECIALMENTE NO AGREGAR: settings = get_settings()
-# ❌ ESPECIALMENTE NO AGREGAR: settings = Settings()
+# Instancia global para importar
+settings = Settings()
