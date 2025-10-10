@@ -1,46 +1,88 @@
 # Backend - Requirements
 # Sistema de Préstamos y Cobranza
+# =================================
 
 # Web Framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
+fastapi==0.109.0                    # ⬆️ Actualizado (de 0.104.1)
+uvicorn[standard]==0.27.0           # ⬆️ Actualizado (de 0.24.0)
+python-multipart==0.0.6             # ✅ Mantenido
 
 # Database
-sqlalchemy==2.0.23
-psycopg2-binary==2.9.9
-alembic==1.12.1
+sqlalchemy==2.0.25                  # ⬆️ Actualizado (de 2.0.23)
+psycopg2-binary==2.9.9              # ✅ Mantenido
+alembic==1.13.1                     # ⬆️ Actualizado (de 1.12.1)
 
-# Authentication & Security (FASE 2)
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-python-multipart==0.0.6
+# Authentication & Security
+python-jose[cryptography]==3.3.0    # ✅ Mantenido
+passlib[bcrypt]==1.7.4              # ✅ Mantenido
+bcrypt==4.1.2                       # 🆕 Agregado - Dependencia explícita
 
 # Validation
-pydantic==2.5.0
-pydantic-settings==2.1.0
-email-validator==2.1.0
+pydantic==2.5.3                     # ⬆️ Actualizado (de 2.5.0)
+pydantic-settings==2.1.0            # ✅ Mantenido
+email-validator==2.1.0.post1        # ⬆️ Actualizado (de 2.1.0)
 
 # Utilities
-python-dotenv==1.0.0
+python-dotenv==1.0.1                # ⬆️ Actualizado (de 1.0.0)
 
 # Date/Time
-python-dateutil==2.8.2
+python-dateutil==2.8.2              # ✅ Mantenido
+pytz==2024.1                        # 🆕 Agregado - Para zonas horarias
 
-# Excel handling (para futuras fases)
-openpyxl==3.1.2
-pandas==2.1.3
+# Excel handling
+openpyxl==3.1.2                     # ✅ Mantenido
+pandas==2.1.4                       # ⬆️ Actualizado (de 2.1.3)
+xlsxwriter==3.1.9                   # 🆕 Agregado - Alternativa para Excel
 
-# PDF generation (para futuras fases)
-reportlab==4.0.7
+# PDF generation
+reportlab==4.0.9                    # ⬆️ Actualizado (de 4.0.7)
+pypdf==3.17.4                       # 🆕 Agregado - Para manipulación PDF
+weasyprint==60.2                    # 🆕 Agregado - HTML to PDF (opcional)
 
-# Email (para futuras fases)
-aiosmtplib==3.0.1
-jinja2==3.1.2
+# Email
+aiosmtplib==3.0.1                   # ✅ Mantenido
+jinja2==3.1.3                       # ⬆️ Actualizado (de 3.1.2)
+premailer==3.10.0                   # 🆕 Agregado - Para emails HTML inline CSS
 
 # HTTP Client
-httpx==0.25.2
+httpx==0.26.0                       # ⬆️ Actualizado (de 0.25.2)
+
+# Scheduling (para notificaciones automáticas)
+apscheduler==3.10.4                 # 🆕 Agregado - Tareas programadas
+
+# Logging & Monitoring
+python-json-logger==2.0.7           # 🆕 Agregado - Logs estructurados
+
+# Rate Limiting (para API)
+slowapi==0.1.9                      # 🆕 Agregado - Rate limiting
+
+# Decimal precision (built-in, pero documentado)
+# decimal - Built-in Python module
 
 # Testing
-pytest==7.4.3
-pytest-asyncio==0.21.1
+pytest==7.4.4                       # ⬆️ Actualizado (de 7.4.3)
+pytest-asyncio==0.21.1              # ✅ Mantenido
+pytest-cov==4.1.0                   # 🆕 Agregado - Coverage de tests
+faker==22.6.0                       # 🆕 Agregado - Datos de prueba
+
+# Development Tools (opcional - comentar en producción)
+# black==23.12.1                    # Formateo de código
+# flake8==7.0.0                     # Linting
+# mypy==1.8.0                       # Type checking
+# pre-commit==3.6.0                 # Git hooks
+
+# =================================
+# NOTAS DE VERSIONES:
+# =================================
+# ⬆️ = Actualizado a versión más reciente estable
+# ✅ = Versión mantenida (ya está actualizada)
+# 🆕 = Nueva dependencia agregada para Sprint 1-2
+# 
+# Para instalar:
+# pip install -r requirements.txt
+#
+# Para actualizar todo:
+# pip install -r requirements.txt --upgrade
+#
+# Para producción (sin dev tools):
+# pip install -r requirements.txt --no-dev
