@@ -39,19 +39,9 @@ from app.schemas.pago import (
 # ============================================
 # SCHEMAS DE USUARIO Y AUTENTICACIÓN
 # ============================================
-# IMPORTAR SOLO LOS MODELOS QUE REALMENTE EXISTEN
-try:
-    from app.schemas.user import (
-        UserRole,  # Este existe según el error
-        # Descomentar solo los que realmente existan en user.py:
-        # UserBase,
-        # UserCreate,
-        # UserUpdate,
-        # UserResponse,
-    )
-except ImportError as e:
-    print(f"⚠️  Advertencia: Algunos modelos de usuario no están disponibles: {e}")
-    UserRole = None
+from app.schemas.user import (
+    UserRole,
+)
 
 # ============================================
 # EXPORTS PÚBLICOS
