@@ -1,42 +1,44 @@
 # app/db/session.py
-import os
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from app.config import get_settings
+import logging
 
-# ✅ Lectura lazy de DATABASE_URL
-def get_database_url():
-    url = os.getenv("DATABASE_URL")
-    if not url:
-        raise ValueError("❌ DATABASE_URL no está configurada")
-    return url
+logger = logging.getLogger(__name__)
 
-# ✅ No crear engine en tiempo de importación
-engine = None
-SessionLocal = None
-Base = declarative_base()
+# Obtener configuración
+settings = get_settings()
 
-def init_db():
-    """Inicializa la conexión a la base de datos"""
-    global engine, SessionLocal
-    
-    if engine is None:
-        database_url = get_database_url()
-        engine = create_engine(
-            database_url,
-            pool_pre_ping=True,
-            pool_size=5,
-            max_overflow=10
-        )
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    
-    return engine
+# Fix para Railway: postgres:// → postgresql://
+DATABASE_URL = settings.DATABASE_URL
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    logger.info("🔧 Corregido DATABASE_URL: postgres:// → postgresql://")
+
+# Crear engine con configuración para producción
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,      # Verifica conexiones antes de usarlas
+    pool_recycle=3600,       # Recicla conexiones cada hora
+    pool_size=5,             # Tamaño del pool
+    max_overflow=10,         # Conexiones extra permitidas
+    echo=settings.DEBUG,     # SQL logging solo en debug
+)
+
+# Crear SessionLocal
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
 
 def get_db():
-    """Dependency para obtener sesión de BD"""
-    if SessionLocal is None:
-        init_db()
+    """
+    Dependency para obtener sesión de base de datos
     
+    Yields:
+        Session: Sesión de SQLAlchemy
+    """
     db = SessionLocal()
     try:
         yield db
