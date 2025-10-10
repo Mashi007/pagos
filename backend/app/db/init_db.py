@@ -1,8 +1,6 @@
 # app/db/init_db.py
 from sqlalchemy import text
-from app.db.session import engine, SessionLocal
-from app.db.base import Base
-from app.config import get_settings
+from app.db.session import engine, SessionLocal, Base  # ✅ Importar Base directo de session
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,14 +13,9 @@ def check_database_connection() -> bool:
         bool: True si la conexión es exitosa, False en caso contrario
     """
     try:
-        # Crear una sesión temporal
         db = SessionLocal()
-        
-        # Intentar ejecutar un query simple
         result = db.execute(text("SELECT 1"))
         result.fetchone()
-        
-        # Cerrar la sesión
         db.close()
         
         logger.info("✅ Conexión a la base de datos exitosa")
@@ -41,20 +34,21 @@ def init_database() -> bool:
         bool: True si la inicialización fue exitosa
     """
     try:
-        settings = get_settings()
-        
         logger.info("🔄 Iniciando creación de tablas...")
         
-        # Importar todos los modelos para que SQLAlchemy los registre
+        # ✅ Importar modelos DENTRO de la función (lazy loading)
         from app.models.cliente import Cliente
         from app.models.prestamo import Prestamo
         from app.models.pago import Pago
+        from app.models.user import User
+        from app.models.auditoria import Auditoria
+        from app.models.notificacion import Notificacion
+        from app.models.aprobacion import Aprobacion
         
         # Crear todas las tablas
         Base.metadata.create_all(bind=engine)
         
         logger.info("✅ Tablas creadas exitosamente")
-        
         return True
         
     except Exception as e:
@@ -69,9 +63,14 @@ def create_tables():
     Función auxiliar para crear tablas (sin logging extensivo)
     """
     try:
+        # ✅ Importar modelos DENTRO de la función
         from app.models.cliente import Cliente
         from app.models.prestamo import Prestamo
         from app.models.pago import Pago
+        from app.models.user import User
+        from app.models.auditoria import Auditoria
+        from app.models.notificacion import Notificacion
+        from app.models.aprobacion import Aprobacion
         
         Base.metadata.create_all(bind=engine)
         return True
