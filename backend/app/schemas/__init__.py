@@ -1,20 +1,32 @@
 # backend/app/schemas/__init__.py
 """
 Schemas centralizados para la API.
-Actualizado: Sincronizado con schemas existentes en user.py
+Incluye todos los modelos de datos para validación y serialización.
 """
 
 from app.schemas.cliente import ClienteCreate, ClienteUpdate, ClienteResponse
 from app.schemas.prestamo import PrestamoCreate, PrestamoUpdate, PrestamoResponse
 from app.schemas.pago import PagoCreate, PagoResponse
 
-# Importaciones de user - Schemas base de usuario
+# Importaciones de user - Schemas completos
 from app.schemas.user import (
+    # Schemas base de usuario
     UserBase,
     UserCreate,
     UserUpdate,
     UserResponse,
     UserListResponse,
+    UserProfile,
+    
+    # Schemas de autenticación
+    LoginRequest,
+    Token,
+    RefreshTokenRequest,
+    
+    # Schemas de gestión de contraseña
+    PasswordChange,
+    PasswordReset,
+    PasswordResetConfirm,
 )
 
 __all__ = [
@@ -32,10 +44,21 @@ __all__ = [
     "PagoCreate",
     "PagoResponse",
     
-    # Usuario
+    # Usuario - CRUD
     "UserBase",
     "UserCreate",
     "UserUpdate",
     "UserResponse",
     "UserListResponse",
+    "UserProfile",
+    
+    # Autenticación y tokens
+    "LoginRequest",
+    "Token",
+    "RefreshTokenRequest",
+    
+    # Gestión de contraseñas
+    "PasswordChange",
+    "PasswordReset",
+    "PasswordResetConfirm",
 ]
