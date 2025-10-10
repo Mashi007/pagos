@@ -1,28 +1,12 @@
-# backend/app/db/base.py
+# app/db/base.py
 """
 Importar Base y todos los modelos para que Alembic los detecte.
-Este módulo centraliza todos los modelos para las migraciones.
+IMPORTANTE: Las importaciones de modelos se hacen de forma lazy para evitar ciclos circulares.
 """
 
 from app.db.session import Base
 
-# Importar todos los modelos
-from app.models.cliente import Cliente
-from app.models.prestamo import Prestamo
-from app.models.pago import Pago
-from app.models.user import User
-from app.models.auditoria import Auditoria
-from app.models.notificacion import Notificacion
-from app.models.aprobacion import Aprobacion
+# NO importar modelos aquí directamente - causa importación circular al startup
+# Los modelos se importarán cuando sea necesario (en init_db.py o en migraciones)
 
-# Export explícito para mejor control
-__all__ = [
-    "Base",
-    "Cliente",
-    "Prestamo",
-    "Pago",
-    "User",
-    "Auditoria",
-    "Notificacion",
-    "Aprobacion",
-]
+__all__ = ["Base"]
