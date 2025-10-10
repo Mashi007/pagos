@@ -1,10 +1,9 @@
-# app/models/prestamo.py - VERSIÓN FINAL COMPLETA
-
+# backend/app/models/prestamo.py
 from enum import Enum
 from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Text, Numeric, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from app.db.session import Base
+from app.db.base import Base
 
 
 class EstadoPrestamo(str, Enum):
@@ -29,10 +28,9 @@ class ModalidadPago(str, Enum):
 
 class Prestamo(Base):
     __tablename__ = "prestamos"
-    __table_args__ = {"schema": "pagos_sistema"}
     
     id = Column(Integer, primary_key=True, index=True)
-    cliente_id = Column(Integer, ForeignKey("pagos_sistema.clientes.id"), nullable=False)
+    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False)
     codigo_prestamo = Column(String(20), unique=True, index=True)
     
     # Montos
@@ -73,4 +71,6 @@ class Prestamo(Base):
     actualizado_en = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
     
     # Relaciones
-    cliente = relationship("Cliente", backref="prestamos")
+    cliente = relationship("Cliente", back_populates="prestamos")
+    cuotas = relationship("Cuota", back_populates="prestamo", cascade="all, delete-orphan")
+    pagos = relationship("Pago", back_populates="prestamo")
