@@ -15,6 +15,7 @@ from app.schemas.user import (
     UserUpdate,
     UserResponse,
     UserListResponse,
+    UserMeResponse,
     
     # Schemas de autenticación
     LoginRequest,
@@ -48,6 +49,7 @@ __all__ = [
     "UserUpdate",
     "UserResponse",
     "UserListResponse",
+    "UserMeResponse",
     
     # Autenticación y tokens
     "LoginRequest",
