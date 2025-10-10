@@ -1,6 +1,75 @@
-# Incluir dependencias base (ruta desde raíz del proyecto)
+# Backend - Production Requirements
+# Sistema de Préstamos y Cobranza - Producción
+# =============================================
+# Optimizado para Railway, Docker y servidores de producción
+
+# ==========================================
+# DEPENDENCIAS BASE
+# ==========================================
 -r base.txt
 
-# Monitoreo producción
-prometheus-fastapi-instrumentator==7.0.0
-sentry-sdk[fastapi]==2.19.2
+# ==========================================
+# PRODUCTION SERVER
+# ==========================================
+gunicorn==21.2.0                    # WSGI server para producción
+gevent==24.2.1                      # Async worker para gunicorn
+
+# ==========================================
+# MONITORING & OBSERVABILITY
+# ==========================================
+prometheus-fastapi-instrumentator==7.0.0    # ⬆️ Actualizado (de 6.1.0)
+prometheus-client==0.19.0                    # 🆕 Cliente Prometheus
+sentry-sdk[fastapi]==2.19.2                 # ⬆️ Actualizado - Error tracking
+
+# ==========================================
+# PERFORMANCE & CACHING
+# ==========================================
+redis==5.0.1                        # 🆕 Para cache y sessions
+hiredis==2.3.2                      # 🆕 Parser rápido para redis (opcional)
+
+# ==========================================
+# HEALTH CHECKS & RELIABILITY
+# ==========================================
+psutil==5.9.7                       # 🆕 System metrics
+tenacity==8.2.3                     # 🆕 Retry logic
+
+# ==========================================
+# SECURITY (Producción)
+# ==========================================
+python-multipart==0.0.6             # Form data parsing seguro
+
+# ==========================================
+# LOGGING AVANZADO (Producción)
+# ==========================================
+loguru==0.7.2                       # 🆕 Logging mejorado
+python-json-logger==2.0.7
+
+# ==========================================
+# COMPRESSION
+# ==========================================
+brotli==1.1.0                       # 🆕 Compresión HTTP
+python-snappy==0.6.1                # 🆕 Compresión datos (opcional)
+
+# ==========================================
+# CONFIGURACIÓN
+# ==========================================
+# Variables de entorno para producción
+# Ver .env.production.example
+
+# SENTRY_DSN=https://...@sentry.io/...
+# REDIS_URL=redis://localhost:6379/0
+# PROMETHEUS_ENABLED=true
+# LOG_LEVEL=INFO
+# WORKERS=4
+
+# ==========================================
+# NOTAS DE DEPLOYMENT
+# ==========================================
+# Railway/Docker:
+# - Usar gunicorn con uvicorn workers
+# - Configurar SENTRY_DSN en variables de entorno
+# - Habilitar Prometheus en /metrics
+# - Redis opcional pero recomendado para cache
+#
+# Comando de inicio recomendado:
+# gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8080
