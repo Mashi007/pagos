@@ -3,7 +3,6 @@
 Schemas centralizados para la API.
 Incluye todos los modelos de datos para validación y serialización.
 """
-
 from app.schemas.cliente import ClienteCreate, ClienteUpdate, ClienteResponse
 from app.schemas.prestamo import PrestamoCreate, PrestamoUpdate, PrestamoResponse
 from app.schemas.pago import PagoCreate, PagoResponse
@@ -16,7 +15,6 @@ from app.schemas.user import (
     UserUpdate,
     UserResponse,
     UserListResponse,
-    UserProfile,
     
     # Schemas de autenticación
     LoginRequest,
@@ -50,7 +48,6 @@ __all__ = [
     "UserUpdate",
     "UserResponse",
     "UserListResponse",
-    "UserProfile",
     
     # Autenticación y tokens
     "LoginRequest",
