@@ -33,13 +33,13 @@ def create_schema():
         return False
 
 
-def drop_and_recreate_tables():
-    """Elimina y recrea todas las tablas (solo para desarrollo)"""
+def drop_tables():
+    """Elimina todas las tablas"""
     try:
         db = SessionLocal()
+        logger.info("🗑️  Eliminando tablas...")
         
-        # Eliminar tablas en orden inverso de dependencias
-        logger.info("🗑️  Eliminando tablas existentes...")
+        # Orden correcto para evitar errores de foreign key
         db.execute(text("DROP TABLE IF EXISTS pagos_sistema.pagos CASCADE"))
         db.execute(text("DROP TABLE IF EXISTS pagos_sistema.prestamos CASCADE"))
         db.execute(text("DROP TABLE IF EXISTS pagos_sistema.notificaciones CASCADE"))
@@ -47,9 +47,9 @@ def drop_and_recreate_tables():
         db.execute(text("DROP TABLE IF EXISTS pagos_sistema.auditorias CASCADE"))
         db.execute(text("DROP TABLE IF EXISTS pagos_sistema.clientes CASCADE"))
         db.execute(text("DROP TABLE IF EXISTS pagos_sistema.users CASCADE"))
+        
         db.commit()
         db.close()
-        
         logger.info("✅ Tablas eliminadas")
         return True
     except Exception as e:
@@ -64,15 +64,13 @@ def init_database() -> bool:
         # PASO 1: Crear schema
         logger.info("🔄 Verificando schema...")
         if not create_schema():
-            logger.error("❌ No se pudo crear el schema")
             return False
         
-        # PASO 2: Eliminar tablas viejas (TEMPORAL - solo en desarrollo)
-        if settings.ENVIRONMENT != "production":
-            drop_and_recreate_tables()
+        # PASO 2: Eliminar tablas viejas SIEMPRE
+        drop_tables()
         
         # PASO 3: Crear tablas
-        logger.info("🔄 Iniciando creación de tablas...")
+        logger.info("🔄 Creando tablas...")
         
         # Importar modelos
         from app.models.cliente import Cliente
@@ -83,7 +81,7 @@ def init_database() -> bool:
         from app.models.notificacion import Notificacion
         from app.models.aprobacion import Aprobacion
         
-        # Crear tablas
+        # Crear todas las tablas
         Base.metadata.create_all(bind=engine)
         
         logger.info("✅ Tablas creadas exitosamente")
@@ -101,6 +99,7 @@ def init_database() -> bool:
 def create_tables():
     try:
         create_schema()
+        drop_tables()
         
         from app.models.cliente import Cliente
         from app.models.prestamo import Prestamo
