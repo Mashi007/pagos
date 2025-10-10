@@ -1,7 +1,32 @@
+# app/models/prestamo.py
+
+from enum import Enum
 from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Text, Numeric, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.db.session import Base
+
+
+# ✅ AGREGAR ESTOS ENUMS AL INICIO DEL ARCHIVO
+class EstadoPrestamo(str, Enum):
+    """Estados posibles de un préstamo"""
+    PENDIENTE = "PENDIENTE"
+    APROBADO = "APROBADO"
+    ACTIVO = "ACTIVO"
+    COMPLETADO = "COMPLETADO"
+    CANCELADO = "CANCELADO"
+    REFINANCIADO = "REFINANCIADO"
+    EN_MORA = "EN_MORA"
+
+
+class ModalidadPago(str, Enum):
+    """Modalidades de pago disponibles"""
+    TRADICIONAL = "TRADICIONAL"
+    SEMANAL = "SEMANAL"
+    QUINCENAL = "QUINCENAL"
+    MENSUAL = "MENSUAL"
+    BIMESTRAL = "BIMESTRAL"
+
 
 class Prestamo(Base):
     __tablename__ = "prestamos"
@@ -35,10 +60,10 @@ class Prestamo(Base):
     saldo_interes = Column(Numeric(12, 2), default=0.00)
     total_pagado = Column(Numeric(12, 2), default=0.00)
     
-    # Estado
-    estado = Column(String(20), default="ACTIVO")
+    # Estado - ✅ Ahora usa el enum
+    estado = Column(String(20), default=EstadoPrestamo.ACTIVO.value)
     categoria = Column(String(20), default="NORMAL")
-    modalidad = Column(String(20), default="TRADICIONAL")
+    modalidad = Column(String(20), default=ModalidadPago.TRADICIONAL.value)
     
     # Información adicional
     destino_credito = Column(Text)
