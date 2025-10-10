@@ -1,29 +1,158 @@
 # backend/app/api/v1/endpoints/health.py
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.db.session import get_db, Base, engine
-from app.db.init_db import check_database_connection
 from app.config import get_settings
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
+from typing import Dict, Any
+import asyncio
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Cache para evitar múltiples checks de DB
+_last_db_check: Dict[str, Any] = {
+    "timestamp": None,
+    "status": True,
+    "cache_duration": 30  # segundos
+}
 
-@router.get("/health")
-async def health_check(db: Session = Depends(get_db)):
-    """Health check endpoint"""
+
+def check_database_cached() -> bool:
+    """
+    Verifica la DB con cache para reducir carga
+    Solo hace check real cada 30 segundos
+    """
+    global _last_db_check
+    
+    now = datetime.utcnow()
+    
+    # Si no hay cache o expiró, hacer check real
+    if (_last_db_check["timestamp"] is None or 
+        (now - _last_db_check["timestamp"]).total_seconds() > _last_db_check["cache_duration"]):
+        
+        try:
+            from app.db.init_db import check_database_connection
+            db_status = check_database_connection()
+            
+            _last_db_check.update({
+                "timestamp": now,
+                "status": db_status
+            })
+            logger.info(f"🔍 DB Check realizado: {db_status}")
+        except Exception as e:
+            logger.error(f"❌ Error en DB check: {e}")
+            _last_db_check.update({
+                "timestamp": now,
+                "status": False
+            })
+    
+    return _last_db_check["status"]
+
+
+@router.get("/health", status_code=status.HTTP_200_OK)
+async def health_check(response: Response):
+    """
+    Health check LIGERO para Railway
+    
+    - No verifica DB por defecto (Railway lo llama cada ~5 segundos)
+    - Responde inmediatamente con status 200
+    - Útil para keep-alive y load balancers
+    """
     settings = get_settings()
-    db_status = check_database_connection()
     
     return {
-        "status": "healthy" if db_status else "unhealthy",
+        "status": "healthy",
+        "app": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@router.get("/health/full", status_code=status.HTTP_200_OK)
+async def health_check_full(response: Response):
+    """
+    Health check COMPLETO con verificación de DB
+    
+    - Usa cache de 30 segundos para reducir carga
+    - Verifica conectividad real a base de datos
+    - Usar para monitoreo menos frecuente
+    """
+    settings = get_settings()
+    
+    # Check con cache
+    db_status = check_database_cached()
+    
+    # Si DB está caída, devolver 503
+    if not db_status:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {
+            "status": "unhealthy",
+            "app": settings.APP_NAME,
+            "version": settings.APP_VERSION,
+            "environment": settings.ENVIRONMENT,
+            "database": "disconnected",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    
+    return {
+        "status": "healthy",
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
-        "database": "connected" if db_status else "disconnected",
+        "database": "connected",
+        "database_last_check": _last_db_check["timestamp"].isoformat() if _last_db_check["timestamp"] else None,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@router.get("/health/ready")
+async def readiness_check(db: Session = Depends(get_db)):
+    """
+    Readiness probe - verifica que la app esté lista para recibir tráfico
+    
+    - Verifica DB en tiempo real
+    - Puede ser más lento
+    - Usar para Kubernetes readiness probes o checks iniciales
+    """
+    settings = get_settings()
+    
+    try:
+        # Check real de DB
+        db.execute(text("SELECT 1"))
+        db_status = True
+    except Exception as e:
+        logger.error(f"❌ Readiness check failed: {e}")
+        db_status = False
+    
+    if not db_status:
+        return Response(
+            content='{"status": "not_ready"}',
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            media_type="application/json"
+        )
+    
+    return {
+        "status": "ready",
+        "app": settings.APP_NAME,
+        "database": "connected",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@router.get("/health/live")
+async def liveness_check():
+    """
+    Liveness probe - verifica que la app esté viva (no colgada)
+    
+    - Respuesta instantánea
+    - No hace checks externos
+    - Usar para Kubernetes liveness probes
+    """
+    return {
+        "status": "alive",
         "timestamp": datetime.utcnow().isoformat()
     }
 
@@ -74,6 +203,10 @@ async def initialize_database(db: Session = Depends(get_db)):
         Base.metadata.create_all(bind=engine)
         
         logger.info("✅ Tablas recreadas exitosamente")
+        
+        # Invalidar cache de DB check
+        global _last_db_check
+        _last_db_check["timestamp"] = None
         
         return {
             "status": "success",
