@@ -1,11 +1,10 @@
 # backend/app/db/init_db.py
 from sqlalchemy import text, inspect
 from app.db.session import engine, Base, SessionLocal
-from app.config import get_settings
+from app.core.config import settings  # ← CORREGIDO: era app.config
 import logging
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 
 def check_database_connection() -> bool:
@@ -56,7 +55,7 @@ def create_tables():
         return False
 
 
-def init_database():
+def init_db() -> bool:  # ← AGREGADA: Esta es la función que faltaba
     """
     Inicializa la base de datos creando las tablas si no existen
     
@@ -92,6 +91,10 @@ def init_database():
         return False
 
 
+# Alias para compatibilidad con versiones anteriores
+init_database = init_db  # ← AGREGADO: Alias para backward compatibility
+
+
 def init_db_startup():
     """
     Función que se llama al inicio de la aplicación (startup event)
@@ -103,10 +106,10 @@ def init_db_startup():
         logger.info("\n" + "="*50)
         logger.info(f"🚀 Sistema de Préstamos y Cobranza v{settings.APP_VERSION}")
         logger.info("="*50)
-        logger.info(f"🗄️  Base de datos: {settings.get_database_url(hide_password=True)}")
+        logger.info(f"🗄️  Base de datos: PostgreSQL (Railway)")
         
         # Inicializar base de datos
-        if init_database():
+        if init_db():
             # Verificar conexión
             if check_database_connection():
                 logger.info("✅ Conexión a base de datos verificada")
