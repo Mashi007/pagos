@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel, EmailStr
 
 from app.db.session import get_db
-from app.models.notificacion import Notificacion, TipoNotificacion, EstadoNotificacion
+from app.models.notificacion import Notificacion
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.pago import Pago
@@ -38,11 +38,11 @@ class NotificacionResponse(BaseModel):
     id: int
     cliente_id: int
     tipo: str
-    canal: str
+    categoria: str
     asunto: str
     estado: str
     enviada_en: Optional[datetime]
-    creada_en: datetime
+    creado_en: datetime
     
     class Config:
         from_attributes = True
@@ -75,11 +75,11 @@ async def enviar_notificacion(
     # Crear registro de notificación
     nueva_notif = Notificacion(
         cliente_id=notificacion.cliente_id,
-        tipo=notificacion.tipo,
-        canal=notificacion.canal,
+        tipo=notificacion.canal,  # EMAIL, WHATSAPP, SMS
+        categoria="RECORDATORIO_PAGO",
         asunto=notificacion.asunto,
         mensaje=notificacion.mensaje,
-        estado=EstadoNotificacion.PENDIENTE.value,
+        estado="PENDIENTE",
         programada_para=notificacion.programada_para or datetime.now()
     )
     
@@ -141,11 +141,11 @@ async def envio_masivo_notificaciones(
         
         notif = Notificacion(
             cliente_id=cliente.id,
-            tipo=TipoNotificacion.RECORDATORIO_PAGO.value,
-            canal=request.canal,
+            tipo=request.canal,
+            categoria="RECORDATORIO_PAGO",
             asunto=f"Recordatorio de Pago - {cliente.nombres}",
             mensaje=mensaje,
-            estado=EstadoNotificacion.PENDIENTE.value,
+            estado="PENDIENTE",
             programada_para=datetime.now()
         )
         
@@ -191,7 +191,7 @@ def historial_notificaciones(
     """
     notificaciones = db.query(Notificacion).filter(
         Notificacion.cliente_id == cliente_id
-    ).order_by(Notificacion.creada_en.desc()).all()
+    ).order_by(Notificacion.creado_en.desc()).all()
     
     return {
         "cliente_id": cliente_id,
@@ -200,11 +200,11 @@ def historial_notificaciones(
             {
                 "id": n.id,
                 "tipo": n.tipo,
-                "canal": n.canal,
+                "categoria": n.categoria,
                 "asunto": n.asunto,
                 "estado": n.estado,
                 "enviada_en": n.enviada_en,
-                "creada_en": n.creada_en
+                "creado_en": n.creado_en
             }
             for n in notificaciones
         ]
@@ -219,7 +219,7 @@ def notificaciones_pendientes(
     Obtener notificaciones pendientes de envío.
     """
     pendientes = db.query(Notificacion).filter(
-        Notificacion.estado == EstadoNotificacion.PENDIENTE.value,
+        Notificacion.estado == "PENDIENTE",
         Notificacion.programada_para <= datetime.now()
     ).all()
     
@@ -230,7 +230,7 @@ def notificaciones_pendientes(
                 "id": n.id,
                 "cliente_id": n.cliente_id,
                 "tipo": n.tipo,
-                "canal": n.canal,
+                "categoria": n.categoria,
                 "programada_para": n.programada_para
             }
             for n in pendientes
@@ -275,11 +275,11 @@ Gracias.
         
         notif = Notificacion(
             cliente_id=prestamo.cliente_id,
-            tipo=TipoNotificacion.RECORDATORIO_PAGO.value,
-            canal="EMAIL",
+            tipo="EMAIL",
+            categoria="RECORDATORIO_PAGO",
             asunto="Recordatorio: Cuota próxima a vencer",
             mensaje=mensaje,
-            estado=EstadoNotificacion.PENDIENTE.value,
+            estado="PENDIENTE",
             programada_para=datetime.now()
         )
         
