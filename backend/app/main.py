@@ -87,74 +87,74 @@ app.add_middleware(
 
 # Health check
 app.include_router(
-    health_router,  # ✅ Cambiado
+    health_router,
     tags=["Health"]
 )
 
 # Módulos principales
 app.include_router(
-    clientes_router,  # ✅ Cambiado
+    clientes_router,
     prefix=f"{settings.API_V1_PREFIX}/clientes",
     tags=["Clientes"]
 )
 
 app.include_router(
-    prestamos_router,  # ✅ Cambiado
+    prestamos_router,
     prefix=f"{settings.API_V1_PREFIX}/prestamos",
     tags=["Préstamos"]
 )
 
 app.include_router(
-    pagos_router,  # ✅ Cambiado
+    pagos_router,
     prefix=f"{settings.API_V1_PREFIX}/pagos",
     tags=["Pagos"]
 )
 
 # Conciliación bancaria
 app.include_router(
-    conciliacion_router,  # ✅ Cambiado
+    conciliacion_router,
     prefix=f"{settings.API_V1_PREFIX}/conciliacion",
     tags=["Conciliación Bancaria"]
 )
 
 # Reportes
 app.include_router(
-    reportes_router,  # ✅ Cambiado
+    reportes_router,
     prefix=f"{settings.API_V1_PREFIX}/reportes",
     tags=["Reportes"]
 )
 
 # KPIs y Estadísticas
 app.include_router(
-    kpis_router,  # ✅ Cambiado
+    kpis_router,
     prefix=f"{settings.API_V1_PREFIX}/kpis",
     tags=["KPIs y Métricas"]
 )
 
 # Notificaciones
 app.include_router(
-    notificaciones_router,  # ✅ Cambiado
+    notificaciones_router,
     prefix=f"{settings.API_V1_PREFIX}/notificaciones",
     tags=["Notificaciones"]
 )
 
 # Sistema de aprobaciones
 app.include_router(
-    aprobaciones_router,  # ✅ Cambiado
+    aprobaciones_router,
     prefix=f"{settings.API_V1_PREFIX}/aprobaciones",
     tags=["Aprobaciones"]
 )
 
 # Auditoría
 app.include_router(
-    auditoria_router,  # ✅ Cambiado
+    auditoria_router,
     prefix=f"{settings.API_V1_PREFIX}/auditoria",
     tags=["Auditoría"]
 )
 
 # Configuración administrativa
 app.include_router(
-    configuracion_router,  # ✅ Cambiado
+    configuracion_router,
     prefix=f"{settings.API_V1_PREFIX}/configuracion",
     tags=["Configuración"]
 )
