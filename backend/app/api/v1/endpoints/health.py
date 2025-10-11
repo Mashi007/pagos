@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.db.session import get_db, Base, engine
-from app.config import get_settings
+from app.core.config import get_settings  # ✅ CORREGIDO
 from datetime import datetime, timedelta
 import logging
 from typing import Dict, Any
