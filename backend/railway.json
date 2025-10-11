@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "uvicorn app.main:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 120 --workers 1",
+    "startCommand": "uvicorn app.main:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 120 --workers 1 --limit-max-requests 1000 --limit-concurrency 100",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ALWAYS",
