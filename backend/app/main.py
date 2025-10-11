@@ -1,191 +1,210 @@
 # backend/app/main.py
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+"""
+Aplicación principal FastAPI - Sistema de Préstamos y Cobranza.
+Incluye TODOS los módulos implementados.
+"""
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-import os
+from contextlib import asynccontextmanager
+import logging
 
-# ✅ Importar TODOS los endpoints existentes
+from app.core.config import settings
+from app.db.init_db import init_db, check_database_connection
+
+# Importar todos los routers
 from app.api.v1.endpoints import (
     health,
     clientes,
     prestamos,
     pagos,
-    auth,
-    users,
-    amortizacion,
+    conciliacion,
+    reportes,
+    kpis,
+    notificaciones,
+    aprobaciones,
+    auditoria,
+    configuracion
 )
+
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Manejo del ciclo de vida de la aplicación.
-    """
-    from app.config import get_settings
-    from app.db.init_db import init_database, check_database_connection
-    
-    settings = get_settings()
-    
+    """Gestión del ciclo de vida de la aplicación"""
     # Startup
-    print("\n" + "=" * 50)
-    print(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION}")
-    print("=" * 50)
+    logger.info("="*50)
+    logger.info(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION}")
+    logger.info("="*50)
+    logger.info(f"🗄️  Base de datos: {settings.DATABASE_URL.split('@')[1] if '@' in settings.DATABASE_URL else 'N/A'}")
     
-    # Mostrar DATABASE_URL (ocultando contraseña)
-    db_url_safe = settings.get_database_url(hide_password=True)
-    print(f"🗄️  Base de datos: {db_url_safe}")
-    
-    # Inicializar tablas
-    try:
-        if init_database():
-            print("✅ Base de datos inicializada correctamente")
-        else:
-            print("⚠️  Advertencia: Error inicializando tablas")
-    except Exception as e:
-        print(f"❌ Error al inicializar BD: {e}")
-        import traceback
-        if settings.DEBUG:
-            traceback.print_exc()
+    # Inicializar base de datos
+    init_db()
+    logger.info("✅ Base de datos inicializada correctamente")
     
     # Verificar conexión
     if check_database_connection():
-        print("✅ Conexión a base de datos verificada")
+        logger.info("✅ Conexión a base de datos verificada")
     else:
-        print("❌ Error: No se pudo conectar a la base de datos")
+        logger.error("❌ Error en conexión a base de datos")
     
-    print(f"🌍 Entorno: {settings.ENVIRONMENT}")
-    print(f"📝 Documentación: /docs")
-    print(f"🔧 Debug mode: {'ON' if settings.DEBUG else 'OFF'}")
-    print("=" * 50 + "\n")
+    logger.info(f"🌍 Entorno: {settings.ENVIRONMENT}")
+    logger.info(f"📝 Documentación: /docs")
+    logger.info(f"🔧 Debug mode: {'ON' if settings.DEBUG else 'OFF'}")
+    logger.info("="*50)
     
     yield
     
     # Shutdown
-    print(f"\n🛑 {settings.APP_NAME} detenido")
+    logger.info("🛑 Sistema de Préstamos y Cobranza detenido")
 
 
+# Crear aplicación
 app = FastAPI(
-    title=os.getenv("APP_NAME", "Sistema de Préstamos y Cobranza"),
-    version=os.getenv("APP_VERSION", "1.0.0"),
-    description="Sistema completo de gestión de préstamos, cobranza y pagos",
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
+    description="API completa para gestión de préstamos, cobranza y pagos",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
 )
 
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    """Captura todas las excepciones no manejadas"""
-    from app.config import get_settings
-    settings = get_settings()
-    
-    print(f"❌ Error no manejado: {exc}")
-    
-    import traceback
-    if settings.DEBUG:
-        traceback.print_exc()
-    
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "Error interno del servidor",
-            "error": str(exc) if settings.DEBUG else "Internal Server Error"
-        }
-    )
-
-
-# CORS
-from app.config import get_settings
-settings = get_settings()
-
+# Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins_list,
-    allow_credentials=True if settings.allowed_origins_list != ["*"] else False,
+    allow_origins=settings.ALLOWED_ORIGINS.split(",") if settings.ALLOWED_ORIGINS != "*" else ["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
 # ============================================
-# ROUTERS
+# REGISTRAR ROUTERS
 # ============================================
-api_prefix = os.getenv("API_PREFIX", "/api/v1")
 
-# Health Check (sin prefijo)
+# Health check
 app.include_router(
     health.router,
     tags=["Health"]
 )
 
-# Autenticación (sin autenticación requerida)
-app.include_router(
-    auth.router,
-    prefix=f"{api_prefix}/auth",
-    tags=["Autenticación"]
-)
-
-# Usuarios (requiere autenticación - configurado en el router)
-app.include_router(
-    users.router,
-    prefix=f"{api_prefix}/users",
-    tags=["Usuarios"]
-)
-
-# Clientes
+# Módulos principales
 app.include_router(
     clientes.router,
-    prefix=f"{api_prefix}/clientes",
+    prefix=f"{settings.API_V1_PREFIX}/clientes",
     tags=["Clientes"]
 )
 
-# Préstamos
 app.include_router(
     prestamos.router,
-    prefix=f"{api_prefix}/prestamos",
+    prefix=f"{settings.API_V1_PREFIX}/prestamos",
     tags=["Préstamos"]
 )
 
-# Pagos
 app.include_router(
     pagos.router,
-    prefix=f"{api_prefix}/pagos",
+    prefix=f"{settings.API_V1_PREFIX}/pagos",
     tags=["Pagos"]
 )
 
-# Amortización
+# Conciliación bancaria
 app.include_router(
-    amortizacion.router,
-    prefix=f"{api_prefix}/amortizacion",
-    tags=["Amortización"]
+    conciliacion.router,
+    prefix=f"{settings.API_V1_PREFIX}/conciliacion",
+    tags=["Conciliación Bancaria"]
+)
+
+# Reportes
+app.include_router(
+    reportes.router,
+    prefix=f"{settings.API_V1_PREFIX}/reportes",
+    tags=["Reportes"]
+)
+
+# KPIs y Estadísticas
+app.include_router(
+    kpis.router,
+    prefix=f"{settings.API_V1_PREFIX}/kpis",
+    tags=["KPIs y Métricas"]
+)
+
+# Notificaciones
+app.include_router(
+    notificaciones.router,
+    prefix=f"{settings.API_V1_PREFIX}/notificaciones",
+    tags=["Notificaciones"]
+)
+
+# Sistema de aprobaciones
+app.include_router(
+    aprobaciones.router,
+    prefix=f"{settings.API_V1_PREFIX}/aprobaciones",
+    tags=["Aprobaciones"]
+)
+
+# Auditoría
+app.include_router(
+    auditoria.router,
+    prefix=f"{settings.API_V1_PREFIX}/auditoria",
+    tags=["Auditoría"]
+)
+
+# Configuración administrativa
+app.include_router(
+    configuracion.router,
+    prefix=f"{settings.API_V1_PREFIX}/configuracion",
+    tags=["Configuración"]
 )
 
 
 @app.get("/", include_in_schema=False)
 async def root():
     """Endpoint raíz con información del sistema"""
-    from app.config import get_settings
-    settings = get_settings()
-    
     return {
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
-        "environment": settings.ENVIRONMENT,
         "status": "running",
+        "environment": settings.ENVIRONMENT,
         "docs": "/docs",
-        "redoc": "/redoc",
         "health": "/health",
-        "api": {
-            "v1": api_prefix
-        },
         "endpoints": {
-            "auth": f"{api_prefix}/auth",
-            "users": f"{api_prefix}/users",
-            "clientes": f"{api_prefix}/clientes",
-            "prestamos": f"{api_prefix}/prestamos",
-            "pagos": f"{api_prefix}/pagos",
-            "amortizacion": f"{api_prefix}/amortizacion",
+            "clientes": f"{settings.API_V1_PREFIX}/clientes",
+            "prestamos": f"{settings.API_V1_PREFIX}/prestamos",
+            "pagos": f"{settings.API_V1_PREFIX}/pagos",
+            "conciliacion": f"{settings.API_V1_PREFIX}/conciliacion",
+            "reportes": f"{settings.API_V1_PREFIX}/reportes",
+            "kpis": f"{settings.API_V1_PREFIX}/kpis",
+            "notificaciones": f"{settings.API_V1_PREFIX}/notificaciones",
+            "aprobaciones": f"{settings.API_V1_PREFIX}/aprobaciones",
+            "auditoria": f"{settings.API_V1_PREFIX}/auditoria",
+            "configuracion": f"{settings.API_V1_PREFIX}/configuracion"
         }
     }
+
+
+# Manejo global de excepciones
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    """Captura todas las excepciones no manejadas"""
+    logger.error(f"❌ Error no manejado: {exc}", exc_info=True)
+    
+    return {
+        "detail": "Error interno del servidor",
+        "error": str(exc) if settings.DEBUG else "Internal Server Error",
+        "type": type(exc).__name__
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8080,
+        reload=settings.DEBUG
+    )
