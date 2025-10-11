@@ -1,5 +1,5 @@
 # backend/app/schemas/cliente.py
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional
 from datetime import date, datetime
 
@@ -40,6 +40,16 @@ class ClienteResponse(ClienteBase):
     fecha_registro: datetime
     fecha_actualizacion: Optional[datetime] = None
     usuario_registro: Optional[str] = None
+    
+    model_config = ConfigDict(from_attributes=True)
 
-    class Config:
-        from_attributes = True
+
+class ClienteList(BaseModel):
+    """Schema para lista de clientes con paginación"""
+    items: list[ClienteResponse]
+    total: int
+    page: int = 1
+    page_size: int = 10
+    total_pages: int
+    
+    model_config = ConfigDict(from_attributes=True)
