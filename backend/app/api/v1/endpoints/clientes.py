@@ -2,7 +2,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
-
 from app.db.session import get_db
 from app.models.cliente import Cliente
 from app.schemas.cliente import ClienteCreate, ClienteUpdate, ClienteResponse
@@ -19,7 +18,8 @@ def crear_cliente(cliente: ClienteCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Cédula ya registrada")
     
-    db_cliente = Cliente(**cliente.dict())
+    # ✅ CORRECCIÓN: usar model_dump() en lugar de dict()
+    db_cliente = Cliente(**cliente.model_dump())
     db.add(db_cliente)
     db.commit()
     db.refresh(db_cliente)
@@ -73,7 +73,8 @@ def actualizar_cliente(
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     
-    for field, value in cliente_data.dict(exclude_unset=True).items():
+    # ✅ CORRECCIÓN: usar model_dump() en lugar de dict()
+    for field, value in cliente_data.model_dump(exclude_unset=True).items():
         setattr(cliente, field, value)
     
     db.commit()
