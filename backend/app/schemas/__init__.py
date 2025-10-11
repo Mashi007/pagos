@@ -8,6 +8,7 @@ Schemas organizados por módulo:
 - Préstamo: Gestión de préstamos
 - Pago: Gestión de pagos
 - User: Gestión de usuarios y autenticación
+- Conciliación: Conciliación bancaria
 """
 
 # ============================================
@@ -44,6 +45,28 @@ from app.schemas.user import (
 )
 
 # ============================================
+# SCHEMAS DE CONCILIACIÓN BANCARIA
+# ============================================
+from app.schemas.conciliacion import (
+    EstadoConciliacion,
+    TipoMatch,
+    MovimientoBancario,
+    MovimientoBancarioResponse,
+    ConciliacionCreate,
+    ConciliacionMatch,
+    ResultadoConciliacion,
+    ConciliacionResponse,
+    ConfirmacionConciliacion,
+    ConfirmacionResponse,
+    ReporteConciliacionMensual,
+    FiltroConciliacion,
+    PagoPendienteConciliacion,
+    ExtractoBancarioUpload,
+    ValidacionExtracto,
+    EstadisticasConciliacion,
+)
+
+# ============================================
 # EXPORTS PÚBLICOS
 # ============================================
 __all__ = [
@@ -63,6 +86,24 @@ __all__ = [
     
     # ========== USUARIO ==========
     "UserRole",
+    
+    # ========== CONCILIACIÓN ==========
+    "EstadoConciliacion",
+    "TipoMatch",
+    "MovimientoBancario",
+    "MovimientoBancarioResponse",
+    "ConciliacionCreate",
+    "ConciliacionMatch",
+    "ResultadoConciliacion",
+    "ConciliacionResponse",
+    "ConfirmacionConciliacion",
+    "ConfirmacionResponse",
+    "ReporteConciliacionMensual",
+    "FiltroConciliacion",
+    "PagoPendienteConciliacion",
+    "ExtractoBancarioUpload",
+    "ValidacionExtracto",
+    "EstadisticasConciliacion",
 ]
 
 # ============================================
