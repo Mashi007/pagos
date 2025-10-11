@@ -1,16 +1,14 @@
 # backend/app/db/init_db.py
 from sqlalchemy import text, inspect
 from app.db.session import engine, Base, SessionLocal
-from app.core.config import settings  # ← CORREGIDO: era app.config
+from app.core.config import settings  # ← Import correcto
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 def check_database_connection() -> bool:
-    """
-    Verifica si la conexión a la base de datos está funcionando
-    """
+    """Verifica si la conexión a la base de datos está funcionando"""
     try:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
@@ -21,9 +19,7 @@ def check_database_connection() -> bool:
 
 
 def table_exists(table_name: str) -> bool:
-    """
-    Verifica si una tabla existe en la base de datos
-    """
+    """Verifica si una tabla existe en la base de datos"""
     try:
         inspector = inspect(engine)
         return table_name in inspector.get_table_names()
@@ -33,9 +29,7 @@ def table_exists(table_name: str) -> bool:
 
 
 def create_tables():
-    """
-    Crea todas las tablas definidas en los modelos
-    """
+    """Crea todas las tablas definidas en los modelos"""
     try:
         # Importar todos los modelos para que SQLAlchemy los registre
         from app.models.cliente import Cliente
@@ -55,12 +49,11 @@ def create_tables():
         return False
 
 
-def init_db() -> bool:  # ← AGREGADA: Esta es la función que faltaba
+def init_db() -> bool:
     """
     Inicializa la base de datos creando las tablas si no existen
     
     En producción, solo crea tablas que no existan.
-    En desarrollo, puedes forzar recreación con la variable FORCE_RECREATE_TABLES.
     """
     try:
         logger.info("🔄 Inicializando base de datos...")
@@ -91,26 +84,22 @@ def init_db() -> bool:  # ← AGREGADA: Esta es la función que faltaba
         return False
 
 
-# Alias para compatibilidad con versiones anteriores
-init_database = init_db  # ← AGREGADO: Alias para backward compatibility
+# Alias para compatibilidad
+init_database = init_db
 
 
 def init_db_startup():
     """
     Función que se llama al inicio de la aplicación (startup event)
-    
-    - En producción: Solo verifica y crea tablas si no existen
-    - No hace cambios destructivos
     """
     try:
         logger.info("\n" + "="*50)
         logger.info(f"🚀 Sistema de Préstamos y Cobranza v{settings.APP_VERSION}")
         logger.info("="*50)
-        logger.info(f"🗄️  Base de datos: PostgreSQL (Railway)")
+        logger.info(f"🗄️  Base de datos: {settings.get_database_url(hide_password=True)}")
         
         # Inicializar base de datos
         if init_db():
-            # Verificar conexión
             if check_database_connection():
                 logger.info("✅ Conexión a base de datos verificada")
             else:
@@ -126,14 +115,10 @@ def init_db_startup():
         
     except Exception as e:
         logger.error(f"❌ Error en startup de DB: {e}")
-        # No lanzar excepción para que la app siga funcionando
-        # aunque la DB tenga problemas
 
 
 def init_db_shutdown():
-    """
-    Función que se llama al cerrar la aplicación (shutdown event)
-    """
+    """Función que se llama al cerrar la aplicación (shutdown event)"""
     try:
         from app.db.session import close_db_connections
         close_db_connections()
