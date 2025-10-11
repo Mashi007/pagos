@@ -1,5 +1,5 @@
 # backend/app/schemas/pago.py
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional
 from datetime import date, time, datetime
 from decimal import Decimal, ROUND_HALF_UP
@@ -20,13 +20,15 @@ class PagoBase(BaseModel):
     comprobante: Optional[str] = Field(None, max_length=50)
     banco: Optional[str] = Field(None, max_length=50)
     observaciones: Optional[str] = None
-
-    @field_validator('monto_pagado', 'monto_capital', 'monto_interes', 'monto_mora', 'descuento')
+    
+    @field_validator('monto_pagado', 'monto_capital', 'monto_interes', 'monto_mora', 'descuento', mode='before')
     @classmethod
     def validate_decimal_places(cls, v: Decimal) -> Decimal:
         """Validar que los montos tengan máximo 2 decimales"""
         if v is None:
             return v
+        if not isinstance(v, Decimal):
+            v = Decimal(str(v))
         # Redondear a 2 decimales
         return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
@@ -51,5 +53,15 @@ class PagoResponse(PagoBase):
     usuario_registro: Optional[str] = None
     creado_en: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PagoList(BaseModel):
+    """Schema para lista de pagos con paginación"""
+    items: list[PagoResponse]
+    total: int
+    page: int = 1
+    page_size: int = 10
+    total_pages: int
+    
+    model_config = ConfigDict(from_attributes=True)
