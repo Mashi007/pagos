@@ -18,7 +18,7 @@ from app.api.v1.endpoints.prestamos import router as prestamos_router
 from app.api.v1.endpoints.pagos import router as pagos_router
 from app.api.v1.endpoints.conciliacion import router as conciliacion_router
 from app.api.v1.endpoints.reportes import router as reportes_router
-from app.api.v1.endpoints.kpis import router as kpis_router
+# from app.api.v1.endpoints.kpis import router as kpis_router  # COMENTADO TEMPORALMENTE
 from app.api.v1.endpoints.notificaciones import router as notificaciones_router
 from app.api.v1.endpoints.aprobaciones import router as aprobaciones_router
 from app.api.v1.endpoints.auditoria import router as auditoria_router
@@ -124,12 +124,12 @@ app.include_router(
     tags=["Reportes"]
 )
 
-# KPIs y Estadísticas
-app.include_router(
-    kpis_router,
-    prefix=f"{settings.API_V1_PREFIX}/kpis",
-    tags=["KPIs y Métricas"]
-)
+# KPIs y Estadísticas - COMENTADO TEMPORALMENTE
+# app.include_router(
+#     kpis_router,
+#     prefix=f"{settings.API_V1_PREFIX}/kpis",
+#     tags=["KPIs y Métricas"]
+# )
 
 # Notificaciones
 app.include_router(
@@ -176,7 +176,7 @@ async def root():
             "pagos": f"{settings.API_V1_PREFIX}/pagos",
             "conciliacion": f"{settings.API_V1_PREFIX}/conciliacion",
             "reportes": f"{settings.API_V1_PREFIX}/reportes",
-            "kpis": f"{settings.API_V1_PREFIX}/kpis",
+            # "kpis": f"{settings.API_V1_PREFIX}/kpis",  # COMENTADO TEMPORALMENTE
             "notificaciones": f"{settings.API_V1_PREFIX}/notificaciones",
             "aprobaciones": f"{settings.API_V1_PREFIX}/aprobaciones",
             "auditoria": f"{settings.API_V1_PREFIX}/auditoria",
