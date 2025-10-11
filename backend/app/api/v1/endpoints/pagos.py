@@ -10,6 +10,7 @@ from app.schemas.pago import PagoCreate, PagoResponse
 
 router = APIRouter()
 
+
 def calcular_proxima_fecha_pago(fecha_inicio, modalidad: str, cuotas_pagadas: int):
     """Calcula la próxima fecha de pago"""
     from datetime import timedelta
@@ -20,6 +21,7 @@ def calcular_proxima_fecha_pago(fecha_inicio, modalidad: str, cuotas_pagadas: in
         return fecha_inicio + timedelta(days=15 * (cuotas_pagadas + 1))
     else:  # MENSUAL
         return fecha_inicio + timedelta(days=30 * (cuotas_pagadas + 1))
+
 
 @router.post("/", response_model=PagoResponse, status_code=201)
 def registrar_pago(pago: PagoCreate, db: Session = Depends(get_db)):
@@ -41,10 +43,10 @@ def registrar_pago(pago: PagoCreate, db: Session = Depends(get_db)):
             detail=f"El monto excede el saldo pendiente (${prestamo.saldo_pendiente})"
         )
     
-    # Crear el pago
+    # ✅ CORRECCIÓN: usar model_dump() en lugar de dict()
     numero_cuota = prestamo.cuotas_pagadas + 1
     db_pago = Pago(
-        **pago.dict(),
+        **pago.model_dump(),
         numero_cuota=numero_cuota
     )
     
@@ -69,6 +71,7 @@ def registrar_pago(pago: PagoCreate, db: Session = Depends(get_db)):
     
     return db_pago
 
+
 @router.get("/", response_model=List[PagoResponse])
 def listar_pagos(
     prestamo_id: int = Query(None),
@@ -84,6 +87,7 @@ def listar_pagos(
     
     pagos = query.order_by(Pago.fecha_pago.desc()).offset(skip).limit(limit).all()
     return pagos
+
 
 @router.get("/{pago_id}", response_model=PagoResponse)
 def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
