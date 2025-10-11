@@ -10,6 +10,7 @@ from app.schemas.prestamo import PrestamoCreate, PrestamoUpdate, PrestamoRespons
 
 router = APIRouter()
 
+
 def calcular_proxima_fecha_pago(fecha_inicio: datetime, modalidad: str, cuotas_pagadas: int) -> datetime:
     """Calcula la próxima fecha de pago según la modalidad"""
     if modalidad == "SEMANAL":
@@ -18,6 +19,7 @@ def calcular_proxima_fecha_pago(fecha_inicio: datetime, modalidad: str, cuotas_p
         return fecha_inicio + timedelta(days=15 * (cuotas_pagadas + 1))
     else:  # MENSUAL
         return fecha_inicio + timedelta(days=30 * (cuotas_pagadas + 1))
+
 
 @router.post("/", response_model=PrestamoResponse, status_code=201)
 def crear_prestamo(prestamo: PrestamoCreate, db: Session = Depends(get_db)):
@@ -35,8 +37,9 @@ def crear_prestamo(prestamo: PrestamoCreate, db: Session = Depends(get_db)):
         0
     )
     
+    # ✅ CORRECCIÓN: usar model_dump() en lugar de dict()
     db_prestamo = Prestamo(
-        **prestamo.dict(),
+        **prestamo.model_dump(),
         saldo_pendiente=prestamo.monto_total,
         cuotas_pagadas=0,
         proxima_fecha_pago=proxima_fecha
@@ -47,6 +50,7 @@ def crear_prestamo(prestamo: PrestamoCreate, db: Session = Depends(get_db)):
     db.refresh(db_prestamo)
     
     return db_prestamo
+
 
 @router.get("/", response_model=List[PrestamoResponse])
 def listar_prestamos(
@@ -68,6 +72,7 @@ def listar_prestamos(
     prestamos = query.offset(skip).limit(limit).all()
     return prestamos
 
+
 @router.get("/{prestamo_id}", response_model=PrestamoResponse)
 def obtener_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     """Obtener un préstamo por ID"""
@@ -75,6 +80,7 @@ def obtener_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
     return prestamo
+
 
 @router.put("/{prestamo_id}", response_model=PrestamoResponse)
 def actualizar_prestamo(
@@ -87,7 +93,8 @@ def actualizar_prestamo(
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
     
-    for field, value in prestamo_data.dict(exclude_unset=True).items():
+    # ✅ CORRECCIÓN: usar model_dump() en lugar de dict()
+    for field, value in prestamo_data.model_dump(exclude_unset=True).items():
         setattr(prestamo, field, value)
     
     db.commit()
