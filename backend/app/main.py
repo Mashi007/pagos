@@ -189,3 +189,14 @@ async def root():
             "amortizacion": f"{api_prefix}/amortizacion",
         }
     }
+
+# Agregar al final de backend/app/main.py, antes del @app.get("/")
+
+# Test endpoint
+from app.api.v1.endpoints import test
+
+app.include_router(
+    test.router,
+    prefix=f"{api_prefix}/test",
+    tags=["Test"]
+)
