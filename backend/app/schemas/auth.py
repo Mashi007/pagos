@@ -2,7 +2,7 @@
 """
 Schemas de autenticación: Login, Token, Register
 """
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional
 
 
@@ -25,13 +25,14 @@ class LoginRequest(BaseModel):
     email: EmailStr = Field(..., description="Email del usuario")
     password: str = Field(..., min_length=1, description="Contraseña del usuario")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "email": "admin@sistema.com",
                 "password": "Admin123!"
             }
         }
+    )
 
 
 class RefreshTokenRequest(BaseModel):
@@ -45,14 +46,15 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=8, description="Nueva contraseña")
     confirm_password: str = Field(..., min_length=8, description="Confirmar nueva contraseña")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "current_password": "OldPassword123!",
                 "new_password": "NewPassword123!",
                 "confirm_password": "NewPassword123!"
             }
         }
+    )
 
 
 class PasswordResetRequest(BaseModel):
