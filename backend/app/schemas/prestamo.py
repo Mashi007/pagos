@@ -1,26 +1,54 @@
-# app/schemas/prestamo.py
+# backend/app/schemas/prestamo.py
+from pydantic import BaseModel, Field, field_validator, ConfigDict
+from typing import Optional, Annotated
+from datetime import date, datetime
+from decimal import Decimal, ROUND_HALF_UP
 
-from pydantic import BaseModel, Field, ConfigDict
-from datetime import datetime, date
-from typing import Optional, List
-from decimal import Decimal
-from app.models.prestamo import EstadoPrestamo, ModalidadPago
+# ✅ Definir constraints personalizados para Decimal
+DecimalAmount = Annotated[
+    Decimal, 
+    Field(ge=0, description="Monto en formato decimal con 2 decimales")
+]
+
+DecimalPercentage = Annotated[
+    Decimal,
+    Field(ge=0, le=100, description="Porcentaje con 2 decimales")
+]
 
 
 class PrestamoBase(BaseModel):
-    """Schema base para préstamos"""
-    cliente_id: int = Field(..., gt=0, description="ID del cliente")
+    """Schema base para Préstamo"""
+    cliente_id: int
     monto_total: Decimal = Field(..., gt=0, description="Monto total del préstamo")
     monto_financiado: Decimal = Field(..., gt=0, description="Monto financiado")
-    monto_inicial: Decimal = Field(default=0.00, ge=0, description="Monto inicial/cuota inicial")
-    tasa_interes: Decimal = Field(default=0.00, ge=0, le=100, description="Tasa de interés anual")
-    numero_cuotas: int = Field(..., gt=0, description="Número total de cuotas")
+    monto_inicial: Decimal = Field(default=Decimal("0.00"), ge=0, description="Monto inicial/cuota inicial")
+    tasa_interes: Decimal = Field(default=Decimal("0.00"), ge=0, le=100, description="Tasa de interés anual (%)")
+    numero_cuotas: int = Field(..., gt=0, description="Número de cuotas")
     monto_cuota: Decimal = Field(..., gt=0, description="Monto de cada cuota")
-    fecha_aprobacion: date = Field(..., description="Fecha de aprobación del préstamo")
-    fecha_primer_vencimiento: date = Field(..., description="Fecha del primer vencimiento")
-    modalidad: ModalidadPago = Field(default=ModalidadPago.TRADICIONAL, description="Modalidad de pago")
-    destino_credito: Optional[str] = Field(None, description="Destino del crédito")
-    observaciones: Optional[str] = Field(None, description="Observaciones adicionales")
+    fecha_aprobacion: date
+    fecha_desembolso: Optional[date] = None
+    fecha_primer_vencimiento: date
+    fecha_ultimo_vencimiento: Optional[date] = None
+    modalidad: str = Field(default="MENSUAL", description="SEMANAL, QUINCENAL, MENSUAL")
+    destino_credito: Optional[str] = None
+    observaciones: Optional[str] = None
+    
+    @field_validator(
+        'monto_total', 
+        'monto_financiado', 
+        'monto_inicial', 
+        'monto_cuota',
+        'tasa_interes',
+        mode='before'
+    )
+    @classmethod
+    def validate_decimal_places(cls, v):
+        """Validar y normalizar decimales a 2 posiciones"""
+        if v is None:
+            return v
+        if not isinstance(v, Decimal):
+            v = Decimal(str(v))
+        return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
 
 class PrestamoCreate(PrestamoBase):
@@ -30,64 +58,52 @@ class PrestamoCreate(PrestamoBase):
 
 class PrestamoUpdate(BaseModel):
     """Schema para actualizar un préstamo"""
-    estado: Optional[EstadoPrestamo] = None
+    monto_total: Optional[Decimal] = Field(None, gt=0, description="Monto total del préstamo")
+    tasa_interes: Optional[Decimal] = Field(None, ge=0, le=100, description="Tasa de interés anual (%)")
+    estado: Optional[str] = None
     categoria: Optional[str] = None
-    modalidad: Optional[ModalidadPago] = None
     observaciones: Optional[str] = None
-    saldo_pendiente: Optional[Decimal] = None
-    cuotas_pagadas: Optional[int] = None
+    
+    @field_validator('monto_total', 'tasa_interes', mode='before')
+    @classmethod
+    def validate_decimal_places(cls, v):
+        """Validar y normalizar decimales a 2 posiciones"""
+        if v is None:
+            return v
+        if not isinstance(v, Decimal):
+            v = Decimal(str(v))
+        return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
 
-class PrestamoResponse(BaseModel):
-    """Schema de respuesta para préstamo"""
+class PrestamoResponse(PrestamoBase):
+    """Schema para respuesta de préstamo"""
     id: int
-    cliente_id: int
-    codigo_prestamo: Optional[str]
-    
-    # Montos
-    monto_total: Decimal
-    monto_financiado: Decimal
-    monto_inicial: Decimal
-    tasa_interes: Decimal
-    
-    # Cuotas
-    numero_cuotas: int
-    monto_cuota: Decimal
-    cuotas_pagadas: int
-    cuotas_pendientes: Optional[int]
-    
-    # Fechas
-    fecha_aprobacion: date
-    fecha_desembolso: Optional[date]
-    fecha_primer_vencimiento: date
-    fecha_ultimo_vencimiento: Optional[date]
-    
-    # Estado financiero
+    codigo_prestamo: Optional[str] = None
     saldo_pendiente: Decimal
     saldo_capital: Decimal
     saldo_interes: Decimal
     total_pagado: Decimal
-    
-    # Estado
     estado: str
     categoria: str
-    modalidad: str
-    
-    # Información adicional
-    destino_credito: Optional[str]
-    observaciones: Optional[str]
-    
-    # Auditoría
+    cuotas_pagadas: int
+    cuotas_pendientes: Optional[int] = None
     creado_en: datetime
-    actualizado_en: datetime
+    actualizado_en: Optional[datetime] = None
     
     model_config = ConfigDict(from_attributes=True)
-
-
-class PrestamoList(BaseModel):
-    """Schema para respuesta paginada de préstamos"""
-    items: List[PrestamoResponse]
-    total: int
-    page: int
-    size: int
-    pages: int
+    
+    @field_validator(
+        'saldo_pendiente',
+        'saldo_capital', 
+        'saldo_interes',
+        'total_pagado',
+        mode='before'
+    )
+    @classmethod
+    def validate_decimal_places(cls, v):
+        """Validar y normalizar decimales a 2 posiciones"""
+        if v is None:
+            return Decimal("0.00")
+        if not isinstance(v, Decimal):
+            v = Decimal(str(v))
+        return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)

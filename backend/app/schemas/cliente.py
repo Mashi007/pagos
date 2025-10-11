@@ -1,42 +1,55 @@
-# app/schemas/cliente.py
-from pydantic import BaseModel, EmailStr, Field
-from datetime import datetime
-from typing import Optional, List
+# backend/app/schemas/cliente.py
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from typing import Optional
+from datetime import date, datetime
+
 
 class ClienteBase(BaseModel):
-    nombre: str = Field(..., min_length=3, max_length=100)
-    cedula: str = Field(..., min_length=5, max_length=20)
-    telefono: str = Field(..., min_length=7, max_length=20)
+    cedula: str = Field(..., min_length=8, max_length=20)
+    nombres: str = Field(..., min_length=2, max_length=100)
+    apellidos: str = Field(..., min_length=2, max_length=100)
+    telefono: Optional[str] = Field(None, max_length=15)
     email: Optional[EmailStr] = None
     direccion: Optional[str] = None
+    fecha_nacimiento: Optional[date] = None
+    ocupacion: Optional[str] = Field(None, max_length=100)
+    notas: Optional[str] = None
+
 
 class ClienteCreate(ClienteBase):
     pass
 
+
 class ClienteUpdate(BaseModel):
-    nombre: Optional[str] = Field(None, min_length=3, max_length=100)
-    telefono: Optional[str] = Field(None, min_length=7, max_length=20)
+    cedula: Optional[str] = Field(None, min_length=8, max_length=20)
+    nombres: Optional[str] = Field(None, min_length=2, max_length=100)
+    apellidos: Optional[str] = Field(None, min_length=2, max_length=100)
+    telefono: Optional[str] = Field(None, max_length=15)
     email: Optional[EmailStr] = None
     direccion: Optional[str] = None
-    activo: Optional[bool] = None
+    fecha_nacimiento: Optional[date] = None
+    ocupacion: Optional[str] = Field(None, max_length=100)
+    estado: Optional[str] = None
+    notas: Optional[str] = None
+
 
 class ClienteResponse(ClienteBase):
     id: int
+    estado: str
     activo: bool
-    fecha_creacion: datetime
-    fecha_actualizacion: datetime
+    fecha_registro: datetime
+    fecha_actualizacion: Optional[datetime] = None
+    usuario_registro: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
-# ✅ AGREGADO: Schema para lista de clientes
+
 class ClienteList(BaseModel):
-    """Schema para respuesta paginada de clientes"""
-    items: List[ClienteResponse]
+    """Schema para lista de clientes con paginación"""
+    items: list[ClienteResponse]
     total: int
-    page: int
-    size: int
-    pages: int
+    page: int = 1
+    page_size: int = 10
+    total_pages: int
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

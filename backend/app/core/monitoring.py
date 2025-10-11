@@ -1,0 +1,253 @@
+# backend/app/core/monitoring.py
+"""
+Configuración de Monitoreo y Observabilidad
+Integración con Sentry, Prometheus y logging estructurado
+"""
+import logging
+import os
+from typing import Optional
+
+from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastAPIIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+from pythonjsonlogger import jsonlogger
+
+from app.core.config import settings
+
+
+def configure_sentry(app: FastAPI) -> None:
+    """
+    Configura Sentry para tracking de errores
+    
+    Args:
+        app: Instancia de FastAPI
+    """
+    if not settings.SENTRY_DSN:
+        logging.warning("SENTRY_DSN no configurado - Sentry deshabilitado")
+        return
+    
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.ENVIRONMENT,
+        release=settings.APP_VERSION,
+        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+        profiles_sample_rate=settings.SENTRY_PROFILES_SAMPLE_RATE,
+        integrations=[
+            FastAPIIntegration(transaction_style="endpoint"),
+            SqlalchemyIntegration(),
+        ],
+        # Configuración adicional
+        before_send=before_send_sentry,
+        send_default_pii=False,  # No enviar PII por defecto
+        attach_stacktrace=True,
+        max_breadcrumbs=50,
+    )
+    
+    logging.info(f"✅ Sentry configurado - Environment: {settings.ENVIRONMENT}")
+
+
+def before_send_sentry(event, hint):
+    """
+    Hook para modificar eventos antes de enviar a Sentry
+    Útil para filtrar información sensible
+    """
+    # Filtrar información sensible
+    if "request" in event:
+        if "headers" in event["request"]:
+            # Remover headers sensibles
+            sensitive_headers = ["authorization", "cookie", "x-api-key"]
+            for header in sensitive_headers:
+                if header in event["request"]["headers"]:
+                    event["request"]["headers"][header] = "[FILTERED]"
+    
+    return event
+
+
+def configure_prometheus(app: FastAPI) -> Optional[Instrumentator]:
+    """
+    Configura Prometheus para métricas
+    
+    Args:
+        app: Instancia de FastAPI
+        
+    Returns:
+        Instrumentator configurado o None
+    """
+    if not settings.PROMETHEUS_ENABLED:
+        logging.warning("PROMETHEUS_ENABLED=False - Prometheus deshabilitado")
+        return None
+    
+    instrumentator = Instrumentator(
+        should_group_status_codes=True,
+        should_ignore_untemplated=True,
+        should_respect_env_var=True,
+        should_instrument_requests_inprogress=True,
+        excluded_handlers=["/health", "/metrics"],
+        env_var_name="ENABLE_METRICS",
+        inprogress_name="fastapi_inprogress",
+        inprogress_labels=True,
+    )
+    
+    # Configurar métricas adicionales
+    instrumentator.add(
+        # Duración de requests por endpoint
+        instrumentator.metrics.latency(
+            buckets=(0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0)
+        )
+    )
+    
+    instrumentator.add(
+        # Tamaño de requests/responses
+        instrumentator.metrics.requests()
+    )
+    
+    # Instrumentar la app
+    instrumentator.instrument(app)
+    
+    # Exponer endpoint /metrics
+    instrumentator.expose(app, endpoint="/metrics", include_in_schema=False)
+    
+    logging.info("✅ Prometheus configurado - Métricas en /metrics")
+    
+    return instrumentator
+
+
+def configure_structured_logging() -> None:
+    """
+    Configura logging estructurado en formato JSON
+    """
+    log_level = settings.LOG_LEVEL.upper()
+    
+    # Configurar formato JSON
+    log_handler = logging.StreamHandler()
+    formatter = jsonlogger.JsonFormatter(
+        "%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d",
+        rename_fields={
+            "asctime": "timestamp",
+            "levelname": "level",
+            "pathname": "file",
+            "lineno": "line",
+        }
+    )
+    log_handler.setFormatter(formatter)
+    
+    # Configurar logger raíz
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    root_logger.handlers = []
+    root_logger.addHandler(log_handler)
+    
+    # Configurar loggers específicos
+    loggers_to_configure = [
+        "uvicorn",
+        "uvicorn.access",
+        "uvicorn.error",
+        "sqlalchemy.engine",
+        "app",
+    ]
+    
+    for logger_name in loggers_to_configure:
+        logger = logging.getLogger(logger_name)
+        logger.setLevel(log_level)
+        logger.handlers = []
+        logger.addHandler(log_handler)
+        logger.propagate = False
+    
+    logging.info(f"✅ Logging estructurado configurado - Level: {log_level}")
+
+
+def setup_monitoring(app: FastAPI) -> dict:
+    """
+    Configura todo el sistema de monitoreo
+    
+    Args:
+        app: Instancia de FastAPI
+        
+    Returns:
+        dict con configuración aplicada
+    """
+    config_applied = {
+        "sentry": False,
+        "prometheus": False,
+        "structured_logging": False,
+    }
+    
+    try:
+        # Logging estructurado
+        configure_structured_logging()
+        config_applied["structured_logging"] = True
+        
+        # Sentry
+        if settings.SENTRY_DSN:
+            configure_sentry(app)
+            config_applied["sentry"] = True
+        
+        # Prometheus
+        if settings.PROMETHEUS_ENABLED:
+            instrumentator = configure_prometheus(app)
+            if instrumentator:
+                config_applied["prometheus"] = True
+        
+        logging.info("✅ Sistema de monitoreo configurado exitosamente")
+        logging.info(f"Configuración aplicada: {config_applied}")
+        
+    except Exception as e:
+        logging.error(f"❌ Error configurando monitoreo: {str(e)}")
+        # No fallar si el monitoreo falla
+        pass
+    
+    return config_applied
+
+
+# Métricas personalizadas de negocio
+def track_business_metrics(
+    metric_name: str,
+    value: float,
+    labels: Optional[dict] = None
+) -> None:
+    """
+    Registra métricas de negocio personalizadas
+    
+    Args:
+        metric_name: Nombre de la métrica
+        value: Valor de la métrica
+        labels: Labels adicionales
+        
+    Examples:
+        track_business_metrics("prestamos_creados", 1, {"categoria": "PERSONAL"})
+        track_business_metrics("pagos_procesados", monto, {"estado": "EXITOSO"})
+    """
+    # Implementar según necesidades
+    # Puede usar prometheus_client.Counter, Gauge, etc.
+    pass
+
+
+# Context managers para tracking
+class track_operation:
+    """
+    Context manager para trackear operaciones
+    
+    Example:
+        with track_operation("crear_prestamo", cliente_id=123):
+            # código
+            pass
+    """
+    def __init__(self, operation_name: str, **kwargs):
+        self.operation_name = operation_name
+        self.context = kwargs
+    
+    def __enter__(self):
+        logging.info(f"Iniciando operación: {self.operation_name}", extra=self.context)
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type:
+            logging.error(
+                f"Error en operación: {self.operation_name}",
+                extra={**self.context, "error": str(exc_val)},
+                exc_info=True
+            )
+        else:
+            logging.info(f"Operación completada: {self.operation_name}", extra=self.context)

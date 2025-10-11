@@ -1,17 +1,78 @@
-# Incluir dependencias base (ruta desde raíz del proyecto)
--r requirements/base.txt
+# Backend - Requirements Development
+# Sistema de Préstamos y Cobranza
+# =================================
+# Herramientas para desarrollo local
 
-# Testing
-pytest==8.3.4
-pytest-asyncio==0.24.0
-pytest-cov==6.0.0
-httpx==0.28.1
+# Instalar base primero
+-r base.txt
 
-# Linting y formateo
-black==24.10.0
-flake8==7.1.1
-mypy==1.13.0
+# ============================================
+# CODE QUALITY
+# ============================================
+# Formateo automático
+black==23.12.1
 isort==5.13.2
 
-# Debugging
-ipython==8.30.0
+# Linting
+flake8==7.0.0
+pylint==3.0.3
+autopep8==2.0.4
+
+# Type checking
+mypy==1.8.0
+
+# ============================================
+# GIT HOOKS
+# ============================================
+pre-commit==3.6.0
+
+# ============================================
+# DEBUGGING
+# ============================================
+ipython==8.20.0
+ipdb==0.13.13
+
+# ============================================
+# TESTING AVANZADO
+# ============================================
+pytest-xdist==3.5.0          # Tests paralelos
+pytest-watch==4.2.0          # Auto-reload tests
+pytest-mock==3.12.0          # Mocking
+coverage[toml]==7.4.0        # Coverage detallado
+
+# ============================================
+# DOCUMENTATION
+# ============================================
+mkdocs==1.5.3
+mkdocs-material==9.5.3
+
+# ============================================
+# DATABASE TOOLS
+# ============================================
+pgcli==4.0.1                 # PostgreSQL CLI interactivo
+
+# ============================================
+# API TESTING
+# ============================================
+httpie==3.2.2                # CLI para APIs
+
+# ============================================
+# PERFORMANCE PROFILING
+# ============================================
+py-spy==0.3.14               # Profiler
+memory-profiler==0.61.0      # Memory profiling
+
+# ============================================
+# MONITORING LOCAL
+# ============================================
+watchdog==3.0.0              # File system monitoring
+
+# ============================================
+# NOTAS:
+# ============================================
+# Instalar con:
+# pip install -r requirements/dev.txt
+#
+# Pre-commit hooks:
+# pre-commit install
+# pre-commit run --all-files
