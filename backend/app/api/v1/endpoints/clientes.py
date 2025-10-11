@@ -1,5 +1,5 @@
 # backend/app/api/v1/endpoints/clientes.py
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy.orm import Session
 from typing import List
 from app.db.session import get_db
@@ -10,21 +10,39 @@ router = APIRouter()
 
 
 @router.post("/", response_model=ClienteResponse, status_code=201)
-def crear_cliente(cliente: ClienteCreate, db: Session = Depends(get_db)):
+def crear_cliente(
+    cliente: ClienteCreate = Body(...),  # ✅ Agregar Body() explícitamente
+    db: Session = Depends(get_db)
+):
     """Crear un nuevo cliente"""
     
-    # Verificar si ya existe la cédula
-    existing = db.query(Cliente).filter(Cliente.cedula == cliente.cedula).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Cédula ya registrada")
+    # 🔍 DEBUG: Imprimir el objeto recibido
+    print(f"📥 Cliente recibido: {cliente}")
+    print(f"📥 Tipo: {type(cliente)}")
     
-    # ✅ CORRECCIÓN: usar model_dump() en lugar de dict()
-    db_cliente = Cliente(**cliente.model_dump())
-    db.add(db_cliente)
-    db.commit()
-    db.refresh(db_cliente)
-    
-    return db_cliente
+    try:
+        # Verificar si ya existe la cédula
+        existing = db.query(Cliente).filter(Cliente.cedula == cliente.cedula).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Cédula ya registrada")
+        
+        # Convertir a dict para SQLAlchemy
+        cliente_dict = cliente.model_dump()
+        print(f"📦 Dict generado: {cliente_dict}")
+        
+        db_cliente = Cliente(**cliente_dict)
+        db.add(db_cliente)
+        db.commit()
+        db.refresh(db_cliente)
+        
+        print(f"✅ Cliente creado: ID={db_cliente.id}")
+        return db_cliente
+        
+    except Exception as e:
+        print(f"❌ Error creando cliente: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 
 @router.get("/", response_model=List[ClienteResponse])
@@ -73,7 +91,6 @@ def actualizar_cliente(
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     
-    # ✅ CORRECCIÓN: usar model_dump() en lugar de dict()
     for field, value in cliente_data.model_dump(exclude_unset=True).items():
         setattr(cliente, field, value)
     
