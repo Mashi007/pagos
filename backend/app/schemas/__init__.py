@@ -2,15 +2,14 @@
 """
 Schemas centralizados para la API.
 Incluye todos los modelos de datos para validación y serialización.
-
 Schemas organizados por módulo:
 - Cliente: Gestión de clientes
 - Préstamo: Gestión de préstamos
 - Pago: Gestión de pagos
 - User: Gestión de usuarios y autenticación
 - Conciliación: Conciliación bancaria
+- KPIs: Métricas e indicadores
 """
-
 # ============================================
 # SCHEMAS DE CLIENTE
 # ============================================
@@ -19,7 +18,6 @@ from app.schemas.cliente import (
     ClienteUpdate,
     ClienteResponse,
 )
-
 # ============================================
 # SCHEMAS DE PRÉSTAMO
 # ============================================
@@ -28,7 +26,6 @@ from app.schemas.prestamo import (
     PrestamoUpdate,
     PrestamoResponse,
 )
-
 # ============================================
 # SCHEMAS DE PAGO
 # ============================================
@@ -36,14 +33,12 @@ from app.schemas.pago import (
     PagoCreate,
     PagoResponse,
 )
-
 # ============================================
 # SCHEMAS DE USUARIO Y AUTENTICACIÓN
 # ============================================
 from app.schemas.user import (
     UserRole,
 )
-
 # ============================================
 # SCHEMAS DE CONCILIACIÓN BANCARIA
 # ============================================
@@ -65,7 +60,14 @@ from app.schemas.conciliacion import (
     ValidacionExtracto,
     EstadisticasConciliacion,
 )
-
+# ============================================
+# SCHEMAS DE KPIs
+# ============================================
+from app.schemas.kpis import (
+    KPIResponse,
+    KPIListResponse,
+    TipoKPI,
+)
 # ============================================
 # EXPORTS PÚBLICOS
 # ============================================
@@ -104,8 +106,12 @@ __all__ = [
     "ExtractoBancarioUpload",
     "ValidacionExtracto",
     "EstadisticasConciliacion",
+    
+    # ========== KPIs ==========
+    "KPIResponse",
+    "KPIListResponse",
+    "TipoKPI",
 ]
-
 # ============================================
 # INFORMACIÓN DEL MÓDULO
 # ============================================
