@@ -1,2 +1,3 @@
 # Para Railway, usar solo las de producción
 -r requirements/prod.txt
+twilio==8.2.0
