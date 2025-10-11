@@ -11,20 +11,18 @@ import logging
 from app.core.config import settings
 from app.db.init_db import init_db, check_database_connection
 
-# Importar todos los routers
-from app.api.v1.endpoints import (
-    health,
-    clientes,
-    prestamos,
-    pagos,
-    conciliacion,
-    reportes,
-    kpis,
-    notificaciones,
-    aprobaciones,
-    auditoria,
-    configuracion
-)
+# ✅ CORRECTO: Importar routers directamente desde cada archivo
+from app.api.v1.endpoints.health import router as health_router
+from app.api.v1.endpoints.clientes import router as clientes_router
+from app.api.v1.endpoints.prestamos import router as prestamos_router
+from app.api.v1.endpoints.pagos import router as pagos_router
+from app.api.v1.endpoints.conciliacion import router as conciliacion_router
+from app.api.v1.endpoints.reportes import router as reportes_router
+from app.api.v1.endpoints.kpis import router as kpis_router
+from app.api.v1.endpoints.notificaciones import router as notificaciones_router
+from app.api.v1.endpoints.aprobaciones import router as aprobaciones_router
+from app.api.v1.endpoints.auditoria import router as auditoria_router
+from app.api.v1.endpoints.configuracion import router as configuracion_router
 
 # Configurar logging
 logging.basicConfig(
@@ -89,74 +87,74 @@ app.add_middleware(
 
 # Health check
 app.include_router(
-    health.router,
+    health_router,  # ✅ Cambiado
     tags=["Health"]
 )
 
 # Módulos principales
 app.include_router(
-    clientes.router,
+    clientes_router,  # ✅ Cambiado
     prefix=f"{settings.API_V1_PREFIX}/clientes",
     tags=["Clientes"]
 )
 
 app.include_router(
-    prestamos.router,
+    prestamos_router,  # ✅ Cambiado
     prefix=f"{settings.API_V1_PREFIX}/prestamos",
     tags=["Préstamos"]
 )
 
 app.include_router(
-    pagos.router,
+    pagos_router,  # ✅ Cambiado
     prefix=f"{settings.API_V1_PREFIX}/pagos",
     tags=["Pagos"]
 )
 
 # Conciliación bancaria
 app.include_router(
-    conciliacion.router,
+    conciliacion_router,  # ✅ Cambiado
     prefix=f"{settings.API_V1_PREFIX}/conciliacion",
     tags=["Conciliación Bancaria"]
 )
 
 # Reportes
 app.include_router(
-    reportes.router,
+    reportes_router,  # ✅ Cambiado
     prefix=f"{settings.API_V1_PREFIX}/reportes",
     tags=["Reportes"]
 )
 
 # KPIs y Estadísticas
 app.include_router(
-    kpis.router,
+    kpis_router,  # ✅ Cambiado
     prefix=f"{settings.API_V1_PREFIX}/kpis",
     tags=["KPIs y Métricas"]
 )
 
 # Notificaciones
 app.include_router(
-    notificaciones.router,
+    notificaciones_router,  # ✅ Cambiado
     prefix=f"{settings.API_V1_PREFIX}/notificaciones",
     tags=["Notificaciones"]
 )
 
 # Sistema de aprobaciones
 app.include_router(
-    aprobaciones.router,
+    aprobaciones_router,  # ✅ Cambiado
     prefix=f"{settings.API_V1_PREFIX}/aprobaciones",
     tags=["Aprobaciones"]
 )
 
 # Auditoría
 app.include_router(
-    auditoria.router,
+    auditoria_router,  # ✅ Cambiado
     prefix=f"{settings.API_V1_PREFIX}/auditoria",
     tags=["Auditoría"]
 )
 
 # Configuración administrativa
 app.include_router(
-    configuracion.router,
+    configuracion_router,  # ✅ Cambiado
     prefix=f"{settings.API_V1_PREFIX}/configuracion",
     tags=["Configuración"]
 )
