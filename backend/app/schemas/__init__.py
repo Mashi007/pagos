@@ -63,10 +63,19 @@ from app.schemas.conciliacion import (
 # ============================================
 # SCHEMAS DE KPIs
 # ============================================
+# ACTUALIZADO: Importaciones corregidas para coincidir con kpis.py
 from app.schemas.kpis import (
+    KPIBase,
+    KPICreate,
+    KPIUpdate,
     KPIResponse,
-    KPIListResponse,
-    TipoKPI,
+    KPIValorBase,
+    KPIValorCreate,
+    KPIValorUpdate,
+    KPIValorResponse,
+    KPIConValores,
+    KPIEstadisticas,
+    DashboardKPIs,
 )
 # ============================================
 # EXPORTS PÚBLICOS
@@ -107,10 +116,18 @@ __all__ = [
     "ValidacionExtracto",
     "EstadisticasConciliacion",
     
-    # ========== KPIs ==========
+    # ========== KPIs (ACTUALIZADO) ==========
+    "KPIBase",
+    "KPICreate",
+    "KPIUpdate",
     "KPIResponse",
-    "KPIListResponse",
-    "TipoKPI",
+    "KPIValorBase",
+    "KPIValorCreate",
+    "KPIValorUpdate",
+    "KPIValorResponse",
+    "KPIConValores",
+    "KPIEstadisticas",
+    "DashboardKPIs",
 ]
 # ============================================
 # INFORMACIÓN DEL MÓDULO
