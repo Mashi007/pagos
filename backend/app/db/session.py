@@ -3,7 +3,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import NullPool, QueuePool
-from app.config import get_settings
+from app.core.config import get_settings  # ✅ CORREGIDO
 import logging
 
 logger = logging.getLogger(__name__)
