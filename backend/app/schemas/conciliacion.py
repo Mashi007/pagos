@@ -1,5 +1,5 @@
 # backend/app/schemas/conciliacion.py
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
 from datetime import date, datetime
 from decimal import Decimal
@@ -39,7 +39,8 @@ class MovimientoBancario(BaseModel):
             date: lambda v: v.isoformat()
         }
     
-    @validator('monto')
+    @field_validator('monto')
+    @classmethod
     def validar_monto(cls, v):
         if v <= 0:
             raise ValueError('El monto debe ser mayor a 0')
@@ -66,9 +67,10 @@ class ConciliacionCreate(BaseModel):
     fecha_fin: date
     movimientos: List[MovimientoBancario]
     
-    @validator('fecha_fin')
-    def validar_fechas(cls, v, values):
-        if 'fecha_inicio' in values and v < values['fecha_inicio']:
+    @field_validator('fecha_fin')
+    @classmethod
+    def validar_fechas(cls, v, info):
+        if 'fecha_inicio' in info.data and v < info.data['fecha_inicio']:
             raise ValueError('La fecha fin debe ser posterior a la fecha inicio')
         return v
 
@@ -104,10 +106,11 @@ class ResultadoConciliacion(BaseModel):
     
     fecha_proceso: datetime = Field(default_factory=datetime.now)
     
-    @validator('porcentaje_conciliacion', always=True)
-    def calcular_porcentaje(cls, v, values):
-        if 'total_movimientos' in values and values['total_movimientos'] > 0:
-            return round((values.get('conciliados', 0) / values['total_movimientos']) * 100, 2)
+    @field_validator('porcentaje_conciliacion')
+    @classmethod
+    def calcular_porcentaje(cls, v, info):
+        if 'total_movimientos' in info.data and info.data['total_movimientos'] > 0:
+            return round((info.data.get('conciliados', 0) / info.data['total_movimientos']) * 100, 2)
         return 0.0
     
     class Config:
@@ -145,7 +148,8 @@ class ConfirmacionConciliacion(BaseModel):
     referencia_bancaria: str
     observaciones: Optional[str] = None
     
-    @validator('referencia_bancaria')
+    @field_validator('referencia_bancaria')
+    @classmethod
     def validar_referencia(cls, v):
         if not v or len(v.strip()) == 0:
             raise ValueError('La referencia bancaria es obligatoria')
