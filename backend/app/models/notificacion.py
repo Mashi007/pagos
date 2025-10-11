@@ -3,12 +3,50 @@
 Modelo de Notificación
 Sistema de notificaciones por email, SMS o WhatsApp
 """
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, JSON
+from enum import Enum as PyEnum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, JSON, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
 
 from app.db.base import Base
+
+
+# Enums para mejor validación y tipado
+class EstadoNotificacion(str, PyEnum):
+    """Estados posibles de una notificación"""
+    PENDIENTE = "PENDIENTE"
+    ENVIADA = "ENVIADA"
+    FALLIDA = "FALLIDA"
+    LEIDA = "LEIDA"
+
+
+class TipoNotificacion(str, PyEnum):
+    """Tipos de notificación disponibles"""
+    EMAIL = "EMAIL"
+    SMS = "SMS"
+    WHATSAPP = "WHATSAPP"
+    PUSH = "PUSH"
+
+
+class CategoriaNotificacion(str, PyEnum):
+    """Categorías de notificación"""
+    RECORDATORIO_PAGO = "RECORDATORIO_PAGO"
+    PRESTAMO_APROBADO = "PRESTAMO_APROBADO"
+    PRESTAMO_RECHAZADO = "PRESTAMO_RECHAZADO"
+    CUOTA_VENCIDA = "CUOTA_VENCIDA"
+    CUOTA_PROXIMA = "CUOTA_PROXIMA"
+    PAGO_RECIBIDO = "PAGO_RECIBIDO"
+    MORA_APLICADA = "MORA_APLICADA"
+    GENERAL = "GENERAL"
+
+
+class PrioridadNotificacion(str, PyEnum):
+    """Niveles de prioridad"""
+    BAJA = "BAJA"
+    NORMAL = "NORMAL"
+    ALTA = "ALTA"
+    URGENTE = "URGENTE"
 
 
 class Notificacion(Base):
@@ -41,17 +79,18 @@ class Notificacion(Base):
     
     # Tipo de notificación
     tipo = Column(
-        String(50),
+        Enum(TipoNotificacion),
         nullable=False,
         index=True
-    )  # EMAIL, SMS, WHATSAPP, PUSH
+    )
     
     # Categoría
     categoria = Column(
-        String(50),
+        Enum(CategoriaNotificacion),
         nullable=False,
+        default=CategoriaNotificacion.GENERAL,
         index=True
-    )  # RECORDATORIO_PAGO, PRESTAMO_APROBADO, CUOTA_VENCIDA, etc.
+    )
     
     # Contenido
     asunto = Column(String(255), nullable=True)
@@ -62,11 +101,11 @@ class Notificacion(Base):
     
     # Estado de envío
     estado = Column(
-        String(20),
+        Enum(EstadoNotificacion),
         nullable=False,
-        default="PENDIENTE",
+        default=EstadoNotificacion.PENDIENTE,
         index=True
-    )  # PENDIENTE, ENVIADA, FALLIDA, LEIDA
+    )
     
     # Intentos de envío
     intentos = Column(Integer, default=0)
@@ -88,10 +127,10 @@ class Notificacion(Base):
     
     # Prioridad
     prioridad = Column(
-        String(10),
+        Enum(PrioridadNotificacion),
         nullable=False,
-        default="NORMAL"
-    )  # BAJA, NORMAL, ALTA, URGENTE
+        default=PrioridadNotificacion.NORMAL
+    )
     
     # Auditoría
     creado_en = Column(DateTime(timezone=True), server_default=func.now())
@@ -102,22 +141,22 @@ class Notificacion(Base):
     cliente = relationship("Cliente", back_populates="notificaciones")
     
     def __repr__(self):
-        return f"<Notificacion {self.tipo} - {self.categoria} - {self.estado}>"
+        return f"<Notificacion {self.tipo.value} - {self.categoria.value} - {self.estado.value}>"
     
     @property
     def esta_pendiente(self) -> bool:
         """Verifica si la notificación está pendiente"""
-        return self.estado == "PENDIENTE"
+        return self.estado == EstadoNotificacion.PENDIENTE
     
     @property
     def fue_enviada(self) -> bool:
         """Verifica si la notificación fue enviada"""
-        return self.estado == "ENVIADA"
+        return self.estado == EstadoNotificacion.ENVIADA
     
     @property
     def fallo(self) -> bool:
         """Verifica si la notificación falló"""
-        return self.estado == "FALLIDA"
+        return self.estado == EstadoNotificacion.FALLIDA
     
     @property
     def puede_reintentar(self) -> bool:
@@ -126,26 +165,26 @@ class Notificacion(Base):
     
     def marcar_enviada(self, respuesta: str = None):
         """Marca la notificación como enviada"""
-        self.estado = "ENVIADA"
+        self.estado = EstadoNotificacion.ENVIADA
         self.enviada_en = datetime.utcnow()
         self.respuesta_servicio = respuesta
     
     def marcar_fallida(self, error: str):
         """Marca la notificación como fallida"""
-        self.estado = "FALLIDA"
+        self.estado = EstadoNotificacion.FALLIDA
         self.error_mensaje = error
         self.intentos += 1
     
     def marcar_leida(self):
         """Marca la notificación como leída"""
-        if self.estado == "ENVIADA":
+        if self.estado == EstadoNotificacion.ENVIADA:
             self.leida_en = datetime.utcnow()
     
     @classmethod
     def crear_recordatorio_pago(
         cls,
         cliente_id: int,
-        tipo: str,
+        tipo: TipoNotificacion,
         mensaje: str,
         programada_para: datetime = None
     ):
@@ -154,7 +193,7 @@ class Notificacion(Base):
         
         Args:
             cliente_id: ID del cliente
-            tipo: EMAIL, SMS o WHATSAPP
+            tipo: TipoNotificacion (EMAIL, SMS o WHATSAPP)
             mensaje: Mensaje de la notificación
             programada_para: Fecha/hora programada (opcional)
             
@@ -164,9 +203,9 @@ class Notificacion(Base):
         return cls(
             cliente_id=cliente_id,
             tipo=tipo,
-            categoria="RECORDATORIO_PAGO",
+            categoria=CategoriaNotificacion.RECORDATORIO_PAGO,
             asunto="Recordatorio de Pago",
             mensaje=mensaje,
             programada_para=programada_para,
-            prioridad="ALTA"
+            prioridad=PrioridadNotificacion.ALTA
         )
