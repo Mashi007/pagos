@@ -1,36 +1,34 @@
-# backend/app/db/session.py
+# backend/app/db/base.py
 """
-Configuración de SQLAlchemy: Engine, SessionLocal y Base.
+Importaciones centralizadas de Base y modelos para SQLAlchemy.
+Este archivo facilita las importaciones y asegura que todos los modelos
+estén registrados antes de crear las tablas.
 """
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
 
-# ✅ CORREGIDO: Importar desde app.config, NO desde app.core.config
-from app.config import settings
+# Importar Base desde session
+from app.db.session import Base
 
-# Crear engine de SQLAlchemy
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,
-    echo=settings.DEBUG  # Mostrar queries SQL en debug
-)
+# Importar settings correctamente
+from app.core.config import settings
 
-# SessionLocal para crear sesiones de BD
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Importar todos los modelos para que SQLAlchemy los registre
+from app.models.user import User
+from app.models.cliente import Cliente
+from app.models.prestamo import Prestamo
+from app.models.pago import Pago
+from app.models.notificacion import Notificacion
+from app.models.auditoria import Auditoria
+from app.models.aprobacion import Aprobacion
 
-# Base para los modelos
-Base = declarative_base()
-
-
-# Dependency para FastAPI
-def get_db():
-    """
-    Dependency que proporciona una sesión de base de datos.
-    Se cierra automáticamente después de cada request.
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# Exportar para facilitar imports
+__all__ = [
+    "Base",
+    "settings",
+    "User",
+    "Cliente", 
+    "Prestamo",
+    "Pago",
+    "Notificacion",
+    "Auditoria",
+    "Aprobacion"
+]
