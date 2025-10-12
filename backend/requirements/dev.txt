@@ -1,44 +1,31 @@
-# Backend - Requirements Development
-# Sistema de Préstamos y Cobranza
-# =================================
-# Herramientas para desarrollo local
-
-# Instalar base primero
+# ============================================
+# DEPENDENCIAS DE DESARROLLO
+# ============================================
 -r base.txt
+
+# ============================================
+# TESTING
+# ============================================
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+httpx==0.25.2  # Para testing de API
 
 # ============================================
 # CODE QUALITY
 # ============================================
-# Formateo automático
-black==23.12.1
-isort==5.13.2
-
-# Linting
-flake8==7.0.0
+black==23.11.0
+flake8==6.1.0
+isort==5.12.0
+mypy==1.7.1
 pylint==3.0.3
-autopep8==2.0.4
-
-# Type checking
-mypy==1.8.0
 
 # ============================================
-# GIT HOOKS
+# DEVELOPMENT TOOLS
 # ============================================
-pre-commit==3.6.0
-
-# ============================================
-# DEBUGGING
-# ============================================
-ipython==8.20.0
+ipython==8.18.1
 ipdb==0.13.13
-
-# ============================================
-# TESTING AVANZADO
-# ============================================
-pytest-xdist==3.5.0          # Tests paralelos
-pytest-watch==4.2.0          # Auto-reload tests
-pytest-mock==3.12.0          # Mocking
-coverage[toml]==7.4.0        # Coverage detallado
 
 # ============================================
 # DOCUMENTATION
@@ -47,32 +34,11 @@ mkdocs==1.5.3
 mkdocs-material==9.5.3
 
 # ============================================
-# DATABASE TOOLS
+# DATABASE MANAGEMENT
 # ============================================
-pgcli==4.0.1                 # PostgreSQL CLI interactivo
+sqlalchemy-utils==0.41.1
 
 # ============================================
-# API TESTING
+# DEBUGGING
 # ============================================
-httpie==3.2.2                # CLI para APIs
-
-# ============================================
-# PERFORMANCE PROFILING
-# ============================================
-py-spy==0.3.14               # Profiler
-memory-profiler==0.61.0      # Memory profiling
-
-# ============================================
-# MONITORING LOCAL
-# ============================================
-watchdog==3.0.0              # File system monitoring
-
-# ============================================
-# NOTAS:
-# ============================================
-# Instalar con:
-# pip install -r requirements/dev.txt
-#
-# Pre-commit hooks:
-# pre-commit install
-# pre-commit run --all-files
+debugpy==1.8.0
