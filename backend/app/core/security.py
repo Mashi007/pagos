@@ -6,7 +6,9 @@ from datetime import datetime, timedelta
 from typing import Optional, Any
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from app.config import get_settings
+
+# ✅ CORREGIDO: Importar desde app.core.config
+from app.core.config import get_settings
 
 settings = get_settings()
 
