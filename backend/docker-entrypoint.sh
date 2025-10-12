@@ -95,4 +95,3 @@ exec uvicorn app.main:app \
     --port "${PORT:-8080}" \
     --workers 1 \
     --log-level info
-
