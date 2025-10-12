@@ -11,4 +11,6 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.0
       - key: DATABASE_URL
-        value: postgresql://pagos_admin:F31OLGHBnP8NBhojFmpA6vCwCngGUzGt@dpg-d318tkuz433a730ouph0-a/pagos_db_zjer
+        fromDatabase:
+          name: pagos-db
+          property: connectionString

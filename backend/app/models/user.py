@@ -49,7 +49,7 @@ class User(Base):
         back_populates="cliente"
     )
     
-    auditorias = relationship("Auditoria", back_populates="user")
+    auditorias = relationship("Auditoria", back_populates="usuario")
     notificaciones = relationship("Notificacion", back_populates="user")
     
     def __repr__(self):
