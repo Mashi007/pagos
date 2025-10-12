@@ -7,9 +7,8 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum as SQLEn
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from app.db.base import Base
+from app.db.session import Base  # ✅ CAMBIAR ESTA LÍNEA
 from app.core.permissions import UserRole
-
 
 class User(Base):
     """Modelo de Usuario"""
