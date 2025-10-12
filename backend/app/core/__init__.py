@@ -1,4 +1,4 @@
-# app/core/__init__.py
+# backend/app/core/__init__.py
 """
 Módulo core - Lógica de negocio central del sistema.
 """
