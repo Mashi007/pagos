@@ -36,12 +36,29 @@ def get_db():
     """
     Dependency que proporciona una sesión de base de datos.
     Se cierra automáticamente después de cada request.
+    
+    Si hay problemas de conexión, levanta HTTPException apropiada.
     """
-    db = SessionLocal()
     try:
+        db = SessionLocal()
         yield db
+    except Exception as e:
+        # Log del error pero no exponer detalles técnicos al usuario
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error de conexión a base de datos: {e}")
+        
+        # Importar HTTPException dentro de la función para evitar imports circulares
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=503, 
+            detail="Servicio de base de datos temporalmente no disponible"
+        )
     finally:
-        db.close()
+        try:
+            db.close()
+        except:
+            pass  # Si db no se creó, no hay nada que cerrar
 
 
 def close_db_connections():

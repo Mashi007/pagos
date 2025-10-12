@@ -39,7 +39,7 @@ class Auditoria(Base):
     id = Column(Integer, primary_key=True, index=True)
     
     # Usuario que realizó la acción
-    user_id = Column(
+    usuario_id = Column(
         Integer,
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
@@ -54,13 +54,13 @@ class Auditoria(Base):
     )  # CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.
     
     # Entidad afectada
-    entidad = Column(
+    tabla = Column(
         String(50),
         nullable=False,
         index=True
     )  # Cliente, Prestamo, Pago, User, etc.
     
-    entidad_id = Column(Integer, nullable=True, index=True)
+    registro_id = Column(Integer, nullable=True, index=True)
     
     # Descripción de la acción
     descripcion = Column(Text, nullable=True)
@@ -83,7 +83,7 @@ class Auditoria(Base):
     mensaje_error = Column(Text, nullable=True)
     
     # Timestamp
-    creado_en = Column(
+    fecha = Column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
@@ -91,18 +91,18 @@ class Auditoria(Base):
     )
     
     # Relaciones
-    user = relationship("User", back_populates="auditorias")
+    usuario = relationship("User", back_populates="auditorias")
     
     def __repr__(self):
-        return f"<Auditoria {self.accion} - {self.entidad} - {self.creado_en}>"
+        return f"<Auditoria {self.accion} - {self.tabla} - {self.fecha}>"
     
     @classmethod
     def registrar(
         cls,
-        user_id: int,
+        usuario_id: int,
         accion: str,
-        entidad: str,
-        entidad_id: int = None,
+        tabla: str,
+        registro_id: int = None,
         descripcion: str = None,
         datos_anteriores: dict = None,
         datos_nuevos: dict = None,
@@ -115,10 +115,10 @@ class Auditoria(Base):
         Método helper para crear registros de auditoría
         
         Args:
-            user_id: ID del usuario que realizó la acción
+            usuario_id: ID del usuario que realizó la acción
             accion: Tipo de acción (CREATE, UPDATE, DELETE, etc.)
-            entidad: Tipo de entidad afectada
-            entidad_id: ID de la entidad afectada
+            tabla: Tipo de entidad afectada
+            registro_id: ID de la entidad afectada
             descripcion: Descripción de la acción
             datos_anteriores: Estado anterior (dict)
             datos_nuevos: Estado nuevo (dict)
@@ -131,10 +131,10 @@ class Auditoria(Base):
             Auditoria: Instancia del registro de auditoría
         """
         return cls(
-            user_id=user_id,
+            usuario_id=user_id,
             accion=accion,
-            entidad=entidad,
-            entidad_id=entidad_id,
+            tabla=tabla,
+            registro_id=registro_id,
             descripcion=descripcion,
             datos_anteriores=datos_anteriores,
             datos_nuevos=datos_nuevos,

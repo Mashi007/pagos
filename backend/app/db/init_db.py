@@ -83,13 +83,23 @@ def init_db_startup():
         logger.info("="*50)
         logger.info(f"🗄️  Base de datos: {settings.get_database_url(hide_password=True)}")
         
-        if init_db():
-            if check_database_connection():
-                logger.info("✅ Conexión a base de datos verificada")
+        # Intentar inicializar la base de datos pero no fallar si no se puede conectar
+        db_initialized = False
+        try:
+            if init_db():
+                if check_database_connection():
+                    logger.info("✅ Conexión a base de datos verificada")
+                    db_initialized = True
+                else:
+                    logger.warning("⚠️  Advertencia: Problema de conexión a base de datos")
             else:
-                logger.warning("⚠️  Advertencia: Problema de conexión a base de datos")
-        else:
-            logger.warning("⚠️  Advertencia: Error inicializando tablas")
+                logger.warning("⚠️  Advertencia: Error inicializando tablas")
+        except Exception as db_error:
+            logger.error(f"❌ Error de base de datos (la aplicación continuará): {db_error}")
+        
+        if not db_initialized:
+            logger.warning("🔧 La aplicación iniciará en modo de funcionalidad limitada")
+            logger.warning("🔧 Algunas funciones pueden no estar disponibles")
         
         logger.info(f"🌍 Entorno: {settings.ENVIRONMENT}")
         logger.info("📝 Documentación: /docs")
@@ -99,6 +109,7 @@ def init_db_startup():
         
     except Exception as e:
         logger.error(f"❌ Error en startup de DB: {e}")
+        logger.warning("🔧 Continuando sin conexión a base de datos")
 
 
 def init_db_shutdown():
