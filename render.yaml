@@ -5,23 +5,12 @@ services:
     region: oregon
     plan: free
     branch: main
-    buildCommand: |
-      cd backend
-      pip install --upgrade pip
-      pip install -r requirements/prod.txt
-    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
       - key: DATABASE_URL
         fromDatabase:
           name: pagos-db
           property: connectionString
-      - key: PYTHON_VERSION
-        value: 3.11.0
-      - key: ENVIRONMENT
-        value: production
-
-databases:
-  - name: pagos-db
-    databaseName: pagos
-    user: pagos_user
-    plan: free
