@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 
-from app.core.config import settings
+from app.config import settings  # CORREGIDO: config está en app/, no en app/core/
 from app.db.init_db import init_db, check_database_connection
 
 # ✅ CORRECTO: Importar routers directamente desde cada archivo
