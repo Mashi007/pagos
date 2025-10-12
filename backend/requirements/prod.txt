@@ -1,23 +1,20 @@
-# Backend - Requirements Production
-# Sistema de Préstamos y Cobranza - Render
-# =================================
-
-# Instalar base primero
+# ============================================
+# DEPENDENCIAS DE PRODUCCIÓN
+# ============================================
 -r base.txt
 
 # ============================================
-# PRODUCCIÓN - SERVIDOR
+# PRODUCTION SERVER
 # ============================================
 gunicorn==21.2.0
 
 # ============================================
-# PRODUCCIÓN - MONITOREO
+# PERFORMANCE MONITORING
 # ============================================
-sentry-sdk[fastapi]==1.40.0
-prometheus-client==0.19.0
+sentry-sdk[fastapi]==1.39.1
 
 # ============================================
-# PRODUCCIÓN - OPTIMIZACIÓN
+# CACHING (OPCIONAL)
 # ============================================
-brotli==1.1.0
-ujson==5.9.0
+# redis==5.0.1
+# aioredis==2.0.1
