@@ -3,7 +3,7 @@ from enum import Enum
 from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Text, Numeric, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from app.db.base import Base
+from app.db.session import Base  # ✅ CORRECTO
 
 
 class EstadoPrestamo(str, Enum):
