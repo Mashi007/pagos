@@ -9,12 +9,12 @@
 gunicorn==21.2.0
 
 # ============================================
-# PERFORMANCE MONITORING
+# PERFORMANCE MONITORING (OPCIONAL)
 # ============================================
-sentry-sdk[fastapi]==1.39.1
+# sentry-sdk[fastapi]==1.39.1
 
 # ============================================
-# CACHING (OPCIONAL)
+# CACHING (OPCIONAL - descomentar si usas Redis)
 # ============================================
 # redis==5.0.1
 # aioredis==2.0.1
