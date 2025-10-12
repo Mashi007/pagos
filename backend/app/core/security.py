@@ -1,14 +1,19 @@
-# backend/app/core/security.py
 """
-Sistema de seguridad: JWT, hashing de passwords, tokens
+Sistema de seguridad: JWT, hashing de passwords, tokens y dependencias de FastAPI
 """
 from datetime import datetime, timedelta
 from typing import Optional, Any
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-# ✅ CORREGIDO: Importar desde app.core.config
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
+
+# Importaciones de dependencias del proyecto
 from app.core.config import get_settings
+from app.db.session import get_db  # Necesario para interactuar con la DB
+from app.models.user import User    # Necesario para cargar el objeto User
 
 settings = get_settings()
 
@@ -20,17 +25,13 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
+# Esquema OAuth2 para FastAPI, que define dónde esperar el token (Authorization: Bearer <token>)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login") 
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     Verifica si una contraseña en texto plano coincide con el hash
-    
-    Args:
-        plain_password: Contraseña en texto plano
-        hashed_password: Hash de la contraseña almacenada
-        
-    Returns:
-        True si coinciden, False si no
     """
     return pwd_context.verify(plain_password, hashed_password)
 
@@ -38,12 +39,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     """
     Genera un hash de una contraseña
-    
-    Args:
-        password: Contraseña en texto plano
-        
-    Returns:
-        Hash de la contraseña
     """
     return pwd_context.hash(password)
 
@@ -55,14 +50,6 @@ def create_access_token(
 ) -> str:
     """
     Crea un token de acceso JWT
-    
-    Args:
-        subject: ID del usuario o email
-        expires_delta: Tiempo de expiración personalizado
-        additional_claims: Claims adicionales (rol, permisos, etc.)
-        
-    Returns:
-        Token JWT codificado
     """
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
@@ -86,12 +73,6 @@ def create_access_token(
 def create_refresh_token(subject: str | int) -> str:
     """
     Crea un token de refresh JWT
-    
-    Args:
-        subject: ID del usuario
-        
-    Returns:
-        Refresh token JWT codificado
     """
     expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     
@@ -109,12 +90,6 @@ def decode_token(token: str) -> dict:
     """
     Decodifica y valida un token JWT
     
-    Args:
-        token: Token JWT a decodificar
-        
-    Returns:
-        Payload del token decodificado
-        
     Raises:
         JWTError: Si el token es inválido o expiró
     """
@@ -122,19 +97,68 @@ def decode_token(token: str) -> dict:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
         return payload
     except JWTError as e:
+        # Re-lanza JWTError para que el manejador de excepciones de FastAPI lo capture
         raise JWTError(f"Error decodificando token: {str(e)}")
+
+
+# -------------------------------------------------------------
+# DEPENDENCIAS DE AUTENTICACIÓN PARA FASTAPI (AÑADIDO)
+# -------------------------------------------------------------
+
+def get_current_user(
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme)
+) -> User:
+    """
+    Función de dependencia para obtener el usuario actual a partir del token JWT.
+    
+    Esta función es usada por los endpoints protegidos, incluyendo aprobaciones.py.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Credenciales inválidas o token expirado",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    try:
+        # 1. Decodificar el token
+        payload = decode_token(token)
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+            
+    except JWTError:
+        raise credentials_exception
+    except Exception:
+        # Captura cualquier otro error, como un token malformado
+        raise credentials_exception
+    
+    # 2. Buscar el usuario en la base de datos
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    
+    if user is None:
+        raise credentials_exception
+        
+    return user
+
+
+def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Dependencia para obtener el usuario actual y asegurar que esté activo.
+    """
+    if not current_user.is_active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo")
+    return current_user
+
+
+# -------------------------------------------------------------
+# [Resto de funciones originales]
+# -------------------------------------------------------------
 
 
 def verify_token_type(token: str, expected_type: str) -> bool:
     """
     Verifica que el token sea del tipo esperado (access o refresh)
-    
-    Args:
-        token: Token JWT
-        expected_type: Tipo esperado ("access" o "refresh")
-        
-    Returns:
-        True si el tipo coincide
     """
     try:
         payload = decode_token(token)
@@ -146,19 +170,6 @@ def verify_token_type(token: str, expected_type: str) -> bool:
 def validate_password_strength(password: str) -> tuple[bool, str]:
     """
     Valida la fortaleza de una contraseña
-    
-    Requisitos:
-    - Mínimo 8 caracteres
-    - Al menos una mayúscula
-    - Al menos una minúscula
-    - Al menos un número
-    - Al menos un carácter especial
-    
-    Args:
-        password: Contraseña a validar
-        
-    Returns:
-        (is_valid, message)
     """
     if len(password) < 8:
         return False, "La contraseña debe tener al menos 8 caracteres"
@@ -182,12 +193,6 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
 def generate_password_reset_token(email: str) -> str:
     """
     Genera un token para reset de contraseña
-    
-    Args:
-        email: Email del usuario
-        
-    Returns:
-        Token JWT para reset de contraseña
     """
     expire = datetime.utcnow() + timedelta(hours=1)  # Expira en 1 hora
     
@@ -204,12 +209,6 @@ def generate_password_reset_token(email: str) -> str:
 def verify_password_reset_token(token: str) -> Optional[str]:
     """
     Verifica un token de reset de contraseña y retorna el email
-    
-    Args:
-        token: Token de reset
-        
-    Returns:
-        Email del usuario si el token es válido, None si no
     """
     try:
         payload = decode_token(token)
