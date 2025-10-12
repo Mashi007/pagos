@@ -14,9 +14,14 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 # ============================================
 class UserRole(str, Enum):
     """Roles de usuario en el sistema."""
-    ADMIN = "admin"
-    USER = "user"
-    VIEWER = "viewer"
+    ADMIN = "ADMIN"
+    ASESOR = "ASESOR"
+    COBRANZAS = "COBRANZAS"
+    CONTADOR = "CONTADOR"
+    COMERCIAL = "COMERCIAL"
+    GERENTE = "GERENTE"
+    DIRECTOR = "DIRECTOR"
+    COMITE = "COMITE"
 
 
 # ============================================
@@ -27,7 +32,7 @@ class UserBase(BaseModel):
     email: EmailStr
     full_name: str = Field(..., min_length=1, max_length=100)
     is_active: bool = True
-    role: UserRole = UserRole.USER
+    role: UserRole = UserRole.ASESOR
 
 
 class UserCreate(UserBase):

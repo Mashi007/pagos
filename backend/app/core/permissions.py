@@ -12,6 +12,7 @@ class UserRole(str, Enum):
     ASESOR = "ASESOR"
     COBRANZAS = "COBRANZAS"
     CONTADOR = "CONTADOR"
+    COMERCIAL = "COMERCIAL"  # Rol para equipo comercial/ventas
     # ROLES AÑADIDOS PARA EL WORKFLOW DE APROBACIÓN DE PRÉSTAMOS
     GERENTE = "GERENTE"
     DIRECTOR = "DIRECTOR"
@@ -140,6 +141,19 @@ ROLE_PERMISSIONS: dict[UserRole, List[Permission]] = {
         Permission.KPI_READ,
         Permission.CONCILIACION_READ,
         Permission.AUDITORIA_READ,
+    ],
+    
+    UserRole.COMERCIAL: [
+        # Puede gestionar clientes y ver reportes limitados
+        Permission.CLIENTE_CREATE,
+        Permission.CLIENTE_READ,
+        Permission.CLIENTE_UPDATE,
+        Permission.PRESTAMO_CREATE,
+        Permission.PRESTAMO_READ,
+        Permission.PRESTAMO_UPDATE,
+        Permission.REPORTE_READ,  # Reportes limitados
+        Permission.KPI_READ,
+        Permission.NOTIFICACION_READ,
     ],
 
     # CONFIGURACIÓN DE ROLES PARA LA APROBACIÓN DE PRÉSTAMOS
