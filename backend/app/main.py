@@ -1,4 +1,3 @@
-# backend/app/main.py
 """
 Aplicación principal FastAPI - Sistema de Préstamos y Cobranza.
 Incluye TODOS los módulos implementados.
@@ -8,7 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 
-from app.config import settings  # CORREGIDO: config está en app/, no en app/core/
+# ✅ CORREGIDO: Importar desde app.core.config
+from app.core.config import settings
 from app.db.init_db import init_db, check_database_connection
 
 # ✅ CORRECTO: Importar routers directamente desde cada archivo
@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):
     logger.info("="*50)
     logger.info(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info("="*50)
-    logger.info(f"🗄️  Base de datos: {settings.DATABASE_URL.split('@')[1] if '@' in settings.DATABASE_URL else 'N/A'}")
+    logger.info(f"🗄️  Base de datos: {settings.get_database_url(hide_password=True)}")
     
     # Inicializar base de datos
     init_db()
@@ -75,7 +75,7 @@ app = FastAPI(
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS.split(",") if settings.ALLOWED_ORIGINS != "*" else ["*"],
+    allow_origins=settings.allowed_origins_list,  # ✅ Usa la property
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -124,13 +124,6 @@ app.include_router(
     tags=["Reportes"]
 )
 
-# KPIs y Estadísticas - COMENTADO TEMPORALMENTE
-# app.include_router(
-#     kpis_router,
-#     prefix=f"{settings.API_V1_PREFIX}/kpis",
-#     tags=["KPIs y Métricas"]
-# )
-
 # Notificaciones
 app.include_router(
     notificaciones_router,
@@ -176,7 +169,6 @@ async def root():
             "pagos": f"{settings.API_V1_PREFIX}/pagos",
             "conciliacion": f"{settings.API_V1_PREFIX}/conciliacion",
             "reportes": f"{settings.API_V1_PREFIX}/reportes",
-            # "kpis": f"{settings.API_V1_PREFIX}/kpis",  # COMENTADO TEMPORALMENTE
             "notificaciones": f"{settings.API_V1_PREFIX}/notificaciones",
             "aprobaciones": f"{settings.API_V1_PREFIX}/aprobaciones",
             "auditoria": f"{settings.API_V1_PREFIX}/auditoria",
