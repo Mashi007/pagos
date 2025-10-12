@@ -7,8 +7,26 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
+from enum import Enum
 
 from app.db.session import Base  # ✅ CORRECTO
+
+
+class TipoAccion(str, Enum):
+    """
+    Enum para los tipos de acciones de auditoría
+    """
+    CREAR = "CREAR"
+    ACTUALIZAR = "ACTUALIZAR" 
+    ELIMINAR = "ELIMINAR"
+    ANULAR = "ANULAR"
+    LOGIN = "LOGIN"
+    LOGOUT = "LOGOUT"
+    VER = "VER"
+    APROBAR = "APROBAR"
+    RECHAZAR = "RECHAZAR"
+    ACTIVAR = "ACTIVAR"
+    DESACTIVAR = "DESACTIVAR"
 
 
 class Auditoria(Base):
