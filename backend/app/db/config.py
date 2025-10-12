@@ -7,15 +7,18 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Configuración de la base de datos
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql://user:password@localhost/dbname"
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Para Render, a veces necesitamos usar la URL externa
-RENDER_DATABASE_URL = os.getenv("RENDER_DATABASE_URL")
-if RENDER_DATABASE_URL:
-    DATABASE_URL = RENDER_DATABASE_URL
+# URL por defecto con hostname externo correcto para Render
+if not DATABASE_URL:
+    DATABASE_URL = "postgresql://pagos_admin:F31OLGHBnP8NBhojFmpA6vCwCngGUzGt@dpg-d318tkuz433a730ouph0-a.oregon-postgres.render.com:5432/pagos_db_zjer"
+
+# Convertir hostname interno a externo si es necesario
+if "dpg-d318tkuz433a730ouph0-a" in DATABASE_URL and ".render.com" not in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace(
+        "dpg-d318tkuz433a730ouph0-a", 
+        "dpg-d318tkuz433a730ouph0-a.oregon-postgres.render.com:5432"
+    )
 
 # Configuración del motor de base de datos con mejores parámetros para Render
 engine = create_engine(
