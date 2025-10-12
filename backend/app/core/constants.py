@@ -1,4 +1,7 @@
 # backend/app/core/constants.py
+"""
+Constantes y enumeraciones del sistema de préstamos y cobranza.
+"""
 from enum import Enum
 
 
@@ -88,8 +91,9 @@ class TipoMovimiento(str, Enum):
 class EstadoAprobacion(str, Enum):
     """Estados de aprobación"""
     PENDIENTE = "PENDIENTE"
-    APROBADO = "APROBADO"
-    RECHAZADO = "RECHAZADO"
+    APROBADA = "APROBADA"
+    RECHAZADA = "RECHAZADA"
+    CANCELADA = "CANCELADA"
 
 
 class TipoPago(str, Enum):
@@ -98,6 +102,36 @@ class TipoPago(str, Enum):
     TRANSFERENCIA = "TRANSFERENCIA"
     CHEQUE = "CHEQUE"
     TARJETA = "TARJETA"
+
+
+# ✅ AGREGADAS LAS CLASES FALTANTES
+class MetodoPago(str, Enum):
+    """Métodos de pago (alias de TipoPago para compatibilidad)"""
+    EFECTIVO = "EFECTIVO"
+    TRANSFERENCIA = "TRANSFERENCIA"
+    CHEQUE = "CHEQUE"
+    TARJETA = "TARJETA"
+
+
+class TipoDocumento(str, Enum):
+    """Tipos de documento de identidad"""
+    CEDULA = "CEDULA"
+    RUC = "RUC"
+    PASAPORTE = "PASAPORTE"
+
+
+class TipoInteres(str, Enum):
+    """Tipos de interés"""
+    SIMPLE = "SIMPLE"
+    COMPUESTO = "COMPUESTO"
+
+
+class EstadoConciliacion(str, Enum):
+    """Estados de conciliación bancaria"""
+    PENDIENTE = "PENDIENTE"
+    CONCILIADO = "CONCILIADO"
+    DESCUADRADO = "DESCUADRADO"
+    REVISADO = "REVISADO"
 
 
 # Configuraciones por defecto

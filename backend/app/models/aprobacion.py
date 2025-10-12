@@ -8,7 +8,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
 
-from app.db.base import Base
+from app.db.session import Base  # ✅ CORRECTO
 
 
 class Aprobacion(Base):
@@ -16,6 +16,7 @@ class Aprobacion(Base):
     Modelo de Aprobación para workflow de solicitudes
     """
     __tablename__ = "aprobaciones"
+    __table_args__ = {'extend_existing': True}
     
     # Identificación
     id = Column(Integer, primary_key=True, index=True)
@@ -89,33 +90,39 @@ class Aprobacion(Base):
     @property
     def esta_pendiente(self) -> bool:
         """Verifica si la aprobación está pendiente"""
-        return self.estado == "PENDIENTE"
+        from app.core.constants import EstadoAprobacion
+        return self.estado == EstadoAprobacion.PENDIENTE.value
     
     @property
     def esta_aprobada(self) -> bool:
         """Verifica si la aprobación fue aprobada"""
-        return self.estado == "APROBADA"
+        from app.core.constants import EstadoAprobacion
+        return self.estado == EstadoAprobacion.APROBADA.value
     
     @property
     def esta_rechazada(self) -> bool:
         """Verifica si la aprobación fue rechazada"""
-        return self.estado == "RECHAZADA"
+        from app.core.constants import EstadoAprobacion
+        return self.estado == EstadoAprobacion.RECHAZADA.value
     
     def aprobar(self, revisor_id: int, comentarios: str = None):
         """Marca la aprobación como aprobada"""
-        self.estado = "APROBADA"
+        from app.core.constants import EstadoAprobacion
+        self.estado = EstadoAprobacion.APROBADA.value
         self.revisor_id = revisor_id
         self.comentarios_revisor = comentarios
         self.fecha_revision = datetime.utcnow()
     
     def rechazar(self, revisor_id: int, comentarios: str):
         """Marca la aprobación como rechazada"""
-        self.estado = "RECHAZADA"
+        from app.core.constants import EstadoAprobacion
+        self.estado = EstadoAprobacion.RECHAZADA.value
         self.revisor_id = revisor_id
         self.comentarios_revisor = comentarios
         self.fecha_revision = datetime.utcnow()
     
     def cancelar(self):
         """Cancela la solicitud de aprobación"""
-        self.estado = "CANCELADA"
+        from app.core.constants import EstadoAprobacion
+        self.estado = EstadoAprobacion.CANCELADA.value
         self.fecha_revision = datetime.utcnow()

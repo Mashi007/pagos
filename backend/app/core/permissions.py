@@ -1,4 +1,3 @@
-# backend/app/core/permissions.py
 """
 Sistema de permisos y roles
 Define los roles del sistema y sus permisos
@@ -13,6 +12,10 @@ class UserRole(str, Enum):
     ASESOR = "ASESOR"
     COBRANZAS = "COBRANZAS"
     CONTADOR = "CONTADOR"
+    # ROLES AÑADIDOS PARA EL WORKFLOW DE APROBACIÓN DE PRÉSTAMOS
+    GERENTE = "GERENTE"
+    DIRECTOR = "DIRECTOR"
+    COMITE = "COMITE"
 
 
 class Permission(str, Enum):
@@ -34,7 +37,7 @@ class Permission(str, Enum):
     PRESTAMO_READ = "prestamo:read"
     PRESTAMO_UPDATE = "prestamo:update"
     PRESTAMO_DELETE = "prestamo:delete"
-    PRESTAMO_APPROVE = "prestamo:approve"
+    PRESTAMO_APPROVE = "prestamo:approve" # Permiso general de aprobación
     
     # Pagos
     PAGO_CREATE = "pago:create"
@@ -136,6 +139,33 @@ ROLE_PERMISSIONS: dict[UserRole, List[Permission]] = {
         Permission.REPORTE_CREATE,
         Permission.KPI_READ,
         Permission.CONCILIACION_READ,
+        Permission.AUDITORIA_READ,
+    ],
+
+    # CONFIGURACIÓN DE ROLES PARA LA APROBACIÓN DE PRÉSTAMOS
+    UserRole.GERENTE: [
+        Permission.PRESTAMO_READ,       # Debe poder ver los detalles del préstamo
+        Permission.PRESTAMO_APPROVE,    # Permiso general de aprobación
+        Permission.CLIENTE_READ,
+        Permission.REPORTE_READ,
+        Permission.KPI_READ,
+    ],
+
+    UserRole.DIRECTOR: [
+        Permission.PRESTAMO_READ,
+        Permission.PRESTAMO_APPROVE,
+        Permission.CLIENTE_READ,
+        Permission.REPORTE_READ,
+        Permission.KPI_READ,
+        Permission.CONCILIACION_READ,
+    ],
+
+    UserRole.COMITE: [
+        Permission.PRESTAMO_READ,
+        Permission.PRESTAMO_APPROVE,
+        Permission.CLIENTE_READ,
+        Permission.REPORTE_READ,
+        Permission.KPI_READ,
         Permission.AUDITORIA_READ,
     ],
 }

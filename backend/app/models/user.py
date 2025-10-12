@@ -1,4 +1,3 @@
-# backend/app/models/user.py
 """
 Modelo de Usuario
 Tabla de usuarios del sistema con autenticación y roles
@@ -7,9 +6,8 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum as SQLEn
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from app.db.base import Base
+from app.db.session import Base
 from app.core.permissions import UserRole
-
 
 class User(Base):
     """Modelo de Usuario"""
@@ -44,6 +42,13 @@ class User(Base):
         foreign_keys="Aprobacion.revisor_id",
         back_populates="revisor"
     )
+    
+    # CORRECCIÓN AÑADIDA: Relación inversa necesaria para el modelo Prestamo.
+    prestamos_solicitados = relationship(
+        "Prestamo", 
+        back_populates="cliente"
+    )
+    
     auditorias = relationship("Auditoria", back_populates="user")
     notificaciones = relationship("Notificacion", back_populates="user")
     

@@ -1,3 +1,2 @@
-# Para Railway, usar solo las de producción
+# This file includes all production dependencies
 -r requirements/prod.txt
-twilio==8.2.0

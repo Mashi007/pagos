@@ -1,18 +1,26 @@
-# backend/app/models/prestamo.py
-from enum import Enum
+"""
+Modelo de Préstamo
+Define la estructura básica de un préstamo.
+Sincronizado con el endpoint de aprobaciones.
+"""
 from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Text, Numeric, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from app.db.base import Base
+from enum import Enum
 
+from app.db.session import Base
+
+# --- Enumeraciones ---
 
 class EstadoPrestamo(str, Enum):
-    """Estados posibles de un préstamo"""
-    PENDIENTE = "PENDIENTE"
-    APROBADO = "APROBADO"
+    """Estados posibles de un préstamo."""
+    PENDIENTE = "PENDIENTE"         # Solicitud inicial
+    EN_APROBACION = "EN_APROBACION" # <== AÑADIDO: Usado por el endpoint de aprobaciones
+    APROBADO = "APROBADO"           # <== USADO por el endpoint
+    RECHAZADO = "RECHAZADO"         # <== AÑADIDO: Usado por el endpoint al rechazar
+    CANCELADO = "CANCELADO"
     ACTIVO = "ACTIVO"
     COMPLETADO = "COMPLETADO"
-    CANCELADO = "CANCELADO"
     REFINANCIADO = "REFINANCIADO"
     EN_MORA = "EN_MORA"
 
@@ -30,7 +38,8 @@ class Prestamo(Base):
     __tablename__ = "prestamos"
     
     id = Column(Integer, primary_key=True, index=True)
-    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False)
+    # CORREGIDO: Usamos "users.id" para ser consistente con los modelos User y Aprobacion
+    cliente_id = Column(Integer, ForeignKey("users.id"), nullable=False) 
     codigo_prestamo = Column(String(20), unique=True, index=True)
     
     # Montos
@@ -43,10 +52,11 @@ class Prestamo(Base):
     numero_cuotas = Column(Integer, nullable=False)
     monto_cuota = Column(Numeric(12, 2), nullable=False)
     cuotas_pagadas = Column(Integer, default=0)
-    cuotas_pendientes = Column(Integer)
+    # Se recomienda que cuotas_pendientes sea calculado, pero se mantiene como columna por diseño.
+    cuotas_pendientes = Column(Integer) 
     
     # Fechas
-    fecha_aprobacion = Column(Date, nullable=False)
+    fecha_aprobacion = Column(Date, nullable=True) # Hacemos nullable, ya que solo se llena al ser APROBADO
     fecha_desembolso = Column(Date)
     fecha_primer_vencimiento = Column(Date, nullable=False)
     fecha_ultimo_vencimiento = Column(Date)
@@ -58,7 +68,7 @@ class Prestamo(Base):
     total_pagado = Column(Numeric(12, 2), default=0.00)
     
     # Estado
-    estado = Column(String(20), default=EstadoPrestamo.ACTIVO.value)
+    estado = Column(String(20), default=EstadoPrestamo.PENDIENTE.value)
     categoria = Column(String(20), default="NORMAL")
     modalidad = Column(String(20), default=ModalidadPago.TRADICIONAL.value)
     
@@ -71,6 +81,7 @@ class Prestamo(Base):
     actualizado_en = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
     
     # Relaciones
-    cliente = relationship("Cliente", back_populates="prestamos")
+    # CORREGIDO: Se asume que 'Cliente' es la entidad 'User'
+    cliente = relationship("User", back_populates="prestamos_solicitados") 
     cuotas = relationship("Cuota", back_populates="prestamo", cascade="all, delete-orphan")
     pagos = relationship("Pago", back_populates="prestamo")
