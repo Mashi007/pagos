@@ -15,12 +15,3 @@ httpx==0.27.2
 
 # Database
 asyncpg==0.30.0
-
-# CORS
-python-cors==1.0.0
-
-# Email (si usas)
-# fastapi-mail==1.4.1
-
-# Logging y monitoreo
-# sentry-sdk==2.18.0
