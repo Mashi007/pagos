@@ -8,7 +8,8 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.db.session import get_db
-from app.models.aprobacion import Aprobacion, EstadoAprobacion, NivelAprobacion
+from app.models.aprobacion import Aprobacion
+from app.core.constants import EstadoAprobacion
 from app.models.user import User
 from app.core.security import get_current_user
 from pydantic import BaseModel
