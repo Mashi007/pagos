@@ -1,5 +1,5 @@
 # Backend - Requirements Base
-# Sistema de Préstamos y Cobranza
+# Sistema de Préstamos y Cobranza - Render
 # =================================
 
 # ============================================
@@ -22,7 +22,6 @@ alembic==1.13.1
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.1.2
-python-multipart==0.0.6
 
 # ============================================
 # VALIDATION
@@ -54,7 +53,6 @@ xlsxwriter==3.1.9
 # ============================================
 reportlab==4.0.9
 pypdf==3.17.4
-# weasyprint==60.2  # Descomentar si necesitas HTML to PDF avanzado
 
 # ============================================
 # EMAIL
@@ -69,7 +67,7 @@ premailer==3.10.0
 httpx==0.26.0
 
 # ============================================
-# SCHEDULING (Tareas automáticas)
+# SCHEDULING
 # ============================================
 apscheduler==3.10.4
 
@@ -90,39 +88,3 @@ pytest==7.4.4
 pytest-asyncio==0.21.1
 pytest-cov==4.1.0
 faker==22.6.0
-
-# ============================================
-# DEPENDENCIAS ADICIONALES RECOMENDADAS
-# ============================================
-
-# Monitoreo y Error Tracking (Opcional - Recomendado para Producción)
-# sentry-sdk[fastapi]==1.40.0  # Error tracking
-# prometheus-client==0.19.0     # Métricas
-
-# WhatsApp/SMS (Opcional - Si usas Twilio)
-# twilio==8.11.1
-
-# Excel Avanzado (Opcional - Si necesitas más features)
-# xlrd==2.0.1  # Para leer archivos .xls viejos
-
-# Compresión de Respuestas
-# brotli==1.1.0  # Compresión HTTP
-
-# Validación de Datos Avanzada
-# phonenumbers==8.13.27  # Para validar teléfonos
-
-# Cache (Opcional - Si usas Redis)
-# redis==5.0.1
-# aioredis==2.0.1
-
-# ============================================
-# NOTAS:
-# ============================================
-# Para instalar:
-# pip install -r requirements/base.txt
-#
-# Para actualizar:
-# pip install -r requirements/base.txt --upgrade
-#
-# Para producción, usar:
-# pip install -r requirements/prod.txt
