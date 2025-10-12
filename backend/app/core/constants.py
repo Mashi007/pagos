@@ -91,8 +91,9 @@ class TipoMovimiento(str, Enum):
 class EstadoAprobacion(str, Enum):
     """Estados de aprobación"""
     PENDIENTE = "PENDIENTE"
-    APROBADO = "APROBADO"
-    RECHAZADO = "RECHAZADO"
+    APROBADA = "APROBADA"
+    RECHAZADA = "RECHAZADA"
+    CANCELADA = "CANCELADA"
 
 
 class TipoPago(str, Enum):
