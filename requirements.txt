@@ -100,7 +100,7 @@ faker==22.6.0
 # prometheus-client==0.19.0     # Métricas
 
 # WhatsApp/SMS (Opcional - Si usas Twilio)
-# twilio==8.11.1
+twilio==8.11.1
 
 # Excel Avanzado (Opcional - Si necesitas más features)
 # xlrd==2.0.1  # Para leer archivos .xls viejos
