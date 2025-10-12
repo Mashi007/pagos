@@ -1,143 +1,187 @@
 """
-Modelo de Aprobación
+Endpoints de Aprobaciones
 Sistema de workflow para solicitudes que requieren aprobación
 """
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from typing import List, Optional
 from datetime import datetime
-from enum import Enum # Importar Enum para definir los estados
 
-from app.db.session import Base
+from app.db.session import get_db
+from app.models.aprobacion import Aprobacion, EstadoAprobacion, NivelAprobacion
+from app.models.user import User
+from app.core.security import get_current_user
+from pydantic import BaseModel
 
-# --- Definición de Enumeraciones ---
+router = APIRouter()
 
-class EstadoAprobacion(str, Enum):
-    """Enumeración de estados posibles para una aprobación."""
-    PENDIENTE = "PENDIENTE"
-    APROBADA = "APROBADA"
-    RECHAZADA = "RECHAZADA"
-    CANCELADA = "CANCELADA"
+# ============================================
+# SCHEMAS PYDANTIC
+# ============================================
 
-class NivelAprobacion(str, Enum):
-    """Enumeración de niveles de aprobación en el workflow."""
-    GERENTE = "GERENTE"
-    DIRECTOR = "DIRECTOR"
-    COMITE = "COMITE"
-# ------------------------------------
+class AprobacionCreate(BaseModel):
+    tipo_solicitud: str
+    nivel: Optional[str] = None
+    entidad: str
+    entidad_id: int
+    justificacion: str
+    datos_solicitados: Optional[str] = None
 
-class Aprobacion(Base):
-    """
-    Modelo de Aprobación para workflow de solicitudes
-    """
-    __tablename__ = "aprobaciones"
+class AprobacionUpdate(BaseModel):
+    estado: str
+    comentarios_revisor: Optional[str] = None
+
+class AprobacionResponse(BaseModel):
+    id: int
+    estado: str
+    tipo_solicitud: str
+    nivel: Optional[str]
+    entidad: str
+    entidad_id: int
+    justificacion: str
+    comentarios_revisor: Optional[str]
+    fecha_solicitud: datetime
+    fecha_revision: Optional[datetime]
+    solicitante_id: int
+    revisor_id: Optional[int]
     
-    # Identificación
-    id = Column(Integer, primary_key=True, index=True)
-    
-    # Estado - Valores posibles: PENDIENTE, APROBADA, RECHAZADA, CANCELADA
-    estado = Column(
-        String(20),
-        nullable=False,
-        default=EstadoAprobacion.PENDIENTE.value, # Usar la enumeración
-        index=True
+    class Config:
+        from_attributes = True
+
+# ============================================
+# ENDPOINTS
+# ============================================
+
+@router.post("/", response_model=AprobacionResponse, status_code=status.HTTP_201_CREATED)
+def crear_aprobacion(
+    aprobacion_data: AprobacionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Crear nueva solicitud de aprobación"""
+    aprobacion = Aprobacion(
+        solicitante_id=current_user.id,
+        estado=EstadoAprobacion.PENDIENTE.value,
+        tipo_solicitud=aprobacion_data.tipo_solicitud,
+        nivel=aprobacion_data.nivel,
+        entidad=aprobacion_data.entidad,
+        entidad_id=aprobacion_data.entidad_id,
+        justificacion=aprobacion_data.justificacion,
+        datos_solicitados=aprobacion_data.datos_solicitados
     )
     
-    # Solicitante y revisor
-    solicitante_id = Column(
-        Integer,
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
-    )
-    revisor_id = Column(
-        Integer,
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True
-    )
+    db.add(aprobacion)
+    db.commit()
+    db.refresh(aprobacion)
     
-    # Detalles de la solicitud
-    tipo_solicitud = Column(
-        String(50),
-        nullable=False,
-        index=True
-    ) # PRESTAMO, MODIFICACION_MONTO, ANULACION, etc.
+    return aprobacion
+
+@router.get("/", response_model=List[AprobacionResponse])
+def listar_aprobaciones(
+    estado: Optional[str] = None,
+    tipo_solicitud: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Listar aprobaciones con filtros"""
+    query = db.query(Aprobacion)
     
-    # Nuevo campo para el nivel de aprobación (usado en el endpoint)
-    nivel = Column(
-        String(20),
-        nullable=True,
-        index=True
-    )
+    if estado:
+        query = query.filter(Aprobacion.estado == estado)
     
-    entidad = Column(String(50), nullable=False) # Cliente, Prestamo, Pago, etc.
-    entidad_id = Column(Integer, nullable=False, index=True)
+    if tipo_solicitud:
+        query = query.filter(Aprobacion.tipo_solicitud == tipo_solicitud)
     
-    # Justificación y comentarios
-    justificacion = Column(Text, nullable=False)
-    comentarios_revisor = Column(Text, nullable=True)
+    aprobaciones = query.offset(skip).limit(limit).all()
+    return aprobaciones
+
+@router.get("/{aprobacion_id}", response_model=AprobacionResponse)
+def obtener_aprobacion(
+    aprobacion_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Obtener aprobación por ID"""
+    aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
     
-    # Datos de la solicitud (JSON serializado como string)
-    datos_solicitados = Column(Text, nullable=True)
+    if not aprobacion:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Aprobación no encontrada"
+        )
     
-    # Fechas
-    fecha_solicitud = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False
-    )
-    fecha_revision = Column(DateTime(timezone=True), nullable=True)
+    return aprobacion
+
+@router.put("/{aprobacion_id}", response_model=AprobacionResponse)
+def actualizar_aprobacion(
+    aprobacion_id: int,
+    aprobacion_update: AprobacionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Aprobar o rechazar una solicitud"""
+    aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
     
-    # Auditoría
-    creado_en = Column(DateTime(timezone=True), server_default=func.now())
-    actualizado_en = Column(DateTime(timezone=True), onupdate=func.now())
+    if not aprobacion:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Aprobación no encontrada"
+        )
     
-    # Relaciones
-    solicitante = relationship(
-        "User",
-        foreign_keys=[solicitante_id],
-        back_populates="aprobaciones_solicitadas"
-    )
-    revisor = relationship(
-        "User",
-        foreign_keys=[revisor_id],
-        back_populates="aprobaciones_revisadas"
-    )
+    if not aprobacion.esta_pendiente:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Esta aprobación ya fue procesada"
+        )
     
-    def __repr__(self):
-        return f"<Aprobacion {self.tipo_solicitud} - {self.estado}>"
+    # Actualizar según el estado
+    if aprobacion_update.estado == EstadoAprobacion.APROBADA.value:
+        aprobacion.aprobar(current_user.id, aprobacion_update.comentarios_revisor)
+    elif aprobacion_update.estado == EstadoAprobacion.RECHAZADA.value:
+        if not aprobacion_update.comentarios_revisor:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Los comentarios son obligatorios al rechazar"
+            )
+        aprobacion.rechazar(current_user.id, aprobacion_update.comentarios_revisor)
+    elif aprobacion_update.estado == EstadoAprobacion.CANCELADA.value:
+        aprobacion.cancelar()
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Estado no válido"
+        )
     
-    @property
-    def esta_pendiente(self) -> bool:
-        """Verifica si la aprobación está pendiente"""
-        return self.estado == EstadoAprobacion.PENDIENTE.value
+    db.commit()
+    db.refresh(aprobacion)
     
-    @property
-    def esta_aprobada(self) -> bool:
-        """Verifica si la aprobación fue aprobada"""
-        return self.estado == EstadoAprobacion.APROBADA.value
+    return aprobacion
+
+@router.delete("/{aprobacion_id}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_aprobacion(
+    aprobacion_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Eliminar una solicitud de aprobación"""
+    aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
     
-    @property
-    def esta_rechazada(self) -> bool:
-        """Verifica si la aprobación fue rechazada"""
-        return self.estado == EstadoAprobacion.RECHAZADA.value
+    if not aprobacion:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Aprobación no encontrada"
+        )
     
-    def aprobar(self, revisor_id: int, comentarios: str = None):
-        """Marca la aprobación como aprobada"""
-        self.estado = EstadoAprobacion.APROBADA.value
-        self.revisor_id = revisor_id
-        self.comentarios_revisor = comentarios
-        self.fecha_revision = datetime.utcnow()
+    # Solo el solicitante puede eliminar su propia solicitud pendiente
+    if aprobacion.solicitante_id != current_user.id or not aprobacion.esta_pendiente:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para eliminar esta aprobación"
+        )
     
-    def rechazar(self, revisor_id: int, comentarios: str):
-        """Marca la aprobación como rechazada"""
-        self.estado = EstadoAprobacion.RECHAZADA.value
-        self.revisor_id = revisor_id
-        self.comentarios_revisor = comentarios
-        self.fecha_revision = datetime.utcnow()
+    db.delete(aprobacion)
+    db.commit()
     
-    def cancelar(self):
-        """Cancela la solicitud de aprobación"""
-        self.estado = EstadoAprobacion.CANCELADA.value
-        self.fecha_revision = datetime.utcnow()
+    return None
