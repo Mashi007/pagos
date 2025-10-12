@@ -1,9 +1,15 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# exit on error
+set -o errexit
 
-echo "==> Upgrading pip..."
+# Navegar al directorio backend si existe
+if [ -d "backend" ]; then
+    cd backend
+fi
+
+# Instalar dependencias
 pip install --upgrade pip
-
-echo "==> Installing dependencies..."
 pip install -r requirements.txt
 
-echo "==> Build completed successfully!"
+# Ejecutar migraciones
+# alembic upgrade head
