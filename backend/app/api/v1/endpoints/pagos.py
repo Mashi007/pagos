@@ -639,7 +639,7 @@ def historial_pagos(
     - Estado
     """
     # Query base con joins
-    query = db.query(Pago).join(Prestamo).join(Cliente)
+    query = db.query(Pago).select_from(Pago).join(Prestamo).join(Cliente)
     
     # Aplicar filtros
     if cliente_id:
@@ -911,7 +911,7 @@ async def exportar_historial_excel(
         raise HTTPException(status_code=500, detail="openpyxl no está instalado")
     
     # Query de pagos
-    query = db.query(Pago).join(Prestamo).join(Cliente)
+    query = db.query(Pago).select_from(Pago).join(Prestamo).join(Cliente)
     
     if fecha_desde:
         query = query.filter(Pago.fecha_pago >= fecha_desde)

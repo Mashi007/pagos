@@ -95,7 +95,7 @@ def dashboard_administrador(
     fecha_limite = hoy + timedelta(days=7)
     vencimientos_proximos = db.query(
         Cuota, Cliente.nombres, Cliente.apellidos, Cliente.cedula
-    ).join(Prestamo).join(Cliente).filter(
+    ).select_from(Cuota).join(Prestamo).join(Cliente).filter(
         Cuota.fecha_vencimiento >= hoy,
         Cuota.fecha_vencimiento <= fecha_limite,
         Cuota.estado.in_(["PENDIENTE", "PARCIAL"])
@@ -1027,7 +1027,7 @@ def obtener_detalle_tabla(
         # Detalle de vencimientos próximos
         fecha_limite = date.today() + timedelta(days=7)
         
-        query = db.query(Cuota, Cliente, Prestamo).join(Prestamo).join(Cliente).filter(
+        query = db.query(Cuota, Cliente, Prestamo).select_from(Cuota).join(Prestamo).join(Cliente).filter(
             Cuota.fecha_vencimiento >= date.today(),
             Cuota.fecha_vencimiento <= fecha_limite,
             Cuota.estado.in_(["PENDIENTE", "PARCIAL"])
