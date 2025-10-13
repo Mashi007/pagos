@@ -27,6 +27,7 @@ from app.api.v1.endpoints import (
     auditoria,
     configuracion,
     dashboard,
+    solicitudes,
 )
 
 # Configurar logging
@@ -79,6 +80,7 @@ app.include_router(aprobaciones.router, prefix=f"{settings.API_V1_PREFIX}/aproba
 app.include_router(auditoria.router, prefix=f"{settings.API_V1_PREFIX}/auditoria", tags=["Auditoria"])
 app.include_router(configuracion.router, prefix=f"{settings.API_V1_PREFIX}/configuracion", tags=["Configuracion"])
 app.include_router(dashboard.router, prefix=f"{settings.API_V1_PREFIX}/dashboard", tags=["Dashboard"])
+app.include_router(solicitudes.router, prefix=f"{settings.API_V1_PREFIX}/solicitudes", tags=["Solicitudes"])
 
 
 @app.get("/", include_in_schema=False)
