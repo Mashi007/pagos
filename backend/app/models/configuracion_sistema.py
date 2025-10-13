@@ -214,9 +214,24 @@ class ConfiguracionPorDefecto:
         },
         
         # ============================================
-        # CONFIGURACIÓN DE WHATSAPP
+        # CONFIGURACIÓN DE WHATSAPP MULTICANAL
         # ============================================
         "WHATSAPP": {
+            "WHATSAPP_ENABLED": {
+                "valor": "false",
+                "descripcion": "Habilitar notificaciones por WhatsApp",
+                "tipo_dato": "BOOLEAN",
+                "requerido": False
+            },
+            "WHATSAPP_PROVIDER": {
+                "valor": "TWILIO",
+                "descripcion": "Proveedor de WhatsApp Business API",
+                "tipo_dato": "STRING",
+                "opciones_validas": ["TWILIO", "360DIALOG", "META_CLOUD_API"],
+                "requerido": False
+            },
+            
+            # CONFIGURACIÓN TWILIO
             "TWILIO_ACCOUNT_SID": {
                 "valor": "",
                 "descripcion": "Account SID de Twilio para WhatsApp",
@@ -231,6 +246,40 @@ class ConfiguracionPorDefecto:
                 "requerido": False,
                 "visible_frontend": True
             },
+            
+            # CONFIGURACIÓN 360DIALOG
+            "360DIALOG_API_KEY": {
+                "valor": "",
+                "descripcion": "API Key de 360Dialog",
+                "tipo_dato": "PASSWORD",
+                "requerido": False,
+                "visible_frontend": True
+            },
+            "360DIALOG_CLIENT_ID": {
+                "valor": "",
+                "descripcion": "Client ID de 360Dialog",
+                "tipo_dato": "STRING",
+                "requerido": False,
+                "visible_frontend": True
+            },
+            
+            # CONFIGURACIÓN META CLOUD API
+            "META_ACCESS_TOKEN": {
+                "valor": "",
+                "descripcion": "Access Token de Meta Cloud API",
+                "tipo_dato": "PASSWORD",
+                "requerido": False,
+                "visible_frontend": True
+            },
+            "META_PHONE_NUMBER_ID": {
+                "valor": "",
+                "descripcion": "Phone Number ID de Meta",
+                "tipo_dato": "STRING",
+                "requerido": False,
+                "visible_frontend": True
+            },
+            
+            # CONFIGURACIÓN GENERAL
             "WHATSAPP_FROM_NUMBER": {
                 "valor": "",
                 "descripcion": "Número de WhatsApp Business (formato: +1234567890)",
@@ -238,16 +287,22 @@ class ConfiguracionPorDefecto:
                 "patron_validacion": r"^\+[1-9]\d{1,14}$",
                 "requerido": False
             },
-            "WHATSAPP_ENABLED": {
-                "valor": "false",
-                "descripcion": "Habilitar notificaciones por WhatsApp",
-                "tipo_dato": "BOOLEAN",
-                "requerido": False
-            },
             "WHATSAPP_BUSINESS_NAME": {
                 "valor": "Financiamiento Automotriz",
                 "descripcion": "Nombre del negocio en WhatsApp",
                 "tipo_dato": "STRING",
+                "requerido": False
+            },
+            "WHATSAPP_WEBHOOK_URL": {
+                "valor": "",
+                "descripcion": "URL del webhook para recibir respuestas",
+                "tipo_dato": "STRING",
+                "requerido": False
+            },
+            "WHATSAPP_VERIFY_TOKEN": {
+                "valor": "",
+                "descripcion": "Token de verificación del webhook",
+                "tipo_dato": "PASSWORD",
                 "requerido": False
             }
         },
