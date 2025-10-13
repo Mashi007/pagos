@@ -30,6 +30,7 @@ import { formatCurrency, formatDate } from '@/utils'
 import { ClienteFilters } from '@/types'
 
 export function ClientesList() {
+  // Forzar nuevo build - versión actualizada
   const [searchTerm, setSearchTerm] = useState('')
   const [filters, setFilters] = useState<ClienteFilters>({})
   const [currentPage, setCurrentPage] = useState(1)
