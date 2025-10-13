@@ -71,33 +71,15 @@ def crear_cliente(
 def listar_clientes(
     # Paginación
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(20, ge=1, le=100, description="Tamaño de página"),
+    per_page: int = Query(20, ge=1, le=100, description="Tamaño de página"),
     
     # Búsqueda de texto
-    search_text: Optional[str] = Query(None, description="Buscar en nombre, cédula o móvil"),
+    search: Optional[str] = Query(None, description="Buscar en nombre, cédula o móvil"),
     
     # Filtros específicos
     estado: Optional[str] = Query(None, description="ACTIVO, INACTIVO, MORA"),
     estado_financiero: Optional[str] = Query(None, description="AL_DIA, MORA, VENCIDO"),
     asesor_id: Optional[int] = Query(None, description="ID del asesor asignado"),
-    concesionario: Optional[str] = Query(None, description="Nombre del concesionario"),
-    modelo_vehiculo: Optional[str] = Query(None, description="Modelo del vehículo"),
-    modalidad_pago: Optional[str] = Query(None, description="SEMANAL, QUINCENAL, MENSUAL, BIMENSUAL"),
-    
-    # Filtros de fecha
-    fecha_registro_desde: Optional[date] = Query(None, description="Fecha de registro desde"),
-    fecha_registro_hasta: Optional[date] = Query(None, description="Fecha de registro hasta"),
-    
-    # Filtros de monto
-    monto_min: Optional[Decimal] = Query(None, ge=0, description="Monto mínimo de financiamiento"),
-    monto_max: Optional[Decimal] = Query(None, ge=0, description="Monto máximo de financiamiento"),
-    
-    # Filtros de mora
-    dias_mora_min: Optional[int] = Query(None, ge=0, description="Días de mora mínimos"),
-    
-    # Ordenamiento
-    order_by: Optional[str] = Query("fecha_registro", description="Campo de ordenamiento"),
-    order_direction: Optional[str] = Query("desc", pattern="^(asc|desc)$", description="Dirección del ordenamiento"),
     
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -132,8 +114,8 @@ def listar_clientes(
     # ============================================
     
     # Búsqueda de texto (nombre, cédula, móvil)
-    if search_text:
-        search_pattern = f"%{search_text}%"
+    if search:
+        search_pattern = f"%{search}%"
         query = query.filter(
             or_(
                 Cliente.nombres.ilike(search_pattern),
@@ -204,16 +186,16 @@ def listar_clientes(
     # PAGINACIÓN
     # ============================================
     total = query.count()
-    skip = (page - 1) * page_size
-    clientes = query.offset(skip).limit(page_size).all()
+    skip = (page - 1) * per_page
+    clientes = query.offset(skip).limit(per_page).all()
     
-    total_pages = (total + page_size - 1) // page_size
+    total_pages = (total + per_page - 1) // per_page
     
     return ClienteList(
         items=clientes,
         total=total,
         page=page,
-        page_size=page_size,
+        page_size=per_page,
         total_pages=total_pages
     )
 
