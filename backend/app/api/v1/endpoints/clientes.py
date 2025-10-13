@@ -363,6 +363,42 @@ def test_step_by_step(
             "status": "error"
         }
 
+@router.get("/test-no-desc")
+def test_no_desc(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Test sin usar desc() para ver si ese es el problema"""
+    try:
+        query = db.query(Cliente)
+        
+        if current_user.rol in ["COMERCIAL", "ASESOR"]:
+            query = query.filter(Cliente.asesor_id == current_user.id)
+        
+        total = query.count()
+        
+        # Ordenamiento simple sin desc()
+        query = query.order_by(Cliente.fecha_registro)
+        
+        skip = (page - 1) * per_page
+        clientes = query.offset(skip).limit(per_page).all()
+        
+        return {
+            "mensaje": "Test sin desc() exitoso",
+            "total": total,
+            "clientes_count": len(clientes),
+            "status": "ok"
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "status": "error"
+        }
+
 
 @router.get("/debug-no-model")
 def debug_no_model(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
