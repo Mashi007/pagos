@@ -275,6 +275,40 @@ def test_with_auth(db: Session = Depends(get_db), current_user: User = Depends(g
         }
 
 
+@router.get("/temp-simple")
+def listar_clientes_temp(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Endpoint temporal simplificado para listar clientes"""
+    try:
+        # Query muy simple
+        query = db.query(Cliente)
+        
+        # Contar total
+        total = query.count()
+        
+        # Paginación
+        skip = (page - 1) * page_size
+        clientes = query.offset(skip).limit(page_size).all()
+        
+        total_pages = (total + page_size - 1) // page_size
+        
+        return {
+            "items": clientes,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error temporal: {str(e)}")
+
+
 @router.get("/test-sin-join")
 def test_sin_join(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Test sin join para verificar si el problema es el join con User"""
