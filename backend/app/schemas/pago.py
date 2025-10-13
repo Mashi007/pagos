@@ -65,3 +65,109 @@ class PagoList(BaseModel):
     total_pages: int
     
     model_config = ConfigDict(from_attributes=True)
+
+
+class PagoManualRequest(BaseModel):
+    """Schema para registro de pago manual avanzado"""
+    # Identificación del cliente
+    cliente_cedula: str = Field(..., description="Cédula del cliente")
+    
+    # Cuotas a pagar
+    cuotas_seleccionadas: list[int] = Field(..., description="IDs de cuotas a pagar")
+    
+    # Información del pago
+    monto_pagado: Decimal = Field(..., gt=0, description="Monto total pagado")
+    fecha_pago: date = Field(..., description="Fecha efectiva del pago")
+    metodo_pago: str = Field(..., regex="^(EFECTIVO|TRANSFERENCIA|TARJETA|CHEQUE)$")
+    
+    # Documentación
+    numero_operacion: Optional[str] = Field(None, max_length=50, description="Número de operación bancaria")
+    comprobante: Optional[str] = Field(None, max_length=50, description="Número de comprobante")
+    banco: Optional[str] = Field(None, max_length=50, description="Banco origen")
+    
+    # Configuración
+    aplicar_descuento: bool = Field(False, description="Aplicar descuento por pronto pago")
+    descuento_porcentaje: Optional[Decimal] = Field(None, ge=0, le=100, description="Porcentaje de descuento")
+    calcular_mora_automatica: bool = Field(True, description="Calcular mora automáticamente")
+    
+    # Observaciones
+    observaciones: Optional[str] = Field(None, description="Observaciones del pago")
+
+
+class PagoManualResponse(BaseModel):
+    """Schema para respuesta de pago manual"""
+    pago_id: int
+    cliente_id: int
+    cliente_nombre: str
+    cuotas_afectadas: list[dict]
+    distribucion_pago: dict
+    resumen: dict
+    mensaje: str
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PagoHistorialFilters(BaseModel):
+    """Filtros para historial de pagos"""
+    # Filtros de cliente
+    cliente_id: Optional[int] = None
+    cliente_cedula: Optional[str] = None
+    cliente_nombre: Optional[str] = None
+    
+    # Filtros de fecha
+    fecha_desde: Optional[date] = None
+    fecha_hasta: Optional[date] = None
+    
+    # Filtros de pago
+    metodo_pago: Optional[str] = None
+    estado_conciliacion: Optional[str] = None
+    monto_min: Optional[Decimal] = None
+    monto_max: Optional[Decimal] = None
+    
+    # Filtros de mora
+    con_mora: Optional[bool] = None
+    dias_mora_min: Optional[int] = None
+    
+    # Ordenamiento
+    order_by: Optional[str] = Field("fecha_pago", regex="^(fecha_pago|monto_pagado|cliente|cuota)$")
+    order_direction: Optional[str] = Field("desc", regex="^(asc|desc)$")
+
+
+class PagoUpdate(BaseModel):
+    """Schema para actualizar un pago"""
+    monto_pagado: Optional[Decimal] = Field(None, gt=0)
+    fecha_pago: Optional[date] = None
+    metodo_pago: Optional[str] = None
+    numero_operacion: Optional[str] = Field(None, max_length=50)
+    comprobante: Optional[str] = Field(None, max_length=50)
+    banco: Optional[str] = Field(None, max_length=50)
+    observaciones: Optional[str] = None
+
+
+class PagoAnularRequest(BaseModel):
+    """Schema para anular un pago"""
+    justificacion: str = Field(..., min_length=10, description="Justificación obligatoria para anulación")
+    revertir_amortizacion: bool = Field(True, description="Revertir cambios en amortización")
+
+
+class CuotasPendientesResponse(BaseModel):
+    """Schema para mostrar cuotas pendientes de un cliente"""
+    cliente_id: int
+    cliente_nombre: str
+    prestamos: list[dict]
+    total_cuotas_pendientes: int
+    total_monto_pendiente: Decimal
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DistribucionPagoResponse(BaseModel):
+    """Schema para mostrar cómo se distribuye un pago"""
+    monto_total: Decimal
+    aplicado_a_mora: Decimal
+    aplicado_a_interes: Decimal
+    aplicado_a_capital: Decimal
+    sobrante: Decimal
+    cuotas_afectadas: list[dict]
+    
+    model_config = ConfigDict(from_attributes=True)

@@ -1,5 +1,5 @@
 # backend/app/models/pago.py
-from sqlalchemy import Column, Integer, String, Date, Time, TIMESTAMP, Numeric, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Date, Time, TIMESTAMP, Numeric, ForeignKey, Text, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.db.session import Base  # ✅ CORRECTO
@@ -40,15 +40,27 @@ class Pago(Base):
     banco = Column(String(50))
     
     # Estado
-    estado = Column(String(20), default="PAGADO")
-    tipo_pago = Column(String(20), default="NORMAL")
+    estado = Column(String(20), default="CONFIRMADO", index=True)  # CONFIRMADO, PENDIENTE, ANULADO
+    tipo_pago = Column(String(20), default="NORMAL")  # NORMAL, PARCIAL, ADELANTO
+    
+    # Conciliación bancaria
+    estado_conciliacion = Column(String(20), default="PENDIENTE")  # PENDIENTE, CONCILIADO, RECHAZADO
+    fecha_conciliacion = Column(Date, nullable=True)
+    referencia_bancaria = Column(String(100), nullable=True)
     
     # Información adicional
     observaciones = Column(Text)
     usuario_registro = Column(String(50))
     
+    # Control de anulación
+    anulado = Column(Boolean, default=False)
+    fecha_anulacion = Column(TIMESTAMP, nullable=True)
+    usuario_anulacion = Column(String(50), nullable=True)
+    justificacion_anulacion = Column(Text, nullable=True)
+    
     # Auditoría
     creado_en = Column(TIMESTAMP, server_default=func.now())
+    actualizado_en = Column(TIMESTAMP, nullable=True, onupdate=func.now())
     
     # Relaciones
     prestamo = relationship("Prestamo", back_populates="pagos")
@@ -58,3 +70,36 @@ class Pago(Base):
         back_populates="pagos",
         overlaps="pagos,cuota"
     )
+    
+    def __repr__(self):
+        return f"<Pago {self.codigo_pago} - ${self.monto_pagado} - {self.estado}>"
+    
+    @property
+    def esta_anulado(self) -> bool:
+        """Verifica si el pago está anulado"""
+        return self.anulado or self.estado == "ANULADO"
+    
+    @property
+    def esta_conciliado(self) -> bool:
+        """Verifica si el pago está conciliado"""
+        return self.estado_conciliacion == "CONCILIADO"
+    
+    @property
+    def tiene_mora(self) -> bool:
+        """Verifica si el pago incluye mora"""
+        return self.monto_mora > 0
+    
+    def anular(self, usuario: str, justificacion: str):
+        """Anula el pago"""
+        from datetime import datetime
+        self.anulado = True
+        self.estado = "ANULADO"
+        self.fecha_anulacion = datetime.now()
+        self.usuario_anulacion = usuario
+        self.justificacion_anulacion = justificacion
+    
+    def generar_codigo_pago(self) -> str:
+        """Genera código único de pago"""
+        from datetime import datetime
+        fecha_str = datetime.now().strftime("%Y%m%d")
+        return f"PAG-{fecha_str}-{self.id:04d}"
