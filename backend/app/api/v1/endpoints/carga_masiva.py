@@ -389,7 +389,7 @@ async def descargar_template(type: str):
     try:
         # Crear template según el tipo
         if type == "clientes":
-        template_data = {
+            template_data = {
                 'cedula': ['12345678', '87654321', '11223344'],
                 'nombre': ['Juan', 'María', 'Carlos'],
                 'apellido': ['Pérez', 'García', 'López'],

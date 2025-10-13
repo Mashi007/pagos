@@ -274,7 +274,7 @@ export function VisualizacionBD() {
                   placeholder="Buscar..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  icon={<Search className="h-4 w-4 text-gray-400" />}
+                  leftIcon={<Search className="h-4 w-4 text-gray-400" />}
                 />
               </div>
               <div>
@@ -376,14 +376,7 @@ export function VisualizacionBD() {
         <AlertWithIcon
           variant="info"
           title="Información de la Base de Datos"
-          description={
-            <div className="space-y-2">
-              <p>• <strong>Total de registros:</strong> {clientes.length} clientes</p>
-              <p>• <strong>Última actualización:</strong> {new Date().toLocaleString()}</p>
-              <p>• <strong>Formato de exportación:</strong> CSV compatible con Excel</p>
-              <p>• <strong>Filtros aplicados:</strong> {searchTerm ? `Búsqueda: "${searchTerm}"` : 'Sin búsqueda'} {filterEstado ? `| Estado: ${filterEstado}` : ''}</p>
-            </div>
-          }
+          description={`• Total de registros: ${clientes.length} clientes\n• Última actualización: ${new Date().toLocaleString()}\n• Formato de exportación: CSV compatible con Excel\n• Filtros aplicados: ${searchTerm ? `Búsqueda: "${searchTerm}"` : 'Sin búsqueda'} ${filterEstado ? `| Estado: ${filterEstado}` : ''}`}
         />
       </motion.div>
     </div>
