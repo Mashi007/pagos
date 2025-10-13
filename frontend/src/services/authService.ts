@@ -18,16 +18,35 @@ export interface ChangePasswordRequest {
 class AuthService {
   // Login de usuario
   async login(credentials: LoginForm): Promise<LoginResponse> {
-    const response = await apiClient.post<LoginResponse>('/api/v1/auth/login', credentials)
-    
-    // Guardar tokens en localStorage
-    if (response.data) {
-      localStorage.setItem('access_token', response.data.access_token)
-      localStorage.setItem('refresh_token', response.data.refresh_token)
-      localStorage.setItem('user', JSON.stringify(response.user))
+    try {
+      console.log('Enviando credenciales a:', '/api/v1/auth/login')
+      console.log('Credenciales:', { email: credentials.email, password: '***' })
+      
+      const response = await apiClient.post<LoginResponse>('/api/v1/auth/login', credentials)
+      
+      console.log('Respuesta del servidor:', response)
+      
+      // Guardar tokens en localStorage
+      if (response.data) {
+        localStorage.setItem('access_token', response.data.access_token)
+        localStorage.setItem('refresh_token', response.data.refresh_token)
+        localStorage.setItem('user', JSON.stringify(response.user))
+        console.log('Tokens guardados en localStorage')
+      }
+      
+      return response
+    } catch (error: any) {
+      console.error('Error en AuthService.login:', error)
+      
+      // Mejorar el manejo de errores
+      if (error.code === 'NETWORK_ERROR' || !error.response) {
+        const networkError = new Error('Error de conexión con el servidor')
+        networkError.code = 'NETWORK_ERROR'
+        throw networkError
+      }
+      
+      throw error
     }
-    
-    return response
   }
 
   // Logout de usuario

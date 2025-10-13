@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { AlertWithIcon } from '@/components/ui/alert'
 import { useAuth } from '@/store/authStore'
 import { LoginForm as LoginFormType } from '@/types'
+import { ConnectionTest } from '@/components/debug/ConnectionTest'
 
 // Schema de validación
 const loginSchema = z.object({
@@ -53,10 +54,20 @@ export function LoginForm() {
   const onSubmit = async (data: LoginFormData) => {
     try {
       clearError()
+      console.log('Intentando login con:', data)
       await login(data)
       navigate(from, { replace: true })
     } catch (error: any) {
-      // Los errores específicos se manejan en el store
+      console.error('Error en login:', error)
+      
+      // Manejar diferentes tipos de errores
+      if (error.code === 'NETWORK_ERROR' || !error.response) {
+        setError('root', { 
+          message: 'Error de conexión. Verifica que el servidor esté funcionando.' 
+        })
+        return
+      }
+      
       if (error.response?.status === 422) {
         // Errores de validación del servidor
         const details = error.response.data.detail
@@ -69,6 +80,14 @@ export function LoginForm() {
             }
           })
         }
+      } else if (error.response?.status === 401) {
+        setError('root', { 
+          message: 'Credenciales incorrectas. Verifica tu email y contraseña.' 
+        })
+      } else {
+        setError('root', { 
+          message: `Error del servidor: ${error.response?.status || 'Desconocido'}` 
+        })
       }
     }
   }
@@ -198,11 +217,16 @@ export function LoginForm() {
               </Button>
             </form>
 
-            <div className="text-center text-sm text-muted-foreground">
-              <p className="font-semibold text-blue-600">RAPICREDIT v1.0</p>
-              <p className="mt-1">© 2024 - Todos los derechos reservados</p>
-              <p className="text-xs mt-1 text-gray-400">Soluciones financieras rápidas y confiables</p>
-            </div>
+        <div className="text-center text-sm text-muted-foreground">
+          <p className="font-semibold text-blue-600">RAPICREDIT v1.0</p>
+          <p className="mt-1">© 2024 - Todos los derechos reservados</p>
+          <p className="text-xs mt-1 text-gray-400">Soluciones financieras rápidas y confiables</p>
+        </div>
+        
+        {/* Componente de prueba de conexión */}
+        <div className="mt-6">
+          <ConnectionTest />
+        </div>
           </CardContent>
         </Card>
 
