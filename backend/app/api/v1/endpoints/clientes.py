@@ -67,7 +67,7 @@ def crear_cliente(
         raise
 
 
-@router.get("/", response_model=ClienteList)
+@router.get("/")
 def listar_clientes(
     # Paginación
     page: int = Query(1, ge=1, description="Número de página"),
@@ -145,13 +145,13 @@ def listar_clientes(
         # Calcular páginas totales
         total_pages = (total + per_page - 1) // per_page
         
-        return ClienteList(
-            items=clientes,
-            total=total,
-            page=page,
-            page_size=per_page,
-            total_pages=total_pages
-        )
+        return {
+            "items": clientes,
+            "total": total,
+            "page": page,
+            "page_size": per_page,
+            "total_pages": total_pages
+        }
         
     except Exception as e:
         import traceback
