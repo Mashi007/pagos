@@ -355,3 +355,175 @@ def proyectar_pago(
         cuotas_restantes=cuotas_restantes,
         mensaje=f"El pago de {request.monto_pago} afectaría {len(cuotas_afectadas)} cuota(s)"
     )
+
+
+@router.get("/prestamo/{prestamo_id}/informacion-adicional")
+def obtener_informacion_adicional(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Obtener información adicional de la tabla de amortización
+    - Cuotas pagadas / Total
+    - % de avance
+    - Próximo vencimiento
+    - Días en mora
+    - Total pagado hasta la fecha
+    - Saldo pendiente
+    """
+    # Verificar préstamo
+    prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+    if not prestamo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Préstamo no encontrado"
+        )
+    
+    # Obtener todas las cuotas
+    todas_cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id).all()
+    
+    # Calcular estadísticas
+    cuotas_pagadas = len([c for c in todas_cuotas if c.estado == "PAGADA"])
+    cuotas_totales = len(todas_cuotas)
+    porcentaje_avance = (cuotas_pagadas / cuotas_totales * 100) if cuotas_totales > 0 else 0
+    
+    # Próximo vencimiento
+    proxima_cuota = db.query(Cuota).filter(
+        Cuota.prestamo_id == prestamo_id,
+        Cuota.estado.in_(["PENDIENTE", "VENCIDA"])
+    ).order_by(Cuota.fecha_vencimiento).first()
+    
+    proximo_vencimiento = None
+    if proxima_cuota:
+        dias_hasta_vencimiento = (proxima_cuota.fecha_vencimiento - date.today()).days
+        proximo_vencimiento = {
+            "fecha": proxima_cuota.fecha_vencimiento,
+            "numero_cuota": proxima_cuota.numero_cuota,
+            "monto": float(proxima_cuota.monto_cuota),
+            "dias_hasta_vencimiento": dias_hasta_vencimiento,
+            "esta_vencida": proxima_cuota.esta_vencida
+        }
+    
+    # Días en mora (máximo de todas las cuotas)
+    cuotas_vencidas = [c for c in todas_cuotas if c.esta_vencida and c.estado != "PAGADA"]
+    dias_mora_maximos = 0
+    if cuotas_vencidas:
+        dias_mora_maximos = max(c.dias_mora for c in cuotas_vencidas)
+    
+    # Totales financieros
+    total_pagado = sum(c.total_pagado for c in todas_cuotas)
+    saldo_pendiente = sum(c.monto_pendiente_total for c in todas_cuotas)
+    total_mora_acumulada = sum(c.monto_mora for c in todas_cuotas)
+    
+    # Estados de cuotas
+    estados_cuotas = {}
+    for cuota in todas_cuotas:
+        estado = cuota.estado
+        if estado not in estados_cuotas:
+            estados_cuotas[estado] = 0
+        estados_cuotas[estado] += 1
+    
+    return {
+        "prestamo_id": prestamo_id,
+        "codigo_prestamo": prestamo.codigo_prestamo,
+        "resumen_cuotas": {
+            "cuotas_pagadas": cuotas_pagadas,
+            "cuotas_totales": cuotas_totales,
+            "porcentaje_avance": round(porcentaje_avance, 2),
+            "cuotas_pendientes": estados_cuotas.get("PENDIENTE", 0),
+            "cuotas_vencidas": estados_cuotas.get("VENCIDA", 0),
+            "cuotas_parciales": estados_cuotas.get("PARCIAL", 0)
+        },
+        "proximo_vencimiento": proximo_vencimiento,
+        "mora_info": {
+            "dias_mora_maximos": dias_mora_maximos,
+            "total_mora_acumulada": float(total_mora_acumulada),
+            "cuotas_en_mora": len(cuotas_vencidas)
+        },
+        "financiero": {
+            "monto_total_prestamo": float(prestamo.monto_total),
+            "monto_financiado": float(prestamo.monto_financiado),
+            "total_pagado_hasta_fecha": float(total_pagado),
+            "saldo_pendiente": float(saldo_pendiente),
+            "porcentaje_pagado": round((float(total_pagado) / float(prestamo.monto_total) * 100), 2) if prestamo.monto_total > 0 else 0
+        },
+        "estados_detalle": estados_cuotas
+    }
+
+
+@router.get("/prestamo/{prestamo_id}/tabla-visual")
+def obtener_tabla_visual(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Obtener tabla de amortización en formato visual como el diagrama
+    """
+    # Verificar préstamo
+    prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+    if not prestamo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Préstamo no encontrado"
+        )
+    
+    # Obtener cuotas ordenadas
+    cuotas = db.query(Cuota).filter(
+        Cuota.prestamo_id == prestamo_id
+    ).order_by(Cuota.numero_cuota).all()
+    
+    # Formatear para tabla visual
+    tabla_visual = []
+    for cuota in cuotas:
+        # Determinar emoji y color según estado
+        if cuota.estado == "PAGADA":
+            emoji = "✅"
+            color = "success"
+        elif cuota.estado == "PARCIAL":
+            emoji = "⏳"
+            color = "warning"
+        elif cuota.estado == "VENCIDA":
+            emoji = "🔴"
+            color = "danger"
+        elif cuota.esta_vencida:
+            emoji = "⚠️"
+            color = "warning"
+        else:  # PENDIENTE
+            emoji = "⏳"
+            color = "info"
+        
+        # Determinar si es adelantado
+        if cuota.estado == "PAGADA" and cuota.fecha_pago and cuota.fecha_pago < cuota.fecha_vencimiento:
+            emoji = "🚀"
+            color = "primary"
+        
+        tabla_visual.append({
+            "numero_cuota": cuota.numero_cuota,
+            "fecha_vencimiento": cuota.fecha_vencimiento.strftime("%d/%m/%Y"),
+            "monto_cuota": f"${float(cuota.monto_cuota):,.2f}",
+            "estado": cuota.estado,
+            "estado_visual": f"{emoji} {cuota.estado}",
+            "color": color,
+            "dias_mora": cuota.dias_mora if cuota.dias_mora > 0 else None,
+            "monto_mora": float(cuota.monto_mora) if cuota.monto_mora > 0 else None,
+            "porcentaje_pagado": float(cuota.porcentaje_pagado),
+            "fecha_pago_real": cuota.fecha_pago.strftime("%d/%m/%Y") if cuota.fecha_pago else None
+        })
+    
+    return {
+        "prestamo_id": prestamo_id,
+        "cliente": {
+            "nombre": prestamo.cliente.nombre_completo,
+            "cedula": prestamo.cliente.cedula
+        },
+        "tabla": tabla_visual,
+        "leyenda_estados": {
+            "✅ PAGADO": "Cuota completamente pagada",
+            "⏳ PARCIAL": "Pago parcial registrado", 
+            "⏳ PENDIENTE": "Sin pagar, no vencida",
+            "🔴 VENCIDA": "Sin pagar, fecha pasada",
+            "🚀 ADELANTADO": "Pagado antes de vencimiento"
+        }
+    }

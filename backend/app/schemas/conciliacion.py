@@ -31,7 +31,9 @@ class MovimientoBancario(BaseModel):
     fecha: date
     referencia: str
     monto: Decimal
+    cedula_pagador: Optional[str] = Field(None, description="Cédula del pagador")
     descripcion: Optional[str] = ""
+    cuenta_origen: Optional[str] = Field(None, description="Número de cuenta origen")
     
     class Config:
         json_encoders = {
@@ -275,4 +277,87 @@ class EstadisticasConciliacion(BaseModel):
     class Config:
         json_encoders = {
             Decimal: lambda v: float(v)
+        }
+
+
+# ============================================
+# SCHEMAS PARA FUNCIONALIDAD AVANZADA
+# ============================================
+
+class MovimientoBancarioExtendido(MovimientoBancario):
+    """Movimiento bancario con información de matching"""
+    id: Optional[int] = None
+    tipo_match: Optional[TipoMatch] = None
+    confianza_match: Optional[float] = None
+    cliente_encontrado: Optional[dict] = None
+    pago_sugerido: Optional[dict] = None
+    requiere_revision: bool = False
+    
+    class Config:
+        from_attributes = True
+
+
+class ValidacionArchivoBancario(BaseModel):
+    """Resultado de validación de archivo bancario"""
+    archivo_valido: bool
+    formato_detectado: str  # CSV, EXCEL
+    total_filas: int
+    filas_validas: int
+    errores: List[str] = []
+    advertencias: List[str] = []
+    duplicados_encontrados: List[dict] = []
+    cedulas_no_registradas: List[str] = []
+    vista_previa: List[MovimientoBancarioExtendido] = []
+
+
+class ConciliacionMasiva(BaseModel):
+    """Schema para conciliación masiva"""
+    movimientos_a_aplicar: List[int] = Field(..., description="IDs de movimientos a aplicar")
+    aplicar_exactos: bool = Field(True, description="Aplicar coincidencias exactas automáticamente")
+    aplicar_parciales: bool = Field(False, description="Aplicar coincidencias parciales")
+    observaciones: Optional[str] = None
+
+
+class ResultadoConciliacionMasiva(BaseModel):
+    """Resultado de conciliación masiva"""
+    total_procesados: int
+    exitosos: int
+    fallidos: int
+    pagos_creados: List[int]
+    errores: List[dict] = []
+    resumen_financiero: dict
+    reporte_generado: bool = True
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
+class RevisionManual(BaseModel):
+    """Schema para revisión manual de movimiento"""
+    movimiento_id: int
+    cliente_cedula: str
+    cuota_id: Optional[int] = None
+    monto_ajustado: Optional[Decimal] = None
+    observaciones: str
+    accion: str = Field(..., pattern="^(APLICAR|RECHAZAR|NO_APLICABLE)$")
+
+
+class HistorialConciliacion(BaseModel):
+    """Historial de conciliaciones"""
+    id: int
+    fecha_proceso: datetime
+    usuario_proceso: str
+    archivo_original: str
+    total_movimientos: int
+    total_aplicados: int
+    tasa_exito: float
+    estado: EstadoConciliacion
+    observaciones: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
         }
