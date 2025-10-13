@@ -2,18 +2,45 @@
 
 ## ✅ Estado del Sistema
 
-### 🌐 **Backend - FUNCIONANDO**
+### 🌐 **Backend - FUNCIONANDO EN RENDER**
 - **URL**: https://pagos-f2qf.onrender.com
 - **Estado**: ✅ ACTIVO
 - **Documentación**: https://pagos-f2qf.onrender.com/docs
 
-### 💻 **Frontend - LISTO PARA EJECUTAR**
+### 💻 **Frontend - LISTO PARA RENDER**
 - **Ubicación**: `./frontend/`
-- **Estado**: ✅ CONFIGURADO
+- **Estado**: ✅ OPTIMIZADO PARA RENDER
 
 ---
 
-## ⚡ EJECUTAR EN 3 PASOS
+## ⚡ DESPLEGAR EN RENDER (3 PASOS)
+
+### **1. Subir a GitHub**
+```bash
+git add .
+git commit -m "Frontend listo para Render"
+git push origin main
+```
+
+### **2. Crear Static Site en Render**
+- Ve a https://render.com
+- **New +** → **Static Site**
+- Conecta tu repositorio
+- **Root Directory**: `frontend`
+- **Build Command**: `npm install && npm run build`
+- **Publish Directory**: `dist`
+
+### **3. Variables de entorno**
+```
+VITE_API_URL=https://pagos-f2qf.onrender.com
+VITE_NODE_ENV=production
+```
+
+**¡Listo!** Tu sistema estará en línea en ~5 minutos
+
+---
+
+## 💻 O EJECUTAR LOCALMENTE
 
 ### **1. Navegar al frontend**
 ```bash
@@ -27,10 +54,10 @@ npm install
 
 ### **3. Iniciar aplicación**
 ```bash
-npm run start
+npm run dev
 ```
 
-**¡Listo!** El sistema se abrirá automáticamente en http://localhost:3000
+**¡Listo!** El sistema se abrirá en http://localhost:3000
 
 ---
 
@@ -72,10 +99,11 @@ npm run start
 
 ---
 
-## 🌐 URLs Importantes
+## 🌐 URLs del Sistema
 
-- **Frontend Local**: http://localhost:3000
-- **Backend API**: https://pagos-f2qf.onrender.com
+- **Frontend en Render**: https://sistema-prestamos-frontend.onrender.com (después del deploy)
+- **Frontend Local**: http://localhost:3000 (para desarrollo)
+- **Backend API**: https://pagos-f2qf.onrender.com ✅ FUNCIONANDO
 - **Documentación API**: https://pagos-f2qf.onrender.com/docs
 - **Health Check**: https://pagos-f2qf.onrender.com/health
 
@@ -114,4 +142,14 @@ Tu sistema de préstamos y cobranza está **100% funcional** con:
 ✅ **Autenticación** completa  
 ✅ **Diseño profesional** responsive  
 
-**¡Solo ejecuta `npm run start` y tendrás un sistema de clase mundial!** 🚀
+**¡Solo despliega en Render y tendrás un sistema de clase mundial en la nube!** 🚀
+
+### 🌐 **RENDER = SOLUCIÓN COMPLETA:**
+- ✅ **Frontend**: Static Site (gratis)
+- ✅ **Backend**: Web Service (ya funcionando)  
+- ✅ **Base de datos**: PostgreSQL (incluida)
+- ✅ **SSL**: HTTPS automático
+- ✅ **CDN**: Velocidad global
+- ✅ **Auto-deploy**: Deploy automático desde Git
+
+**¡Tu sistema completo en la nube por prácticamente $0!** 🎊

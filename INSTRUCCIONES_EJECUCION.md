@@ -2,7 +2,7 @@
 
 ## 📋 RESUMEN DEL PROYECTO
 
-He creado un **frontend completo y funcional** para el sistema de préstamos y cobranza con las siguientes características:
+He creado un **frontend completo y funcional** para el sistema de préstamos y cobranza, **optimizado para Render**, con las siguientes características:
 
 ### ✅ **LO QUE ESTÁ IMPLEMENTADO:**
 
@@ -52,9 +52,9 @@ He creado un **frontend completo y funcional** para el sistema de préstamos y c
 
 ### 📋 **PRERREQUISITOS:**
 
-1. **Node.js 18+** instalado
-2. **Backend funcionando** en `localhost:8080`
-3. **Base de datos** configurada
+1. **Cuenta en Render** (gratis)
+2. **Repositorio en GitHub** 
+3. **Backend ya funcionando** ✅ https://pagos-f2qf.onrender.com
 
 ### 🔧 **INSTALACIÓN Y EJECUCIÓN:**
 
@@ -63,23 +63,35 @@ He creado un **frontend completo y funcional** para el sistema de préstamos y c
 - **Documentación**: https://pagos-f2qf.onrender.com/docs
 - **Estado**: ✅ ACTIVO y funcionando
 
-#### **💻 Frontend (Ejecutar localmente):**
+#### **🚀 Frontend (Desplegar en Render):**
+```bash
+# 1. Subir código a GitHub
+git add .
+git commit -m "Frontend listo para Render"
+git push origin main
+
+# 2. En Render.com:
+# - New + → Static Site
+# - Conectar repositorio
+# - Root Directory: frontend
+# - Build: npm install && npm run build
+# - Publish: dist
+
+# 3. Variables de entorno en Render:
+# VITE_API_URL=https://pagos-f2qf.onrender.com
+```
+
+#### **💻 O ejecutar localmente para desarrollo:**
 ```bash
 cd frontend
-
-# Opción 1: Setup automático
-npm run start
-
-# Opción 2: Manual
-npm install
-npm run setup
-npm run dev
+npm install && npm run dev
 ```
 
 ### 🌐 **ACCESO AL SISTEMA:**
 
-- **Frontend Local**: http://localhost:3000
-- **Backend API**: https://pagos-f2qf.onrender.com
+- **Frontend en Render**: https://sistema-prestamos-frontend.onrender.com (después del deploy)
+- **Frontend Local**: http://localhost:3000 (para desarrollo)
+- **Backend API**: https://pagos-f2qf.onrender.com ✅ FUNCIONANDO
 - **Documentación API**: https://pagos-f2qf.onrender.com/docs
 
 ### 👤 **USUARIOS DE PRUEBA:**

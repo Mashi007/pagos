@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: sistema-prestamos-frontend
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run preview
+    envVars:
+      - key: VITE_API_URL
+        value: https://pagos-f2qf.onrender.com
+      - key: VITE_NODE_ENV
+        value: production
+      - key: VITE_APP_NAME
+        value: "Sistema de Préstamos y Cobranza"
+      - key: VITE_APP_VERSION
+        value: "1.0.0"
+    staticPublishPath: ./dist
