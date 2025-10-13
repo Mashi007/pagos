@@ -1,4 +1,4 @@
-import React from 'react'
+import { useState } from 'react'
 import { Heart, Shield } from 'lucide-react'
 
 export function Footer() {

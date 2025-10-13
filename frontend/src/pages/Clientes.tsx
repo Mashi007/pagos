@@ -1,4 +1,3 @@
-import React from 'react'
 import { ClientesList } from '@/components/clientes/ClientesList'
 
 export function Clientes() {

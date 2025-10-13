@@ -22,9 +22,8 @@ export function useClientes(
   perPage: number = 20
 ) {
   return useQuery({
-    queryKey: clienteKeys.list({ ...filters, page, per_page: perPage }),
+    queryKey: clienteKeys.list({ ...filters, per_page: perPage }),
     queryFn: () => clienteService.getClientes(filters, page, perPage),
-    keepPreviousData: true,
     staleTime: 5 * 60 * 1000, // 5 minutos
   })
 }
