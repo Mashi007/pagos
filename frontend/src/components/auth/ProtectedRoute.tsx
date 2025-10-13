@@ -58,7 +58,7 @@ export function ProtectedRoute({
             Rol requerido: {requiredRoles.join(', ')}
           </p>
           <p className="text-sm text-gray-500">
-            Su rol actual: {user.rol}
+            Su rol actual: {currentUser?.rol || 'No disponible'}
           </p>
         </div>
       </div>
