@@ -41,45 +41,46 @@ export function ConnectionTest() {
     }
   }
 
-  const testAuthEndpoint = async () => {
+  const wakeUpBackend = async () => {
     setIsLoading(true)
     setError(null)
     setResult(null)
 
     try {
-      console.log('Probando endpoint de autenticación...')
+      console.log('Despertando el backend...')
       
-      // Probar endpoint de auth (sin credenciales)
-      const response = await apiClient.post('/api/v1/auth/login', {
-        email: 'test@test.com',
-        password: 'test123'
-      }) as any
+      // Intentar despertar el backend con múltiples requests
+      const promises = [
+        fetch('https://pagos-f2qf.onrender.com/', { method: 'GET' }),
+        fetch('https://pagos-f2qf.onrender.com/docs', { method: 'GET' }),
+        fetch('https://pagos-f2qf.onrender.com/api/v1/auth/login', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: 'test@test.com', password: 'test123' })
+        })
+      ]
       
-      setResult({
-        status: 'success',
-        data: response.data,
-        statusCode: response.status
-      })
-    } catch (err: any) {
-      console.error('Error en prueba de auth:', err)
+      const results = await Promise.allSettled(promises)
+      console.log('Resultados del despertar:', results)
       
-      // Si es 422 o 401, es normal (credenciales incorrectas)
-      if (err.response?.status === 422 || err.response?.status === 401) {
+      // Verificar si al menos uno funcionó
+      const successful = results.some(result => 
+        result.status === 'fulfilled' && 
+        (result.value.status === 200 || result.value.status === 422 || result.value.status === 401)
+      )
+      
+      if (successful) {
         setResult({
-          status: 'expected_error',
-          message: 'Endpoint funcionando correctamente (error esperado)',
-          statusCode: err.response.status,
-          data: err.response.data
+          status: 'success',
+          message: 'Backend despertado exitosamente',
+          data: 'El servicio está ahora disponible'
         })
       } else {
-        setError(err.message || 'Error desconocido')
-        setResult({
-          status: 'error',
-          error: err.message,
-          statusCode: err.response?.status,
-          response: err.response?.data
-        })
+        setError('No se pudo despertar el backend')
       }
+    } catch (err: any) {
+      console.error('Error al despertar backend:', err)
+      setError(err.message || 'Error desconocido')
     } finally {
       setIsLoading(false)
     }
@@ -101,11 +102,11 @@ export function ConnectionTest() {
           </Button>
           
           <Button 
-            onClick={testAuthEndpoint} 
+            onClick={wakeUpBackend} 
             disabled={isLoading}
-            variant="outline"
+            className="bg-orange-500 hover:bg-orange-600 text-white"
           >
-            {isLoading ? 'Probando...' : 'Probar Endpoint Auth'}
+            {isLoading ? 'Despertando...' : '🚀 Despertar Backend'}
           </Button>
         </div>
 
