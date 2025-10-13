@@ -44,7 +44,7 @@ class CargaMasivaService {
         }
       }
 
-      return response.data as CargaMasivaResponse
+      return response.data as unknown as CargaMasivaResponse
     } catch (error: any) {
       console.error('Error en carga masiva:', error)
       
