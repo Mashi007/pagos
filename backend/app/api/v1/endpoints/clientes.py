@@ -92,44 +92,44 @@ def listar_clientes(
     - COMERCIAL/ASESOR: Ve SOLO sus clientes asignados
     """
     try:
-    # Construir query base
+        # Construir query base
         query = db.query(Cliente)
-    
-    # ============================================
-    # FILTRO POR ROL - MATRIZ DE ACCESO
-    # ============================================
-    if current_user.rol in ["COMERCIAL", "ASESOR"]:
-        # Solo pueden ver SUS clientes asignados
-        query = query.filter(Cliente.asesor_id == current_user.id)
+        
+        # ============================================
+        # FILTRO POR ROL - MATRIZ DE ACCESO
+        # ============================================
+        if current_user.rol in ["COMERCIAL", "ASESOR"]:
+            # Solo pueden ver SUS clientes asignados
+            query = query.filter(Cliente.asesor_id == current_user.id)
         # ADMIN ve todos los clientes (sin filtro adicional)
-    
-    # ============================================
-    # APLICAR FILTROS ADICIONALES
-    # ============================================
-    
-    # Búsqueda de texto (nombre, cédula, móvil)
+        
+        # ============================================
+        # APLICAR FILTROS ADICIONALES
+        # ============================================
+        
+        # Búsqueda de texto (nombre, cédula, móvil)
         if search:
             search_pattern = f"%{search}%"
-        query = query.filter(
-            or_(
-                Cliente.nombres.ilike(search_pattern),
-                Cliente.apellidos.ilike(search_pattern),
-                Cliente.cedula.ilike(search_pattern),
-                Cliente.telefono.ilike(search_pattern),
-                func.concat(Cliente.nombres, ' ', Cliente.apellidos).ilike(search_pattern)
+            query = query.filter(
+                or_(
+                    Cliente.nombres.ilike(search_pattern),
+                    Cliente.apellidos.ilike(search_pattern),
+                    Cliente.cedula.ilike(search_pattern),
+                    Cliente.telefono.ilike(search_pattern),
+                    func.concat(Cliente.nombres, ' ', Cliente.apellidos).ilike(search_pattern)
+                )
             )
-        )
-    
-    # Filtros específicos
-    if estado:
-        query = query.filter(Cliente.estado == estado)
-    
-    if estado_financiero:
-        query = query.filter(Cliente.estado_financiero == estado_financiero)
-    
-    if asesor_id:
-        query = query.filter(Cliente.asesor_id == asesor_id)
-    
+        
+        # Filtros específicos
+        if estado:
+            query = query.filter(Cliente.estado == estado)
+        
+        if estado_financiero:
+            query = query.filter(Cliente.estado_financiero == estado_financiero)
+        
+        if asesor_id:
+            query = query.filter(Cliente.asesor_id == asesor_id)
+        
         # ============================================
         # ORDENAMIENTO por defecto
         # ============================================
