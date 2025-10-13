@@ -5,7 +5,7 @@ Endpoint especial para configuración inicial del sistema desde el frontend
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Dict, Any
+from typing import Dict, Any, List
 from datetime import datetime
 
 from app.db.session import get_db
