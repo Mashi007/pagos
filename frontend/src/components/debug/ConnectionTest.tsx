@@ -18,7 +18,7 @@ export function ConnectionTest() {
       console.log('Probando conexión con el backend...')
       
       // Probar conexión básica
-      const response = await apiClient.get('/')
+      const response = await apiClient.get('/') as any
       console.log('Respuesta del servidor:', response)
       
       setResult({
@@ -53,7 +53,7 @@ export function ConnectionTest() {
       const response = await apiClient.post('/api/v1/auth/login', {
         email: 'test@test.com',
         password: 'test123'
-      })
+      }) as any
       
       setResult({
         status: 'success',

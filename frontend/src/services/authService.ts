@@ -40,7 +40,7 @@ class AuthService {
       
       // Mejorar el manejo de errores
       if (error.code === 'NETWORK_ERROR' || !error.response) {
-        const networkError = new Error('Error de conexión con el servidor')
+        const networkError = new Error('Error de conexión con el servidor') as any
         networkError.code = 'NETWORK_ERROR'
         throw networkError
       }
