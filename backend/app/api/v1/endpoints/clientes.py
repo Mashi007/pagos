@@ -237,6 +237,56 @@ def verificar_estructura_tabla(db: Session = Depends(get_db)):
         return {"error": str(e)}
 
 
+@router.post("/aplicar-migracion-manual")
+def aplicar_migracion_manual(db: Session = Depends(get_db)):
+    """Aplicar migración manual para agregar columnas faltantes"""
+    try:
+        from sqlalchemy import text
+        
+        # Lista de columnas que faltan
+        columnas_faltantes = [
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS modelo_vehiculo VARCHAR(100)",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS marca_vehiculo VARCHAR(50)",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS anio_vehiculo INTEGER",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS color_vehiculo VARCHAR(30)",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS chasis VARCHAR(50)",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS motor VARCHAR(50)",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS concesionario VARCHAR(100)",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS vendedor_concesionario VARCHAR(100)",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS total_financiamiento NUMERIC(12,2)",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS cuota_inicial NUMERIC(12,2) DEFAULT 0.00",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS monto_financiado NUMERIC(12,2)",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS fecha_entrega DATE",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS numero_amortizaciones INTEGER",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS modalidad_pago VARCHAR(20)",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS asesor_id INTEGER",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS fecha_asignacion DATE",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS estado_financiero VARCHAR(20) DEFAULT 'AL_DIA'",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS dias_mora INTEGER DEFAULT 0"
+        ]
+        
+        columnas_aplicadas = []
+        for sql in columnas_faltantes:
+            try:
+                db.execute(text(sql))
+                columnas_aplicadas.append(sql)
+            except Exception as e:
+                print(f"Error aplicando {sql}: {e}")
+        
+        db.commit()
+        
+        return {
+            "mensaje": "Migración manual aplicada",
+            "columnas_aplicadas": len(columnas_aplicadas),
+            "total_columnas": len(columnas_faltantes),
+            "detalles": columnas_aplicadas
+        }
+        
+    except Exception as e:
+        db.rollback()
+        return {"error": str(e)}
+
+
 @router.get("/cedula/{cedula}", response_model=ClienteResponse)
 def buscar_por_cedula(cedula: str, db: Session = Depends(get_db)):
     """Buscar cliente por cédula"""
