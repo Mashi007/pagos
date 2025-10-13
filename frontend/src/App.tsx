@@ -14,6 +14,7 @@ import { useKeepBackendAlive } from '@/hooks/useKeepBackendAlive'
 import { Login } from '@/pages/Login'
 import { Dashboard } from '@/pages/Dashboard'
 import { Clientes } from '@/pages/Clientes'
+import { CargaMasiva } from '@/pages/CargaMasiva'
 
 // Placeholder components for other pages
 
@@ -132,6 +133,16 @@ function App() {
           <Route path="clientes" element={<Clientes />} />
           <Route path="clientes/nuevo" element={<Clientes />} />
           <Route path="clientes/:id" element={<Clientes />} />
+
+          {/* Carga Masiva */}
+          <Route
+            path="carga-masiva"
+            element={
+              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE']}>
+                <CargaMasiva />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Préstamos */}
           <Route
