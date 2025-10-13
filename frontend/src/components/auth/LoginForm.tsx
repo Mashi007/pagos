@@ -14,7 +14,6 @@ import { useAuth } from '@/store/authStore'
 import { LoginForm as LoginFormType } from '@/types'
 import { ConnectionTest } from '@/components/debug/ConnectionTest'
 import { BackendStatus } from '@/components/debug/BackendStatus'
-import { TemporaryLogin } from '@/components/auth/TemporaryLogin'
 
 // Schema de validación
 const loginSchema = z.object({
@@ -233,11 +232,6 @@ export function LoginForm() {
         {/* Estado del backend */}
         <div className="mt-4">
           <BackendStatus />
-        </div>
-        
-        {/* Login temporal */}
-        <div className="mt-4">
-          <TemporaryLogin />
         </div>
           </CardContent>
         </Card>
