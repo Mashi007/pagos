@@ -237,6 +237,24 @@ def verificar_estructura_tabla(db: Session = Depends(get_db)):
         return {"error": str(e)}
 
 
+@router.get("/test-simple")
+def test_simple_query(db: Session = Depends(get_db)):
+    """Test simple para verificar conexión a base de datos"""
+    try:
+        # Query muy simple sin joins
+        count = db.query(Cliente).count()
+        return {
+            "mensaje": "Query simple exitosa",
+            "total_clientes": count,
+            "status": "ok"
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "status": "error"
+        }
+
+
 @router.post("/aplicar-migracion-manual")
 def aplicar_migracion_manual(db: Session = Depends(get_db)):
     """Aplicar migración manual para agregar columnas faltantes"""
