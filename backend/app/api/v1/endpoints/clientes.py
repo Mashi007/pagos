@@ -145,8 +145,40 @@ def listar_clientes(
         # Calcular páginas totales
         total_pages = (total + per_page - 1) // per_page
         
+        # Convertir clientes a dict simple para evitar problemas de serialización
+        clientes_dict = []
+        for cliente in clientes:
+            cliente_dict = {
+                "id": cliente.id,
+                "cedula": cliente.cedula,
+                "nombres": cliente.nombres,
+                "apellidos": cliente.apellidos,
+                "telefono": cliente.telefono,
+                "email": cliente.email,
+                "direccion": cliente.direccion,
+                "ocupacion": cliente.ocupacion,
+                "modelo_vehiculo": cliente.modelo_vehiculo,
+                "marca_vehiculo": cliente.marca_vehiculo,
+                "anio_vehiculo": cliente.anio_vehiculo,
+                "color_vehiculo": cliente.color_vehiculo,
+                "concesionario": cliente.concesionario,
+                "total_financiamiento": float(cliente.total_financiamiento) if cliente.total_financiamiento else None,
+                "cuota_inicial": float(cliente.cuota_inicial) if cliente.cuota_inicial else None,
+                "monto_financiado": float(cliente.monto_financiado) if cliente.monto_financiado else None,
+                "modalidad_pago": cliente.modalidad_pago,
+                "numero_amortizaciones": cliente.numero_amortizaciones,
+                "asesor_id": cliente.asesor_id,
+                "estado": cliente.estado,
+                "activo": cliente.activo,
+                "estado_financiero": cliente.estado_financiero,
+                "dias_mora": cliente.dias_mora,
+                "fecha_registro": cliente.fecha_registro.isoformat() if cliente.fecha_registro else None,
+                "fecha_asignacion": cliente.fecha_asignacion.isoformat() if cliente.fecha_asignacion else None
+            }
+            clientes_dict.append(cliente_dict)
+        
         return {
-            "items": clientes,
+            "items": clientes_dict,
             "total": total,
             "page": page,
             "page_size": per_page,
