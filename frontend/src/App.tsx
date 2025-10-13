@@ -13,24 +13,15 @@ import { useAuth } from '@/store/authStore'
 import { Login } from '@/pages/Login'
 import { Dashboard } from '@/pages/Dashboard'
 import { Clientes } from '@/pages/Clientes'
+import { Pagos } from '@/pages/Pagos'
+import { Amortizacion } from '@/pages/Amortizacion'
+import { Notificaciones } from '@/pages/Notificaciones'
 import { CargaMasiva } from '@/pages/CargaMasiva'
 import { VisualizacionBD } from '@/pages/VisualizacionBD'
 
 // Placeholder components for other pages
 
-const Pagos = () => (
-  <div className="p-6">
-    <h1 className="text-2xl font-bold mb-4">Gestión de Pagos</h1>
-    <p className="text-gray-600">Módulo de pagos en desarrollo...</p>
-  </div>
-)
-
-const Amortizacion = () => (
-  <div className="p-6">
-    <h1 className="text-2xl font-bold mb-4">Tabla de Amortización</h1>
-    <p className="text-gray-600">Módulo de amortización en desarrollo...</p>
-  </div>
-)
+// Pagos y Amortizacion ahora están importados desde las páginas reales
 
 const Conciliacion = () => (
   <div className="p-6">
