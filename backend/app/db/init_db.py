@@ -43,6 +43,38 @@ def create_tables():
         return False
 
 
+def run_migrations():
+    """Ejecuta las migraciones de Alembic"""
+    try:
+        import subprocess
+        import os
+        
+        # Cambiar al directorio del backend
+        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        os.chdir(backend_dir)
+        
+        logger.info("🔄 Ejecutando migraciones de Alembic...")
+        
+        # Ejecutar alembic upgrade head
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        
+        if result.returncode == 0:
+            logger.info("✅ Migraciones aplicadas exitosamente")
+            return True
+        else:
+            logger.error(f"❌ Error ejecutando migraciones: {result.stderr}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"❌ Error ejecutando migraciones: {e}")
+        return False
+
+
 def init_db() -> bool:
     """Inicializa la base de datos creando las tablas si no existen"""
     try:
@@ -51,6 +83,10 @@ def init_db() -> bool:
         if not check_database_connection():
             logger.error("❌ No se pudo conectar a la base de datos")
             return False
+        
+        # Intentar ejecutar migraciones primero
+        logger.info("🔄 Intentando aplicar migraciones...")
+        migrations_success = run_migrations()
         
         main_tables = ["users", "clientes", "prestamos", "pagos"]
         tables_exist = all(table_exists(table) for table in main_tables)
@@ -65,6 +101,8 @@ def init_db() -> bool:
                 return False
         else:
             logger.info("✅ Base de datos ya inicializada, tablas existentes")
+            if migrations_success:
+                logger.info("✅ Migraciones aplicadas correctamente")
             return True
             
     except Exception as e:
