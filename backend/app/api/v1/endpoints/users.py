@@ -18,6 +18,105 @@ from datetime import datetime
 router = APIRouter()
 
 
+# ============================================
+# VERIFICACIÓN DE ADMINISTRADORES
+# ============================================
+
+@router.get("/verificar-admin")
+def verificar_rol_administracion(
+    db: Session = Depends(get_db)
+):
+    """
+    🔍 Verificar estado del rol de administración en el sistema
+    """
+    try:
+        # Buscar todos los administradores
+        admins = db.query(User).filter(User.rol == "ADMIN").all()
+        admins_activos = db.query(User).filter(
+            User.rol == "ADMIN",
+            User.is_active == True
+        ).all()
+        
+        # Estadísticas de usuarios por rol
+        roles_stats = {}
+        for rol in ["ADMIN", "GERENTE", "DIRECTOR", "COBRANZAS", "COMERCIAL", "ASESOR", "CONTADOR", "INVITADO"]:
+            count = db.query(User).filter(User.rol == rol).count()
+            activos = db.query(User).filter(User.rol == rol, User.is_active == True).count()
+            roles_stats[rol] = {"total": count, "activos": activos}
+        
+        # Estado del sistema
+        sistema_funcional = len(admins_activos) > 0
+        
+        return {
+            "titulo": "🔍 VERIFICACIÓN DEL ROL DE ADMINISTRACIÓN",
+            "fecha_verificacion": datetime.now().isoformat(),
+            
+            "estado_administracion": {
+                "activo": sistema_funcional,
+                "total_admins": len(admins),
+                "admins_activos": len(admins_activos),
+                "estado": "✅ FUNCIONAL" if sistema_funcional else "❌ SIN ADMINISTRADOR ACTIVO"
+            },
+            
+            "administradores_registrados": [
+                {
+                    "id": admin.id,
+                    "email": admin.email,
+                    "nombre_completo": admin.full_name,
+                    "activo": admin.is_active,
+                    "fecha_creacion": admin.created_at,
+                    "ultimo_login": getattr(admin, 'last_login', None),
+                    "estado": "✅ ACTIVO" if admin.is_active else "❌ INACTIVO"
+                }
+                for admin in admins
+            ],
+            
+            "permisos_administrador": {
+                "gestion_usuarios": "✅ Crear, editar, eliminar usuarios",
+                "gestion_clientes": "✅ Acceso completo a todos los clientes",
+                "gestion_pagos": "✅ Modificar, anular pagos sin aprobación",
+                "reportes": "✅ Generar todos los reportes",
+                "configuracion": "✅ Configurar parámetros del sistema",
+                "aprobaciones": "✅ Aprobar/rechazar solicitudes",
+                "carga_masiva": "✅ Realizar migraciones masivas",
+                "auditoria": "✅ Ver logs completos del sistema",
+                "dashboard": "✅ Dashboard administrativo completo"
+            },
+            
+            "estadisticas_usuarios": {
+                "por_rol": roles_stats,
+                "total_usuarios": sum(stats["total"] for stats in roles_stats.values()),
+                "usuarios_activos": sum(stats["activos"] for stats in roles_stats.values())
+            },
+            
+            "recomendaciones": [
+                "✅ Sistema funcional" if sistema_funcional else "❌ Crear usuario administrador",
+                "🔐 Cambiar contraseñas por defecto" if any(admin.email == "admin@financiamiento.com" for admin in admins) else None,
+                "👥 Crear usuarios para otros roles según necesidades",
+                "📊 Revisar dashboard administrativo regularmente",
+                "🔔 Configurar notificaciones automáticas"
+            ],
+            
+            "acciones_disponibles": {
+                "crear_admin": "python backend/scripts/create_admin.py",
+                "modo_interactivo": "python backend/scripts/create_admin.py --interactive",
+                "listar_admins": "python backend/scripts/create_admin.py --list",
+                "verificar_sistema": "python backend/scripts/create_admin.py --verify"
+            },
+            
+            "urls_sistema": {
+                "aplicacion": "https://pagos-f2qf.onrender.com",
+                "documentacion": "https://pagos-f2qf.onrender.com/docs",
+                "login": "POST /api/v1/auth/login",
+                "dashboard_admin": "GET /api/v1/dashboard/admin",
+                "verificar_admin": "GET /api/v1/users/verificar-admin"
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error verificando administración: {str(e)}")
+
+
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED, summary="Crear usuario")
 def create_user(
     user_data: UserCreate,
