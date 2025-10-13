@@ -12,6 +12,7 @@ from app.models.user import User
 from app.schemas.auth import (
     LoginRequest,
     Token,
+    LoginResponse,
     RefreshTokenRequest,
     ChangePasswordRequest
 )
@@ -22,7 +23,7 @@ from app.services.auth_service import AuthService
 router = APIRouter()
 
 
-@router.post("/login", response_model=Token, summary="Login de usuario")
+@router.post("/login", response_model=LoginResponse, summary="Login de usuario")
 def login(
     login_data: LoginRequest,
     db: Session = Depends(get_db)
@@ -30,14 +31,29 @@ def login(
     """
     Login de usuario con email y contraseña
     
-    Retorna access_token y refresh_token
+    Retorna access_token, refresh_token e información del usuario
     
     - **email**: Email del usuario
     - **password**: Contraseña del usuario
     """
     token, user = AuthService.login(db, login_data)
     
-    return token
+    # Crear respuesta con tokens y usuario
+    login_response = LoginResponse(
+        access_token=token.access_token,
+        refresh_token=token.refresh_token,
+        token_type=token.token_type,
+        user={
+            "id": user.id,
+            "email": user.email,
+            "nombre": user.nombre,
+            "apellido": user.apellido,
+            "rol": user.rol,
+            "is_active": user.is_active
+        }
+    )
+    
+    return login_response
 
 
 @router.post("/refresh", response_model=Token, summary="Refresh token")

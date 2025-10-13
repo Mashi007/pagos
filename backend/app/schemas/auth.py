@@ -13,6 +13,14 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
+class LoginResponse(BaseModel):
+    """Schema para respuesta de login (tokens + usuario)"""
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user: dict  # Información básica del usuario
+
+
 class TokenPayload(BaseModel):
     """Schema para el payload del token"""
     sub: Optional[str] = None
