@@ -103,7 +103,7 @@ export function ClientesList() {
   if (error) {
     return (
       <AlertWithIcon
-        type="error"
+        variant="destructive"
         title="Error al cargar clientes"
         description="No se pudieron cargar los clientes. Por favor, intenta nuevamente."
       />

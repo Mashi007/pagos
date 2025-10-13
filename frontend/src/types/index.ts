@@ -224,6 +224,7 @@ export interface ClienteFilters {
   asesor_id?: string;
   fecha_desde?: string;
   fecha_hasta?: string;
+  per_page?: number;
 }
 
 export interface PagoFilters {
