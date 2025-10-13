@@ -3,7 +3,7 @@
 Modelo de Aprobación
 Sistema de workflow para solicitudes que requieren aprobación
 """
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Date, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
