@@ -6,6 +6,7 @@ Integración con Sentry, Prometheus y logging estructurado
 import logging
 import os
 from typing import Optional
+from datetime import datetime
 
 from fastapi import FastAPI
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -201,14 +202,17 @@ def setup_monitoring(app: FastAPI) -> dict:
     return config_applied
 
 
-# Métricas personalizadas de negocio
+# ============================================
+# MÉTRICAS PERSONALIZADAS DE FINANCIAMIENTO AUTOMOTRIZ
+# ============================================
+
 def track_business_metrics(
     metric_name: str,
     value: float,
     labels: Optional[dict] = None
 ) -> None:
     """
-    Registra métricas de negocio personalizadas
+    Registra métricas de negocio personalizadas para financiamiento automotriz
     
     Args:
         metric_name: Nombre de la métrica
@@ -216,12 +220,102 @@ def track_business_metrics(
         labels: Labels adicionales
         
     Examples:
-        track_business_metrics("prestamos_creados", 1, {"categoria": "PERSONAL"})
-        track_business_metrics("pagos_procesados", monto, {"estado": "EXITOSO"})
+        track_business_metrics("clientes_creados", 1, {"asesor": "Juan", "concesionario": "AutoCenter"})
+        track_business_metrics("pagos_procesados", monto, {"estado": "EXITOSO", "metodo": "TRANSFERENCIA"})
+        track_business_metrics("mora_acumulada", dias_mora, {"cliente_id": 123})
+        track_business_metrics("conciliacion_exitosa", 1, {"banco": "Popular", "registros": 50})
     """
-    # Implementar según necesidades
-    # Puede usar prometheus_client.Counter, Gauge, etc.
-    pass
+    try:
+        # Log estructurado para métricas de negocio
+        logging.info(
+            f"BUSINESS_METRIC: {metric_name}",
+            extra={
+                "metric_name": metric_name,
+                "metric_value": value,
+                "labels": labels or {},
+                "timestamp": datetime.now().isoformat(),
+                "system": "financiamiento_automotriz"
+            }
+        )
+        
+        # Si Prometheus está habilitado, registrar métrica
+        if settings.PROMETHEUS_ENABLED:
+            # Implementar contadores específicos del negocio
+            pass
+            
+    except Exception as e:
+        logging.error(f"Error registrando métrica de negocio: {e}")
+
+
+def track_financial_operation(
+    operation_type: str,
+    amount: float,
+    client_id: int,
+    user_id: int,
+    additional_data: Optional[dict] = None
+) -> None:
+    """
+    Trackear operaciones financieras específicas
+    
+    Args:
+        operation_type: PAGO, PRESTAMO, ANULACION, MODIFICACION
+        amount: Monto de la operación
+        client_id: ID del cliente
+        user_id: ID del usuario que ejecuta
+        additional_data: Datos adicionales
+    """
+    track_business_metrics(
+        f"financial_operation_{operation_type.lower()}",
+        amount,
+        {
+            "operation_type": operation_type,
+            "client_id": client_id,
+            "user_id": user_id,
+            **(additional_data or {})
+        }
+    )
+
+
+def track_approval_workflow(
+    workflow_step: str,
+    request_type: str,
+    user_role: str,
+    processing_time_seconds: Optional[float] = None
+) -> None:
+    """
+    Trackear flujo de aprobaciones
+    
+    Args:
+        workflow_step: SOLICITUD, APROBACION, RECHAZO, EJECUCION
+        request_type: MODIFICAR_PAGO, ANULAR_PAGO, EDITAR_CLIENTE
+        user_role: Rol del usuario
+        processing_time_seconds: Tiempo de procesamiento
+    """
+    track_business_metrics(
+        f"approval_workflow_{workflow_step.lower()}",
+        processing_time_seconds or 1,
+        {
+            "workflow_step": workflow_step,
+            "request_type": request_type,
+            "user_role": user_role
+        }
+    )
+
+
+def track_bulk_migration(
+    total_records: int,
+    successful: int,
+    failed: int,
+    warnings: int,
+    migration_type: str
+) -> None:
+    """
+    Trackear migraciones masivas
+    """
+    track_business_metrics("bulk_migration_total", total_records, {"type": migration_type})
+    track_business_metrics("bulk_migration_successful", successful, {"type": migration_type})
+    track_business_metrics("bulk_migration_failed", failed, {"type": migration_type})
+    track_business_metrics("bulk_migration_warnings", warnings, {"type": migration_type})
 
 
 # Context managers para tracking
