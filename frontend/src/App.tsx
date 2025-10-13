@@ -12,14 +12,9 @@ import { useAuth } from '@/store/authStore'
 // Pages
 import { Login } from '@/pages/Login'
 import { Dashboard } from '@/pages/Dashboard'
+import { Clientes } from '@/pages/Clientes'
 
 // Placeholder components for other pages
-const Clientes = () => (
-  <div className="p-6">
-    <h1 className="text-2xl font-bold mb-4">Gestión de Clientes</h1>
-    <p className="text-gray-600">Módulo de clientes en desarrollo...</p>
-  </div>
-)
 
 const Pagos = () => (
   <div className="p-6">
