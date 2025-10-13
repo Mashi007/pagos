@@ -12,8 +12,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { AlertWithIcon } from '@/components/ui/alert'
 import { useAuth } from '@/store/authStore'
 import { LoginForm as LoginFormType } from '@/types'
-import { ConnectionTest } from '@/components/debug/ConnectionTest'
-import { BackendStatus } from '@/components/debug/BackendStatus'
 
 // Schema de validación
 const loginSchema = z.object({
@@ -222,16 +220,6 @@ export function LoginForm() {
           <p className="font-semibold text-blue-600">RAPICREDIT v1.0</p>
           <p className="mt-1">© 2024 - Todos los derechos reservados</p>
           <p className="text-xs mt-1 text-gray-400">Soluciones financieras rápidas y confiables</p>
-        </div>
-        
-        {/* Componente de prueba de conexión */}
-        <div className="mt-6">
-          <ConnectionTest />
-        </div>
-        
-        {/* Estado del backend */}
-        <div className="mt-4">
-          <BackendStatus />
         </div>
           </CardContent>
         </Card>
