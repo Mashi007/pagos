@@ -21,6 +21,8 @@ import logging
 # Servicios de notificación
 from app.services.email_service import EmailService
 from app.services.whatsapp_service import WhatsAppService
+from app.core.security import get_current_user
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
