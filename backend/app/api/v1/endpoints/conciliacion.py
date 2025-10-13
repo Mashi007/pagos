@@ -764,8 +764,8 @@ async def _generar_reporte_conciliacion(user_id: int, pagos_creados: List[int], 
 
 @router.post("/flujo-completo")
 async def flujo_completo_conciliacion(
-    archivo: UploadFile = File(...),
     background_tasks: BackgroundTasks,
+    archivo: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
