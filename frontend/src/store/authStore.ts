@@ -18,6 +18,8 @@ interface AuthState {
   changePassword: (data: { current_password: string; new_password: string; confirm_password: string }) => Promise<void>
   clearError: () => void
   setLoading: (loading: boolean) => void
+  setUser: (user: User) => void
+  setTokens: (tokens: any) => void
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -126,6 +128,15 @@ export const useAuthStore = create<AuthState>()(
       // Establecer estado de carga
       setLoading: (loading: boolean) => {
         set({ isLoading: loading })
+      },
+
+      setUser: (user: User) => {
+        set({ user, isAuthenticated: true })
+      },
+
+      setTokens: (tokens: any) => {
+        // Los tokens se guardan en localStorage en el componente
+        set({ isAuthenticated: true })
       },
     }),
     {

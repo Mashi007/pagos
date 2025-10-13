@@ -13,6 +13,8 @@ import { AlertWithIcon } from '@/components/ui/alert'
 import { useAuth } from '@/store/authStore'
 import { LoginForm as LoginFormType } from '@/types'
 import { ConnectionTest } from '@/components/debug/ConnectionTest'
+import { BackendStatus } from '@/components/debug/BackendStatus'
+import { TemporaryLogin } from '@/components/auth/TemporaryLogin'
 
 // Schema de validación
 const loginSchema = z.object({
@@ -226,6 +228,16 @@ export function LoginForm() {
         {/* Componente de prueba de conexión */}
         <div className="mt-6">
           <ConnectionTest />
+        </div>
+        
+        {/* Estado del backend */}
+        <div className="mt-4">
+          <BackendStatus />
+        </div>
+        
+        {/* Login temporal */}
+        <div className="mt-4">
+          <TemporaryLogin />
         </div>
           </CardContent>
         </Card>
