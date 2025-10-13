@@ -95,7 +95,7 @@ def listar_clientes(
     
     # Ordenamiento
     order_by: Optional[str] = Query("fecha_registro", description="Campo de ordenamiento"),
-    order_direction: Optional[str] = Query("desc", regex="^(asc|desc)$", description="Dirección del ordenamiento"),
+    order_direction: Optional[str] = Query("desc", pattern="^(asc|desc)$", description="Dirección del ordenamiento"),
     
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)

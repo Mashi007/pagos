@@ -351,7 +351,7 @@ def acciones_criticas(
 
 @router.get("/exportar")
 async def exportar_auditoria(
-    formato: str = Query("csv", regex="^(csv|excel)$"),
+    formato: str = Query("csv", pattern="^(csv|excel)$"),
     fecha_inicio: Optional[date] = None,
     fecha_fin: Optional[date] = None,
     current_user: User = Depends(get_current_user),

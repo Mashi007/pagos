@@ -78,7 +78,7 @@ class PagoManualRequest(BaseModel):
     # Información del pago
     monto_pagado: Decimal = Field(..., gt=0, description="Monto total pagado")
     fecha_pago: date = Field(..., description="Fecha efectiva del pago")
-    metodo_pago: str = Field(..., regex="^(EFECTIVO|TRANSFERENCIA|TARJETA|CHEQUE)$")
+    metodo_pago: str = Field(..., pattern="^(EFECTIVO|TRANSFERENCIA|TARJETA|CHEQUE)$")
     
     # Documentación
     numero_operacion: Optional[str] = Field(None, max_length=50, description="Número de operación bancaria")
@@ -129,8 +129,8 @@ class PagoHistorialFilters(BaseModel):
     dias_mora_min: Optional[int] = None
     
     # Ordenamiento
-    order_by: Optional[str] = Field("fecha_pago", regex="^(fecha_pago|monto_pagado|cliente|cuota)$")
-    order_direction: Optional[str] = Field("desc", regex="^(asc|desc)$")
+    order_by: Optional[str] = Field("fecha_pago", pattern="^(fecha_pago|monto_pagado|cliente|cuota)$")
+    order_direction: Optional[str] = Field("desc", pattern="^(asc|desc)$")
 
 
 class PagoUpdate(BaseModel):

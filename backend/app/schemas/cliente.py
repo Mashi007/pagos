@@ -33,7 +33,7 @@ class ClienteBase(BaseModel):
     cuota_inicial: Optional[Decimal] = Field(None, ge=0)
     fecha_entrega: Optional[date] = None
     numero_amortizaciones: Optional[int] = Field(None, ge=1, le=360)
-    modalidad_pago: Optional[str] = Field(None, regex="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
+    modalidad_pago: Optional[str] = Field(None, pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
     
     # Asignación
     asesor_id: Optional[int] = None
@@ -94,7 +94,7 @@ class ClienteUpdate(BaseModel):
     cuota_inicial: Optional[Decimal] = Field(None, ge=0)
     fecha_entrega: Optional[date] = None
     numero_amortizaciones: Optional[int] = Field(None, ge=1, le=360)
-    modalidad_pago: Optional[str] = Field(None, regex="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
+    modalidad_pago: Optional[str] = Field(None, pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
     
     # Asignación y estado
     asesor_id: Optional[int] = None
@@ -149,12 +149,12 @@ class ClienteSearchFilters(BaseModel):
     search_text: Optional[str] = Field(None, description="Búsqueda en nombre, cédula o móvil")
     
     # Filtros específicos
-    estado: Optional[str] = Field(None, regex="^(ACTIVO|INACTIVO|MORA)$")
-    estado_financiero: Optional[str] = Field(None, regex="^(AL_DIA|MORA|VENCIDO)$")
+    estado: Optional[str] = Field(None, pattern="^(ACTIVO|INACTIVO|MORA)$")
+    estado_financiero: Optional[str] = Field(None, pattern="^(AL_DIA|MORA|VENCIDO)$")
     asesor_id: Optional[int] = None
     concesionario: Optional[str] = None
     modelo_vehiculo: Optional[str] = None
-    modalidad_pago: Optional[str] = Field(None, regex="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
+    modalidad_pago: Optional[str] = Field(None, pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
     
     # Filtros de fecha
     fecha_registro_desde: Optional[date] = None
@@ -171,8 +171,8 @@ class ClienteSearchFilters(BaseModel):
     dias_mora_max: Optional[int] = Field(None, ge=0)
     
     # Ordenamiento
-    order_by: Optional[str] = Field(None, regex="^(nombre|fecha_registro|monto_financiamiento|dias_mora)$")
-    order_direction: Optional[str] = Field("asc", regex="^(asc|desc)$")
+    order_by: Optional[str] = Field(None, pattern="^(nombre|fecha_registro|monto_financiamiento|dias_mora)$")
+    order_direction: Optional[str] = Field("asc", pattern="^(asc|desc)$")
 
 
 class ClienteResumenFinanciero(BaseModel):
@@ -214,7 +214,7 @@ class ClienteCreateWithLoan(ClienteBase):
     cuota_inicial: Decimal = Field(default=Decimal("0.00"), ge=0)
     fecha_entrega: date = Field(..., description="Fecha de entrega del vehículo")
     numero_amortizaciones: int = Field(..., ge=1, le=360, description="Número de cuotas")
-    modalidad_pago: str = Field(..., regex="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
+    modalidad_pago: str = Field(..., pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
     
     # Datos del vehículo (obligatorios para financiamiento)
     modelo_vehiculo: str = Field(..., min_length=1, max_length=100)
