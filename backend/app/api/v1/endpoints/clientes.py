@@ -104,6 +104,10 @@ def listar_clientes(
     """
     Listar clientes con búsqueda avanzada y filtros múltiples
     
+    IMPLEMENTA MATRIZ DE ACCESO POR ROL:
+    - ADMIN/COBRANZAS: Ve TODOS los clientes
+    - COMERCIAL/ASESOR: Ve SOLO sus clientes asignados
+    
     Funcionalidades:
     - Búsqueda de texto en nombre, cédula y móvil
     - Filtros por estado, asesor, concesionario, modelo
@@ -115,7 +119,15 @@ def listar_clientes(
     query = db.query(Cliente).outerjoin(User, Cliente.asesor_id == User.id)
     
     # ============================================
-    # APLICAR FILTROS
+    # FILTRO POR ROL - MATRIZ DE ACCESO
+    # ============================================
+    if current_user.rol in ["COMERCIAL", "ASESOR"]:
+        # Solo pueden ver SUS clientes asignados
+        query = query.filter(Cliente.asesor_id == current_user.id)
+    # ADMIN y COBRANZAS ven todos los clientes (sin filtro adicional)
+    
+    # ============================================
+    # APLICAR FILTROS ADICIONALES
     # ============================================
     
     # Búsqueda de texto (nombre, cédula, móvil)

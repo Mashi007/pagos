@@ -29,13 +29,15 @@ def dashboard_administrador(
     current_user: User = Depends(get_current_user)
 ):
     """
-    👑 DASHBOARD ADMINISTRADOR
-    - KPIs principales
-    - Gráfico evolución mensual cartera
-    - Gráfico distribución clientes
-    - Tabla vencimientos próximos 7 días
-    - Top 5 asesores del mes
-    - Alertas críticas
+    👑 DASHBOARD ADMINISTRADOR - ACCESO COMPLETO AL SISTEMA
+    ✅ Acceso: TODO el sistema
+    ✅ Vista Dashboard:
+       • KPIs principales (tarjetas con números grandes)
+       • Gráfico de mora vs al día
+       • Tabla de pagos recientes
+       • Alertas de pagos vencidos hoy
+       • Acceso a TODOS los clientes
+       • Estadísticas globales
     """
     # Verificar permisos
     if current_user.rol not in ["ADMIN", "GERENTE", "DIRECTOR"]:
@@ -204,13 +206,15 @@ def dashboard_cobranzas(
     current_user: User = Depends(get_current_user)
 ):
     """
-    💰 DASHBOARD COBRANZAS
-    - Cobrado hoy
-    - Vencimientos hoy
-    - Clientes en mora
-    - Gráfico cobros diarios (30 días)
-    - Tabla clientes a contactar
-    - Notificaciones pagos sin conciliar
+    💰 DASHBOARD COBRANZAS - ACCESO COMPLETO (EXCEPTO GESTIÓN DE USUARIOS)
+    ✅ Acceso: TODO el sistema (excepto gestión de usuarios)
+    ✅ Vista Dashboard:
+       • KPIs principales (tarjetas con números grandes)
+       • Gráfico de mora vs al día
+       • Tabla de pagos recientes
+       • Alertas de pagos vencidos hoy
+       • Acceso a TODOS los clientes
+       • Estadísticas globales
     """
     # Verificar permisos
     if current_user.rol not in ["ADMIN", "COBRANZAS", "GERENTE"]:
@@ -349,14 +353,14 @@ def dashboard_comercial(
     current_user: User = Depends(get_current_user)
 ):
     """
-    👔 DASHBOARD COMERCIAL
-    - Ventas del mes
-    - Monto vendido
-    - Meta mensual
-    - Gráfico ventas por modelo
-    - Gráfico ventas por asesor
-    - Tabla últimas ventas
-    - Ranking asesores
+    👔 DASHBOARD COMERCIAL - SOLO SUS CLIENTES
+    ⚠️ Acceso: SOLO SUS CLIENTES
+    ✅ Vista Dashboard:
+       • KPIs de sus clientes únicamente
+       • Gráfico de mora vs al día (solo sus clientes)
+       • Lista de sus clientes
+       • Estadísticas de sus clientes
+       • NO ve datos de otros asesores/comerciales
     """
     # Verificar permisos
     if current_user.rol not in ["ADMIN", "COMERCIAL", "GERENTE", "DIRECTOR"]:
@@ -366,15 +370,37 @@ def dashboard_comercial(
     hoy = date.today()
     inicio_mes = hoy.replace(day=1)
     
-    # VENTAS DEL MES
+    # FILTRO POR ROL: COMERCIAL solo ve SUS clientes
+    filtro_clientes = Cliente.activo == True
+    if current_user.rol == "COMERCIAL":
+        # Solo sus clientes asignados
+        filtro_clientes = and_(
+            Cliente.activo == True,
+            Cliente.asesor_id == current_user.id
+        )
+    
+    # KPIs DE SUS CLIENTES ÚNICAMENTE
+    mis_clientes_total = db.query(Cliente).filter(filtro_clientes).count()
+    
+    mis_clientes_al_dia = db.query(Cliente).filter(
+        filtro_clientes,
+        Cliente.estado_financiero == "AL_DIA"
+    ).count()
+    
+    mis_clientes_mora = db.query(Cliente).filter(
+        filtro_clientes,
+        Cliente.estado_financiero == "EN_MORA"
+    ).count()
+    
+    # VENTAS DEL MES (solo sus clientes)
     ventas_mes = db.query(Cliente).filter(
-        Cliente.fecha_registro >= inicio_mes,
-        Cliente.activo == True
+        filtro_clientes,
+        Cliente.fecha_registro >= inicio_mes
     ).count()
     
     monto_vendido_mes = db.query(func.sum(Cliente.total_financiamiento)).filter(
-        Cliente.fecha_registro >= inicio_mes,
-        Cliente.activo == True
+        filtro_clientes,
+        Cliente.fecha_registro >= inicio_mes
     ).scalar() or Decimal('0')
     
     # META MENSUAL (configurable)
@@ -495,11 +521,14 @@ def dashboard_asesor(
     current_user: User = Depends(get_current_user)
 ):
     """
-    👤 DASHBOARD ASESOR
-    - Mis clientes
-    - Estado de mi cartera
-    - Tabla mis clientes en mora
-    - Mi posición en ranking
+    👤 DASHBOARD ASESOR - SOLO SUS CLIENTES
+    ⚠️ Acceso: SOLO SUS CLIENTES
+    ✅ Vista Dashboard:
+       • KPIs de sus clientes únicamente
+       • Gráfico de mora vs al día (solo sus clientes)
+       • Lista de sus clientes
+       • Estadísticas de sus clientes
+       • NO ve datos de otros asesores/comerciales
     """
     # Determinar asesor a consultar
     if asesor_id:
@@ -612,6 +641,97 @@ def dashboard_asesor(
     }
 
 
+@router.get("/matriz-acceso-roles")
+def obtener_matriz_acceso_roles(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    📋 Matriz de acceso actualizada por roles
+    """
+    return {
+        "titulo": "DASHBOARD ACTUALIZADO POR ROL",
+        "fecha_actualizacion": datetime.now().isoformat(),
+        "usuario_actual": {
+            "nombre": current_user.full_name,
+            "rol": current_user.rol,
+            "dashboard_asignado": f"/api/v1/dashboard/{current_user.rol.lower()}"
+        },
+        "matriz_acceso": {
+            "ADMIN": {
+                "emoji": "👑",
+                "titulo": "ADMINISTRADOR",
+                "acceso": "✅ TODO el sistema",
+                "vista_dashboard": [
+                    "• KPIs principales (tarjetas con números grandes)",
+                    "• Gráfico de mora vs al día",
+                    "• Tabla de pagos recientes", 
+                    "• Alertas de pagos vencidos hoy",
+                    "• Acceso a TODOS los clientes",
+                    "• Estadísticas globales"
+                ],
+                "endpoint": "/api/v1/dashboard/admin",
+                "permisos_especiales": ["Gestión de usuarios", "Configuración del sistema"]
+            },
+            "COBRANZAS": {
+                "emoji": "💰",
+                "titulo": "COBRANZAS", 
+                "acceso": "✅ TODO el sistema (excepto gestión de usuarios)",
+                "vista_dashboard": [
+                    "• KPIs principales (tarjetas con números grandes)",
+                    "• Gráfico de mora vs al día",
+                    "• Tabla de pagos recientes",
+                    "• Alertas de pagos vencidos hoy", 
+                    "• Acceso a TODOS los clientes",
+                    "• Estadísticas globales"
+                ],
+                "endpoint": "/api/v1/dashboard/cobranzas",
+                "restricciones": ["NO puede gestionar usuarios"]
+            },
+            "COMERCIAL": {
+                "emoji": "👔",
+                "titulo": "COMERCIAL",
+                "acceso": "⚠️ SOLO SUS CLIENTES",
+                "vista_dashboard": [
+                    "• KPIs de sus clientes únicamente",
+                    "• Gráfico de mora vs al día (solo sus clientes)",
+                    "• Lista de sus clientes",
+                    "• Estadísticas de sus clientes",
+                    "• NO ve datos de otros asesores/comerciales"
+                ],
+                "endpoint": "/api/v1/dashboard/comercial",
+                "filtro_aplicado": "asesor_id = current_user.id"
+            },
+            "ASESOR": {
+                "emoji": "👤", 
+                "titulo": "ASESOR",
+                "acceso": "⚠️ SOLO SUS CLIENTES",
+                "vista_dashboard": [
+                    "• KPIs de sus clientes únicamente",
+                    "• Gráfico de mora vs al día (solo sus clientes)",
+                    "• Lista de sus clientes", 
+                    "• Estadísticas de sus clientes",
+                    "• NO ve datos de otros asesores/comerciales"
+                ],
+                "endpoint": "/api/v1/dashboard/asesor",
+                "filtro_aplicado": "asesor_id = current_user.id"
+            }
+        },
+        "implementacion_tecnica": {
+            "filtros_por_rol": {
+                "ADMIN_COBRANZAS": "Sin filtros - acceso completo",
+                "COMERCIAL_ASESOR": "WHERE cliente.asesor_id = current_user.id"
+            },
+            "endpoints_disponibles": {
+                "admin": "/api/v1/dashboard/admin",
+                "cobranzas": "/api/v1/dashboard/cobranzas", 
+                "comercial": "/api/v1/dashboard/comercial",
+                "asesor": "/api/v1/dashboard/asesor",
+                "por_rol": "/api/v1/dashboard/por-rol"
+            }
+        }
+    }
+
+
 @router.get("/por-rol")
 def dashboard_por_rol(
     filtro_fecha: Optional[str] = Query("mes", description="dia, semana, mes, año"),
@@ -622,22 +742,33 @@ def dashboard_por_rol(
 ):
     """
     🎨 Dashboard adaptativo según rol del usuario actual
-    Con filtros dinámicos interactivos
+    IMPLEMENTA MATRIZ DE ACCESO POR ROL:
+    - ADMIN/COBRANZAS: Acceso completo a todos los datos
+    - COMERCIAL/ASESOR: Solo sus clientes asignados
     """
     user_role = current_user.rol
     
-    # Redirigir según rol
+    # Agregar información de acceso según rol
+    info_acceso = {
+        "ADMIN": "✅ ACCESO COMPLETO - Todos los datos del sistema",
+        "COBRANZAS": "✅ ACCESO COMPLETO - Todos los datos (excepto usuarios)",
+        "COMERCIAL": "⚠️ ACCESO LIMITADO - Solo sus clientes asignados",
+        "ASESOR": "⚠️ ACCESO LIMITADO - Solo sus clientes asignados"
+    }
+    
+    # Redirigir según rol con información de acceso
+    dashboard_data = None
     if user_role == "ADMIN":
-        return dashboard_administrador(db=db, current_user=current_user)
+        dashboard_data = dashboard_administrador(db=db, current_user=current_user)
     elif user_role == "COBRANZAS":
-        return dashboard_cobranzas(db=db, current_user=current_user)
+        dashboard_data = dashboard_cobranzas(db=db, current_user=current_user)
     elif user_role == "COMERCIAL":
-        return dashboard_comercial(db=db, current_user=current_user)
+        dashboard_data = dashboard_comercial(db=db, current_user=current_user)
     elif user_role in ["ASESOR", "GERENTE"]:
-        return dashboard_asesor(db=db, current_user=current_user)
+        dashboard_data = dashboard_asesor(db=db, current_user=current_user)
     else:
         # Dashboard básico para otros roles
-        return {
+        dashboard_data = {
             "tipo_dashboard": "BASICO",
             "usuario": current_user.full_name,
             "rol": user_role,
@@ -647,6 +778,17 @@ def dashboard_por_rol(
                 "total_pagos_hoy": db.query(Pago).filter(Pago.fecha_pago == date.today()).count()
             }
         }
+    
+    # Agregar información de acceso al dashboard
+    if dashboard_data:
+        dashboard_data["info_acceso"] = {
+            "rol": user_role,
+            "descripcion": info_acceso.get(user_role, "Acceso básico"),
+            "filtros_aplicados": "Solo sus clientes" if user_role in ["COMERCIAL", "ASESOR"] else "Sin filtros",
+            "puede_ver_otros_asesores": user_role in ["ADMIN", "COBRANZAS"]
+        }
+    
+    return dashboard_data
 
 
 @router.get("/datos-graficos/{tipo_grafico}")
