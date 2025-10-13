@@ -224,22 +224,6 @@ export function LoginForm() {
           </CardContent>
         </Card>
 
-        {/* Información de usuarios demo */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.8, duration: 0.5 }}
-          className="mt-6 p-4 bg-white/50 backdrop-blur-sm rounded-lg border border-white/20"
-        >
-          <h3 className="text-sm font-medium text-gray-700 mb-2">
-            Usuarios de demostración:
-          </h3>
-          <div className="text-xs text-gray-600 space-y-1">
-            <p><strong>Admin:</strong> admin@sistema.com / admin123</p>
-            <p><strong>Gerente:</strong> gerente@sistema.com / gerente123</p>
-            <p><strong>Asesor:</strong> asesor@sistema.com / asesor123</p>
-          </div>
-        </motion.div>
       </motion.div>
     </div>
   )
