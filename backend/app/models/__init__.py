@@ -11,6 +11,7 @@ from app.models.prestamo import Prestamo
 from app.models.pago import Pago
 from app.models.amortizacion import Cuota
 from app.models.aprobacion import Aprobacion
+from app.models.configuracion_sistema import ConfiguracionSistema
 from app.models.auditoria import Auditoria
 from app.models.notificacion import Notificacion
 
@@ -22,6 +23,7 @@ __all__ = [
     "Pago",
     "Cuota",
     "Aprobacion",
+    "ConfiguracionSistema",
     "Auditoria",
     "Notificacion",
 ]
