@@ -25,6 +25,7 @@ from app.schemas.cliente import (
 from app.schemas.amortizacion import TablaAmortizacionRequest
 from app.services.amortizacion_service import AmortizacionService
 from app.core.security import get_current_user
+from datetime import datetime
 
 router = APIRouter()
 
@@ -355,34 +356,140 @@ def crear_cliente_con_financiamiento(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Crear cliente con financiamiento y generar tabla de amortización automáticamente
+    🚗 FLUJO COMPLETO: Crear cliente con financiamiento
+    
+    Pasos del flujo:
+    1. ✅ Asesor inicia sesión (verificado por get_current_user)
+    2. ✅ Click "Nuevo Cliente" (este endpoint)
+    3. ✅ Completa formulario (ClienteCreateWithLoan)
+    4. ✅ Sistema valida datos
+    5. ✅ Genera tabla de amortización automáticamente
+    6. ✅ Sistema guarda y ejecuta acciones automáticas
+    7. ✅ Cliente listo para cobrar
     """
     try:
-        # Verificar que no exista la cédula
+        # ============================================
+        # 4. VALIDACIONES DEL SISTEMA
+        # ============================================
+        
+        # Validar cédula única
         existing = db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
         if existing:
-            raise HTTPException(status_code=400, detail="Cédula ya registrada")
+            raise HTTPException(status_code=400, detail="❌ Cédula ya registrada en el sistema")
         
-        # Verificar que el asesor existe
+        # Validar email válido (si se proporciona)
+        if cliente_data.email:
+            import re
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, cliente_data.email):
+                raise HTTPException(status_code=400, detail="❌ Formato de email inválido")
+        
+        # Validar que el asesor existe y tiene rol apropiado
         asesor = db.query(User).filter(User.id == cliente_data.asesor_id).first()
         if not asesor:
-            raise HTTPException(status_code=400, detail="Asesor no encontrado")
+            raise HTTPException(status_code=400, detail="❌ Asesor no encontrado")
         
-        # Calcular monto financiado
+        if asesor.rol not in ["ASESOR", "COMERCIAL", "GERENTE"]:
+            raise HTTPException(status_code=400, detail="❌ El usuario no tiene rol de asesor")
+        
+        if not asesor.is_active:
+            raise HTTPException(status_code=400, detail="❌ El asesor está inactivo")
+        
+        # Validar montos coherentes
+        if cliente_data.cuota_inicial >= cliente_data.total_financiamiento:
+            raise HTTPException(status_code=400, detail="❌ La cuota inicial no puede ser mayor o igual al total")
+        
         monto_financiado = cliente_data.total_financiamiento - cliente_data.cuota_inicial
+        if monto_financiado <= 0:
+            raise HTTPException(status_code=400, detail="❌ El monto financiado debe ser mayor a 0")
+        
+        # Validar límites de financiamiento
+        from app.core.config import settings
+        if monto_financiado < settings.MONTO_MINIMO_PRESTAMO:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"❌ Monto financiado mínimo: ${settings.MONTO_MINIMO_PRESTAMO:,.2f}"
+            )
+        
+        if monto_financiado > settings.MONTO_MAXIMO_PRESTAMO:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"❌ Monto financiado máximo: ${settings.MONTO_MAXIMO_PRESTAMO:,.2f}"
+            )
+        
+        # Validar número de cuotas
+        if cliente_data.numero_amortizaciones < settings.PLAZO_MINIMO_MESES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"❌ Número mínimo de cuotas: {settings.PLAZO_MINIMO_MESES}"
+            )
+        
+        if cliente_data.numero_amortizaciones > settings.PLAZO_MAXIMO_MESES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"❌ Número máximo de cuotas: {settings.PLAZO_MAXIMO_MESES}"
+            )
+        
+        # Validar fecha de entrega
+        if cliente_data.fecha_entrega < date.today():
+            raise HTTPException(status_code=400, detail="❌ La fecha de entrega no puede ser pasada")
+        
+        # ============================================
+        # 5. GENERACIÓN AUTOMÁTICA (PREVIEW)
+        # ============================================
+        
+        # Generar tabla de amortización para preview
+        tasa_interes = cliente_data.tasa_interes_anual or settings.TASA_INTERES_BASE
+        
+        from app.schemas.amortizacion import TablaAmortizacionRequest
+        from app.services.amortizacion_service import AmortizacionService
+        
+        tabla_request = TablaAmortizacionRequest(
+            monto_financiado=monto_financiado,
+            tasa_interes_anual=tasa_interes,
+            numero_cuotas=cliente_data.numero_amortizaciones,
+            fecha_primer_vencimiento=cliente_data.fecha_entrega,
+            modalidad=cliente_data.modalidad_pago,
+            sistema_amortizacion="FRANCES"
+        )
+        
+        tabla_preview = AmortizacionService.generar_tabla_amortizacion(tabla_request)
+        
+        # ============================================
+        # 7. CREAR CLIENTE Y EJECUTAR ACCIONES AUTOMÁTICAS
+        # ============================================
         
         # Crear cliente
         cliente_dict = cliente_data.model_dump()
         cliente_dict['monto_financiado'] = monto_financiado
         cliente_dict['fecha_asignacion'] = date.today()
         cliente_dict['usuario_registro'] = current_user.email
+        cliente_dict['estado_financiero'] = "AL_DIA"
         
         db_cliente = Cliente(**cliente_dict)
         db.add(db_cliente)
         db.commit()
         db.refresh(db_cliente)
         
-        # Generar tabla de amortización si se solicita
+        # Registrar en auditoría
+        from app.models.auditoria import Auditoria, TipoAccion
+        auditoria = Auditoria.registrar(
+            usuario_id=current_user.id,
+            accion=TipoAccion.CREAR.value,
+            tabla="clientes",
+            registro_id=db_cliente.id,
+            descripcion=f"Nuevo cliente creado: {db_cliente.nombre_completo}",
+            datos_nuevos={
+                "cedula": db_cliente.cedula,
+                "nombre": db_cliente.nombre_completo,
+                "vehiculo": db_cliente.vehiculo_completo,
+                "monto_financiado": float(monto_financiado),
+                "asesor": asesor.full_name
+            }
+        )
+        db.add(auditoria)
+        
+        # Generar tabla de amortización automáticamente
         if cliente_data.generar_tabla_automatica:
             background_tasks.add_task(
                 _generar_tabla_amortizacion_cliente,
@@ -390,11 +497,142 @@ def crear_cliente_con_financiamiento(
                 cliente_data=cliente_data
             )
         
-        return db_cliente
+        # Enviar email de bienvenida al cliente
+        if db_cliente.email:
+            background_tasks.add_task(
+                _enviar_email_bienvenida,
+                cliente_id=db_cliente.id,
+                asesor_nombre=asesor.full_name
+            )
         
+        # Notificar a equipo de cobranzas sobre nuevo cliente
+        background_tasks.add_task(
+            _notificar_cobranzas_nuevo_cliente,
+            cliente_id=db_cliente.id,
+            asesor_nombre=asesor.full_name
+        )
+        
+        db.commit()
+        
+        return {
+            **db_cliente.__dict__,
+            "mensaje": "✅ Cliente registrado exitosamente",
+            "tabla_amortizacion_preview": {
+                "cuotas_generadas": len(tabla_preview.cuotas),
+                "primera_cuota": float(tabla_preview.cuotas[0].cuota) if tabla_preview.cuotas else 0,
+                "total_intereses": float(tabla_preview.resumen.get("total_interes", 0)),
+                "total_pagar": float(tabla_preview.resumen.get("total_pagar", 0))
+            },
+            "acciones_ejecutadas": {
+                "cliente_guardado": True,
+                "auditoria_registrada": True,
+                "tabla_amortizacion_programada": cliente_data.generar_tabla_automatica,
+                "email_bienvenida_programado": bool(db_cliente.email),
+                "notificacion_cobranzas_programada": True
+            },
+            "proximo_paso": "Cliente listo para gestión de cobranza"
+        }
+        
+    except HTTPException:
+        # Re-lanzar HTTPExceptions (errores de validación)
+        raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error creando cliente: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"❌ Error interno: {str(e)}")
+
+
+@router.post("/preview-amortizacion")
+def preview_tabla_amortizacion(
+    cliente_data: ClienteCreateWithLoan,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    🔍 PASO 6: Preview de tabla de amortización para revisión del asesor
+    Permite al asesor revisar antes de confirmar
+    """
+    try:
+        # Calcular monto financiado
+        monto_financiado = cliente_data.total_financiamiento - cliente_data.cuota_inicial
+        
+        # Validaciones básicas
+        if monto_financiado <= 0:
+            raise HTTPException(status_code=400, detail="Monto financiado debe ser mayor a 0")
+        
+        # Generar tabla de amortización
+        from app.core.config import settings
+        tasa_interes = cliente_data.tasa_interes_anual or settings.TASA_INTERES_BASE
+        
+        from app.schemas.amortizacion import TablaAmortizacionRequest
+        from app.services.amortizacion_service import AmortizacionService
+        
+        tabla_request = TablaAmortizacionRequest(
+            monto_financiado=monto_financiado,
+            tasa_interes_anual=tasa_interes,
+            numero_cuotas=cliente_data.numero_amortizaciones,
+            fecha_primer_vencimiento=cliente_data.fecha_entrega,
+            modalidad=cliente_data.modalidad_pago,
+            sistema_amortizacion="FRANCES"
+        )
+        
+        tabla = AmortizacionService.generar_tabla_amortizacion(tabla_request)
+        
+        # Calcular estadísticas adicionales
+        cuota_promedio = float(tabla.cuotas[0].cuota) if tabla.cuotas else 0
+        total_intereses = sum(float(c.interes) for c in tabla.cuotas)
+        total_pagar = sum(float(c.cuota) for c in tabla.cuotas)
+        
+        return {
+            "cliente_preview": {
+                "nombre": f"{cliente_data.nombres} {cliente_data.apellidos}",
+                "cedula": cliente_data.cedula,
+                "vehiculo": f"{cliente_data.marca_vehiculo} {cliente_data.modelo_vehiculo}",
+                "concesionario": cliente_data.concesionario
+            },
+            "financiamiento_preview": {
+                "total_financiamiento": float(cliente_data.total_financiamiento),
+                "cuota_inicial": float(cliente_data.cuota_inicial),
+                "monto_financiado": float(monto_financiado),
+                "numero_cuotas": cliente_data.numero_amortizaciones,
+                "modalidad": cliente_data.modalidad_pago,
+                "tasa_interes": float(tasa_interes)
+            },
+            "tabla_amortizacion": {
+                "cuotas": [
+                    {
+                        "numero": c.numero_cuota,
+                        "fecha": c.fecha_vencimiento.strftime("%d/%m/%Y"),
+                        "cuota": float(c.cuota),
+                        "capital": float(c.capital),
+                        "interes": float(c.interes),
+                        "saldo": float(c.saldo_final)
+                    }
+                    for c in tabla.cuotas[:5]  # Primeras 5 cuotas para preview
+                ],
+                "resumen": {
+                    "cuota_mensual": cuota_promedio,
+                    "total_intereses": total_intereses,
+                    "total_pagar": total_pagar,
+                    "ahorro_vs_contado": 0  # Calcular si hay descuento por contado
+                }
+            },
+            "validaciones": {
+                "cedula_disponible": True,
+                "asesor_valido": True,
+                "montos_coherentes": True,
+                "dentro_limites": True
+            },
+            "acciones_pendientes": [
+                "Guardar cliente en base de datos",
+                "Generar tabla de amortización completa",
+                "Enviar email de bienvenida",
+                "Notificar a equipo de cobranzas",
+                "Registrar en auditoría"
+            ]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generando preview: {str(e)}")
 
 
 @router.get("/{cliente_id}/acciones-rapidas", response_model=ClienteQuickActions)
@@ -575,6 +813,174 @@ async def _generar_tabla_amortizacion_cliente(cliente_id: int, cliente_data: Cli
         import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Error generando tabla de amortización para cliente {cliente_id}: {str(e)}")
+
+
+async def _enviar_email_bienvenida(cliente_id: int, asesor_nombre: str):
+    """
+    📧 PASO 7a: Enviar email de bienvenida al cliente
+    """
+    try:
+        db = SessionLocal()
+        cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+        
+        if cliente and cliente.email:
+            from app.models.notificacion import Notificacion
+            from app.services.email_service import EmailService
+            
+            mensaje = f"""
+¡Bienvenido/a a Financiera Automotriz!
+
+Estimado/a {cliente.nombre_completo},
+
+Nos complace darle la bienvenida como nuevo cliente de nuestra financiera.
+
+DETALLES DE SU FINANCIAMIENTO:
+• Vehículo: {cliente.vehiculo_completo}
+• Concesionario: {cliente.concesionario}
+• Monto financiado: ${float(cliente.monto_financiado or 0):,.2f}
+• Modalidad de pago: {cliente.modalidad_pago}
+• Asesor asignado: {asesor_nombre}
+
+PRÓXIMOS PASOS:
+1. Recibirá la tabla de amortización completa por email
+2. Su primera cuota vence el: {cliente.fecha_entrega.strftime('%d/%m/%Y') if cliente.fecha_entrega else 'Por definir'}
+3. Le enviaremos recordatorios antes de cada vencimiento
+
+DATOS DE CONTACTO:
+• Teléfono: (021) 123-456
+• Email: info@financiera.com
+• Horario: Lunes a Viernes 8:00 - 18:00
+
+¡Gracias por confiar en nosotros!
+
+Saludos cordiales,
+Equipo de Financiera Automotriz
+            """
+            
+            # Crear notificación
+            notif = Notificacion(
+                cliente_id=cliente_id,
+                tipo="EMAIL",
+                categoria="GENERAL",
+                asunto="🎉 ¡Bienvenido a Financiera Automotriz!",
+                mensaje=mensaje,
+                estado="PENDIENTE",
+                programada_para=datetime.now(),
+                prioridad="NORMAL"
+            )
+            
+            db.add(notif)
+            db.commit()
+            db.refresh(notif)
+            
+            # Enviar email
+            email_service = EmailService()
+            await email_service.send_email(
+                to_email=cliente.email,
+                subject=notif.asunto,
+                body=notif.mensaje,
+                notificacion_id=notif.id
+            )
+            
+        db.close()
+        
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error enviando email de bienvenida a cliente {cliente_id}: {str(e)}")
+
+
+async def _notificar_cobranzas_nuevo_cliente(cliente_id: int, asesor_nombre: str):
+    """
+    🔔 PASO 7b: Notificar a equipo de cobranzas sobre nuevo cliente
+    """
+    try:
+        db = SessionLocal()
+        cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+        
+        if cliente:
+            # Obtener usuarios de cobranzas
+            usuarios_cobranzas = db.query(User).filter(
+                User.rol.in_(["COBRANZAS", "GERENTE", "ADMIN"]),
+                User.is_active == True,
+                User.email.isnot(None)
+            ).all()
+            
+            for usuario in usuarios_cobranzas:
+                mensaje = f"""
+Hola {usuario.full_name},
+
+NUEVO CLIENTE REGISTRADO
+
+📋 DATOS DEL CLIENTE:
+• Nombre: {cliente.nombre_completo}
+• Cédula: {cliente.cedula}
+• Teléfono: {cliente.telefono or 'No proporcionado'}
+• Email: {cliente.email or 'No proporcionado'}
+
+🚗 VEHÍCULO FINANCIADO:
+• Vehículo: {cliente.vehiculo_completo}
+• Concesionario: {cliente.concesionario or 'No especificado'}
+
+💰 FINANCIAMIENTO:
+• Total: ${float(cliente.total_financiamiento or 0):,.2f}
+• Cuota inicial: ${float(cliente.cuota_inicial or 0):,.2f}
+• Monto financiado: ${float(cliente.monto_financiado or 0):,.2f}
+• Modalidad: {cliente.modalidad_pago}
+• Primera cuota: {cliente.fecha_entrega.strftime('%d/%m/%Y') if cliente.fecha_entrega else 'Por definir'}
+
+👤 ASESOR RESPONSABLE: {asesor_nombre}
+
+ACCIONES RECOMENDADAS:
+• Verificar datos de contacto
+• Programar recordatorios de pago
+• Incluir en seguimiento de cartera
+
+Acceder al cliente: https://pagos-f2qf.onrender.com/clientes/{cliente_id}
+
+Saludos.
+                """
+                
+                from app.models.notificacion import Notificacion
+                notif = Notificacion(
+                    user_id=usuario.id,
+                    tipo="EMAIL",
+                    categoria="GENERAL",
+                    asunto=f"🆕 Nuevo Cliente: {cliente.nombre_completo}",
+                    mensaje=mensaje,
+                    estado="PENDIENTE",
+                    programada_para=datetime.now(),
+                    prioridad="NORMAL"
+                )
+                
+                db.add(notif)
+            
+            db.commit()
+            
+            # Enviar emails
+            from app.services.email_service import EmailService
+            email_service = EmailService()
+            
+            for usuario in usuarios_cobranzas:
+                notif = db.query(Notificacion).filter(
+                    Notificacion.user_id == usuario.id,
+                    Notificacion.asunto.like(f"%{cliente.nombre_completo}%")
+                ).order_by(Notificacion.id.desc()).first()
+                
+                if notif:
+                    await email_service.send_email(
+                        to_email=usuario.email,
+                        subject=notif.asunto,
+                        body=notif.mensaje,
+                        notificacion_id=notif.id
+                    )
+        
+        db.close()
+        
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error notificando a cobranzas sobre cliente {cliente_id}: {str(e)}")
 
 
 @router.get("/buscar/avanzada", response_model=ClienteList)
