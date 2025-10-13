@@ -248,23 +248,280 @@ def registrar_pago_manual(
         
         db.commit()
         
+        # ============================================
+        # 8. ACCIONES AUTOMÁTICAS DEL SISTEMA
+        # ============================================
+        
+        # Actualizar estado del cliente
+        if cliente.dias_mora > 0 and distribucion["aplicado_a_mora"] > 0:
+            # Recalcular días de mora del cliente
+            cuotas_con_mora = db.query(Cuota).join(Prestamo).filter(
+                Prestamo.cliente_id == cliente.id,
+                Cuota.estado.in_(["VENCIDA", "PARCIAL"]),
+                Cuota.dias_mora > 0
+            ).all()
+            
+            if cuotas_con_mora:
+                cliente.dias_mora = max(c.dias_mora for c in cuotas_con_mora)
+                cliente.estado_financiero = "MORA" if cliente.dias_mora > 0 else "AL_DIA"
+            else:
+                cliente.dias_mora = 0
+                cliente.estado_financiero = "AL_DIA"
+        
+        # Registrar en auditoría
+        from app.models.auditoria import Auditoria, TipoAccion
+        auditoria = Auditoria.registrar(
+            usuario_id=current_user.id,
+            accion=TipoAccion.CREAR.value,
+            tabla="pagos",
+            registro_id=db_pago.id,
+            descripcion=f"Pago manual registrado: ${pago_data.monto_pagado}",
+            datos_nuevos={
+                "cliente": cliente.nombre_completo,
+                "cedula": cliente.cedula,
+                "monto": float(pago_data.monto_pagado),
+                "cuotas_afectadas": len(cuotas_afectadas),
+                "metodo_pago": pago_data.metodo_pago
+            }
+        )
+        db.add(auditoria)
+        
+        # Enviar email de confirmación al cliente (background)
+        if cliente.email:
+            from app.api.v1.endpoints.notificaciones import enviar_confirmacion_pago
+            background_tasks.add_task(
+                enviar_confirmacion_pago,
+                pago_id=db_pago.id,
+                background_tasks=background_tasks,
+                db=db
+            )
+        
+        db.commit()
+        
         return PagoManualResponse(
             pago_id=db_pago.id,
             cliente_id=cliente.id,
             cliente_nombre=cliente.nombre_completo,
             cuotas_afectadas=cuotas_afectadas,
-            distribucion_pago=distribucion,
+            distribucion_pago={
+                "aplicado_a_mora": float(distribucion["aplicado_a_mora"]),
+                "aplicado_a_interes": float(distribucion["aplicado_a_interes"]),
+                "aplicado_a_capital": float(distribucion["aplicado_a_capital"]),
+                "sobrante": float(distribucion["sobrante"])
+            },
             resumen={
                 "total_pagado": float(pago_data.monto_pagado),
                 "cuotas_procesadas": len(cuotas_afectadas),
-                "sobrante": float(distribucion["sobrante"])
+                "sobrante": float(distribucion["sobrante"]),
+                "cliente_actualizado": True,
+                "auditoria_registrada": True,
+                "email_confirmacion_programado": bool(cliente.email)
             },
-            mensaje=f"Pago de ${pago_data.monto_pagado} procesado exitosamente"
+            mensaje=f"✅ Pago de ${pago_data.monto_pagado} procesado exitosamente"
         )
         
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error procesando pago: {str(e)}")
+
+
+@router.get("/flujo-completo/paso/{paso}")
+def obtener_paso_flujo_pago(
+    paso: int,
+    cedula: Optional[str] = Query(None, description="Cédula del cliente"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    🔄 FLUJO COMPLETO DE REGISTRO MANUAL DE PAGO
+    
+    Pasos implementados:
+    1. ✅ COBRANZAS recibe pago
+    2. ✅ Ingresa al sistema → "Registrar Pago"
+    3. ✅ Busca cliente por cédula
+    4. ✅ Sistema muestra tabla y cuotas
+    5. ✅ Cobranzas ingresa datos
+    6. ✅ Sistema calcula distribución
+    7. ✅ Cobranzas confirma
+    8. ✅ Sistema ejecuta acciones automáticas
+    9. ✅ Pago registrado exitosamente
+    """
+    if paso == 3 and cedula:
+        # PASO 3: Buscar cliente por cédula
+        return obtener_cuotas_pendientes_por_cedula(cedula=cedula, db=db, current_user=current_user)
+    
+    elif paso == 4 and cedula:
+        # PASO 4: Mostrar tabla de amortización completa
+        cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
+        if not cliente:
+            raise HTTPException(status_code=404, detail="Cliente no encontrado")
+        
+        # Obtener préstamos del cliente
+        prestamos = db.query(Prestamo).filter(
+            Prestamo.cliente_id == cliente.id,
+            Prestamo.estado.in_(["ACTIVO", "EN_MORA"])
+        ).all()
+        
+        tabla_completa = []
+        for prestamo in prestamos:
+            # Obtener todas las cuotas del préstamo
+            cuotas = db.query(Cuota).filter(
+                Cuota.prestamo_id == prestamo.id
+            ).order_by(Cuota.numero_cuota).all()
+            
+            cuotas_data = []
+            for cuota in cuotas:
+                # Actualizar mora si está vencida
+                if cuota.esta_vencida and cuota.estado != "PAGADA":
+                    from app.core.config import settings
+                    mora_calculada = cuota.calcular_mora(Decimal(str(settings.TASA_MORA_DIARIA)))
+                    cuota.monto_mora = mora_calculada
+                    cuota.dias_mora = (date.today() - cuota.fecha_vencimiento).days
+                
+                cuotas_data.append({
+                    "id": cuota.id,
+                    "numero_cuota": cuota.numero_cuota,
+                    "fecha_vencimiento": cuota.fecha_vencimiento.strftime("%d/%m/%Y"),
+                    "monto_cuota": float(cuota.monto_cuota),
+                    "capital_pendiente": float(cuota.capital_pendiente),
+                    "interes_pendiente": float(cuota.interes_pendiente),
+                    "monto_mora": float(cuota.monto_mora),
+                    "total_pendiente": float(cuota.monto_pendiente_total),
+                    "dias_mora": cuota.dias_mora,
+                    "estado": cuota.estado,
+                    "estado_visual": _get_estado_visual(cuota),
+                    "seleccionable": cuota.estado in ["PENDIENTE", "VENCIDA", "PARCIAL"]
+                })
+            
+            tabla_completa.append({
+                "prestamo_id": prestamo.id,
+                "codigo_prestamo": prestamo.codigo_prestamo,
+                "cuotas": cuotas_data
+            })
+        
+        # Calcular resumen
+        total_mora_acumulada = sum(
+            float(c["monto_mora"]) for tabla in tabla_completa 
+            for c in tabla["cuotas"] if c["monto_mora"] > 0
+        )
+        
+        cuotas_vencidas = sum(
+            1 for tabla in tabla_completa 
+            for c in tabla["cuotas"] if c["estado"] == "VENCIDA"
+        )
+        
+        return {
+            "paso": 4,
+            "cliente": {
+                "id": cliente.id,
+                "nombre": cliente.nombre_completo,
+                "cedula": cliente.cedula,
+                "telefono": cliente.telefono,
+                "vehiculo": cliente.vehiculo_completo,
+                "estado_financiero": cliente.estado_financiero
+            },
+            "tabla_amortizacion": tabla_completa,
+            "resumen_mora": {
+                "total_mora_acumulada": total_mora_acumulada,
+                "cuotas_vencidas": cuotas_vencidas,
+                "dias_mora_maximos": cliente.dias_mora
+            },
+            "instrucciones": [
+                "Seleccione las cuotas que el cliente desea pagar",
+                "Ingrese el monto recibido",
+                "Complete los datos del pago",
+                "El sistema calculará la distribución automáticamente"
+            ]
+        }
+    
+    elif paso == 6:
+        # PASO 6: Información sobre cálculos del sistema
+        return {
+            "paso": 6,
+            "titulo": "Sistema Calcula Automáticamente",
+            "calculos": {
+                "pago_parcial_completo": "Determina si el monto cubre completamente las cuotas seleccionadas",
+                "distribucion_automatica": {
+                    "orden": ["1° Mora acumulada", "2° Intereses pendientes", "3° Capital pendiente"],
+                    "descripcion": "El sistema aplica el pago siguiendo este orden de prioridad"
+                },
+                "actualizacion_saldos": "Actualiza automáticamente saldos pendientes y estados de cuotas"
+            },
+            "ejemplo_distribucion": {
+                "monto_recibido": 1500.00,
+                "aplicado_mora": 50.00,
+                "aplicado_interes": 200.00,
+                "aplicado_capital": 1250.00,
+                "sobrante": 0.00
+            }
+        }
+    
+    elif paso == 8:
+        # PASO 8: Acciones automáticas del sistema
+        return {
+            "paso": 8,
+            "titulo": "Acciones Automáticas del Sistema",
+            "acciones_ejecutadas": [
+                {
+                    "accion": "Actualizar tabla de amortización",
+                    "descripcion": "Actualiza estados de cuotas y saldos pendientes",
+                    "automatico": True
+                },
+                {
+                    "accion": "Actualizar estado del cliente", 
+                    "descripcion": "Cambia estado financiero según días de mora",
+                    "automatico": True
+                },
+                {
+                    "accion": "Registrar en auditoría",
+                    "descripcion": "Guarda registro completo de la transacción",
+                    "automatico": True
+                },
+                {
+                    "accion": "Enviar email de confirmación",
+                    "descripcion": "Notifica al cliente sobre el pago recibido",
+                    "automatico": True,
+                    "condicional": "Solo si el cliente tiene email"
+                }
+            ],
+            "resultado_final": "✅ Pago registrado exitosamente - Cliente actualizado"
+        }
+    
+    else:
+        return {
+            "flujo_completo": {
+                "1": "COBRANZAS recibe pago (transferencia/efectivo)",
+                "2": "Ingresa al sistema → 'Registrar Pago'",
+                "3": "Busca cliente por cédula",
+                "4": "Sistema muestra tabla y cuotas pendientes",
+                "5": "Cobranzas ingresa datos del pago",
+                "6": "Sistema calcula distribución automática",
+                "7": "Cobranzas confirma el pago",
+                "8": "Sistema ejecuta acciones automáticas",
+                "9": "✅ Pago registrado exitosamente"
+            },
+            "endpoints_disponibles": {
+                "paso_3": "GET /pagos/cliente/cedula/{cedula}/cuotas-pendientes",
+                "paso_4": "GET /pagos/flujo-completo/paso/4?cedula={cedula}",
+                "paso_5_7": "POST /pagos/manual",
+                "paso_6": "GET /pagos/flujo-completo/paso/6",
+                "paso_8": "GET /pagos/flujo-completo/paso/8"
+            }
+        }
+
+
+def _get_estado_visual(cuota) -> str:
+    """Helper para obtener estado visual de cuota"""
+    if cuota.estado == "PAGADA":
+        return "✅ PAGADA"
+    elif cuota.estado == "PARCIAL":
+        return "⏳ PARCIAL"
+    elif cuota.estado == "VENCIDA":
+        return "🔴 VENCIDA"
+    elif cuota.esta_vencida:
+        return "⚠️ VENCIDA"
+    else:
+        return "⏳ PENDIENTE"
 
 
 @router.post("/simular", response_model=DistribucionPagoResponse)
