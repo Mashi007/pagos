@@ -133,9 +133,9 @@ def calcular_scoring_crediticio(
 
 @router.get("/scoring-masivo")
 def calcular_scoring_masivo_cartera(
+    background_tasks: BackgroundTasks,
     limite: int = Query(100, ge=1, le=1000, description="Límite de clientes a procesar"),
     solo_activos: bool = Query(True, description="Solo clientes activos"),
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
