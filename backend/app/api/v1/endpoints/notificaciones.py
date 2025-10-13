@@ -501,8 +501,12 @@ async def enviar_confirmacion_pago(
     """
     3. Confirmación de pago recibido (automática al registrar pago)
     """
-    # Obtener pago
-    pago = db.query(Pago).join(Prestamo).join(Cliente).filter(Pago.id == pago_id).first()
+    # Obtener pago con joins explícitos
+    pago = db.query(Pago).select_from(Pago).join(
+        Prestamo, Pago.prestamo_id == Prestamo.id
+    ).join(
+        Cliente, Prestamo.cliente_id == Cliente.id
+    ).filter(Pago.id == pago_id).first()
     if not pago:
         raise HTTPException(status_code=404, detail="Pago no encontrado")
     
@@ -597,15 +601,19 @@ async def enviar_estados_cuenta_mensual(
         inicio_mes = mes_anterior.replace(day=1)
         fin_mes = mes_anterior
         
-        # Pagos del mes anterior
-        pagos_mes = db.query(Pago).join(Prestamo).filter(
+        # Pagos del mes anterior con joins explícitos
+        pagos_mes = db.query(Pago).select_from(Pago).join(
+            Prestamo, Pago.prestamo_id == Prestamo.id
+        ).filter(
             Prestamo.cliente_id == cliente.id,
             Pago.fecha_pago >= inicio_mes,
             Pago.fecha_pago <= fin_mes
         ).all()
         
-        # Cuotas pendientes
-        cuotas_pendientes = db.query(Cuota).join(Prestamo).filter(
+        # Cuotas pendientes con joins explícitos
+        cuotas_pendientes = db.query(Cuota).select_from(Cuota).join(
+            Prestamo, Cuota.prestamo_id == Prestamo.id
+        ).filter(
             Prestamo.cliente_id == cliente.id,
             Cuota.estado.in_(["PENDIENTE", "VENCIDA", "PARCIAL"])
         ).order_by(Cuota.fecha_vencimiento).limit(3).all()

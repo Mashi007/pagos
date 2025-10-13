@@ -524,13 +524,21 @@ async def reporte_cobranza_diaria_pdf(
     if not fecha:
         fecha = date.today()
     
-    # Obtener datos
-    pagos_hoy = db.query(Pago).select_from(Pago).join(Prestamo).join(Cliente).filter(
+    # Obtener datos con joins explícitos
+    pagos_hoy = db.query(Pago).select_from(Pago).join(
+        Prestamo, Pago.prestamo_id == Prestamo.id
+    ).join(
+        Cliente, Prestamo.cliente_id == Cliente.id
+    ).filter(
         Pago.fecha_pago == fecha,
         Pago.estado != "ANULADO"
     ).all()
     
-    vencimientos_hoy = db.query(Cuota).select_from(Cuota).join(Prestamo).join(Cliente).filter(
+    vencimientos_hoy = db.query(Cuota).select_from(Cuota).join(
+        Prestamo, Cuota.prestamo_id == Prestamo.id
+    ).join(
+        Cliente, Prestamo.cliente_id == Cliente.id
+    ).filter(
         Cuota.fecha_vencimiento == fecha,
         Cuota.estado.in_(["PENDIENTE", "PARCIAL"])
     ).all()
