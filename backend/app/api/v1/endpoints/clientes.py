@@ -255,6 +255,26 @@ def test_simple_query(db: Session = Depends(get_db)):
         }
 
 
+@router.get("/test-with-auth")
+def test_with_auth(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Endpoint simple con autenticación para probar"""
+    try:
+        total = db.query(Cliente).count()
+        return {
+            "mensaje": "Query con auth exitosa",
+            "total_clientes": total,
+            "usuario": current_user.nombre,
+            "rol": current_user.rol,
+            "status": "ok"
+        }
+    except Exception as e:
+        return {
+            "mensaje": f"Error en query con auth: {str(e)}",
+            "total_clientes": 0,
+            "status": "error"
+        }
+
+
 @router.get("/test-sin-join")
 def test_sin_join(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Test sin join para verificar si el problema es el join con User"""
