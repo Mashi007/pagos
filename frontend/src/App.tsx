@@ -8,7 +8,6 @@ import { Layout } from '@/components/layout/Layout'
 // Auth
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { useAuth } from '@/store/authStore'
-import { useKeepBackendAlive } from '@/hooks/useKeepBackendAlive'
 
 // Pages
 import { Login } from '@/pages/Login'
@@ -83,9 +82,6 @@ const NotFound = () => (
 
 function App() {
   const { isAuthenticated, refreshUser } = useAuth()
-  
-  // Mantener el backend activo
-  useKeepBackendAlive()
 
   useEffect(() => {
     // Verificar autenticación al cargar la app
