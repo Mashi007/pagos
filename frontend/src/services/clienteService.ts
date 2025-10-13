@@ -10,8 +10,19 @@ class ClienteService {
     page: number = 1,
     perPage: number = 20
   ): Promise<PaginatedResponse<Cliente>> {
-    // TEMPORAL: Usar endpoint simple que funciona correctamente
-    const url = `${this.baseUrl}/temp-simple?page=${page}&page_size=${perPage}`
+    // Usar endpoint principal corregido
+    const params = new URLSearchParams({
+      page: page.toString(),
+      per_page: perPage.toString()
+    })
+    
+    // Agregar filtros si existen
+    if (filters?.search) params.append('search', filters.search)
+    if (filters?.estado) params.append('estado', filters.estado)
+    if (filters?.estado_financiero) params.append('estado_financiero', filters.estado_financiero)
+    if (filters?.asesor_id) params.append('asesor_id', filters.asesor_id.toString())
+    
+    const url = `${this.baseUrl}/?${params.toString()}`
     return apiClient.get<PaginatedResponse<Cliente>>(url)
   }
 

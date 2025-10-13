@@ -85,21 +85,15 @@ def listar_clientes(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Listar clientes con búsqueda avanzada y filtros múltiples
+    Listar clientes con filtros básicos y paginación
     
     IMPLEMENTA MATRIZ DE ACCESO POR ROL:
-    - ADMIN/COBRANZAS: Ve TODOS los clientes
+    - ADMIN: Ve TODOS los clientes
     - COMERCIAL/ASESOR: Ve SOLO sus clientes asignados
-    
-    Funcionalidades:
-    - Búsqueda de texto en nombre, cédula y móvil
-    - Filtros por estado, asesor, concesionario, modelo
-    - Filtros por rangos de fecha y monto
-    - Ordenamiento por múltiples campos
-    - Paginación
     """
-    # Construir query base (sin join problemático)
-    query = db.query(Cliente)
+    try:
+    # Construir query base
+        query = db.query(Cliente)
     
     # ============================================
     # FILTRO POR ROL - MATRIZ DE ACCESO
@@ -107,15 +101,15 @@ def listar_clientes(
     if current_user.rol in ["COMERCIAL", "ASESOR"]:
         # Solo pueden ver SUS clientes asignados
         query = query.filter(Cliente.asesor_id == current_user.id)
-    # ADMIN y COBRANZAS ven todos los clientes (sin filtro adicional)
+        # ADMIN ve todos los clientes (sin filtro adicional)
     
     # ============================================
     # APLICAR FILTROS ADICIONALES
     # ============================================
     
     # Búsqueda de texto (nombre, cédula, móvil)
-    if search:
-        search_pattern = f"%{search}%"
+        if search:
+            search_pattern = f"%{search}%"
         query = query.filter(
             or_(
                 Cliente.nombres.ilike(search_pattern),
@@ -136,68 +130,33 @@ def listar_clientes(
     if asesor_id:
         query = query.filter(Cliente.asesor_id == asesor_id)
     
-    if concesionario:
-        query = query.filter(Cliente.concesionario.ilike(f"%{concesionario}%"))
-    
-    if modelo_vehiculo:
-        query = query.filter(Cliente.modelo_vehiculo.ilike(f"%{modelo_vehiculo}%"))
-    
-    if modalidad_pago:
-        query = query.filter(Cliente.modalidad_pago == modalidad_pago)
-    
-    # Filtros de fecha
-    if fecha_registro_desde:
-        query = query.filter(Cliente.fecha_registro >= fecha_registro_desde)
-    
-    if fecha_registro_hasta:
-        query = query.filter(Cliente.fecha_registro <= fecha_registro_hasta)
-    
-    # Filtros de monto
-    if monto_min:
-        query = query.filter(Cliente.total_financiamiento >= monto_min)
-    
-    if monto_max:
-        query = query.filter(Cliente.total_financiamiento <= monto_max)
-    
-    # Filtros de mora
-    if dias_mora_min:
-        query = query.filter(Cliente.dias_mora >= dias_mora_min)
-    
-    # ============================================
-    # APLICAR ORDENAMIENTO
-    # ============================================
-    order_column = Cliente.fecha_registro  # Default
-    
-    if order_by == "nombre":
-        order_column = func.concat(Cliente.nombres, ' ', Cliente.apellidos)
-    elif order_by == "monto_financiamiento":
-        order_column = Cliente.total_financiamiento
-    elif order_by == "dias_mora":
-        order_column = Cliente.dias_mora
-    elif order_by == "fecha_registro":
-        order_column = Cliente.fecha_registro
-    
-    if order_direction == "desc":
-        query = query.order_by(desc(order_column))
-    else:
-        query = query.order_by(asc(order_column))
-    
-    # ============================================
-    # PAGINACIÓN
-    # ============================================
-    total = query.count()
-    skip = (page - 1) * per_page
-    clientes = query.offset(skip).limit(per_page).all()
-    
-    total_pages = (total + per_page - 1) // per_page
-    
-    return ClienteList(
-        items=clientes,
-        total=total,
-        page=page,
-        page_size=per_page,
-        total_pages=total_pages
-    )
+        # ============================================
+        # ORDENAMIENTO por defecto
+        # ============================================
+        query = query.order_by(desc(Cliente.fecha_registro))
+        
+        # ============================================
+        # PAGINACIÓN
+        # ============================================
+        total = query.count()
+        skip = (page - 1) * per_page
+        clientes = query.offset(skip).limit(per_page).all()
+        
+        # Calcular páginas totales
+        total_pages = (total + per_page - 1) // per_page
+        
+        return ClienteList(
+            items=clientes,
+            total=total,
+            page=page,
+            page_size=per_page,
+            total_pages=total_pages
+        )
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error listando clientes: {str(e)}")
 
 
 @router.get("/verificar-estructura")
@@ -257,38 +216,7 @@ def test_with_auth(db: Session = Depends(get_db), current_user: User = Depends(g
         }
 
 
-@router.get("/temp-simple")
-def listar_clientes_temp(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Endpoint temporal simplificado para listar clientes"""
-    try:
-        # Query muy simple
-        query = db.query(Cliente)
-        
-        # Contar total
-        total = query.count()
-        
-        # Paginación
-        skip = (page - 1) * page_size
-        clientes = query.offset(skip).limit(page_size).all()
-        
-        total_pages = (total + page_size - 1) // page_size
-        
-        return {
-            "items": clientes,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": total_pages
-        }
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Error temporal: {str(e)}")
+# Endpoint temporal eliminado - usar endpoint principal
 
 
 @router.get("/debug-no-model")
