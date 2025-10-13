@@ -36,7 +36,11 @@ class CargaMasivaService {
         }
       )
 
-      return response.data
+      return response.data || {
+        success: false,
+        message: 'No se recibió respuesta del servidor',
+        errors: ['Error de comunicación']
+      }
     } catch (error: any) {
       console.error('Error en carga masiva:', error)
       
@@ -69,7 +73,7 @@ class CargaMasivaService {
     try {
       const response = await apiClient.get(`/api/v1/carga-masiva/template/${type}`, {
         responseType: 'blob'
-      })
+      }) as any
       return response.data
     } catch (error: any) {
       console.error('Error al descargar template:', error)
@@ -108,7 +112,7 @@ class CargaMasivaService {
   // Obtener historial de cargas
   async obtenerHistorial(): Promise<any[]> {
     try {
-      const response = await apiClient.get('/api/v1/carga-masiva/historial')
+      const response = await apiClient.get('/api/v1/carga-masiva/historial') as any
       return response.data
     } catch (error: any) {
       console.error('Error al obtener historial:', error)

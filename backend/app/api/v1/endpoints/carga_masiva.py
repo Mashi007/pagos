@@ -50,7 +50,7 @@ async def cargar_archivo_excel(
             return await procesar_prestamos(content, file.filename, db)
         elif type == "pagos":
             return await procesar_pagos(content, file.filename, db)
-                        else:
+        else:
             raise HTTPException(
                 status_code=400,
                 detail="Tipo de datos no válido"

@@ -15,6 +15,7 @@ import { Login } from '@/pages/Login'
 import { Dashboard } from '@/pages/Dashboard'
 import { Clientes } from '@/pages/Clientes'
 import { CargaMasiva } from '@/pages/CargaMasiva'
+import { VisualizacionBD } from '@/pages/VisualizacionBD'
 
 // Placeholder components for other pages
 

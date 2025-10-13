@@ -31,7 +31,8 @@
     "recharts": "^2.8.0",
     "date-fns": "^2.30.0",
     "class-variance-authority": "^0.7.0",
-    "serve": "^14.2.1"
+    "serve": "^14.2.1",
+    "@radix-ui/react-progress": "^1.0.3"
   },
   "devDependencies": {
     "@types/react": "^18.2.37",
