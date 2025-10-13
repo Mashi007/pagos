@@ -338,6 +338,118 @@ def debug_no_model(db: Session = Depends(get_db), current_user: User = Depends(g
         }
 
 
+@router.post("/crear-clientes-prueba")
+def crear_clientes_prueba(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Crear clientes de prueba para demostrar la funcionalidad"""
+    try:
+        # Verificar si ya existen clientes
+        existing_count = db.query(Cliente).count()
+        if existing_count > 0:
+            return {
+                "mensaje": f"Ya existen {existing_count} clientes en la base de datos",
+                "status": "info"
+            }
+        
+        # Crear clientes de prueba
+        clientes_prueba = [
+            {
+                "cedula": "12345678",
+                "nombres": "Juan Carlos",
+                "apellidos": "Pérez González",
+                "telefono": "0987654321",
+                "email": "juan.perez@email.com",
+                "direccion": "Av. Principal 123, Quito",
+                "ocupacion": "Ingeniero",
+                "modelo_vehiculo": "Toyota Corolla",
+                "marca_vehiculo": "Toyota",
+                "anio_vehiculo": 2022,
+                "color_vehiculo": "Blanco",
+                "concesionario": "AutoCenter Quito",
+                "total_financiamiento": 25000.00,
+                "cuota_inicial": 5000.00,
+                "monto_financiado": 20000.00,
+                "modalidad_pago": "MENSUAL",
+                "numero_amortizaciones": 48,
+                "estado": "ACTIVO",
+                "estado_financiero": "AL_DIA",
+                "asesor_id": current_user.id
+            },
+            {
+                "cedula": "87654321",
+                "nombres": "María Elena",
+                "apellidos": "Rodríguez López",
+                "telefono": "0998765432",
+                "email": "maria.rodriguez@email.com",
+                "direccion": "Calle Secundaria 456, Guayaquil",
+                "ocupacion": "Contadora",
+                "modelo_vehiculo": "Hyundai Accent",
+                "marca_vehiculo": "Hyundai",
+                "anio_vehiculo": 2023,
+                "color_vehiculo": "Azul",
+                "concesionario": "Hyundai Motors",
+                "total_financiamiento": 18000.00,
+                "cuota_inicial": 3000.00,
+                "monto_financiado": 15000.00,
+                "modalidad_pago": "MENSUAL",
+                "numero_amortizaciones": 36,
+                "estado": "ACTIVO",
+                "estado_financiero": "AL_DIA",
+                "asesor_id": current_user.id
+            },
+            {
+                "cedula": "11223344",
+                "nombres": "Carlos Alberto",
+                "apellidos": "Martínez Silva",
+                "telefono": "0987654321",
+                "email": "carlos.martinez@email.com",
+                "direccion": "Av. Libertad 789, Cuenca",
+                "ocupacion": "Comerciante",
+                "modelo_vehiculo": "Nissan Versa",
+                "marca_vehiculo": "Nissan",
+                "anio_vehiculo": 2021,
+                "color_vehiculo": "Gris",
+                "concesionario": "Nissan Ecuador",
+                "total_financiamiento": 22000.00,
+                "cuota_inicial": 4000.00,
+                "monto_financiado": 18000.00,
+                "modalidad_pago": "MENSUAL",
+                "numero_amortizaciones": 42,
+                "estado": "ACTIVO",
+                "estado_financiero": "MORA",
+                "dias_mora": 15,
+                "asesor_id": current_user.id
+            }
+        ]
+        
+        clientes_creados = []
+        for cliente_data in clientes_prueba:
+            cliente = Cliente(**cliente_data)
+            db.add(cliente)
+            db.flush()  # Para obtener el ID
+            clientes_creados.append({
+                "id": cliente.id,
+                "nombre": f"{cliente.nombres} {cliente.apellidos}",
+                "cedula": cliente.cedula
+            })
+        
+        db.commit()
+        
+        return {
+            "mensaje": f"Se crearon {len(clientes_creados)} clientes de prueba exitosamente",
+            "clientes": clientes_creados,
+            "status": "success"
+        }
+        
+    except Exception as e:
+        db.rollback()
+        import traceback
+        traceback.print_exc()
+        return {
+            "mensaje": f"Error creando clientes de prueba: {str(e)}",
+            "status": "error"
+        }
+
+
 @router.get("/test-sin-join")
 def test_sin_join(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Test sin join para verificar si el problema es el join con User"""
