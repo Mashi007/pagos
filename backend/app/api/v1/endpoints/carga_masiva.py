@@ -101,6 +101,7 @@ async def procesar_clientes(content: bytes, filename: str, db: Session):
         total_records = len(df)
         processed_records = 0
         errors = []
+        errores_detallados = []
         
         for index, row in df.iterrows():
             try:
@@ -110,9 +111,43 @@ async def procesar_clientes(content: bytes, filename: str, db: Session):
                 telefono = str(row.get('telefono', '')).strip()
                 email = str(row.get('email', '')).strip()
                 
+                # Validaciones específicas
+                errores_validacion = []
+                
+                # Validar cédula venezolana
+                if not cedula.startswith('V') or len(cedula) < 8:
+                    errores_validacion.append('Formato de cédula inválido - debe empezar con V y tener al menos 8 caracteres')
+                
+                # Validar teléfono
+                if telefono and telefono != 'error':
+                    if not (telefono.startswith('+5804') or telefono.startswith('04')):
+                        errores_validacion.append('Formato de teléfono inválido - debe empezar con +5804 o 04')
+                
+                # Validar email
+                if email and email != 'error':
+                    if '@' not in email or '.' not in email.split('@')[-1]:
+                        errores_validacion.append('Formato de email inválido')
+                
                 # Saltar filas con datos de error
                 if telefono == 'error' or email == 'error':
-                    errors.append(f"Fila {index + 2}: Datos marcados como 'error' - omitida")
+                    errores_detallados.append({
+                        'row': index + 2,
+                        'cedula': cedula,
+                        'error': 'Datos marcados como "error" - móvil y/o email inválidos',
+                        'data': row.to_dict(),
+                        'tipo': 'cliente'
+                    })
+                    continue
+                
+                # Si hay errores de validación, agregar a la lista detallada
+                if errores_validacion:
+                    errores_detallados.append({
+                        'row': index + 2,
+                        'cedula': cedula,
+                        'error': '; '.join(errores_validacion),
+                        'data': row.to_dict(),
+                        'tipo': 'cliente'
+                    })
                     continue
                 
                 # Crear cliente
@@ -145,21 +180,29 @@ async def procesar_clientes(content: bytes, filename: str, db: Session):
                 processed_records += 1
                 
             except Exception as e:
-                errors.append(f"Fila {index + 1}: {str(e)}")
+                errores_detallados.append({
+                    'row': index + 2,
+                    'cedula': str(row.get('cedula', 'N/A')),
+                    'error': f'Error inesperado: {str(e)}',
+                    'data': row.to_dict(),
+                    'tipo': 'cliente'
+                })
 
         # Guardar cambios
         db.commit()
         
         return {
             "success": True,
-            "message": "Archivo procesado exitosamente",
+            "message": f"Procesados {processed_records} de {total_records} registros de clientes",
             "data": {
                 "totalRecords": total_records,
                 "processedRecords": processed_records,
-                "errors": len(errors),
+                "errors": len(errores_detallados),
                 "fileName": filename,
+                "type": "clientes",
                 "details": errors[:10]  # Primeros 10 errores
-            }
+            },
+            "erroresDetallados": errores_detallados
         }
 
     except HTTPException:
@@ -209,6 +252,7 @@ async def procesar_pagos(content: bytes, filename: str, db: Session):
         total_records = len(df)
         processed_records = 0
         errors = []
+        errores_detallados = []
         
         for index, row in df.iterrows():
             try:
@@ -218,11 +262,39 @@ async def procesar_pagos(content: bytes, filename: str, db: Session):
                 fecha = str(row.get('fecha', ''))
                 documento_pago = str(row.get('documento_pago', ''))
                 
+                # Validaciones específicas
+                errores_validacion = []
+                
+                # Validar cédula venezolana
+                if not cedula.startswith('V') or len(cedula) < 8:
+                    errores_validacion.append('Formato de cédula inválido - debe empezar con V y tener al menos 8 caracteres')
+                
+                # Validar monto
+                if monto_pagado <= 0:
+                    errores_validacion.append('Monto debe ser mayor a 0')
+                
                 # Buscar cliente por cédula
                 cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
                 
                 if not cliente:
-                    errors.append(f"Fila {index + 2}: Cliente con cédula {cedula} no encontrado")
+                    errores_detallados.append({
+                        'row': index + 2,
+                        'cedula': cedula,
+                        'error': f'Cliente con cédula {cedula} no encontrado - debe cargar primero el archivo de clientes',
+                        'data': row.to_dict(),
+                        'tipo': 'pago'
+                    })
+                    continue
+                
+                # Si hay errores de validación, agregar a la lista detallada
+                if errores_validacion:
+                    errores_detallados.append({
+                        'row': index + 2,
+                        'cedula': cedula,
+                        'error': '; '.join(errores_validacion),
+                        'data': row.to_dict(),
+                        'tipo': 'pago'
+                    })
                     continue
                 
                 # Crear pago
@@ -249,7 +321,13 @@ async def procesar_pagos(content: bytes, filename: str, db: Session):
                 processed_records += 1
                 
             except Exception as e:
-                errors.append(f"Fila {index + 2}: {str(e)}")
+                errores_detallados.append({
+                    'row': index + 2,
+                    'cedula': str(row.get('cedula', 'N/A')),
+                    'error': f'Error inesperado: {str(e)}',
+                    'data': row.to_dict(),
+                    'tipo': 'pago'
+                })
         
         return {
             "success": True,
@@ -257,11 +335,12 @@ async def procesar_pagos(content: bytes, filename: str, db: Session):
             "data": {
                 "totalRecords": total_records,
                 "processedRecords": processed_records,
-                "errors": len(errors),
+                "errors": len(errores_detallados),
                 "fileName": filename,
                 "type": "pagos",
                 "details": errors[:10]  # Solo los primeros 10 errores
-            }
+            },
+            "erroresDetallados": errores_detallados
         }
         
     except Exception as e:

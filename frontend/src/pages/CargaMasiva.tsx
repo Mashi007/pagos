@@ -4,6 +4,7 @@ import { Upload, FileSpreadsheet, Download, AlertCircle, CheckCircle, X } from '
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AlertWithIcon } from '@/components/ui/alert'
+import { ErroresDetallados } from '@/components/carga-masiva/ErroresDetallados'
 import { Progress } from '@/components/ui/progress'
 
 interface UploadResult {
@@ -11,6 +12,13 @@ interface UploadResult {
   message: string
   data?: any
   errors?: string[]
+  erroresDetallados?: Array<{
+    row: number
+    cedula: string
+    error: string
+    data: any
+    tipo: 'cliente' | 'pago'
+  }>
 }
 
 export function CargaMasiva() {
@@ -84,28 +92,61 @@ export function CargaMasiva() {
       clearInterval(progressInterval)
       setUploadProgress(100)
 
-      // Simular resultado exitoso
+      // Simular resultado con errores detallados
+      const erroresDetallados = selectedType === 'clientes' ? [
+        {
+          row: 3,
+          cedula: 'V30325601',
+          error: 'Datos marcados como "error" - móvil y email inválidos',
+          data: { cedula: 'V30325601', nombre: 'AARON ALEJANDRO GONZALEZ CAYAMA', telefono: 'error', email: 'error' },
+          tipo: 'cliente' as const
+        },
+        {
+          row: 15,
+          cedula: 'V12345678',
+          error: 'Formato de cédula inválido - debe empezar con V',
+          data: { cedula: '12345678', nombre: 'JUAN PEREZ', telefono: '+5804123456789', email: 'juan@email.com' },
+          tipo: 'cliente' as const
+        }
+      ] : [
+        {
+          row: 5,
+          cedula: 'V99999999',
+          error: 'Cliente con cédula V99999999 no encontrado',
+          data: { cedula: 'V99999999', fecha: '06/12/2024', monto_pagado: '150', documento_pago: '123456789' },
+          tipo: 'pago' as const
+        },
+        {
+          row: 8,
+          cedula: 'V22283249',
+          error: 'Formato de monto inválido - debe ser numérico',
+          data: { cedula: 'V22283249', fecha: '06/12/2024', monto_pagado: 'abc', documento_pago: '740087437485285' },
+          tipo: 'pago' as const
+        }
+      ]
+
       const result = {
         success: true,
-        message: `${selectedType === 'clientes' ? 'Clientes' : 'Pagos'} cargados exitosamente`,
+        message: `${selectedType === 'clientes' ? 'Clientes' : 'Pagos'} procesados con ${erroresDetallados.length} errores`,
         data: {
           totalRecords: selectedType === 'clientes' ? 150 : 300,
           processedRecords: selectedType === 'clientes' ? 148 : 295,
-          errors: selectedType === 'clientes' ? 2 : 5,
+          errors: erroresDetallados.length,
           fileName: selectedFile.name,
           type: selectedType
-        }
+        },
+        erroresDetallados
       }
 
       setUploadResult(result)
 
-      // Si se cargaron clientes exitosamente, avanzar al siguiente paso
-      if (selectedType === 'clientes' && result.success) {
+      // Si se cargaron clientes exitosamente (aunque haya errores), avanzar al siguiente paso
+      if (selectedType === 'clientes' && result.success && result.data.processedRecords > 0) {
         setClientesLoaded(true)
         setUploadStep('pagos')
         setSelectedType('pagos')
         setSelectedFile(null)
-      } else if (selectedType === 'pagos' && result.success) {
+      } else if (selectedType === 'pagos' && result.success && result.data.processedRecords > 0) {
         setUploadStep('complete')
       }
 
@@ -333,6 +374,35 @@ export function CargaMasiva() {
                           {uploadResult.data.fileName}
                         </p>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Mostrar errores detallados si existen */}
+                  {uploadResult.erroresDetallados && uploadResult.erroresDetallados.length > 0 && (
+                    <div className="mt-6">
+                      <ErroresDetallados
+                        errores={uploadResult.erroresDetallados}
+                        tipo={uploadResult.data.type}
+                        onDescargarErrores={() => {
+                          // Generar archivo CSV con solo los errores
+                          const erroresCSV = uploadResult.erroresDetallados!.map(error => [
+                            error.row,
+                            error.cedula,
+                            error.error,
+                            JSON.stringify(error.data)
+                          ])
+                          const csvContent = [
+                            ['fila', 'cedula', 'error', 'datos'],
+                            ...erroresCSV
+                          ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n')
+                          
+                          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+                          const link = document.createElement('a')
+                          link.href = URL.createObjectURL(blob)
+                          link.download = `errores_${uploadResult.data.type}_${new Date().toISOString().split('T')[0]}.csv`
+                          link.click()
+                        }}
+                      />
                     </div>
                   )}
 
