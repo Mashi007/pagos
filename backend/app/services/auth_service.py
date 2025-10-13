@@ -230,6 +230,11 @@ class AuthService:
         Returns:
             Lista de permisos (strings)
         """
-        user_role = UserRole(user.rol)
-        permissions = get_role_permissions(user_role)
-        return [perm.value for perm in permissions]
+        try:
+            # Convertir el rol string a UserRole enum
+            user_role = UserRole[user.rol] if isinstance(user.rol, str) else user.rol
+            permissions = get_role_permissions(user_role)
+            return [perm.value for perm in permissions]
+        except (KeyError, ValueError):
+            # Si el rol no es válido, retornar permisos vacíos
+            return []
