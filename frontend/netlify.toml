@@ -1,0 +1,18 @@
+[build]
+  publish = "dist"
+  command = "npm run build"
+
+[build.environment]
+  VITE_API_URL = "https://pagos-f2qf.onrender.com"
+  VITE_NODE_ENV = "production"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[context.production.environment]
+  VITE_API_URL = "https://pagos-f2qf.onrender.com"
+
+[context.deploy-preview.environment]
+  VITE_API_URL = "https://pagos-f2qf.onrender.com"

@@ -58,33 +58,29 @@ He creado un **frontend completo y funcional** para el sistema de préstamos y c
 
 ### 🔧 **INSTALACIÓN Y EJECUCIÓN:**
 
-#### **1. Backend (Ya existente):**
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
-```
+#### **🌐 Backend en Producción (Ya funcionando):**
+- **URL**: https://pagos-f2qf.onrender.com
+- **Documentación**: https://pagos-f2qf.onrender.com/docs
+- **Estado**: ✅ ACTIVO y funcionando
 
-#### **2. Frontend (Nuevo):**
+#### **💻 Frontend (Ejecutar localmente):**
 ```bash
 cd frontend
 
-# Instalar dependencias (si tienes npm/yarn)
+# Opción 1: Setup automático
+npm run start
+
+# Opción 2: Manual
 npm install
-# O si no tienes npm, las dependencias están definidas en package.json
-
-# Crear archivo de configuración
-echo "VITE_API_URL=http://localhost:8080" > .env
-
-# Iniciar servidor de desarrollo
+npm run setup
 npm run dev
 ```
 
 ### 🌐 **ACCESO AL SISTEMA:**
 
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8080
-- **Documentación API**: http://localhost:8080/docs
+- **Frontend Local**: http://localhost:3000
+- **Backend API**: https://pagos-f2qf.onrender.com
+- **Documentación API**: https://pagos-f2qf.onrender.com/docs
 
 ### 👤 **USUARIOS DE PRUEBA:**
 
