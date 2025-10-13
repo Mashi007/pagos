@@ -3,7 +3,7 @@
 Schemas de autenticación: Login, Token, Register
 """
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional
+from typing import Optional, Dict, Any
 
 
 class Token(BaseModel):
@@ -18,7 +18,7 @@ class LoginResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
-    user: dict  # Información básica del usuario
+    user: Dict[str, Any]  # Información básica del usuario
 
 
 class TokenPayload(BaseModel):
