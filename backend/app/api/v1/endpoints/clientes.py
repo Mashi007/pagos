@@ -92,44 +92,44 @@ def listar_clientes(
     - COMERCIAL/ASESOR: Ve SOLO sus clientes asignados
     """
     try:
-        # Construir query base
+    # Construir query base
         query = db.query(Cliente)
-        
-        # ============================================
-        # FILTRO POR ROL - MATRIZ DE ACCESO
-        # ============================================
-        if current_user.rol in ["COMERCIAL", "ASESOR"]:
-            # Solo pueden ver SUS clientes asignados
-            query = query.filter(Cliente.asesor_id == current_user.id)
+    
+    # ============================================
+    # FILTRO POR ROL - MATRIZ DE ACCESO
+    # ============================================
+    if current_user.rol in ["COMERCIAL", "ASESOR"]:
+        # Solo pueden ver SUS clientes asignados
+        query = query.filter(Cliente.asesor_id == current_user.id)
         # ADMIN ve todos los clientes (sin filtro adicional)
-        
-        # ============================================
-        # APLICAR FILTROS ADICIONALES
-        # ============================================
-        
-        # Búsqueda de texto (nombre, cédula, móvil)
+    
+    # ============================================
+    # APLICAR FILTROS ADICIONALES
+    # ============================================
+    
+    # Búsqueda de texto (nombre, cédula, móvil)
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
-                or_(
-                    Cliente.nombres.ilike(search_pattern),
-                    Cliente.apellidos.ilike(search_pattern),
-                    Cliente.cedula.ilike(search_pattern),
-                    Cliente.telefono.ilike(search_pattern),
-                    func.concat(Cliente.nombres, ' ', Cliente.apellidos).ilike(search_pattern)
-                )
+        query = query.filter(
+            or_(
+                Cliente.nombres.ilike(search_pattern),
+                Cliente.apellidos.ilike(search_pattern),
+                Cliente.cedula.ilike(search_pattern),
+                Cliente.telefono.ilike(search_pattern),
+                func.concat(Cliente.nombres, ' ', Cliente.apellidos).ilike(search_pattern)
             )
-        
-        # Filtros específicos
-        if estado:
-            query = query.filter(Cliente.estado == estado)
-        
-        if estado_financiero:
-            query = query.filter(Cliente.estado_financiero == estado_financiero)
-        
-        if asesor_id:
-            query = query.filter(Cliente.asesor_id == asesor_id)
-        
+        )
+    
+    # Filtros específicos
+    if estado:
+        query = query.filter(Cliente.estado == estado)
+    
+    if estado_financiero:
+        query = query.filter(Cliente.estado_financiero == estado_financiero)
+    
+    if asesor_id:
+        query = query.filter(Cliente.asesor_id == asesor_id)
+    
         # ============================================
         # ORDENAMIENTO por defecto
         # ============================================
@@ -274,6 +274,47 @@ def test_with_auth(db: Session = Depends(get_db), current_user: User = Depends(g
             "total_clientes": count,
             "usuario": current_user.email,
             "rol": current_user.rol,
+            "status": "ok"
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "status": "error"
+        }
+
+@router.get("/test-main-logic")
+def test_main_logic(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Test replicando la lógica del endpoint principal"""
+    try:
+        # Construir query base
+        query = db.query(Cliente)
+        
+        # FILTRO POR ROL - MATRIZ DE ACCESO
+        if current_user.rol in ["COMERCIAL", "ASESOR"]:
+            query = query.filter(Cliente.asesor_id == current_user.id)
+        
+        # ORDENAMIENTO
+        query = query.order_by(desc(Cliente.fecha_registro))
+        
+    # PAGINACIÓN
+    total = query.count()
+        skip = (page - 1) * per_page
+        clientes = query.offset(skip).limit(per_page).all()
+        
+        total_pages = (total + per_page - 1) // per_page
+        
+        return {
+            "mensaje": "Lógica principal exitosa",
+            "total": total,
+            "page": page,
+            "page_size": per_page,
+            "total_pages": total_pages,
+            "clientes_count": len(clientes),
             "status": "ok"
         }
     except Exception as e:
