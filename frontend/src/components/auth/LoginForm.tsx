@@ -219,7 +219,7 @@ export function LoginForm() {
         <div className="text-center text-sm text-muted-foreground">
           <p className="font-semibold text-blue-600">RAPICREDIT v1.0</p>
           <p className="mt-1">© 2024 - Todos los derechos reservados</p>
-          <p className="text-xs mt-1 text-gray-400">Soluciones financieras rápidas y confiables</p>
+          <p className="text-xs mt-1 text-gray-400">Sistema de préstamos y cobranza</p>
         </div>
           </CardContent>
         </Card>
