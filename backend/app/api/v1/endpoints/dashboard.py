@@ -93,25 +93,31 @@ def dashboard_administrador(
     
     # VENCIMIENTOS PRÓXIMOS 7 DÍAS
     fecha_limite = hoy + timedelta(days=7)
-    vencimientos_proximos = db.query(
-        Cuota, Cliente.nombres, Cliente.apellidos, Cliente.cedula
-    ).select_from(Cuota).join(Prestamo).join(Cliente).filter(
+    vencimientos_proximos = db.query(Cuota).select_from(Cuota).join(
+        Prestamo, Cuota.prestamo_id == Prestamo.id
+    ).join(
+        Cliente, Prestamo.cliente_id == Cliente.id
+    ).filter(
         Cuota.fecha_vencimiento >= hoy,
         Cuota.fecha_vencimiento <= fecha_limite,
         Cuota.estado.in_(["PENDIENTE", "PARCIAL"])
     ).order_by(Cuota.fecha_vencimiento).limit(10).all()
     
     tabla_vencimientos = []
-    for cuota, nombres, apellidos, cedula in vencimientos_proximos:
-        dias_hasta = (cuota.fecha_vencimiento - hoy).days
-        tabla_vencimientos.append({
-            "cliente": f"{nombres} {apellidos}",
-            "cedula": cedula,
-            "monto": f"${float(cuota.monto_cuota):,.0f}",
-            "fecha": cuota.fecha_vencimiento.strftime("%d/%m/%Y"),
-            "dias": dias_hasta,
-            "color": "danger" if dias_hasta == 0 else ("warning" if dias_hasta <= 2 else "info")
-        })
+    for cuota in vencimientos_proximos:
+        prestamo = db.query(Prestamo).filter(Prestamo.id == cuota.prestamo_id).first()
+        if prestamo:
+            cliente = db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
+            if cliente:
+                dias_hasta = (cuota.fecha_vencimiento - hoy).days
+                tabla_vencimientos.append({
+                    "cliente": f"{cliente.nombres} {cliente.apellidos}",
+                    "cedula": cliente.cedula,
+                    "monto": f"${float(cuota.monto_cuota):,.0f}",
+                    "fecha": cuota.fecha_vencimiento.strftime("%d/%m/%Y"),
+                    "dias": dias_hasta,
+                    "color": "danger" if dias_hasta == 0 else ("warning" if dias_hasta <= 2 else "info")
+                })
     
     # TOP 5 ASESORES DEL MES
     inicio_mes = hoy.replace(day=1)
@@ -1027,7 +1033,11 @@ def obtener_detalle_tabla(
         # Detalle de vencimientos próximos
         fecha_limite = date.today() + timedelta(days=7)
         
-        query = db.query(Cuota, Cliente, Prestamo).select_from(Cuota).join(Prestamo).join(Cliente).filter(
+        query = db.query(Cuota).select_from(Cuota).join(
+            Prestamo, Cuota.prestamo_id == Prestamo.id
+        ).join(
+            Cliente, Prestamo.cliente_id == Cliente.id
+        ).filter(
             Cuota.fecha_vencimiento >= date.today(),
             Cuota.fecha_vencimiento <= fecha_limite,
             Cuota.estado.in_(["PENDIENTE", "PARCIAL"])
@@ -1037,19 +1047,22 @@ def obtener_detalle_tabla(
         skip = (page - 1) * page_size
         resultados = query.order_by(Cuota.fecha_vencimiento).offset(skip).limit(page_size).all()
         
-        datos = [
-            {
-                "cliente": cliente.nombre_completo,
-                "cedula": cliente.cedula,
-                "telefono": cliente.telefono,
-                "cuota": cuota.numero_cuota,
-                "monto": float(cuota.monto_cuota),
-                "fecha_vencimiento": cuota.fecha_vencimiento,
-                "dias_hasta": (cuota.fecha_vencimiento - date.today()).days,
-                "asesor": cliente.asesor.full_name if cliente.asesor else "Sin asignar"
-            }
-            for cuota, cliente, prestamo in resultados
-        ]
+        datos = []
+        for cuota in resultados:
+            prestamo = db.query(Prestamo).filter(Prestamo.id == cuota.prestamo_id).first()
+            if prestamo:
+                cliente = db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
+                if cliente:
+                    datos.append({
+                        "cliente": cliente.nombre_completo,
+                        "cedula": cliente.cedula,
+                        "telefono": cliente.telefono,
+                        "cuota": cuota.numero_cuota,
+                        "monto": float(cuota.monto_cuota),
+                        "fecha_vencimiento": cuota.fecha_vencimiento,
+                        "dias_hasta": (cuota.fecha_vencimiento - date.today()).days,
+                        "asesor": cliente.asesor.full_name if cliente.asesor else "Sin asignar"
+                    })
         
         return {
             "componente": componente,
