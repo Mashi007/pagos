@@ -309,6 +309,35 @@ def listar_clientes_temp(
         raise HTTPException(status_code=500, detail=f"Error temporal: {str(e)}")
 
 
+@router.get("/debug-no-model")
+def debug_no_model(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Debug sin usar modelo Cliente"""
+    try:
+        # Probar conexión básica
+        result = db.execute("SELECT 1 as test").fetchone()
+        
+        # Probar query directo a la tabla
+        table_exists = db.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'clientes')").fetchone()
+        
+        # Contar registros directamente
+        count_result = db.execute("SELECT COUNT(*) as total FROM clientes").fetchone()
+        
+        return {
+            "test_query": result[0] if result else "error",
+            "table_exists": table_exists[0] if table_exists else False,
+            "total_records": count_result[0] if count_result else 0,
+            "usuario": current_user.nombre,
+            "status": "ok"
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "error": str(e),
+            "status": "error"
+        }
+
+
 @router.get("/test-sin-join")
 def test_sin_join(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Test sin join para verificar si el problema es el join con User"""
