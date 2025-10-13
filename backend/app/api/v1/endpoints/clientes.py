@@ -264,6 +264,24 @@ def test_simple(db: Session = Depends(get_db)):
             "status": "error"
         }
 
+@router.get("/test-with-auth")
+def test_with_auth(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Test con autenticación"""
+    try:
+        count = db.query(Cliente).count()
+        return {
+            "mensaje": "Test con auth exitoso",
+            "total_clientes": count,
+            "usuario": current_user.email,
+            "rol": current_user.rol,
+            "status": "ok"
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "status": "error"
+        }
+
 
 @router.get("/debug-no-model")
 def debug_no_model(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
