@@ -116,8 +116,8 @@ def listar_clientes(
     - Ordenamiento por múltiples campos
     - Paginación
     """
-    # Construir query base
-    query = db.query(Cliente).select_from(Cliente).outerjoin(User, Cliente.asesor_id == User.id)
+    # Construir query base (sin join problemático)
+    query = db.query(Cliente)
     
     # ============================================
     # FILTRO POR ROL - MATRIZ DE ACCESO
