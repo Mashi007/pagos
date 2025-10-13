@@ -3,7 +3,7 @@
 Endpoint para gestión de notificaciones del sistema.
 Soporta Email y WhatsApp (Twilio).
 """
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from typing import List, Optional
