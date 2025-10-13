@@ -141,9 +141,12 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     },
   ]
 
+  // TEMPORAL: Mostrar todos los elementos del menú sin filtros de permisos
   const filteredMenuItems = menuItems.filter((item) => {
-    if (!item.requiredRoles) return true
-    return hasAnyRole(item.requiredRoles)
+    // Mostrar todos los elementos por ahora
+    return true
+    // if (!item.requiredRoles) return true
+    // return hasAnyRole(item.requiredRoles)
   })
 
   const isActiveRoute = (href: string) => {
