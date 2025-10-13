@@ -404,9 +404,9 @@ async def clasificar_errores_detallado(
 
 @router.post("/ejecutar-migracion")
 async def ejecutar_migracion_masiva(
-    archivo: UploadFile = File(...),
     opciones: OpcionesMigracion,
     background_tasks: BackgroundTasks,
+    archivo: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
