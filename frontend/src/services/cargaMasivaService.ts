@@ -36,7 +36,11 @@ class CargaMasivaService {
         }
       )
 
-      return response.data
+      return response.data || {
+        success: false,
+        message: 'No se recibió respuesta del servidor',
+        errors: ['Error de comunicación']
+      }
     } catch (error: any) {
       console.error('Error en carga masiva:', error)
       
