@@ -119,10 +119,12 @@ def dashboard_administrador(
         User.full_name,
         func.count(Cliente.id).label('nuevos_clientes'),
         func.sum(Cliente.total_financiamiento).label('monto_vendido')
-    ).outerjoin(Cliente, and_(
-        User.id == Cliente.asesor_id,
-        Cliente.fecha_registro >= inicio_mes
-    )).filter(
+    ).select_from(User).outerjoin(
+        Cliente, and_(
+            User.id == Cliente.asesor_id,
+            Cliente.fecha_registro >= inicio_mes
+        )
+    ).filter(
         User.rol.in_(["ASESOR", "COMERCIAL", "GERENTE"])
     ).group_by(User.id, User.full_name).order_by(
         func.count(Cliente.id).desc()
