@@ -3,7 +3,7 @@
 Endpoint para configuración administrativa del sistema.
 Gestión de parámetros, tasas, límites y ajustes generales.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
