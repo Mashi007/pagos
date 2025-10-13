@@ -100,10 +100,11 @@ export function Dashboard() {
       >
         <div className="flex items-center space-x-4 mb-4">
           <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-white font-bold text-sm leading-none">RAPI</div>
-              <div className="text-yellow-300 font-bold text-xs leading-none">CREDIT</div>
-            </div>
+            <img 
+              src="/logo-compact.svg" 
+              alt="RAPICREDIT Logo" 
+              className="w-8 h-8"
+            />
           </div>
           <div>
             <h1 className="text-2xl font-bold mb-1">

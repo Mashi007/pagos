@@ -1,0 +1,44 @@
+<svg width="200" height="60" viewBox="0 0 200 60" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fondo del logo -->
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8B5CF6;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F59E0B;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#EF4444;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Símbolo principal - R estilizada -->
+  <g transform="translate(10, 10)">
+    <!-- Cuerpo principal de la R -->
+    <path d="M0 0 L0 40 L15 40 L15 25 L20 25 L25 40 L35 40 L25 20 L30 0 Z" fill="url(#logoGradient)"/>
+    
+    <!-- Pierna diagonal de la R -->
+    <path d="M15 25 L25 15 L30 15 L20 25 Z" fill="url(#logoGradient)"/>
+    
+    <!-- Círculo de acento -->
+    <circle cx="32" cy="8" r="6" fill="url(#accentGradient)"/>
+    
+    <!-- Rayo de velocidad -->
+    <path d="M40 5 L45 0 L50 5 L45 10 Z" fill="#F59E0B"/>
+  </g>
+  
+  <!-- Texto RAPICREDIT -->
+  <text x="60" y="25" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#1F2937">
+    RAPI
+  </text>
+  <text x="60" y="45" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#3B82F6">
+    CREDIT
+  </text>
+  
+  <!-- Línea decorativa -->
+  <line x1="60" y1="50" x2="180" y2="50" stroke="#E5E7EB" stroke-width="1"/>
+  
+  <!-- Tagline -->
+  <text x="60" y="58" font-family="Arial, sans-serif" font-size="8" fill="#6B7280">
+    Soluciones Financieras Rápidas
+  </text>
+</svg>

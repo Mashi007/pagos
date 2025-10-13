@@ -83,24 +83,21 @@ export function LoginForm() {
       >
         <Card className="shadow-2xl border-0">
           <CardHeader className="space-y-4 text-center">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-              className="mx-auto"
-            >
-              {/* Logo de Rapicredit */}
-              <div className="w-24 h-24 mx-auto mb-4 bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-2xl">
-                <div className="text-center">
-                  <div className="text-white font-bold text-lg leading-tight">
-                    RAPI
-                  </div>
-                  <div className="text-yellow-300 font-bold text-sm leading-tight">
-                    CREDIT
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+          className="mx-auto"
+        >
+          {/* Logo de Rapicredit */}
+          <div className="w-24 h-24 mx-auto mb-4 bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-2xl">
+            <img 
+              src="/logo-compact.svg" 
+              alt="RAPICREDIT Logo" 
+              className="w-16 h-16"
+            />
+          </div>
+        </motion.div>
             
             <div>
               <CardTitle className="text-3xl font-bold text-gradient text-center">
