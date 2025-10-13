@@ -218,6 +218,25 @@ def listar_clientes(
     )
 
 
+@router.get("/verificar-estructura")
+def verificar_estructura_tabla(db: Session = Depends(get_db)):
+    """Verificar estructura de la tabla clientes"""
+    try:
+        from sqlalchemy import inspect
+        inspector = inspect(db.bind)
+        columns = inspector.get_columns('clientes')
+        column_names = [col['name'] for col in columns]
+        
+        return {
+            "tabla": "clientes",
+            "columnas": column_names,
+            "total_columnas": len(column_names),
+            "tiene_total_financiamiento": "total_financiamiento" in column_names
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @router.get("/cedula/{cedula}", response_model=ClienteResponse)
 def buscar_por_cedula(cedula: str, db: Session = Depends(get_db)):
     """Buscar cliente por cédula"""
