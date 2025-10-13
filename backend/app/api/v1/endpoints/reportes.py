@@ -591,7 +591,7 @@ def generar_reporte_personalizado(
     🔍 Generador de reportes personalizados con filtros
     """
     # Construir query base
-    query = db.query(Cliente).outerjoin(User, Cliente.asesor_id == User.id)
+    query = db.query(Cliente)
     
     # Aplicar filtros
     if fecha_inicio:

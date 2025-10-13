@@ -949,7 +949,7 @@ def historial_completo_notificaciones(
     - Estado: Enviado/Entregado/Rebotado/Error
     - Filtros por cliente, tipo, fecha
     """
-    query = db.query(Notificacion).outerjoin(Cliente).outerjoin(User)
+    query = db.query(Notificacion).select_from(Notificacion).outerjoin(Cliente).outerjoin(User)
     
     # Aplicar filtros
     if fecha_desde:
