@@ -75,6 +75,51 @@ def run_migrations():
         return False
 
 
+def create_admin_user():
+    """Crea el usuario administrador si no existe"""
+    try:
+        from app.models.user import User
+        from app.core.security import get_password_hash
+        from app.core.permissions import UserRole
+        from datetime import datetime
+        
+        db = SessionLocal()
+        
+        # Verificar si ya existe un admin
+        existing_admin = db.query(User).filter(User.rol == UserRole.ADMIN).first()
+        
+        if existing_admin:
+            logger.info(f"✅ Usuario ADMIN ya existe: {existing_admin.email}")
+            db.close()
+            return True
+        
+        # Crear admin
+        admin = User(
+            email="admin@financiamiento.com",
+            nombre="Administrador",
+            apellido="Sistema",
+            hashed_password=get_password_hash("Admin2025!"),
+            rol=UserRole.ADMIN,
+            is_active=True,
+            created_at=datetime.utcnow()
+        )
+        
+        db.add(admin)
+        db.commit()
+        db.refresh(admin)
+        
+        logger.info("✅ Usuario ADMIN creado exitosamente")
+        logger.info(f"📧 Email: {admin.email}")
+        logger.info(f"🔒 Password: Admin2025!")
+        
+        db.close()
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Error creando usuario admin: {e}")
+        return False
+
+
 def init_db() -> bool:
     """Inicializa la base de datos creando las tablas si no existen"""
     try:
@@ -95,6 +140,8 @@ def init_db() -> bool:
             logger.info("📝 Tablas no encontradas, creando...")
             if create_tables():
                 logger.info("✅ Base de datos inicializada correctamente")
+                # Crear usuario admin después de crear tablas
+                create_admin_user()
                 return True
             else:
                 logger.error("❌ Error al crear tablas")
@@ -103,6 +150,8 @@ def init_db() -> bool:
             logger.info("✅ Base de datos ya inicializada, tablas existentes")
             if migrations_success:
                 logger.info("✅ Migraciones aplicadas correctamente")
+            # Crear usuario admin si no existe
+            create_admin_user()
             return True
             
     except Exception as e:
