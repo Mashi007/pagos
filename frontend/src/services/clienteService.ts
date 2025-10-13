@@ -10,7 +10,7 @@ class ClienteService {
     page: number = 1,
     perPage: number = 20
   ): Promise<PaginatedResponse<Cliente>> {
-    // TEMPORAL: Usar endpoint simple hasta corregir el principal
+    // TEMPORAL: Usar endpoint simple que funciona correctamente
     const url = `${this.baseUrl}/temp-simple?page=${page}&page_size=${perPage}`
     return apiClient.get<PaginatedResponse<Cliente>>(url)
   }
