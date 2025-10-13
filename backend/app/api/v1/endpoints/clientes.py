@@ -255,6 +255,32 @@ def test_simple_query(db: Session = Depends(get_db)):
         }
 
 
+@router.get("/test-sin-join")
+def test_sin_join(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Test sin join para verificar si el problema es el join con User"""
+    try:
+        # Query sin join, solo con filtro por rol
+        if current_user.rol in ["COMERCIAL", "ASESOR"]:
+            # Solo sus clientes asignados
+            query = db.query(Cliente).filter(Cliente.asesor_id == current_user.id)
+        else:
+            # ADMIN y COBRANZAS ven todos los clientes
+            query = db.query(Cliente)
+        
+        count = query.count()
+        return {
+            "mensaje": "Query sin join exitosa",
+            "total_clientes": count,
+            "usuario_rol": current_user.rol,
+            "status": "ok"
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "status": "error"
+        }
+
+
 @router.post("/aplicar-migracion-manual")
 def aplicar_migracion_manual(db: Session = Depends(get_db)):
     """Aplicar migración manual para agregar columnas faltantes"""
