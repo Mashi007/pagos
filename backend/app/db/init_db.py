@@ -78,20 +78,23 @@ def run_migrations():
 def create_admin_user():
     """Crea el usuario administrador si no existe"""
     try:
+        logger.info("🔄 Verificando usuario administrador...")
+        
         from app.models.user import User
         from app.core.security import get_password_hash
-        from app.core.permissions import UserRole
         from datetime import datetime
         
         db = SessionLocal()
         
         # Verificar si ya existe un admin
-        existing_admin = db.query(User).filter(User.rol == UserRole.ADMIN).first()
+        existing_admin = db.query(User).filter(User.rol == "ADMIN").first()
         
         if existing_admin:
             logger.info(f"✅ Usuario ADMIN ya existe: {existing_admin.email}")
             db.close()
             return True
+        
+        logger.info("📝 Creando usuario administrador...")
         
         # Crear admin
         admin = User(
@@ -99,7 +102,7 @@ def create_admin_user():
             nombre="Administrador",
             apellido="Sistema",
             hashed_password=get_password_hash("Admin2025!"),
-            rol=UserRole.ADMIN,
+            rol="ADMIN",
             is_active=True,
             created_at=datetime.utcnow()
         )
@@ -117,6 +120,8 @@ def create_admin_user():
         
     except Exception as e:
         logger.error(f"❌ Error creando usuario admin: {e}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
         return False
 
 
