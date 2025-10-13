@@ -28,6 +28,7 @@ from app.api.v1.endpoints import (
     configuracion,
     dashboard,
     solicitudes,
+    carga_masiva,
 )
 
 # Configurar logging
@@ -81,6 +82,7 @@ app.include_router(auditoria.router, prefix=f"{settings.API_V1_PREFIX}/auditoria
 app.include_router(configuracion.router, prefix=f"{settings.API_V1_PREFIX}/configuracion", tags=["Configuracion"])
 app.include_router(dashboard.router, prefix=f"{settings.API_V1_PREFIX}/dashboard", tags=["Dashboard"])
 app.include_router(solicitudes.router, prefix=f"{settings.API_V1_PREFIX}/solicitudes", tags=["Solicitudes"])
+app.include_router(carga_masiva.router, prefix=f"{settings.API_V1_PREFIX}/carga-masiva", tags=["Carga Masiva"])
 
 
 @app.get("/", include_in_schema=False)
