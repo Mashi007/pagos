@@ -17,6 +17,71 @@ import logging
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
+# ============================================
+# MONITOREO Y OBSERVABILIDAD
+# ============================================
+
+@router.get("/monitoreo/estado")
+def obtener_estado_monitoreo(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    🔍 Verificar estado del sistema de monitoreo y observabilidad
+    """
+    # Solo admin puede ver configuración de monitoreo
+    if current_user.rol != "ADMIN":
+        raise HTTPException(status_code=403, detail="Solo administradores pueden ver configuración de monitoreo")
+    
+    from app.core.monitoring import get_monitoring_status
+    return get_monitoring_status()
+
+
+@router.post("/monitoreo/habilitar")
+def habilitar_monitoreo_basico(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    ⚡ Habilitar monitoreo básico sin dependencias externas
+    """
+    if current_user.rol != "ADMIN":
+        raise HTTPException(status_code=403, detail="Solo administradores pueden configurar monitoreo")
+    
+    try:
+        # Configurar logging estructurado básico
+        import logging
+        
+        # Configurar formato mejorado
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        
+        # Logger específico para el sistema de financiamiento
+        finance_logger = logging.getLogger("financiamiento_automotriz")
+        finance_logger.setLevel(logging.INFO)
+        
+        return {
+            "mensaje": "✅ Monitoreo básico habilitado",
+            "configuracion": {
+                "logging_estructurado": "✅ Habilitado",
+                "nivel_log": "INFO",
+                "formato": "Timestamp + Archivo + Línea + Mensaje",
+                "logger_especifico": "financiamiento_automotriz"
+            },
+            "beneficios": [
+                "📋 Logs más detallados y estructurados",
+                "🔍 Mejor debugging de errores",
+                "📊 Tracking básico de operaciones",
+                "⚡ Sin dependencias externas adicionales"
+            ],
+            "siguiente_paso": "Configurar Sentry y Prometheus para monitoreo avanzado"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error habilitando monitoreo: {str(e)}")
+
 # Schemas
 class ConfiguracionTasas(BaseModel):
     tasa_interes_base: Decimal = Field(..., ge=0, le=100, description="Tasa de interés base anual (%)")

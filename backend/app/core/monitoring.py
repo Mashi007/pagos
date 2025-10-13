@@ -345,3 +345,94 @@ class track_operation:
             )
         else:
             logging.info(f"Operación completada: {self.operation_name}", extra=self.context)
+
+
+# ============================================
+# ENDPOINT DE VERIFICACIÓN DE MONITOREO
+# ============================================
+
+def get_monitoring_status() -> dict:
+    """
+    Obtener estado actual del sistema de monitoreo
+    """
+    return {
+        "titulo": "🔍 ESTADO DEL SISTEMA DE MONITOREO",
+        "fecha_verificacion": datetime.now().isoformat(),
+        
+        "servicios_monitoreo": {
+            "sentry": {
+                "habilitado": bool(getattr(settings, 'SENTRY_DSN', None)),
+                "dsn_configurado": bool(getattr(settings, 'SENTRY_DSN', None)),
+                "environment": getattr(settings, 'ENVIRONMENT', 'production'),
+                "traces_sample_rate": getattr(settings, 'SENTRY_TRACES_SAMPLE_RATE', 0.1),
+                "descripcion": "Tracking de errores y performance"
+            },
+            "prometheus": {
+                "habilitado": getattr(settings, 'PROMETHEUS_ENABLED', False),
+                "endpoint": "/metrics",
+                "descripcion": "Métricas de aplicación y negocio"
+            },
+            "logging_estructurado": {
+                "habilitado": True,
+                "formato": "JSON",
+                "nivel": getattr(settings, 'LOG_LEVEL', 'INFO'),
+                "descripcion": "Logs estructurados para análisis"
+            }
+        },
+        
+        "metricas_negocio_disponibles": {
+            "financieras": [
+                "clientes_creados",
+                "pagos_procesados", 
+                "prestamos_aprobados",
+                "mora_acumulada",
+                "conciliacion_exitosa"
+            ],
+            "operacionales": [
+                "approval_workflow_solicitud",
+                "approval_workflow_aprobacion",
+                "bulk_migration_total",
+                "financial_operation_pago"
+            ],
+            "rendimiento": [
+                "http_requests_total",
+                "http_request_duration_seconds",
+                "database_connections"
+            ]
+        },
+        
+        "integracion_actual": {
+            "main_py": "❌ No integrado",
+            "endpoints": "❌ No utilizado",
+            "recomendacion": "Integrar en main.py para habilitar monitoreo completo"
+        },
+        
+        "beneficios_implementacion": [
+            "🔍 Tracking automático de errores con Sentry",
+            "📊 Métricas de performance con Prometheus",
+            "📋 Logs estructurados para análisis",
+            "⚡ Alertas automáticas de problemas",
+            "📈 Métricas de negocio específicas",
+            "🔧 Debugging mejorado en producción"
+        ],
+        
+        "pasos_integracion": [
+            "1. Agregar variables de entorno (SENTRY_DSN, etc.)",
+            "2. Importar setup_monitoring en main.py",
+            "3. Llamar setup_monitoring(app) al inicio",
+            "4. Usar track_operation en endpoints críticos",
+            "5. Configurar alertas en Sentry/Prometheus"
+        ],
+        
+        "utilidad_para_financiamiento": {
+            "alta": "✅ Muy útil para sistema empresarial",
+            "razones": [
+                "Tracking de operaciones financieras críticas",
+                "Monitoreo de flujos de aprobación",
+                "Alertas de errores en pagos/conciliación",
+                "Métricas de rendimiento de asesores",
+                "Análisis de patrones de mora",
+                "Debugging de migraciones masivas"
+            ]
+        }
+    }
