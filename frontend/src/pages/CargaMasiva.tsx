@@ -18,6 +18,9 @@ export function CargaMasiva() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedType, setSelectedType] = useState<'clientes' | 'pagos'>('clientes')
+  const [uploadStep, setUploadStep] = useState<'clientes' | 'pagos' | 'complete'>('clientes')
+  const [clientesLoaded, setClientesLoaded] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,7 +76,7 @@ export function CargaMasiva() {
       // Crear FormData para enviar el archivo
       const formData = new FormData()
       formData.append('file', selectedFile)
-      formData.append('type', 'clientes') // Tipo de datos a importar
+      formData.append('type', selectedType) // Tipo de datos a importar
 
       // Simular llamada a la API (por ahora)
       await new Promise(resolve => setTimeout(resolve, 2000))
@@ -82,16 +85,29 @@ export function CargaMasiva() {
       setUploadProgress(100)
 
       // Simular resultado exitoso
-      setUploadResult({
+      const result = {
         success: true,
-        message: 'Archivo cargado exitosamente',
+        message: `${selectedType === 'clientes' ? 'Clientes' : 'Pagos'} cargados exitosamente`,
         data: {
-          totalRecords: 150,
-          processedRecords: 148,
-          errors: 2,
-          fileName: selectedFile.name
+          totalRecords: selectedType === 'clientes' ? 150 : 300,
+          processedRecords: selectedType === 'clientes' ? 148 : 295,
+          errors: selectedType === 'clientes' ? 2 : 5,
+          fileName: selectedFile.name,
+          type: selectedType
         }
-      })
+      }
+
+      setUploadResult(result)
+
+      // Si se cargaron clientes exitosamente, avanzar al siguiente paso
+      if (selectedType === 'clientes' && result.success) {
+        setClientesLoaded(true)
+        setUploadStep('pagos')
+        setSelectedType('pagos')
+        setSelectedFile(null)
+      } else if (selectedType === 'pagos' && result.success) {
+        setUploadStep('complete')
+      }
 
     } catch (error: any) {
       setUploadResult({
@@ -106,18 +122,30 @@ export function CargaMasiva() {
   }
 
   const downloadTemplate = () => {
-    // Crear un template Excel básico
-    const templateData = [
-      ['cedula', 'nombre', 'apellido', 'telefono', 'email', 'direccion', 'monto_prestamo', 'fecha_prestamo', 'estado'],
-      ['12345678', 'Juan', 'Pérez', '3001234567', 'juan@email.com', 'Calle 123 #45-67', '500000', '2024-01-15', 'ACTIVO'],
-      ['87654321', 'María', 'García', '3007654321', 'maria@email.com', 'Carrera 78 #12-34', '750000', '2024-01-20', 'ACTIVO']
-    ]
+    let templateData: string[][]
+    let filename: string
+
+    if (selectedType === 'clientes') {
+      templateData = [
+        ['cedula', 'nombre', 'telefono', 'email'],
+        ['V31566283', 'AARON ALEJANDRO CRESPO ALVAREZ', '+5804127166660', 'aaroncrespo@gmail.com'],
+        ['V14929151', 'AARON DANIEL PALENCIA GUZMAN', '+5804247505679', 'AARONWA7@GMAIL.COM']
+      ]
+      filename = 'template_clientes_rapicredit.csv'
+    } else {
+      templateData = [
+        ['cedula', 'fecha', 'monto_pagado', 'fecha_pago_cuota', 'documento_pago'],
+        ['V22283249', '06/12/2024', '108', '05/12/2024', '740087437485285'],
+        ['V31566283', '07/12/2024', '250', '06/12/2024', '740087437485286']
+      ]
+      filename = 'template_pagos_rapicredit.csv'
+    }
 
     const csvContent = templateData.map(row => row.join(',')).join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
-    link.download = 'template_clientes_rapicredit.csv'
+    link.download = filename
     link.click()
   }
 
@@ -129,19 +157,40 @@ export function CargaMasiva() {
         className="flex items-center justify-between"
       >
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Carga Masiva de Datos</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Migración desde Excel</h1>
           <p className="text-gray-600 mt-2">
-            Importa datos desde archivos Excel para poblar la base de datos
+            Importa tus datos de clientes y pagos desde Excel al sistema RAPICREDIT
           </p>
+          <div className="mt-4 flex space-x-4">
+            <div className={`px-4 py-2 rounded-lg ${uploadStep === 'clientes' ? 'bg-blue-100 text-blue-800' : clientesLoaded ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+              <span className="font-medium">Paso 1:</span> Cargar Clientes
+            </div>
+            <div className={`px-4 py-2 rounded-lg ${uploadStep === 'pagos' ? 'bg-blue-100 text-blue-800' : uploadStep === 'complete' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+              <span className="font-medium">Paso 2:</span> Cargar Pagos
+            </div>
+            <div className={`px-4 py-2 rounded-lg ${uploadStep === 'complete' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+              <span className="font-medium">Paso 3:</span> Articulación Completa
+            </div>
+          </div>
         </div>
-        <Button
-          onClick={downloadTemplate}
-          variant="outline"
-          className="flex items-center space-x-2"
-        >
-          <Download className="h-4 w-4" />
-          <span>Descargar Template</span>
-        </Button>
+        <div className="flex space-x-2">
+          <select
+            className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value as 'clientes' | 'pagos')}
+          >
+            <option value="clientes">Template Clientes</option>
+            <option value="pagos">Template Pagos</option>
+          </select>
+          <Button
+            onClick={downloadTemplate}
+            variant="outline"
+            className="flex items-center space-x-2"
+          >
+            <Download className="h-4 w-4" />
+            <span>Descargar Template</span>
+          </Button>
+        </div>
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -155,14 +204,23 @@ export function CargaMasiva() {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <Upload className="h-5 w-5" />
-                <span>Cargar Archivo Excel</span>
+                <span>
+                  {uploadStep === 'clientes' ? 'Cargar Archivo de Clientes' : 
+                   uploadStep === 'pagos' ? 'Cargar Archivo de Pagos' : 
+                   'Migración Completa'}
+                </span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
                 <FileSpreadsheet className="h-12 w-12 mx-auto text-gray-400 mb-4" />
                 <p className="text-gray-600 mb-2">
-                  Arrastra tu archivo Excel aquí o haz clic para seleccionar
+                  {uploadStep === 'clientes' ? 
+                    'Arrastra tu archivo de CLIENTES aquí (con columnas: cedula, nombre, telefono, email)' :
+                    uploadStep === 'pagos' ?
+                    'Arrastra tu archivo de PAGOS aquí (con columnas: cedula, fecha, monto_pagado, documento_pago)' :
+                    'Migración completada exitosamente'
+                  }
                 </p>
                 <input
                   ref={fileInputRef}
@@ -174,9 +232,9 @@ export function CargaMasiva() {
                 <Button
                   onClick={() => fileInputRef.current?.click()}
                   variant="outline"
-                  disabled={isUploading}
+                  disabled={isUploading || uploadStep === 'complete'}
                 >
-                  Seleccionar Archivo
+                  {uploadStep === 'complete' ? 'Migración Completa' : 'Seleccionar Archivo'}
                 </Button>
               </div>
 
@@ -215,11 +273,13 @@ export function CargaMasiva() {
 
               <Button
                 onClick={handleUpload}
-                disabled={!selectedFile || isUploading}
+                disabled={!selectedFile || isUploading || uploadStep === 'complete'}
                 className="w-full"
                 size="lg"
               >
-                {isUploading ? 'Procesando...' : 'Cargar Datos'}
+                {isUploading ? 'Procesando...' : 
+                 uploadStep === 'complete' ? 'Migración Completa' :
+                 `Cargar ${selectedType === 'clientes' ? 'Clientes' : 'Pagos'}`}
               </Button>
             </CardContent>
           </Card>

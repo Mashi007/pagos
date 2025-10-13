@@ -75,14 +75,26 @@ async def procesar_clientes(content: bytes, filename: str, db: Session):
         else:
             df = pd.read_excel(io.BytesIO(content))
 
+        # Mapear columnas del archivo venezolano a nuestro esquema
+        column_mapping = {
+            'CEDULA IDENT': 'cedula',
+            'CEDULA IDENTIDAD': 'cedula', 
+            'NOMBRE': 'nombre',
+            'MOVIL': 'telefono',
+            'CORREO ELECTRONICO': 'email'
+        }
+        
+        # Renombrar columnas según el mapeo
+        df = df.rename(columns=column_mapping)
+        
         # Validar columnas requeridas
-        required_columns = ['cedula', 'nombre', 'apellido', 'telefono']
+        required_columns = ['cedula', 'nombre']
         missing_columns = [col for col in required_columns if col not in df.columns]
         
         if missing_columns:
             raise HTTPException(
                 status_code=400,
-                detail=f"Faltan columnas requeridas: {', '.join(missing_columns)}"
+                detail=f"Faltan columnas requeridas: {', '.join(missing_columns)}. Columnas disponibles: {list(df.columns)}"
             )
 
         # Procesar datos
@@ -92,16 +104,27 @@ async def procesar_clientes(content: bytes, filename: str, db: Session):
         
         for index, row in df.iterrows():
             try:
+                # Limpiar datos
+                cedula = str(row['cedula']).strip()
+                nombre = str(row['nombre']).strip()
+                telefono = str(row.get('telefono', '')).strip()
+                email = str(row.get('email', '')).strip()
+                
+                # Saltar filas con datos de error
+                if telefono == 'error' or email == 'error':
+                    errors.append(f"Fila {index + 2}: Datos marcados como 'error' - omitida")
+                    continue
+                
                 # Crear cliente
                 cliente_data = ClienteCreate(
-                    cedula=str(row['cedula']),
-                    nombre=str(row['nombre']),
-                    apellido=str(row['apellido']),
-                    telefono=str(row['telefono']),
-                    email=str(row.get('email', '')),
-                    direccion=str(row.get('direccion', '')),
-                    monto_prestamo=float(row.get('monto_prestamo', 0)),
-                    estado=str(row.get('estado', 'ACTIVO'))
+                    cedula=cedula,
+                    nombre=nombre,
+                    apellido="",  # No disponible en el archivo
+                    telefono=telefono if telefono != 'error' else "",
+                    email=email if email != 'error' else "",
+                    direccion="",  # No disponible en el archivo
+                    monto_prestamo=0,  # Se asignará después
+                    estado="ACTIVO"
                 )
 
                 # Verificar si ya existe
@@ -146,6 +169,105 @@ async def procesar_clientes(content: bytes, filename: str, db: Session):
         raise HTTPException(
             status_code=500,
             detail=f"Error al procesar clientes: {str(e)}"
+        )
+
+async def procesar_pagos(content: bytes, filename: str, db: Session):
+    """
+    Procesar archivo de pagos con formato venezolano
+    """
+    try:
+        # Leer Excel/CSV
+        if filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(content))
+        else:
+            df = pd.read_excel(io.BytesIO(content))
+
+        # Mapear columnas del archivo venezolano a nuestro esquema
+        column_mapping = {
+            'CEDULA IDENTIDAD': 'cedula',
+            'Fecha': 'fecha',
+            'VIONTO PAGADCCHA': 'monto_pagado',  # Columna con nombre extraño
+            'MONTO PAGADO': 'monto_pagado',
+            'PAGO CUOT': 'fecha_pago_cuota',
+            'DOCUMENTO PAGO': 'documento_pago'
+        }
+        
+        # Renombrar columnas según el mapeo
+        df = df.rename(columns=column_mapping)
+        
+        # Validar columnas requeridas
+        required_columns = ['cedula', 'monto_pagado']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        
+        if missing_columns:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Faltan columnas requeridas: {', '.join(missing_columns)}. Columnas disponibles: {list(df.columns)}"
+            )
+
+        # Procesar datos
+        total_records = len(df)
+        processed_records = 0
+        errors = []
+        
+        for index, row in df.iterrows():
+            try:
+                # Limpiar datos
+                cedula = str(row['cedula']).strip()
+                monto_pagado = float(row['monto_pagado'])
+                fecha = str(row.get('fecha', ''))
+                documento_pago = str(row.get('documento_pago', ''))
+                
+                # Buscar cliente por cédula
+                cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
+                
+                if not cliente:
+                    errors.append(f"Fila {index + 2}: Cliente con cédula {cedula} no encontrado")
+                    continue
+                
+                # Crear pago
+                pago_data = {
+                    "cliente_id": cliente.id,
+                    "monto": monto_pagado,
+                    "fecha_pago": fecha if fecha else None,
+                    "metodo_pago": "TRANSFERENCIA",
+                    "estado": "CONFIRMADO",
+                    "referencia": documento_pago,
+                    "observaciones": f"Importado desde Excel - {filename}"
+                }
+                
+                # Crear registro de pago (usando el modelo Pago si existe)
+                # Por ahora, actualizamos el monto del préstamo del cliente
+                if cliente.monto_prestamo:
+                    cliente.monto_prestamo -= monto_pagado
+                    if cliente.monto_prestamo <= 0:
+                        cliente.estado = "PAGADO"
+                else:
+                    cliente.monto_prestamo = -monto_pagado  # Saldo a favor
+                
+                db.commit()
+                processed_records += 1
+                
+            except Exception as e:
+                errors.append(f"Fila {index + 2}: {str(e)}")
+        
+        return {
+            "success": True,
+            "message": f"Procesados {processed_records} de {total_records} registros de pagos",
+            "data": {
+                "totalRecords": total_records,
+                "processedRecords": processed_records,
+                "errors": len(errors),
+                "fileName": filename,
+                "type": "pagos",
+                "details": errors[:10]  # Solo los primeros 10 errores
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al procesar pagos: {str(e)}"
         )
 
 async def procesar_prestamos(content: bytes, filename: str, db: Session):
