@@ -43,11 +43,7 @@ class User(Base):
         back_populates="revisor"
     )
     
-    # CORRECCIÓN AÑADIDA: Relación inversa necesaria para el modelo Prestamo.
-    prestamos_solicitados = relationship(
-        "Prestamo", 
-        back_populates="cliente"
-    )
+    # Relación removida: Los préstamos pertenecen a Cliente, no a User
     
     auditorias = relationship("Auditoria", back_populates="usuario")
     notificaciones = relationship("Notificacion", back_populates="user")

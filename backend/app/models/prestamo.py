@@ -38,8 +38,8 @@ class Prestamo(Base):
     __tablename__ = "prestamos"
     
     id = Column(Integer, primary_key=True, index=True)
-    # CORREGIDO: Usamos "users.id" para ser consistente con los modelos User y Aprobacion
-    cliente_id = Column(Integer, ForeignKey("users.id"), nullable=False) 
+    # CORREGIDO: Usamos "clientes.id" para referenciar correctamente al modelo Cliente
+    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False) 
     codigo_prestamo = Column(String(20), unique=True, index=True)
     
     # Montos
@@ -81,7 +81,7 @@ class Prestamo(Base):
     actualizado_en = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
     
     # Relaciones
-    # CORREGIDO: Se asume que 'Cliente' es la entidad 'User'
-    cliente = relationship("User", back_populates="prestamos_solicitados") 
+    # CORREGIDO: Relación correcta con el modelo Cliente
+    cliente = relationship("Cliente", back_populates="prestamos") 
     cuotas = relationship("Cuota", back_populates="prestamo", cascade="all, delete-orphan")
     pagos = relationship("Pago", back_populates="prestamo")
