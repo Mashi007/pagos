@@ -99,12 +99,22 @@ export function Dashboard() {
         animate={{ opacity: 1, y: 0 }}
         className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-6 text-white"
       >
-        <h1 className="text-2xl font-bold mb-2">
-          ¡Bienvenido, {userName}!
-        </h1>
-        <p className="text-blue-100">
-          Dashboard {userRole} - Sistema de Préstamos y Cobranza
-        </p>
+        <div className="flex items-center space-x-4 mb-4">
+          <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-white font-bold text-sm leading-none">RAPI</div>
+              <div className="text-yellow-300 font-bold text-xs leading-none">CREDIT</div>
+            </div>
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold mb-1">
+              ¡Bienvenido a RAPICREDIT, {userName}!
+            </h1>
+            <p className="text-blue-100">
+              Dashboard {userRole} - Soluciones financieras rápidas y confiables
+            </p>
+          </div>
+        </div>
         <div className="mt-4 flex items-center space-x-4 text-sm">
           <div className="flex items-center space-x-1">
             <div className="w-2 h-2 bg-green-400 rounded-full"></div>

@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: sistema-prestamos-frontend
+    name: rapicredit-frontend
     env: node
     buildCommand: npm install && npm run build
     startCommand: npm run preview
@@ -10,7 +10,7 @@ services:
       - key: VITE_NODE_ENV
         value: production
       - key: VITE_APP_NAME
-        value: "Sistema de Préstamos y Cobranza"
+        value: "RAPICREDIT - Sistema de Préstamos y Cobranza"
       - key: VITE_APP_VERSION
         value: "1.0.0"
     staticPublishPath: ./dist

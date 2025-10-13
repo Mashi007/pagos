@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 
-console.log('🚀 Configurando Sistema de Préstamos y Cobranza...\n');
+console.log('🚀 Configurando RAPICREDIT - Sistema de Préstamos y Cobranza...\n');
 
 // Crear archivo .env si no existe
 const envPath = path.join(__dirname, '.env');
@@ -14,7 +14,7 @@ VITE_API_URL=https://pagos-f2qf.onrender.com
 VITE_NODE_ENV=development
 
 # App Configuration
-VITE_APP_NAME="Sistema de Préstamos y Cobranza"
+VITE_APP_NAME="RAPICREDIT - Sistema de Préstamos y Cobranza"
 VITE_APP_VERSION="1.0.0"
 
 # Features flags

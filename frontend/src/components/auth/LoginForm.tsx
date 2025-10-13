@@ -87,17 +87,30 @@ export function LoginForm() {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-              className="mx-auto w-16 h-16 bg-primary rounded-full flex items-center justify-center"
+              className="mx-auto"
             >
-              <LogIn className="w-8 h-8 text-primary-foreground" />
+              {/* Logo de Rapicredit */}
+              <div className="w-24 h-24 mx-auto mb-4 bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-2xl">
+                <div className="text-center">
+                  <div className="text-white font-bold text-lg leading-tight">
+                    RAPI
+                  </div>
+                  <div className="text-yellow-300 font-bold text-sm leading-tight">
+                    CREDIT
+                  </div>
+                </div>
+              </div>
             </motion.div>
             
             <div>
-              <CardTitle className="text-2xl font-bold text-gradient">
-                Sistema de Préstamos
+              <CardTitle className="text-3xl font-bold text-gradient text-center">
+                RAPICREDIT
               </CardTitle>
-              <CardDescription className="text-base mt-2">
-                Ingrese sus credenciales para acceder al sistema
+              <CardDescription className="text-lg mt-2 text-center font-medium">
+                Sistema de Préstamos y Cobranza
+              </CardDescription>
+              <CardDescription className="text-sm mt-1 text-center text-gray-500">
+                Ingrese sus credenciales para acceder
               </CardDescription>
             </div>
           </CardHeader>
@@ -189,8 +202,9 @@ export function LoginForm() {
             </form>
 
             <div className="text-center text-sm text-muted-foreground">
-              <p>Sistema de Préstamos y Cobranza v1.0</p>
+              <p className="font-semibold text-blue-600">RAPICREDIT v1.0</p>
               <p className="mt-1">© 2024 - Todos los derechos reservados</p>
+              <p className="text-xs mt-1 text-gray-400">Soluciones financieras rápidas y confiables</p>
             </div>
           </CardContent>
         </Card>

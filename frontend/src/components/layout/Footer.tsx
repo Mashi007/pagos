@@ -9,9 +9,11 @@ export function Footer() {
       <div className="flex flex-col md:flex-row justify-between items-center space-y-2 md:space-y-0">
         {/* Left side - Copyright */}
         <div className="flex items-center space-x-2 text-sm text-gray-600">
-          <Shield className="h-4 w-4 text-primary" />
+          <div className="w-5 h-5 bg-gradient-to-br from-blue-600 to-purple-700 rounded flex items-center justify-center">
+            <span className="text-white font-bold text-xs">RC</span>
+          </div>
           <span>
-            © {currentYear} Sistema de Préstamos y Cobranza. Todos los derechos reservados.
+            © {currentYear} <strong>RAPICREDIT</strong> - Sistema de Préstamos y Cobranza. Todos los derechos reservados.
           </span>
         </div>
 
@@ -22,7 +24,7 @@ export function Footer() {
           <div className="flex items-center space-x-1">
             <span>Hecho con</span>
             <Heart className="h-3 w-3 text-red-500 fill-current" />
-            <span>para empresas financieras</span>
+            <span>para RAPICREDIT</span>
           </div>
         </div>
       </div>
@@ -32,7 +34,7 @@ export function Footer() {
         <div className="flex items-center justify-center space-x-1 text-xs text-gray-500">
           <span>Hecho con</span>
           <Heart className="h-3 w-3 text-red-500 fill-current" />
-          <span>para empresas financieras</span>
+          <span>para RAPICREDIT</span>
         </div>
       </div>
     </footer>

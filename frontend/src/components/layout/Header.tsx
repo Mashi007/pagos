@@ -78,9 +78,14 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
           </Button>
 
           <div className="hidden lg:block">
-            <h1 className="text-xl font-semibold text-gray-900">
-              Sistema de Préstamos
-            </h1>
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-700 rounded-lg flex items-center justify-center">
+                <div className="text-white font-bold text-xs">RC</div>
+              </div>
+              <h1 className="text-xl font-semibold text-gray-900">
+                RAPICREDIT
+              </h1>
+            </div>
           </div>
 
           {/* Search bar */}

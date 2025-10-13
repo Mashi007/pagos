@@ -216,13 +216,15 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Shield className="w-5 h-5 text-primary-foreground" />
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg">
+                <div className="text-center">
+                  <div className="text-white font-bold text-xs leading-none">RC</div>
+                </div>
               </div>
               <div>
-                <h2 className="font-semibold text-gray-900">SPC</h2>
-                <p className="text-xs text-gray-500">v1.0</p>
+                <h2 className="font-bold text-gray-900 text-sm">RAPICREDIT</h2>
+                <p className="text-xs text-gray-500">Sistema v1.0</p>
               </div>
             </div>
             <Button
