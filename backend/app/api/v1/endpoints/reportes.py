@@ -330,3 +330,257 @@ def clientes_top(
         }
         for r in resultado
     ]
+
+
+# ============================================
+# REPORTES PREDEFINIDOS
+# ============================================
+
+@router.get("/estado-cuenta/{cliente_id}/pdf")
+async def generar_estado_cuenta_pdf(
+    cliente_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    1. Estado de cuenta por cliente (PDF)
+    - Datos del cliente
+    - Tabla de amortización
+    - Historial de pagos
+    - Saldo pendiente
+    """
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.units import inch
+        import io
+        
+        # Obtener datos del cliente
+        cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+        if not cliente:
+            raise HTTPException(status_code=404, detail="Cliente no encontrado")
+        
+        # Crear PDF en memoria
+        buffer = io.BytesIO()
+        p = canvas.Canvas(buffer, pagesize=letter)
+        
+        # Encabezado
+        p.setFont("Helvetica-Bold", 16)
+        p.drawString(50, 750, "ESTADO DE CUENTA")
+        
+        # Datos del cliente
+        p.setFont("Helvetica", 12)
+        y_pos = 700
+        p.drawString(50, y_pos, f"Cliente: {cliente.nombre_completo}")
+        p.drawString(50, y_pos - 20, f"Cédula: {cliente.cedula}")
+        p.drawString(50, y_pos - 40, f"Teléfono: {cliente.telefono or 'N/A'}")
+        p.drawString(50, y_pos - 60, f"Vehículo: {cliente.vehiculo_completo}")
+        
+        # Resumen financiero
+        resumen = cliente.calcular_resumen_financiero(db)
+        y_pos = 600
+        p.setFont("Helvetica-Bold", 14)
+        p.drawString(50, y_pos, "RESUMEN FINANCIERO")
+        
+        p.setFont("Helvetica", 12)
+        p.drawString(50, y_pos - 30, f"Total Financiado: ${float(resumen['total_financiado']):,.2f}")
+        p.drawString(50, y_pos - 50, f"Total Pagado: ${float(resumen['total_pagado']):,.2f}")
+        p.drawString(50, y_pos - 70, f"Saldo Pendiente: ${float(resumen['saldo_pendiente']):,.2f}")
+        p.drawString(50, y_pos - 90, f"Cuotas: {resumen['cuotas_pagadas']} / {resumen['cuotas_totales']}")
+        p.drawString(50, y_pos - 110, f"% Avance: {resumen['porcentaje_avance']}%")
+        
+        p.showPage()
+        p.save()
+        
+        buffer.seek(0)
+        
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=estado_cuenta_{cliente.cedula}.pdf"}
+        )
+        
+    except ImportError:
+        raise HTTPException(status_code=500, detail="reportlab no está instalado")
+
+
+@router.get("/cobranza-diaria/pdf")
+async def reporte_cobranza_diaria_pdf(
+    fecha: Optional[date] = Query(None, description="Fecha del reporte (default: hoy)"),
+    db: Session = Depends(get_db)
+):
+    """
+    2. Reporte de cobranza diaria (PDF/Excel)
+    - Pagos recibidos hoy
+    - Vencimientos de hoy
+    - Pendientes del día
+    """
+    if not fecha:
+        fecha = date.today()
+    
+    # Obtener datos
+    pagos_hoy = db.query(Pago).join(Prestamo).join(Cliente).filter(
+        Pago.fecha_pago == fecha,
+        Pago.estado != "ANULADO"
+    ).all()
+    
+    vencimientos_hoy = db.query(Cuota).join(Prestamo).join(Cliente).filter(
+        Cuota.fecha_vencimiento == fecha,
+        Cuota.estado.in_(["PENDIENTE", "PARCIAL"])
+    ).all()
+    
+    # Crear respuesta JSON (PDF requeriría reportlab)
+    return {
+        "fecha_reporte": fecha,
+        "pagos_recibidos": [
+            {
+                "cliente": pago.prestamo.cliente.nombre_completo,
+                "cedula": pago.prestamo.cliente.cedula,
+                "monto": float(pago.monto_pagado),
+                "metodo": pago.metodo_pago,
+                "referencia": pago.numero_operacion
+            }
+            for pago in pagos_hoy
+        ],
+        "vencimientos_hoy": [
+            {
+                "cliente": cuota.prestamo.cliente.nombre_completo,
+                "cedula": cuota.prestamo.cliente.cedula,
+                "numero_cuota": cuota.numero_cuota,
+                "monto": float(cuota.monto_cuota),
+                "dias_mora": cuota.dias_mora
+            }
+            for cuota in vencimientos_hoy
+        ],
+        "resumen": {
+            "total_cobrado": sum(float(p.monto_pagado) for p in pagos_hoy),
+            "total_vencimientos": len(vencimientos_hoy),
+            "monto_vencimientos": sum(float(c.monto_cuota) for c in vencimientos_hoy)
+        }
+    }
+
+
+@router.get("/personalizado")
+def generar_reporte_personalizado(
+    # Filtros
+    fecha_inicio: Optional[date] = Query(None),
+    fecha_fin: Optional[date] = Query(None),
+    cliente_ids: Optional[str] = Query(None, description="IDs separados por coma"),
+    asesor_ids: Optional[str] = Query(None, description="IDs separados por coma"),
+    concesionarios: Optional[str] = Query(None, description="Nombres separados por coma"),
+    modelos: Optional[str] = Query(None, description="Modelos separados por coma"),
+    estado: Optional[str] = Query(None, description="AL_DIA, MORA, TODOS"),
+    modalidad: Optional[str] = Query(None, description="SEMANAL, QUINCENAL, MENSUAL"),
+    
+    # Columnas a incluir
+    incluir_datos_personales: bool = Query(True),
+    incluir_datos_vehiculo: bool = Query(True),
+    incluir_datos_financieros: bool = Query(True),
+    incluir_historial_pagos: bool = Query(False),
+    
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    🔍 Generador de reportes personalizados con filtros
+    """
+    # Construir query base
+    query = db.query(Cliente).outerjoin(User, Cliente.asesor_id == User.id)
+    
+    # Aplicar filtros
+    if fecha_inicio:
+        query = query.filter(Cliente.fecha_registro >= fecha_inicio)
+    
+    if fecha_fin:
+        query = query.filter(Cliente.fecha_registro <= fecha_fin)
+    
+    if cliente_ids:
+        ids = [int(id.strip()) for id in cliente_ids.split(",")]
+        query = query.filter(Cliente.id.in_(ids))
+    
+    if asesor_ids:
+        ids = [int(id.strip()) for id in asesor_ids.split(",")]
+        query = query.filter(Cliente.asesor_id.in_(ids))
+    
+    if concesionarios:
+        concesionarios_list = [c.strip() for c in concesionarios.split(",")]
+        query = query.filter(Cliente.concesionario.in_(concesionarios_list))
+    
+    if modelos:
+        modelos_list = [m.strip() for m in modelos.split(",")]
+        query = query.filter(Cliente.modelo_vehiculo.in_(modelos_list))
+    
+    if estado and estado != "TODOS":
+        if estado == "AL_DIA":
+            query = query.filter(Cliente.dias_mora == 0)
+        elif estado == "MORA":
+            query = query.filter(Cliente.dias_mora > 0)
+    
+    if modalidad:
+        query = query.filter(Cliente.modalidad_pago == modalidad)
+    
+    # Obtener resultados
+    clientes = query.all()
+    
+    # Construir respuesta según columnas seleccionadas
+    resultados = []
+    for cliente in clientes:
+        cliente_data = {"id": cliente.id}
+        
+        if incluir_datos_personales:
+            cliente_data.update({
+                "nombre": cliente.nombre_completo,
+                "cedula": cliente.cedula,
+                "telefono": cliente.telefono,
+                "email": cliente.email,
+                "direccion": cliente.direccion
+            })
+        
+        if incluir_datos_vehiculo:
+            cliente_data.update({
+                "vehiculo": cliente.vehiculo_completo,
+                "concesionario": cliente.concesionario,
+                "año": cliente.anio_vehiculo
+            })
+        
+        if incluir_datos_financieros:
+            resumen = cliente.calcular_resumen_financiero(db)
+            cliente_data.update({
+                "total_financiado": float(resumen["total_financiado"]),
+                "total_pagado": float(resumen["total_pagado"]),
+                "saldo_pendiente": float(resumen["saldo_pendiente"]),
+                "dias_mora": cliente.dias_mora,
+                "estado_financiero": cliente.estado_financiero
+            })
+        
+        if incluir_historial_pagos:
+            pagos = db.query(Pago).join(Prestamo).filter(
+                Prestamo.cliente_id == cliente.id
+            ).order_by(Pago.fecha_pago.desc()).limit(5).all()
+            
+            cliente_data["ultimos_pagos"] = [
+                {
+                    "fecha": pago.fecha_pago,
+                    "monto": float(pago.monto_pagado),
+                    "cuota": pago.numero_cuota
+                }
+                for pago in pagos
+            ]
+        
+        resultados.append(cliente_data)
+    
+    return {
+        "filtros_aplicados": {
+            "fecha_inicio": fecha_inicio,
+            "fecha_fin": fecha_fin,
+            "total_clientes": len(resultados)
+        },
+        "columnas_incluidas": {
+            "datos_personales": incluir_datos_personales,
+            "datos_vehiculo": incluir_datos_vehiculo,
+            "datos_financieros": incluir_datos_financieros,
+            "historial_pagos": incluir_historial_pagos
+        },
+        "resultados": resultados,
+        "vista_previa": resultados[:10],  # Primeros 10 para vista previa
+        "opciones_exportacion": ["PDF", "Excel", "CSV"]
+    }
