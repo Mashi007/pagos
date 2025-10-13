@@ -431,7 +431,7 @@ def dashboard_comercial(
         User.full_name,
         func.count(Cliente.id).label('ventas'),
         func.sum(Cliente.total_financiamiento).label('monto')
-    ).outerjoin(Cliente, and_(
+    ).select_from(User).outerjoin(Cliente, and_(
         User.id == Cliente.asesor_id,
         Cliente.fecha_registro >= inicio_mes
     )).filter(
