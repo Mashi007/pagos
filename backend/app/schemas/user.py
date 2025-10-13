@@ -66,9 +66,20 @@ class UserListResponse(BaseModel):
     page_size: int
 
 
-class UserMeResponse(UserResponse):
+class UserMeResponse(BaseModel):
     """Schema para el usuario actual (puede incluir info adicional)."""
-    pass
+    id: int
+    email: EmailStr
+    nombre: str
+    apellido: str
+    rol: str
+    is_active: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    last_login: Optional[datetime] = None
+    permissions: list[str] = []
+    
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================
