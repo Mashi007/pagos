@@ -338,7 +338,7 @@ def debug_no_model(db: Session = Depends(get_db), current_user: User = Depends(g
         }
 
 
-@router.post("/crear-clientes-prueba")
+@router.get("/crear-clientes-prueba")
 def crear_clientes_prueba(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Crear clientes de prueba para demostrar la funcionalidad"""
     try:
