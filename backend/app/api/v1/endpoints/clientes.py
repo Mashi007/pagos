@@ -216,7 +216,21 @@ def test_with_auth(db: Session = Depends(get_db), current_user: User = Depends(g
         }
 
 
-# Endpoint temporal eliminado - usar endpoint principal
+@router.get("/test-simple")
+def test_simple(db: Session = Depends(get_db)):
+    """Endpoint de prueba muy simple"""
+    try:
+        count = db.query(Cliente).count()
+        return {
+            "mensaje": "Test simple exitoso",
+            "total_clientes": count,
+            "status": "ok"
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "status": "error"
+        }
 
 
 @router.get("/debug-no-model")
