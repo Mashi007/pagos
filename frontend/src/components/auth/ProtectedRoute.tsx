@@ -17,12 +17,16 @@ export function ProtectedRoute({
   const { isAuthenticated, user, isLoading, refreshUser } = useAuth()
   const location = useLocation()
 
+  // Verificar autenticación temporal
+  const isTemporaryAuth = localStorage.getItem('isAuthenticated') === 'true'
+  const tempUser = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!) : null
+
   useEffect(() => {
     // Si hay token pero no hay usuario, intentar refrescar
-    if (!user && localStorage.getItem('access_token')) {
+    if (!user && localStorage.getItem('access_token') && !isTemporaryAuth) {
       refreshUser()
     }
-  }, [user, refreshUser])
+  }, [user, refreshUser, isTemporaryAuth])
 
   // Mostrar loading mientras se verifica la autenticación
   if (isLoading) {
@@ -33,13 +37,14 @@ export function ProtectedRoute({
     )
   }
 
-  // Si no está autenticado, redirigir al login
-  if (!isAuthenticated || !user) {
+  // Si no está autenticado (ni temporal ni real), redirigir al login
+  if ((!isAuthenticated && !isTemporaryAuth) || (!user && !tempUser)) {
     return <Navigate to={fallbackPath} state={{ from: location }} replace />
   }
 
   // Si se requieren roles específicos, verificar permisos
-  if (requiredRoles.length > 0 && !requiredRoles.includes(user.rol)) {
+  const currentUser = user || tempUser
+  if (requiredRoles.length > 0 && currentUser && !requiredRoles.includes(currentUser.rol)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

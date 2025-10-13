@@ -3,13 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AlertWithIcon } from '@/components/ui/alert'
-import { useAuth } from '@/store/authStore'
 
 export function TemporaryLogin() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
-  const { setUser, setTokens } = useAuth()
 
   const handleTemporaryLogin = async (role: string) => {
     setIsLoading(true)
@@ -40,9 +38,8 @@ export function TemporaryLogin() {
       localStorage.setItem('refresh_token', tempTokens.refresh_token)
       localStorage.setItem('user', JSON.stringify(tempUser))
 
-      // Actualizar el store
-      setUser(tempUser)
-      setTokens(tempTokens)
+      // Simular autenticación exitosa
+      localStorage.setItem('isAuthenticated', 'true')
 
       // Redirigir al dashboard
       navigate('/dashboard')
