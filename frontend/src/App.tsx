@@ -55,10 +55,13 @@ function App() {
 
   useEffect(() => {
     // Verificar autenticación al cargar la app
-    if (localStorage.getItem('access_token') && !isAuthenticated) {
+    const hasToken = localStorage.getItem('access_token')
+    const hasUser = localStorage.getItem('user')
+    
+    if (hasToken && hasUser && !isAuthenticated) {
       refreshUser()
     }
-  }, [isAuthenticated, refreshUser])
+  }, []) // Solo ejecutar una vez al cargar la app
 
   return (
     <AnimatePresence mode="wait">

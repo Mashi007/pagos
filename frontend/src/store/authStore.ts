@@ -79,14 +79,20 @@ export const useAuthStore = create<AuthState>()(
 
       // Refrescar información del usuario
       refreshUser: async () => {
-        if (!authService.isAuthenticated()) {
-          set({ user: null, isAuthenticated: false })
+        // Primero verificar si hay tokens en localStorage
+        const storedUser = authService.getStoredUser()
+        const hasToken = authService.getStoredToken()
+        
+        if (!hasToken || !storedUser) {
+          set({ user: null, isAuthenticated: false, isLoading: false })
           return
         }
 
-        set({ isLoading: true })
+        // Si hay datos almacenados, restaurar inmediatamente
+        set({ user: storedUser, isAuthenticated: true, isLoading: true })
         
         try {
+          // Intentar obtener información actualizada del usuario
           const user = await authService.getCurrentUser()
           set({
             user,
@@ -95,10 +101,13 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           })
         } catch (error: any) {
-          // Si falla la renovación, cerrar sesión
-          await get().logout()
+          console.warn('Error al refrescar usuario, manteniendo datos almacenados:', error)
+          // Si falla la actualización pero tenemos datos almacenados, mantenerlos
           set({
-            error: 'Sesión expirada. Por favor, inicie sesión nuevamente.',
+            user: storedUser,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
           })
         }
       },
@@ -147,9 +156,19 @@ export const useAuthStore = create<AuthState>()(
       }),
       onRehydrateStorage: () => (state) => {
         // Verificar si el usuario sigue autenticado al cargar desde localStorage
-        if (state?.isAuthenticated && !authService.isAuthenticated()) {
-          state.user = null
-          state.isAuthenticated = false
+        if (state?.isAuthenticated) {
+          // Si hay datos en el store pero no hay tokens válidos, limpiar
+          if (!authService.isAuthenticated()) {
+            state.user = null
+            state.isAuthenticated = false
+          } else {
+            // Restaurar usuario desde localStorage si está disponible
+            const storedUser = authService.getStoredUser()
+            if (storedUser) {
+              state.user = storedUser
+              state.isAuthenticated = true
+            }
+          }
         }
       },
     }

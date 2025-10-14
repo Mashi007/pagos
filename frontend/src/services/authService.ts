@@ -26,12 +26,25 @@ class AuthService {
       
       console.log('Respuesta del servidor:', response)
       
-      // Guardar tokens en localStorage
+      // Guardar tokens según la opción "Recordarme"
       if (response.data) {
-        localStorage.setItem('access_token', response.data.access_token)
-        localStorage.setItem('refresh_token', response.data.refresh_token)
-        localStorage.setItem('user', JSON.stringify(response.user))
-        console.log('Tokens guardados en localStorage')
+        const rememberMe = credentials.remember || false
+        
+        if (rememberMe) {
+          // Guardar en localStorage (persistente)
+          localStorage.setItem('access_token', response.data.access_token)
+          localStorage.setItem('refresh_token', response.data.refresh_token)
+          localStorage.setItem('user', JSON.stringify(response.user))
+          localStorage.setItem('remember_me', 'true')
+          console.log('Tokens guardados en localStorage (recordarme)')
+        } else {
+          // Guardar en sessionStorage (solo para la sesión actual)
+          sessionStorage.setItem('access_token', response.data.access_token)
+          sessionStorage.setItem('refresh_token', response.data.refresh_token)
+          sessionStorage.setItem('user', JSON.stringify(response.user))
+          localStorage.setItem('remember_me', 'false')
+          console.log('Tokens guardados en sessionStorage (solo sesión)')
+        }
       }
       
       return response
@@ -103,12 +116,25 @@ class AuthService {
   isAuthenticated(): boolean {
     const token = localStorage.getItem('access_token')
     const user = localStorage.getItem('user')
+    const rememberMe = localStorage.getItem('remember_me') === 'true'
+    
+    // Si no está marcado "recordarme", solo verificar sessionStorage
+    if (!rememberMe) {
+      const sessionToken = sessionStorage.getItem('access_token')
+      const sessionUser = sessionStorage.getItem('user')
+      return !!(sessionToken && sessionUser)
+    }
+    
     return !!(token && user)
   }
 
-  // Obtener usuario desde localStorage
+  // Obtener usuario desde localStorage o sessionStorage
   getStoredUser(): User | null {
-    const userStr = localStorage.getItem('user')
+    const rememberMe = localStorage.getItem('remember_me') === 'true'
+    const userStr = rememberMe 
+      ? localStorage.getItem('user') 
+      : sessionStorage.getItem('user')
+    
     if (!userStr) return null
     
     try {
@@ -118,9 +144,12 @@ class AuthService {
     }
   }
 
-  // Obtener token desde localStorage
+  // Obtener token desde localStorage o sessionStorage
   getStoredToken(): string | null {
-    return localStorage.getItem('access_token')
+    const rememberMe = localStorage.getItem('remember_me') === 'true'
+    return rememberMe 
+      ? localStorage.getItem('access_token') 
+      : sessionStorage.getItem('access_token')
   }
 
   // Verificar si el usuario tiene un rol específico
