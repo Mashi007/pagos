@@ -64,7 +64,13 @@ const MODELOS_VEHICULOS = [
   'Volkswagen Polo'
 ]
 
-export function CrearClienteForm({ onClose }: { onClose: () => void }) {
+export function CrearClienteForm({ 
+  onClose, 
+  onClienteCreated 
+}: { 
+  onClose: () => void
+  onClienteCreated?: () => void 
+}) {
   const [formData, setFormData] = useState<FormData>({
     nombreCompleto: '',
     cedula: '',
@@ -258,12 +264,15 @@ export function CrearClienteForm({ onClose }: { onClose: () => void }) {
 
     setIsSubmitting(true)
     try {
-      // TODO: Implementar llamada al backend
+      // TODO: Implementar llamada al backend para crear cliente
       console.log('Guardando cliente:', formData)
       await new Promise(resolve => setTimeout(resolve, 2000)) // Simular API call
       
-      // Éxito - cerrar modal
+      // Éxito - cerrar modal y notificar que se creó un cliente
       onClose()
+      if (onClienteCreated) {
+        onClienteCreated()
+      }
     } catch (error) {
       console.error('Error al guardar cliente:', error)
     } finally {

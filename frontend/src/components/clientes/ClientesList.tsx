@@ -12,7 +12,9 @@ import {
   MoreHorizontal,
   Phone,
   Mail,
-  Car
+  Car,
+  User,
+  AlertCircle
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -274,15 +276,30 @@ export function ClientesList() {
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="sm">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          title="Ver detalles del cliente"
+                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        >
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="sm">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          title="Editar cliente"
+                          className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                        >
                           <Edit className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="sm">
-                          <MoreHorizontal className="w-4 h-4" />
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          title="Eliminar cliente"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -324,7 +341,13 @@ export function ClientesList() {
       {/* Modal Crear Cliente */}
       <AnimatePresence>
         {showCrearCliente && (
-          <CrearClienteForm onClose={() => setShowCrearCliente(false)} />
+          <CrearClienteForm 
+            onClose={() => setShowCrearCliente(false)}
+            onClienteCreated={() => {
+              // Refrescar la lista cuando se cree un nuevo cliente
+              window.location.reload()
+            }}
+          />
         )}
       </AnimatePresence>
     </div>

@@ -73,6 +73,30 @@ def upgrade():
         ('Carmen', 'López', 'carmen.lopez@rapicredit.com', '+58-424-5678901', 'Vehículos Usados', 4, true)
     """)
 
+    # Insertar datos iniciales de clientes de ejemplo
+    op.execute("""
+        INSERT INTO clientes (
+            nombre, cedula, telefono, email, direccion, saldo_pendiente, 
+            fecha_ultimo_pago, estado, modelo_vehiculo, total_financiamiento, 
+            cuota_inicial, numero_amortizaciones, modalidad_financiamiento, 
+            fecha_entrega, concesionario_id, asesor_id, notas, created_at
+        ) VALUES
+        (
+            'María Elena Rodríguez', 'V12345678', '+58 424 1234567', 'maria.rodriguez@email.com',
+            'Av. Principal, Residencias El Paraíso, Torre A, Apt 4B, Caracas', 15750.00,
+            '2024-01-15', 'ACTIVO', 'Toyota Corolla 2023', 25000.00,
+            5000.00, 24, 'mensual', '2024-01-10', 1, 1,
+            'Cliente puntual en pagos, excelente historial crediticio', NOW()
+        ),
+        (
+            'Carlos Alberto Mendoza', 'E87654321', '+58 414 9876543', 'carlos.mendoza@hotmail.com',
+            'Urbanización Los Palos Grandes, Calle Principal, Casa 123, Caracas', 8230.50,
+            '2024-01-20', 'ACTIVO', 'Nissan Versa 2022', 18000.00,
+            3000.00, 18, 'quincenal', '2024-01-05', 1, 1,
+            'Cliente preferencial, referido por otro cliente satisfecho', NOW()
+        )
+    """)
+
 
 def downgrade():
     # Eliminar índices
