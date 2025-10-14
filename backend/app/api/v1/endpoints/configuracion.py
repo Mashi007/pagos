@@ -147,6 +147,222 @@ def obtener_configuracion_completa(
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración: {str(e)}")
 
 
+@router.get("/validadores")
+def obtener_configuracion_validadores(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    🔍 Obtener configuración completa de validadores para el módulo de configuración
+    """
+    try:
+        from app.services.validators_service import (
+            ValidadorTelefono, ValidadorCedula, ValidadorFecha, ValidadorEmail
+        )
+        
+        return {
+            "titulo": "🔍 CONFIGURACIÓN DE VALIDADORES",
+            "fecha_consulta": datetime.now().isoformat(),
+            "consultado_por": current_user.full_name,
+            
+            "validadores_disponibles": {
+                "telefono": {
+                    "descripcion": "Validación y formateo de números telefónicos",
+                    "paises_soportados": {
+                        "venezuela": {
+                            "codigo": "+58",
+                            "formato": "+58 XXXXXXXXXX",
+                            "requisitos": {
+                                "debe_empezar_por": "+58",
+                                "longitud_total": "10 dígitos",
+                                "primer_digito": "No puede ser 0",
+                                "digitos_validos": "0-9"
+                            },
+                            "ejemplos_validos": [
+                                "1234567890 → +581234567890",
+                                "4241234567 → +584241234567",
+                                "+581234567890"
+                            ],
+                            "ejemplos_invalidos": [
+                                "0123456789 (empieza por 0)",
+                                "123456789 (9 dígitos)",
+                                "12345678901 (11 dígitos)"
+                            ]
+                        }
+                    },
+                    "auto_formateo": True,
+                    "validacion_tiempo_real": True
+                },
+                
+                "cedula": {
+                    "descripcion": "Validación de cédulas por país",
+                    "paises_soportados": {
+                        "venezuela": {
+                            "prefijos_validos": ["V", "E", "J"],
+                            "longitud": "7-10 dígitos",
+                            "requisitos": {
+                                "prefijos": "V=Venezolano, E=Extranjero, J=Jurídico",
+                                "dígitos": "Solo números del 0 al 9",
+                                "longitud": "Entre 7 y 10 dígitos"
+                            },
+                            "ejemplos_validos": [
+                                "V1234567 (7 dígitos)",
+                                "E12345678 (8 dígitos)",
+                                "J123456789 (9 dígitos)",
+                                "V1234567890 (10 dígitos)"
+                            ],
+                            "ejemplos_invalidos": [
+                                "G12345678 (prefijo G no válido)",
+                                "V123456 (6 dígitos)",
+                                "V12345678901 (11 dígitos)"
+                            ]
+                        }
+                    },
+                    "auto_formateo": True,
+                    "validacion_tiempo_real": True
+                },
+                
+                "fecha": {
+                    "descripcion": "Validación estricta de fechas",
+                    "formato_requerido": "DD/MM/YYYY",
+                    "requisitos": {
+                        "dia": "2 dígitos (01-31)",
+                        "mes": "2 dígitos (01-12)",
+                        "año": "4 dígitos (1900-2100)",
+                        "separador": "/ (barra)"
+                    },
+                    "ejemplos_validos": [
+                        "01/01/2024",
+                        "15/03/2024",
+                        "29/02/2024 (año bisiesto)",
+                        "31/12/2024"
+                    ],
+                    "ejemplos_invalidos": [
+                        "1/1/2024 (día y mes sin cero inicial)",
+                        "01-01-2024 (separador guión)",
+                        "2024-01-01 (formato YYYY-MM-DD)",
+                        "32/01/2024 (día inválido)"
+                    ],
+                    "auto_formateo": False,
+                    "validacion_tiempo_real": True,
+                    "requiere_calendario": True
+                },
+                
+                "email": {
+                    "descripcion": "Validación y normalización de emails",
+                    "caracteristicas": {
+                        "normalizacion": "Conversión automática a minúsculas",
+                        "limpieza": "Remoción automática de espacios",
+                        "validacion": "RFC 5322 estándar",
+                        "dominios_bloqueados": [
+                            "tempmail.org",
+                            "10minutemail.com", 
+                            "guerrillamail.com",
+                            "mailinator.com",
+                            "throwaway.email"
+                        ]
+                    },
+                    "ejemplos_validos": [
+                        "USUARIO@EJEMPLO.COM → usuario@ejemplo.com",
+                        " Usuario@Ejemplo.com  → usuario@ejemplo.com",
+                        "usuario.nombre@dominio.com",
+                        "usuario+tag@ejemplo.com"
+                    ],
+                    "ejemplos_invalidos": [
+                        "usuario@ (sin dominio)",
+                        "@ejemplo.com (sin usuario)",
+                        "usuario@tempmail.org (dominio bloqueado)",
+                        "usuario@ (formato inválido)"
+                    ],
+                    "auto_formateo": True,
+                    "validacion_tiempo_real": True
+                }
+            },
+            
+            "reglas_negocio": {
+                "fecha_entrega": "No puede ser futura",
+                "fecha_pago": "Máximo 1 día en el futuro",
+                "monto_pago": "No puede exceder saldo pendiente",
+                "total_financiamiento": "Entre $100 y $50,000,000",
+                "amortizaciones": "Entre 1 y 84 meses",
+                "cedula_venezuela": "Prefijos V/E/J + 7-10 dígitos del 0-9",
+                "telefono_venezuela": "+58 + 10 dígitos (primer dígito no puede ser 0)",
+                "fecha_formato": "DD/MM/YYYY (día 2 dígitos, mes 2 dígitos, año 4 dígitos)",
+                "email_normalizacion": "Conversión automática a minúsculas (incluyendo @)"
+            },
+            
+            "configuracion_frontend": {
+                "validacion_onchange": "Validar al cambiar valor",
+                "formateo_onkeyup": "Formatear mientras escribe",
+                "mostrar_errores": "Mostrar errores en tiempo real",
+                "auto_formateo": "Formatear automáticamente al perder foco",
+                "sugerencias": "Mostrar sugerencias de formato"
+            },
+            
+            "endpoints_validacion": {
+                "validar_campo": "POST /api/v1/validadores/validar-campo",
+                "corregir_datos": "POST /api/v1/validadores/corregir-datos",
+                "configuracion": "GET /api/v1/validadores/configuracion",
+                "verificacion": "GET /api/v1/validadores/verificacion-validadores"
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obteniendo configuración de validadores: {str(e)}")
+
+
+@router.post("/validadores/probar")
+def probar_validadores(
+    datos_prueba: Dict[str, Any],
+    current_user: User = Depends(get_current_user)
+):
+    """
+    🧪 Probar validadores con datos de ejemplo
+    """
+    try:
+        from app.services.validators_service import (
+            ValidadorTelefono, ValidadorCedula, ValidadorFecha, ValidadorEmail
+        )
+        
+        resultados = {}
+        
+        # Probar teléfono
+        if "telefono" in datos_prueba:
+            telefono = datos_prueba["telefono"]
+            pais = datos_prueba.get("pais_telefono", "VENEZUELA")
+            resultados["telefono"] = ValidadorTelefono.validar_y_formatear_telefono(telefono, pais)
+        
+        # Probar cédula
+        if "cedula" in datos_prueba:
+            cedula = datos_prueba["cedula"]
+            pais = datos_prueba.get("pais_cedula", "VENEZUELA")
+            resultados["cedula"] = ValidadorCedula.validar_y_formatear_cedula(cedula, pais)
+        
+        # Probar fecha
+        if "fecha" in datos_prueba:
+            fecha = datos_prueba["fecha"]
+            resultados["fecha"] = ValidadorFecha.validar_fecha_entrega(fecha)
+        
+        # Probar email
+        if "email" in datos_prueba:
+            email = datos_prueba["email"]
+            resultados["email"] = ValidadorEmail.validar_email(email)
+        
+        return {
+            "titulo": "🧪 RESULTADOS DE PRUEBA DE VALIDADORES",
+            "fecha_prueba": datetime.now().isoformat(),
+            "datos_entrada": datos_prueba,
+            "resultados": resultados,
+            "resumen": {
+                "total_validados": len(resultados),
+                "validos": sum(1 for r in resultados.values() if r.get("valido", False)),
+                "invalidos": sum(1 for r in resultados.values() if not r.get("valido", False))
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error probando validadores: {str(e)}")
+
+
 @router.get("/sistema/categoria/{categoria}")
 def obtener_configuracion_categoria(
     categoria: str,
