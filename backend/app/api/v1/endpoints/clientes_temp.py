@@ -56,7 +56,7 @@ def listar_clientes_con_auth(db: Session = Depends(get_db)):
     """
     Endpoint temporal para probar clientes con autenticación
     """
-    from app.core.security import get_current_user
+    from app.api.deps import get_current_user
     from app.models.user import User
     
     try:

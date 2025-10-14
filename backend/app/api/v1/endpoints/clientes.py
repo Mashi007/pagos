@@ -24,7 +24,7 @@ from app.schemas.cliente import (
 )
 from app.schemas.amortizacion import TablaAmortizacionRequest
 from app.services.amortizacion_service import AmortizacionService
-from app.core.security import get_current_user
+from app.api.deps import get_current_user
 from datetime import datetime
 import traceback
 

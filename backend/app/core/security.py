@@ -102,53 +102,10 @@ def decode_token(token: str) -> dict:
 
 
 # -------------------------------------------------------------
-# DEPENDENCIAS DE AUTENTICACIÓN PARA FASTAPI (AÑADIDO)
+# DEPENDENCIAS DE AUTENTICACIÓN PARA FASTAPI (ELIMINADAS - DUPLICADAS)
 # -------------------------------------------------------------
-
-def get_current_user(
-    db: Session = Depends(get_db),
-    token: str = Depends(oauth2_scheme)
-) -> User:
-    """
-    Función de dependencia para obtener el usuario actual a partir del token JWT.
-    
-    Esta función es usada por los endpoints protegidos, incluyendo aprobaciones.py.
-    """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Credenciales inválidas o token expirado",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    
-    try:
-        # 1. Decodificar el token
-        payload = decode_token(token)
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-            
-    except JWTError:
-        raise credentials_exception
-    except Exception:
-        # Captura cualquier otro error, como un token malformado
-        raise credentials_exception
-    
-    # 2. Buscar el usuario en la base de datos
-    user = db.query(User).filter(User.id == int(user_id)).first()
-    
-    if user is None:
-        raise credentials_exception
-        
-    return user
-
-
-def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
-    """
-    Dependencia para obtener el usuario actual y asegurar que esté activo.
-    """
-    if not current_user.is_active:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo")
-    return current_user
+# Las funciones get_current_user y get_current_active_user están definidas en app/api/deps.py
+# para evitar duplicación y conflictos de importación
 
 
 # -------------------------------------------------------------

@@ -11,7 +11,7 @@ from app.db.session import get_db
 from app.models.aprobacion import Aprobacion
 from app.core.constants import EstadoAprobacion
 from app.models.user import User
-from app.core.security import get_current_user
+from app.api.deps import get_current_user
 from pydantic import BaseModel
 
 router = APIRouter()
