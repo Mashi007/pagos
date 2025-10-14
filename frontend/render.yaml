@@ -1,27 +1,12 @@
 services:
-  - type: static_site
+  - type: web_service
     name: rapicredit-frontend
-    env: static
+    env: node
     buildCommand: npm run render-build
-    staticPublishPath: ./dist
-    headers:
-      - path: /*
-        name: Cache-Control
-        value: no-cache
-      - path: /*
-        name: X-Frame-Options
-        value: DENY
-      - path: /*
-        name: X-Content-Type-Options
-        value: nosniff
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-        headers:
-          Cache-Control: no-cache
-    environmentVariables:
+    startCommand: npm run render-start
+    envVars:
       - key: NODE_ENV
         value: production
       - key: VITE_API_URL
         value: https://pagos-f2qf.onrender.com
+    healthCheckPath: /

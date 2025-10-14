@@ -23,17 +23,23 @@ class ApiClient {
     // Request interceptor - agregar token de autenticación
     this.client.interceptors.request.use(
       (config) => {
-        // Buscar token en localStorage o sessionStorage según la configuración
-        const rememberMe = localStorage.getItem('remember_me') === 'true'
-        const token = rememberMe 
-          ? localStorage.getItem('access_token') 
-          : sessionStorage.getItem('access_token')
-          
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`
-          console.log('🔑 Token enviado en request:', token.substring(0, 20) + '...')
-        } else {
-          console.warn('⚠️ No se encontró token para la request:', config.url)
+        // NO agregar token a endpoints de autenticación
+        const authEndpoints = ['/api/v1/auth/login', '/api/v1/auth/refresh']
+        const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint))
+        
+        if (!isAuthEndpoint) {
+          // Buscar token en localStorage o sessionStorage según la configuración
+          const rememberMe = localStorage.getItem('remember_me') === 'true'
+          const token = rememberMe 
+            ? localStorage.getItem('access_token') 
+            : sessionStorage.getItem('access_token')
+            
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`
+            console.log('🔑 Token enviado en request:', token.substring(0, 20) + '...')
+          } else {
+            console.warn('⚠️ No se encontró token para la request:', config.url)
+          }
         }
         return config
       },
