@@ -32,7 +32,7 @@ export const useAuthStore = create<AuthState>()(
       error: null,
 
       // Acción de login
-      login: async (credentials: LoginForm) => {
+      login: async (credentials: LoginForm): Promise<void> => {
         set({ isLoading: true, error: null })
         
         try {
@@ -66,7 +66,6 @@ export const useAuthStore = create<AuthState>()(
           })
 
           toast.success(`¡Bienvenido, ${response.user.nombre}!`)
-          return response
         } catch (error: any) {
           console.error('❌ Store: Error en login:', error)
           set({
