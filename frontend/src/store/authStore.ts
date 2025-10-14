@@ -45,38 +45,62 @@ export const useAuthStore = create<AuthState>()(
           
           console.log('✅ Store: Login exitoso, respuesta recibida:', response)
           
-          // ENFOQUE RADICAL: GUARDADO SIMPLIFICADO CON DEBUGGING BÁSICO
-          console.log('🚨 STORE: INICIANDO GUARDADO DE TOKENS...')
-          console.log('🚨 STORE: response.data existe?', !!response.data)
-          console.log('🚨 STORE: response.data.access_token existe?', !!response.data?.access_token)
-          console.log('🚨 STORE: response.user existe?', !!response.user)
+          // SOLUCIÓN DEFINITIVA: GUARDADO FORZADO CON VERIFICACIÓN MÚLTIPLE
+          console.log('🔧 SOLUCIÓN DEFINITIVA: Iniciando guardado forzado...')
           
           const rememberMe = credentials.remember || false
-          console.log('🚨 STORE: rememberMe =', rememberMe)
+          const accessToken = response.data.access_token
+          const refreshToken = response.data.refresh_token
+          const userData = response.user
           
-          // GUARDADO SIMPLE SIN TRY-CATCH
-          console.log('🚨 STORE: Guardando access_token...')
-          if (rememberMe) {
-            localStorage.setItem('access_token', response.data.access_token)
-            localStorage.setItem('refresh_token', response.data.refresh_token)
-            localStorage.setItem('user', JSON.stringify(response.user))
-            localStorage.setItem('remember_me', 'true')
-            console.log('🚨 STORE: GUARDADO EN LOCALSTORAGE COMPLETADO')
-          } else {
-            sessionStorage.setItem('access_token', response.data.access_token)
-            sessionStorage.setItem('refresh_token', response.data.refresh_token)
-            sessionStorage.setItem('user', JSON.stringify(response.user))
-            localStorage.setItem('remember_me', 'false')
-            console.log('🚨 STORE: GUARDADO EN SESSIONSTORAGE COMPLETADO')
+          console.log('🔧 Datos recibidos:', {
+            hasAccessToken: !!accessToken,
+            hasRefreshToken: !!refreshToken,
+            hasUser: !!userData,
+            rememberMe,
+            tokenLength: accessToken?.length || 0
+          })
+          
+          // GUARDADO FORZADO EN AMBOS STORAGES
+          try {
+            // 1. Guardar en localStorage SIEMPRE
+            localStorage.setItem('access_token', accessToken)
+            localStorage.setItem('refresh_token', refreshToken)
+            localStorage.setItem('user', JSON.stringify(userData))
+            localStorage.setItem('remember_me', rememberMe ? 'true' : 'false')
+            console.log('✅ localStorage: Tokens guardados')
+            
+            // 2. Guardar en sessionStorage SIEMPRE (backup)
+            sessionStorage.setItem('access_token', accessToken)
+            sessionStorage.setItem('refresh_token', refreshToken)
+            sessionStorage.setItem('user', JSON.stringify(userData))
+            console.log('✅ sessionStorage: Tokens guardados')
+            
+            // 3. VERIFICACIÓN MÚLTIPLE INMEDIATA
+            const localToken = localStorage.getItem('access_token')
+            const sessionToken = sessionStorage.getItem('access_token')
+            
+            console.log('🔍 VERIFICACIÓN POST-GUARDADO:', {
+              localToken: localToken ? `EXISTS (${localToken.length} chars)` : 'NULL',
+              sessionToken: sessionToken ? `EXISTS (${sessionToken.length} chars)` : 'NULL',
+              tokensMatch: localToken === sessionToken,
+              tokensMatchOriginal: localToken === accessToken
+            })
+            
+            // 4. VERIFICACIÓN ADICIONAL CON TIMEOUT
+            setTimeout(() => {
+              const verifyLocal = localStorage.getItem('access_token')
+              const verifySession = sessionStorage.getItem('access_token')
+              console.log('🔍 VERIFICACIÓN RETARDADA (100ms):', {
+                local: !!verifyLocal,
+                session: !!verifySession,
+                bothExist: !!(verifyLocal && verifySession)
+              })
+            }, 100)
+            
+          } catch (error) {
+            console.error('❌ ERROR CRÍTICO AL GUARDAR TOKENS:', error)
           }
-          
-          // VERIFICACIÓN INMEDIATA
-          console.log('🚨 STORE: Verificando guardado inmediato...')
-          const testToken = rememberMe 
-            ? localStorage.getItem('access_token')
-            : sessionStorage.getItem('access_token')
-          console.log('🚨 STORE: Token recuperado:', testToken ? 'EXISTS' : 'NULL')
-          console.log('🚨 STORE: Token length:', testToken?.length || 0)
           
           // Actualizar estado inmediatamente después del login exitoso
           set({

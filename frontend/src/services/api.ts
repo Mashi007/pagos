@@ -44,21 +44,46 @@ class ApiClient {
             allSessionStorageKeys: Object.keys(sessionStorage).filter(k => k.includes('token') || k.includes('user'))
           })
           
-          // LÓGICA ROBUSTA: Priorizar cualquier token disponible
+          // LÓGICA DEFINITIVA: Buscar token en AMBOS storages con prioridad
           let token, storageType
           
+          // PRIORIDAD 1: localStorage (recordarme)
           if (localToken && localToken.trim() !== '') {
             token = localToken
             storageType = 'localStorage'
             console.log('✅ Interceptor: Usando token de localStorage')
-          } else if (sessionToken && sessionToken.trim() !== '') {
+          } 
+          // PRIORIDAD 2: sessionStorage (sesión temporal)
+          else if (sessionToken && sessionToken.trim() !== '') {
             token = sessionToken
             storageType = 'sessionStorage'
             console.log('✅ Interceptor: Usando token de sessionStorage')
-          } else {
-            token = null
-            storageType = 'none'
-            console.error('❌ Interceptor: NO HAY TOKENS DISPONIBLES EN NINGÚN STORAGE')
+          } 
+          // FALLBACK: Buscar en ambos storages de nuevo
+          else {
+            console.log('🔍 Interceptor: Buscando tokens en ambos storages...')
+            const retryLocal = localStorage.getItem('access_token')
+            const retrySession = sessionStorage.getItem('access_token')
+            
+            if (retryLocal && retryLocal.trim() !== '') {
+              token = retryLocal
+              storageType = 'localStorage (retry)'
+              console.log('✅ Interceptor: Token encontrado en localStorage (retry)')
+            } else if (retrySession && retrySession.trim() !== '') {
+              token = retrySession
+              storageType = 'sessionStorage (retry)'
+              console.log('✅ Interceptor: Token encontrado en sessionStorage (retry)')
+            } else {
+              token = null
+              storageType = 'none'
+              console.error('❌ Interceptor: NO HAY TOKENS DISPONIBLES EN NINGÚN STORAGE')
+              console.error('🔍 Debug completo storage:', {
+                localStorage_keys: Object.keys(localStorage).filter(k => k.includes('token') || k.includes('user')),
+                sessionStorage_keys: Object.keys(sessionStorage).filter(k => k.includes('token') || k.includes('user')),
+                localToken_value: localStorage.getItem('access_token'),
+                sessionToken_value: sessionStorage.getItem('access_token')
+              })
+            }
           }
             
           if (token && token.trim() !== '') {
