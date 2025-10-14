@@ -11,6 +11,7 @@ import {
   XCircle,
   Save,
   X,
+  Eye,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -27,6 +28,7 @@ export function ConcesionariosConfig() {
   const [searchTerm, setSearchTerm] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingConcesionario, setEditingConcesionario] = useState<Concesionario | null>(null)
+  const [viewingConcesionario, setViewingConcesionario] = useState<Concesionario | null>(null)
 
   // Form state
   const [formData, setFormData] = useState<ConcesionarioCreate>({
@@ -55,18 +57,25 @@ export function ConcesionariosConfig() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
+      setError(null) // Limpiar errores previos
+      
       if (editingConcesionario) {
         await concesionarioService.actualizarConcesionario(editingConcesionario.id, formData)
       } else {
         await concesionarioService.crearConcesionario(formData)
       }
       
+      // Recargar la lista de concesionarios para actualizar la tabla
       await loadConcesionarios()
       resetForm()
     } catch (err) {
       console.error('Error al guardar concesionario:', err)
       setError('Error al guardar el concesionario.')
     }
+  }
+
+  const handleView = (concesionario: Concesionario) => {
+    setViewingConcesionario(concesionario)
   }
 
   const handleEdit = (concesionario: Concesionario) => {
@@ -100,6 +109,7 @@ export function ConcesionariosConfig() {
       activo: true
     })
     setEditingConcesionario(null)
+    setViewingConcesionario(null)
     setShowForm(false)
   }
 
@@ -192,6 +202,71 @@ export function ConcesionariosConfig() {
         </Card>
       )}
 
+      {/* Modal de Visualización */}
+      {viewingConcesionario && (
+        <Card>
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <CardTitle className="flex items-center">
+                <Eye className="mr-2 h-5 w-5 text-blue-600" />
+                Detalles del Concesionario
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={() => setViewingConcesionario(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-500">Nombre del Concesionario</label>
+                <p className="text-lg font-semibold">{viewingConcesionario.nombre}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Responsable</label>
+                <p className="text-lg">{viewingConcesionario.responsable || 'No especificado'}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Estado</label>
+                <div className="mt-1">
+                  <Badge variant={viewingConcesionario.activo ? 'default' : 'destructive'}>
+                    {viewingConcesionario.activo ? (
+                      <>
+                        <CheckCircle className="mr-1 h-3 w-3" />
+                        Activo
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="mr-1 h-3 w-3" />
+                        Inactivo
+                      </>
+                    )}
+                  </Badge>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Fecha de Creación</label>
+                <p className="text-sm text-gray-600">
+                  {new Date(viewingConcesionario.created_at).toLocaleDateString('es-ES')}
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-2 mt-6">
+              <Button variant="outline" onClick={() => setViewingConcesionario(null)}>
+                Cerrar
+              </Button>
+              <Button onClick={() => {
+                handleEdit(viewingConcesionario)
+                setViewingConcesionario(null)
+              }}>
+                <Edit className="mr-2 h-4 w-4" />
+                Editar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Búsqueda */}
       <Card>
         <CardContent className="pt-6">
@@ -245,11 +320,22 @@ export function ConcesionariosConfig() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end space-x-2">
+                      <div className="flex items-center justify-end space-x-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleView(concesionario)}
+                          title="Ver detalles"
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleEdit(concesionario)}
+                          title="Editar concesionario"
+                          className="text-green-600 hover:text-green-700"
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -257,6 +343,7 @@ export function ConcesionariosConfig() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDelete(concesionario.id)}
+                          title="Eliminar concesionario"
                           className="text-red-600 hover:text-red-700"
                         >
                           <Trash2 className="h-4 w-4" />
