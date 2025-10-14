@@ -1,2 +1,143 @@
+<<<<<<< HEAD
 Flask==3.0.0 
 gunicorn==21.2.0 
+=======
+# Backend - Requirements Base
+# Sistema de Préstamos y Cobranza
+# =================================
+
+# ============================================
+# WEB FRAMEWORK
+# ============================================
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# ============================================
+# DATABASE
+# ============================================
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# ============================================
+# AUTHENTICATION & SECURITY
+# ============================================
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.1.2
+python-multipart==0.0.6
+
+# ============================================
+# VALIDATION
+# ============================================
+pydantic==2.5.3
+pydantic-settings==2.1.0
+email-validator==2.1.0.post1
+
+# ============================================
+# UTILITIES
+# ============================================
+python-dotenv==1.0.1
+
+# ============================================
+# DATE/TIME
+# ============================================
+python-dateutil==2.8.2
+pytz==2024.1
+
+# ============================================
+# EXCEL HANDLING
+# ============================================
+openpyxl==3.1.2
+pandas==2.1.4
+xlsxwriter==3.1.9
+
+# ============================================
+# PDF GENERATION
+# ============================================
+reportlab==4.0.9
+pypdf==3.17.4
+# weasyprint==60.2  # Descomentar si necesitas HTML to PDF avanzado
+
+# ============================================
+# EMAIL
+# ============================================
+aiosmtplib==3.0.1
+jinja2==3.1.3
+premailer==3.10.0
+
+# ============================================
+# HTTP CLIENT
+# ============================================
+httpx==0.26.0
+
+# ============================================
+# SCHEDULING (Tareas automáticas)
+# ============================================
+apscheduler==3.10.4
+
+# ============================================
+# LOGGING & MONITORING
+# ============================================
+python-json-logger==2.0.7
+
+# ============================================
+# RATE LIMITING
+# ============================================
+slowapi==0.1.9
+
+# ============================================
+# TESTING
+# ============================================
+pytest==7.4.4
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+faker==22.6.0
+
+# ============================================
+# DEPENDENCIAS ADICIONALES RECOMENDADAS
+# ============================================
+
+# Monitoreo y Error Tracking (Opcional - Recomendado para Producción)
+# sentry-sdk[fastapi]==1.40.0  # Error tracking
+# prometheus-client==0.19.0     # Métricas
+
+# WhatsApp/SMS (Opcional - Si usas Twilio)
+twilio==8.11.1
+
+# Excel Avanzado (Opcional - Si necesitas más features)
+# xlrd==2.0.1  # Para leer archivos .xls viejos
+
+# Compresión de Respuestas
+# brotli==1.1.0  # Compresión HTTP
+
+# Validación de Datos Avanzada
+# phonenumbers==8.13.27  # Para validar teléfonos
+
+# Cache (Opcional - Si usas Redis)
+# redis==5.0.1
+# aioredis==2.0.1
+
+# ============================================
+# NOTAS:
+# ============================================
+# Para instalar:
+# pip install -r requirements/base.txt
+#
+# Para actualizar:
+# pip install -r requirements/base.txt --upgrade
+#
+# Para producción, usar:
+# pip install -r requirements/prod.txt
+
+# ============================================
+# PRODUCTION SERVER
+# ============================================
+gunicorn==21.2.0
+
+# ============================================
+# ASYNC DATABASE DRIVER
+# ============================================
+asyncpg==0.30.0
+>>>>>>> f951ea57a9c3a7a8f94762f6fc07ec0f0769d719
