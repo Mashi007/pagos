@@ -138,7 +138,7 @@ export function CargaMasiva() {
           errors: response.data.errors,
           fileName: response.data.fileName,
           type: response.data.type as 'clientes' | 'pagos',
-          erroresDetallados: response.data.erroresDetallados
+          erroresDetallados: response.erroresDetallados
         } : undefined,
         errors: response.errors
       })
@@ -167,8 +167,8 @@ export function CargaMasiva() {
       }
 
       // Preparar errores para edición si existen
-      if (response.data?.erroresDetallados && response.data.erroresDetallados.length > 0) {
-        const errors: ErrorRow[] = response.data.erroresDetallados.map((error: any, index: number) => ({
+      if (response.erroresDetallados && response.erroresDetallados.length > 0) {
+        const errors: ErrorRow[] = response.erroresDetallados.map((error: any, index: number) => ({
           id: `error-${index}`,
           row: error.row,
           cedula: error.cedula,
