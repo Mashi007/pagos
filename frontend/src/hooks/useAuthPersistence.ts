@@ -7,7 +7,7 @@ import { authService } from '@/services/authService'
  * Se encarga de restaurar la sesión del usuario al cargar la aplicación
  */
 export function useAuthPersistence() {
-  const { isAuthenticated, refreshUser, setUser } = useAuth()
+  const { isAuthenticated, refreshUser } = useAuth()
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -17,10 +17,8 @@ export function useAuthPersistence() {
       
       if (hasToken && storedUser && !isAuthenticated) {
         try {
-          // Restaurar inmediatamente el usuario desde el almacenamiento
-          setUser(storedUser)
-          
           // Intentar verificar la validez del token con el servidor
+          // refreshUser ya maneja la restauración automática
           await refreshUser()
         } catch (error) {
           console.warn('Error al restaurar sesión:', error)
