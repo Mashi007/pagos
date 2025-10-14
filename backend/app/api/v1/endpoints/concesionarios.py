@@ -11,7 +11,6 @@ from app.schemas.concesionario import (
     ConcesionarioListResponse
 )
 from app.api.deps import get_current_user
-from app.core.permissions import require_roles
 
 router = APIRouter()
 
