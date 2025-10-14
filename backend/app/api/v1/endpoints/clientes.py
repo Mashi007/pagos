@@ -283,8 +283,8 @@ def test_main_logic(
         # ORDENAMIENTO
         query = query.order_by(desc(Cliente.fecha_registro))
         
-    # PAGINACIÓN
-    total = query.count()
+        # PAGINACIÓN
+        total = query.count()
         skip = (page - 1) * per_page
         clientes = query.offset(skip).limit(per_page).all()
         
