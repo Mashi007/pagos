@@ -56,23 +56,61 @@ export const useAuthStore = create<AuthState>()(
           // Verificar que los tokens se guardaron con un pequeño delay
           const rememberMe = credentials.remember || false
           
+          console.log('🔧 Store: Iniciando verificación POST-LOGIN...', {
+            rememberMe,
+            rememberParam: credentials.remember,
+            responseData: {
+              hasAccessToken: !!response.access_token,
+              accessTokenLength: response.access_token?.length || 0,
+              hasUser: !!response.user,
+              userEmail: response.user?.email
+            }
+          })
+          
+          // Verificación INMEDIATA
+          const hasTokenImmediate = rememberMe 
+            ? localStorage.getItem('access_token') 
+            : sessionStorage.getItem('access_token')
+            
+          console.log('🔍 Store: Verificación INMEDIATA POST-LOGIN:', {
+            rememberMe,
+            hasToken: !!hasTokenImmediate,
+            tokenLength: hasTokenImmediate?.length || 0,
+            storageType: rememberMe ? 'localStorage' : 'sessionStorage',
+            tokenPreview: hasTokenImmediate ? hasTokenImmediate.substring(0, 20) + '...' : 'null'
+          })
+          
           // Esperar un poco para que se complete el guardado
           setTimeout(() => {
             const hasToken = rememberMe 
               ? localStorage.getItem('access_token') 
               : sessionStorage.getItem('access_token')
             
-            console.log('🔍 Store: Verificación POST-LOGIN de tokens guardados:', {
+            console.log('🔍 Store: Verificación POST-LOGIN CON DELAY (200ms):', {
               rememberMe,
               hasToken: !!hasToken,
               tokenLength: hasToken?.length || 0,
               storageType: rememberMe ? 'localStorage' : 'sessionStorage',
-              tokenPreview: hasToken ? hasToken.substring(0, 20) + '...' : 'null'
+              tokenPreview: hasToken ? hasToken.substring(0, 20) + '...' : 'null',
+              sameAsImmediate: hasToken === hasTokenImmediate,
+              localStorageKeys: Object.keys(localStorage).filter(k => k.includes('token') || k.includes('user')),
+              sessionStorageKeys: Object.keys(sessionStorage).filter(k => k.includes('token') || k.includes('user'))
             })
             
             // Verificar que el token se puede recuperar correctamente
             if (!hasToken) {
               console.error('❌ CRÍTICO: Token no disponible después del login')
+              console.error('🔍 Debug completo localStorage:', {
+                access_token: localStorage.getItem('access_token') ? 'EXISTS' : 'NOT_FOUND',
+                refresh_token: localStorage.getItem('refresh_token') ? 'EXISTS' : 'NOT_FOUND',
+                user: localStorage.getItem('user') ? 'EXISTS' : 'NOT_FOUND',
+                remember_me: localStorage.getItem('remember_me')
+              })
+              console.error('🔍 Debug completo sessionStorage:', {
+                access_token: sessionStorage.getItem('access_token') ? 'EXISTS' : 'NOT_FOUND',
+                refresh_token: sessionStorage.getItem('refresh_token') ? 'EXISTS' : 'NOT_FOUND',
+                user: sessionStorage.getItem('user') ? 'EXISTS' : 'NOT_FOUND'
+              })
             } else {
               console.log('✅ Token verificado y disponible para requests')
             }

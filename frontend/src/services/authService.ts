@@ -38,19 +38,38 @@ class AuthService {
         
         if (rememberMe) {
           // Guardar en localStorage (persistente)
+          console.log('🔧 AuthService: Guardando tokens en localStorage...', {
+            accessTokenLength: response.data.access_token?.length || 0,
+            refreshTokenLength: response.data.refresh_token?.length || 0,
+            userExists: !!response.user
+          })
+          
           localStorage.setItem('access_token', response.data.access_token)
           localStorage.setItem('refresh_token', response.data.refresh_token)
           localStorage.setItem('user', JSON.stringify(response.user))
           localStorage.setItem('remember_me', 'true')
-          console.log('✅ Tokens guardados en localStorage (recordarme)')
           
-          // Verificación inmediata después de guardar
+          // Verificación INMEDIATA después de guardar
+          const tokenAfterSave = localStorage.getItem('access_token')
+          const userAfterSave = localStorage.getItem('user')
+          
+          console.log('🔍 AuthService: Verificación INMEDIATA POST-GUARDADO:', {
+            hasToken: !!tokenAfterSave,
+            tokenLength: tokenAfterSave?.length || 0,
+            tokenPreview: tokenAfterSave ? tokenAfterSave.substring(0, 20) + '...' : 'null',
+            hasUser: !!userAfterSave,
+            rememberMe: localStorage.getItem('remember_me'),
+            storageKeys: Object.keys(localStorage).filter(k => k.includes('token') || k.includes('user') || k.includes('remember'))
+          })
+          
+          // Verificación con delay también
           setTimeout(() => {
-            console.log('🔍 Verificación POST-GUARDADO localStorage:', {
-              hasToken: !!localStorage.getItem('access_token'),
-              tokenLength: localStorage.getItem('access_token')?.length || 0,
-              hasUser: !!localStorage.getItem('user'),
-              rememberMe: localStorage.getItem('remember_me')
+            const tokenAfterDelay = localStorage.getItem('access_token')
+            console.log('🔍 AuthService: Verificación CON DELAY (100ms):', {
+              hasToken: !!tokenAfterDelay,
+              tokenLength: tokenAfterDelay?.length || 0,
+              tokenPreview: tokenAfterDelay ? tokenAfterDelay.substring(0, 20) + '...' : 'null',
+              sameToken: tokenAfterDelay === tokenAfterSave
             })
           }, 100)
         } else {
