@@ -92,98 +92,81 @@ def listar_clientes(
     - COMERCIAL/ASESOR: Ve SOLO sus clientes asignados
     """
     try:
-    # Construir query base
+        # Construir query base
         query = db.query(Cliente)
-    
-    # ============================================
-    # FILTRO POR ROL - MATRIZ DE ACCESO
-    # ============================================
-    if current_user.rol in ["COMERCIAL", "ASESOR"]:
-        # Solo pueden ver SUS clientes asignados
-        query = query.filter(Cliente.asesor_id == current_user.id)
-        # ADMIN ve todos los clientes (sin filtro adicional)
-    
-    # ============================================
-    # APLICAR FILTROS ADICIONALES
-    # ============================================
-    
-    # Búsqueda de texto (nombre, cédula, móvil)
+        
+        # FILTRO POR ROL - MATRIZ DE ACCESO
+        if current_user.rol in ["COMERCIAL", "ASESOR"]:
+            query = query.filter(Cliente.asesor_id == current_user.id)
+        
+        # APLICAR FILTROS
         if search:
             search_pattern = f"%{search}%"
-        query = query.filter(
-            or_(
-                Cliente.nombres.ilike(search_pattern),
-                Cliente.apellidos.ilike(search_pattern),
-                Cliente.cedula.ilike(search_pattern),
-                Cliente.telefono.ilike(search_pattern),
-                func.concat(Cliente.nombres, ' ', Cliente.apellidos).ilike(search_pattern)
+            query = query.filter(
+                or_(
+                    Cliente.nombres.ilike(search_pattern),
+                    Cliente.apellidos.ilike(search_pattern),
+                    Cliente.cedula.ilike(search_pattern),
+                    Cliente.telefono.ilike(search_pattern)
+                )
             )
-        )
-    
-    # Filtros específicos
-    if estado:
-        query = query.filter(Cliente.estado == estado)
-    
-    if estado_financiero:
-        query = query.filter(Cliente.estado_financiero == estado_financiero)
-    
-    if asesor_id:
-        query = query.filter(Cliente.asesor_id == asesor_id)
-    
-    # ============================================
-    # ORDENAMIENTO simple
-    # ============================================
-    query = query.order_by(Cliente.id.desc())
-    
-    # ============================================
-    # SIN PAGINACIÓN (temporal hasta corregir problema)
-    # ============================================
-    total = query.count()
-    clientes = query.all()  # Sin paginación para evitar 503
-    
-    # Calcular páginas totales
-    total_pages = 1
-    
-    # Convertir clientes a dict simple para evitar problemas de serialización
-    clientes_dict = []
-    for cliente in clientes:
-        cliente_dict = {
-            "id": cliente.id,
-            "cedula": cliente.cedula,
-            "nombres": cliente.nombres,
-            "apellidos": cliente.apellidos,
-            "telefono": cliente.telefono,
-            "email": cliente.email,
-            "direccion": cliente.direccion,
-            "ocupacion": cliente.ocupacion,
-            "modelo_vehiculo": cliente.modelo_vehiculo,
-            "marca_vehiculo": cliente.marca_vehiculo,
-            "anio_vehiculo": cliente.anio_vehiculo,
-            "color_vehiculo": cliente.color_vehiculo,
-            "concesionario": cliente.concesionario,
-            "total_financiamiento": float(cliente.total_financiamiento) if cliente.total_financiamiento else None,
-            "cuota_inicial": float(cliente.cuota_inicial) if cliente.cuota_inicial else None,
-            "monto_financiado": float(cliente.monto_financiado) if cliente.monto_financiado else None,
-            "modalidad_pago": cliente.modalidad_pago,
-            "numero_amortizaciones": cliente.numero_amortizaciones,
-            "asesor_id": cliente.asesor_id,
-            "estado": cliente.estado,
-            "activo": cliente.activo,
-            "estado_financiero": cliente.estado_financiero,
-            "dias_mora": cliente.dias_mora,
-            "fecha_registro": cliente.fecha_registro.isoformat() if cliente.fecha_registro else None,
-            "fecha_asignacion": cliente.fecha_asignacion.isoformat() if cliente.fecha_asignacion else None
+        
+        if estado:
+            query = query.filter(Cliente.estado == estado)
+        
+        if estado_financiero:
+            query = query.filter(Cliente.estado_financiero == estado_financiero)
+        
+        if asesor_id:
+            query = query.filter(Cliente.asesor_id == asesor_id)
+        
+        # ORDENAMIENTO
+        query = query.order_by(Cliente.id.desc())
+        
+        # PAGINACIÓN
+        total = query.count()
+        clientes = query.all()
+        total_pages = 1
+        
+        # Serialización manual
+        clientes_dict = []
+        for cliente in clientes:
+            clientes_dict.append({
+                "id": cliente.id,
+                "cedula": cliente.cedula,
+                "nombres": cliente.nombres,
+                "apellidos": cliente.apellidos,
+                "telefono": cliente.telefono,
+                "email": cliente.email,
+                "direccion": cliente.direccion,
+                "ocupacion": cliente.ocupacion,
+                "modelo_vehiculo": cliente.modelo_vehiculo,
+                "marca_vehiculo": cliente.marca_vehiculo,
+                "anio_vehiculo": cliente.anio_vehiculo,
+                "color_vehiculo": cliente.color_vehiculo,
+                "concesionario": cliente.concesionario,
+                "total_financiamiento": float(cliente.total_financiamiento) if cliente.total_financiamiento else None,
+                "cuota_inicial": float(cliente.cuota_inicial) if cliente.cuota_inicial else None,
+                "monto_financiado": float(cliente.monto_financiado) if cliente.monto_financiado else None,
+                "modalidad_pago": cliente.modalidad_pago,
+                "numero_amortizaciones": cliente.numero_amortizaciones,
+                "asesor_id": cliente.asesor_id,
+                "estado": cliente.estado,
+                "activo": cliente.activo,
+                "estado_financiero": cliente.estado_financiero,
+                "dias_mora": cliente.dias_mora,
+                "fecha_registro": cliente.fecha_registro.isoformat() if cliente.fecha_registro else None,
+                "fecha_asignacion": cliente.fecha_asignacion.isoformat() if cliente.fecha_asignacion else None
+            })
+        
+        return {
+            "items": clientes_dict,
+            "total": total,
+            "page": page,
+            "page_size": per_page,
+            "total_pages": total_pages
         }
-        clientes_dict.append(cliente_dict)
-    
-    return {
-        "items": clientes_dict,
-        "total": total,
-        "page": page,
-        "page_size": per_page,
-        "total_pages": total_pages
-    }
-    
+        
     except Exception as e:
         import traceback
         traceback.print_exc()
