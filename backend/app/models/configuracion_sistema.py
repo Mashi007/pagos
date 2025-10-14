@@ -224,43 +224,11 @@ class ConfiguracionPorDefecto:
                 "requerido": False
             },
             "WHATSAPP_PROVIDER": {
-                "valor": "TWILIO",
+                "valor": "META_CLOUD_API",
                 "descripcion": "Proveedor de WhatsApp Business API",
                 "tipo_dato": "STRING",
-                "opciones_validas": ["TWILIO", "360DIALOG", "META_CLOUD_API"],
+                "opciones_validas": ["META_CLOUD_API"],
                 "requerido": False
-            },
-            
-            # CONFIGURACIÓN TWILIO
-            "TWILIO_ACCOUNT_SID": {
-                "valor": "",
-                "descripcion": "Account SID de Twilio para WhatsApp",
-                "tipo_dato": "STRING",
-                "requerido": False,
-                "visible_frontend": True
-            },
-            "TWILIO_AUTH_TOKEN": {
-                "valor": "",
-                "descripcion": "Auth Token de Twilio",
-                "tipo_dato": "PASSWORD",
-                "requerido": False,
-                "visible_frontend": True
-            },
-            
-            # CONFIGURACIÓN 360DIALOG
-            "360DIALOG_API_KEY": {
-                "valor": "",
-                "descripcion": "API Key de 360Dialog",
-                "tipo_dato": "PASSWORD",
-                "requerido": False,
-                "visible_frontend": True
-            },
-            "360DIALOG_CLIENT_ID": {
-                "valor": "",
-                "descripcion": "Client ID de 360Dialog",
-                "tipo_dato": "STRING",
-                "requerido": False,
-                "visible_frontend": True
             },
             
             # CONFIGURACIÓN META CLOUD API

@@ -564,8 +564,9 @@ def obtener_estado_servicios(
             },
             "whatsapp": {
                 "habilitado": ConfigHelper.is_whatsapp_enabled(db),
-                "configurado": bool(ConfigHelper.get_config(db, "WHATSAPP", "TWILIO_ACCOUNT_SID")),
-                "estado": "✅ ACTIVO" if ConfigHelper.is_whatsapp_enabled(db) else "❌ INACTIVO"
+                "configurado": bool(ConfigHelper.get_config(db, "WHATSAPP", "META_ACCESS_TOKEN")),
+                "estado": "✅ ACTIVO" if ConfigHelper.is_whatsapp_enabled(db) else "❌ INACTIVO",
+                "provider": "META_CLOUD_API"
             },
             "database": {
                 "habilitado": True,

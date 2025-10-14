@@ -55,7 +55,7 @@ numpy==1.26.2
 # ============================================
 # NOTIFICATIONS
 # ============================================
-twilio==8.2.0
+# twilio==8.2.0  # NO USADO - WhatsApp se integra con Meta Developers API
 aiosmtplib==3.0.1
 jinja2==3.1.2
 

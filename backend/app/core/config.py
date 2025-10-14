@@ -103,11 +103,8 @@ class Settings(BaseSettings):
     WHATSAPP_BUSINESS_ACCOUNT_ID: Optional[str] = None
     WHATSAPP_WEBHOOK_VERIFY_TOKEN: Optional[str] = None
     
-    # SMS (Twilio - solo para SMS, no WhatsApp)
-    SMS_ENABLED: bool = False
-    TWILIO_ACCOUNT_SID: Optional[str] = None
-    TWILIO_AUTH_TOKEN: Optional[str] = None
-    TWILIO_PHONE_NUMBER: Optional[str] = None
+    # SMS - NO USADO (solo Email y WhatsApp vía Meta)
+    # SMS_ENABLED: bool = False
     
     # ============================================
     # REPORTES
