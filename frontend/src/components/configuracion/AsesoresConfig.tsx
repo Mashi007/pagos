@@ -13,6 +13,7 @@ import {
   X,
   Mail,
   Phone,
+  Eye,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -38,17 +39,12 @@ export function AsesoresConfig() {
   const [searchTerm, setSearchTerm] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingAsesor, setEditingAsesor] = useState<Asesor | null>(null)
+  const [viewingAsesor, setViewingAsesor] = useState<Asesor | null>(null)
 
   // Form state
   const [formData, setFormData] = useState<AsesorCreate>({
     nombre: '',
-    apellido: '',
-    email: '',
-    telefono: '',
-    especialidad: '',
-    comision_porcentaje: 0,
-    activo: true,
-    notas: ''
+    activo: true
   })
 
   useEffect(() => {
@@ -71,12 +67,15 @@ export function AsesoresConfig() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
+      setError(null) // Limpiar errores previos
+      
       if (editingAsesor) {
         await asesorService.actualizarAsesor(editingAsesor.id, formData)
       } else {
         await asesorService.crearAsesor(formData)
       }
       
+      // Recargar la lista de asesores para actualizar la tabla
       await loadAsesores()
       resetForm()
     } catch (err) {
@@ -85,17 +84,15 @@ export function AsesoresConfig() {
     }
   }
 
+  const handleView = (asesor: Asesor) => {
+    setViewingAsesor(asesor)
+  }
+
   const handleEdit = (asesor: Asesor) => {
     setEditingAsesor(asesor)
     setFormData({
       nombre: asesor.nombre,
-      apellido: asesor.apellido,
-      email: asesor.email,
-      telefono: asesor.telefono || '',
-      especialidad: asesor.especialidad || '',
-      comision_porcentaje: asesor.comision_porcentaje || 0,
-      activo: asesor.activo,
-      notas: asesor.notas || ''
+      activo: asesor.activo
     })
     setShowForm(true)
   }
@@ -117,22 +114,16 @@ export function AsesoresConfig() {
   const resetForm = () => {
     setFormData({
       nombre: '',
-      apellido: '',
-      email: '',
-      telefono: '',
-      especialidad: '',
-      comision_porcentaje: 0,
-      activo: true,
-      notas: ''
+      activo: true
     })
     setEditingAsesor(null)
+    setViewingAsesor(null)
     setShowForm(false)
   }
 
   const filteredAsesores = asesores.filter(asesor =>
     asesor.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    asesor.especialidad?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    asesor.email.toLowerCase().includes(searchTerm.toLowerCase())
+    asesor.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   if (loading) {
@@ -173,74 +164,14 @@ export function AsesoresConfig() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div>
-                  <label className="text-sm font-medium">Nombre *</label>
+                  <label className="text-sm font-medium">Nombre del Asesor *</label>
                   <Input
                     value={formData.nombre}
                     onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                    placeholder="Nombre"
+                    placeholder="Nombre del asesor"
                     required
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Apellido *</label>
-                  <Input
-                    value={formData.apellido}
-                    onChange={(e) => setFormData({ ...formData, apellido: e.target.value })}
-                    placeholder="Apellido"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Email *</label>
-                  <Input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="asesor@ejemplo.com"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Teléfono</label>
-                  <Input
-                    value={formData.telefono}
-                    onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                    placeholder="+58-424-1234567"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Especialidad</label>
-                  <select
-                    value={formData.especialidad}
-                    onChange={(e) => setFormData({ ...formData, especialidad: e.target.value })}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                  >
-                    <option value="">Seleccionar especialidad</option>
-                    {ESPECIALIDADES.map((esp) => (
-                      <option key={esp} value={esp}>{esp}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Comisión (%)</label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.comision_porcentaje}
-                    onChange={(e) => setFormData({ ...formData, comision_porcentaje: parseInt(e.target.value) || 0 })}
-                    placeholder="5"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="text-sm font-medium">Notas</label>
-                  <textarea
-                    value={formData.notas}
-                    onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
-                    placeholder="Notas adicionales sobre el asesor"
-                    className="w-full p-2 border border-gray-300 rounded-md h-20 resize-none"
                   />
                 </div>
               </div>
@@ -271,6 +202,71 @@ export function AsesoresConfig() {
         </Card>
       )}
 
+      {/* Modal de Visualización */}
+      {viewingAsesor && (
+        <Card>
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <CardTitle className="flex items-center">
+                <Eye className="mr-2 h-5 w-5 text-blue-600" />
+                Detalles del Asesor
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={() => setViewingAsesor(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-500">Nombre del Asesor</label>
+                <p className="text-lg font-semibold">{viewingAsesor.nombre_completo}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Estado</label>
+                <div className="mt-1">
+                  <Badge variant={viewingAsesor.activo ? 'default' : 'destructive'}>
+                    {viewingAsesor.activo ? (
+                      <>
+                        <CheckCircle className="mr-1 h-3 w-3" />
+                        Activo
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="mr-1 h-3 w-3" />
+                        Inactivo
+                      </>
+                    )}
+                  </Badge>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Email</label>
+                <p className="text-sm text-gray-600">{viewingAsesor.email}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Fecha de Creación</label>
+                <p className="text-sm text-gray-600">
+                  {new Date(viewingAsesor.created_at).toLocaleDateString('es-ES')}
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-2 mt-6">
+              <Button variant="outline" onClick={() => setViewingAsesor(null)}>
+                Cerrar
+              </Button>
+              <Button onClick={() => {
+                handleEdit(viewingAsesor)
+                setViewingAsesor(null)
+              }}>
+                <Edit className="mr-2 h-4 w-4" />
+                Editar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Búsqueda */}
       <Card>
         <CardContent className="pt-6">
@@ -293,10 +289,7 @@ export function AsesoresConfig() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nombre Completo</TableHead>
-                  <TableHead>Especialidad</TableHead>
-                  <TableHead>Contacto</TableHead>
-                  <TableHead>Comisión</TableHead>
+                  <TableHead>Nombre del Asesor</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -305,40 +298,7 @@ export function AsesoresConfig() {
                 {filteredAsesores.map((asesor) => (
                   <TableRow key={asesor.id}>
                     <TableCell>
-                      <div>
-                        <div className="font-medium">{asesor.nombre_completo}</div>
-                        {asesor.notas && (
-                          <div className="text-sm text-gray-500">{asesor.notas}</div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {asesor.especialidad ? (
-                        <Badge variant="outline">{asesor.especialidad}</Badge>
-                      ) : (
-                        '-'
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex items-center text-sm">
-                          <Mail className="mr-1 h-3 w-3" />
-                          {asesor.email}
-                        </div>
-                        {asesor.telefono && (
-                          <div className="flex items-center text-sm text-gray-500">
-                            <Phone className="mr-1 h-3 w-3" />
-                            {asesor.telefono}
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {asesor.comision_porcentaje ? (
-                        <span className="font-medium">{asesor.comision_porcentaje}%</span>
-                      ) : (
-                        '-'
-                      )}
+                      <div className="font-medium">{asesor.nombre_completo}</div>
                     </TableCell>
                     <TableCell>
                       <Badge variant={asesor.activo ? 'default' : 'destructive'}>
@@ -356,11 +316,22 @@ export function AsesoresConfig() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end space-x-2">
+                      <div className="flex items-center justify-end space-x-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleView(asesor)}
+                          title="Ver detalles"
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleEdit(asesor)}
+                          title="Editar asesor"
+                          className="text-green-600 hover:text-green-700"
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -368,6 +339,7 @@ export function AsesoresConfig() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDelete(asesor.id)}
+                          title="Eliminar asesor"
                           className="text-red-600 hover:text-red-700"
                         >
                           <Trash2 className="h-4 w-4" />
