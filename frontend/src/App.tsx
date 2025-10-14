@@ -53,7 +53,19 @@ function App() {
   const { isAuthenticated } = useAuth()
   
   // Hook para manejar la persistencia de autenticación
-  useAuthPersistence()
+  const { isInitialized } = useAuthPersistence()
+
+  // Mostrar loading screen mientras se inicializa la autenticación
+  if (!isInitialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-accent/5">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <AnimatePresence mode="wait">
