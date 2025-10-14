@@ -19,7 +19,6 @@ import { Pagos } from '@/pages/Pagos'
 import { Amortizacion } from '@/pages/Amortizacion'
 import { Conciliacion } from '@/pages/Conciliacion'
 import { Reportes } from '@/pages/Reportes'
-import { KPIs } from '@/pages/KPIs'
 import { Aprobaciones } from '@/pages/Aprobaciones'
 import { Auditoria } from '@/pages/Auditoria'
 import { InteligenciaArtificial } from '@/pages/InteligenciaArtificial'
@@ -145,15 +144,6 @@ function App() {
             }
           />
 
-          {/* KPIs */}
-          <Route
-            path="kpis"
-            element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE', 'DIRECTOR']}>
-                <KPIs />
-              </ProtectedRoute>
-            }
-          />
 
           {/* Aprobaciones */}
           <Route

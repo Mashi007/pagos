@@ -1,33 +1,109 @@
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { 
   DollarSign, 
   Users, 
   CreditCard, 
-  TrendingUp, 
+  TrendingUp,
+  TrendingDown,
   AlertTriangle,
   CheckCircle,
   Clock,
-  Target
+  Target,
+  BarChart3,
+  PieChart,
+  LineChart,
+  Calendar,
+  RefreshCw,
+  Eye,
+  Activity,
+  Zap,
+  Award,
+  Building2,
+  Car
 } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { usePermissions } from '@/store/authStore'
 import { formatCurrency, formatPercentage } from '@/utils'
 
-// Mock data - en producción vendría del backend
-const mockKPIs = {
-  cartera_total: 2500000,
-  cartera_al_dia: 2100000,
-  cartera_vencida: 400000,
-  porcentaje_mora: 16,
+// Mock data integrado - en producción vendría del backend
+const mockData = {
+  // KPIs Principales
+  cartera_total: 485750.00,
+  cartera_anterior: 462300.00,
+  cartera_al_dia: 425250.00,
+  cartera_vencida: 60500.00,
+  porcentaje_mora: 12.5,
+  porcentaje_mora_anterior: 15.2,
   pagos_hoy: 15,
   monto_pagos_hoy: 45000,
   clientes_activos: 150,
   clientes_mora: 24,
+  clientes_anterior: 28,
   meta_mensual: 500000,
   avance_meta: 320000,
+  
+  // Métricas Financieras Detalladas
+  financieros: {
+    totalCobrado: 125400.00,
+    totalCobradoAnterior: 118200.00,
+    ingresosCapital: 89500.00,
+    ingresosInteres: 28750.00,
+    ingresosMora: 7150.00,
+    tasaRecuperacion: 85.4,
+    tasaRecuperacionAnterior: 82.1,
+  },
+  
+  // Métricas de Cobranza
+  cobranza: {
+    promedioDiasMora: 8.5,
+    promedioDiasMoraAnterior: 12.3,
+    porcentajeCumplimiento: 87.6,
+    porcentajeCumplimientoAnterior: 84.2,
+  },
+  
+  // Métricas de Asesores
+  asesores: {
+    totalAsesores: 8,
+    asesoresActivos: 7,
+    ventasMejorAsesor: 12,
+    montoMejorAsesor: 75000.00,
+    promedioVentas: 8.5,
+    tasaConversion: 23.4,
+    tasaConversionAnterior: 21.8,
+  },
+  
+  // Métricas de Productos
+  productos: {
+    modeloMasVendido: 'Toyota Corolla',
+    ventasModeloMasVendido: 25,
+    ticketPromedio: 18500.00,
+    ticketPromedioAnterior: 17200.00,
+    totalModelos: 12,
+    modeloMenosVendido: 'Nissan Versa',
+  }
 }
+
+const mockEvolucionMensual = [
+  { mes: 'Ene', cartera: 420000, cobrado: 95000, morosidad: 18.2 },
+  { mes: 'Feb', cartera: 435000, cobrado: 102000, morosidad: 16.8 },
+  { mes: 'Mar', cartera: 448000, cobrado: 108000, morosidad: 15.5 },
+  { mes: 'Abr', cartera: 456000, cobrado: 112000, morosidad: 14.2 },
+  { mes: 'May', cartera: 462300, cobrado: 118200, morosidad: 15.2 },
+  { mes: 'Jun', cartera: 475000, cobrado: 122000, morosidad: 13.8 },
+  { mes: 'Jul', cartera: 485750, cobrado: 125400, morosidad: 12.5 },
+]
+
+const mockTopAsesores = [
+  { nombre: 'Carlos Mendoza', ventas: 12, monto: 75000, clientes: 15, tasaConversion: 28.5 },
+  { nombre: 'María González', ventas: 10, monto: 65000, clientes: 13, tasaConversion: 25.2 },
+  { nombre: 'Luis Rodríguez', ventas: 9, monto: 58000, clientes: 11, tasaConversion: 22.8 },
+  { nombre: 'Ana Pérez', ventas: 8, monto: 52000, clientes: 10, tasaConversion: 21.5 },
+  { nombre: 'José Silva', ventas: 7, monto: 45000, clientes: 9, tasaConversion: 19.8 },
+]
 
 const mockRecentPayments = [
   { id: 1, cliente: 'Juan Pérez', monto: 850, fecha: '2024-01-15', estado: 'confirmado' },
@@ -39,95 +115,118 @@ const mockRecentPayments = [
 const mockAlerts = [
   { id: 1, tipo: 'vencimiento', mensaje: '5 cuotas vencen hoy', prioridad: 'alta' },
   { id: 2, tipo: 'mora', mensaje: '3 clientes entraron en mora', prioridad: 'alta' },
-  { id: 3, tipo: 'pago', mensaje: '2 pagos pendientes de confirmación', prioridad: 'media' },
+  { id: 3, tipo: 'pendiente', mensaje: '2 pagos pendientes de confirmación', prioridad: 'media' },
 ]
 
 export function Dashboard() {
   const { userRole, userName, isAdmin, canViewAllClients } = usePermissions()
+  const [periodo, setPeriodo] = useState('mes')
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
+  const calcularVariacion = (actual: number, anterior: number) => {
+    const variacion = ((actual - anterior) / anterior) * 100
+    return {
+      valor: variacion,
+      esPositivo: variacion > 0,
+      icono: variacion > 0 ? TrendingUp : TrendingDown,
+      color: variacion > 0 ? 'text-green-600' : 'text-red-600',
+      bgColor: variacion > 0 ? 'bg-green-50' : 'bg-red-50'
+    }
+  }
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    // Simular actualización de datos
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    setIsRefreshing(false)
+  }
+
+  // KPIs Principales con tendencias
   const kpiCards = [
     {
       title: 'Cartera Total',
-      value: formatCurrency(mockKPIs.cartera_total),
+      value: formatCurrency(mockData.cartera_total),
       description: 'Total de préstamos activos',
       icon: DollarSign,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
-      trend: '+5.2%',
-      trendUp: true,
+      variacion: calcularVariacion(mockData.cartera_total, mockData.cartera_anterior),
+      status: 'excellent'
     },
     {
       title: 'Cartera al Día',
-      value: formatCurrency(mockKPIs.cartera_al_dia),
-      description: `${formatPercentage(84)} de la cartera total`,
+      value: formatCurrency(mockData.cartera_al_dia),
+      description: `${formatPercentage((mockData.cartera_al_dia / mockData.cartera_total) * 100)} de la cartera total`,
       icon: CheckCircle,
       color: 'text-green-600',
       bgColor: 'bg-green-50',
-      trend: '+2.1%',
-      trendUp: true,
+      variacion: { valor: 2.1, esPositivo: true, icono: TrendingUp, color: 'text-green-600', bgColor: 'bg-green-50' },
+      status: 'good'
     },
     {
       title: 'Cartera en Mora',
-      value: formatCurrency(mockKPIs.cartera_vencida),
-      description: `${formatPercentage(mockKPIs.porcentaje_mora)} de mora`,
+      value: formatCurrency(mockData.cartera_vencida),
+      description: `${formatPercentage(mockData.porcentaje_mora)} de mora`,
       icon: AlertTriangle,
       color: 'text-red-600',
       bgColor: 'bg-red-50',
-      trend: '-1.3%',
-      trendUp: false,
+      variacion: calcularVariacion(mockData.porcentaje_mora, mockData.porcentaje_mora_anterior),
+      status: 'warning'
     },
     {
       title: 'Pagos Hoy',
-      value: mockKPIs.pagos_hoy.toString(),
-      description: formatCurrency(mockKPIs.monto_pagos_hoy),
+      value: mockData.pagos_hoy.toString(),
+      description: formatCurrency(mockData.monto_pagos_hoy),
       icon: CreditCard,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
-      trend: '+12.5%',
-      trendUp: true,
-    },
+      variacion: { valor: 12.5, esPositivo: true, icono: TrendingUp, color: 'text-green-600', bgColor: 'bg-green-50' },
+      status: 'excellent'
+    }
   ]
 
-  const progressPercentage = (mockKPIs.avance_meta / mockKPIs.meta_mensual) * 100
+  const progressPercentage = (mockData.avance_meta / mockData.meta_mensual) * 100
 
   return (
     <div className="space-y-6">
-      {/* Welcome Header */}
+      {/* Header con controles */}
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
+        initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-6 text-white"
+        className="flex items-center justify-between"
       >
-        <div className="flex items-center space-x-4 mb-4">
-          <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-            <img 
-              src="/logo-compact.svg" 
-              alt="RAPICREDIT Logo" 
-              className="w-8 h-8"
-            />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold mb-1">
-              ¡Bienvenido a RAPICREDIT, {userName}!
-            </h1>
-            <p className="text-blue-100">
-              Dashboard {userRole} - Soluciones financieras rápidas y confiables
-            </p>
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard Ejecutivo</h1>
+          <p className="text-gray-600">
+            Bienvenido, {userName} • Resumen completo del sistema de financiamiento
+          </p>
         </div>
-        <div className="mt-4 flex items-center space-x-4 text-sm">
-          <div className="flex items-center space-x-1">
-            <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-            <span>Sistema operativo</span>
-          </div>
-          <div className="flex items-center space-x-1">
-            <Clock className="w-4 h-4" />
-            <span>Última actualización: hace 2 min</span>
-          </div>
+        <div className="flex items-center space-x-3">
+          <Select value={periodo} onValueChange={setPeriodo}>
+            <SelectTrigger className="w-[140px]">
+              <Calendar className="mr-2 h-4 w-4" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="dia">Hoy</SelectItem>
+              <SelectItem value="semana">Esta semana</SelectItem>
+              <SelectItem value="mes">Este mes</SelectItem>
+              <SelectItem value="año">Este año</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Actualizar
+          </Button>
         </div>
       </motion.div>
 
-      {/* KPI Cards */}
+      {/* KPIs Principales */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {kpiCards.map((kpi, index) => (
           <motion.div
@@ -136,34 +235,32 @@ export function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
           >
-            <Card className="hover:shadow-lg transition-shadow">
+            <Card className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-blue-500">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 mb-1">
-                      {kpi.title}
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900">
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-medium text-gray-600">
+                        {kpi.title}
+                      </p>
+                      <div className={`p-2 rounded-full ${kpi.bgColor}`}>
+                        <kpi.icon className={`w-5 h-5 ${kpi.color}`} />
+                      </div>
+                    </div>
+                    <p className="text-3xl font-bold text-gray-900 mb-1">
                       {kpi.value}
                     </p>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="text-sm text-gray-500 mb-3">
                       {kpi.description}
                     </p>
+                    <div className="flex items-center">
+                      <kpi.variacion.icono className={`w-4 h-4 mr-1 ${kpi.variacion.color}`} />
+                      <span className={`text-sm font-medium ${kpi.variacion.color}`}>
+                        {Math.abs(kpi.variacion.valor).toFixed(1)}%
+                      </span>
+                      <span className="text-sm text-gray-500 ml-1">vs mes anterior</span>
+                    </div>
                   </div>
-                  <div className={`p-3 rounded-full ${kpi.bgColor}`}>
-                    <kpi.icon className={`w-6 h-6 ${kpi.color}`} />
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center">
-                  <TrendingUp className={`w-4 h-4 mr-1 ${
-                    kpi.trendUp ? 'text-green-500' : 'text-red-500'
-                  }`} />
-                  <span className={`text-sm font-medium ${
-                    kpi.trendUp ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {kpi.trend}
-                  </span>
-                  <span className="text-sm text-gray-500 ml-1">vs mes anterior</span>
                 </div>
               </CardContent>
             </Card>
@@ -171,175 +268,362 @@ export function Dashboard() {
         ))}
       </div>
 
+      {/* Métricas Financieras Detalladas */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Meta Mensual */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Target className="w-5 h-5 text-blue-600" />
-                <span>Meta Mensual</span>
-              </CardTitle>
-              <CardDescription>
-                Progreso de cobranza del mes actual
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Progreso</span>
-                  <span className="text-sm font-medium">
-                    {progressPercentage.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div
-                    className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min(progressPercentage, 100)}%` }}
-                  ></div>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">
-                    Recaudado: {formatCurrency(mockKPIs.avance_meta)}
-                  </span>
-                  <span className="text-gray-600">
-                    Meta: {formatCurrency(mockKPIs.meta_mensual)}
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Alertas */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <AlertTriangle className="w-5 h-5 text-yellow-600" />
-                  <span>Alertas</span>
-                </div>
-                <Badge variant="destructive">{mockAlerts.length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {mockAlerts.map((alert) => (
-                  <div
-                    key={alert.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                  >
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">
-                        {alert.mensaje}
-                      </p>
-                    </div>
-                    <Badge
-                      variant={alert.prioridad === 'alta' ? 'destructive' : 'warning'}
-                    >
-                      {alert.prioridad}
-                    </Badge>
-                  </div>
-                ))}
-                <Button variant="outline" className="w-full mt-3">
-                  Ver todas las alertas
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Pagos Recientes */}
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.6 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <CreditCard className="w-5 h-5 text-green-600" />
-                <span>Pagos Recientes</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {mockRecentPayments.map((pago) => (
-                  <div
-                    key={pago.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {pago.cliente}
-                      </p>
-                      <p className="text-xs text-gray-500">{pago.fecha}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-gray-900">
-                        {formatCurrency(pago.monto)}
-                      </p>
-                      <Badge
-                        variant={pago.estado === 'confirmado' ? 'success' : 'warning'}
-                      >
-                        {pago.estado}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-                <Button variant="outline" className="w-full mt-3">
-                  Ver todos los pagos
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-
-      {/* Quick Actions */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.7 }}
-      >
+        {/* Total Cobrado */}
         <Card>
           <CardHeader>
-            <CardTitle>Acciones Rápidas</CardTitle>
-            <CardDescription>
-              Accesos directos a las funciones más utilizadas
-            </CardDescription>
+            <CardTitle className="flex items-center">
+              <CreditCard className="mr-2 h-5 w-5 text-green-600" />
+              Total Cobrado
+            </CardTitle>
+            <CardDescription>Recaudación del período actual</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Button className="h-20 flex flex-col space-y-2">
-                <CreditCard className="w-6 h-6" />
-                <span>Nuevo Pago</span>
-              </Button>
-              <Button variant="outline" className="h-20 flex flex-col space-y-2">
-                <Users className="w-6 h-6" />
-                <span>Nuevo Cliente</span>
-              </Button>
-              <Button variant="outline" className="h-20 flex flex-col space-y-2">
-                <TrendingUp className="w-6 h-6" />
-                <span>Generar Reporte</span>
-              </Button>
-              <Button variant="outline" className="h-20 flex flex-col space-y-2">
-                <AlertTriangle className="w-6 h-6" />
-                <span>Ver Mora</span>
-              </Button>
+            <div className="text-2xl font-bold text-green-600 mb-2">
+              {formatCurrency(mockData.financieros.totalCobrado)}
+            </div>
+            <div className="flex items-center text-sm">
+              {(() => {
+                const variacion = calcularVariacion(
+                  mockData.financieros.totalCobrado,
+                  mockData.financieros.totalCobradoAnterior
+                )
+                const IconComponent = variacion.icono
+                return (
+                  <>
+                    <IconComponent className={`h-4 w-4 mr-1 ${variacion.color}`} />
+                    <span className={variacion.color}>
+                      {Math.abs(variacion.valor).toFixed(1)}% vs mes anterior
+                    </span>
+                  </>
+                )
+              })()}
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+
+        {/* Tasa de Recuperación */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Target className="mr-2 h-5 w-5 text-blue-600" />
+              Tasa de Recuperación
+            </CardTitle>
+            <CardDescription>Eficiencia en cobranza</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600 mb-2">
+              {mockData.financieros.tasaRecuperacion}%
+            </div>
+            <div className="flex items-center text-sm">
+              {(() => {
+                const variacion = calcularVariacion(
+                  mockData.financieros.tasaRecuperacion,
+                  mockData.financieros.tasaRecuperacionAnterior
+                )
+                const IconComponent = variacion.icono
+                return (
+                  <>
+                    <IconComponent className={`h-4 w-4 mr-1 ${variacion.color}`} />
+                    <span className={variacion.color}>
+                      {Math.abs(variacion.valor).toFixed(1)}% vs mes anterior
+                    </span>
+                  </>
+                )
+              })()}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Progreso de Meta Mensual */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Activity className="mr-2 h-5 w-5 text-purple-600" />
+              Meta Mensual
+            </CardTitle>
+            <CardDescription>Avance hacia la meta de recaudación</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">
+                  Recaudado: {formatCurrency(mockData.avance_meta)}
+                </span>
+                <span className="text-gray-600">
+                  Meta: {formatCurrency(mockData.meta_mensual)}
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-purple-600 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${progressPercentage}%` }}
+                ></div>
+              </div>
+              <div className="text-center">
+                <span className="text-lg font-bold text-purple-600">
+                  {progressPercentage.toFixed(1)}%
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Gráficos y Análisis */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Evolución Mensual */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <LineChart className="mr-2 h-5 w-5" />
+              Evolución Mensual
+            </CardTitle>
+            <CardDescription>Comparativo de cartera, cobrado y morosidad</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {mockEvolucionMensual.map((mes, index) => (
+                <div key={mes.mes} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <span className="text-sm font-bold text-blue-600">{mes.mes}</span>
+                    </div>
+                    <div>
+                      <div className="font-medium text-gray-900">Enero - Julio</div>
+                      <div className="text-sm text-gray-500">Período {index + 1}</div>
+                    </div>
+                  </div>
+                  <div className="flex space-x-6 text-sm">
+                    <div className="text-center">
+                      <div className="text-gray-500">Cartera</div>
+                      <div className="font-semibold text-gray-900">{formatCurrency(mes.cartera)}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-gray-500">Cobrado</div>
+                      <div className="font-semibold text-green-600">{formatCurrency(mes.cobrado)}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-gray-500">Mora</div>
+                      <div className="font-semibold text-red-600">{mes.morosidad}%</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Top Asesores */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Award className="mr-2 h-5 w-5" />
+              Top Asesores
+            </CardTitle>
+            <CardDescription>Ranking por ventas y rendimiento</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {mockTopAsesores.map((asesor, index) => (
+                <div key={asesor.nombre} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                      index === 0 ? 'bg-yellow-500 text-white' : 
+                      index === 1 ? 'bg-gray-400 text-white' : 
+                      index === 2 ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-600'
+                    }`}>
+                      {index + 1}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900">{asesor.nombre}</div>
+                      <div className="text-sm text-gray-500">{asesor.clientes} clientes • {asesor.ventas} ventas</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-semibold text-gray-900">{formatCurrency(asesor.monto)}</div>
+                    <div className="text-sm text-green-600">{asesor.tasaConversion}% conversión</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Métricas Detalladas */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Ingresos por Tipo */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <PieChart className="mr-2 h-5 w-5" />
+              Ingresos por Tipo
+            </CardTitle>
+            <CardDescription>Desglose de ingresos por categoría</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                <span className="font-medium text-blue-900">Capital</span>
+                <Badge variant="outline" className="bg-blue-100 text-blue-800">
+                  {formatCurrency(mockData.financieros.ingresosCapital)}
+                </Badge>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                <span className="font-medium text-green-900">Intereses</span>
+                <Badge variant="outline" className="bg-green-100 text-green-800">
+                  {formatCurrency(mockData.financieros.ingresosInteres)}
+                </Badge>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                <span className="font-medium text-red-900">Mora</span>
+                <Badge variant="outline" className="bg-red-100 text-red-800">
+                  {formatCurrency(mockData.financieros.ingresosMora)}
+                </Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Métricas de Cobranza */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <BarChart3 className="mr-2 h-5 w-5" />
+              Métricas de Cobranza
+            </CardTitle>
+            <CardDescription>Indicadores de eficiencia</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <span className="font-medium">Promedio días mora</span>
+                <Badge variant="outline">
+                  {mockData.cobranza.promedioDiasMora} días
+                </Badge>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                <span className="font-medium text-green-900">% Cumplimiento</span>
+                <Badge className="bg-green-600 text-white">
+                  {mockData.cobranza.porcentajeCumplimiento}%
+                </Badge>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                <span className="font-medium text-red-900">Clientes en mora</span>
+                <Badge className="bg-red-600 text-white">
+                  {mockData.cobranza.clientesMora}
+                </Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Métricas de Productos */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Car className="mr-2 h-5 w-5" />
+              Métricas de Productos
+            </CardTitle>
+            <CardDescription>Análisis de modelos</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                <span className="font-medium text-blue-900">Modelo más vendido</span>
+                <Badge variant="outline" className="bg-blue-100 text-blue-800">
+                  {mockData.productos.modeloMasVendido}
+                </Badge>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                <span className="font-medium text-green-900">Ventas del modelo</span>
+                <Badge variant="outline" className="bg-green-100 text-green-800">
+                  {mockData.productos.ventasModeloMasVendido}
+                </Badge>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
+                <span className="font-medium text-purple-900">Ticket promedio</span>
+                <Badge variant="outline" className="bg-purple-100 text-purple-800">
+                  {formatCurrency(mockData.productos.ticketPromedio)}
+                </Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Alertas y Actividad Reciente */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Alertas Importantes */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <AlertTriangle className="mr-2 h-5 w-5 text-orange-600" />
+              Alertas Importantes
+            </CardTitle>
+            <CardDescription>Notificaciones que requieren atención</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {mockAlerts.map((alert) => (
+                <div key={alert.id} className={`p-3 rounded-lg border-l-4 ${
+                  alert.prioridad === 'alta' 
+                    ? 'bg-red-50 border-red-500' 
+                    : 'bg-yellow-50 border-yellow-500'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-gray-900">{alert.mensaje}</p>
+                      <p className="text-sm text-gray-600 capitalize">
+                        Tipo: {alert.tipo} • Prioridad: {alert.prioridad}
+                      </p>
+                    </div>
+                    <Badge variant={alert.prioridad === 'alta' ? 'destructive' : 'secondary'}>
+                      {alert.prioridad}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Pagos Recientes */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <CreditCard className="mr-2 h-5 w-5 text-green-600" />
+              Pagos Recientes
+            </CardTitle>
+            <CardDescription>Últimas transacciones procesadas</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {mockRecentPayments.map((payment) => (
+                <div key={payment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-2 h-2 rounded-full ${
+                      payment.estado === 'confirmado' ? 'bg-green-500' : 'bg-yellow-500'
+                    }`}></div>
+                    <div>
+                      <p className="font-medium text-gray-900">{payment.cliente}</p>
+                      <p className="text-sm text-gray-600">{payment.fecha}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-gray-900">{formatCurrency(payment.monto)}</p>
+                    <Badge variant={payment.estado === 'confirmado' ? 'default' : 'secondary'}>
+                      {payment.estado}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

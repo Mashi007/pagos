@@ -91,12 +91,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       requiredRoles: ['ADMIN', 'GERENTE', 'DIRECTOR', 'CONTADOR', 'AUDITOR'],
     },
     {
-      title: 'KPIs',
-      href: '/kpis',
-      icon: BarChart3,
-      requiredRoles: ['ADMIN', 'GERENTE', 'DIRECTOR'],
-    },
-    {
       title: 'Aprobaciones',
       href: '/aprobaciones',
       icon: CheckSquare,
