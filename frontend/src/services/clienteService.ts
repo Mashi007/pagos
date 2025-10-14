@@ -10,7 +10,7 @@ class ClienteService {
     page: number = 1,
     perPage: number = 20
   ): Promise<PaginatedResponse<Cliente>> {
-    // Usar endpoint principal corregido
+    // Endpoint principal con barra final para evitar redirección 307
     const params = new URLSearchParams({
       page: page.toString(),
       per_page: perPage.toString()
@@ -22,6 +22,7 @@ class ClienteService {
     if (filters?.estado_financiero) params.append('estado_financiero', filters.estado_financiero)
     if (filters?.asesor_id) params.append('asesor_id', filters.asesor_id.toString())
     
+    // IMPORTANTE: Incluir la barra final para evitar redirección 307
     const url = `${this.baseUrl}/?${params.toString()}`
     return apiClient.get<PaginatedResponse<Cliente>>(url)
   }
