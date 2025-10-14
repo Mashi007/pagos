@@ -2,8 +2,11 @@ services:
   - type: web
     name: rapicredit-frontend
     env: node
-    buildCommand: npm install && npm run build
+    region: oregon
+    plan: free
+    buildCommand: npm ci && npm run build
     startCommand: node server.js
+    healthCheckPath: /
     envVars:
       - key: NODE_ENV
         value: production
