@@ -2,7 +2,7 @@
 """
 Configuración de SQLAlchemy: Engine, SessionLocal y Base.
 """
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -13,11 +13,15 @@ from app.core.config import settings
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,
-    pool_size=settings.DB_POOL_SIZE,
-    max_overflow=settings.DB_MAX_OVERFLOW,
-    pool_timeout=settings.DB_POOL_TIMEOUT,
-    pool_recycle=settings.DB_POOL_RECYCLE,
-    echo=settings.DB_ECHO
+    pool_size=1,  # Reducido para Render
+    max_overflow=0,  # Sin overflow para evitar problemas
+    pool_timeout=10,  # Timeout más corto
+    pool_recycle=300,  # Reciclar cada 5 minutos
+    echo=settings.DB_ECHO,
+    connect_args={
+        "connect_timeout": 10,
+        "application_name": "rapicredit_backend"
+    }
 )
 
 # SessionLocal para crear sesiones de BD
@@ -39,14 +43,27 @@ def get_db():
     
     Si hay problemas de conexión, levanta HTTPException apropiada.
     """
+    db = None
     try:
-        db = SessionLocal()
-        yield db
-    except Exception as e:
-        # Log del error pero no exponer detalles técnicos al usuario
+        # Intentar crear sesión con timeout
         import logging
         logger = logging.getLogger(__name__)
-        logger.error(f"Error de conexión a base de datos: {e}")
+        
+        logger.info("🔄 Intentando crear sesión de base de datos...")
+        db = SessionLocal()
+        
+        # Test de conexión
+        db.execute(text("SELECT 1"))
+        logger.info("✅ Sesión de base de datos creada exitosamente")
+        
+        yield db
+        
+    except Exception as e:
+        # Log del error detallado
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"❌ Error de conexión a base de datos: {e}")
+        logger.error(f"❌ Tipo de error: {type(e).__name__}")
         
         # Importar HTTPException dentro de la función para evitar imports circulares
         from fastapi import HTTPException
@@ -55,10 +72,12 @@ def get_db():
             detail="Servicio de base de datos temporalmente no disponible"
         )
     finally:
-        try:
-            db.close()
-        except:
-            pass  # Si db no se creó, no hay nada que cerrar
+        if db:
+            try:
+                db.close()
+                logger.info("✅ Sesión de base de datos cerrada")
+            except Exception as e:
+                logger.warning(f"⚠️ Error cerrando sesión: {e}")
 
 
 def close_db_connections():
