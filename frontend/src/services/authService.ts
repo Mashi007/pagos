@@ -132,18 +132,23 @@ class AuthService {
 
   // Verificar si el usuario está autenticado
   isAuthenticated(): boolean {
-    const token = localStorage.getItem('access_token')
-    const user = localStorage.getItem('user')
     const rememberMe = localStorage.getItem('remember_me') === 'true'
     
-    // Si no está marcado "recordarme", solo verificar sessionStorage
-    if (!rememberMe) {
+    if (rememberMe) {
+      // Verificar localStorage para "recordarme"
+      const token = localStorage.getItem('access_token')
+      const user = localStorage.getItem('user')
+      const isValid = !!(token && user)
+      console.log('🔍 Verificación autenticación (localStorage):', { hasToken: !!token, hasUser: !!user, isValid })
+      return isValid
+    } else {
+      // Verificar sessionStorage para sesión temporal
       const sessionToken = sessionStorage.getItem('access_token')
       const sessionUser = sessionStorage.getItem('user')
-      return !!(sessionToken && sessionUser)
+      const isValid = !!(sessionToken && sessionUser)
+      console.log('🔍 Verificación autenticación (sessionStorage):', { hasToken: !!sessionToken, hasUser: !!sessionUser, isValid })
+      return isValid
     }
-    
-    return !!(token && user)
   }
 
   // Obtener usuario desde localStorage o sessionStorage

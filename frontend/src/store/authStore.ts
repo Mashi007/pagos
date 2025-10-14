@@ -155,20 +155,30 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: state.isAuthenticated,
       }),
       onRehydrateStorage: () => (state) => {
-        // Verificar si el usuario sigue autenticado al cargar desde localStorage
-        if (state?.isAuthenticated) {
-          // Si hay datos en el store pero no hay tokens válidos, limpiar
-          if (!authService.isAuthenticated()) {
-            state.user = null
-            state.isAuthenticated = false
-          } else {
-            // Restaurar usuario desde localStorage si está disponible
-            const storedUser = authService.getStoredUser()
-            if (storedUser) {
-              state.user = storedUser
-              state.isAuthenticated = true
-            }
-          }
+        console.log('🔄 Rehidratando store de autenticación...', state)
+        
+        // Verificar si hay datos almacenados en localStorage/sessionStorage
+        const storedUser = authService.getStoredUser()
+        const hasToken = authService.getStoredToken()
+        const rememberMe = localStorage.getItem('remember_me') === 'true'
+        
+        console.log('📊 Datos encontrados en storage:', {
+          hasStoredUser: !!storedUser,
+          hasToken: !!hasToken,
+          rememberMe,
+          storageType: rememberMe ? 'localStorage' : 'sessionStorage'
+        })
+        
+        if (storedUser && hasToken) {
+          // Restaurar datos desde storage
+          state.user = storedUser
+          state.isAuthenticated = true
+          console.log('✅ Usuario restaurado desde storage:', storedUser.nombre)
+        } else {
+          // Limpiar estado si no hay datos válidos
+          state.user = null
+          state.isAuthenticated = false
+          console.log('🧹 Estado limpiado - no hay datos válidos')
         }
       },
     }
