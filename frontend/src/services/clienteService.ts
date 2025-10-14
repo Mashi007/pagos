@@ -10,31 +10,13 @@ class ClienteService {
     page: number = 1,
     perPage: number = 20
   ): Promise<PaginatedResponse<Cliente>> {
-    // TEMPORAL: Usar endpoint sin autenticación para debugging
-    try {
-      console.log('🔄 Intentando obtener clientes con autenticación...')
-      const response = await apiClient.get<PaginatedResponse<Cliente>>('/api/v1/clientes-temp/test-con-auth')
-      console.log('✅ Clientes obtenidos con autenticación:', response)
-      return response
-    } catch (authError) {
-      console.warn('⚠️ Error con autenticación, probando sin auth:', authError)
-      try {
-        const response = await apiClient.get<any>('/api/v1/clientes-temp/test-sin-auth')
-        console.log('✅ Clientes obtenidos sin autenticación:', response)
-        
-        // Convertir respuesta a formato esperado
-        return {
-          data: response.data || [],
-          total: response.total || 0,
-          page: 1,
-          per_page: response.total || 0,
-          total_pages: 1
-        }
-      } catch (noAuthError) {
-        console.error('❌ Error en ambos endpoints:', noAuthError)
-        throw noAuthError
-      }
-    }
+    console.log('🔄 Obteniendo clientes desde endpoint real...')
+    const params = { ...filters, page, per_page: perPage }
+    const url = buildUrl(this.baseUrl, params)
+    
+    const response = await apiClient.get<PaginatedResponse<Cliente>>(url)
+    console.log('✅ Clientes obtenidos correctamente:', response)
+    return response
   }
 
   // Obtener cliente por ID
