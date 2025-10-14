@@ -1,12 +1,11 @@
 services:
   - type: web_service
     name: rapicredit-frontend
-    env: node
-    buildCommand: npm run render-build
-    startCommand: npm run render-start
+    env: docker
+    dockerfilePath: ./frontend/Dockerfile
     envVars:
       - key: NODE_ENV
         value: production
       - key: VITE_API_URL
         value: https://pagos-f2qf.onrender.com
-    healthCheckPath: /
+    healthCheckPath: /health

@@ -1,5 +1,5 @@
-# Dockerfile para Frontend en Render
-FROM node:18-alpine
+# Dockerfile para Frontend con Nginx
+FROM node:18-alpine AS builder
 
 # Establecer directorio de trabajo
 WORKDIR /app
@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Instalar dependencias
-RUN npm ci --only=production
+RUN npm ci
 
 # Copiar código fuente
 COPY . .
@@ -20,11 +20,17 @@ ENV VITE_NODE_ENV=production
 # Construir aplicación
 RUN npm run build
 
-# Instalar servidor estático
-RUN npm install -g serve
+# Stage 2: Nginx
+FROM nginx:alpine
+
+# Copiar configuración de Nginx
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copiar archivos construidos
+COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Exponer puerto
-EXPOSE 3000
+EXPOSE 80
 
-# Comando para iniciar
-CMD ["serve", "-s", "dist", "-l", "3000"]
+# Comando para iniciar Nginx
+CMD ["nginx", "-g", "daemon off;"]
