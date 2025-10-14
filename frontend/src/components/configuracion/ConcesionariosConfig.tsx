@@ -31,9 +31,6 @@ export function ConcesionariosConfig() {
   // Form state
   const [formData, setFormData] = useState<ConcesionarioCreate>({
     nombre: '',
-    direccion: '',
-    telefono: '',
-    email: '',
     responsable: '',
     activo: true
   })
@@ -76,9 +73,6 @@ export function ConcesionariosConfig() {
     setEditingConcesionario(concesionario)
     setFormData({
       nombre: concesionario.nombre,
-      direccion: concesionario.direccion || '',
-      telefono: concesionario.telefono || '',
-      email: concesionario.email || '',
       responsable: concesionario.responsable || '',
       activo: concesionario.activo
     })
@@ -102,9 +96,6 @@ export function ConcesionariosConfig() {
   const resetForm = () => {
     setFormData({
       nombre: '',
-      direccion: '',
-      telefono: '',
-      email: '',
       responsable: '',
       activo: true
     })
@@ -157,7 +148,7 @@ export function ConcesionariosConfig() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium">Nombre *</label>
+                  <label className="text-sm font-medium">Nombre del Concesionario *</label>
                   <Input
                     value={formData.nombre}
                     onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
@@ -171,31 +162,6 @@ export function ConcesionariosConfig() {
                     value={formData.responsable}
                     onChange={(e) => setFormData({ ...formData, responsable: e.target.value })}
                     placeholder="Nombre del responsable"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Teléfono</label>
-                  <Input
-                    value={formData.telefono}
-                    onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                    placeholder="+58-212-1234567"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Email</label>
-                  <Input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="concesionario@ejemplo.com"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="text-sm font-medium">Dirección</label>
-                  <Input
-                    value={formData.direccion}
-                    onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
-                    placeholder="Dirección completa del concesionario"
                   />
                 </div>
               </div>
@@ -248,9 +214,8 @@ export function ConcesionariosConfig() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nombre</TableHead>
+                  <TableHead>Nombre del Concesionario</TableHead>
                   <TableHead>Responsable</TableHead>
-                  <TableHead>Contacto</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -259,25 +224,10 @@ export function ConcesionariosConfig() {
                 {filteredConcesionarios.map((concesionario) => (
                   <TableRow key={concesionario.id}>
                     <TableCell>
-                      <div>
-                        <div className="font-medium">{concesionario.nombre}</div>
-                        {concesionario.direccion && (
-                          <div className="text-sm text-gray-500">{concesionario.direccion}</div>
-                        )}
-                      </div>
+                      <div className="font-medium">{concesionario.nombre}</div>
                     </TableCell>
                     <TableCell>
                       {concesionario.responsable || '-'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        {concesionario.telefono && (
-                          <div className="text-sm">{concesionario.telefono}</div>
-                        )}
-                        {concesionario.email && (
-                          <div className="text-sm text-gray-500">{concesionario.email}</div>
-                        )}
-                      </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant={concesionario.activo ? 'default' : 'destructive'}>
