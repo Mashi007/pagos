@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AlertWithIcon } from '@/components/ui/alert'
 import { ErroresDetallados } from '@/components/carga-masiva/ErroresDetallados'
 import { Progress } from '@/components/ui/progress'
+import { cargaMasivaService } from '@/services/cargaMasivaService'
 
 interface UploadResult {
   success: boolean
@@ -81,72 +82,31 @@ export function CargaMasiva() {
         })
       }, 200)
 
-      // Crear FormData para enviar el archivo
-      const formData = new FormData()
-      formData.append('file', selectedFile)
-      formData.append('type', selectedType) // Tipo de datos a importar
-
-      // Simular llamada a la API (por ahora)
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // Llamada real a la API
+      const response = await cargaMasivaService.cargarArchivo({
+        file: selectedFile,
+        type: selectedType
+      })
 
       clearInterval(progressInterval)
       setUploadProgress(100)
 
-      // Simular resultado con errores detallados
-      const erroresDetallados = selectedType === 'clientes' ? [
-        {
-          row: 3,
-          cedula: 'V30325601',
-          error: 'Datos marcados como "error" - móvil y email inválidos',
-          data: { cedula: 'V30325601', nombre: 'AARON ALEJANDRO GONZALEZ CAYAMA', telefono: 'error', email: 'error' },
-          tipo: 'cliente' as const
-        },
-        {
-          row: 15,
-          cedula: 'V12345678',
-          error: 'Formato de cédula inválido - debe empezar con V',
-          data: { cedula: '12345678', nombre: 'JUAN PEREZ', telefono: '+5804123456789', email: 'juan@email.com' },
-          tipo: 'cliente' as const
-        }
-      ] : [
-        {
-          row: 5,
-          cedula: 'V99999999',
-          error: 'Cliente con cédula V99999999 no encontrado',
-          data: { cedula: 'V99999999', fecha: '06/12/2024', monto_pagado: '150', documento_pago: '123456789' },
-          tipo: 'pago' as const
-        },
-        {
-          row: 8,
-          cedula: 'V22283249',
-          error: 'Formato de monto inválido - debe ser numérico',
-          data: { cedula: 'V22283249', fecha: '06/12/2024', monto_pagado: 'abc', documento_pago: '740087437485285' },
-          tipo: 'pago' as const
-        }
-      ]
-
-      const result = {
-        success: true,
-        message: `${selectedType === 'clientes' ? 'Clientes' : 'Pagos'} procesados con ${erroresDetallados.length} errores`,
-        data: {
-          totalRecords: selectedType === 'clientes' ? 150 : 300,
-          processedRecords: selectedType === 'clientes' ? 148 : 295,
-          errors: erroresDetallados.length,
-          fileName: selectedFile.name,
-          type: selectedType
-        },
-        erroresDetallados
-      }
-
-      setUploadResult(result)
+      // Procesar respuesta real
+      setUploadResult({
+        success: response.success,
+        message: response.message,
+        data: response.data,
+        errors: response.errors,
+        erroresDetallados: response.erroresDetallados
+      })
 
       // Si se cargaron clientes exitosamente (aunque haya errores), avanzar al siguiente paso
-      if (selectedType === 'clientes' && result.success && result.data.processedRecords > 0) {
+      if (selectedType === 'clientes' && response.success && response.data?.processedRecords > 0) {
         setClientesLoaded(true)
         setUploadStep('pagos')
         setSelectedType('pagos')
         setSelectedFile(null)
-      } else if (selectedType === 'pagos' && result.success && result.data.processedRecords > 0) {
+      } else if (selectedType === 'pagos' && response.success && response.data?.processedRecords > 0) {
         setUploadStep('complete')
       }
 

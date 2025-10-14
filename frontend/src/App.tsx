@@ -13,43 +13,22 @@ import { useAuth } from '@/store/authStore'
 import { Login } from '@/pages/Login'
 import { Dashboard } from '@/pages/Dashboard'
 import { Clientes } from '@/pages/Clientes'
+import { Prestamos } from '@/pages/Prestamos'
 import { Pagos } from '@/pages/Pagos'
 import { Amortizacion } from '@/pages/Amortizacion'
+import { Conciliacion } from '@/pages/Conciliacion'
+import { Reportes } from '@/pages/Reportes'
+import { KPIs } from '@/pages/KPIs'
+import { Aprobaciones } from '@/pages/Aprobaciones'
+import { Auditoria } from '@/pages/Auditoria'
+import { InteligenciaArtificial } from '@/pages/InteligenciaArtificial'
 import { Notificaciones } from '@/pages/Notificaciones'
+import { Programador } from '@/pages/Programador'
+import { Configuracion } from '@/pages/Configuracion'
 import { CargaMasiva } from '@/pages/CargaMasiva'
 import { VisualizacionBD } from '@/pages/VisualizacionBD'
 
-// Placeholder components for other pages
-
-// Pagos y Amortizacion ahora están importados desde las páginas reales
-
-const Conciliacion = () => (
-  <div className="p-6">
-    <h1 className="text-2xl font-bold mb-4">Conciliación Bancaria</h1>
-    <p className="text-gray-600">Módulo de conciliación en desarrollo...</p>
-  </div>
-)
-
-const Reportes = () => (
-  <div className="p-6">
-    <h1 className="text-2xl font-bold mb-4">Reportes</h1>
-    <p className="text-gray-600">Módulo de reportes en desarrollo...</p>
-  </div>
-)
-
-const KPIs = () => (
-  <div className="p-6">
-    <h1 className="text-2xl font-bold mb-4">KPIs y Métricas</h1>
-    <p className="text-gray-600">Módulo de KPIs en desarrollo...</p>
-  </div>
-)
-
-const Configuracion = () => (
-  <div className="p-6">
-    <h1 className="text-2xl font-bold mb-4">Configuración</h1>
-    <p className="text-gray-600">Módulo de configuración en desarrollo...</p>
-  </div>
-)
+// Todas las páginas ahora están importadas desde archivos reales
 
 const NotFound = () => (
   <div className="min-h-screen flex items-center justify-center">
@@ -137,10 +116,7 @@ function App() {
             path="prestamos"
             element={
               <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE', 'ASESOR_COMERCIAL']}>
-                <div className="p-6">
-                  <h1 className="text-2xl font-bold mb-4">Gestión de Préstamos</h1>
-                  <p className="text-gray-600">Módulo de préstamos en desarrollo...</p>
-                </div>
+                <Prestamos />
               </ProtectedRoute>
             }
           />
@@ -186,11 +162,8 @@ function App() {
           <Route
             path="aprobaciones"
             element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE', 'DIRECTOR']}>
-                <div className="p-6">
-                  <h1 className="text-2xl font-bold mb-4">Sistema de Aprobaciones</h1>
-                  <p className="text-gray-600">Módulo de aprobaciones en desarrollo...</p>
-                </div>
+              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE', 'ASESOR_COMERCIAL']}>
+                <Aprobaciones />
               </ProtectedRoute>
             }
           />
@@ -200,60 +173,31 @@ function App() {
             path="auditoria"
             element={
               <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE', 'AUDITOR']}>
-                <div className="p-6">
-                  <h1 className="text-2xl font-bold mb-4">Auditoría</h1>
-                  <p className="text-gray-600">Módulo de auditoría en desarrollo...</p>
-                </div>
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Carga Masiva */}
-          <Route
-            path="carga-masiva"
-            element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE']}>
-                <div className="p-6">
-                  <h1 className="text-2xl font-bold mb-4">Carga Masiva</h1>
-                  <p className="text-gray-600">Módulo de carga masiva en desarrollo...</p>
-                </div>
+                <Auditoria />
               </ProtectedRoute>
             }
           />
 
           {/* Inteligencia Artificial */}
           <Route
-            path="ia"
+            path="inteligencia-artificial"
             element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE', 'DIRECTOR']}>
-                <div className="p-6">
-                  <h1 className="text-2xl font-bold mb-4">Inteligencia Artificial</h1>
-                  <p className="text-gray-600">Módulo de IA en desarrollo...</p>
-                </div>
+              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE', 'ANALISTA']}>
+                <InteligenciaArtificial />
               </ProtectedRoute>
             }
           />
 
+
           {/* Notificaciones */}
-          <Route
-            path="notificaciones"
-            element={
-              <div className="p-6">
-                <h1 className="text-2xl font-bold mb-4">Notificaciones</h1>
-                <p className="text-gray-600">Módulo de notificaciones en desarrollo...</p>
-              </div>
-            }
-          />
+          <Route path="notificaciones" element={<Notificaciones />} />
 
           {/* Scheduler */}
           <Route
             path="scheduler"
             element={
               <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE']}>
-                <div className="p-6">
-                  <h1 className="text-2xl font-bold mb-4">Programador de Tareas</h1>
-                  <p className="text-gray-600">Módulo de scheduler en desarrollo...</p>
-                </div>
+                <Programador />
               </ProtectedRoute>
             }
           />
