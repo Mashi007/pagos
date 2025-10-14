@@ -150,31 +150,34 @@ async def procesar_clientes(content: bytes, filename: str, db: Session):
                     })
                     continue
                 
-                # Crear cliente
-                cliente_data = ClienteCreate(
-                    cedula=cedula,
-                    nombre=nombre,
-                    apellido="",  # No disponible en el archivo
-                    telefono=telefono if telefono != 'error' else "",
-                    email=email if email != 'error' else "",
-                    direccion="",  # No disponible en el archivo
-                    monto_prestamo=0,  # Se asignará después
-                    estado="ACTIVO"
-                )
+                # Crear cliente directamente con el modelo Cliente
+                cliente_data = {
+                    "cedula": cedula,
+                    "nombres": nombre,
+                    "apellidos": "",  # No disponible en el archivo
+                    "telefono": telefono if telefono != 'error' else "",
+                    "email": email if email != 'error' else "",
+                    "direccion": "",  # No disponible en el archivo
+                    "estado": "ACTIVO",
+                    "activo": True,
+                    "fecha_registro": datetime.utcnow(),
+                    "usuario_registro": "CARGA_MASIVA"
+                }
 
                 # Verificar si ya existe
                 existing_cliente = db.query(Cliente).filter(
-                    Cliente.cedula == cliente_data.cedula
+                    Cliente.cedula == cedula
                 ).first()
 
                 if existing_cliente:
                     # Actualizar cliente existente
-                    for key, value in cliente_data.dict().items():
-                        setattr(existing_cliente, key, value)
-                    existing_cliente.updated_at = datetime.utcnow()
+                    for key, value in cliente_data.items():
+                        if key not in ['cedula', 'fecha_registro']:  # No actualizar cédula ni fecha de registro
+                            setattr(existing_cliente, key, value)
+                    existing_cliente.fecha_actualizacion = datetime.utcnow()
                 else:
                     # Crear nuevo cliente
-                    new_cliente = Cliente(**cliente_data.dict())
+                    new_cliente = Cliente(**cliente_data)
                     db.add(new_cliente)
 
                 processed_records += 1
@@ -297,27 +300,47 @@ async def procesar_pagos(content: bytes, filename: str, db: Session):
                     })
                     continue
                 
-                # Crear pago
+                # Buscar cliente por cédula para articular el pago
+                cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
+                
+                if not cliente:
+                    errores_detallados.append({
+                        'row': index + 2,
+                        'cedula': cedula,
+                        'error': 'Cliente no encontrado con esta cédula',
+                        'data': row.to_dict(),
+                        'tipo': 'pago'
+                    })
+                    continue
+                
+                # Crear registro de pago usando el modelo Pago
+                from app.models.pago import Pago
+                
                 pago_data = {
-                    "cliente_id": cliente.id,
-                    "monto": monto_pagado,
-                    "fecha_pago": fecha if fecha else None,
+                    "prestamo_id": 1,  # Por ahora usar préstamo por defecto
+                    "numero_cuota": 1,
+                    "codigo_pago": f"PAGO_{cedula}_{index}",
+                    "monto_cuota_programado": monto_pagado,
+                    "monto_pagado": monto_pagado,
+                    "monto_total": monto_pagado,
+                    "fecha_pago": fecha if fecha else datetime.utcnow().date(),
+                    "fecha_vencimiento": fecha if fecha else datetime.utcnow().date(),
                     "metodo_pago": "TRANSFERENCIA",
+                    "numero_operacion": documento_pago,
                     "estado": "CONFIRMADO",
-                    "referencia": documento_pago,
+                    "tipo_pago": "NORMAL",
                     "observaciones": f"Importado desde Excel - {filename}"
                 }
                 
-                # Crear registro de pago (usando el modelo Pago si existe)
-                # Por ahora, actualizamos el monto del préstamo del cliente
-                if cliente.monto_prestamo:
-                    cliente.monto_prestamo -= monto_pagado
-                    if cliente.monto_prestamo <= 0:
-                        cliente.estado = "PAGADO"
-                else:
-                    cliente.monto_prestamo = -monto_pagado  # Saldo a favor
+                # Crear nuevo pago
+                new_pago = Pago(**pago_data)
+                db.add(new_pago)
                 
-                db.commit()
+                # Actualizar estado del cliente si es necesario
+                if cliente.estado_financiero == "MORA":
+                    cliente.estado_financiero = "AL_DIA"
+                    cliente.dias_mora = 0
+                
                 processed_records += 1
                 
             except Exception as e:
@@ -455,3 +478,179 @@ async def obtener_historial_cargas(
             }
         ]
     }
+
+@router.post("/corregir-error")
+async def corregir_error(
+    request: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Corregir un error individual de carga masiva
+    """
+    try:
+        tipo = request.get('tipo')
+        cedula = request.get('cedula')
+        data = request.get('data')
+        
+        if tipo == 'cliente':
+            # Buscar cliente existente
+            cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
+            if cliente:
+                # Actualizar datos del cliente
+                for key, value in data.items():
+                    if hasattr(cliente, key):
+                        setattr(cliente, key, value)
+                cliente.fecha_actualizacion = datetime.utcnow()
+                db.commit()
+                return {"success": True, "message": "Cliente corregido exitosamente"}
+            else:
+                # Crear nuevo cliente
+                cliente_data = {
+                    "cedula": cedula,
+                    "nombres": data.get('nombre', ''),
+                    "apellidos": data.get('apellido', ''),
+                    "telefono": data.get('telefono', ''),
+                    "email": data.get('email', ''),
+                    "direccion": data.get('direccion', ''),
+                    "estado": "ACTIVO",
+                    "activo": True,
+                    "fecha_registro": datetime.utcnow(),
+                    "usuario_registro": current_user.email
+                }
+                new_cliente = Cliente(**cliente_data)
+                db.add(new_cliente)
+                db.commit()
+                return {"success": True, "message": "Cliente creado exitosamente"}
+        
+        elif tipo == 'pago':
+            # Buscar cliente por cédula
+            cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
+            if not cliente:
+                return {"success": False, "message": "Cliente no encontrado"}
+            
+            # Crear pago
+            from app.models.pago import Pago
+            pago_data = {
+                "prestamo_id": 1,  # Por ahora usar préstamo por defecto
+                "numero_cuota": 1,
+                "codigo_pago": f"PAGO_{cedula}_{datetime.utcnow().timestamp()}",
+                "monto_cuota_programado": float(data.get('monto_pagado', 0)),
+                "monto_pagado": float(data.get('monto_pagado', 0)),
+                "monto_total": float(data.get('monto_pagado', 0)),
+                "fecha_pago": datetime.strptime(data.get('fecha_pago', ''), '%d/%m/%Y').date() if data.get('fecha_pago') else datetime.utcnow().date(),
+                "fecha_vencimiento": datetime.strptime(data.get('fecha_pago', ''), '%d/%m/%Y').date() if data.get('fecha_pago') else datetime.utcnow().date(),
+                "metodo_pago": data.get('metodo_pago', 'TRANSFERENCIA'),
+                "numero_operacion": data.get('documento_pago', ''),
+                "estado": "CONFIRMADO",
+                "tipo_pago": "NORMAL",
+                "observaciones": f"Corregido manualmente por {current_user.email}"
+            }
+            new_pago = Pago(**pago_data)
+            db.add(new_pago)
+            db.commit()
+            return {"success": True, "message": "Pago corregido exitosamente"}
+        
+        else:
+            return {"success": False, "message": "Tipo de corrección no válido"}
+            
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al corregir registro: {str(e)}"
+        )
+
+@router.post("/reenviar")
+async def reenviar_registros(
+    request: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Reenviar registros corregidos
+    """
+    try:
+        tipo = request.get('tipo')
+        registros = request.get('registros', [])
+        
+        processed = 0
+        errors = []
+        
+        for registro in registros:
+            try:
+                if tipo == 'cliente':
+                    # Procesar cliente
+                    cliente_data = {
+                        "cedula": registro.get('cedula'),
+                        "nombres": registro.get('nombre', ''),
+                        "apellidos": registro.get('apellido', ''),
+                        "telefono": registro.get('telefono', ''),
+                        "email": registro.get('email', ''),
+                        "direccion": registro.get('direccion', ''),
+                        "estado": "ACTIVO",
+                        "activo": True,
+                        "fecha_registro": datetime.utcnow(),
+                        "usuario_registro": current_user.email
+                    }
+                    
+                    # Verificar si existe
+                    existing = db.query(Cliente).filter(Cliente.cedula == cliente_data['cedula']).first()
+                    if existing:
+                        for key, value in cliente_data.items():
+                            if key not in ['cedula', 'fecha_registro']:
+                                setattr(existing, key, value)
+                        existing.fecha_actualizacion = datetime.utcnow()
+                    else:
+                        new_cliente = Cliente(**cliente_data)
+                        db.add(new_cliente)
+                    
+                    processed += 1
+                    
+                elif tipo == 'pago':
+                    # Procesar pago
+                    cliente = db.query(Cliente).filter(Cliente.cedula == registro.get('cedula')).first()
+                    if cliente:
+                        from app.models.pago import Pago
+                        pago_data = {
+                            "prestamo_id": 1,
+                            "numero_cuota": 1,
+                            "codigo_pago": f"PAGO_{registro.get('cedula')}_{processed}",
+                            "monto_cuota_programado": float(registro.get('monto_pagado', 0)),
+                            "monto_pagado": float(registro.get('monto_pagado', 0)),
+                            "monto_total": float(registro.get('monto_pagado', 0)),
+                            "fecha_pago": datetime.strptime(registro.get('fecha_pago', ''), '%d/%m/%Y').date() if registro.get('fecha_pago') else datetime.utcnow().date(),
+                            "fecha_vencimiento": datetime.strptime(registro.get('fecha_pago', ''), '%d/%m/%Y').date() if registro.get('fecha_pago') else datetime.utcnow().date(),
+                            "metodo_pago": registro.get('metodo_pago', 'TRANSFERENCIA'),
+                            "numero_operacion": registro.get('documento_pago', ''),
+                            "estado": "CONFIRMADO",
+                            "tipo_pago": "NORMAL",
+                            "observaciones": f"Reenviado por {current_user.email}"
+                        }
+                        new_pago = Pago(**pago_data)
+                        db.add(new_pago)
+                        processed += 1
+                    else:
+                        errors.append(f"Cliente no encontrado para cédula: {registro.get('cedula')}")
+                        
+            except Exception as e:
+                errors.append(f"Error procesando registro: {str(e)}")
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": f"Procesados {processed} registros exitosamente",
+            "data": {
+                "processedRecords": processed,
+                "errors": len(errors),
+                "details": errors
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al reenviar registros: {str(e)}"
+        )
