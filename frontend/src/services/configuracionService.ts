@@ -1,4 +1,4 @@
-import { apiClient } from './api'
+import { apiClient, ApiResponse } from './api'
 
 // Interfaces para la configuración de validadores
 export interface ValidadoresConfig {
@@ -103,14 +103,14 @@ class ConfiguracionService {
 
   // Obtener configuración de validadores
   async obtenerValidadores(): Promise<ValidadoresConfig> {
-    const response = await apiClient.get<ValidadoresConfig>(`${this.baseUrl}/validadores`)
-    return response.data as ValidadoresConfig
+    const response = await apiClient.get<ApiResponse<ValidadoresConfig>>(`${this.baseUrl}/validadores`)
+    return response.data.data
   }
 
   // Probar validadores con datos de ejemplo
   async probarValidadores(datosPrueba: PruebaValidadores): Promise<ResultadoPrueba> {
-    const response = await apiClient.post<ResultadoPrueba>(`${this.baseUrl}/validadores/probar`, datosPrueba)
-    return response.data as ResultadoPrueba
+    const response = await apiClient.post<ApiResponse<ResultadoPrueba>>(`${this.baseUrl}/validadores/probar`, datosPrueba)
+    return response.data.data
   }
 
   // Obtener configuración completa del sistema
