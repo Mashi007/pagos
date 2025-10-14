@@ -83,23 +83,31 @@ class Settings(BaseSettings):
     DIAS_MORA_ALERTA: int = 15
     
     # EMAIL
-    EMAIL_ENABLED: bool = False
+    EMAIL_ENABLED: bool = True
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
-    FROM_EMAIL: Optional[str] = None
-    FROM_NAME: str = "Sistema de Préstamos"
-    SMTP_FROM: Optional[str] = None
-    SMTP_FROM_NAME: Optional[str] = "Sistema de Préstamos"
+    FROM_EMAIL: Optional[str] = "noreply@rapicredit.com"
+    FROM_NAME: str = "RapiCredit"
+    SMTP_FROM: Optional[str] = "noreply@rapicredit.com"
+    SMTP_FROM_NAME: Optional[str] = "RapiCredit"
+    SMTP_USE_TLS: bool = True
+    SMTP_USE_SSL: bool = False
     
-    # WHATSAPP/SMS (Twilio)
+    # WHATSAPP (Meta Developers API)
+    WHATSAPP_ENABLED: bool = True
+    WHATSAPP_API_URL: str = "https://graph.facebook.com/v18.0"
+    WHATSAPP_ACCESS_TOKEN: Optional[str] = None
+    WHATSAPP_PHONE_NUMBER_ID: Optional[str] = None
+    WHATSAPP_BUSINESS_ACCOUNT_ID: Optional[str] = None
+    WHATSAPP_WEBHOOK_VERIFY_TOKEN: Optional[str] = None
+    
+    # SMS (Twilio - solo para SMS, no WhatsApp)
     SMS_ENABLED: bool = False
-    WHATSAPP_ENABLED: bool = False
     TWILIO_ACCOUNT_SID: Optional[str] = None
     TWILIO_AUTH_TOKEN: Optional[str] = None
     TWILIO_PHONE_NUMBER: Optional[str] = None
-    TWILIO_WHATSAPP_NUMBER: Optional[str] = None
     
     # ============================================
     # REPORTES

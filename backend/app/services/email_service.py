@@ -28,6 +28,13 @@ class EmailService:
         self.smtp_password = settings.SMTP_PASSWORD
         self.from_email = settings.FROM_EMAIL
         self.from_name = settings.FROM_NAME
+        self.use_tls = getattr(settings, 'SMTP_USE_TLS', True)
+        self.use_ssl = getattr(settings, 'SMTP_USE_SSL', False)
+        
+        # Verificar configuración
+        if not self.smtp_user or not self.smtp_password:
+            logger.warning("Credenciales de email no configuradas")
+            logger.info("Variables requeridas: SMTP_USER, SMTP_PASSWORD")
     
     async def send_email(
         self,

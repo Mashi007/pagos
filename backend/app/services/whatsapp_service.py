@@ -1,9 +1,10 @@
 # backend/app/services/whatsapp_service.py
 """
-Servicio para envío de mensajes WhatsApp usando Twilio.
+Servicio para envío de mensajes WhatsApp usando Meta Developers API.
 """
-from twilio.rest import Client
-from typing import Optional
+import aiohttp
+import json
+from typing import Optional, Dict, Any
 from datetime import datetime
 import logging
 
@@ -15,231 +16,324 @@ logger = logging.getLogger(__name__)
 
 
 class WhatsAppService:
-    """Servicio para gestión de WhatsApp"""
+    """Servicio para gestión de WhatsApp usando Meta Developers API"""
     
     def __init__(self):
-        # Configuración de Twilio
-        self.account_sid = settings.TWILIO_ACCOUNT_SID
-        self.auth_token = settings.TWILIO_AUTH_TOKEN
-        self.from_number = settings.TWILIO_WHATSAPP_NUMBER
+        # Configuración de Meta Developers API
+        self.api_url = settings.WHATSAPP_API_URL
+        self.access_token = settings.WHATSAPP_ACCESS_TOKEN
+        self.phone_number_id = settings.WHATSAPP_PHONE_NUMBER_ID
+        self.business_account_id = settings.WHATSAPP_BUSINESS_ACCOUNT_ID
+        self.webhook_verify_token = settings.WHATSAPP_WEBHOOK_VERIFY_TOKEN
         
-        # Inicializar cliente de Twilio
-        if self.account_sid and self.auth_token:
-            self.client = Client(self.account_sid, self.auth_token)
-        else:
-            self.client = None
-            logger.warning("Credenciales de Twilio no configuradas")
+        # Verificar configuración
+        if not self.access_token or not self.phone_number_id:
+            logger.warning("Credenciales de Meta Developers no configuradas")
+            logger.info("Variables requeridas: WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID")
     
     async def send_message(
         self,
         to_number: str,
         message: str,
+        template_name: Optional[str] = None,
+        template_params: Optional[Dict[str, Any]] = None,
         notificacion_id: Optional[int] = None
-    ) -> bool:
+    ) -> Dict[str, Any]:
         """
-        Enviar mensaje de WhatsApp.
+        Enviar mensaje WhatsApp usando Meta Developers API
         
         Args:
-            to_number: Número de teléfono (formato: +593999999999)
+            to_number: Número de teléfono destinatario (formato internacional)
             message: Mensaje a enviar
+            template_name: Nombre del template (opcional)
+            template_params: Parámetros del template (opcional)
             notificacion_id: ID de notificación para actualizar estado
         
         Returns:
-            True si se envió exitosamente
+            Dict con resultado del envío
         """
-        if not self.client:
-            logger.error("Cliente de Twilio no inicializado")
-            return False
-        
         try:
-            # Formatear número para WhatsApp (debe incluir whatsapp:)
-            whatsapp_to = f"whatsapp:{to_number}"
-            whatsapp_from = f"whatsapp:{self.from_number}"
+            if not self.access_token or not self.phone_number_id:
+                return {
+                    "success": False,
+                    "error": "WhatsApp no configurado. Faltan credenciales de Meta",
+                    "message_id": None
+                }
+            
+            # Formatear número (quitar + y espacios)
+            clean_number = to_number.replace('+', '').replace(' ', '').replace('-', '')
+            if not clean_number.isdigit():
+                return {
+                    "success": False,
+                    "error": "Número de teléfono inválido",
+                    "message_id": None
+                }
+            
+            # URL del endpoint de Meta
+            url = f"{self.api_url}/{self.phone_number_id}/messages"
+            
+            # Headers
+            headers = {
+                "Authorization": f"Bearer {self.access_token}",
+                "Content-Type": "application/json"
+            }
+            
+            # Preparar payload según tipo de mensaje
+            if template_name and template_params:
+                # Mensaje con template
+                payload = {
+                    "messaging_product": "whatsapp",
+                    "to": clean_number,
+                    "type": "template",
+                    "template": {
+                        "name": template_name,
+                        "language": {"code": "es"},
+                        "components": [
+                            {
+                                "type": "body",
+                                "parameters": [
+                                    {"type": "text", "text": str(value)}
+                                    for value in template_params.values()
+                                ]
+                            }
+                        ]
+                    }
+                }
+            else:
+                # Mensaje simple
+                payload = {
+                    "messaging_product": "whatsapp",
+                    "to": clean_number,
+                    "type": "text",
+                    "text": {"body": message}
+                }
             
             # Enviar mensaje
-            message_obj = self.client.messages.create(
-                body=message,
-                from_=whatsapp_from,
-                to=whatsapp_to
-            )
-            
-            logger.info(f"WhatsApp enviado a {to_number}. SID: {message_obj.sid}")
-            
-            # Actualizar notificación
-            if notificacion_id:
-                self._actualizar_notificacion(
-                    notificacion_id,
-                    EstadoNotificacion.ENVIADA.value,
-                    sid=message_obj.sid
-                )
-            
-            return True
-            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=payload) as response:
+                    response_data = await response.json()
+                    
+                    if response.status == 200:
+                        message_id = response_data.get("messages", [{}])[0].get("id")
+                        
+                        # Actualizar notificación
+                        if notificacion_id:
+                            self._actualizar_notificacion(
+                                notificacion_id,
+                                EstadoNotificacion.ENVIADA.value,
+                                message_id=message_id
+                            )
+                        
+                        logger.info(f"Mensaje WhatsApp enviado: {message_id}")
+                        return {
+                            "success": True,
+                            "message_id": message_id,
+                            "status": "sent",
+                            "error": None,
+                            "response": response_data
+                        }
+                    else:
+                        error_msg = f"Error Meta API: {response_data}"
+                        logger.error(error_msg)
+                        
+                        # Actualizar notificación como fallida
+                        if notificacion_id:
+                            self._actualizar_notificacion(
+                                notificacion_id,
+                                EstadoNotificacion.FALLIDA.value,
+                                error=error_msg
+                            )
+                        
+                        return {
+                            "success": False,
+                            "error": error_msg,
+                            "message_id": None,
+                            "response": response_data
+                        }
+                        
         except Exception as e:
-            logger.error(f"Error enviando WhatsApp a {to_number}: {str(e)}")
+            error_msg = f"Error enviando WhatsApp: {str(e)}"
+            logger.error(error_msg)
             
             # Actualizar notificación como fallida
             if notificacion_id:
                 self._actualizar_notificacion(
                     notificacion_id,
                     EstadoNotificacion.FALLIDA.value,
-                    error=str(e)
+                    error=error_msg
                 )
             
-            return False
+            return {
+                "success": False,
+                "error": error_msg,
+                "message_id": None
+            }
     
     async def send_template_message(
         self,
         to_number: str,
         template_name: str,
-        variables: dict,
+        variables: Dict[str, Any],
         notificacion_id: Optional[int] = None
-    ) -> bool:
+    ) -> Dict[str, Any]:
         """
-        Enviar mensaje usando template predefinido.
+        Enviar mensaje usando template predefinido de Meta.
         
         Args:
             to_number: Número destinatario
-            template_name: Nombre del template
+            template_name: Nombre del template (debe estar aprobado en Meta)
             variables: Variables para el template
             notificacion_id: ID de notificación
         
         Returns:
-            True si se envió exitosamente
+            Dict con resultado del envío
         """
         try:
-            # Generar mensaje desde template
-            message = self._generate_message_from_template(template_name, variables)
+            if not self.access_token or not self.phone_number_id:
+                return {
+                    "success": False,
+                    "error": "WhatsApp no configurado. Faltan credenciales de Meta",
+                    "message_id": None
+                }
             
-            return await self.send_message(
-                to_number=to_number,
-                message=message,
-                notificacion_id=notificacion_id
-            )
+            # Formatear número
+            clean_number = to_number.replace('+', '').replace(' ', '').replace('-', '')
+            if not clean_number.isdigit():
+                return {
+                    "success": False,
+                    "error": "Número de teléfono inválido",
+                    "message_id": None
+                }
             
+            # URL del endpoint de Meta
+            url = f"{self.api_url}/{self.phone_number_id}/messages"
+            
+            # Headers
+            headers = {
+                "Authorization": f"Bearer {self.access_token}",
+                "Content-Type": "application/json"
+            }
+            
+            # Preparar payload para template
+            payload = {
+                "messaging_product": "whatsapp",
+                "to": clean_number,
+                "type": "template",
+                "template": {
+                    "name": template_name,
+                    "language": {"code": "es"},
+                    "components": [
+                        {
+                            "type": "body",
+                            "parameters": [
+                                {"type": "text", "text": str(value)}
+                                for value in variables.values()
+                            ]
+                        }
+                    ]
+                }
+            }
+            
+            # Enviar mensaje
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=payload) as response:
+                    response_data = await response.json()
+                    
+                    if response.status == 200:
+                        message_id = response_data.get("messages", [{}])[0].get("id")
+                        
+                        # Actualizar notificación
+                        if notificacion_id:
+                            self._actualizar_notificacion(
+                                notificacion_id,
+                                EstadoNotificacion.ENVIADA.value,
+                                message_id=message_id
+                            )
+                        
+                        logger.info(f"Template WhatsApp enviado: {message_id}")
+                        return {
+                            "success": True,
+                            "message_id": message_id,
+                            "status": "sent",
+                            "error": None,
+                            "response": response_data
+                        }
+                    else:
+                        error_msg = f"Error Meta API template: {response_data}"
+                        logger.error(error_msg)
+                        
+                        # Actualizar notificación como fallida
+                        if notificacion_id:
+                            self._actualizar_notificacion(
+                                notificacion_id,
+                                EstadoNotificacion.FALLIDA.value,
+                                error=error_msg
+                            )
+                        
+                        return {
+                            "success": False,
+                            "error": error_msg,
+                            "message_id": None,
+                            "response": response_data
+                        }
+                        
         except Exception as e:
-            logger.error(f"Error enviando template WhatsApp: {str(e)}")
-            return False
+            error_msg = f"Error enviando template WhatsApp: {str(e)}"
+            logger.error(error_msg)
+            
+            # Actualizar notificación como fallida
+            if notificacion_id:
+                self._actualizar_notificacion(
+                    notificacion_id,
+                    EstadoNotificacion.FALLIDA.value,
+                    error=error_msg
+                )
+            
+            return {
+                "success": False,
+                "error": error_msg,
+                "message_id": None
+            }
     
-    def _generate_message_from_template(self, template_name: str, variables: dict) -> str:
+    def get_message_status(self, message_id: str) -> Dict[str, Any]:
         """
-        Generar mensaje desde template.
-        """
-        templates = {
-            "recordatorio_pago": """
-🔔 *Recordatorio de Pago*
-
-Hola {cliente_nombre},
-
-Te recordamos que tienes una cuota próxima a vencer:
-
-💰 Monto: ${monto}
-📅 Vencimiento: {fecha_vencimiento}
-⏰ Días restantes: {dias_restantes}
-
-Por favor, realiza tu pago a tiempo para evitar recargos.
-
-Gracias por tu preferencia.
-            """,
-            
-            "prestamo_aprobado": """
-✅ *¡Préstamo Aprobado!*
-
-Hola {cliente_nombre},
-
-¡Buenas noticias! Tu préstamo ha sido APROBADO.
-
-💰 Monto: ${monto}
-📅 Plazo: {plazo} meses
-💵 Cuota mensual: ${cuota}
-
-Acércate a nuestras oficinas para firmar el contrato.
-            """,
-            
-            "mora": """
-⚠️ *Aviso de Mora*
-
-Hola {cliente_nombre},
-
-Tu cuenta presenta mora en el pago:
-
-⏰ Días de mora: {dias_mora}
-💰 Saldo pendiente: ${saldo_pendiente}
-📌 Recargo: ${recargo_mora}
-
-Por favor, regulariza tu situación para evitar acciones legales.
-
-Contáctanos: {telefono}
-            """,
-            
-            "confirmacion_pago": """
-✅ *Pago Recibido*
-
-Hola {cliente_nombre},
-
-Confirmamos la recepción de tu pago:
-
-💰 Monto: ${monto}
-📅 Fecha: {fecha}
-🔢 Recibo: {recibo}
-
-Gracias por tu puntualidad.
-            """,
-            
-            "cuota_vencida": """
-⚠️ *Cuota Vencida*
-
-Hola {cliente_nombre},
-
-Tu cuota del {fecha_vencimiento} está vencida.
-
-💰 Monto: ${monto}
-⏰ Días vencidos: {dias_vencidos}
-
-Por favor, regulariza tu pago lo antes posible.
-            """
-        }
-        
-        if template_name not in templates:
-            raise ValueError(f"Template '{template_name}' no encontrado")
-        
-        return templates[template_name].format(**variables)
-    
-    def get_message_status(self, message_sid: str) -> dict:
-        """
-        Obtener estado de un mensaje enviado.
+        Obtener estado de un mensaje enviado usando Meta API.
         
         Args:
-            message_sid: SID del mensaje de Twilio
+            message_id: ID del mensaje de Meta
         
         Returns:
             Dict con información del mensaje
         """
-        if not self.client:
-            return {"error": "Cliente no inicializado"}
-        
         try:
-            message = self.client.messages(message_sid).fetch()
+            if not self.access_token or not self.phone_number_id:
+                return {"error": "Credenciales no configuradas"}
             
+            # URL para obtener estado del mensaje
+            url = f"{self.api_url}/{self.phone_number_id}/messages/{message_id}"
+            
+            headers = {
+                "Authorization": f"Bearer {self.access_token}",
+                "Content-Type": "application/json"
+            }
+            
+            # Nota: Meta API no proporciona endpoint directo para consultar estado
+            # El estado se maneja via webhooks
             return {
-                "sid": message.sid,
-                "status": message.status,
-                "to": message.to,
-                "from": message.from_,
-                "date_sent": message.date_sent,
-                "error_code": message.error_code,
-                "error_message": message.error_message
+                "message_id": message_id,
+                "note": "Estado se obtiene via webhooks de Meta",
+                "status": "unknown"
             }
             
         except Exception as e:
-            logger.error(f"Error obteniendo estado del mensaje {message_sid}: {str(e)}")
+            logger.error(f"Error obteniendo estado del mensaje {message_id}: {str(e)}")
             return {"error": str(e)}
     
     def _actualizar_notificacion(
         self,
         notificacion_id: int,
         estado: str,
-        sid: Optional[str] = None,
+        message_id: Optional[str] = None,
         error: Optional[str] = None
     ):
         """
@@ -255,11 +349,11 @@ Por favor, regulariza tu pago lo antes posible.
                 notificacion.estado = estado
                 notificacion.enviada_en = datetime.now()
                 
-                if sid:
-                    # Guardar SID de Twilio en metadata
+                if message_id:
+                    # Guardar ID de Meta en metadata
                     if not notificacion.meta_info:
                         notificacion.meta_info = {}
-                    notificacion.meta_info['twilio_sid'] = sid
+                    notificacion.meta_info['meta_message_id'] = message_id
                 
                 if error:
                     notificacion.error = error
@@ -283,6 +377,28 @@ Por favor, regulariza tu pago lo antes posible.
         """
         import re
         
-        # Formato esperado: +593999999999 (Ecuador)
+        # Formato esperado: +593999999999 (Ecuador) o similar
         pattern = r'^\+\d{10,15}$'
         return bool(re.match(pattern, phone_number))
+    
+    def validate_meta_configuration(self) -> Dict[str, Any]:
+        """
+        Validar configuración de Meta Developers.
+        
+        Returns:
+            Dict con estado de la configuración
+        """
+        config_status = {
+            "access_token": bool(self.access_token),
+            "phone_number_id": bool(self.phone_number_id),
+            "business_account_id": bool(self.business_account_id),
+            "webhook_verify_token": bool(self.webhook_verify_token),
+            "api_url": self.api_url
+        }
+        
+        config_status["ready"] = all([
+            config_status["access_token"],
+            config_status["phone_number_id"]
+        ])
+        
+        return config_status
