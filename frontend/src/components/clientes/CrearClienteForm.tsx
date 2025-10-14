@@ -171,10 +171,11 @@ export function CrearClienteForm({
           
           if (response.ok) {
             const result = await response.json()
-            if (result.valido) {
+            // ✅ CORRECCIÓN: Acceder a result.validacion.valido
+            if (result.validacion && result.validacion.valido) {
               return { isValid: true }
             } else {
-              return { isValid: false, message: result.mensaje || 'Formato de cédula inválido' }
+              return { isValid: false, message: result.validacion?.mensaje || 'Formato de cédula inválido' }
             }
           }
         } catch (error) {
@@ -209,10 +210,11 @@ export function CrearClienteForm({
           
           if (response.ok) {
             const result = await response.json()
-            if (result.valido) {
+            // ✅ CORRECCIÓN: Acceder a result.validacion.valido
+            if (result.validacion && result.validacion.valido) {
               return { isValid: true }
             } else {
-              return { isValid: false, message: result.mensaje || 'Formato de teléfono inválido' }
+              return { isValid: false, message: result.validacion?.mensaje || 'Formato de teléfono inválido' }
             }
           }
         } catch (error) {
@@ -220,10 +222,10 @@ export function CrearClienteForm({
         }
         
         // Fallback: validación local
-        const cleanMovil = value.replace(/\D/g, '')
-        if (cleanMovil.length === 10) {
+        const cleanMovilFallback = value.replace(/\D/g, '')
+        if (cleanMovilFallback.length === 10) {
           return { isValid: true }
-        } else if (cleanMovil.length === 12 && cleanMovil.startsWith('58')) {
+        } else if (cleanMovilFallback.length === 12 && cleanMovilFallback.startsWith('58')) {
           return { isValid: true }
         }
         return { isValid: false, message: 'Debe tener 10 dígitos después del +58' }
@@ -248,10 +250,11 @@ export function CrearClienteForm({
           
           if (response.ok) {
             const result = await response.json()
-            if (result.valido) {
+            // ✅ CORRECCIÓN: Acceder a result.validacion.valido
+            if (result.validacion && result.validacion.valido) {
               return { isValid: true }
             } else {
-              return { isValid: false, message: result.mensaje || 'Formato de email inválido' }
+              return { isValid: false, message: result.validacion?.mensaje || 'Formato de email inválido' }
             }
           }
         } catch (error) {
@@ -382,33 +385,30 @@ export function CrearClienteForm({
     try {
       // 🔄 CONECTAR AL BACKEND: Usar servicio real
       
-      // 🔄 TRANSFORMAR DATOS: Convertir FormData a ClienteForm
+      // ✅ TRANSFORMAR DATOS: Convertir FormData a ClienteForm (coincide con backend)
       const clienteData = {
+        // Datos personales (coincide con backend/app/schemas/cliente.py)
         cedula: formData.cedula,
-        nombre: formData.nombreCompleto.split(' ')[0] || '',
-        apellido: formData.nombreCompleto.split(' ').slice(1).join(' ') || '',
-        telefono: formData.movil.replace(/[^\d]/g, ''), // Limpiar formato
+        nombres: formData.nombreCompleto.split(' ')[0] || '',  // ✅ Backend: "nombres"
+        apellidos: formData.nombreCompleto.split(' ').slice(1).join(' ') || '',  // ✅ Backend: "apellidos"
+        telefono: formData.movil.replace(/[^\d]/g, ''),  // ✅ Backend: "telefono"
         email: formData.email,
-        direccion: '', // No disponible en formulario actual
-        fecha_nacimiento: '', // No disponible en formulario actual
-        ingresos_mensuales: 0, // No disponible en formulario actual
-        estado_civil: '', // No disponible en formulario actual
-        profesion: '', // No disponible en formulario actual
         
-        // Datos del vehículo
-        marca_vehiculo: formData.modeloVehiculo.split(' ')[0] || '',
-        modelo_vehiculo: formData.modeloVehiculo,
-        año_vehiculo: new Date().getFullYear(), // Default
-        placa_vehiculo: '', // No disponible en formulario actual
-        vin_vehiculo: '', // No disponible en formulario actual
-        valor_vehiculo: parseFloat(formData.totalFinanciamiento.replace(/[^\d.-]/g, '')) || 0,
+        // Datos del vehículo (coincide con backend)
+        modelo_vehiculo: formData.modeloVehiculo,  // ✅ Backend: "modelo_vehiculo"
+        marca_vehiculo: formData.modeloVehiculo.split(' ')[0] || '',  // ✅ Backend: "marca_vehiculo"
+        anio_vehiculo: new Date().getFullYear(),  // ✅ Backend: "anio_vehiculo"
         
-        // Datos del financiamiento
-        monto_financiamiento: parseFloat(formData.totalFinanciamiento.replace(/[^\d.-]/g, '')) || 0,
-        cuota_inicial: parseFloat(formData.cuotaInicial.replace(/[^\d.-]/g, '')) || 0,
-        tasa_interes: 12, // Default
-        plazo_meses: parseInt(formData.numeroAmortizaciones) || 12,
-        sistema_amortizacion: 'FRANCES' as const
+        // Concesionario y asesor (coincide con backend)
+        concesionario: formData.concesionario,  // ✅ Backend: "concesionario"
+        asesor_id: parseInt(formData.asesorAsignado) || undefined,  // ✅ Backend: "asesor_id"
+        
+        // Datos del financiamiento (coincide con backend)
+        total_financiamiento: parseFloat(formData.totalFinanciamiento.replace(/[^\d.-]/g, '')) || 0,  // ✅ Backend: "total_financiamiento"
+        cuota_inicial: parseFloat(formData.cuotaInicial.replace(/[^\d.-]/g, '')) || 0,  // ✅ Backend: "cuota_inicial"
+        fecha_entrega: formData.fechaEntrega,  // ✅ Backend: "fecha_entrega"
+        numero_amortizaciones: parseInt(formData.numeroAmortizaciones) || 12,  // ✅ Backend: "numero_amortizaciones"
+        modalidad_pago: formData.modalidadFinanciamiento.toUpperCase()  // ✅ Backend: "modalidad_pago"
       }
       
       console.log('🔄 Enviando cliente al backend:', clienteData)
