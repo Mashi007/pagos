@@ -7,7 +7,7 @@ import { authService } from '@/services/authService'
  * Se encarga de restaurar la sesión del usuario al cargar la aplicación
  */
 export function useAuthPersistence() {
-  const { isAuthenticated, refreshUser, setUser } = useAuth()
+  const { setUser } = useAuth()
   const [isInitialized, setIsInitialized] = useState(false)
 
   useEffect(() => {
@@ -23,7 +23,6 @@ export function useAuthPersistence() {
         console.log('📊 Estado de autenticación:', {
           hasToken: !!hasToken,
           hasStoredUser: !!storedUser,
-          isAuthenticated,
           rememberMe,
           storageType: rememberMe ? 'localStorage' : 'sessionStorage'
         })
@@ -33,23 +32,9 @@ export function useAuthPersistence() {
           
           // Restaurar inmediatamente el usuario en el store
           setUser(storedUser)
-          
-          try {
-            // Intentar verificar la validez del token con el servidor
-            await refreshUser()
-            console.log('✅ Sesión restaurada exitosamente')
-          } catch (error) {
-            console.warn('⚠️ Error al verificar token con servidor, manteniendo sesión local:', error)
-            // Si falla la verificación pero tenemos datos válidos, mantenerlos
-            // El usuario ya está restaurado en el store
-          }
+          console.log('✅ Sesión restaurada exitosamente')
         } else {
           console.log('❌ No se encontraron datos de autenticación válidos')
-          // Asegurar que el estado esté limpio
-          if (isAuthenticated) {
-            console.log('🧹 Limpiando estado de autenticación inconsistente')
-            authService.logout()
-          }
         }
       } catch (error) {
         console.error('❌ Error crítico al inicializar autenticación:', error)
