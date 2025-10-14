@@ -195,14 +195,35 @@ class AuthService {
 
   // Obtener token desde localStorage o sessionStorage
   getStoredToken(): string | null {
-    const rememberMe = localStorage.getItem('remember_me') === 'true'
-    const token = rememberMe 
-      ? localStorage.getItem('access_token') 
-      : sessionStorage.getItem('access_token')
+    // PRIMERO: Verificar localStorage (recordarme)
+    const localToken = localStorage.getItem('access_token')
+    const localUser = localStorage.getItem('user')
     
-    console.log('🔍 getStoredToken llamado:', {
-      rememberMe,
-      storageType: rememberMe ? 'localStorage' : 'sessionStorage',
+    // SEGUNDO: Si no hay en localStorage, verificar sessionStorage
+    const sessionToken = sessionStorage.getItem('access_token')
+    const sessionUser = sessionStorage.getItem('user')
+    
+    // DETERMINAR: Qué token usar basado en qué datos existen
+    const hasLocalData = !!(localToken && localUser)
+    const hasSessionData = !!(sessionToken && sessionUser)
+    
+    let token, storageType
+    
+    if (hasLocalData) {
+      token = localToken
+      storageType = 'localStorage'
+    } else if (hasSessionData) {
+      token = sessionToken
+      storageType = 'sessionStorage'
+    } else {
+      token = null
+      storageType = 'none'
+    }
+    
+    console.log('🔍 getStoredToken MEJORADO:', {
+      hasLocalData,
+      hasSessionData,
+      storageType,
       hasToken: !!token,
       tokenLength: token?.length || 0,
       tokenPreview: token ? token.substring(0, 20) + '...' : 'null'

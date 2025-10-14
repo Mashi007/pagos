@@ -15,16 +15,63 @@ export function useAuthPersistence() {
       console.log('🔄 Inicializando persistencia de autenticación...')
       
       try {
-        // Verificar si hay datos de autenticación almacenados
-        const hasToken = authService.getStoredToken()
-        const storedUser = authService.getStoredUser()
-        const rememberMe = localStorage.getItem('remember_me') === 'true'
+        // PRIMERO: Verificar si hay tokens en localStorage (recordarme)
+        const localToken = localStorage.getItem('access_token')
+        const localUser = localStorage.getItem('user')
         
-        console.log('📊 Estado de autenticación:', {
+        // SEGUNDO: Si no hay en localStorage, verificar sessionStorage
+        const sessionToken = sessionStorage.getItem('access_token')
+        const sessionUser = sessionStorage.getItem('user')
+        
+        // DETERMINAR: Qué storage usar basado en qué tokens existen
+        const hasLocalData = !!(localToken && localUser)
+        const hasSessionData = !!(sessionToken && sessionUser)
+        
+        let hasToken, storedUser, rememberMe, storageType
+        
+        if (hasLocalData) {
+          // Hay datos en localStorage - usar recordarme
+          hasToken = localToken
+          try {
+            storedUser = JSON.parse(localUser)
+            rememberMe = true
+            storageType = 'localStorage'
+          } catch (error) {
+            console.error('Error parsing localStorage user:', error)
+            hasToken = null
+            storedUser = null
+            rememberMe = false
+            storageType = 'none'
+          }
+        } else if (hasSessionData) {
+          // Solo hay datos en sessionStorage - sesión temporal
+          hasToken = sessionToken
+          try {
+            storedUser = JSON.parse(sessionUser)
+            rememberMe = false
+            storageType = 'sessionStorage'
+          } catch (error) {
+            console.error('Error parsing sessionStorage user:', error)
+            hasToken = null
+            storedUser = null
+            rememberMe = false
+            storageType = 'none'
+          }
+        } else {
+          // No hay datos en ningún lado
+          hasToken = null
+          storedUser = null
+          rememberMe = false
+          storageType = 'none'
+        }
+        
+        console.log('📊 Estado de autenticación MEJORADO:', {
+          hasLocalData,
+          hasSessionData,
           hasToken: !!hasToken,
           hasStoredUser: !!storedUser,
           rememberMe,
-          storageType: rememberMe ? 'localStorage' : 'sessionStorage'
+          storageType
         })
         
         // Debug detallado de localStorage y sessionStorage

@@ -28,19 +28,40 @@ class ApiClient {
         const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint))
         
         if (!isAuthEndpoint) {
-          // Usar el método del authService para obtener el token
-          const rememberMe = localStorage.getItem('remember_me') === 'true'
-          const token = rememberMe 
-            ? localStorage.getItem('access_token') 
-            : sessionStorage.getItem('access_token')
+          // PRIMERO: Verificar localStorage (recordarme)
+          const localToken = localStorage.getItem('access_token')
+          const localUser = localStorage.getItem('user')
+          
+          // SEGUNDO: Si no hay en localStorage, verificar sessionStorage
+          const sessionToken = sessionStorage.getItem('access_token')
+          const sessionUser = sessionStorage.getItem('user')
+          
+          // DETERMINAR: Qué token usar basado en qué datos existen
+          const hasLocalData = !!(localToken && localUser)
+          const hasSessionData = !!(sessionToken && sessionUser)
+          
+          let token, storageType
+          
+          if (hasLocalData) {
+            token = localToken
+            storageType = 'localStorage'
+          } else if (hasSessionData) {
+            token = sessionToken
+            storageType = 'sessionStorage'
+          } else {
+            token = null
+            storageType = 'none'
+          }
             
           if (token && token.trim() !== '') {
             config.headers.Authorization = `Bearer ${token}`
             console.log('🔑 Token enviado en request:', config.url, token.substring(0, 20) + '...')
           } else {
             console.warn('⚠️ No se encontró token para la request:', config.url)
-            console.log('🔍 Debug completo de storage:', {
-              rememberMe,
+            console.log('🔍 Debug completo de storage MEJORADO:', {
+              hasLocalData,
+              hasSessionData,
+              storageType,
               localStorage: {
                 access_token: localStorage.getItem('access_token') ? 'EXISTS' : 'NOT_FOUND',
                 refresh_token: localStorage.getItem('refresh_token') ? 'EXISTS' : 'NOT_FOUND',
