@@ -5,6 +5,8 @@ from typing import List
 
 from app.db.session import get_db
 from app.models.cliente import Cliente
+from app.api.deps import get_current_user
+from app.models.user import User
 
 router = APIRouter()
 
@@ -52,16 +54,15 @@ def listar_clientes_sin_auth(db: Session = Depends(get_db)):
 
 
 @router.get("/test-con-auth")
-def listar_clientes_con_auth(db: Session = Depends(get_db)):
+def listar_clientes_con_auth(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     """
     Endpoint temporal para probar clientes con autenticación
     """
-    from app.api.deps import get_current_user
-    from app.models.user import User
-    
     try:
-        # Intentar obtener usuario actual
-        current_user = get_current_user(db)
+        # Usuario actual ya obtenido por Depends
         
         # Query simple de clientes
         clientes = db.query(Cliente).limit(5).all()
