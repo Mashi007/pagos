@@ -28,6 +28,7 @@ import { formatDate } from '@/utils'
 import { ValidadoresConfig } from '@/components/configuracion/ValidadoresConfig'
 import { ConcesionariosConfig } from '@/components/configuracion/ConcesionariosConfig'
 import { AsesoresConfig } from '@/components/configuracion/AsesoresConfig'
+import UsuariosConfig from '@/components/configuracion/UsuariosConfig'
 
 // Mock data para configuración
 const mockConfiguracion = {
@@ -108,6 +109,7 @@ export function Configuracion() {
     { id: 'validadores', nombre: 'Validadores', icono: CheckSquare },
     { id: 'concesionarios', nombre: 'Concesionarios', icono: Building },
     { id: 'asesores', nombre: 'Asesores', icono: Users },
+    { id: 'usuarios', nombre: 'Usuarios', icono: Users },
   ]
 
   const handleGuardar = () => {
@@ -617,6 +619,7 @@ export function Configuracion() {
       case 'validadores': return <ValidadoresConfig />
       case 'concesionarios': return <ConcesionariosConfig />
       case 'asesores': return <AsesoresConfig />
+      case 'usuarios': return <UsuariosConfig />
       default: return renderSeccionNotificaciones() // Cambiado de general a notificaciones
     }
   }
