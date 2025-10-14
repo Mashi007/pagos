@@ -48,9 +48,15 @@ export function ValidadoresConfig() {
       setCargando(true)
       const config = await configuracionService.obtenerValidadores()
       setConfiguracion(config)
-    } catch (err) {
-      setError('Error al cargar la configuración de validadores')
+    } catch (err: any) {
       console.error('Error:', err)
+      if (err.response?.status === 503) {
+        setError('Servicio temporalmente no disponible. Intenta nuevamente.')
+      } else if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
+        setError('Error de conexión. Verifica que el servidor esté funcionando.')
+      } else {
+        setError('Error al cargar la configuración de validadores')
+      }
     } finally {
       setCargando(false)
     }
