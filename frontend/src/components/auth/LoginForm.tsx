@@ -46,7 +46,7 @@ export function LoginForm() {
     defaultValues: {
       email: '',
       password: '',
-      remember: false,
+      remember: true, // Por defecto activado para persistencia
     },
   })
 
