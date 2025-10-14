@@ -33,37 +33,130 @@ router = APIRouter()
 
 @router.post("/", response_model=ClienteResponse, status_code=201)
 def crear_cliente(
-    cliente: ClienteCreate = Body(...),  # ✅ Agregar Body() explícitamente
-    db: Session = Depends(get_db)
+    cliente: ClienteCreate = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    """Crear un nuevo cliente"""
-    
-    # 🔍 DEBUG: Imprimir el objeto recibido
-    print(f"📥 Cliente recibido: {cliente}")
-    print(f"📥 Tipo: {type(cliente)}")
+    """Crear un nuevo cliente con validaciones completas y auditoría"""
     
     try:
+        # 🔍 AUDITORÍA: Registrar inicio de creación
+        from app.models.auditoria import Auditoria, TipoAccion
+        
         # Verificar si ya existe la cédula
         existing = db.query(Cliente).filter(Cliente.cedula == cliente.cedula).first()
         if existing:
+            # 🔍 AUDITORÍA: Registrar intento de duplicado
+            auditoria = Auditoria.registrar(
+                usuario_id=current_user.id,
+                accion=TipoAccion.CREAR,
+                tabla="Cliente",
+                descripcion=f"Intento de crear cliente con cédula duplicada: {cliente.cedula}",
+                resultado="FALLIDO",
+                mensaje_error="Cédula ya registrada"
+            )
+            db.add(auditoria)
+            db.commit()
             raise HTTPException(status_code=400, detail="Cédula ya registrada")
+        
+        # 🔍 VALIDACIONES: Aplicar validadores antes de crear
+        from app.services.validators_service import (
+            ValidadorCedula, ValidadorTelefono, ValidadorEmail
+        )
+        
+        errores_validacion = []
+        
+        # Validar cédula
+        if cliente.cedula:
+            resultado_cedula = ValidadorCedula.validar_y_formatear_cedula(cliente.cedula, "VENEZUELA")
+            if not resultado_cedula.get("valido"):
+                errores_validacion.append(f"Cédula inválida: {resultado_cedula.get('mensaje', 'Formato incorrecto')}")
+            else:
+                cliente.cedula = resultado_cedula.get("valor_formateado", cliente.cedula)
+        
+        # Validar teléfono
+        if cliente.telefono:
+            resultado_telefono = ValidadorTelefono.validar_y_formatear_telefono(cliente.telefono, "VENEZUELA")
+            if not resultado_telefono.get("valido"):
+                errores_validacion.append(f"Teléfono inválido: {resultado_telefono.get('mensaje', 'Formato incorrecto')}")
+            else:
+                cliente.telefono = resultado_telefono.get("valor_formateado", cliente.telefono)
+        
+        # Validar email
+        if cliente.email:
+            resultado_email = ValidadorEmail.validar_email(cliente.email)
+            if not resultado_email.get("valido"):
+                errores_validacion.append(f"Email inválido: {resultado_email.get('mensaje', 'Formato incorrecto')}")
+            else:
+                cliente.email = resultado_email.get("valor_formateado", cliente.email)
+        
+        # Si hay errores de validación, no crear el cliente
+        if errores_validacion:
+            # 🔍 AUDITORÍA: Registrar fallo de validación
+            auditoria = Auditoria.registrar(
+                usuario_id=current_user.id,
+                accion=TipoAccion.CREAR,
+                tabla="Cliente",
+                descripcion=f"Cliente rechazado por validaciones: {cliente.cedula}",
+                datos_nuevos=cliente.model_dump(),
+                resultado="FALLIDO",
+                mensaje_error="; ".join(errores_validacion)
+            )
+            db.add(auditoria)
+            db.commit()
+            raise HTTPException(status_code=422, detail={
+                "mensaje": "Errores de validación encontrados",
+                "errores": errores_validacion
+            })
+        
+        # 🔍 AUDITORÍA: Registrar datos antes de la creación
+        datos_cliente = cliente.model_dump()
         
         # Convertir a dict para SQLAlchemy
         cliente_dict = cliente.model_dump()
-        print(f"📦 Dict generado: {cliente_dict}")
         
         db_cliente = Cliente(**cliente_dict)
         db.add(db_cliente)
+        db.flush()  # Para obtener el ID antes del commit
+        
+        # 🔍 AUDITORÍA: Registrar creación exitosa
+        auditoria = Auditoria.registrar(
+            usuario_id=current_user.id,
+            accion=TipoAccion.CREAR,
+            tabla="Cliente",
+            registro_id=db_cliente.id,
+            descripcion=f"Cliente creado exitosamente: {cliente.cedula}",
+            datos_nuevos=datos_cliente,
+            resultado="EXITOSO"
+        )
+        db.add(auditoria)
         db.commit()
         db.refresh(db_cliente)
         
-        print(f"✅ Cliente creado: ID={db_cliente.id}")
+        print(f"✅ Cliente creado con validaciones: ID={db_cliente.id}")
         return db_cliente
         
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
+        db.rollback()
         print(f"❌ Error creando cliente: {e}")
         import traceback
         traceback.print_exc()
+        
+        # 🔍 AUDITORÍA: Registrar error crítico
+        auditoria = Auditoria.registrar(
+            usuario_id=current_user.id,
+            accion=TipoAccion.CREAR,
+            tabla="Cliente",
+            descripcion=f"Error crítico creando cliente: {cliente.cedula}",
+            resultado="FALLIDO",
+            mensaje_error=str(e)
+        )
+        db.add(auditoria)
+        db.commit()
+        
         raise
 
 

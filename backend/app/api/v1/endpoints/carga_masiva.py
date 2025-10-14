@@ -45,7 +45,7 @@ async def cargar_archivo_excel(
         
         # Procesar según el tipo
         if type == "clientes":
-            return await procesar_clientes(content, file.filename, db)
+            return await procesar_clientes(content, file.filename, db, current_user.id)
         elif type == "prestamos":
             return await procesar_prestamos(content, file.filename, db)
         elif type == "pagos":
@@ -64,11 +64,24 @@ async def cargar_archivo_excel(
             detail=f"Error al procesar el archivo: {str(e)}"
         )
 
-async def procesar_clientes(content: bytes, filename: str, db: Session):
+async def procesar_clientes(content: bytes, filename: str, db: Session, usuario_id: int = None):
     """
-    Procesar archivo de clientes
+    Procesar archivo de clientes con validaciones completas y auditoría
     """
     try:
+        # 🔍 AUDITORÍA: Registrar inicio de carga masiva
+        from app.models.auditoria import Auditoria, TipoAccion
+        
+        auditoria_inicio = Auditoria.registrar(
+            usuario_id=usuario_id,
+            accion=TipoAccion.CREAR,
+            tabla="Cliente",
+            descripcion=f"Inicio de carga masiva de clientes desde archivo: {filename}",
+            resultado="EXITOSO"
+        )
+        db.add(auditoria_inicio)
+        db.flush()
+        
         # Leer Excel/CSV
         if filename.endswith('.csv'):
             df = pd.read_csv(io.BytesIO(content))
