@@ -23,9 +23,15 @@ class ValidadorTelefono:
         "VENEZUELA": {
             "codigo_pais": "+58",
             "operadoras": ["424", "414", "416", "426", "412", "425"],
-            "longitud_sin_codigo": 10,  # 424 1234567
-            "patron_completo": r"^\+58\s?[0-9]{3}\s?[0-9]{7}$",
-            "formato_display": "+58 XXX XXXXXXX"
+            "longitud_sin_codigo": 10,  # 10 dígitos total
+            "patron_completo": r"^\+58[1-9][0-9]{9}$",  # +58 + 10 dígitos (primer dígito no puede ser 0)
+            "formato_display": "+58 XXXXXXXXXX",
+            "requisitos": {
+                "debe_empezar_por": "+58",
+                "longitud_total": 10,
+                "primer_digito": "No puede ser 0",
+                "digitos_validos": "0-9"
+            }
         },
         "DOMINICANA": {
             "codigo_pais": "+1",
@@ -77,38 +83,42 @@ class ValidadorTelefono:
                     "valor_formateado": None
                 }
             
-            # Casos de formateo
-            if telefono_limpio.startswith(config["codigo_pais"].replace("+", "")):
-                # Ya tiene código de país: "584241234567"
-                numero_formateado = "+" + telefono_limpio[:2] + " " + telefono_limpio[2:5] + " " + telefono_limpio[5:]
-                
-            elif telefono_limpio.startswith(config["codigo_pais"]):
-                # Ya tiene + y código: "+584241234567"
-                numero_sin_plus = telefono_limpio[1:]
-                numero_formateado = "+" + numero_sin_plus[:2] + " " + numero_sin_plus[2:5] + " " + numero_sin_plus[5:]
-                
-            elif len(telefono_limpio) == config["longitud_sin_codigo"]:
-                # Solo número local: "4241234567"
-                operadora = telefono_limpio[:3]
-                if operadora in config["operadoras"]:
-                    numero_formateado = f"{config['codigo_pais']} {operadora} {telefono_limpio[3:]}"
+            # Casos de formateo específicos por país
+            if pais.upper() == "VENEZUELA":
+                return ValidadorTelefono._formatear_telefono_venezolano(telefono_limpio, config)
+            else:
+                # Lógica original para otros países
+                if telefono_limpio.startswith(config["codigo_pais"].replace("+", "")):
+                    # Ya tiene código de país: "584241234567"
+                    numero_formateado = "+" + telefono_limpio[:2] + " " + telefono_limpio[2:5] + " " + telefono_limpio[5:]
+                    
+                elif telefono_limpio.startswith(config["codigo_pais"]):
+                    # Ya tiene + y código: "+584241234567"
+                    numero_sin_plus = telefono_limpio[1:]
+                    numero_formateado = "+" + numero_sin_plus[:2] + " " + numero_sin_plus[2:5] + " " + numero_sin_plus[5:]
+                    
+                elif len(telefono_limpio) == config["longitud_sin_codigo"]:
+                    # Solo número local: "4241234567"
+                    operadora = telefono_limpio[:3]
+                    if operadora in config["operadoras"]:
+                        numero_formateado = f"{config['codigo_pais']} {operadora} {telefono_limpio[3:]}"
+                    else:
+                        return {
+                            "valido": False,
+                            "error": f"Operadora '{operadora}' no válida para {pais}. Válidas: {', '.join(config['operadoras'])}",
+                            "valor_original": telefono,
+                            "valor_formateado": None,
+                            "sugerencia": f"Debe comenzar con: {', '.join(config['operadoras'])}"
+                        }
                 else:
                     return {
                         "valido": False,
-                        "error": f"Operadora '{operadora}' no válida para {pais}. Válidas: {', '.join(config['operadoras'])}",
+                        "error": f"Longitud incorrecta. Formato esperado: {config['formato_display']}",
                         "valor_original": telefono,
                         "valor_formateado": None,
-                        "sugerencia": f"Debe comenzar con: {', '.join(config['operadoras'])}"
+                        "longitud_actual": len(telefono_limpio),
+                        "longitud_esperada": config["longitud_sin_codigo"]
                     }
-            else:
-                return {
-                    "valido": False,
-                    "error": f"Longitud incorrecta. Formato esperado: {config['formato_display']}",
-                    "valor_original": telefono,
-                    "valor_formateado": None,
-                    "longitud_actual": len(telefono_limpio),
-                    "longitud_esperada": config["longitud_sin_codigo"]
-                }
             
             # Validar formato final
             if re.match(config["patron_completo"], numero_formateado):
@@ -136,6 +146,119 @@ class ValidadorTelefono:
                 "valor_original": telefono,
                 "valor_formateado": None
             }
+    
+    @staticmethod
+    def _formatear_telefono_venezolano(telefono_limpio: str, config: Dict) -> Dict[str, Any]:
+        """
+        📱 Formatear teléfono venezolano con nuevos requisitos:
+        - Debe empezar por +58
+        - Seguido de 10 dígitos
+        - El primer dígito no puede ser 0
+        """
+        try:
+            # Casos de entrada
+            if telefono_limpio.startswith("58"):
+                # Ya tiene código de país sin +: "581234567890"
+                numero_sin_codigo = telefono_limpio[2:]  # Quitar "58"
+                if len(numero_sin_codigo) == 10:
+                    # Validar que el primer dígito no sea 0
+                    if numero_sin_codigo[0] == "0":
+                        return {
+                            "valido": False,
+                            "error": "El primer dígito del número no puede ser 0",
+                            "valor_original": telefono_limpio,
+                            "valor_formateado": None,
+                            "requisitos": config["requisitos"]
+                        }
+                    numero_formateado = f"+58{numero_sin_codigo}"
+                else:
+                    return {
+                        "valido": False,
+                        "error": f"Longitud incorrecta. Debe tener 10 dígitos después de +58, tiene {len(numero_sin_codigo)}",
+                        "valor_original": telefono_limpio,
+                        "valor_formateado": None,
+                        "requisitos": config["requisitos"]
+                    }
+                    
+            elif telefono_limpio.startswith("+58"):
+                # Ya tiene +58: "+581234567890"
+                numero_sin_codigo = telefono_limpio[3:]  # Quitar "+58"
+                if len(numero_sin_codigo) == 10:
+                    # Validar que el primer dígito no sea 0
+                    if numero_sin_codigo[0] == "0":
+                        return {
+                            "valido": False,
+                            "error": "El primer dígito del número no puede ser 0",
+                            "valor_original": telefono_limpio,
+                            "valor_formateado": None,
+                            "requisitos": config["requisitos"]
+                        }
+                    numero_formateado = telefono_limpio
+                else:
+                    return {
+                        "valido": False,
+                        "error": f"Longitud incorrecta. Debe tener 10 dígitos después de +58, tiene {len(numero_sin_codigo)}",
+                        "valor_original": telefono_limpio,
+                        "valor_formateado": None,
+                        "requisitos": config["requisitos"]
+                    }
+                    
+            elif len(telefono_limpio) == 10:
+                # Solo número local: "1234567890"
+                # Validar que el primer dígito no sea 0
+                if telefono_limpio[0] == "0":
+                    return {
+                        "valido": False,
+                        "error": "El primer dígito del número no puede ser 0",
+                        "valor_original": telefono_limpio,
+                        "valor_formateado": None,
+                        "requisitos": config["requisitos"]
+                    }
+                numero_formateado = f"+58{telefono_limpio}"
+                
+            else:
+                return {
+                    "valido": False,
+                    "error": f"Longitud incorrecta. Formato esperado: +58 seguido de 10 dígitos (primer dígito no puede ser 0)",
+                    "valor_original": telefono_limpio,
+                    "valor_formateado": None,
+                    "longitud_actual": len(telefono_limpio),
+                    "requisitos": config["requisitos"]
+                }
+            
+            # Validar formato final con regex
+            if re.match(config["patron_completo"], numero_formateado):
+                return {
+                    "valido": True,
+                    "valor_original": telefono_limpio,
+                    "valor_formateado": numero_formateado,
+                    "pais": "VENEZUELA",
+                    "cambio_realizado": telefono_limpio != numero_formateado,
+                    "codigo_pais": "+58",
+                    "numero_local": numero_formateado[3:],  # Sin +58
+                    "requisitos_cumplidos": {
+                        "empieza_por_58": True,
+                        "longitud_10_digitos": True,
+                        "primer_digito_no_cero": numero_formateado[3] != "0"
+                    }
+                }
+            else:
+                return {
+                    "valido": False,
+                    "error": "Formato final no cumple con los requisitos",
+                    "valor_original": telefono_limpio,
+                    "valor_formateado": numero_formateado,
+                    "requisitos": config["requisitos"]
+                }
+                
+        except Exception as e:
+            logger.error(f"Error formateando teléfono venezolano: {e}")
+            return {
+                "valido": False,
+                "error": f"Error de formateo: {str(e)}",
+                "valor_original": telefono_limpio,
+                "valor_formateado": None
+            }
 
 
 class ValidadorCedula:
@@ -146,11 +269,11 @@ class ValidadorCedula:
     
     PAISES_CEDULA = {
         "VENEZUELA": {
-            "prefijos": ["V", "E", "J", "G"],  # V=Venezolano, E=Extranjero, J=Jurídico, G=Gobierno
-            "longitud_numero": [7, 8],  # 7 u 8 dígitos
-            "patron": r"^[VEJG]\d{7,8}$",
+            "prefijos": ["V", "E", "J"],  # V=Venezolano, E=Extranjero, J=Jurídico
+            "longitud_numero": [7, 8, 9, 10],  # 7 a 10 dígitos
+            "patron": r"^[VEJ]\d{7,10}$",
             "formato_display": "V12345678",
-            "descripcion": "Cédula venezolana: V/E + 7-8 dígitos"
+            "descripcion": "Cédula venezolana: V/E/J + 7-10 dígitos"
         },
         "DOMINICANA": {
             "prefijos": [],  # Sin prefijo de letra
@@ -238,20 +361,51 @@ class ValidadorCedula:
             prefijo = cedula_formateada[0]
             numero = cedula_formateada[1:]
             
-            if len(numero) in config["longitud_numero"]:
+            # Validar que el prefijo sea válido
+            if prefijo not in config["prefijos"]:
                 return {
-                    "valido": True,
+                    "valido": False,
+                    "error": f"Prefijo '{prefijo}' no válido. Válidos: {', '.join(config['prefijos'])}",
                     "valor_original": cedula_limpia,
-                    "valor_formateado": cedula_formateada,
-                    "pais": "VENEZUELA",
-                    "tipo": {
-                        "V": "Venezolano",
-                        "E": "Extranjero",
-                        "J": "Jurídico",
-                        "G": "Gobierno"
-                    }.get(prefijo, "Desconocido"),
-                    "cambio_realizado": cedula_limpia != cedula_formateada
+                    "valor_formateado": None,
+                    "formato_esperado": config["descripcion"]
                 }
+            
+            # Validar longitud del número
+            if len(numero) not in config["longitud_numero"]:
+                return {
+                    "valido": False,
+                    "error": f"Longitud inválida: {len(numero)} dígitos. Válidos: {config['longitud_numero']} dígitos",
+                    "valor_original": cedula_limpia,
+                    "valor_formateado": None,
+                    "formato_esperado": config["descripcion"]
+                }
+            
+            # Validar que todos los dígitos sean números
+            if not numero.isdigit():
+                return {
+                    "valido": False,
+                    "error": "Los dígitos deben ser números del 0 al 9",
+                    "valor_original": cedula_limpia,
+                    "valor_formateado": None,
+                    "formato_esperado": config["descripcion"]
+                }
+            
+            return {
+                "valido": True,
+                "valor_original": cedula_limpia,
+                "valor_formateado": cedula_formateada,
+                "pais": "VENEZUELA",
+                "tipo": {
+                    "V": "Venezolano",
+                    "E": "Extranjero",
+                    "J": "Jurídico"
+                }.get(prefijo, "Desconocido"),
+                "cambio_realizado": cedula_limpia != cedula_formateada,
+                "prefijo": prefijo,
+                "numero": numero,
+                "longitud": len(numero)
+            }
         
         return {
             "valido": False,

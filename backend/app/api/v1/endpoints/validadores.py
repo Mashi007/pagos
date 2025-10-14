@@ -562,9 +562,16 @@ def obtener_configuracion_validadores(
             "paises_soportados": {
                 "venezuela": {
                     "codigo": "VENEZUELA",
-                    "telefono_formato": "+58 XXX XXXXXXX",
+                    "telefono_formato": "+58 XXXXXXXXXX",
+                    "telefono_requisitos": {
+                        "debe_empezar_por": "+58",
+                        "longitud_total": "10 dígitos",
+                        "primer_digito": "No puede ser 0",
+                        "digitos_validos": "0-9"
+                    },
                     "cedula_formato": "V12345678",
-                    "operadoras": ["424", "414", "416", "426", "412", "425"]
+                    "cedula_prefijos": ["V", "E", "J"],
+                    "cedula_longitud": "7-10 dígitos"
                 },
                 "dominicana": {
                     "codigo": "DOMINICANA", 
@@ -620,7 +627,9 @@ def obtener_configuracion_validadores(
                 "fecha_pago": "Máximo 1 día en el futuro",
                 "monto_pago": "No puede exceder saldo pendiente",
                 "total_financiamiento": "Entre $100 y $50,000,000",
-                "amortizaciones": "Entre 1 y 84 meses"
+                "amortizaciones": "Entre 1 y 84 meses",
+                "cedula_venezuela": "Prefijos V/E/J + 7-10 dígitos del 0-9",
+                "telefono_venezuela": "+58 + 10 dígitos (primer dígito no puede ser 0)"
             },
             
             "configuracion_frontend": {
@@ -728,7 +737,9 @@ def verificar_sistema_validadores(
                 "estado": "✅ IMPLEMENTADO",
                 "paises": ["Venezuela", "República Dominicana", "Colombia"],
                 "auto_formateo": True,
-                "ejemplo": "12345678 → V12345678"
+                "ejemplo": "12345678 → V12345678",
+                "venezuela_prefijos": ["V", "E", "J"],
+                "venezuela_longitud": "7-10 dígitos"
             },
             "email": {
                 "estado": "✅ IMPLEMENTADO",
