@@ -48,8 +48,23 @@ export function useAuthPersistence() {
           // Restaurar inmediatamente el usuario en el store
           setUser(storedUser)
           console.log('✅ Sesión restaurada exitosamente para:', storedUser.nombre)
+          
+          // Verificar que el token sigue disponible después de restaurar
+          setTimeout(() => {
+            const tokenAfterRestore = authService.getStoredToken()
+            console.log('🔍 Verificación post-restauración:', {
+              tokenDisponible: !!tokenAfterRestore,
+              tokenLength: tokenAfterRestore?.length || 0
+            })
+          }, 100)
         } else {
           console.log('❌ No se encontraron datos de autenticación válidos')
+          console.log('🔍 Detalles de la verificación:', {
+            hasToken: !!hasToken,
+            hasStoredUser: !!storedUser,
+            tokenValue: hasToken,
+            userValue: storedUser
+          })
         }
       } catch (error) {
         console.error('❌ Error crítico al inicializar autenticación:', error)

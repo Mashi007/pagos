@@ -39,6 +39,20 @@ class ApiClient {
             console.log('🔑 Token enviado en request:', config.url, token.substring(0, 20) + '...')
           } else {
             console.warn('⚠️ No se encontró token para la request:', config.url)
+            console.log('🔍 Debug completo de storage:', {
+              rememberMe,
+              localStorage: {
+                access_token: localStorage.getItem('access_token') ? 'EXISTS' : 'NOT_FOUND',
+                refresh_token: localStorage.getItem('refresh_token') ? 'EXISTS' : 'NOT_FOUND',
+                user: localStorage.getItem('user') ? 'EXISTS' : 'NOT_FOUND',
+                remember_me: localStorage.getItem('remember_me')
+              },
+              sessionStorage: {
+                access_token: sessionStorage.getItem('access_token') ? 'EXISTS' : 'NOT_FOUND',
+                refresh_token: sessionStorage.getItem('refresh_token') ? 'EXISTS' : 'NOT_FOUND',
+                user: sessionStorage.getItem('user') ? 'EXISTS' : 'NOT_FOUND'
+              }
+            })
             // Para endpoints que requieren autenticación, cancelar la request
             const protectedEndpoints = ['/api/v1/clientes', '/api/v1/concesionarios/activos', '/api/v1/asesores/activos', '/api/v1/dashboard', '/api/v1/configuracion', '/api/v1/validadores']
             const unprotectedEndpoints = ['/api/v1/clientes-temp/test-sin-auth', '/api/v1/health', '/api/v1/auth/login', '/api/v1/validadores/test-simple']
@@ -48,8 +62,10 @@ class ApiClient {
             const isUnprotectedEndpoint = unprotectedEndpoints.some(endpoint => config.url?.includes(endpoint))
             
             if (isProtectedEndpoint && !isUnprotectedEndpoint) {
-              console.error('🚫 Cancelando request protegida sin token:', config.url)
-              return Promise.reject(new Error('No hay token de autenticación disponible'))
+              console.error('🚫 Request protegida sin token, intentando continuar:', config.url)
+              // En lugar de cancelar, intentar continuar y dejar que el backend responda con 401
+              // Esto permitirá que el interceptor de respuesta maneje la renovación del token
+              console.log('⚠️ Continuando request sin token - el backend manejará la autenticación')
             } else if (isUnprotectedEndpoint) {
               console.log('✅ Endpoint no protegido, continuando sin token:', config.url)
             } else {
