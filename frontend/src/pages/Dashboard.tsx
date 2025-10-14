@@ -157,7 +157,7 @@ export function Dashboard() {
   })
 
   // Usar datos del backend si están disponibles, sino usar mock
-  const data = dashboardData || mockData
+  const data = (dashboardData && Object.keys(dashboardData).length > 0) ? dashboardData : mockData
   const isLoadingData = loadingDashboard || loadingKpis
 
   const calcularVariacion = (actual: number, anterior: number) => {

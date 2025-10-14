@@ -77,7 +77,7 @@ export function useCreateCliente() {
       // Invalidar y refetch queries relacionadas
       queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
       
-      toast.success(`Cliente ${newCliente.nombre} ${newCliente.apellido} creado exitosamente`)
+      toast.success(`Cliente ${newCliente.nombres} ${newCliente.apellidos} creado exitosamente`)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Error al crear cliente')
@@ -95,14 +95,14 @@ export function useUpdateCliente() {
     onSuccess: (updatedCliente) => {
       // Actualizar cache específico del cliente
       queryClient.setQueryData(
-        clienteKeys.detail(updatedCliente.id),
+        clienteKeys.detail(String(updatedCliente.id)),
         updatedCliente
       )
       
       // Invalidar listas
       queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
       
-      toast.success(`Cliente ${updatedCliente.nombre} ${updatedCliente.apellido} actualizado`)
+      toast.success(`Cliente ${updatedCliente.nombres} ${updatedCliente.apellidos} actualizado`)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Error al actualizar cliente')
@@ -166,7 +166,7 @@ export function useAsignarAsesor() {
     onSuccess: (updatedCliente) => {
       // Actualizar cache específico
       queryClient.setQueryData(
-        clienteKeys.detail(updatedCliente.id),
+        clienteKeys.detail(String(updatedCliente.id)),
         updatedCliente
       )
       
