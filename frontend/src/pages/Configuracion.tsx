@@ -103,7 +103,7 @@ export function Configuracion() {
     { id: 'notificaciones', nombre: 'Notificaciones', icono: Bell },
     { id: 'seguridad', nombre: 'Seguridad', icono: Shield },
     { id: 'baseDatos', nombre: 'Base de Datos', icono: Database },
-    { id: 'integraciones', nombre: 'Integraciones', icono: Settings },
+    // { id: 'integraciones', nombre: 'Integraciones', icono: Settings }, // OCULTO
     { id: 'facturacion', nombre: 'Facturación', icono: DollarSign },
     { id: 'validadores', nombre: 'Validadores', icono: CheckSquare },
     { id: 'concesionarios', nombre: 'Concesionarios', icono: Building },
@@ -612,7 +612,7 @@ export function Configuracion() {
       case 'notificaciones': return renderSeccionNotificaciones()
       case 'seguridad': return renderSeccionSeguridad()
       case 'baseDatos': return renderSeccionBaseDatos()
-      case 'integraciones': return renderSeccionIntegraciones()
+      // case 'integraciones': return renderSeccionIntegraciones() // OCULTO
       case 'facturacion': return renderSeccionFacturacion()
       case 'validadores': return <ValidadoresConfig />
       case 'concesionarios': return <ConcesionariosConfig />
