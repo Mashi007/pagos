@@ -31,8 +31,29 @@ import { usePermissions } from '@/store/authStore'
 import { formatCurrency, formatPercentage } from '@/utils'
 import { apiClient } from '@/services/api'
 
+// Tipos para Dashboard
+interface DashboardData {
+  cartera_total: number
+  cartera_anterior?: number
+  cartera_al_dia: number
+  cartera_vencida: number
+  porcentaje_mora: number
+  porcentaje_mora_anterior?: number
+  pagos_hoy: number
+  monto_pagos_hoy: number
+  clientes_activos: number
+  clientes_mora: number
+  clientes_anterior?: number
+  meta_mensual: number
+  avance_meta: number
+  financieros?: any
+  cobranza?: any
+  asesores?: any
+  productos?: any
+}
+
 // Mock data integrado - en producción vendría del backend
-const mockData = {
+const mockData: DashboardData = {
   // KPIs Principales
   cartera_total: 485750.00,
   cartera_anterior: 462300.00,
@@ -126,13 +147,13 @@ export function Dashboard() {
   const [periodo, setPeriodo] = useState('mes')
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // ✅ CORRECCIÓN: Conectar a endpoints reales del backend
-  const { data: dashboardData, isLoading: loadingDashboard, refetch: refetchDashboard } = useQuery({
+  // ✅ CORRECCIÓN: Conectar a endpoints reales del backend con tipos explícitos
+  const { data: dashboardData, isLoading: loadingDashboard, refetch: refetchDashboard } = useQuery<DashboardData>({
     queryKey: ['dashboard', periodo],
     queryFn: async () => {
       try {
-        const response = await apiClient.get(`/api/v1/dashboard/administrador?periodo=${periodo}`)
-        return response
+        const response = await apiClient.get(`/api/v1/dashboard/admin?periodo=${periodo}`)
+        return response as DashboardData
       } catch (error) {
         console.warn('Error cargando dashboard desde backend, usando datos mock:', error)
         return mockData // Fallback a datos mock
@@ -140,24 +161,26 @@ export function Dashboard() {
     },
     staleTime: 5 * 60 * 1000, // 5 minutos
     refetchInterval: 10 * 60 * 1000, // Actualizar cada 10 minutos
+    initialData: mockData, // Datos iniciales mientras carga
   })
 
-  const { data: kpisData, isLoading: loadingKpis } = useQuery({
+  const { data: kpisData, isLoading: loadingKpis } = useQuery<DashboardData>({
     queryKey: ['kpis'],
     queryFn: async () => {
       try {
-        const response = await apiClient.get('/api/v1/kpis')
-        return response
+        const response = await apiClient.get('/api/v1/kpis/dashboard')
+        return response as DashboardData
       } catch (error) {
         console.warn('Error cargando KPIs desde backend, usando datos mock:', error)
         return mockData // Fallback a datos mock
       }
     },
     staleTime: 5 * 60 * 1000,
+    initialData: mockData, // Datos iniciales mientras carga
   })
 
   // Usar datos del backend si están disponibles, sino usar mock
-  const data = (dashboardData && Object.keys(dashboardData).length > 0) ? dashboardData : mockData
+  const data: DashboardData = dashboardData || mockData
   const isLoadingData = loadingDashboard || loadingKpis
 
   const calcularVariacion = (actual: number, anterior: number) => {

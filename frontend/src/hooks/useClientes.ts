@@ -141,7 +141,7 @@ export function useCambiarEstadoCliente() {
     onSuccess: (updatedCliente) => {
       // Actualizar cache específico
       queryClient.setQueryData(
-        clienteKeys.detail(updatedCliente.id),
+        clienteKeys.detail(String(updatedCliente.id)),
         updatedCliente
       )
       
