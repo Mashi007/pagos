@@ -173,3 +173,59 @@ def verify_token(
         "email": current_user.email,
         "rol": current_user.rol
     }
+
+
+@router.post("/create-test-user", summary="Crear usuario de prueba")
+def create_test_user(db: Session = Depends(get_db)):
+    """
+    ENDPOINT TEMPORAL PARA CREAR USUARIO CON CONTRASEÑA CONOCIDA
+    
+    CREDENCIALES:
+    - Email: admin@rapicredit.com
+    - Password: admin123
+    - Rol: ADMIN
+    """
+    import bcrypt
+    
+    try:
+        # Eliminar usuario existente si existe
+        existing_user = db.query(User).filter(User.email == "admin@rapicredit.com").first()
+        if existing_user:
+            db.delete(existing_user)
+            db.commit()
+        
+        # Crear hash de contraseña para "admin123"
+        password = "admin123"
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        
+        # Crear usuario nuevo
+        new_user = User(
+            email="admin@rapicredit.com",
+            password_hash=password_hash.decode('utf-8'),
+            nombre="Admin",
+            apellido="Sistema",
+            rol="ADMIN",
+            is_active=True
+        )
+        
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        
+        return {
+            "success": True,
+            "message": "Usuario de prueba creado exitosamente",
+            "credentials": {
+                "email": "admin@rapicredit.com",
+                "password": "admin123",
+                "rol": "ADMIN"
+            },
+            "user_id": new_user.id
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creando usuario de prueba: {str(e)}"
+        )
