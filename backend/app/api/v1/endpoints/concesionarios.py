@@ -88,7 +88,6 @@ def obtener_concesionario(
     return ConcesionarioResponse.from_orm(concesionario)
 
 @router.post("/", response_model=ConcesionarioResponse)
-@require_roles(["ADMIN", "GERENTE"])
 def crear_concesionario(
     concesionario_data: ConcesionarioCreate,
     db: Session = Depends(get_db),
@@ -118,7 +117,6 @@ def crear_concesionario(
         raise HTTPException(status_code=500, detail=f"Error al crear concesionario: {str(e)}")
 
 @router.put("/{concesionario_id}", response_model=ConcesionarioResponse)
-@require_roles(["ADMIN", "GERENTE"])
 def actualizar_concesionario(
     concesionario_id: int,
     concesionario_data: ConcesionarioUpdate,
@@ -160,7 +158,6 @@ def actualizar_concesionario(
         raise HTTPException(status_code=500, detail=f"Error al actualizar concesionario: {str(e)}")
 
 @router.delete("/{concesionario_id}")
-@require_roles(["ADMIN", "GERENTE"])
 def eliminar_concesionario(
     concesionario_id: int,
     db: Session = Depends(get_db),

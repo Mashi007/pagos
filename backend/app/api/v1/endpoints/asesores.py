@@ -101,7 +101,6 @@ def obtener_asesor(
     return AsesorResponse.from_orm(asesor)
 
 @router.post("/", response_model=AsesorResponse)
-@require_roles(["ADMIN", "GERENTE"])
 def crear_asesor(
     asesor_data: AsesorCreate,
     db: Session = Depends(get_db),
@@ -131,7 +130,6 @@ def crear_asesor(
         raise HTTPException(status_code=500, detail=f"Error al crear asesor: {str(e)}")
 
 @router.put("/{asesor_id}", response_model=AsesorResponse)
-@require_roles(["ADMIN", "GERENTE"])
 def actualizar_asesor(
     asesor_id: int,
     asesor_data: AsesorUpdate,
@@ -173,7 +171,6 @@ def actualizar_asesor(
         raise HTTPException(status_code=500, detail=f"Error al actualizar asesor: {str(e)}")
 
 @router.delete("/{asesor_id}")
-@require_roles(["ADMIN", "GERENTE"])
 def eliminar_asesor(
     asesor_id: int,
     db: Session = Depends(get_db),
