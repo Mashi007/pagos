@@ -157,6 +157,11 @@ export const useAuthStore = create<AuthState>()(
       onRehydrateStorage: () => (state) => {
         console.log('🔄 Rehidratando store de autenticación...', state)
         
+        if (!state) {
+          console.log('❌ No hay estado para rehidratar')
+          return
+        }
+        
         // Verificar si hay datos almacenados en localStorage/sessionStorage
         const storedUser = authService.getStoredUser()
         const hasToken = authService.getStoredToken()

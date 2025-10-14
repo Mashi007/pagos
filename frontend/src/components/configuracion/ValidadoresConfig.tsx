@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { configuracionService, ValidadoresConfig, PruebaValidadores } from '@/services/configuracionService'
+import { configuracionService, type ValidadoresConfig, type PruebaValidadores } from '@/services/configuracionService'
 
 export function ValidadoresConfig() {
   const [configuracion, setConfiguracion] = useState<ValidadoresConfig | null>(null)
@@ -168,7 +168,7 @@ export function ValidadoresConfig() {
                 <div>
                   <h5 className="font-medium text-green-700 mb-2">✅ Ejemplos Válidos</h5>
                   <ul className="text-sm space-y-1">
-                    {config.paises_soportados.venezuela.ejemplos_validos.map((ejemplo, idx) => (
+                    {config.paises_soportados.venezuela.ejemplos_validos.map((ejemplo: string, idx: number) => (
                       <li key={idx} className="font-mono bg-green-100 px-2 py-1 rounded">{ejemplo}</li>
                     ))}
                   </ul>
@@ -176,7 +176,7 @@ export function ValidadoresConfig() {
                 <div>
                   <h5 className="font-medium text-red-700 mb-2">❌ Ejemplos Inválidos</h5>
                   <ul className="text-sm space-y-1">
-                    {config.paises_soportados.venezuela.ejemplos_invalidos.map((ejemplo, idx) => (
+                    {config.paises_soportados.venezuela.ejemplos_invalidos.map((ejemplo: string, idx: number) => (
                       <li key={idx} className="font-mono bg-red-100 px-2 py-1 rounded">{ejemplo}</li>
                     ))}
                   </ul>
@@ -248,7 +248,7 @@ export function ValidadoresConfig() {
                 <div>
                   <strong>Dominios bloqueados:</strong>
                   <div className="mt-1 flex flex-wrap gap-1">
-                    {config.caracteristicas.dominios_bloqueados.slice(0, 3).map((dominio, idx) => (
+                    {config.caracteristicas.dominios_bloqueados.slice(0, 3).map((dominio: string, idx: number) => (
                       <Badge key={idx} variant="destructive" className="text-xs">{dominio}</Badge>
                     ))}
                     {config.caracteristicas.dominios_bloqueados.length > 3 && (
