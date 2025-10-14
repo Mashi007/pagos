@@ -46,26 +46,22 @@ export const userService = {
     if (is_active !== undefined) {
       params.is_active = is_active
     }
-    const response = await api.get<UserListResponse>('/users/', { params })
-    return response.data
+    return await api.get<UserListResponse>('/users/', { params })
   },
 
   // Obtener usuario por ID
   obtenerUsuario: async (userId: number): Promise<User> => {
-    const response = await api.get<User>(`/users/${userId}`)
-    return response.data
+    return await api.get<User>(`/users/${userId}`)
   },
 
   // Crear usuario
   crearUsuario: async (userData: UserCreate): Promise<User> => {
-    const response = await api.post<User>('/users/', userData)
-    return response.data
+    return await api.post<User>('/users/', userData)
   },
 
   // Actualizar usuario
   actualizarUsuario: async (userId: number, userData: UserUpdate): Promise<User> => {
-    const response = await api.put<User>(`/users/${userId}`, userData)
-    return response.data
+    return await api.put<User>(`/users/${userId}`, userData)
   },
 
   // Eliminar usuario
@@ -75,8 +71,7 @@ export const userService = {
 
   // Verificar administradores
   verificarAdmin: async (): Promise<any> => {
-    const response = await api.get('/users/verificar-admin')
-    return response.data
+    return await api.get('/users/verificar-admin')
   }
 }
 
