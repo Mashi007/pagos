@@ -26,11 +26,11 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { AlertWithIcon } from '@/components/ui/alert'
 import { CrearClienteForm } from './CrearClienteForm'
 
-import { useClientes } from '@/hooks/useClientes'
 import { useDebounce } from '@/hooks/useDebounce'
 import { usePermissions } from '@/store/authStore'
 import { formatCurrency, formatDate } from '@/utils'
 import { ClienteFilters } from '@/types'
+import { useClientes } from '@/hooks/useClientes'
 
 export function ClientesList() {
   // Forzar nuevo build - versión actualizada
