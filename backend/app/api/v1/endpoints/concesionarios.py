@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.concesionario import Concesionario
@@ -87,7 +87,7 @@ def obtener_concesionario(
     
     return ConcesionarioResponse.from_orm(concesionario)
 
-@router.post("/", response_model=ConcesionarioResponse)
+@router.post("", response_model=ConcesionarioResponse)
 def crear_concesionario(
     concesionario_data: ConcesionarioCreate,
     db: Session = Depends(get_db),

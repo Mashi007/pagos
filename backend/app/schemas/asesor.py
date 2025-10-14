@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, validator
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 class AsesorBase(BaseModel):
@@ -59,8 +59,7 @@ class AsesorResponse(AsesorBase):
         from_attributes = True
 
 class AsesorListResponse(BaseModel):
-    items: list[AsesorResponse]
     total: int
     page: int
-    size: int
-    pages: int
+    per_page: int
+    data: List[AsesorResponse]

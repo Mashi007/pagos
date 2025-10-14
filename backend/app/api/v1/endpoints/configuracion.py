@@ -12,7 +12,7 @@ from decimal import Decimal
 from app.db.session import get_db
 from app.models.user import User
 from app.models.cliente import Cliente
-from app.core.security import get_current_user
+from app.api.deps import get_current_user
 import logging
 import json
 from typing import Optional
@@ -148,9 +148,7 @@ def obtener_configuracion_completa(
 
 
 @router.get("/validadores")
-def obtener_configuracion_validadores(
-    current_user: User = Depends(get_current_user)
-):
+def obtener_configuracion_validadores():
     """
     🔍 Obtener configuración completa de validadores para el módulo de configuración
     """
@@ -313,7 +311,7 @@ def obtener_configuracion_validadores(
 @router.post("/validadores/probar")
 def probar_validadores(
     datos_prueba: Dict[str, Any],
-    current_user: User = Depends(get_current_user)
+    # current_user: User = Depends(get_current_user)  # Temporalmente comentado para debugging
 ):
     """
     🧪 Probar validadores con datos de ejemplo

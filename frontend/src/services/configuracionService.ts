@@ -103,12 +103,14 @@ class ConfiguracionService {
 
   // Obtener configuración de validadores
   async obtenerValidadores(): Promise<ValidadoresConfig> {
-    return await apiClient.get<ValidadoresConfig>(`${this.baseUrl}/validadores`)
+    const response = await apiClient.get(`${this.baseUrl}/validadores`)
+    return response as ValidadoresConfig
   }
 
   // Probar validadores con datos de ejemplo
   async probarValidadores(datosPrueba: PruebaValidadores): Promise<ResultadoPrueba> {
-    return await apiClient.post<ResultadoPrueba>(`${this.baseUrl}/validadores/probar`, datosPrueba)
+    const response = await apiClient.post(`${this.baseUrl}/validadores/probar`, datosPrueba)
+    return response as ResultadoPrueba
   }
 
   // Obtener configuración completa del sistema

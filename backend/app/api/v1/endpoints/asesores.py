@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.asesor import Asesor
@@ -100,7 +100,7 @@ def obtener_asesor(
     
     return AsesorResponse.from_orm(asesor)
 
-@router.post("/", response_model=AsesorResponse)
+@router.post("", response_model=AsesorResponse)
 def crear_asesor(
     asesor_data: AsesorCreate,
     db: Session = Depends(get_db),
