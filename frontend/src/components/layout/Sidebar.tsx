@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -19,6 +19,9 @@ import {
   Calendar,
   Shield,
   X,
+  ChevronDown,
+  ChevronRight,
+  Wrench,
 } from 'lucide-react'
 import { cn } from '@/utils'
 import { usePermissions } from '@/store/authStore'
@@ -32,16 +35,26 @@ interface SidebarProps {
 
 interface MenuItem {
   title: string
-  href: string
+  href?: string
   icon: React.ComponentType<{ className?: string }>
   badge?: string
   requiredRoles?: string[]
   children?: MenuItem[]
+  isSubmenu?: boolean
 }
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation()
   const { hasAnyRole, userRole } = usePermissions()
+  const [openSubmenus, setOpenSubmenus] = useState<string[]>(['Herramientas'])
+
+  const toggleSubmenu = (title: string) => {
+    setOpenSubmenus(prev =>
+      prev.includes(title)
+        ? prev.filter(item => item !== title)
+        : [...prev, title]
+    )
+  }
 
   const menuItems: MenuItem[] = [
     {
@@ -53,10 +66,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       title: 'Clientes',
       href: '/clientes',
       icon: Users,
-      children: [
-        { title: 'Lista de Clientes', href: '/clientes', icon: Users },
-        { title: 'Nuevo Cliente', href: '/clientes/nuevo', icon: UserCheck },
-      ],
     },
     {
       title: 'Préstamos',
@@ -68,10 +77,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       title: 'Pagos',
       href: '/pagos',
       icon: CreditCard,
-      children: [
-        { title: 'Registrar Pago', href: '/pagos/nuevo', icon: CreditCard },
-        { title: 'Historial', href: '/pagos', icon: FileText },
-      ],
     },
     {
       title: 'Amortización',
@@ -98,12 +103,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       requiredRoles: ['ADMIN', 'GERENTE', 'DIRECTOR'],
     },
     {
-      title: 'Auditoría',
-      href: '/auditoria',
-      icon: Search,
-      requiredRoles: ['ADMIN', 'GERENTE', 'AUDITOR'],
-    },
-    {
       title: 'Carga Masiva',
       href: '/carga-masiva',
       icon: Upload,
@@ -117,15 +116,15 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       requiredRoles: ['ADMIN', 'GERENTE', 'DIRECTOR'],
     },
     {
-      title: 'Notificaciones',
-      href: '/notificaciones',
-      icon: Bell,
-    },
-    {
-      title: 'Programador',
-      href: '/scheduler',
-      icon: Calendar,
+      title: 'Herramientas',
+      icon: Wrench,
+      isSubmenu: true,
       requiredRoles: ['ADMIN', 'GERENTE'],
+      children: [
+        { title: 'Notificaciones', href: '/notificaciones', icon: Bell },
+        { title: 'Programador', href: '/scheduler', icon: Calendar, requiredRoles: ['ADMIN', 'GERENTE'] },
+        { title: 'Auditoría', href: '/auditoria', icon: Search, requiredRoles: ['ADMIN', 'GERENTE', 'AUDITOR'] },
+      ],
     },
     {
       title: 'Configuración',
@@ -239,42 +238,104 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             <div className="px-3 space-y-1">
               {filteredMenuItems.map((item, index) => (
                 <motion.div
-                  key={item.href}
+                  key={item.href || item.title}
                   variants={itemVariants}
                   initial="closed"
                   animate="open"
                   transition={{ delay: index * 0.05 }}
                 >
-                  <NavLink
-                    to={item.href}
-                    onClick={() => {
-                      // Cerrar sidebar en móvil al hacer click
-                      if (window.innerWidth < 1024) {
-                        onClose()
-                      }
-                    }}
-                    className={({ isActive }) =>
-                      cn(
-                        "flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                        isActive || isActiveRoute(item.href)
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                      )
-                    }
-                  >
-                    <div className="flex items-center space-x-3">
-                      <item.icon className="h-5 w-5" />
-                      <span>{item.title}</span>
-                    </div>
-                    {item.badge && (
-                      <Badge
-                        variant={item.badge === 'NUEVO' ? 'success' : 'destructive'}
-                        className="text-xs"
+                  {item.isSubmenu && item.children ? (
+                    // Renderizar submenú con dropdown
+                    <div>
+                      <button
+                        onClick={() => toggleSubmenu(item.title)}
+                        className={cn(
+                          "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                          "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                        )}
                       >
-                        {item.badge}
-                      </Badge>
-                    )}
-                  </NavLink>
+                        <div className="flex items-center space-x-3">
+                          <item.icon className="h-5 w-5" />
+                          <span>{item.title}</span>
+                        </div>
+                        {openSubmenus.includes(item.title) ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                      </button>
+                      
+                      {/* Submenú desplegable */}
+                      <AnimatePresence>
+                        {openSubmenus.includes(item.title) && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="ml-6 mt-1 space-y-1">
+                              {item.children.map((child) => (
+                                <NavLink
+                                  key={child.href}
+                                  to={child.href!}
+                                  onClick={() => {
+                                    if (window.innerWidth < 1024) {
+                                      onClose()
+                                    }
+                                  }}
+                                  className={({ isActive }) =>
+                                    cn(
+                                      "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                                      isActive || isActiveRoute(child.href!)
+                                        ? "bg-primary text-primary-foreground shadow-sm"
+                                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                                    )
+                                  }
+                                >
+                                  <child.icon className="h-4 w-4" />
+                                  <span>{child.title}</span>
+                                </NavLink>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  ) : (
+                    // Renderizar item normal
+                    <NavLink
+                      to={item.href!}
+                      onClick={() => {
+                        // Cerrar sidebar en móvil al hacer click
+                        if (window.innerWidth < 1024) {
+                          onClose()
+                        }
+                      }}
+                      className={({ isActive }) =>
+                        cn(
+                          "flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                          isActive || isActiveRoute(item.href!)
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                        )
+                      }
+                    >
+                      <div className="flex items-center space-x-3">
+                        <item.icon className="h-5 w-5" />
+                        <span>{item.title}</span>
+                      </div>
+                      {item.badge && (
+                        <Badge
+                          variant={item.badge === 'NUEVO' ? 'success' : 'destructive'}
+                          className="text-xs"
+                        >
+                          {item.badge}
+                        </Badge>
+                      )}
+                    </NavLink>
+                  )}
                 </motion.div>
               ))}
             </div>
