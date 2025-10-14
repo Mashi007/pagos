@@ -15,7 +15,7 @@ export interface ChangePasswordRequest {
   confirm_password: string
 }
 
-class AuthService {
+export class AuthService {
   // Login de usuario - SOLO API CALL, NO GUARDA TOKENS
   async login(credentials: LoginForm): Promise<LoginResponse> {
     try {
