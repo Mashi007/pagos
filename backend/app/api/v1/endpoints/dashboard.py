@@ -121,8 +121,10 @@ def dashboard_administrador(
     
     # TOP 5 ASESORES DEL MES
     inicio_mes = hoy.replace(day=1)
-    top_asesores = db.query(
-        User.full_name,
+    top_asesores_query = db.query(
+        User.id,
+        User.nombre,
+        User.apellido,
         func.count(Cliente.id).label('nuevos_clientes'),
         func.sum(Cliente.total_financiamiento).label('monto_vendido')
     ).select_from(User).outerjoin(
@@ -131,10 +133,20 @@ def dashboard_administrador(
             Cliente.fecha_registro >= inicio_mes
         )
     ).filter(
-        User.rol.in_(["ASESOR", "COMERCIAL", "GERENTE"])
-    ).group_by(User.id, User.full_name).order_by(
+        User.rol.in_(["ASESOR_COMERCIAL", "GERENTE"])
+    ).group_by(User.id, User.nombre, User.apellido).order_by(
         func.count(Cliente.id).desc()
     ).limit(5).all()
+    
+    # Formatear resultados
+    top_asesores = [
+        {
+            "nombre": f"{asesor.nombre} {asesor.apellido}",
+            "nuevos_clientes": asesor.nuevos_clientes,
+            "monto_vendido": float(asesor.monto_vendido or 0)
+        }
+        for asesor in top_asesores_query
+    ]
     
     # ALERTAS CRÍTICAS
     clientes_criticos = db.query(Cliente).filter(
@@ -433,18 +445,30 @@ def dashboard_comercial(
     ).all()
     
     # VENTAS POR ASESOR
-    ventas_por_asesor = db.query(
-        User.full_name,
+    ventas_por_asesor_query = db.query(
+        User.id,
+        User.nombre,
+        User.apellido,
         func.count(Cliente.id).label('ventas'),
         func.sum(Cliente.total_financiamiento).label('monto')
     ).select_from(User).outerjoin(Cliente, and_(
         User.id == Cliente.asesor_id,
         Cliente.fecha_registro >= inicio_mes
     )).filter(
-        User.rol.in_(["ASESOR", "COMERCIAL", "GERENTE"])
-    ).group_by(User.id, User.full_name).order_by(
+        User.rol.in_(["ASESOR_COMERCIAL", "GERENTE"])
+    ).group_by(User.id, User.nombre, User.apellido).order_by(
         func.count(Cliente.id).desc()
     ).all()
+    
+    # Formatear resultados
+    ventas_por_asesor = [
+        {
+            "nombre": f"{v.nombre} {v.apellido}",
+            "ventas": v.ventas,
+            "monto": float(v.monto or 0)
+        }
+        for v in ventas_por_asesor_query
+    ]
     
     # ÚLTIMAS VENTAS REGISTRADAS
     ultimas_ventas = db.query(Cliente).filter(
@@ -586,25 +610,26 @@ def dashboard_asesor(
     # MI POSICIÓN EN RANKING
     ranking_general = db.query(
         User.id,
-        User.full_name,
+        User.nombre,
+        User.apellido,
         func.count(Cliente.id).label('total_clientes'),
         func.sum(Cliente.total_financiamiento).label('monto_total')
     ).outerjoin(Cliente, User.id == Cliente.asesor_id).filter(
-        User.rol.in_(["ASESOR", "COMERCIAL", "GERENTE"]),
+        User.rol.in_(["ASESOR_COMERCIAL", "GERENTE"]),
         Cliente.activo == True
-    ).group_by(User.id, User.full_name).order_by(
+    ).group_by(User.id, User.nombre, User.apellido).order_by(
         func.count(Cliente.id).desc()
     ).all()
     
     mi_posicion = None
-    for idx, (user_id, nombre, clientes, monto) in enumerate(ranking_general):
-        if user_id == asesor_id:
+    for idx, asesor_rank in enumerate(ranking_general):
+        if asesor_rank.id == asesor_id:
             mi_posicion = {
                 "posicion": idx + 1,
                 "total_asesores": len(ranking_general),
-                "clientes": clientes,
-                "monto": float(monto or 0),
-                "percentil": round((1 - idx / len(ranking_general)) * 100, 1)
+                "clientes": asesor_rank.total_clientes,
+                "monto": float(asesor_rank.monto_total or 0),
+                "percentil": round((1 - idx / len(ranking_general)) * 100, 1) if len(ranking_general) > 0 else 0
             }
             break
     
