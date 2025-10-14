@@ -97,22 +97,38 @@ def crear_concesionario(
     ➕ Crear un nuevo concesionario
     """
     try:
+        # 🔍 DEBUG: Imprimir los datos recibidos
+        print(f"📥 Concesionario recibido: {concesionario_data}")
+        print(f"📥 Tipo: {type(concesionario_data)}")
+        
         # Verificar que no exista un concesionario con el mismo nombre
         existing = db.query(Concesionario).filter(Concesionario.nombre == concesionario_data.nombre).first()
         if existing:
             raise HTTPException(status_code=400, detail="Ya existe un concesionario con este nombre")
         
+        # Limpiar campos vacíos
+        concesionario_dict = concesionario_data.dict()
+        for key, value in concesionario_dict.items():
+            if value == "" or value is None:
+                concesionario_dict[key] = None
+        
+        print(f"📦 Dict limpio: {concesionario_dict}")
+        
         # Crear nuevo concesionario
-        concesionario = Concesionario(**concesionario_data.dict())
+        concesionario = Concesionario(**concesionario_dict)
         db.add(concesionario)
         db.commit()
         db.refresh(concesionario)
         
+        print(f"✅ Concesionario creado: ID={concesionario.id}")
         return ConcesionarioResponse.from_orm(concesionario)
         
     except HTTPException:
         raise
     except Exception as e:
+        print(f"❌ Error creando concesionario: {e}")
+        import traceback
+        traceback.print_exc()
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al crear concesionario: {str(e)}")
 
