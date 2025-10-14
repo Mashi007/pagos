@@ -34,6 +34,7 @@ from app.api.v1.endpoints import (
     notificaciones_multicanal,
     scheduler_notificaciones,
     validadores,
+    diagnostico,
 )
 
 # Configurar logging
@@ -93,6 +94,7 @@ app.include_router(setup_inicial.router, prefix=f"{settings.API_V1_PREFIX}/setup
 app.include_router(notificaciones_multicanal.router, prefix=f"{settings.API_V1_PREFIX}/notificaciones-multicanal", tags=["Notificaciones Multicanal"])
 app.include_router(scheduler_notificaciones.router, prefix=f"{settings.API_V1_PREFIX}/scheduler", tags=["Scheduler"])
 app.include_router(validadores.router, prefix=f"{settings.API_V1_PREFIX}/validadores", tags=["Validadores"])
+app.include_router(diagnostico.router, prefix=f"{settings.API_V1_PREFIX}/diagnostico", tags=["Diagnostico"])
 
 
 @app.get("/", include_in_schema=False)
