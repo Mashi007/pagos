@@ -128,8 +128,17 @@ class ApiClient {
         case 500:
           toast.error('Error interno del servidor')
           break
+        case 503:
+          toast.error('Servicio temporalmente no disponible. Intenta nuevamente.')
+          break
         default:
-          toast.error(data.message || 'Error desconocido')
+          if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+            toast.error('Tiempo de espera agotado. Verifica tu conexión.')
+          } else if (error.message?.includes('Network Error') || error.code === 'ERR_NETWORK') {
+            toast.error('Error de conexión. Verifica que el servidor esté funcionando.')
+          } else {
+            toast.error(data.message || 'Error desconocido')
+          }
       }
     } else if (error.request) {
       // Error de red

@@ -14,6 +14,7 @@ import {
   Mail,
   Phone,
   Eye,
+  RefreshCw,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -56,9 +57,15 @@ export function AsesoresConfig() {
       setLoading(true)
       const data = await asesorService.listarAsesoresActivos()
       setAsesores(data)
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al cargar asesores:', err)
-      setError('No se pudieron cargar los asesores.')
+      if (err.response?.status === 503) {
+        setError('Servicio temporalmente no disponible. Intenta nuevamente.')
+      } else if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
+        setError('Error de conexión. Verifica que el servidor esté funcionando.')
+      } else {
+        setError('No se pudieron cargar los asesores.')
+      }
     } finally {
       setLoading(false)
     }
@@ -356,7 +363,18 @@ export function AsesoresConfig() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
+          <div className="flex items-center justify-between">
+            <span>{error}</span>
+            <Button 
+              onClick={loadAsesores}
+              variant="outline" 
+              size="sm"
+              className="ml-4"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Reintentar
+            </Button>
+          </div>
         </div>
       )}
     </motion.div>
