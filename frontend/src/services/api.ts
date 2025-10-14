@@ -36,9 +36,17 @@ class ApiClient {
             
           if (token) {
             config.headers.Authorization = `Bearer ${token}`
-            console.log('🔑 Token enviado en request:', token.substring(0, 20) + '...')
+            console.log('🔑 Token enviado en request:', config.url, token.substring(0, 20) + '...')
           } else {
             console.warn('⚠️ No se encontró token para la request:', config.url)
+            // Para endpoints que requieren autenticación, cancelar la request
+            const protectedEndpoints = ['/api/v1/clientes', '/api/v1/concesionarios', '/api/v1/asesores', '/api/v1/dashboard']
+            const isProtectedEndpoint = protectedEndpoints.some(endpoint => config.url?.includes(endpoint))
+            
+            if (isProtectedEndpoint) {
+              console.error('🚫 Cancelando request protegida sin token:', config.url)
+              return Promise.reject(new Error('No hay token de autenticación disponible'))
+            }
           }
         }
         return config
