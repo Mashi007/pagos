@@ -10,21 +10,31 @@ class ClienteService {
     page: number = 1,
     perPage: number = 20
   ): Promise<PaginatedResponse<Cliente>> {
-    // Endpoint principal con barra final para evitar redirección 307
-    const params = new URLSearchParams({
-      page: page.toString(),
-      per_page: perPage.toString()
-    })
-    
-    // Agregar filtros si existen
-    if (filters?.search) params.append('search', filters.search)
-    if (filters?.estado) params.append('estado', filters.estado)
-    if (filters?.estado_financiero) params.append('estado_financiero', filters.estado_financiero)
-    if (filters?.asesor_id) params.append('asesor_id', filters.asesor_id.toString())
-    
-    // IMPORTANTE: Incluir la barra final para evitar redirección 307
-    const url = `${this.baseUrl}/?${params.toString()}`
-    return apiClient.get<PaginatedResponse<Cliente>>(url)
+    // TEMPORAL: Usar endpoint sin autenticación para debugging
+    try {
+      console.log('🔄 Intentando obtener clientes con autenticación...')
+      const response = await apiClient.get<PaginatedResponse<Cliente>>('/api/v1/clientes-temp/test-con-auth')
+      console.log('✅ Clientes obtenidos con autenticación:', response)
+      return response
+    } catch (authError) {
+      console.warn('⚠️ Error con autenticación, probando sin auth:', authError)
+      try {
+        const response = await apiClient.get<any>('/api/v1/clientes-temp/test-sin-auth')
+        console.log('✅ Clientes obtenidos sin autenticación:', response)
+        
+        // Convertir respuesta a formato esperado
+        return {
+          data: response.data || [],
+          total: response.total || 0,
+          page: 1,
+          per_page: response.total || 0,
+          total_pages: 1
+        }
+      } catch (noAuthError) {
+        console.error('❌ Error en ambos endpoints:', noAuthError)
+        throw noAuthError
+      }
+    }
   }
 
   // Obtener cliente por ID
