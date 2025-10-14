@@ -110,7 +110,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     },
     {
       title: 'Inteligencia Artificial',
-      href: '/ia',
+      href: '/inteligencia-artificial',
       icon: Brain,
       badge: 'NUEVO',
       requiredRoles: ['ADMIN', 'GERENTE', 'DIRECTOR'],
