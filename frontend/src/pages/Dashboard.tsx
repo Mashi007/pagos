@@ -63,6 +63,7 @@ const mockData = {
     promedioDiasMoraAnterior: 12.3,
     porcentajeCumplimiento: 87.6,
     porcentajeCumplimientoAnterior: 84.2,
+    clientesMora: 23,
   },
   
   // Métricas de Asesores
