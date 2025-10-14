@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Search, 
   Filter, 
@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { AlertWithIcon } from '@/components/ui/alert'
+import { CrearClienteForm } from './CrearClienteForm'
 
 import { useClientes } from '@/hooks/useClientes'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -35,6 +36,7 @@ export function ClientesList() {
   const [filters, setFilters] = useState<ClienteFilters>({})
   const [currentPage, setCurrentPage] = useState(1)
   const [showFilters, setShowFilters] = useState(false)
+  const [showCrearCliente, setShowCrearCliente] = useState(false)
 
   const debouncedSearch = useDebounce(searchTerm, 300)
   const { canViewAllClients } = usePermissions()
@@ -131,7 +133,7 @@ export function ClientesList() {
             <Upload className="w-4 h-4 mr-2" />
             Importar
           </Button>
-          <Button size="sm">
+          <Button size="sm" onClick={() => setShowCrearCliente(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Nuevo Cliente
           </Button>
@@ -318,6 +320,13 @@ export function ClientesList() {
           </div>
         </div>
       )}
+
+      {/* Modal Crear Cliente */}
+      <AnimatePresence>
+        {showCrearCliente && (
+          <CrearClienteForm onClose={() => setShowCrearCliente(false)} />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
