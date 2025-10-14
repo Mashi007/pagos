@@ -8,6 +8,7 @@ import { Layout } from '@/components/layout/Layout'
 // Auth
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { useAuth } from '@/store/authStore'
+import { useAuthPersistence } from '@/hooks/useAuthPersistence'
 
 // Pages
 import { Login } from '@/pages/Login'
@@ -51,17 +52,10 @@ const NotFound = () => (
 )
 
 function App() {
-  const { isAuthenticated, refreshUser } = useAuth()
-
-  useEffect(() => {
-    // Verificar autenticación al cargar la app
-    const hasToken = localStorage.getItem('access_token')
-    const hasUser = localStorage.getItem('user')
-    
-    if (hasToken && hasUser && !isAuthenticated) {
-      refreshUser()
-    }
-  }, []) // Solo ejecutar una vez al cargar la app
+  const { isAuthenticated } = useAuth()
+  
+  // Hook para manejar la persistencia de autenticación
+  useAuthPersistence()
 
   return (
     <AnimatePresence mode="wait">
