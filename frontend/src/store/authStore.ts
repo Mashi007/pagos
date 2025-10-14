@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import { User, LoginForm } from '@/types'
 import { authService } from '@/services/authService'
 import toast from 'react-hot-toast'
@@ -22,118 +21,58 @@ interface AuthState {
   setTokens: (tokens: any) => void
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
+export const useAuthStore = create<AuthState>()((set, get) => ({
       // Estado inicial
       user: null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
 
-      // Acción de login
+      // Acción de login - RESPONSABILIDAD ÚNICA: GUARDAR TOKENS Y ESTADO
       login: async (credentials: LoginForm): Promise<void> => {
         set({ isLoading: true, error: null })
         
         try {
-          console.log('🔄 Store: Iniciando login con:', {
-            email: credentials.email,
-            remember: credentials.remember
-          })
+          console.log('Store: Iniciando login...')
           
+          // 1. HACER API CALL
           const response = await authService.login(credentials)
           
-          console.log('✅ Store: Login exitoso, respuesta recibida:', response)
+          console.log('Store: Login exitoso, guardando tokens...')
           
-          // SOLUCIÓN DEFINITIVA: GUARDADO FORZADO CON VERIFICACIÓN MÚLTIPLE
-          console.log('🔧 SOLUCIÓN DEFINITIVA: Iniciando guardado forzado...')
-          
+          // 2. GUARDAR TOKENS (RESPONSABILIDAD ÚNICA DEL STORE)
           const rememberMe = credentials.remember || false
           const accessToken = response.data.access_token
           const refreshToken = response.data.refresh_token
           const userData = response.user
           
-          console.log('🔧 Datos recibidos:', {
-            hasAccessToken: !!accessToken,
-            hasRefreshToken: !!refreshToken,
-            hasUser: !!userData,
-            rememberMe,
-            tokenLength: accessToken?.length || 0
-          })
-          
-          // GUARDADO FORZADO EN AMBOS STORAGES
-          try {
-            // 1. Guardar en localStorage SIEMPRE
+          // Guardar en el storage apropiado
+          if (rememberMe) {
             localStorage.setItem('access_token', accessToken)
             localStorage.setItem('refresh_token', refreshToken)
             localStorage.setItem('user', JSON.stringify(userData))
-            localStorage.setItem('remember_me', rememberMe ? 'true' : 'false')
-            console.log('✅ localStorage: Tokens guardados')
-            
-            // 2. Guardar en sessionStorage SIEMPRE (backup)
+            localStorage.setItem('remember_me', 'true')
+            console.log('Store: Tokens guardados en localStorage')
+          } else {
             sessionStorage.setItem('access_token', accessToken)
             sessionStorage.setItem('refresh_token', refreshToken)
             sessionStorage.setItem('user', JSON.stringify(userData))
-            console.log('✅ sessionStorage: Tokens guardados')
-            
-            // 3. VERIFICACIÓN MÚLTIPLE INMEDIATA
-            const localToken = localStorage.getItem('access_token')
-            const sessionToken = sessionStorage.getItem('access_token')
-            
-            console.log('🔍 VERIFICACIÓN POST-GUARDADO:', {
-              localToken: localToken ? `EXISTS (${localToken.length} chars)` : 'NULL',
-              sessionToken: sessionToken ? `EXISTS (${sessionToken.length} chars)` : 'NULL',
-              tokensMatch: localToken === sessionToken,
-              tokensMatchOriginal: localToken === accessToken
-            })
-            
-            // 4. VERIFICACIÓN ADICIONAL CON TIMEOUT
-            setTimeout(() => {
-              const verifyLocal = localStorage.getItem('access_token')
-              const verifySession = sessionStorage.getItem('access_token')
-              console.log('🔍 VERIFICACIÓN RETARDADA (100ms):', {
-                local: !!verifyLocal,
-                session: !!verifySession,
-                bothExist: !!(verifyLocal && verifySession)
-              })
-            }, 100)
-            
-          } catch (error) {
-            console.error('❌ ERROR CRÍTICO AL GUARDAR TOKENS:', error)
+            localStorage.setItem('remember_me', 'false')
+            console.log('Store: Tokens guardados en sessionStorage')
           }
           
-          // Actualizar estado inmediatamente después del login exitoso
+          // 3. ACTUALIZAR ESTADO
           set({
-            user: response.user,
+            user: userData,
             isAuthenticated: true,
             isLoading: false,
             error: null,
           })
 
-          // Verificación adicional con delay para confirmar persistencia
-          setTimeout(() => {
-            const hasToken = rememberMe 
-              ? localStorage.getItem('access_token') 
-              : sessionStorage.getItem('access_token')
-            
-            console.log('🔍 Store: Verificación POST-LOGIN CON DELAY (200ms):', {
-              rememberMe,
-              hasToken: !!hasToken,
-              tokenLength: hasToken?.length || 0,
-              storageType: rememberMe ? 'localStorage' : 'sessionStorage',
-              tokenPreview: hasToken ? hasToken.substring(0, 20) + '...' : 'null'
-            })
-            
-            if (!hasToken) {
-              console.error('❌ CRÍTICO: Token perdido después del delay')
-            } else {
-              console.log('✅ Token persistente y disponible para requests')
-            }
-          }, 200)
-
-          toast.success(`¡Bienvenido, ${response.user.nombre}!`)
+          console.log('Store: Login completado exitosamente')
+          toast.success(`¡Bienvenido, ${userData.nombre}!`)
         } catch (error: any) {
-          console.error('❌ Store: Error en login:', error)
+          console.error('Store: Error en login:', error)
           set({
             user: null,
             isAuthenticated: false,
@@ -231,50 +170,9 @@ export const useAuthStore = create<AuthState>()(
       },
 
       setTokens: (tokens: any) => {
-        // Los tokens se guardan en localStorage en el componente
         set({ isAuthenticated: true })
       },
-    }),
-    {
-      name: 'auth-store',
-      partialize: (state) => ({
-        user: state.user,
-        isAuthenticated: state.isAuthenticated,
-      }),
-      onRehydrateStorage: () => (state) => {
-        console.log('🔄 Rehidratando store de autenticación...', state)
-        
-        if (!state) {
-          console.log('❌ No hay estado para rehidratar')
-          return
-        }
-        
-        // Verificar si hay datos almacenados en localStorage/sessionStorage
-        const storedUser = authService.getStoredUser()
-        const hasToken = authService.getStoredToken()
-        const rememberMe = localStorage.getItem('remember_me') === 'true'
-        
-        console.log('📊 Datos encontrados en storage:', {
-          hasStoredUser: !!storedUser,
-          hasToken: !!hasToken,
-          rememberMe,
-          storageType: rememberMe ? 'localStorage' : 'sessionStorage'
-        })
-        
-        if (storedUser && hasToken) {
-          // Restaurar datos desde storage
-          state.user = storedUser
-          state.isAuthenticated = true
-          console.log('✅ Usuario restaurado desde storage:', storedUser.nombre)
-        } else {
-          // Limpiar estado si no hay datos válidos
-          state.user = null
-          state.isAuthenticated = false
-          console.log('🧹 Estado limpiado - no hay datos válidos')
-        }
-      },
-    }
-  )
+    })
 )
 
 // Selectores para facilitar el uso

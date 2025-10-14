@@ -16,87 +16,20 @@ export interface ChangePasswordRequest {
 }
 
 class AuthService {
-  // Login de usuario
+  // Login de usuario - SOLO API CALL, NO GUARDA TOKENS
   async login(credentials: LoginForm): Promise<LoginResponse> {
     try {
-      console.log('Enviando credenciales a:', '/api/v1/auth/login')
-      console.log('Credenciales:', { email: credentials.email, password: '***' })
+      console.log('AuthService: Enviando credenciales a:', '/api/v1/auth/login')
       
       const response = await apiClient.post<LoginResponse>('/api/v1/auth/login', credentials)
       
-      console.log('Respuesta del servidor:', response)
+      console.log('AuthService: Respuesta del servidor recibida')
       
-      // Guardar tokens según la opción "Recordarme"
-      if (response.data) {
-        const rememberMe = credentials.remember || false
-        console.log('🔍 Credenciales recibidas en authService:', {
-          email: credentials.email,
-          remember: credentials.remember,
-          rememberMe: rememberMe,
-          tipoRemember: typeof credentials.remember
-        })
-        
-        if (rememberMe) {
-          // Guardar en localStorage (persistente)
-          console.log('🔧 AuthService: Guardando tokens en localStorage...', {
-            accessTokenLength: response.data.access_token?.length || 0,
-            refreshTokenLength: response.data.refresh_token?.length || 0,
-            userExists: !!response.user
-          })
-          
-          localStorage.setItem('access_token', response.data.access_token)
-          localStorage.setItem('refresh_token', response.data.refresh_token)
-          localStorage.setItem('user', JSON.stringify(response.user))
-          localStorage.setItem('remember_me', 'true')
-          
-          // Verificación INMEDIATA después de guardar
-          const tokenAfterSave = localStorage.getItem('access_token')
-          const userAfterSave = localStorage.getItem('user')
-          
-          console.log('🔍 AuthService: Verificación INMEDIATA POST-GUARDADO:', {
-            hasToken: !!tokenAfterSave,
-            tokenLength: tokenAfterSave?.length || 0,
-            tokenPreview: tokenAfterSave ? tokenAfterSave.substring(0, 20) + '...' : 'null',
-            hasUser: !!userAfterSave,
-            rememberMe: localStorage.getItem('remember_me'),
-            storageKeys: Object.keys(localStorage).filter(k => k.includes('token') || k.includes('user') || k.includes('remember'))
-          })
-          
-          // Verificación con delay también
-          setTimeout(() => {
-            const tokenAfterDelay = localStorage.getItem('access_token')
-            console.log('🔍 AuthService: Verificación CON DELAY (100ms):', {
-              hasToken: !!tokenAfterDelay,
-              tokenLength: tokenAfterDelay?.length || 0,
-              tokenPreview: tokenAfterDelay ? tokenAfterDelay.substring(0, 20) + '...' : 'null',
-              sameToken: tokenAfterDelay === tokenAfterSave
-            })
-          }, 100)
-        } else {
-          // Guardar en sessionStorage (solo para la sesión actual)
-          sessionStorage.setItem('access_token', response.data.access_token)
-          sessionStorage.setItem('refresh_token', response.data.refresh_token)
-          sessionStorage.setItem('user', JSON.stringify(response.user))
-          localStorage.setItem('remember_me', 'false')
-          console.log('✅ Tokens guardados en sessionStorage (solo sesión)')
-          
-          // Verificación inmediata después de guardar
-          setTimeout(() => {
-            console.log('🔍 Verificación POST-GUARDADO sessionStorage:', {
-              hasToken: !!sessionStorage.getItem('access_token'),
-              tokenLength: sessionStorage.getItem('access_token')?.length || 0,
-              hasUser: !!sessionStorage.getItem('user'),
-              rememberMe: localStorage.getItem('remember_me')
-            })
-          }, 100)
-        }
-      }
-      
+      // NO GUARDAR TOKENS AQUÍ - Solo retornar la respuesta
       return response
     } catch (error: any) {
-      console.error('Error en AuthService.login:', error)
+      console.error('AuthService: Error en login:', error)
       
-      // Mejorar el manejo de errores
       if (error.code === 'NETWORK_ERROR' || !error.response) {
         const networkError = new Error('Error de conexión con el servidor') as any
         networkError.code = 'NETWORK_ERROR'
