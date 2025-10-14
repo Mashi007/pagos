@@ -16,6 +16,7 @@ import {
   CheckCircle,
   Eye,
   EyeOff,
+  CheckSquare,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +24,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatDate } from '@/utils'
+import { ValidadoresConfig } from '@/components/configuracion/ValidadoresConfig'
 
 // Mock data para configuración
 const mockConfiguracion = {
@@ -100,6 +102,7 @@ export function Configuracion() {
     { id: 'baseDatos', nombre: 'Base de Datos', icono: Database },
     { id: 'integraciones', nombre: 'Integraciones', icono: Settings },
     { id: 'facturacion', nombre: 'Facturación', icono: DollarSign },
+    { id: 'validadores', nombre: 'Validadores', icono: CheckSquare },
   ]
 
   const handleGuardar = () => {
@@ -606,6 +609,7 @@ export function Configuracion() {
       case 'baseDatos': return renderSeccionBaseDatos()
       case 'integraciones': return renderSeccionIntegraciones()
       case 'facturacion': return renderSeccionFacturacion()
+      case 'validadores': return <ValidadoresConfig />
       default: return renderSeccionGeneral()
     }
   }
