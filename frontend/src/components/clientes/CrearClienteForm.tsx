@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { concesionarioService, type Concesionario } from '@/services/concesionarioService'
 import { asesorService, type Asesor } from '@/services/asesorService'
+import { clienteService } from '@/services/clienteService'
 
 interface FormData {
   // Datos personales
@@ -380,7 +381,6 @@ export function CrearClienteForm({
     setIsSubmitting(true)
     try {
       // 🔄 CONECTAR AL BACKEND: Usar servicio real
-      import { clienteService } from '@/services/clienteService'
       
       // 🔄 TRANSFORMAR DATOS: Convertir FormData a ClienteForm
       const clienteData = {
