@@ -106,6 +106,8 @@ app.include_router(asesores.router, prefix=f"{settings.API_V1_PREFIX}/asesores",
 @app.get("/", include_in_schema=False)
 async def root():
     return {
+        "message": "Sistema de Préstamos y Cobranza API v1.0.0", 
+        "cors_fixed": True,
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "status": "running",
