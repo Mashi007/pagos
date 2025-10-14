@@ -14,6 +14,9 @@ export function useAuthPersistence() {
     const initializeAuth = async () => {
       console.log('🔄 Inicializando persistencia de autenticación...')
       
+      // IMPORTANTE: Esperar un poco para que el login haya completado su guardado
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
       try {
         // PRIMERO: Verificar si hay tokens en localStorage (recordarme)
         const localToken = localStorage.getItem('access_token')
@@ -36,6 +39,7 @@ export function useAuthPersistence() {
             storedUser = JSON.parse(localUser)
             rememberMe = true
             storageType = 'localStorage'
+            console.log('✅ useAuthPersistence: Datos encontrados en localStorage')
           } catch (error) {
             console.error('Error parsing localStorage user:', error)
             hasToken = null
@@ -50,6 +54,7 @@ export function useAuthPersistence() {
             storedUser = JSON.parse(sessionUser)
             rememberMe = false
             storageType = 'sessionStorage'
+            console.log('✅ useAuthPersistence: Datos encontrados en sessionStorage')
           } catch (error) {
             console.error('Error parsing sessionStorage user:', error)
             hasToken = null
@@ -63,6 +68,7 @@ export function useAuthPersistence() {
           storedUser = null
           rememberMe = false
           storageType = 'none'
+          console.log('ℹ️ useAuthPersistence: No hay datos de autenticación almacenados')
         }
         
         console.log('📊 Estado de autenticación MEJORADO:', {
@@ -105,13 +111,16 @@ export function useAuthPersistence() {
             })
           }, 100)
         } else {
-          console.log('❌ No se encontraron datos de autenticación válidos')
+          console.log('ℹ️ No se encontraron datos de autenticación válidos (esto es normal en el primer acceso)')
           console.log('🔍 Detalles de la verificación:', {
             hasToken: !!hasToken,
             hasStoredUser: !!storedUser,
-            tokenValue: hasToken,
-            userValue: storedUser
+            tokenValue: hasToken ? hasToken.substring(0, 20) + '...' : 'null',
+            userValue: storedUser ? `${storedUser.nombre} (${storedUser.email})` : 'null'
           })
+          
+          // NO limpiar el estado si no hay datos - esto es normal en el primer acceso
+          // Solo logear para debugging
         }
       } catch (error) {
         console.error('❌ Error crítico al inicializar autenticación:', error)
