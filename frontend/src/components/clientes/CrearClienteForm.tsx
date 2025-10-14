@@ -113,8 +113,8 @@ export function CrearClienteForm({
     loadData()
   }, [])
 
-  // Validaciones en tiempo real
-  const validateField = (field: string, value: string): ValidationResult => {
+  // 🔍 VALIDACIONES CON BACKEND: Usar validadores del sistema
+  const validateField = async (field: string, value: string): Promise<ValidationResult> => {
     switch (field) {
       case 'nombreCompleto':
         if (!value.trim()) return { isValid: false, message: 'Nombre requerido' }
@@ -123,16 +123,73 @@ export function CrearClienteForm({
 
       case 'cedula':
         if (!value.trim()) return { isValid: false, message: 'Cédula requerida' }
+        
+        try {
+          // 🔍 VALIDAR CON BACKEND: Usar endpoint de validadores
+          const response = await fetch('/api/v1/validadores/validar-campo', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
+            },
+            body: JSON.stringify({
+              campo: 'cedula',
+              valor: value,
+              pais: 'VENEZUELA'
+            })
+          })
+          
+          if (response.ok) {
+            const result = await response.json()
+            if (result.valido) {
+              return { isValid: true }
+            } else {
+              return { isValid: false, message: result.mensaje || 'Formato de cédula inválido' }
+            }
+          }
+        } catch (error) {
+          console.warn('Error validando cédula con backend:', error)
+        }
+        
+        // Fallback: validación local
         const cedulaPattern = /^[VE]\d{6,8}$/
         if (!cedulaPattern.test(value.toUpperCase())) {
           return { isValid: false, message: 'Formato: V/E + 6-8 dígitos' }
         }
-        // TODO: Verificar disponibilidad en backend
         return { isValid: true }
 
       case 'movil':
         if (!value.trim()) return { isValid: false, message: 'Móvil requerido' }
-        // Permitir entrada con o sin +58
+        
+        try {
+          // 🔍 VALIDAR CON BACKEND: Usar endpoint de validadores
+          const cleanMovil = value.replace(/[^\d]/g, '')
+          const response = await fetch('/api/v1/validadores/validar-campo', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
+            },
+            body: JSON.stringify({
+              campo: 'telefono',
+              valor: cleanMovil,
+              pais: 'VENEZUELA'
+            })
+          })
+          
+          if (response.ok) {
+            const result = await response.json()
+            if (result.valido) {
+              return { isValid: true }
+            } else {
+              return { isValid: false, message: result.mensaje || 'Formato de teléfono inválido' }
+            }
+          }
+        } catch (error) {
+          console.warn('Error validando teléfono con backend:', error)
+        }
+        
+        // Fallback: validación local
         const cleanMovil = value.replace(/\D/g, '')
         if (cleanMovil.length === 10) {
           return { isValid: true }
@@ -143,6 +200,35 @@ export function CrearClienteForm({
 
       case 'email':
         if (!value.trim()) return { isValid: false, message: 'Email requerido' }
+        
+        try {
+          // 🔍 VALIDAR CON BACKEND: Usar endpoint de validadores
+          const response = await fetch('/api/v1/validadores/validar-campo', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
+            },
+            body: JSON.stringify({
+              campo: 'email',
+              valor: value,
+              pais: 'VENEZUELA'
+            })
+          })
+          
+          if (response.ok) {
+            const result = await response.json()
+            if (result.valido) {
+              return { isValid: true }
+            } else {
+              return { isValid: false, message: result.mensaje || 'Formato de email inválido' }
+            }
+          }
+        } catch (error) {
+          console.warn('Error validando email con backend:', error)
+        }
+        
+        // Fallback: validación local
         const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
         if (!emailPattern.test(value.toLowerCase())) {
           return { isValid: false, message: 'Formato de email inválido' }
@@ -192,11 +278,11 @@ export function CrearClienteForm({
     }
   }
 
-  const handleFieldChange = (field: keyof FormData, value: string) => {
+  const handleFieldChange = async (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
     
-    // Validar campo inmediatamente
-    const validation = validateField(field, value)
+    // 🔍 VALIDAR CAMPO CON BACKEND: Validación asíncrona
+    const validation = await validateField(field, value)
     setValidations(prev => ({ ...prev, [field]: validation }))
   }
 
@@ -264,9 +350,41 @@ export function CrearClienteForm({
 
     setIsSubmitting(true)
     try {
-      // TODO: Implementar llamada al backend para crear cliente
-      console.log('Guardando cliente:', formData)
-      await new Promise(resolve => setTimeout(resolve, 2000)) // Simular API call
+      // 🔄 CONECTAR AL BACKEND: Usar servicio real
+      import { clienteService } from '@/services/clienteService'
+      
+      // 🔄 TRANSFORMAR DATOS: Convertir FormData a ClienteForm
+      const clienteData = {
+        cedula: formData.cedula,
+        nombre: formData.nombreCompleto.split(' ')[0] || '',
+        apellido: formData.nombreCompleto.split(' ').slice(1).join(' ') || '',
+        telefono: formData.movil.replace(/[^\d]/g, ''), // Limpiar formato
+        email: formData.email,
+        direccion: '', // No disponible en formulario actual
+        fecha_nacimiento: '', // No disponible en formulario actual
+        ingresos_mensuales: 0, // No disponible en formulario actual
+        estado_civil: '', // No disponible en formulario actual
+        profesion: '', // No disponible en formulario actual
+        
+        // Datos del vehículo
+        marca_vehiculo: formData.modeloVehiculo.split(' ')[0] || '',
+        modelo_vehiculo: formData.modeloVehiculo,
+        año_vehiculo: new Date().getFullYear(), // Default
+        placa_vehiculo: '', // No disponible en formulario actual
+        vin_vehiculo: '', // No disponible en formulario actual
+        valor_vehiculo: parseFloat(formData.totalFinanciamiento.replace(/[^\d.-]/g, '')) || 0,
+        
+        // Datos del financiamiento
+        monto_financiamiento: parseFloat(formData.totalFinanciamiento.replace(/[^\d.-]/g, '')) || 0,
+        cuota_inicial: parseFloat(formData.cuotaInicial.replace(/[^\d.-]/g, '')) || 0,
+        tasa_interes: 12, // Default
+        plazo_meses: parseInt(formData.numeroAmortizaciones) || 12,
+        sistema_amortizacion: 'FRANCES' as const
+      }
+      
+      console.log('🔄 Enviando cliente al backend:', clienteData)
+      const newCliente = await clienteService.createCliente(clienteData)
+      console.log('✅ Cliente creado exitosamente:', newCliente)
       
       // Éxito - cerrar modal y notificar que se creó un cliente
       onClose()
@@ -274,7 +392,8 @@ export function CrearClienteForm({
         onClienteCreated()
       }
     } catch (error) {
-      console.error('Error al guardar cliente:', error)
+      console.error('❌ Error al guardar cliente:', error)
+      // TODO: Mostrar error al usuario
     } finally {
       setIsSubmitting(false)
     }
