@@ -14,6 +14,8 @@ from app.models.aprobacion import Aprobacion
 from app.models.configuracion_sistema import ConfiguracionSistema
 from app.models.auditoria import Auditoria
 from app.models.notificacion import Notificacion
+from app.models.concesionario import Concesionario
+from app.models.asesor import Asesor
 
 __all__ = [
     "Base",
@@ -26,4 +28,6 @@ __all__ = [
     "ConfiguracionSistema",
     "Auditoria",
     "Notificacion",
+    "Concesionario",
+    "Asesor",
 ]

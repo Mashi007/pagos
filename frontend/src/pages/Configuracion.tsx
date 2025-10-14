@@ -17,6 +17,7 @@ import {
   Eye,
   EyeOff,
   CheckSquare,
+  Building,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -25,6 +26,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatDate } from '@/utils'
 import { ValidadoresConfig } from '@/components/configuracion/ValidadoresConfig'
+import { ConcesionariosConfig } from '@/components/configuracion/ConcesionariosConfig'
+import { AsesoresConfig } from '@/components/configuracion/AsesoresConfig'
 
 // Mock data para configuración
 const mockConfiguracion = {
@@ -103,6 +106,8 @@ export function Configuracion() {
     { id: 'integraciones', nombre: 'Integraciones', icono: Settings },
     { id: 'facturacion', nombre: 'Facturación', icono: DollarSign },
     { id: 'validadores', nombre: 'Validadores', icono: CheckSquare },
+    { id: 'concesionarios', nombre: 'Concesionarios', icono: Building },
+    { id: 'asesores', nombre: 'Asesores', icono: Users },
   ]
 
   const handleGuardar = () => {
@@ -610,6 +615,8 @@ export function Configuracion() {
       case 'integraciones': return renderSeccionIntegraciones()
       case 'facturacion': return renderSeccionFacturacion()
       case 'validadores': return <ValidadoresConfig />
+      case 'concesionarios': return <ConcesionariosConfig />
+      case 'asesores': return <AsesoresConfig />
       default: return renderSeccionGeneral()
     }
   }

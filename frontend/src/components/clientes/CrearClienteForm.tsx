@@ -21,6 +21,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { concesionarioService, type Concesionario } from '@/services/concesionarioService'
+import { asesorService, type Asesor } from '@/services/asesorService'
 
 interface FormData {
   // Datos personales
@@ -62,22 +64,6 @@ const MODELOS_VEHICULOS = [
   'Volkswagen Polo'
 ]
 
-const ASESORES = [
-  'María González',
-  'Carlos Rodríguez',
-  'Ana Martínez',
-  'Luis Fernández',
-  'Carmen López'
-]
-
-const CONCESIONARIOS = [
-  'Concesionario Centro',
-  'Auto Plaza Norte',
-  'Vehículos del Sur',
-  'Motor City',
-  'Auto Express'
-]
-
 export function CrearClienteForm({ onClose }: { onClose: () => void }) {
   const [formData, setFormData] = useState<FormData>({
     nombreCompleto: '',
@@ -96,6 +82,30 @@ export function CrearClienteForm({ onClose }: { onClose: () => void }) {
 
   const [validations, setValidations] = useState<FieldValidation>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [concesionarios, setConcesionarios] = useState<Concesionario[]>([])
+  const [asesores, setAsesores] = useState<Asesor[]>([])
+  const [loadingData, setLoadingData] = useState(true)
+
+  // Cargar datos dinámicos al montar el componente
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoadingData(true)
+        const [concesionariosData, asesoresData] = await Promise.all([
+          concesionarioService.listarConcesionariosActivos(),
+          asesorService.listarAsesoresActivos()
+        ])
+        setConcesionarios(concesionariosData)
+        setAsesores(asesoresData)
+      } catch (error) {
+        console.error('Error al cargar datos:', error)
+      } finally {
+        setLoadingData(false)
+      }
+    }
+
+    loadData()
+  }, [])
 
   // Validaciones en tiempo real
   const validateField = (field: string, value: string): ValidationResult => {
@@ -262,6 +272,28 @@ export function CrearClienteForm({ onClose }: { onClose: () => void }) {
   }
 
   const pendingErrors = getPendingErrors()
+
+  if (loadingData) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+      >
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+          className="bg-white rounded-lg shadow-xl p-8 text-center"
+        >
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <h3 className="text-lg font-semibold mb-2">Cargando datos...</h3>
+          <p className="text-gray-600">Cargando concesionarios y asesores</p>
+        </motion.div>
+      </motion.div>
+    )
+  }
 
   return (
     <motion.div
@@ -544,9 +576,14 @@ export function CrearClienteForm({ onClose }: { onClose: () => void }) {
                       <SelectValue placeholder="Seleccionar asesor" />
                     </SelectTrigger>
                     <SelectContent>
-                      {ASESORES.map((asesor) => (
-                        <SelectItem key={asesor} value={asesor}>
-                          {asesor}
+                      {asesores.map((asesor) => (
+                        <SelectItem key={asesor.id} value={asesor.nombre_completo}>
+                          <div className="flex flex-col">
+                            <span>{asesor.nombre_completo}</span>
+                            {asesor.especialidad && (
+                              <span className="text-xs text-gray-500">{asesor.especialidad}</span>
+                            )}
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -565,9 +602,14 @@ export function CrearClienteForm({ onClose }: { onClose: () => void }) {
                       <SelectValue placeholder="Seleccionar concesionario" />
                     </SelectTrigger>
                     <SelectContent>
-                      {CONCESIONARIOS.map((concesionario) => (
-                        <SelectItem key={concesionario} value={concesionario}>
-                          {concesionario}
+                      {concesionarios.map((concesionario) => (
+                        <SelectItem key={concesionario.id} value={concesionario.nombre}>
+                          <div className="flex flex-col">
+                            <span>{concesionario.nombre}</span>
+                            {concesionario.responsable && (
+                              <span className="text-xs text-gray-500">{concesionario.responsable}</span>
+                            )}
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>

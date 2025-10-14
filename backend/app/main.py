@@ -36,6 +36,8 @@ from app.api.v1.endpoints import (
     validadores,
     diagnostico,
     clientes_temp,
+    concesionarios,
+    asesores,
 )
 
 # Configurar logging
@@ -97,6 +99,8 @@ app.include_router(scheduler_notificaciones.router, prefix=f"{settings.API_V1_PR
 app.include_router(validadores.router, prefix=f"{settings.API_V1_PREFIX}/validadores", tags=["Validadores"])
 app.include_router(diagnostico.router, prefix=f"{settings.API_V1_PREFIX}/diagnostico", tags=["Diagnostico"])
 app.include_router(clientes_temp.router, prefix=f"{settings.API_V1_PREFIX}/clientes-temp", tags=["Clientes Temp"])
+app.include_router(concesionarios.router, prefix=f"{settings.API_V1_PREFIX}/concesionarios", tags=["Concesionarios"])
+app.include_router(asesores.router, prefix=f"{settings.API_V1_PREFIX}/asesores", tags=["Asesores"])
 
 
 @app.get("/", include_in_schema=False)
