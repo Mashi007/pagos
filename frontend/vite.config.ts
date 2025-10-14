@@ -20,4 +20,19 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          router: ['react-router-dom'],
+          ui: ['framer-motion', 'lucide-react'],
+        },
+      },
+    },
+  },
+  preview: {
+    port: 4173,
+    host: true,
+  },
 })
