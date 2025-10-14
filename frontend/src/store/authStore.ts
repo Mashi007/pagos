@@ -45,47 +45,38 @@ export const useAuthStore = create<AuthState>()(
           
           console.log('✅ Store: Login exitoso, respuesta recibida:', response)
           
-          // GUARDAR TOKENS DIRECTAMENTE EN EL STORE (NUEVO ENFOQUE)
-          const rememberMe = credentials.remember || false
-          console.log('🔧 Store: Guardando tokens directamente...', {
-            rememberMe,
-            hasAccessToken: !!response.data?.access_token,
-            hasRefreshToken: !!response.data?.refresh_token,
-            hasUser: !!response.user
-          })
+          // ENFOQUE RADICAL: GUARDADO SIMPLIFICADO CON DEBUGGING BÁSICO
+          console.log('🚨 STORE: INICIANDO GUARDADO DE TOKENS...')
+          console.log('🚨 STORE: response.data existe?', !!response.data)
+          console.log('🚨 STORE: response.data.access_token existe?', !!response.data?.access_token)
+          console.log('🚨 STORE: response.user existe?', !!response.user)
           
-          try {
-            if (rememberMe) {
-              // Guardar en localStorage
-              localStorage.setItem('access_token', response.data.access_token)
-              localStorage.setItem('refresh_token', response.data.refresh_token)
-              localStorage.setItem('user', JSON.stringify(response.user))
-              localStorage.setItem('remember_me', 'true')
-              console.log('✅ Store: Tokens guardados en localStorage')
-            } else {
-              // Guardar en sessionStorage
-              sessionStorage.setItem('access_token', response.data.access_token)
-              sessionStorage.setItem('refresh_token', response.data.refresh_token)
-              sessionStorage.setItem('user', JSON.stringify(response.user))
-              localStorage.setItem('remember_me', 'false')
-              console.log('✅ Store: Tokens guardados en sessionStorage')
-            }
-            
-            // Verificación inmediata del guardado
-            const verifyToken = rememberMe 
-              ? localStorage.getItem('access_token')
-              : sessionStorage.getItem('access_token')
-              
-            console.log('🔍 Store: Verificación inmediata de guardado:', {
-              rememberMe,
-              tokenExists: !!verifyToken,
-              tokenLength: verifyToken?.length || 0,
-              tokenPreview: verifyToken ? verifyToken.substring(0, 20) + '...' : 'null'
-            })
-            
-          } catch (error) {
-            console.error('❌ Store: Error guardando tokens:', error)
+          const rememberMe = credentials.remember || false
+          console.log('🚨 STORE: rememberMe =', rememberMe)
+          
+          // GUARDADO SIMPLE SIN TRY-CATCH
+          console.log('🚨 STORE: Guardando access_token...')
+          if (rememberMe) {
+            localStorage.setItem('access_token', response.data.access_token)
+            localStorage.setItem('refresh_token', response.data.refresh_token)
+            localStorage.setItem('user', JSON.stringify(response.user))
+            localStorage.setItem('remember_me', 'true')
+            console.log('🚨 STORE: GUARDADO EN LOCALSTORAGE COMPLETADO')
+          } else {
+            sessionStorage.setItem('access_token', response.data.access_token)
+            sessionStorage.setItem('refresh_token', response.data.refresh_token)
+            sessionStorage.setItem('user', JSON.stringify(response.user))
+            localStorage.setItem('remember_me', 'false')
+            console.log('🚨 STORE: GUARDADO EN SESSIONSTORAGE COMPLETADO')
           }
+          
+          // VERIFICACIÓN INMEDIATA
+          console.log('🚨 STORE: Verificando guardado inmediato...')
+          const testToken = rememberMe 
+            ? localStorage.getItem('access_token')
+            : sessionStorage.getItem('access_token')
+          console.log('🚨 STORE: Token recuperado:', testToken ? 'EXISTS' : 'NULL')
+          console.log('🚨 STORE: Token length:', testToken?.length || 0)
           
           // Actualizar estado inmediatamente después del login exitoso
           set({
