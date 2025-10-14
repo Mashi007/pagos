@@ -31,6 +31,9 @@ class ApiClient {
           
         if (token) {
           config.headers.Authorization = `Bearer ${token}`
+          console.log('🔑 Token enviado en request:', token.substring(0, 20) + '...')
+        } else {
+          console.warn('⚠️ No se encontró token para la request:', config.url)
         }
         return config
       },
