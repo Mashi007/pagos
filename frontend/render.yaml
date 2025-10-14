@@ -1,5 +1,5 @@
 services:
-  - type: web
+  - type: static_site
     name: rapicredit-frontend
     env: static
     buildCommand: npm install && npm run build
