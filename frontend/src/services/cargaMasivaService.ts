@@ -129,7 +129,7 @@ class CargaMasivaService {
   }): Promise<{ success: boolean; message: string }> {
     try {
       const response = await apiClient.post('/api/v1/carga-masiva/corregir-error', request)
-      return response.data
+      return response.data as { success: boolean; message: string }
     } catch (error: any) {
       console.error('Error al corregir error:', error)
       return {
@@ -146,7 +146,7 @@ class CargaMasivaService {
   }): Promise<CargaMasivaResponse> {
     try {
       const response = await apiClient.post('/api/v1/carga-masiva/reenviar', request)
-      return response.data
+      return response.data as CargaMasivaResponse
     } catch (error: any) {
       console.error('Error al reenviar registros:', error)
       return {

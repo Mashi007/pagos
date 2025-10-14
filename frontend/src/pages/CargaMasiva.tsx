@@ -132,7 +132,14 @@ export function CargaMasiva() {
       setUploadResult({
         success: response.success,
         message: response.message,
-        data: response.data,
+        data: response.data ? {
+          totalRecords: response.data.totalRecords,
+          processedRecords: response.data.processedRecords,
+          errors: response.data.errors,
+          fileName: response.data.fileName,
+          type: response.data.type as 'clientes' | 'pagos',
+          erroresDetallados: response.data.erroresDetallados
+        } : undefined,
         errors: response.errors
       })
 
@@ -161,7 +168,7 @@ export function CargaMasiva() {
 
       // Preparar errores para edición si existen
       if (response.data?.erroresDetallados && response.data.erroresDetallados.length > 0) {
-        const errors: ErrorRow[] = response.data.erroresDetallados.map((error, index) => ({
+        const errors: ErrorRow[] = response.data.erroresDetallados.map((error: any, index: number) => ({
           id: `error-${index}`,
           row: error.row,
           cedula: error.cedula,
