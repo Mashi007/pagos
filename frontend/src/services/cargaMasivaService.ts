@@ -22,6 +22,7 @@ export interface CargaMasivaResponse {
     cedula: string
     error: string
     data: any
+    tipo: 'cliente' | 'pago'
   }>
 }
 

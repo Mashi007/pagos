@@ -101,12 +101,12 @@ export function CargaMasiva() {
       })
 
       // Si se cargaron clientes exitosamente (aunque haya errores), avanzar al siguiente paso
-      if (selectedType === 'clientes' && response.success && response.data?.processedRecords > 0) {
+      if (selectedType === 'clientes' && response.success && response.data && response.data.processedRecords > 0) {
         setClientesLoaded(true)
         setUploadStep('pagos')
         setSelectedType('pagos')
         setSelectedFile(null)
-      } else if (selectedType === 'pagos' && response.success && response.data?.processedRecords > 0) {
+      } else if (selectedType === 'pagos' && response.success && response.data && response.data.processedRecords > 0) {
         setUploadStep('complete')
       }
 
