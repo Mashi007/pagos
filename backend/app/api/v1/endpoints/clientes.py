@@ -608,6 +608,14 @@ def buscar_por_cedula(cedula: str, db: Session = Depends(get_db)):
     return cliente
 
 
+
+
+
+
+# ============================================
+# ENDPOINTS CON PARÁMETROS DE RUTA - AL FINAL PARA EVITAR CONFLICTOS
+# ============================================
+
 @router.get("/{cliente_id}", response_model=ClienteResponse)
 def obtener_cliente(cliente_id: int, db: Session = Depends(get_db)):
     """Obtener un cliente por ID"""
@@ -617,77 +625,10 @@ def obtener_cliente(cliente_id: int, db: Session = Depends(get_db)):
     return cliente
 
 
-@router.put("/{cliente_id}", response_model=ClienteResponse)
-def actualizar_cliente(
-    cliente_id: int,
-    cliente_data: ClienteUpdate,
-    db: Session = Depends(get_db)
-):
-    """Actualizar datos de un cliente"""
-    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
-    if not cliente:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    
-    for field, value in cliente_data.model_dump(exclude_unset=True).items():
-        setattr(cliente, field, value)
-    
-    db.commit()
-    db.refresh(cliente)
-    return cliente
-
-
-@router.delete("/{cliente_id}", status_code=204)
-def eliminar_cliente(
-    cliente_id: int, 
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Desactivar un cliente (soft delete) con validaciones"""
-    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
-    if not cliente:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    
-    # ✅ VALIDACIÓN: No eliminar si tiene pagos o préstamos activos
-    prestamos_activos = db.query(Prestamo).filter(
-        Prestamo.cliente_id == cliente_id,
-        Prestamo.estado.in_(["ACTIVO", "EN_MORA", "PENDIENTE"])
-    ).count()
-    
-    if prestamos_activos > 0:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"No se puede eliminar: el cliente tiene {prestamos_activos} préstamo(s) activo(s)"
-        )
-    
-    pagos_registrados = db.query(Pago).join(Prestamo).filter(
-        Prestamo.cliente_id == cliente_id
-    ).count()
-    
-    if pagos_registrados > 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No se puede eliminar: el cliente tiene {pagos_registrados} pago(s) registrado(s)"
-        )
-    
-    # Realizar soft delete
-    cliente.activo = False
-    cliente.estado = "INACTIVO"
-    cliente.fecha_actualizacion = func.now()
-    db.commit()
-    
-    return None
-
-
 # ============================================
 # ENDPOINTS ADICIONALES PARA FUNCIONALIDAD AVANZADA
 # ============================================
 
-@router.get("/{cliente_id}/detallado", response_model=ClienteDetallado)
-def obtener_cliente_detallado(
-    cliente_id: int, 
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
     """
     Obtener ficha detallada del cliente con resumen financiero
     """
@@ -1029,36 +970,6 @@ def preview_tabla_amortizacion(
         raise HTTPException(status_code=500, detail=f"Error generando preview: {str(e)}")
 
 
-@router.get("/{cliente_id}/acciones-rapidas", response_model=ClienteQuickActions)
-def obtener_acciones_rapidas(
-    cliente_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Obtener acciones rápidas disponibles para un cliente
-    """
-    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
-    if not cliente:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    
-    # Verificar permisos del usuario actual
-    from app.core.permissions import UserRole, has_permission, Permission
-    user_role = UserRole(current_user.rol)
-    
-    # Determinar acciones disponibles
-    acciones = ClienteQuickActions(
-        puede_registrar_pago=has_permission(user_role, Permission.PAGO_CREATE),
-        puede_enviar_recordatorio=has_permission(user_role, Permission.NOTIFICACION_SEND),
-        puede_generar_estado_cuenta=has_permission(user_role, Permission.REPORTE_READ),
-        puede_modificar_financiamiento=has_permission(user_role, Permission.PRESTAMO_UPDATE),
-        puede_reasignar_asesor=(
-            user_role == UserRole.ADMIN or 
-            (user_role in [UserRole.GERENTE, UserRole.DIRECTOR] and cliente.asesor_id == current_user.id)
-        )
-    )
-    
-    return acciones
 
 
 @router.post("/{cliente_id}/reasignar-asesor")
@@ -1534,3 +1445,39 @@ def estadisticas_clientes(
             for mod, total in por_modalidad
         ]
     }
+
+
+# ============================================
+# ENDPOINTS CON PARÁMETROS DE RUTA - AL FINAL PARA EVITAR CONFLICTOS
+# ============================================
+
+@router.get("/{cliente_id}/acciones-rapidas", response_model=ClienteQuickActions)
+def obtener_acciones_rapidas(
+    cliente_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Obtener acciones rápidas disponibles para un cliente
+    """
+    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    
+    # Verificar permisos del usuario actual
+    from app.core.permissions import UserRole, has_permission, Permission
+    user_role = UserRole(current_user.rol)
+    
+    # Determinar acciones disponibles
+    acciones = ClienteQuickActions(
+        puede_registrar_pago=has_permission(user_role, Permission.PAGO_CREATE),
+        puede_enviar_recordatorio=has_permission(user_role, Permission.NOTIFICACION_SEND),
+        puede_generar_estado_cuenta=has_permission(user_role, Permission.REPORTE_READ),
+        puede_modificar_financiamiento=has_permission(user_role, Permission.PRESTAMO_UPDATE),
+        puede_reasignar_asesor=(
+            user_role == UserRole.ADMIN or 
+            (user_role in [UserRole.GERENTE, UserRole.DIRECTOR] and cliente.asesor_id == current_user.id)
+        )
+    )
+    
+    return acciones
