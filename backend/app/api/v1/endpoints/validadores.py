@@ -599,15 +599,27 @@ def obtener_configuracion_validadores(
                     "validacion_tiempo_real": True
                 },
                 "email": {
-                    "descripcion": "Validación RFC 5322 + dominios bloqueados",
+                    "descripcion": "Validación RFC 5322 + normalización a minúsculas",
                     "auto_formateo": True,
-                    "validacion_tiempo_real": True
+                    "validacion_tiempo_real": True,
+                    "normalizacion": {
+                        "convertir_minusculas": True,
+                        "remover_espacios": True,
+                        "normalizar_aroba": True
+                    }
                 },
                 "fechas": {
-                    "descripcion": "Validación con reglas de negocio",
+                    "descripcion": "Validación estricta formato DD/MM/YYYY",
                     "auto_formateo": False,
                     "validacion_tiempo_real": True,
-                    "requiere_calendario": True
+                    "requiere_calendario": True,
+                    "formato_requerido": "DD/MM/YYYY",
+                    "requisitos": {
+                        "dia": "2 dígitos (01-31)",
+                        "mes": "2 dígitos (01-12)",
+                        "año": "4 dígitos",
+                        "separador": "/ (barra)"
+                    }
                 },
                 "montos": {
                     "descripcion": "Validación con límites por tipo",
@@ -629,7 +641,9 @@ def obtener_configuracion_validadores(
                 "total_financiamiento": "Entre $100 y $50,000,000",
                 "amortizaciones": "Entre 1 y 84 meses",
                 "cedula_venezuela": "Prefijos V/E/J + 7-10 dígitos del 0-9",
-                "telefono_venezuela": "+58 + 10 dígitos (primer dígito no puede ser 0)"
+                "telefono_venezuela": "+58 + 10 dígitos (primer dígito no puede ser 0)",
+                "fecha_formato": "DD/MM/YYYY (día 2 dígitos, mes 2 dígitos, año 4 dígitos)",
+                "email_normalizacion": "Conversión automática a minúsculas (incluyendo @)"
             },
             
             "configuracion_frontend": {

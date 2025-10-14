@@ -599,22 +599,49 @@ class ValidadorFecha:
     
     @staticmethod
     def _parsear_fecha_flexible(fecha_str: str) -> Optional[date]:
-        """Parsear fecha en múltiples formatos"""
-        formatos = [
-            "%d/%m/%Y",    # 15/03/2024
-            "%d-%m-%Y",    # 15-03-2024
-            "%Y-%m-%d",    # 2024-03-15
-            "%d/%m/%y",    # 15/03/24
-            "%d-%m-%y"     # 15-03-24
-        ]
+        """
+        Parsear fecha con validación estricta de formato DD/MM/YYYY
         
-        for formato in formatos:
+        Requisitos:
+        - Día: 2 dígitos (01-31)
+        - Mes: 2 dígitos (01-12)  
+        - Año: 4 dígitos
+        - Separador: / (barra)
+        """
+        fecha_limpia = fecha_str.strip()
+        
+        # Validar formato básico con regex
+        if not re.match(r'^\d{2}/\d{2}/\d{4}$', fecha_limpia):
+            return None
+        
+        try:
+            # Parsear estrictamente como DD/MM/YYYY
+            fecha_parseada = datetime.strptime(fecha_limpia, "%d/%m/%Y").date()
+            
+            # Validaciones adicionales
+            dia, mes, año = fecha_limpia.split('/')
+            
+            # Validar que el día sea válido (01-31)
+            if not (1 <= int(dia) <= 31):
+                return None
+                
+            # Validar que el mes sea válido (01-12)
+            if not (1 <= int(mes) <= 12):
+                return None
+                
+            # Validar que el año sea razonable (1900-2100)
+            if not (1900 <= int(año) <= 2100):
+                return None
+            
+            # Validar que la fecha sea válida (ej: 31/02/2024 no existe)
             try:
-                return datetime.strptime(fecha_str.strip(), formato).date()
+                datetime.strptime(fecha_limpia, "%d/%m/%Y").date()
+                return fecha_parseada
             except ValueError:
-                continue
-        
-        return None
+                return None
+                
+        except (ValueError, IndexError):
+            return None
 
 
 class ValidadorMonto:
@@ -808,7 +835,13 @@ class ValidadorEmail:
     @staticmethod
     def validar_email(email_str: str, verificar_dominio: bool = True) -> Dict[str, Any]:
         """
-        📧 Validar email con reglas avanzadas
+        📧 Validar email con normalización automática a minúsculas
+        
+        Características:
+        - Convierte automáticamente a minúsculas (incluyendo @)
+        - Validación RFC 5322
+        - Verificación de dominios bloqueados
+        - Normalización de espacios
         """
         try:
             if not email_str or email_str.upper() == "ERROR":
@@ -819,8 +852,18 @@ class ValidadorEmail:
                     "valor_formateado": None
                 }
             
-            # Limpiar email
+            # Normalizar email: quitar espacios y convertir a minúsculas
             email_limpio = email_str.strip().lower()
+            
+            # Validar que contenga el símbolo @
+            if '@' not in email_limpio:
+                return {
+                    "valido": False,
+                    "error": "Email debe contener el símbolo @",
+                    "valor_original": email_str,
+                    "valor_formateado": email_limpio,
+                    "formato_esperado": "usuario@dominio.com"
+                }
             
             # Validar formato RFC 5322
             patron_email = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
@@ -831,27 +874,65 @@ class ValidadorEmail:
                     "error": "Formato de email inválido",
                     "valor_original": email_str,
                     "valor_formateado": email_limpio,
-                    "formato_esperado": "usuario@dominio.com"
+                    "formato_esperado": "usuario@dominio.com",
+                    "ejemplo_valido": "usuario@ejemplo.com"
+                }
+            
+            # Extraer partes del email
+            partes_email = email_limpio.split('@')
+            usuario = partes_email[0]
+            dominio = partes_email[1]
+            
+            # Validaciones adicionales
+            if len(usuario) == 0:
+                return {
+                    "valido": False,
+                    "error": "La parte del usuario no puede estar vacía",
+                    "valor_original": email_str,
+                    "valor_formateado": email_limpio
+                }
+            
+            if len(dominio) == 0:
+                return {
+                    "valido": False,
+                    "error": "El dominio no puede estar vacío",
+                    "valor_original": email_str,
+                    "valor_formateado": email_limpio
                 }
             
             # Verificar dominio bloqueado
             if verificar_dominio:
-                dominio = email_limpio.split('@')[1]
                 if dominio in ValidadorEmail.DOMINIOS_BLOQUEADOS:
                     return {
                         "valido": False,
                         "error": f"Dominio '{dominio}' no permitido",
                         "valor_original": email_str,
                         "valor_formateado": email_limpio,
-                        "razon": "Dominio de email temporal bloqueado"
+                        "razon": "Dominio de email temporal bloqueado",
+                        "dominios_bloqueados": ValidadorEmail.DOMINIOS_BLOQUEADOS
                     }
+            
+            # Determinar qué cambios se realizaron
+            cambios_realizados = []
+            if email_str != email_limpio:
+                if email_str.strip() != email_limpio:
+                    cambios_realizados.append("Espacios removidos")
+                if email_str.lower() != email_limpio:
+                    cambios_realizados.append("Convertido a minúsculas")
             
             return {
                 "valido": True,
                 "valor_original": email_str,
                 "valor_formateado": email_limpio,
-                "dominio": email_limpio.split('@')[1],
-                "cambio_realizado": email_str != email_limpio
+                "usuario": usuario,
+                "dominio": dominio,
+                "cambio_realizado": email_str != email_limpio,
+                "cambios_aplicados": cambios_realizados,
+                "normalizacion": {
+                    "espacios_removidos": email_str.strip() != email_str,
+                    "convertido_minusculas": email_str.lower() != email_str,
+                    "aroba_normalizada": '@' in email_limpio
+                }
             }
             
         except Exception as e:
