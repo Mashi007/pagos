@@ -183,7 +183,17 @@ export function Dashboard() {
   const data: DashboardData = dashboardData || mockData
   const isLoadingData = loadingDashboard || loadingKpis
 
-  const calcularVariacion = (actual: number, anterior: number) => {
+  const calcularVariacion = (actual: number, anterior?: number) => {
+    if (!anterior || anterior === 0) {
+      return {
+        valor: 0,
+        esPositivo: true,
+        icono: TrendingUp,
+        color: 'text-gray-600',
+        bgColor: 'bg-gray-50'
+      }
+    }
+    
     const variacion = ((actual - anterior) / anterior) * 100
     return {
       valor: variacion,
@@ -219,7 +229,7 @@ export function Dashboard() {
       icon: DollarSign,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
-      variacion: calcularVariacion(data.cartera_total, data.cartera_anterior || mockData.cartera_anterior),
+      variacion: calcularVariacion(data.cartera_total, data.cartera_anterior),
       status: 'excellent'
     },
     {
@@ -239,7 +249,7 @@ export function Dashboard() {
       icon: AlertTriangle,
       color: 'text-red-600',
       bgColor: 'bg-red-50',
-      variacion: calcularVariacion(mockData.porcentaje_mora, mockData.porcentaje_mora_anterior),
+      variacion: calcularVariacion(mockData.porcentaje_mora, mockData.porcentaje_mora_anterior || 0),
       status: 'warning'
     },
     {
