@@ -188,6 +188,7 @@ export const useAuth = () => {
     refreshUser: store.refreshUser,
     changePassword: store.changePassword,
     clearError: store.clearError,
+    setUser: store.setUser,
   }
 }
 
