@@ -1,9 +1,53 @@
+# Headers for SPA routing
 /*
+  Cache-Control: no-cache
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
-  X-XSS-Protection: 1; mode=block
   Referrer-Policy: strict-origin-when-cross-origin
-  Cache-Control: public, max-age=31536000, immutable
 
-/index.html
-  Cache-Control: public, max-age=0, must-revalidate
+# Specific routes
+/dashboard
+  Cache-Control: no-cache
+
+/login
+  Cache-Control: no-cache
+
+/clientes
+  Cache-Control: no-cache
+
+/prestamos
+  Cache-Control: no-cache
+
+/pagos
+  Cache-Control: no-cache
+
+/reportes
+  Cache-Control: no-cache
+
+/configuracion
+  Cache-Control: no-cache
+
+/aprobaciones
+  Cache-Control: no-cache
+
+/auditoria
+  Cache-Control: no-cache
+
+/notificaciones
+  Cache-Control: no-cache
+
+/carga-masiva
+  Cache-Control: no-cache
+
+/setup
+  Cache-Control: no-cache
+
+# Static assets
+/assets/*
+  Cache-Control: public, max-age=31536000
+
+/favicon.ico
+  Cache-Control: public, max-age=86400
+
+/logo*.svg
+  Cache-Control: public, max-age=86400

@@ -8,12 +8,12 @@ services:
       - path: /*
         name: Cache-Control
         value: no-cache
+        headers:
+          Cache-Control: no-cache
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
-        headers:
-          Cache-Control: no-cache
     environmentVariables:
       - key: NODE_ENV
         value: production
