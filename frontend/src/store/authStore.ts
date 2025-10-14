@@ -60,8 +60,8 @@ export const useAuthStore = create<AuthState>()(
             rememberMe,
             rememberParam: credentials.remember,
             responseData: {
-              hasAccessToken: !!response.access_token,
-              accessTokenLength: response.access_token?.length || 0,
+              hasAccessToken: !!response.data?.access_token,
+              accessTokenLength: response.data?.access_token?.length || 0,
               hasUser: !!response.user,
               userEmail: response.user?.email
             }
