@@ -42,23 +42,24 @@ class ClienteService {
     await apiClient.delete(`${this.baseUrl}/${id}`)
   }
 
-  // Buscar clientes por término
+  // Buscar clientes por término (usando filtros en endpoint principal)
   async searchClientes(query: string): Promise<Cliente[]> {
-    const response = await apiClient.get<ApiResponse<Cliente[]>>(`${this.baseUrl}/search`, {
-      params: { q: query }
-    })
+    const filters: ClienteFilters = { search: query }
+    const response = await this.getClientes(filters, 1, 100)
     return response.data
   }
 
-  // Obtener clientes por asesor
+  // Obtener clientes por asesor (usando filtros en endpoint principal)
   async getClientesByAsesor(asesorId: string): Promise<Cliente[]> {
-    const response = await apiClient.get<ApiResponse<Cliente[]>>(`${this.baseUrl}/asesor/${asesorId}`)
+    const filters: ClienteFilters = { asesor_id: asesorId }
+    const response = await this.getClientes(filters, 1, 100)
     return response.data
   }
 
-  // Obtener clientes en mora
+  // Obtener clientes en mora (usando filtros en endpoint principal)
   async getClientesEnMora(): Promise<Cliente[]> {
-    const response = await apiClient.get<ApiResponse<Cliente[]>>(`${this.baseUrl}/mora`)
+    const filters: ClienteFilters = { estado_financiero: 'MORA' }
+    const response = await this.getClientes(filters, 1, 100)
     return response.data
   }
 
@@ -107,18 +108,17 @@ class ClienteService {
     return response.data
   }
 
-  // Exportar clientes
+  // Exportar clientes (usando endpoint de carga masiva)
   async exportarClientes(filters?: ClienteFilters, format: 'excel' | 'pdf' = 'excel'): Promise<void> {
-    const params = { ...filters, format }
-    const url = buildUrl(`${this.baseUrl}/export`, params)
-    
-    await apiClient.downloadFile(url, `clientes.${format}`)
+    // TODO: Implementar cuando esté disponible el endpoint de exportación
+    console.warn('Exportación de clientes no implementada aún')
+    throw new Error('Exportación de clientes no disponible')
   }
 
-  // Importar clientes desde Excel
+  // Importar clientes desde Excel (usando endpoint de carga masiva)
   async importarClientes(file: File): Promise<{ success: number; errors: any[] }> {
     const response = await apiClient.uploadFile<ApiResponse<{ success: number; errors: any[] }>>(
-      `${this.baseUrl}/import`,
+      '/api/v1/carga-masiva/clientes',
       file
     )
     return response.data

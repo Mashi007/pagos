@@ -84,11 +84,6 @@ class Cliente(Base):
         return self.total_financiamiento is not None and self.total_financiamiento > 0
     
     @property
-    def nombre_completo(self) -> str:
-        """Retorna el nombre completo del cliente"""
-        return f"{self.nombres} {self.apellidos}"
-    
-    @property
     def vehiculo_completo(self) -> str:
         """Retorna descripción completa del vehículo"""
         if not self.modelo_vehiculo:

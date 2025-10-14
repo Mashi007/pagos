@@ -22,46 +22,53 @@ export type UserRole =
   | 'USUARIO';
 
 export interface Cliente {
-  id: string;
+  id: number;
   cedula: string;
-  nombre: string;
-  apellido: string;
-  telefono: string;
+  nombres: string;
+  apellidos: string;
+  telefono?: string;
   email?: string;
-  direccion: string;
-  fecha_nacimiento: string;
-  ingresos_mensuales: number;
-  estado_civil: string;
-  profesion: string;
+  direccion?: string;
+  fecha_nacimiento?: string;
+  ocupacion?: string;
   
-  // Datos del vehículo
-  marca_vehiculo: string;
-  modelo_vehiculo: string;
-  año_vehiculo: number;
-  placa_vehiculo: string;
-  vin_vehiculo?: string;
-  valor_vehiculo: number;
+  // Datos del vehículo (coincide con backend)
+  modelo_vehiculo?: string;
+  marca_vehiculo?: string;
+  anio_vehiculo?: number;
+  color_vehiculo?: string;
+  chasis?: string;
+  motor?: string;
   
-  // Datos del financiamiento
-  monto_financiamiento: number;
-  cuota_inicial: number;
-  total_financiamiento: number;
-  tasa_interes: number;
-  plazo_meses: number;
-  cuota_mensual: number;
-  sistema_amortizacion: 'FRANCES' | 'ALEMAN' | 'AMERICANO';
+  // Concesionario
+  concesionario?: string;
+  vendedor_concesionario?: string;
   
-  // Datos del asesor
-  asesor_id: string;
-  asesor_nombre?: string;
+  // Datos del financiamiento (coincide con backend)
+  total_financiamiento?: number;
+  cuota_inicial?: number;
+  monto_financiado?: number;
+  fecha_entrega?: string;
+  numero_amortizaciones?: number;
+  modalidad_pago?: string;
   
-  // Estados y fechas
-  estado: 'ACTIVO' | 'INACTIVO' | 'MORA' | 'CANCELADO';
-  fecha_desembolso: string;
-  proxima_cuota: string;
+  // Asignación y gestión
+  asesor_id?: number;
+  fecha_asignacion?: string;
   
-  created_at: string;
-  updated_at: string;
+  // Estados (coincide con backend)
+  estado: 'ACTIVO' | 'INACTIVO' | 'MORA';
+  activo: boolean;
+  estado_financiero?: string;
+  dias_mora: number;
+  
+  // Auditoría
+  fecha_registro: string;
+  fecha_actualizacion?: string;
+  usuario_registro?: string;
+  
+  // Notas
+  notas?: string;
 }
 
 export interface Pago {
@@ -157,32 +164,40 @@ export interface LoginForm {
 }
 
 export interface ClienteForm {
-  // Datos personales
+  // Datos personales (coincide con backend)
   cedula: string;
-  nombre: string;
-  apellido: string;
-  telefono: string;
+  nombres: string;
+  apellidos: string;
+  telefono?: string;
   email?: string;
-  direccion: string;
-  fecha_nacimiento: string;
-  ingresos_mensuales: number;
-  estado_civil: string;
-  profesion: string;
+  direccion?: string;
+  fecha_nacimiento?: string;
+  ocupacion?: string;
   
-  // Datos del vehículo
-  marca_vehiculo: string;
-  modelo_vehiculo: string;
-  año_vehiculo: number;
-  placa_vehiculo: string;
-  vin_vehiculo?: string;
-  valor_vehiculo: number;
+  // Datos del vehículo (coincide con backend)
+  modelo_vehiculo?: string;
+  marca_vehiculo?: string;
+  anio_vehiculo?: number;
+  color_vehiculo?: string;
+  chasis?: string;
+  motor?: string;
   
-  // Datos del financiamiento
-  monto_financiamiento: number;
-  cuota_inicial: number;
-  tasa_interes: number;
-  plazo_meses: number;
-  sistema_amortizacion: 'FRANCES' | 'ALEMAN' | 'AMERICANO';
+  // Concesionario
+  concesionario?: string;
+  vendedor_concesionario?: string;
+  
+  // Datos del financiamiento (coincide con backend)
+  total_financiamiento?: number;
+  cuota_inicial?: number;
+  fecha_entrega?: string;
+  numero_amortizaciones?: number;
+  modalidad_pago?: string;
+  
+  // Asignación
+  asesor_id?: number;
+  
+  // Notas
+  notas?: string;
 }
 
 export interface PagoForm {
