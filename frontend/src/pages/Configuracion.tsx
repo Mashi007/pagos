@@ -18,6 +18,7 @@ import {
   EyeOff,
   CheckSquare,
   Building,
+  Brain,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -91,6 +92,13 @@ const mockConfiguracion = {
     plazoMaximo: 60,
     cuotaInicialMinima: 10,
   },
+  inteligenciaArtificial: {
+    openaiApiKey: '',
+    openaiModel: 'gpt-3.5-turbo',
+    aiScoringEnabled: true,
+    aiPredictionEnabled: true,
+    aiChatbotEnabled: true
+  },
 }
 
 export function Configuracion() {
@@ -106,6 +114,7 @@ export function Configuracion() {
     { id: 'baseDatos', nombre: 'Base de Datos', icono: Database },
     // { id: 'integraciones', nombre: 'Integraciones', icono: Settings }, // OCULTO
     { id: 'facturacion', nombre: 'Facturación', icono: DollarSign },
+    { id: 'inteligenciaArtificial', nombre: 'Inteligencia Artificial', icono: Brain },
     { id: 'validadores', nombre: 'Validadores', icono: CheckSquare },
     { id: 'concesionarios', nombre: 'Concesionarios', icono: Building },
     { id: 'asesores', nombre: 'Asesores', icono: Users },
@@ -608,6 +617,181 @@ export function Configuracion() {
     </div>
   )
 
+  const renderSeccionInteligenciaArtificial = () => (
+    <div className="space-y-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Brain className="h-5 w-5 text-blue-600" />
+          <h3 className="font-semibold text-blue-900">Configuración de Inteligencia Artificial</h3>
+        </div>
+        <p className="text-sm text-blue-700">
+          Configura las funcionalidades de IA para scoring crediticio, predicción de mora y chatbot inteligente.
+        </p>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-1">
+        {/* OpenAI API Key */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Settings className="h-5 w-5 text-blue-600" />
+              OpenAI Configuration
+            </CardTitle>
+            <CardDescription>
+              Configuración de la API de OpenAI para funcionalidades de IA
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">OpenAI API Key</label>
+              <div className="relative">
+                <Input
+                  type={mostrarPassword ? 'text' : 'password'}
+                  value={configuracion.inteligenciaArtificial.openaiApiKey}
+                  onChange={(e) => handleCambio('inteligenciaArtificial', 'openaiApiKey', e.target.value)}
+                  placeholder="sk-..."
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setMostrarPassword(!mostrarPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {mostrarPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Obtén tu API Key en: https://platform.openai.com/api-keys
+              </p>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Modelo de OpenAI</label>
+              <Select
+                value={configuracion.inteligenciaArtificial.openaiModel}
+                onValueChange={(value) => handleCambio('inteligenciaArtificial', 'openaiModel', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un modelo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo (Recomendado)</SelectItem>
+                  <SelectItem value="gpt-4">GPT-4 (Más potente)</SelectItem>
+                  <SelectItem value="gpt-4-turbo">GPT-4 Turbo (Más rápido)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500 mt-1">
+                GPT-3.5 Turbo es más económico, GPT-4 es más preciso
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Funcionalidades de IA */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Brain className="h-5 w-5 text-green-600" />
+              Funcionalidades de IA
+            </CardTitle>
+            <CardDescription>
+              Habilita o deshabilita las diferentes funcionalidades de inteligencia artificial
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <h4 className="font-medium">Scoring Crediticio con IA</h4>
+                <p className="text-sm text-gray-600">
+                  Analiza automáticamente la capacidad de pago de los clientes
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={configuracion.inteligenciaArtificial.aiScoringEnabled}
+                  onChange={(e) => handleCambio('inteligenciaArtificial', 'aiScoringEnabled', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <h4 className="font-medium">Predicción de Mora</h4>
+                <p className="text-sm text-gray-600">
+                  Predice la probabilidad de mora usando machine learning
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={configuracion.inteligenciaArtificial.aiPredictionEnabled}
+                  onChange={(e) => handleCambio('inteligenciaArtificial', 'aiPredictionEnabled', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <h4 className="font-medium">Chatbot Inteligente</h4>
+                <p className="text-sm text-gray-600">
+                  Asistente virtual para atención al cliente
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={configuracion.inteligenciaArtificial.aiChatbotEnabled}
+                  onChange={(e) => handleCambio('inteligenciaArtificial', 'aiChatbotEnabled', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Estado de la configuración */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              Estado de la Configuración
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">API Key configurada:</span>
+                <Badge variant={configuracion.inteligenciaArtificial.openaiApiKey ? "default" : "destructive"}>
+                  {configuracion.inteligenciaArtificial.openaiApiKey ? "✅ Configurada" : "❌ No configurada"}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Modelo seleccionado:</span>
+                <Badge variant="secondary">{configuracion.inteligenciaArtificial.openaiModel}</Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Funcionalidades activas:</span>
+                <Badge variant="secondary">
+                  {[
+                    configuracion.inteligenciaArtificial.aiScoringEnabled && "Scoring",
+                    configuracion.inteligenciaArtificial.aiPredictionEnabled && "Predicción",
+                    configuracion.inteligenciaArtificial.aiChatbotEnabled && "Chatbot"
+                  ].filter(Boolean).join(", ") || "Ninguna"}
+                </Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+
   const renderContenidoSeccion = () => {
     switch (seccionActiva) {
       case 'general': return renderSeccionGeneral()
@@ -616,6 +800,7 @@ export function Configuracion() {
       case 'baseDatos': return renderSeccionBaseDatos()
       // case 'integraciones': return renderSeccionIntegraciones() // OCULTO
       case 'facturacion': return renderSeccionFacturacion()
+      case 'inteligenciaArtificial': return renderSeccionInteligenciaArtificial()
       case 'validadores': return <ValidadoresConfig />
       case 'concesionarios': return <ConcesionariosConfig />
       case 'asesores': return <AsesoresConfig />
