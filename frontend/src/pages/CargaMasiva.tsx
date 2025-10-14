@@ -309,30 +309,63 @@ export function CargaMasiva() {
                   />
 
                   {uploadResult.success && uploadResult.data && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-green-50 p-3 rounded-lg">
-                        <p className="text-sm text-green-700">Total Registros</p>
-                        <p className="text-2xl font-bold text-green-900">
-                          {uploadResult.data.totalRecords}
-                        </p>
+                    <div className="space-y-4">
+                      {/* Tarjetas de estadísticas - Disposición horizontal */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-medium text-green-700">Total Registros</p>
+                              <p className="text-3xl font-bold text-green-900 mt-1">
+                                {uploadResult.data.totalRecords}
+                              </p>
+                            </div>
+                            <div className="bg-green-500 rounded-full p-2">
+                              <CheckCircle className="h-6 w-6 text-white" />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-medium text-blue-700">Procesados</p>
+                              <p className="text-3xl font-bold text-blue-900 mt-1">
+                                {uploadResult.data.processedRecords}
+                              </p>
+                            </div>
+                            <div className="bg-blue-500 rounded-full p-2">
+                              <CheckCircle className="h-6 w-6 text-white" />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 p-4 rounded-lg border border-yellow-200">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-medium text-yellow-700">Con Errores</p>
+                              <p className="text-3xl font-bold text-yellow-900 mt-1">
+                                {uploadResult.data.errors}
+                              </p>
+                            </div>
+                            <div className="bg-yellow-500 rounded-full p-2">
+                              <AlertTriangle className="h-6 w-6 text-white" />
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="bg-blue-50 p-3 rounded-lg">
-                        <p className="text-sm text-blue-700">Procesados</p>
-                        <p className="text-2xl font-bold text-blue-900">
-                          {uploadResult.data.processedRecords}
-                        </p>
-                      </div>
-                      <div className="bg-yellow-50 p-3 rounded-lg">
-                        <p className="text-sm text-yellow-700">Con Errores</p>
-                        <p className="text-2xl font-bold text-yellow-900">
-                          {uploadResult.data.errors}
-                        </p>
-                      </div>
-                      <div className="bg-purple-50 p-3 rounded-lg">
-                        <p className="text-sm text-purple-700">Archivo</p>
-                        <p className="text-sm font-medium text-purple-900 truncate">
-                          {uploadResult.data.fileName}
-                        </p>
+
+                      {/* Información del archivo */}
+                      <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200">
+                        <div className="flex items-center space-x-3">
+                          <FileSpreadsheet className="h-5 w-5 text-purple-600" />
+                          <div>
+                            <p className="text-sm font-medium text-purple-700">Archivo Procesado</p>
+                            <p className="text-lg font-semibold text-purple-900">
+                              {uploadResult.data.fileName}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}

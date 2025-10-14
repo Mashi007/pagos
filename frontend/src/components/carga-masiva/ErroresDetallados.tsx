@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { AlertTriangle, Download, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react'
+import { AlertTriangle, Download, Eye, EyeOff, CheckCircle, XCircle, FileSpreadsheet, ChevronDown, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AlertWithIcon } from '@/components/ui/alert'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
 
 interface ErrorDetail {
   row: number
@@ -85,6 +87,21 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
     return 'Revisar datos y formato'
   }
 
+  const getErrorType = (error: string): string => {
+    const errorMsg = error.toLowerCase()
+    
+    if (errorMsg.includes('cedula')) return 'Cédula'
+    if (errorMsg.includes('telefono') || errorMsg.includes('móvil')) return 'Teléfono'
+    if (errorMsg.includes('email')) return 'Email'
+    if (errorMsg.includes('monto')) return 'Monto'
+    if (errorMsg.includes('fecha')) return 'Fecha'
+    if (errorMsg.includes('no encontrado')) return 'Cliente'
+    if (errorMsg.includes('formato')) return 'Formato'
+    if (errorMsg.includes('requerido') || errorMsg.includes('obligatorio')) return 'Requerido'
+    
+    return 'Validación'
+  }
+
   if (errores.length === 0) {
     return null
   }
@@ -95,109 +112,172 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.3 }}
     >
-      <Card className="border-red-200 bg-red-50">
+      <Card className="border-red-200 bg-gradient-to-r from-red-50 to-red-100">
         <CardHeader>
           <CardTitle className="flex items-center justify-between text-red-800">
-            <div className="flex items-center space-x-2">
-              <AlertTriangle className="h-5 w-5" />
-              <span>Errores Requieren Corrección Manual</span>
+            <div className="flex items-center space-x-3">
+              <div className="bg-red-500 rounded-full p-2">
+                <AlertTriangle className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <span className="text-lg font-bold">Errores Requieren Corrección Manual</span>
+                <p className="text-sm font-normal text-red-600 mt-1">
+                  {errores.length} registros con problemas de validación
+                </p>
+              </div>
             </div>
             <div className="flex space-x-2">
               <Button
                 onClick={generarArchivoCorreccion}
                 variant="outline"
                 size="sm"
-                className="text-red-700 border-red-300 hover:bg-red-100"
+                className="text-red-700 border-red-300 hover:bg-red-100 font-medium"
               >
-                <Download className="h-4 w-4 mr-2" />
-                Descargar Lista de Correcciones
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                Lista de Correcciones
               </Button>
               <Button
                 onClick={onDescargarErrores}
                 variant="outline"
                 size="sm"
-                className="text-red-700 border-red-300 hover:bg-red-100"
+                className="text-red-700 border-red-300 hover:bg-red-100 font-medium"
               >
                 <Download className="h-4 w-4 mr-2" />
-                Descargar Solo Errores
+                Solo Errores
               </Button>
             </div>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
           <AlertWithIcon
             variant="destructive"
             title={`${errores.length} registros requieren corrección manual`}
             description="Estos registros no pudieron procesarse automáticamente. Descarga la lista para corregirlos y volver a cargar."
           />
           
-          <div className="mt-4 space-y-3 max-h-96 overflow-y-auto">
-            {errores.map((error, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="border border-red-200 rounded-lg p-3 bg-white"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <XCircle className="h-5 w-5 text-red-500" />
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        Fila {error.row} - Cédula: {error.cedula}
+          {/* Tabla de errores mejorada */}
+          <div className="bg-white rounded-lg border border-red-200 overflow-hidden">
+            <Table>
+              <TableHeader className="bg-red-50">
+                <TableRow>
+                  <TableHead className="text-red-800 font-semibold">Fila</TableHead>
+                  <TableHead className="text-red-800 font-semibold">Cédula</TableHead>
+                  <TableHead className="text-red-800 font-semibold">Tipo de Error</TableHead>
+                  <TableHead className="text-red-800 font-semibold">Descripción</TableHead>
+                  <TableHead className="text-red-800 font-semibold">Acción</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {errores.map((error, index) => (
+                  <motion.tr
+                    key={index}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="hover:bg-red-50/50 transition-colors"
+                  >
+                    <TableCell className="font-medium">
+                      <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">
+                        {error.row}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {error.cedula}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="destructive" className="text-xs">
+                        {getErrorType(error.error)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="max-w-md">
+                      <p className="text-sm text-gray-700 line-clamp-2">
+                        {error.error}
                       </p>
-                      <p className="text-sm text-red-600">{error.error}</p>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        onClick={() => toggleError(error.row)}
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        {erroresExpandidos.has(error.row) ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TableCell>
+                  </motion.tr>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Detalles expandibles */}
+          {errores.map((error, index) => (
+            erroresExpandidos.has(error.row) && (
+              <motion.div
+                key={`detail-${index}`}
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="bg-white border border-red-200 rounded-lg p-4"
+              >
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
+                      <XCircle className="h-4 w-4 mr-2 text-red-500" />
+                      Datos Originales
+                    </h4>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <pre className="text-xs font-mono text-gray-700 whitespace-pre-wrap">
+                        {JSON.stringify(error.data, null, 2)}
+                      </pre>
                     </div>
                   </div>
-                  <Button
-                    onClick={() => toggleError(error.row)}
-                    variant="ghost"
-                    size="sm"
-                  >
-                    {erroresExpandidos.has(error.row) ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-                
-                {erroresExpandidos.has(error.row) && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    className="mt-3 pt-3 border-t border-red-100"
-                  >
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <p className="font-medium text-gray-700 mb-1">Datos Originales:</p>
-                        <div className="bg-gray-50 p-2 rounded text-xs font-mono">
-                          {JSON.stringify(error.data, null, 2)}
-                        </div>
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-700 mb-1">Corrección Sugerida:</p>
-                        <div className="bg-green-50 p-2 rounded text-xs">
-                          {generarCorreccionSugerida(error)}
-                        </div>
-                      </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
+                      <CheckCircle className="h-4 w-4 mr-2 text-green-500" />
+                      Corrección Sugerida
+                    </h4>
+                    <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                      <p className="text-sm text-green-800">
+                        {generarCorreccionSugerida(error)}
+                      </p>
                     </div>
-                  </motion.div>
-                )}
+                  </div>
+                </div>
               </motion.div>
-            ))}
-          </div>
+            )
+          ))}
           
-          <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-            <h4 className="font-medium text-blue-900 mb-2">📋 Instrucciones para Corrección:</h4>
-            <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
-              <li>Descarga la lista de errores usando el botón "Descargar Lista de Correcciones"</li>
-              <li>Corrige los datos en Excel según las sugerencias</li>
-              <li>Guarda el archivo corregido</li>
-              <li>Vuelve a cargar el archivo corregido</li>
-              <li>Los registros corregidos se procesarán automáticamente</li>
-            </ol>
+          {/* Instrucciones mejoradas */}
+          <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-6 rounded-lg border border-blue-200">
+            <h4 className="font-bold text-blue-900 mb-4 flex items-center">
+              <FileSpreadsheet className="h-5 w-5 mr-2" />
+              📋 Instrucciones para Corrección
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <h5 className="font-semibold text-blue-800 mb-2">Pasos a seguir:</h5>
+                <ol className="text-sm text-blue-700 space-y-2 list-decimal list-inside">
+                  <li>Descarga la lista de errores usando el botón "Lista de Correcciones"</li>
+                  <li>Corrige los datos en Excel según las sugerencias mostradas</li>
+                  <li>Guarda el archivo corregido</li>
+                  <li>Vuelve a cargar el archivo corregido</li>
+                </ol>
+              </div>
+              <div>
+                <h5 className="font-semibold text-blue-800 mb-2">Tipos de errores comunes:</h5>
+                <ul className="text-sm text-blue-700 space-y-1">
+                  <li>• <strong>Cédula:</strong> Formato V12345678</li>
+                  <li>• <strong>Teléfono:</strong> +5804123456789</li>
+                  <li>• <strong>Email:</strong> usuario@dominio.com</li>
+                  <li>• <strong>Monto:</strong> Solo números con punto decimal</li>
+                </ul>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
