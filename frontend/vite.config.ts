@@ -36,4 +36,8 @@ export default defineConfig({
     port: 4173,
     host: true,
   },
+  // Configuración para Render
+  define: {
+    'process.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || 'https://pagos-f2qf.onrender.com'),
+  },
 })

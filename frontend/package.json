@@ -10,7 +10,9 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview --host 0.0.0.0 --port $PORT",
     "start": "npm run setup && npm run dev",
-    "serve": "serve -s dist -l $PORT"
+    "serve": "serve -s dist -l $PORT",
+    "render-build": "npm install && npm run build",
+    "render-start": "serve -s dist -l $PORT"
   },
   "dependencies": {
     "react": "^18.2.0",

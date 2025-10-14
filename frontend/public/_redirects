@@ -1,1 +1,11 @@
+# SPA redirect rules for Render
 /*    /index.html   200
+
+# Specific routes
+/dashboard    /index.html   200
+/login        /index.html   200
+/clientes     /index.html   200
+/prestamos    /index.html   200
+/pagos        /index.html   200
+/reportes     /index.html   200
+/configuracion /index.html   200
