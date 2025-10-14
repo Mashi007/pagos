@@ -31,6 +31,7 @@ import { usePermissions } from '@/store/authStore'
 import { formatCurrency, formatDate } from '@/utils'
 import { ClienteFilters } from '@/types'
 import { useClientes } from '@/hooks/useClientes'
+import { useQueryClient } from '@tanstack/react-query'
 
 export function ClientesList() {
   // Forzar nuevo build - versión actualizada
@@ -42,6 +43,7 @@ export function ClientesList() {
 
   const debouncedSearch = useDebounce(searchTerm, 300)
   const { canViewAllClients } = usePermissions()
+  const queryClient = useQueryClient()
 
   // Queries
   const {
@@ -344,8 +346,10 @@ export function ClientesList() {
           <CrearClienteForm 
             onClose={() => setShowCrearCliente(false)}
             onClienteCreated={() => {
-              // Refrescar la lista cuando se cree un nuevo cliente
-              window.location.reload()
+              // ✅ CORRECCIÓN: Invalidar queries para actualizar datos
+              queryClient.invalidateQueries({ queryKey: ['clientes'] })
+              queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+              queryClient.invalidateQueries({ queryKey: ['kpis'] })
             }}
           />
         )}

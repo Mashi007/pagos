@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
+import { useQuery } from '@tanstack/react-query'
 import { 
   DollarSign, 
   Users, 
@@ -28,6 +29,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { usePermissions } from '@/store/authStore'
 import { formatCurrency, formatPercentage } from '@/utils'
+import { apiClient } from '@/services/api'
 
 // Mock data integrado - en producción vendría del backend
 const mockData = {
@@ -124,6 +126,40 @@ export function Dashboard() {
   const [periodo, setPeriodo] = useState('mes')
   const [isRefreshing, setIsRefreshing] = useState(false)
 
+  // ✅ CORRECCIÓN: Conectar a endpoints reales del backend
+  const { data: dashboardData, isLoading: loadingDashboard, refetch: refetchDashboard } = useQuery({
+    queryKey: ['dashboard', periodo],
+    queryFn: async () => {
+      try {
+        const response = await apiClient.get(`/api/v1/dashboard/administrador?periodo=${periodo}`)
+        return response
+      } catch (error) {
+        console.warn('Error cargando dashboard desde backend, usando datos mock:', error)
+        return mockData // Fallback a datos mock
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutos
+    refetchInterval: 10 * 60 * 1000, // Actualizar cada 10 minutos
+  })
+
+  const { data: kpisData, isLoading: loadingKpis } = useQuery({
+    queryKey: ['kpis'],
+    queryFn: async () => {
+      try {
+        const response = await apiClient.get('/api/v1/kpis')
+        return response
+      } catch (error) {
+        console.warn('Error cargando KPIs desde backend, usando datos mock:', error)
+        return mockData // Fallback a datos mock
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // Usar datos del backend si están disponibles, sino usar mock
+  const data = dashboardData || mockData
+  const isLoadingData = loadingDashboard || loadingKpis
+
   const calcularVariacion = (actual: number, anterior: number) => {
     const variacion = ((actual - anterior) / anterior) * 100
     return {
@@ -137,21 +173,30 @@ export function Dashboard() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
-    // Simular actualización de datos
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setIsRefreshing(false)
+    try {
+      // ✅ CORRECCIÓN: Refrescar datos reales del backend
+      await Promise.all([
+        refetchDashboard(),
+        // Invalidar también queries de clientes para datos actualizados
+        // queryClient.invalidateQueries({ queryKey: ['clientes'] })
+      ])
+    } catch (error) {
+      console.error('Error al refrescar dashboard:', error)
+    } finally {
+      setIsRefreshing(false)
+    }
   }
 
   // KPIs Principales con tendencias
   const kpiCards = [
     {
       title: 'Cartera Total',
-      value: formatCurrency(mockData.cartera_total),
+      value: formatCurrency(data.cartera_total),
       description: 'Total de préstamos activos',
       icon: DollarSign,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
-      variacion: calcularVariacion(mockData.cartera_total, mockData.cartera_anterior),
+      variacion: calcularVariacion(data.cartera_total, data.cartera_anterior || mockData.cartera_anterior),
       status: 'excellent'
     },
     {
