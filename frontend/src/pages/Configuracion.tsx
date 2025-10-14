@@ -19,6 +19,11 @@ import {
   CheckSquare,
   Building,
   Brain,
+  Wrench,
+  Calendar,
+  FileText,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -106,10 +111,21 @@ export function Configuracion() {
   const [seccionActiva, setSeccionActiva] = useState('general')
   const [mostrarPassword, setMostrarPassword] = useState(false)
   const [cambiosPendientes, setCambiosPendientes] = useState(false)
+  const [submenuAbierto, setSubmenuAbierto] = useState(false)
 
   const secciones = [
     { id: 'general', nombre: 'General', icono: Globe },
-    { id: 'notificaciones', nombre: 'Notificaciones', icono: Bell },
+    { 
+      id: 'herramientas', 
+      nombre: 'Herramientas', 
+      icono: Wrench, 
+      submenu: true,
+      items: [
+        { id: 'notificaciones', nombre: 'Notificaciones', icono: Bell },
+        { id: 'programador', nombre: 'Programador', icono: Calendar },
+        { id: 'auditoria', nombre: 'Auditoría', icono: FileText },
+      ]
+    },
     // { id: 'seguridad', nombre: 'Seguridad', icono: Shield }, // OCULTO - No necesario por ahora
     { id: 'baseDatos', nombre: 'Base de Datos', icono: Database },
     // { id: 'integraciones', nombre: 'Integraciones', icono: Settings }, // OCULTO
@@ -617,6 +633,181 @@ export function Configuracion() {
     </div>
   )
 
+  const renderSeccionProgramador = () => (
+    <div className="space-y-6">
+      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Calendar className="h-5 w-5 text-green-600" />
+          <h3 className="font-semibold text-green-900">Programador de Tareas</h3>
+        </div>
+        <p className="text-sm text-green-700">
+          Configura tareas automáticas, recordatorios y procesos programados del sistema.
+        </p>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-1">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Clock className="h-5 w-5 text-blue-600" />
+              Tareas Programadas
+            </CardTitle>
+            <CardDescription>
+              Configuración de tareas automáticas del sistema
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <h4 className="font-medium">Recordatorios de Pago</h4>
+                <p className="text-sm text-gray-600">
+                  Envío automático de recordatorios antes del vencimiento
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={true}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <h4 className="font-medium">Backup Automático</h4>
+                <p className="text-sm text-gray-600">
+                  Respaldo automático de la base de datos
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={true}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <h4 className="font-medium">Reportes Automáticos</h4>
+                <p className="text-sm text-gray-600">
+                  Generación y envío automático de reportes
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={false}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+
+  const renderSeccionAuditoria = () => (
+    <div className="space-y-6">
+      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <FileText className="h-5 w-5 text-purple-600" />
+          <h3 className="font-semibold text-purple-900">Auditoría del Sistema</h3>
+        </div>
+        <p className="text-sm text-purple-700">
+          Registro y seguimiento de todas las actividades del sistema para cumplimiento y seguridad.
+        </p>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-1">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-600" />
+              Configuración de Auditoría
+            </CardTitle>
+            <CardDescription>
+              Configura qué eventos se registran en el sistema de auditoría
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <h4 className="font-medium">Auditoría de Usuarios</h4>
+                <p className="text-sm text-gray-600">
+                  Registra login, logout y cambios de perfil
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={true}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <h4 className="font-medium">Auditoría de Transacciones</h4>
+                <p className="text-sm text-gray-600">
+                  Registra todos los movimientos financieros
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={true}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <h4 className="font-medium">Auditoría de Configuración</h4>
+                <p className="text-sm text-gray-600">
+                  Registra cambios en configuraciones del sistema
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={true}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <h4 className="font-medium">Retención de Logs</h4>
+                <p className="text-sm text-gray-600">
+                  Días de retención de registros de auditoría
+                </p>
+              </div>
+              <Input
+                type="number"
+                value={90}
+                className="w-20"
+                placeholder="90"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+
   const renderSeccionInteligenciaArtificial = () => (
     <div className="space-y-6">
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -796,6 +987,8 @@ export function Configuracion() {
     switch (seccionActiva) {
       case 'general': return renderSeccionGeneral()
       case 'notificaciones': return renderSeccionNotificaciones()
+      case 'programador': return renderSeccionProgramador()
+      case 'auditoria': return renderSeccionAuditoria()
       // case 'seguridad': return renderSeccionSeguridad() // OCULTO
       case 'baseDatos': return renderSeccionBaseDatos()
       // case 'integraciones': return renderSeccionIntegraciones() // OCULTO
@@ -829,6 +1022,54 @@ export function Configuracion() {
             <div className="space-y-2">
               {secciones.map((seccion) => {
                 const IconComponent = seccion.icono
+                
+                if (seccion.submenu) {
+                  return (
+                    <div key={seccion.id}>
+                      <button
+                        onClick={() => setSubmenuAbierto(!submenuAbierto)}
+                        className={`w-full flex items-center justify-between space-x-3 p-3 rounded-lg text-left transition-colors ${
+                          seccionActiva === seccion.id || seccion.items?.some(item => seccionActiva === item.id)
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'hover:bg-gray-100'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <IconComponent className="h-5 w-5" />
+                          <span className="font-medium">{seccion.nombre}</span>
+                        </div>
+                        {submenuAbierto ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                      </button>
+                      
+                      {submenuAbierto && seccion.items && (
+                        <div className="ml-8 mt-1 space-y-1">
+                          {seccion.items.map((item) => {
+                            const ItemIconComponent = item.icono
+                            return (
+                              <button
+                                key={item.id}
+                                onClick={() => setSeccionActiva(item.id)}
+                                className={`w-full flex items-center space-x-3 p-2 rounded-lg text-left transition-colors ${
+                                  seccionActiva === item.id
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'hover:bg-gray-100'
+                                }`}
+                              >
+                                <ItemIconComponent className="h-4 w-4" />
+                                <span className="text-sm font-medium">{item.nombre}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+                
                 return (
                   <button
                     key={seccion.id}
