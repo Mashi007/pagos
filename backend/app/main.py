@@ -38,6 +38,7 @@ from app.api.v1.endpoints import (
     clientes_temp,
     concesionarios,
     asesores,
+    configuracion,
 )
 
 # Configurar logging
@@ -101,6 +102,7 @@ app.include_router(diagnostico.router, prefix=f"{settings.API_V1_PREFIX}/diagnos
 app.include_router(clientes_temp.router, prefix=f"{settings.API_V1_PREFIX}/clientes-temp", tags=["Clientes Temp"])
 app.include_router(concesionarios.router, prefix=f"{settings.API_V1_PREFIX}/concesionarios", tags=["Concesionarios"])
 app.include_router(asesores.router, prefix=f"{settings.API_V1_PREFIX}/asesores", tags=["Asesores"])
+app.include_router(configuracion.router, prefix=f"{settings.API_V1_PREFIX}/configuracion", tags=["Configuracion"])
 
 
 @app.get("/", include_in_schema=False)

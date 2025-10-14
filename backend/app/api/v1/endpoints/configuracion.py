@@ -160,7 +160,7 @@ def obtener_configuracion_validadores():
         return {
             "titulo": "🔍 CONFIGURACIÓN DE VALIDADORES",
             "fecha_consulta": datetime.now().isoformat(),
-            "consultado_por": current_user.full_name,
+            "consultado_por": "Sistema",
             
             "validadores_disponibles": {
                 "telefono": {
@@ -310,8 +310,7 @@ def obtener_configuracion_validadores():
 
 @router.post("/validadores/probar")
 def probar_validadores(
-    datos_prueba: Dict[str, Any],
-    # current_user: User = Depends(get_current_user)  # Temporalmente comentado para debugging
+    datos_prueba: Dict[str, Any]
 ):
     """
     🧪 Probar validadores con datos de ejemplo
