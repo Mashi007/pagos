@@ -21,7 +21,6 @@ import { Conciliacion } from '@/pages/Conciliacion'
 import { Reportes } from '@/pages/Reportes'
 import { Aprobaciones } from '@/pages/Aprobaciones'
 import { Auditoria } from '@/pages/Auditoria'
-import { InteligenciaArtificial } from '@/pages/InteligenciaArtificial'
 import { Notificaciones } from '@/pages/Notificaciones'
 import { Programador } from '@/pages/Programador'
 import { Configuracion } from '@/pages/Configuracion'
@@ -164,17 +163,6 @@ function App() {
               </ProtectedRoute>
             }
           />
-
-          {/* Inteligencia Artificial */}
-          <Route
-            path="inteligencia-artificial"
-            element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE', 'ANALISTA']}>
-                <InteligenciaArtificial />
-              </ProtectedRoute>
-            }
-          />
-
 
           {/* Notificaciones */}
           <Route path="notificaciones" element={<Notificaciones />} />

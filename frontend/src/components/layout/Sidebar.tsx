@@ -109,13 +109,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       requiredRoles: ['ADMIN', 'GERENTE'],
     },
     {
-      title: 'Inteligencia Artificial',
-      href: '/inteligencia-artificial',
-      icon: Brain,
-      badge: 'NUEVO',
-      requiredRoles: ['ADMIN', 'GERENTE', 'DIRECTOR'],
-    },
-    {
       title: 'Herramientas',
       icon: Wrench,
       isSubmenu: true,
