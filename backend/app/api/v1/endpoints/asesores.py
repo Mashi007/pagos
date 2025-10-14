@@ -110,13 +110,26 @@ def crear_asesor(
     ➕ Crear un nuevo asesor
     """
     try:
-        # Verificar que no exista un asesor con el mismo email
-        existing = db.query(Asesor).filter(Asesor.email == asesor_data.email).first()
-        if existing:
-            raise HTTPException(status_code=400, detail="Ya existe un asesor con este email")
+        # Generar email automático si no se proporciona
+        if not asesor_data.email:
+            asesor_data.email = f"{asesor_data.nombre.lower().replace(' ', '.')}@asesor.local"
+        
+        # Verificar que no exista un asesor con el mismo email (solo si se proporciona email)
+        if asesor_data.email:
+            existing = db.query(Asesor).filter(Asesor.email == asesor_data.email).first()
+            if existing:
+                raise HTTPException(status_code=400, detail="Ya existe un asesor con este email")
+        
+        # Generar nombre_completo
+        nombre_completo = asesor_data.nombre
+        if asesor_data.apellido:
+            nombre_completo = f"{asesor_data.nombre} {asesor_data.apellido}"
         
         # Crear nuevo asesor
-        asesor = Asesor(**asesor_data.dict())
+        asesor_dict = asesor_data.dict()
+        asesor_dict['nombre_completo'] = nombre_completo
+        
+        asesor = Asesor(**asesor_dict)
         db.add(asesor)
         db.commit()
         db.refresh(asesor)

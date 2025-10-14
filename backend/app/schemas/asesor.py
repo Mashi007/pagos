@@ -4,18 +4,18 @@ from datetime import datetime
 
 class AsesorBase(BaseModel):
     nombre: str
-    apellido: str
-    email: EmailStr
+    apellido: Optional[str] = ""
+    email: Optional[str] = ""
     telefono: Optional[str] = None
     especialidad: Optional[str] = None
     comision_porcentaje: Optional[int] = None
     activo: bool = True
     notas: Optional[str] = None
 
-    @validator('nombre', 'apellido')
+    @validator('nombre')
     def name_must_not_be_empty(cls, v):
         if not v or not v.strip():
-            raise ValueError('El nombre y apellido no pueden estar vacíos')
+            raise ValueError('El nombre no puede estar vacío')
         return v.strip()
 
     @validator('comision_porcentaje')
@@ -30,17 +30,17 @@ class AsesorCreate(AsesorBase):
 class AsesorUpdate(BaseModel):
     nombre: Optional[str] = None
     apellido: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     telefono: Optional[str] = None
     especialidad: Optional[str] = None
     comision_porcentaje: Optional[int] = None
     activo: Optional[bool] = None
     notas: Optional[str] = None
 
-    @validator('nombre', 'apellido')
+    @validator('nombre')
     def name_must_not_be_empty(cls, v):
         if v is not None and (not v or not v.strip()):
-            raise ValueError('El nombre y apellido no pueden estar vacíos')
+            raise ValueError('El nombre no puede estar vacío')
         return v.strip() if v else v
 
     @validator('comision_porcentaje')
