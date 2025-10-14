@@ -1,5 +1,5 @@
 // frontend/src/services/userService.ts
-import api from './api'
+import { apiClient as api } from './api'
 
 export interface User {
   id: number
