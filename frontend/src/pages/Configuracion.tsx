@@ -140,7 +140,7 @@ export function Configuracion() {
         </div>
         <div>
           <label className="text-sm font-medium">Idioma</label>
-          <Select value={configuracion.general.idioma} onValueChange={(value) => handleCambio('general', 'idioma', value)}>
+          <Select value={configuracion.general.idioma} onValueChange={(value: string) => handleCambio('general', 'idioma', value)}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -152,7 +152,7 @@ export function Configuracion() {
         </div>
         <div>
           <label className="text-sm font-medium">Zona Horaria</label>
-          <Select value={configuracion.general.zonaHoraria} onValueChange={(value) => handleCambio('general', 'zonaHoraria', value)}>
+          <Select value={configuracion.general.zonaHoraria} onValueChange={(value: string) => handleCambio('general', 'zonaHoraria', value)}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -165,7 +165,7 @@ export function Configuracion() {
         </div>
         <div>
           <label className="text-sm font-medium">Moneda</label>
-          <Select value={configuracion.general.moneda} onValueChange={(value) => handleCambio('general', 'moneda', value)}>
+          <Select value={configuracion.general.moneda} onValueChange={(value: string) => handleCambio('general', 'moneda', value)}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -178,7 +178,7 @@ export function Configuracion() {
         </div>
         <div>
           <label className="text-sm font-medium">Formato de Fecha</label>
-          <Select value={configuracion.general.formatoFecha} onValueChange={(value) => handleCambio('general', 'formatoFecha', value)}>
+          <Select value={configuracion.general.formatoFecha} onValueChange={(value: string) => handleCambio('general', 'formatoFecha', value)}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -253,7 +253,7 @@ export function Configuracion() {
         </div>
         <div>
           <label className="text-sm font-medium">Proveedor SMS</label>
-          <Select value={configuracion.notificaciones.smsProveedor} onValueChange={(value) => handleCambio('notificaciones', 'smsProveedor', value)}>
+          <Select value={configuracion.notificaciones.smsProveedor} onValueChange={(value: string) => handleCambio('notificaciones', 'smsProveedor', value)}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -308,7 +308,7 @@ export function Configuracion() {
         </div>
         <div>
           <label className="text-sm font-medium">Política de Contraseñas</label>
-          <Select value={configuracion.seguridad.politicaContraseñas} onValueChange={(value) => handleCambio('seguridad', 'politicaContraseñas', value)}>
+          <Select value={configuracion.seguridad.politicaContraseñas} onValueChange={(value: string) => handleCambio('seguridad', 'politicaContraseñas', value)}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -383,7 +383,7 @@ export function Configuracion() {
         </div>
         <div>
           <label className="text-sm font-medium">Frecuencia de Backup</label>
-          <Select value={configuracion.baseDatos.frecuenciaBackup} onValueChange={(value) => handleCambio('baseDatos', 'frecuenciaBackup', value)}>
+          <Select value={configuracion.baseDatos.frecuenciaBackup} onValueChange={(value: string) => handleCambio('baseDatos', 'frecuenciaBackup', value)}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>

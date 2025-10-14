@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Upload, FileSpreadsheet, Download, AlertCircle, CheckCircle, X } from 'lucide-react'
+import { Upload, FileSpreadsheet, Download, AlertCircle, CheckCircle, X, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AlertWithIcon } from '@/components/ui/alert'

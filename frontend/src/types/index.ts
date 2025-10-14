@@ -221,6 +221,7 @@ export interface AuthTokens {
 export interface ClienteFilters {
   search?: string;
   estado?: Cliente['estado'];
+  estado_financiero?: string;
   asesor_id?: string;
   fecha_desde?: string;
   fecha_hasta?: string;

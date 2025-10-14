@@ -13,9 +13,16 @@ export interface CargaMasivaResponse {
     processedRecords: number
     errors: number
     fileName: string
+    type?: string
     details?: any[]
   }
   errors?: string[]
+  erroresDetallados?: Array<{
+    row: number
+    cedula: string
+    error: string
+    data: any
+  }>
 }
 
 class CargaMasivaService {
