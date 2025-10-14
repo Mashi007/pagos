@@ -29,6 +29,12 @@ class AuthService {
       // Guardar tokens según la opción "Recordarme"
       if (response.data) {
         const rememberMe = credentials.remember || false
+        console.log('🔍 Credenciales recibidas en authService:', {
+          email: credentials.email,
+          remember: credentials.remember,
+          rememberMe: rememberMe,
+          tipoRemember: typeof credentials.remember
+        })
         
         if (rememberMe) {
           // Guardar en localStorage (persistente)
@@ -36,14 +42,24 @@ class AuthService {
           localStorage.setItem('refresh_token', response.data.refresh_token)
           localStorage.setItem('user', JSON.stringify(response.user))
           localStorage.setItem('remember_me', 'true')
-          console.log('Tokens guardados en localStorage (recordarme)')
+          console.log('✅ Tokens guardados en localStorage (recordarme)')
+          console.log('🔍 Verificación localStorage:', {
+            hasToken: !!localStorage.getItem('access_token'),
+            hasUser: !!localStorage.getItem('user'),
+            rememberMe: localStorage.getItem('remember_me')
+          })
         } else {
           // Guardar en sessionStorage (solo para la sesión actual)
           sessionStorage.setItem('access_token', response.data.access_token)
           sessionStorage.setItem('refresh_token', response.data.refresh_token)
           sessionStorage.setItem('user', JSON.stringify(response.user))
           localStorage.setItem('remember_me', 'false')
-          console.log('Tokens guardados en sessionStorage (solo sesión)')
+          console.log('✅ Tokens guardados en sessionStorage (solo sesión)')
+          console.log('🔍 Verificación sessionStorage:', {
+            hasToken: !!sessionStorage.getItem('access_token'),
+            hasUser: !!sessionStorage.getItem('user'),
+            rememberMe: localStorage.getItem('remember_me')
+          })
         }
       }
       

@@ -27,13 +27,28 @@ export function useAuthPersistence() {
           storageType: rememberMe ? 'localStorage' : 'sessionStorage'
         })
         
-        // Debug adicional
-        console.log('🔍 Datos encontrados en storage:', {
-          hasStoredUser: !!storedUser,
-          hasToken: !!hasToken,
-          rememberMe,
-          storageType: rememberMe ? 'localStorage' : 'sessionStorage'
-        })
+            // Debug adicional
+            console.log('🔍 Datos encontrados en storage:', {
+              hasStoredUser: !!storedUser,
+              hasToken: !!hasToken,
+              rememberMe,
+              storageType: rememberMe ? 'localStorage' : 'sessionStorage'
+            })
+            
+            // Debug detallado de localStorage y sessionStorage
+            console.log('🔍 Debug detallado de storage:', {
+              localStorage: {
+                access_token: localStorage.getItem('access_token') ? 'EXISTS' : 'NOT_FOUND',
+                refresh_token: localStorage.getItem('refresh_token') ? 'EXISTS' : 'NOT_FOUND',
+                user: localStorage.getItem('user') ? 'EXISTS' : 'NOT_FOUND',
+                remember_me: localStorage.getItem('remember_me')
+              },
+              sessionStorage: {
+                access_token: sessionStorage.getItem('access_token') ? 'EXISTS' : 'NOT_FOUND',
+                refresh_token: sessionStorage.getItem('refresh_token') ? 'EXISTS' : 'NOT_FOUND',
+                user: sessionStorage.getItem('user') ? 'EXISTS' : 'NOT_FOUND'
+              }
+            })
         
         if (hasToken && storedUser) {
           console.log('✅ Datos de autenticación encontrados, restaurando sesión...')

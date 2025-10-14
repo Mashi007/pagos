@@ -53,7 +53,9 @@ export function LoginForm() {
   const onSubmit = async (data: LoginFormData) => {
     try {
       clearError()
-      console.log('Intentando login con:', data)
+      console.log('🔑 Intentando login con:', data)
+      console.log('🔍 Valor de remember en onSubmit:', data.remember)
+      console.log('🔍 Tipo de remember:', typeof data.remember)
       await login(data)
       navigate(from, { replace: true })
     } catch (error: any) {
