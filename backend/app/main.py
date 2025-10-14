@@ -38,7 +38,6 @@ from app.api.v1.endpoints import (
     clientes_temp,
     concesionarios,
     asesores,
-    configuracion,
 )
 
 # Configurar logging
