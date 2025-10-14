@@ -245,8 +245,16 @@ class AuthService {
       storageType,
       hasToken: !!token,
       tokenLength: token?.length || 0,
-      tokenPreview: token ? token.substring(0, 20) + '...' : 'null'
+      tokenPreview: token ? token.substring(0, 20) + '...' : 'null',
+      localTokenExists: !!localToken,
+      localUserExists: !!localUser,
+      sessionTokenExists: !!sessionToken,
+      sessionUserExists: !!sessionUser
     })
+    
+    if (!token) {
+      console.error('🚨 CRÍTICO: getStoredToken retorna null - esto causará 403 Forbidden')
+    }
     
     return token
   }

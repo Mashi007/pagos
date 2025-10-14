@@ -56,8 +56,14 @@ class ApiClient {
           if (token && token.trim() !== '') {
             config.headers.Authorization = `Bearer ${token}`
             console.log('🔑 Token enviado en request:', config.url, token.substring(0, 20) + '...')
+            console.log('🔍 Headers configurados:', {
+              Authorization: config.headers.Authorization ? 'SET' : 'NOT_SET',
+              ContentType: config.headers['Content-Type'],
+              url: config.url
+            })
           } else {
             console.warn('⚠️ No se encontró token para la request:', config.url)
+            console.error('🚨 CRÍTICO: Request sin token - esto causará 403 Forbidden')
             console.log('🔍 Debug completo de storage MEJORADO:', {
               hasLocalData,
               hasSessionData,
