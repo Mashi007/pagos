@@ -23,6 +23,12 @@ from app.services.auth_service import AuthService
 router = APIRouter()
 
 
+@router.options("/login")
+async def options_login():
+    """Manejar preflight CORS para login"""
+    return {"message": "OK"}
+
+
 @router.post("/login", response_model=LoginResponse, summary="Login de usuario")
 def login(
     login_data: LoginRequest,
