@@ -75,7 +75,7 @@ app.add_middleware(
 )
 
 # Registrar routers
-app.include_router(health.router, tags=["Health"])
+app.include_router(health.router, prefix=f"{settings.API_V1_PREFIX}", tags=["Health"])
 app.include_router(auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["Auth"])
 app.include_router(users.router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["Users"])
 app.include_router(clientes.router, prefix=f"{settings.API_V1_PREFIX}/clientes", tags=["Clientes"])
