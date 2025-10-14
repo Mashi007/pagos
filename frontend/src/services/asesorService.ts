@@ -17,24 +17,12 @@ export interface Asesor {
 
 export interface AsesorCreate {
   nombre: string
-  apellido: string
-  email: string
-  telefono?: string
-  especialidad?: string
-  comision_porcentaje?: number
   activo?: boolean
-  notas?: string
 }
 
 export interface AsesorUpdate {
   nombre?: string
-  apellido?: string
-  email?: string
-  telefono?: string
-  especialidad?: string
-  comision_porcentaje?: number
   activo?: boolean
-  notas?: string
 }
 
 export interface AsesorListResponse {
