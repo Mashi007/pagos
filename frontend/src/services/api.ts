@@ -37,20 +37,24 @@ class ApiClient {
           const sessionUser = sessionStorage.getItem('user')
           
           // DETERMINAR: Qué token usar basado en qué datos existen
-          const hasLocalData = !!(localToken && localUser)
-          const hasSessionData = !!(sessionToken && sessionUser)
+          // PRIORIZAR: Si hay token en localStorage, usarlo (incluso si no hay user)
+          const hasLocalToken = !!localToken
+          const hasSessionToken = !!sessionToken
           
           let token, storageType
           
-          if (hasLocalData) {
+          if (hasLocalToken) {
             token = localToken
             storageType = 'localStorage'
-          } else if (hasSessionData) {
+            console.log('🔍 Interceptor: Usando token de localStorage (prioridad)')
+          } else if (hasSessionToken) {
             token = sessionToken
             storageType = 'sessionStorage'
+            console.log('🔍 Interceptor: Usando token de sessionStorage (fallback)')
           } else {
             token = null
             storageType = 'none'
+            console.log('🔍 Interceptor: No hay tokens disponibles')
           }
             
           if (token && token.trim() !== '') {
@@ -65,8 +69,8 @@ class ApiClient {
             console.warn('⚠️ No se encontró token para la request:', config.url)
             console.error('🚨 CRÍTICO: Request sin token - esto causará 403 Forbidden')
             console.log('🔍 Debug completo de storage MEJORADO:', {
-              hasLocalData,
-              hasSessionData,
+              hasLocalToken,
+              hasSessionToken,
               storageType,
               localStorage: {
                 access_token: localStorage.getItem('access_token') ? 'EXISTS' : 'NOT_FOUND',
