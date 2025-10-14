@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-Flask==3.0.0 
-gunicorn==21.2.0 
-=======
 # Backend - Requirements Base
 # Sistema de Préstamos y Cobranza
 # =================================
@@ -140,4 +136,3 @@ gunicorn==21.2.0
 # ASYNC DATABASE DRIVER
 # ============================================
 asyncpg==0.30.0
->>>>>>> f951ea57a9c3a7a8f94762f6fc07ec0f0769d719
