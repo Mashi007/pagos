@@ -40,12 +40,16 @@ class ApiClient {
           } else {
             console.warn('⚠️ No se encontró token para la request:', config.url)
             // Para endpoints que requieren autenticación, cancelar la request
-            const protectedEndpoints = ['/api/v1/clientes', '/api/v1/concesionarios', '/api/v1/asesores', '/api/v1/dashboard', '/api/v1/configuracion']
+            const protectedEndpoints = ['/api/v1/clientes', '/api/v1/concesionarios/activos', '/api/v1/asesores/activos', '/api/v1/dashboard', '/api/v1/configuracion', '/api/v1/validadores']
+            const unprotectedEndpoints = ['/api/v1/clientes-temp/test-sin-auth', '/api/v1/health', '/api/v1/auth/login']
             const isProtectedEndpoint = protectedEndpoints.some(endpoint => config.url?.includes(endpoint))
+            const isUnprotectedEndpoint = unprotectedEndpoints.some(endpoint => config.url?.includes(endpoint))
             
-            if (isProtectedEndpoint) {
+            if (isProtectedEndpoint && !isUnprotectedEndpoint) {
               console.error('🚫 Cancelando request protegida sin token:', config.url)
               return Promise.reject(new Error('No hay token de autenticación disponible'))
+            } else if (isUnprotectedEndpoint) {
+              console.log('✅ Endpoint no protegido, continuando sin token:', config.url)
             }
           }
         }

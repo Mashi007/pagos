@@ -36,7 +36,14 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null })
         
         try {
+          console.log('🔄 Store: Iniciando login con:', {
+            email: credentials.email,
+            remember: credentials.remember
+          })
+          
           const response = await authService.login(credentials)
+          
+          console.log('✅ Store: Login exitoso, respuesta recibida:', response)
           
           // Actualizar estado inmediatamente después del login exitoso
           set({
@@ -46,15 +53,22 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           })
 
-          // Forzar persistencia inmediata
-          console.log('✅ Login exitoso, actualizando store:', {
-            user: response.user.email,
-            isAuthenticated: true,
-            rememberMe: credentials.remember
+          // Verificar que los tokens se guardaron
+          const rememberMe = credentials.remember || false
+          const hasToken = rememberMe 
+            ? localStorage.getItem('access_token') 
+            : sessionStorage.getItem('access_token')
+          
+          console.log('🔍 Store: Verificación de tokens guardados:', {
+            rememberMe,
+            hasToken: !!hasToken,
+            storageType: rememberMe ? 'localStorage' : 'sessionStorage'
           })
 
           toast.success(`¡Bienvenido, ${response.user.nombre}!`)
+          return response
         } catch (error: any) {
+          console.error('❌ Store: Error en login:', error)
           set({
             user: null,
             isAuthenticated: false,

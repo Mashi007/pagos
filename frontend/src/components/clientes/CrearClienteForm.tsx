@@ -92,19 +92,48 @@ export function CrearClienteForm({
   const [asesores, setAsesores] = useState<Asesor[]>([])
   const [loadingData, setLoadingData] = useState(true)
 
-  // Cargar datos dinámicos al montar el componente
+  // 🔄 CARGAR DATOS DINÁMICOS: Asesores y Concesionarios desde configuración
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoadingData(true)
+        console.log('🔄 Cargando asesores y concesionarios desde configuración...')
+        
         const [concesionariosData, asesoresData] = await Promise.all([
-          concesionarioService.listarConcesionariosActivos(),
-          asesorService.listarAsesoresActivos()
+          // 🔄 Usar endpoints de configuración
+          fetch('/api/v1/concesionarios/activos', {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
+            }
+          }).then(res => res.json()).then(data => data.data || []),
+          
+          fetch('/api/v1/asesores/activos', {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
+            }
+          }).then(res => res.json()).then(data => data.data || [])
         ])
+        
+        console.log('✅ Datos cargados:', {
+          concesionarios: concesionariosData.length,
+          asesores: asesoresData.length
+        })
+        
         setConcesionarios(concesionariosData)
         setAsesores(asesoresData)
       } catch (error) {
-        console.error('Error al cargar datos:', error)
+        console.error('❌ Error al cargar datos de configuración:', error)
+        // Fallback a servicios locales si falla
+        try {
+          const [concesionariosData, asesoresData] = await Promise.all([
+            concesionarioService.listarConcesionariosActivos(),
+            asesorService.listarAsesoresActivos()
+          ])
+          setConcesionarios(concesionariosData)
+          setAsesores(asesoresData)
+        } catch (fallbackError) {
+          console.error('❌ Error en fallback:', fallbackError)
+        }
       } finally {
         setLoadingData(false)
       }
