@@ -45,24 +45,27 @@ def get_db():
     """
     db = None
     try:
-        # Intentar crear sesión con timeout
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        logger.info("🔄 Intentando crear sesión de base de datos...")
+        # Crear sesión de base de datos
         db = SessionLocal()
         
-        # Test de conexión
+        # Test básico de conexión (sin logging excesivo)
         db.execute(text("SELECT 1"))
-        logger.info("✅ Sesión de base de datos creada exitosamente")
         
         yield db
         
     except Exception as e:
-        # Log del error detallado
+        # Solo manejar errores reales de DB, no de autenticación
         import logging
         logger = logging.getLogger(__name__)
-        logger.error(f"❌ Error de conexión a base de datos: {e}")
+        
+        # Verificar si es un error de autenticación HTTP
+        error_str = str(e)
+        if "401" in error_str or "Not authenticated" in error_str or "Email o contraseña incorrectos" in error_str:
+            # Re-lanzar errores de autenticación sin modificar
+            raise e
+        
+        # Solo manejar errores reales de DB
+        logger.error(f"❌ Error real de base de datos: {e}")
         logger.error(f"❌ Tipo de error: {type(e).__name__}")
         
         # Importar HTTPException dentro de la función para evitar imports circulares
@@ -75,9 +78,8 @@ def get_db():
         if db:
             try:
                 db.close()
-                logger.info("✅ Sesión de base de datos cerrada")
-            except Exception as e:
-                logger.warning(f"⚠️ Error cerrando sesión: {e}")
+            except Exception:
+                pass  # Ignorar errores al cerrar
 
 
 def close_db_connections():
