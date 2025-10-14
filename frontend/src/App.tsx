@@ -25,6 +25,10 @@ import { Notificaciones } from '@/pages/Notificaciones'
 import { Programador } from '@/pages/Programador'
 import { Configuracion } from '@/pages/Configuracion'
 import { CargaMasiva } from '@/pages/CargaMasiva'
+import { PrestamosPage } from '@/pages/PrestamosPage'
+import { PagosPage } from '@/pages/PagosPage'
+import { AmortizacionPage } from '@/pages/AmortizacionPage'
+import { ReportesPage } from '@/pages/ReportesPage'
 import { VisualizacionBD } from '@/pages/VisualizacionBD'
 
 // Todas las páginas ahora están importadas desde archivos reales
@@ -123,17 +127,17 @@ function App() {
             path="prestamos"
             element={
               <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE', 'ASESOR_COMERCIAL']}>
-                <Prestamos />
+                <PrestamosPage />
               </ProtectedRoute>
             }
           />
 
           {/* Pagos */}
-          <Route path="pagos" element={<Pagos />} />
-          <Route path="pagos/nuevo" element={<Pagos />} />
+          <Route path="pagos" element={<PagosPage />} />
+          <Route path="pagos/nuevo" element={<PagosPage />} />
 
           {/* Amortización */}
-          <Route path="amortizacion" element={<Amortizacion />} />
+          <Route path="amortizacion" element={<AmortizacionPage />} />
 
           {/* Conciliación */}
           <Route
@@ -150,7 +154,7 @@ function App() {
             path="reportes"
             element={
               <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE', 'DIRECTOR', 'CONTADOR', 'AUDITOR']}>
-                <Reportes />
+                <ReportesPage />
               </ProtectedRoute>
             }
           />
