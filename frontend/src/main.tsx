@@ -7,6 +7,7 @@ import App from './App.tsx'
 import './index.css'
 
 // Configuración del cliente de React Query
+// Versión: 2025-10-14 (Actualizada con correcciones TypeScript)
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
