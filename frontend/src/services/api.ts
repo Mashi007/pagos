@@ -28,13 +28,13 @@ class ApiClient {
         const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint))
         
         if (!isAuthEndpoint) {
-          // Buscar token en localStorage o sessionStorage según la configuración
+          // Usar el método del authService para obtener el token
           const rememberMe = localStorage.getItem('remember_me') === 'true'
           const token = rememberMe 
             ? localStorage.getItem('access_token') 
             : sessionStorage.getItem('access_token')
             
-          if (token) {
+          if (token && token.trim() !== '') {
             config.headers.Authorization = `Bearer ${token}`
             console.log('🔑 Token enviado en request:', config.url, token.substring(0, 20) + '...')
           } else {

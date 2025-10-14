@@ -53,17 +53,30 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           })
 
-          // Verificar que los tokens se guardaron
+          // Verificar que los tokens se guardaron con un pequeño delay
           const rememberMe = credentials.remember || false
-          const hasToken = rememberMe 
-            ? localStorage.getItem('access_token') 
-            : sessionStorage.getItem('access_token')
           
-          console.log('🔍 Store: Verificación de tokens guardados:', {
-            rememberMe,
-            hasToken: !!hasToken,
-            storageType: rememberMe ? 'localStorage' : 'sessionStorage'
-          })
+          // Esperar un poco para que se complete el guardado
+          setTimeout(() => {
+            const hasToken = rememberMe 
+              ? localStorage.getItem('access_token') 
+              : sessionStorage.getItem('access_token')
+            
+            console.log('🔍 Store: Verificación POST-LOGIN de tokens guardados:', {
+              rememberMe,
+              hasToken: !!hasToken,
+              tokenLength: hasToken?.length || 0,
+              storageType: rememberMe ? 'localStorage' : 'sessionStorage',
+              tokenPreview: hasToken ? hasToken.substring(0, 20) + '...' : 'null'
+            })
+            
+            // Verificar que el token se puede recuperar correctamente
+            if (!hasToken) {
+              console.error('❌ CRÍTICO: Token no disponible después del login')
+            } else {
+              console.log('✅ Token verificado y disponible para requests')
+            }
+          }, 200)
 
           toast.success(`¡Bienvenido, ${response.user.nombre}!`)
         } catch (error: any) {

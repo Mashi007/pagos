@@ -43,11 +43,16 @@ class AuthService {
           localStorage.setItem('user', JSON.stringify(response.user))
           localStorage.setItem('remember_me', 'true')
           console.log('✅ Tokens guardados en localStorage (recordarme)')
-          console.log('🔍 Verificación localStorage:', {
-            hasToken: !!localStorage.getItem('access_token'),
-            hasUser: !!localStorage.getItem('user'),
-            rememberMe: localStorage.getItem('remember_me')
-          })
+          
+          // Verificación inmediata después de guardar
+          setTimeout(() => {
+            console.log('🔍 Verificación POST-GUARDADO localStorage:', {
+              hasToken: !!localStorage.getItem('access_token'),
+              tokenLength: localStorage.getItem('access_token')?.length || 0,
+              hasUser: !!localStorage.getItem('user'),
+              rememberMe: localStorage.getItem('remember_me')
+            })
+          }, 100)
         } else {
           // Guardar en sessionStorage (solo para la sesión actual)
           sessionStorage.setItem('access_token', response.data.access_token)
@@ -55,11 +60,16 @@ class AuthService {
           sessionStorage.setItem('user', JSON.stringify(response.user))
           localStorage.setItem('remember_me', 'false')
           console.log('✅ Tokens guardados en sessionStorage (solo sesión)')
-          console.log('🔍 Verificación sessionStorage:', {
-            hasToken: !!sessionStorage.getItem('access_token'),
-            hasUser: !!sessionStorage.getItem('user'),
-            rememberMe: localStorage.getItem('remember_me')
-          })
+          
+          // Verificación inmediata después de guardar
+          setTimeout(() => {
+            console.log('🔍 Verificación POST-GUARDADO sessionStorage:', {
+              hasToken: !!sessionStorage.getItem('access_token'),
+              tokenLength: sessionStorage.getItem('access_token')?.length || 0,
+              hasUser: !!sessionStorage.getItem('user'),
+              rememberMe: localStorage.getItem('remember_me')
+            })
+          }, 100)
         }
       }
       
@@ -186,9 +196,19 @@ class AuthService {
   // Obtener token desde localStorage o sessionStorage
   getStoredToken(): string | null {
     const rememberMe = localStorage.getItem('remember_me') === 'true'
-    return rememberMe 
+    const token = rememberMe 
       ? localStorage.getItem('access_token') 
       : sessionStorage.getItem('access_token')
+    
+    console.log('🔍 getStoredToken llamado:', {
+      rememberMe,
+      storageType: rememberMe ? 'localStorage' : 'sessionStorage',
+      hasToken: !!token,
+      tokenLength: token?.length || 0,
+      tokenPreview: token ? token.substring(0, 20) + '...' : 'null'
+    })
+    
+    return token
   }
 
   // Verificar si el usuario tiene un rol específico
