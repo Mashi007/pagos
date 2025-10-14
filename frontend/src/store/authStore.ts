@@ -38,11 +38,19 @@ export const useAuthStore = create<AuthState>()(
         try {
           const response = await authService.login(credentials)
           
+          // Actualizar estado inmediatamente después del login exitoso
           set({
             user: response.user,
             isAuthenticated: true,
             isLoading: false,
             error: null,
+          })
+
+          // Forzar persistencia inmediata
+          console.log('✅ Login exitoso, actualizando store:', {
+            user: response.user.email,
+            isAuthenticated: true,
+            rememberMe: credentials.remember
           })
 
           toast.success(`¡Bienvenido, ${response.user.nombre}!`)

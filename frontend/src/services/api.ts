@@ -40,7 +40,7 @@ class ApiClient {
           } else {
             console.warn('⚠️ No se encontró token para la request:', config.url)
             // Para endpoints que requieren autenticación, cancelar la request
-            const protectedEndpoints = ['/api/v1/clientes', '/api/v1/concesionarios', '/api/v1/asesores', '/api/v1/dashboard']
+            const protectedEndpoints = ['/api/v1/clientes', '/api/v1/concesionarios', '/api/v1/asesores', '/api/v1/dashboard', '/api/v1/configuracion']
             const isProtectedEndpoint = protectedEndpoints.some(endpoint => config.url?.includes(endpoint))
             
             if (isProtectedEndpoint) {

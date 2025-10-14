@@ -545,6 +545,35 @@ def obtener_ejemplos_correccion(
 
 
 # ============================================
+# ENDPOINTS DE PRUEBA
+# ============================================
+
+@router.get("/test-simple")
+def test_validadores_simple():
+    """
+    🔧 Endpoint de prueba simple para validadores
+    """
+    return {
+        "status": "ok",
+        "message": "Endpoint de validadores funcionando",
+        "timestamp": datetime.now().isoformat()
+    }
+
+@router.get("/test-con-auth")
+def test_validadores_con_auth(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    🔧 Endpoint de prueba con autenticación para validadores
+    """
+    return {
+        "status": "ok",
+        "message": "Endpoint de validadores con auth funcionando",
+        "user": current_user.email,
+        "timestamp": datetime.now().isoformat()
+    }
+
+# ============================================
 # CONFIGURACIÓN DE VALIDADORES
 # ============================================
 
@@ -556,6 +585,7 @@ def obtener_configuracion_validadores(
     ⚙️ Obtener configuración de validadores para el frontend
     """
     try:
+        print(f"🔧 Obteniendo configuración de validadores para usuario: {current_user.email}")
         return {
             "titulo": "⚙️ CONFIGURACIÓN DE VALIDADORES",
             
