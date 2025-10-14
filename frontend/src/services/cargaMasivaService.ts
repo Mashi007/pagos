@@ -121,6 +121,42 @@ class CargaMasivaService {
     }
   }
 
+  // Corregir error individual
+  async corregirError(request: {
+    tipo: 'cliente' | 'pago'
+    cedula: string
+    data: any
+  }): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await apiClient.post('/api/v1/carga-masiva/corregir-error', request)
+      return response.data
+    } catch (error: any) {
+      console.error('Error al corregir error:', error)
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Error al corregir el registro'
+      }
+    }
+  }
+
+  // Reenviar registros corregidos
+  async reenviarRegistros(request: {
+    tipo: 'cliente' | 'pago'
+    registros: any[]
+  }): Promise<CargaMasivaResponse> {
+    try {
+      const response = await apiClient.post('/api/v1/carga-masiva/reenviar', request)
+      return response.data
+    } catch (error: any) {
+      console.error('Error al reenviar registros:', error)
+      return {
+        success: false,
+        message: 'Error al reenviar los registros corregidos',
+        errors: [error.message || 'Error desconocido']
+      }
+    }
+  }
+
   // Obtener historial de cargas
   async obtenerHistorial(): Promise<any[]> {
     try {
