@@ -20,6 +20,8 @@ import { AlertWithIcon } from '@/components/ui/alert'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { cargaMasivaService } from '@/services/cargaMasivaService'
+import { useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 
 interface UploadResult {
   success: boolean
@@ -62,6 +64,9 @@ export function CargaMasiva() {
   const [showErrorEditor, setShowErrorEditor] = useState(false)
   const [errorRows, setErrorRows] = useState<ErrorRow[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // Query client para invalidar cache
+  const queryClient = useQueryClient()
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -130,6 +135,29 @@ export function CargaMasiva() {
         data: response.data,
         errors: response.errors
       })
+
+      // Invalidar cache de clientes si la carga fue exitosa
+      if (response.success && selectedFlow === 'clientes') {
+        // Invalidar todas las queries relacionadas con clientes
+        queryClient.invalidateQueries({ queryKey: ['clientes'] })
+        queryClient.invalidateQueries({ queryKey: ['clientes-temp'] })
+        
+        // Mostrar notificación de éxito
+        toast.success(`✅ ${response.data?.processedRecords || 0} clientes cargados exitosamente`)
+        
+        // Notificar que los datos se actualizarán en el módulo de clientes
+        toast.success('📋 Los datos se reflejarán automáticamente en el módulo de clientes')
+      } else if (response.success && selectedFlow === 'pagos') {
+        // Invalidar queries de pagos y dashboard
+        queryClient.invalidateQueries({ queryKey: ['pagos'] })
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+        
+        // Mostrar notificación de éxito
+        toast.success(`✅ ${response.data?.processedRecords || 0} pagos cargados exitosamente`)
+        
+        // Notificar que los datos se actualizarán en el dashboard
+        toast.success('📊 Los datos se reflejarán automáticamente en el dashboard')
+      }
 
       // Preparar errores para edición si existen
       if (response.data?.erroresDetallados && response.data.erroresDetallados.length > 0) {
@@ -221,8 +249,20 @@ export function CargaMasiva() {
         } : null)
       }
 
+      // Invalidar cache después de corregir error
+      if (errorToSave.tipo === 'cliente') {
+        queryClient.invalidateQueries({ queryKey: ['clientes'] })
+        queryClient.invalidateQueries({ queryKey: ['clientes-temp'] })
+        toast.success('✅ Cliente corregido y actualizado en el módulo de clientes')
+      } else if (errorToSave.tipo === 'pago') {
+        queryClient.invalidateQueries({ queryKey: ['pagos'] })
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+        toast.success('✅ Pago corregido y actualizado en el dashboard')
+      }
+
     } catch (error) {
       console.error('Error al guardar corrección:', error)
+      toast.error('❌ Error al corregir el registro')
     }
   }
 
@@ -504,14 +544,35 @@ export function CargaMasiva() {
 
                       {/* Información del archivo */}
                       <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200">
-                        <div className="flex items-center space-x-3">
-                          <FileSpreadsheet className="h-5 w-5 text-purple-600" />
-                          <div>
-                            <p className="text-sm font-medium text-purple-700">Archivo Procesado</p>
-                            <p className="text-lg font-semibold text-purple-900">
-                              {uploadResult.data.fileName}
-                            </p>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <FileSpreadsheet className="h-5 w-5 text-purple-600" />
+                            <div>
+                              <p className="text-sm font-medium text-purple-700">Archivo Procesado</p>
+                              <p className="text-lg font-semibold text-purple-900">
+                                {uploadResult.data.fileName}
+                              </p>
+                            </div>
                           </div>
+                          <Button
+                            onClick={() => {
+                              if (selectedFlow === 'clientes') {
+                                queryClient.invalidateQueries({ queryKey: ['clientes'] })
+                                queryClient.invalidateQueries({ queryKey: ['clientes-temp'] })
+                                toast.success('🔄 Módulo de clientes actualizado')
+                              } else {
+                                queryClient.invalidateQueries({ queryKey: ['pagos'] })
+                                queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+                                toast.success('🔄 Dashboard actualizado')
+                              }
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                          >
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Actualizar
+                          </Button>
                         </div>
                       </div>
                     </div>
