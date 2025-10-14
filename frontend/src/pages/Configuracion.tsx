@@ -95,17 +95,17 @@ const mockConfiguracion = {
 
 export function Configuracion() {
   const [configuracion, setConfiguracion] = useState(mockConfiguracion)
-  const [seccionActiva, setSeccionActiva] = useState('notificaciones')
+  const [seccionActiva, setSeccionActiva] = useState('general')
   const [mostrarPassword, setMostrarPassword] = useState(false)
   const [cambiosPendientes, setCambiosPendientes] = useState(false)
 
   const secciones = [
-    // { id: 'general', nombre: 'General', icono: Globe }, // OCULTO - No necesario por ahora
+    { id: 'general', nombre: 'General', icono: Globe },
     { id: 'notificaciones', nombre: 'Notificaciones', icono: Bell },
     // { id: 'seguridad', nombre: 'Seguridad', icono: Shield }, // OCULTO - No necesario por ahora
-    // { id: 'baseDatos', nombre: 'Base de Datos', icono: Database }, // OCULTO - No necesario por ahora
+    { id: 'baseDatos', nombre: 'Base de Datos', icono: Database },
     // { id: 'integraciones', nombre: 'Integraciones', icono: Settings }, // OCULTO
-    // { id: 'facturacion', nombre: 'Facturación', icono: DollarSign }, // OCULTO - No necesario por ahora
+    { id: 'facturacion', nombre: 'Facturación', icono: DollarSign },
     { id: 'validadores', nombre: 'Validadores', icono: CheckSquare },
     { id: 'concesionarios', nombre: 'Concesionarios', icono: Building },
     { id: 'asesores', nombre: 'Asesores', icono: Users },
@@ -610,17 +610,17 @@ export function Configuracion() {
 
   const renderContenidoSeccion = () => {
     switch (seccionActiva) {
-      // case 'general': return renderSeccionGeneral() // OCULTO
+      case 'general': return renderSeccionGeneral()
       case 'notificaciones': return renderSeccionNotificaciones()
       // case 'seguridad': return renderSeccionSeguridad() // OCULTO
-      // case 'baseDatos': return renderSeccionBaseDatos() // OCULTO
+      case 'baseDatos': return renderSeccionBaseDatos()
       // case 'integraciones': return renderSeccionIntegraciones() // OCULTO
-      // case 'facturacion': return renderSeccionFacturacion() // OCULTO
+      case 'facturacion': return renderSeccionFacturacion()
       case 'validadores': return <ValidadoresConfig />
       case 'concesionarios': return <ConcesionariosConfig />
       case 'asesores': return <AsesoresConfig />
       case 'usuarios': return <UsuariosConfig />
-      default: return renderSeccionNotificaciones() // Cambiado de general a notificaciones
+      default: return renderSeccionGeneral()
     }
   }
 
