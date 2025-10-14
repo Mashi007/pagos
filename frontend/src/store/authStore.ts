@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { User, LoginForm } from '@/types'
-import { authService } from '@/services/authService'
+import { authService, AuthService } from '@/services/authService'
 import toast from 'react-hot-toast'
 
 interface AuthState {
@@ -105,17 +105,14 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
       // Refrescar información del usuario
       refreshUser: async () => {
-        // Primero verificar si hay tokens en localStorage
-        const storedUser = authService.getStoredUser()
-        const hasToken = authService.getStoredToken()
+        const { user: currentUser } = get()
         
-        if (!hasToken || !storedUser) {
+        if (!currentUser) {
           set({ user: null, isAuthenticated: false, isLoading: false })
           return
         }
 
-        // Si hay datos almacenados, restaurar inmediatamente
-        set({ user: storedUser, isAuthenticated: true, isLoading: true })
+        set({ isLoading: true })
         
         try {
           // Intentar obtener información actualizada del usuario
@@ -127,10 +124,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
             error: null,
           })
         } catch (error: any) {
-          console.warn('Error al refrescar usuario, manteniendo datos almacenados:', error)
-          // Si falla la actualización pero tenemos datos almacenados, mantenerlos
+          console.warn('Error al refrescar usuario, manteniendo datos actuales:', error)
+          // Si falla la actualización, mantener los datos actuales
           set({
-            user: storedUser,
+            user: currentUser,
             isAuthenticated: true,
             isLoading: false,
             error: null,
@@ -192,21 +189,21 @@ export const useAuth = () => {
   }
 }
 
-// Selectores específicos para permisos
+// Selectores específicos para permisos - SIMPLIFICADOS
 export const usePermissions = () => {
   const user = useAuthStore((state) => state.user)
   
   return {
-    isAdmin: () => authService.isAdmin(),
-    canManagePayments: () => authService.canManagePayments(),
-    canViewReports: () => authService.canViewReports(),
-    canManageConfig: () => authService.canManageConfig(),
-    canViewAllClients: () => authService.canViewAllClients(),
-    hasRole: (role: string) => authService.hasRole(role),
-    hasAnyRole: (roles: string[]) => authService.hasAnyRole(roles),
+    isAdmin: () => AuthService.isAdmin(user),
+    canManagePayments: () => AuthService.canManagePayments(user),
+    canViewReports: () => AuthService.canViewReports(user),
+    canManageConfig: () => AuthService.canManageConfig(user),
+    canViewAllClients: () => AuthService.canViewAllClients(user),
+    hasRole: (role: string) => AuthService.hasRole(user, role),
+    hasAnyRole: (roles: string[]) => AuthService.hasAnyRole(user, roles),
     userId: user?.id,
     userRole: user?.rol,
-    userName: authService.getCurrentUserName(),
-    userInitials: authService.getCurrentUserInitials(),
+    userName: AuthService.getCurrentUserName(user),
+    userInitials: AuthService.getCurrentUserInitials(user),
   }
 }

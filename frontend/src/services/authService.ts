@@ -108,143 +108,43 @@ class AuthService {
     await apiClient.post('/api/v1/auth/change-password', data)
   }
 
-  // Verificar si el usuario está autenticado
-  isAuthenticated(): boolean {
-    const rememberMe = localStorage.getItem('remember_me') === 'true'
-    
-    if (rememberMe) {
-      // Verificar localStorage para "recordarme"
-      const token = localStorage.getItem('access_token')
-      const user = localStorage.getItem('user')
-      const isValid = !!(token && user)
-      console.log('🔍 Verificación autenticación (localStorage):', { hasToken: !!token, hasUser: !!user, isValid })
-      return isValid
-    } else {
-      // Verificar sessionStorage para sesión temporal
-      const sessionToken = sessionStorage.getItem('access_token')
-      const sessionUser = sessionStorage.getItem('user')
-      const isValid = !!(sessionToken && sessionUser)
-      console.log('🔍 Verificación autenticación (sessionStorage):', { hasToken: !!sessionToken, hasUser: !!sessionUser, isValid })
-      return isValid
-    }
-  }
+  // MÉTODOS DE TOKEN MANAGEMENT ELIMINADOS - AHORA EN authStore.ts
 
-  // Obtener usuario desde localStorage o sessionStorage
-  getStoredUser(): User | null {
-    const rememberMe = localStorage.getItem('remember_me') === 'true'
-    const userStr = rememberMe 
-      ? localStorage.getItem('user') 
-      : sessionStorage.getItem('user')
-    
-    if (!userStr) return null
-    
-    try {
-      return JSON.parse(userStr)
-    } catch {
-      return null
-    }
-  }
-
-  // Obtener token desde localStorage o sessionStorage
-  getStoredToken(): string | null {
-    // PRIMERO: Verificar localStorage (recordarme)
-    const localToken = localStorage.getItem('access_token')
-    const localUser = localStorage.getItem('user')
-    
-    // SEGUNDO: Si no hay en localStorage, verificar sessionStorage
-    const sessionToken = sessionStorage.getItem('access_token')
-    const sessionUser = sessionStorage.getItem('user')
-    
-    // DETERMINAR: Qué token usar basado en qué datos existen
-    const hasLocalData = !!(localToken && localUser)
-    const hasSessionData = !!(sessionToken && sessionUser)
-    
-    let token, storageType
-    
-    if (hasLocalData) {
-      token = localToken
-      storageType = 'localStorage'
-    } else if (hasSessionData) {
-      token = sessionToken
-      storageType = 'sessionStorage'
-    } else {
-      token = null
-      storageType = 'none'
-    }
-    
-    console.log('🔍 getStoredToken MEJORADO:', {
-      hasLocalData,
-      hasSessionData,
-      storageType,
-      hasToken: !!token,
-      tokenLength: token?.length || 0,
-      tokenPreview: token ? token.substring(0, 20) + '...' : 'null',
-      localTokenExists: !!localToken,
-      localUserExists: !!localUser,
-      sessionTokenExists: !!sessionToken,
-      sessionUserExists: !!sessionUser
-    })
-    
-    if (!token) {
-      console.error('🚨 CRÍTICO: getStoredToken retorna null - esto causará 403 Forbidden')
-    }
-    
-    return token
-  }
-
-  // Verificar si el usuario tiene un rol específico
-  hasRole(role: string): boolean {
-    const user = this.getStoredUser()
+  // MÉTODOS DE PERMISOS SIMPLIFICADOS - RECIBEN USER COMO PARÁMETRO
+  static hasRole(user: User | null, role: string): boolean {
     return user?.rol === role
   }
 
-  // Verificar si el usuario tiene alguno de los roles especificados
-  hasAnyRole(roles: string[]): boolean {
-    const user = this.getStoredUser()
+  static hasAnyRole(user: User | null, roles: string[]): boolean {
     return user ? roles.includes(user.rol) : false
   }
 
-  // Verificar permisos administrativos
-  isAdmin(): boolean {
-    return this.hasAnyRole(['ADMIN', 'GERENTE', 'DIRECTOR'])
+  static isAdmin(user: User | null): boolean {
+    return AuthService.hasAnyRole(user, ['ADMIN', 'GERENTE', 'DIRECTOR'])
   }
 
-  // Verificar permisos de cobranza
-  canManagePayments(): boolean {
-    return this.hasAnyRole(['ADMIN', 'GERENTE', 'COBRADOR', 'ASESOR_COMERCIAL'])
+  static canManagePayments(user: User | null): boolean {
+    return AuthService.hasAnyRole(user, ['ADMIN', 'GERENTE', 'COBRADOR', 'ASESOR_COMERCIAL'])
   }
 
-  // Verificar permisos de reportes
-  canViewReports(): boolean {
-    return this.hasAnyRole(['ADMIN', 'GERENTE', 'DIRECTOR', 'CONTADOR', 'AUDITOR'])
+  static canViewReports(user: User | null): boolean {
+    return AuthService.hasAnyRole(user, ['ADMIN', 'GERENTE', 'DIRECTOR', 'CONTADOR', 'AUDITOR'])
   }
 
-  // Verificar permisos de configuración
-  canManageConfig(): boolean {
-    return this.hasAnyRole(['ADMIN', 'GERENTE'])
+  static canManageConfig(user: User | null): boolean {
+    return AuthService.hasAnyRole(user, ['ADMIN', 'GERENTE'])
   }
 
-  // Verificar si puede ver todos los clientes o solo los asignados
-  canViewAllClients(): boolean {
-    return this.hasAnyRole(['ADMIN', 'GERENTE', 'DIRECTOR', 'CONTADOR', 'AUDITOR'])
+  static canViewAllClients(user: User | null): boolean {
+    return AuthService.hasAnyRole(user, ['ADMIN', 'GERENTE', 'DIRECTOR', 'CONTADOR', 'AUDITOR'])
   }
 
-  // Obtener ID del usuario actual
-  getCurrentUserId(): string | null {
-    const user = this.getStoredUser()
-    return user?.id || null
-  }
-
-  // Obtener nombre completo del usuario actual
-  getCurrentUserName(): string {
-    const user = this.getStoredUser()
+  static getCurrentUserName(user: User | null): string {
     if (!user) return 'Usuario'
     return `${user.nombre} ${user.apellido}`.trim()
   }
 
-  // Obtener iniciales del usuario actual
-  getCurrentUserInitials(): string {
-    const user = this.getStoredUser()
+  static getCurrentUserInitials(user: User | null): string {
     if (!user) return 'U'
     
     const firstInitial = user.nombre?.charAt(0)?.toUpperCase() || ''
