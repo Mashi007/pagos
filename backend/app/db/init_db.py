@@ -86,13 +86,20 @@ def create_admin_user():
         
         db = SessionLocal()
         
-        # Verificar si ya existe un admin
-        existing_admin = db.query(User).filter(User.rol == "ADMINISTRADOR_GENERAL").first()
+        # Verificar si ya existe el admin correcto
+        existing_admin = db.query(User).filter(User.email == "itmaster@rapicreditca.com").first()
         
         if existing_admin:
-            logger.info(f"✅ Usuario ADMINISTRADOR_GENERAL ya existe: {existing_admin.email}")
+            logger.info(f"✅ Usuario itmaster@rapicreditca.com ya existe: {existing_admin.email}")
             db.close()
             return True
+        
+        # Eliminar admin@financiamiento.com si existe
+        wrong_admin = db.query(User).filter(User.email == "admin@financiamiento.com").first()
+        if wrong_admin:
+            logger.info(f"🗑️ Eliminando usuario incorrecto: {wrong_admin.email}")
+            db.delete(wrong_admin)
+            db.commit()
         
         logger.info("📝 Creando usuario administrador...")
         
