@@ -64,7 +64,11 @@ def fix_roles_now():
         admin_count = cursor.fetchone()['count']
         
         if admin_count > 0:
-            # Actualizar roles
+            # Primero actualizar el enum
+            cursor.execute("ALTER TYPE user_role_enum ADD VALUE IF NOT EXISTS 'ADMINISTRADOR_GENERAL'")
+            conn.commit()
+            
+            # Luego actualizar roles
             cursor.execute("UPDATE users SET rol = 'ADMINISTRADOR_GENERAL' WHERE rol = 'ADMIN'")
             updated = cursor.rowcount
             conn.commit()
