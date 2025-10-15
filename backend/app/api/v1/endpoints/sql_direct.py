@@ -65,8 +65,9 @@ def fix_roles_now():
         
         if admin_count > 0:
             # Primero verificar si el valor ya existe en el enum
-            cursor.execute("SELECT EXISTS (SELECT 1 FROM pg_type t JOIN pg_enum e ON t.oid = e.enumtypid WHERE t.typname = 'user_role_enum' AND e.enumlabel = 'ADMINISTRADOR_GENERAL')")
-            enum_exists = cursor.fetchone()[0]
+            cursor.execute("SELECT EXISTS (SELECT 1 FROM pg_type t JOIN pg_enum e ON t.oid = e.enumtypid WHERE t.typname = 'user_role_enum' AND e.enumlabel = 'ADMINISTRADOR_GENERAL') as exists")
+            result = cursor.fetchone()
+            enum_exists = result['exists'] if result else False
             
             if not enum_exists:
                 # Agregar el nuevo valor al enum si no existe
@@ -141,4 +142,4 @@ def ping():
     """
     🏓 Ping simple
     """
-    return {"message": "pong", "status": "ok", "version": "1e605ea", "update": "enum_fix_compatible"}
+    return {"message": "pong", "status": "ok", "version": "fix_v2", "update": "enum_exists_corrected"}
