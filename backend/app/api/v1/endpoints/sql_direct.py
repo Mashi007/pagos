@@ -64,9 +64,14 @@ def fix_roles_now():
         admin_count = cursor.fetchone()['count']
         
         if admin_count > 0:
-            # Primero actualizar el enum
-            cursor.execute("ALTER TYPE user_role_enum ADD VALUE IF NOT EXISTS 'ADMINISTRADOR_GENERAL'")
-            conn.commit()
+            # Primero verificar si el valor ya existe en el enum
+            cursor.execute("SELECT EXISTS (SELECT 1 FROM pg_type t JOIN pg_enum e ON t.oid = e.enumtypid WHERE t.typname = 'user_role_enum' AND e.enumlabel = 'ADMINISTRADOR_GENERAL')")
+            enum_exists = cursor.fetchone()[0]
+            
+            if not enum_exists:
+                # Agregar el nuevo valor al enum si no existe
+                cursor.execute("ALTER TYPE user_role_enum ADD VALUE 'ADMINISTRADOR_GENERAL'")
+                conn.commit()
             
             # Luego actualizar roles
             cursor.execute("UPDATE users SET rol = 'ADMINISTRADOR_GENERAL' WHERE rol = 'ADMIN'")
