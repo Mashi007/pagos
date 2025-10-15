@@ -117,8 +117,7 @@ export function ModelosVehiculosConfig() {
   }
 
   const filteredModelos = modelos.filter(modelo =>
-    modelo.modelo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    modelo.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase())
+    modelo.modelo.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   if (loading) {
