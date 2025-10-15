@@ -1,7 +1,8 @@
 import { apiClient, ApiResponse } from './api'
 import { User, AuthTokens, LoginForm } from '@/types'
 
-export interface LoginResponse extends AuthTokens {
+export interface LoginResponse {
+  data: AuthTokens
   user: User
 }
 
@@ -26,7 +27,7 @@ export class AuthService {
       console.log('AuthService: Respuesta del servidor recibida')
       
       // NO GUARDAR TOKENS AQUÍ - Solo retornar los datos
-      return response.data
+      return response
     } catch (error: any) {
       console.error('AuthService: Error en login:', error)
       
