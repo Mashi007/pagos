@@ -3,10 +3,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Body, BackgroundTa
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, func, desc, asc
 from typing import List, Optional
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
-from app.db.session import get_db, SessionLocal
+from app.db.session import get_db
 from app.models.cliente import Cliente
 from app.models.user import User
 from app.models.prestamo import Prestamo
@@ -25,7 +25,6 @@ from app.schemas.cliente import (
 from app.schemas.amortizacion import TablaAmortizacionRequest
 from app.services.amortizacion_service import AmortizacionService
 from app.api.deps import get_current_user
-from datetime import datetime
 import traceback
 
 router = APIRouter()

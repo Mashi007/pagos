@@ -2,7 +2,7 @@
 from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Text, Boolean, Numeric, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from app.db.session import Base  # ✅ CORRECTO
+from app.db.base import Base  # ✅ CORRECTO
 
 class Cliente(Base):
     __tablename__ = "clientes"
@@ -108,6 +108,7 @@ class Cliente(Base):
     def calcular_resumen_financiero(self, db_session):
         """Calcula resumen financiero del cliente"""
         from decimal import Decimal
+        from app.models.prestamo import Prestamo
         
         if not self.tiene_financiamiento:
             return {

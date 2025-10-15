@@ -12,6 +12,11 @@ from app.models.cliente import Cliente
 from app.schemas.cliente import ClienteCreate
 from app.api.deps import get_current_user
 from app.models.user import User
+from app.services.validators_service import (
+    ValidadorTelefono,
+    ValidadorCedula,
+    ValidadorEmail
+)
 
 router = APIRouter()
 
@@ -94,7 +99,14 @@ async def procesar_clientes(content: bytes, filename: str, db: Session, usuario_
             'CEDULA IDENTIDAD': 'cedula', 
             'NOMBRE': 'nombre',
             'MOVIL': 'telefono',
-            'CORREO ELECTRONICO': 'email'
+            'CORREO ELECTRONICO': 'email',
+            'DIRECCION': 'direccion',
+            'MODELO VEHICULO': 'modelo_vehiculo',
+            'MONTO FINANCIAMIENTO': 'monto_financiamiento',
+            'CUOTA INICIAL': 'cuota_inicial',
+            'NUMERO AMORTIZACIONES': 'numero_amortizaciones',
+            'ASESOR': 'asesor',
+            'CONCESIONARIO': 'concesionario'
         }
         
         # Renombrar columnas según el mapeo
@@ -123,23 +135,40 @@ async def procesar_clientes(content: bytes, filename: str, db: Session, usuario_
                 nombre = str(row['nombre']).strip()
                 telefono = str(row.get('telefono', '')).strip()
                 email = str(row.get('email', '')).strip()
+                direccion = str(row.get('direccion', '')).strip()
+                modelo_vehiculo = str(row.get('modelo_vehiculo', '')).strip()
+                monto_financiamiento = float(row.get('monto_financiamiento', 0)) if row.get('monto_financiamiento') else 0
+                cuota_inicial = float(row.get('cuota_inicial', 0)) if row.get('cuota_inicial') else 0
+                numero_amortizaciones = int(row.get('numero_amortizaciones', 12)) if row.get('numero_amortizaciones') else 12
+                asesor = str(row.get('asesor', '')).strip()
+                concesionario = str(row.get('concesionario', '')).strip()
                 
-                # Validaciones específicas
+                # Validaciones específicas usando validadores del sistema
                 errores_validacion = []
                 
-                # Validar cédula venezolana
-                if not cedula.startswith('V') or len(cedula) < 8:
-                    errores_validacion.append('Formato de cédula inválido - debe empezar con V y tener al menos 8 caracteres')
+                # Validar cédula con validador del sistema
+                if cedula:
+                    resultado_cedula = ValidadorCedula.validar_y_formatear_cedula(cedula, "VENEZUELA")
+                    if not resultado_cedula.get("valido"):
+                        errores_validacion.append(f"Cédula inválida: {resultado_cedula.get('mensaje', 'Formato incorrecto')}")
+                    else:
+                        cedula = resultado_cedula.get("valor_formateado", cedula)
                 
-                # Validar teléfono
+                # Validar teléfono con validador del sistema
                 if telefono and telefono != 'error':
-                    if not (telefono.startswith('+5804') or telefono.startswith('04')):
-                        errores_validacion.append('Formato de teléfono inválido - debe empezar con +5804 o 04')
+                    resultado_telefono = ValidadorTelefono.validar_y_formatear_telefono(telefono, "VENEZUELA")
+                    if not resultado_telefono.get("valido"):
+                        errores_validacion.append(f"Teléfono inválido: {resultado_telefono.get('mensaje', 'Formato incorrecto')}")
+                    else:
+                        telefono = resultado_telefono.get("valor_formateado", telefono)
                 
-                # Validar email
+                # Validar email con validador del sistema
                 if email and email != 'error':
-                    if '@' not in email or '.' not in email.split('@')[-1]:
-                        errores_validacion.append('Formato de email inválido')
+                    resultado_email = ValidadorEmail.validar_email(email)
+                    if not resultado_email.get("valido"):
+                        errores_validacion.append(f"Email inválido: {resultado_email.get('mensaje', 'Formato incorrecto')}")
+                    else:
+                        email = resultado_email.get("valor_formateado", email)
                 
                 # Saltar filas con datos de error
                 if telefono == 'error' or email == 'error':
@@ -166,11 +195,18 @@ async def procesar_clientes(content: bytes, filename: str, db: Session, usuario_
                 # Crear cliente directamente con el modelo Cliente
                 cliente_data = {
                     "cedula": cedula,
-                    "nombres": nombre,
-                    "apellidos": "",  # No disponible en el archivo
+                    "nombres": nombre.split(' ')[0] if nombre else "",
+                    "apellidos": ' '.join(nombre.split(' ')[1:]) if len(nombre.split(' ')) > 1 else "",
                     "telefono": telefono if telefono != 'error' else "",
                     "email": email if email != 'error' else "",
-                    "direccion": "",  # No disponible en el archivo
+                    "direccion": direccion,
+                    "modelo_vehiculo": modelo_vehiculo,
+                    "marca_vehiculo": modelo_vehiculo.split(' ')[0] if modelo_vehiculo else "",
+                    "total_financiamiento": monto_financiamiento,
+                    "cuota_inicial": cuota_inicial,
+                    "numero_amortizaciones": numero_amortizaciones,
+                    "modalidad_financiamiento": "mensual",  # Default
+                    "fecha_entrega": datetime.utcnow().date(),
                     "estado": "ACTIVO",
                     "activo": True,
                     "fecha_registro": datetime.utcnow(),
@@ -426,15 +462,17 @@ async def descargar_template(type: str):
         # Crear template según el tipo
         if type == "clientes":
             template_data = {
-                'cedula': ['12345678', '87654321', '11223344'],
-                'nombre': ['Juan', 'María', 'Carlos'],
-                'apellido': ['Pérez', 'García', 'López'],
-                'telefono': ['3001234567', '3007654321', '3009988776'],
-                'email': ['juan@email.com', 'maria@email.com', 'carlos@email.com'],
-                'direccion': ['Calle 123 #45-67', 'Carrera 78 #12-34', 'Avenida 56 #89-01'],
-                'monto_prestamo': [500000, 750000, 300000],
-                'fecha_prestamo': ['2024-01-15', '2024-01-20', '2024-01-25'],
-                'estado': ['ACTIVO', 'ACTIVO', 'ACTIVO']
+                'CEDULA IDENT': ['V12345678', 'V87654321', 'V11223344'],
+                'NOMBRE': ['Juan Carlos', 'María Elena', 'Carlos Alberto'],
+                'MOVIL': ['+58 414-123-4567', '+58 424-765-4321', '+58 414-998-8776'],
+                'CORREO ELECTRONICO': ['juan.perez@email.com', 'maria.garcia@email.com', 'carlos.lopez@email.com'],
+                'DIRECCION': ['Av. Francisco de Miranda, Caracas', 'Carrera 78 #12-34, Valencia', 'Avenida 56 #89-01, Maracaibo'],
+                'MODELO VEHICULO': ['Toyota Corolla', 'Nissan Versa', 'Hyundai Accent'],
+                'MONTO FINANCIAMIENTO': [25000, 18000, 17000],
+                'CUOTA INICIAL': [5000, 3000, 2000],
+                'NUMERO AMORTIZACIONES': [24, 18, 12],
+                'ASESOR': ['Roberto Martínez', 'Sandra López', 'Miguel Hernández'],
+                'CONCESIONARIO': ['AutoCenter Caracas', 'Motors Valencia', 'Vehiculos Maracaibo']
             }
         else:
             raise HTTPException(

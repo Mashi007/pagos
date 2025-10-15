@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
 from sqlalchemy.sql import func
-from app.db.session import Base
+from app.db.base import Base
 
 class Concesionario(Base):
     __tablename__ = "concesionarios"
