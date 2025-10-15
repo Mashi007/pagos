@@ -59,6 +59,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
             userData: userData ? 'EXISTS' : 'MISSING'
           })
           
+          console.log('Store: Valores reales:', {
+            accessToken: accessToken,
+            refreshToken: refreshToken ? 'EXISTS' : 'MISSING',
+            userData: userData ? 'EXISTS' : 'MISSING'
+          })
+          
           // Validar que tenemos los datos necesarios
           if (!accessToken || !refreshToken || !userData) {
             throw new Error('Datos de respuesta incompletos')
@@ -66,6 +72,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           
           // Guardar en el storage apropiado
           if (rememberMe) {
+            console.log('Store: Guardando en localStorage...')
             localStorage.setItem('access_token', accessToken)
             localStorage.setItem('refresh_token', refreshToken)
             localStorage.setItem('user', JSON.stringify(userData))
@@ -76,6 +83,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
               user: localStorage.getItem('user') ? 'GUARDADO' : 'ERROR',
               remember_me: localStorage.getItem('remember_me')
             })
+            
+            // Verificación inmediata
+            const savedToken = localStorage.getItem('access_token')
+            console.log('Store: Token guardado inmediatamente:', savedToken ? 'EXISTS' : 'ERROR')
           } else {
             sessionStorage.setItem('access_token', accessToken)
             sessionStorage.setItem('refresh_token', refreshToken)
