@@ -34,7 +34,6 @@ export function ConcesionariosConfig() {
   // Form state
   const [formData, setFormData] = useState<ConcesionarioCreate>({
     nombre: '',
-    responsable: '',
     activo: true
   })
 
@@ -89,7 +88,6 @@ export function ConcesionariosConfig() {
     setEditingConcesionario(concesionario)
     setFormData({
       nombre: concesionario.nombre,
-      responsable: concesionario.responsable || '',
       activo: concesionario.activo
     })
     setShowForm(true)
@@ -112,7 +110,6 @@ export function ConcesionariosConfig() {
   const resetForm = () => {
     setFormData({
       nombre: '',
-      responsable: '',
       activo: true
     })
     setEditingConcesionario(null)
@@ -121,8 +118,7 @@ export function ConcesionariosConfig() {
   }
 
   const filteredConcesionarios = concesionarios.filter(concesionario =>
-    concesionario.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    concesionario.responsable?.toLowerCase().includes(searchTerm.toLowerCase())
+    concesionario.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   if (loading) {
@@ -163,7 +159,7 @@ export function ConcesionariosConfig() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label className="text-sm font-medium">Nombre del Concesionario *</label>
                   <Input
@@ -171,14 +167,6 @@ export function ConcesionariosConfig() {
                     onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
                     placeholder="Nombre del concesionario"
                     required
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Responsable</label>
-                  <Input
-                    value={formData.responsable}
-                    onChange={(e) => setFormData({ ...formData, responsable: e.target.value })}
-                    placeholder="Nombre del responsable"
                   />
                 </div>
               </div>
@@ -230,10 +218,6 @@ export function ConcesionariosConfig() {
                 <p className="text-lg font-semibold">{viewingConcesionario.nombre}</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-500">Responsable</label>
-                <p className="text-lg">{viewingConcesionario.responsable || 'No especificado'}</p>
-              </div>
-              <div>
                 <label className="text-sm font-medium text-gray-500">Estado</label>
                 <div className="mt-1">
                   <Badge variant={viewingConcesionario.activo ? 'default' : 'destructive'}>
@@ -250,12 +234,6 @@ export function ConcesionariosConfig() {
                     )}
                   </Badge>
                 </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Fecha de Creación</label>
-                <p className="text-sm text-gray-600">
-                  {new Date(viewingConcesionario.created_at).toLocaleDateString('es-ES')}
-                </p>
               </div>
             </div>
             <div className="flex justify-end space-x-2 mt-6">
@@ -297,7 +275,6 @@ export function ConcesionariosConfig() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre del Concesionario</TableHead>
-                  <TableHead>Responsable</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -307,9 +284,6 @@ export function ConcesionariosConfig() {
                   <TableRow key={concesionario.id}>
                     <TableCell>
                       <div className="font-medium">{concesionario.nombre}</div>
-                    </TableCell>
-                    <TableCell>
-                      {concesionario.responsable || '-'}
                     </TableCell>
                     <TableCell>
                       <Badge variant={concesionario.activo ? 'default' : 'destructive'}>
