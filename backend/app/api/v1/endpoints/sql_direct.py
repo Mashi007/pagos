@@ -8,6 +8,39 @@ import logging
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+@router.get("/fix-enum")
+def fix_enum_first():
+    """
+    🔧 Actualizar enum para incluir ADMINISTRADOR_GENERAL
+    """
+    try:
+        import psycopg2
+        
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
+            return {"error": "DATABASE_URL no encontrada", "status": "error"}
+        
+        conn = psycopg2.connect(database_url)
+        cursor = conn.cursor()
+        
+        # Agregar ADMINISTRADOR_GENERAL al enum si no existe
+        cursor.execute("ALTER TYPE user_role_enum ADD VALUE IF NOT EXISTS 'ADMINISTRADOR_GENERAL'")
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        
+        return {
+            "message": "✅ Enum actualizado: agregado ADMINISTRADOR_GENERAL",
+            "status": "success"
+        }
+        
+    except Exception as e:
+        return {
+            "message": f"❌ Error actualizando enum: {str(e)}",
+            "status": "error"
+        }
+
 @router.get("/fix-now")
 def fix_roles_now():
     """
