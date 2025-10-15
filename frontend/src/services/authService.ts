@@ -1,7 +1,8 @@
 import { apiClient, ApiResponse } from './api'
 import { User, AuthTokens, LoginForm } from '@/types'
 
-export interface LoginResponse extends ApiResponse<AuthTokens> {
+export interface LoginResponse {
+  data: AuthTokens
   user: User
 }
 
