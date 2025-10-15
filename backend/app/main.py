@@ -42,6 +42,7 @@ from app.api.v1.endpoints import (
     test_router,
     fix_roles,
     emergency_fix,
+    sql_direct,
 )
 
 # Configurar logging
@@ -109,6 +110,7 @@ app.include_router(modelos_vehiculos.router, prefix=f"{settings.API_V1_PREFIX}/m
 app.include_router(test_router.router, prefix=f"{settings.API_V1_PREFIX}/test", tags=["Test"])
 app.include_router(fix_roles.router, prefix=f"{settings.API_V1_PREFIX}/fix", tags=["Fix Roles"])
 app.include_router(emergency_fix.router, prefix=f"{settings.API_V1_PREFIX}/emergency", tags=["Emergency Fix"])
+app.include_router(sql_direct.router, prefix=f"{settings.API_V1_PREFIX}/sql", tags=["SQL Direct"])
 
 
 @app.get("/", include_in_schema=False)
