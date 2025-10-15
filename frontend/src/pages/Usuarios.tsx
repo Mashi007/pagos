@@ -15,7 +15,7 @@ export function Usuarios() {
       id: 1,
       nombre: 'Admin',
       apellido: 'Sistema',
-      email: 'admin@financiamiento.com',
+      email: 'itmaster@rapicreditca.com',
       rol: 'ADMIN',
       activo: true,
       ultimo_acceso: '2025-10-15'

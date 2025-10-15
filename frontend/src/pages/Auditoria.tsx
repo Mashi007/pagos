@@ -28,7 +28,7 @@ import { formatDate } from '@/utils'
 const mockAuditoria = [
   {
     id: 'AUD001',
-    usuario: 'admin@financiamiento.com',
+    usuario: 'itmaster@rapicreditca.com',
     accion: 'LOGIN',
     modulo: 'AUTH',
     descripcion: 'Inicio de sesión exitoso',
@@ -76,7 +76,7 @@ const mockAuditoria = [
   },
   {
     id: 'AUD005',
-    usuario: 'admin@financiamiento.com',
+    usuario: 'itmaster@rapicreditca.com',
     accion: 'EXPORT',
     modulo: 'REPORTES',
     descripcion: 'Exportación de reporte de cartera',

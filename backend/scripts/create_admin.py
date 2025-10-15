@@ -200,7 +200,7 @@ def create_admin_user():
         
         # Crear admin con datos por defecto mejorados
         admin = User(
-            email="admin@financiamiento.com",
+            email="itmaster@rapicreditca.com",
             nombre="Administrador",
             apellido="Sistema",
             hashed_password=get_password_hash("Admin2025!"),
@@ -425,7 +425,7 @@ def create_admin_user():
         
         # Crear admin con datos por defecto mejorados
         admin = User(
-            email="admin@financiamiento.com",
+            email="itmaster@rapicreditca.com",
             nombre="Administrador",
             apellido="Sistema",
             hashed_password=get_password_hash("Admin2025!"),

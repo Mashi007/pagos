@@ -35,7 +35,7 @@ const mockReportes = [
     tamaño: '2.4 MB',
     descargas: 15,
     estado: 'DISPONIBLE',
-    generadoPor: 'admin@financiamiento.com',
+    generadoPor: 'itmaster@rapicreditca.com',
   },
   {
     id: 'REP002',
@@ -48,7 +48,7 @@ const mockReportes = [
     tamaño: '1.8 MB',
     descargas: 8,
     estado: 'DISPONIBLE',
-    generadoPor: 'admin@financiamiento.com',
+    generadoPor: 'itmaster@rapicreditca.com',
   },
   {
     id: 'REP003',
@@ -61,7 +61,7 @@ const mockReportes = [
     tamaño: '3.1 MB',
     descargas: 12,
     estado: 'PROCESANDO',
-    generadoPor: 'admin@financiamiento.com',
+    generadoPor: 'itmaster@rapicreditca.com',
   },
   {
     id: 'REP004',
@@ -74,7 +74,7 @@ const mockReportes = [
     tamaño: '850 KB',
     descargas: 25,
     estado: 'DISPONIBLE',
-    generadoPor: 'admin@financiamiento.com',
+    generadoPor: 'itmaster@rapicreditca.com',
   },
 ]
 

@@ -91,7 +91,7 @@ def verificar_rol_administracion(
             
             "recomendaciones": [
                 "✅ Sistema funcional" if sistema_funcional else "❌ Crear usuario administrador",
-                "🔐 Cambiar contraseñas por defecto" if any(admin.email == "admin@financiamiento.com" for admin in admins) else None,
+                "🔐 Cambiar contraseñas por defecto" if any(admin.email == "itmaster@rapicreditca.com" for admin in admins) else None,
                 "👥 Crear usuarios para otros roles según necesidades",
                 "📊 Revisar dashboard administrativo regularmente",
                 "🔔 Configurar notificaciones automáticas"

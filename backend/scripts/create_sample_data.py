@@ -32,7 +32,7 @@ def crear_usuarios_ejemplo(db: SessionLocal):
     
     usuarios = [
         {
-            "email": "admin@financiamiento.com",
+            "email": "itmaster@rapicreditca.com",
             "nombre": "Administrador",
             "apellido": "Sistema",
             "rol": "ADMIN",
@@ -233,7 +233,7 @@ def main():
         print(f"  👤 Clientes: {len(clientes)}")
         
         print(f"\n🔐 Credenciales de prueba:")
-        print(f"  Admin: admin@financiamiento.com / Admin2025!")
+        print(f"  Admin: itmaster@rapicreditca.com / R@pi_2025**")
         print(f"  Gerente: gerente@financiamiento.com / Gerente2025!")
         print(f"  Asesor: asesor1@financiamiento.com / Asesor2025!")
         

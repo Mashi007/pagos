@@ -17,7 +17,7 @@ def login_admin():
     try:
         # Primero intentar con las credenciales actuales
         credentials = [
-            {"email": "admin@financiamiento.com", "password": "Admin2025!"},
+            {"email": "itmaster@rapicreditca.com", "password": "R@pi_2025**"},
             {"email": "admin@sistema.com", "password": "Admin123!"},
             {"email": "itmaster@rapicreditca.com", "password": "R@pi_2025**"}
         ]

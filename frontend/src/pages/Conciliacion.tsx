@@ -35,7 +35,7 @@ const mockConciliaciones = [
     discrepancias: 3,
     montoTotal: 12500.00,
     estado: 'COMPLETADA',
-    procesadoPor: 'admin@financiamiento.com',
+    procesadoPor: 'itmaster@rapicreditca.com',
   },
   {
     id: 'CONC002',
@@ -47,7 +47,7 @@ const mockConciliaciones = [
     discrepancias: 3,
     montoTotal: 8750.00,
     estado: 'PENDIENTE',
-    procesadoPor: 'admin@financiamiento.com',
+    procesadoPor: 'itmaster@rapicreditca.com',
   },
   {
     id: 'CONC003',
@@ -59,7 +59,7 @@ const mockConciliaciones = [
     discrepancias: 7,
     montoTotal: 18900.00,
     estado: 'ERROR',
-    procesadoPor: 'admin@financiamiento.com',
+    procesadoPor: 'itmaster@rapicreditca.com',
   },
 ]
 
