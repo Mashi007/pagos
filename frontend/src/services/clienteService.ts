@@ -10,13 +10,29 @@ class ClienteService {
     page: number = 1,
     perPage: number = 20
   ): Promise<PaginatedResponse<Cliente>> {
-    console.log('🔄 Obteniendo clientes desde endpoint real...')
-    const params = { ...filters, page, per_page: perPage }
-    const url = buildUrl(this.baseUrl, params)
+    console.log('🔄 Obteniendo clientes desde endpoint simplificado...')
     
-    const response = await apiClient.get<PaginatedResponse<Cliente>>(url)
-    console.log('✅ Clientes obtenidos correctamente:', response)
-    return response
+    try {
+      // Intentar endpoint simplificado primero
+      const response = await apiClient.get(`${this.baseUrl}/simple?limit=${perPage}`)
+      console.log('✅ Clientes obtenidos desde endpoint simplificado:', response)
+      
+      // Adaptar respuesta al formato esperado
+      return {
+        data: response.clientes || [],
+        total: response.total || 0,
+        page: page,
+        per_page: perPage,
+        total_pages: Math.ceil((response.total || 0) / perPage)
+      }
+    } catch (error) {
+      console.error('❌ Error en endpoint simplificado:', error)
+      // Fallback al endpoint original si falla
+      const params = { ...filters, page, per_page: perPage }
+      const url = buildUrl(this.baseUrl, params)
+      const response = await apiClient.get<PaginatedResponse<Cliente>>(url)
+      return response
+    }
   }
 
   // Obtener cliente por ID
