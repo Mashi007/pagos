@@ -74,49 +74,43 @@ class ValidadoresService {
 
   // Validar campo individual
   async validarCampo(campo: string, valor: string, pais: string = 'VENEZUELA'): Promise<ValidacionResponse> {
-    const response = await apiClient.post<ValidacionResponse>(`${this.baseUrl}/validar-campo`, {
+    return await apiClient.post<ValidacionResponse>(`${this.baseUrl}/validar-campo`, {
       campo,
       valor,
       pais
     })
-    return response.data
   }
 
   // Formatear campo en tiempo real
   async formatearTiempoReal(campo: string, valor: string, pais: string = 'VENEZUELA'): Promise<any> {
-    const response = await apiClient.post(`${this.baseUrl}/formatear-tiempo-real`, {
+    return await apiClient.post(`${this.baseUrl}/formatear-tiempo-real`, {
       campo,
       valor,
       pais
     })
-    return response.data
   }
 
   // Obtener configuración de validadores
   async obtenerConfiguracion(): Promise<ConfiguracionValidadores> {
-    const response = await apiClient.get<ConfiguracionValidadores>(`${this.baseUrl}/configuracion-validadores`)
-    return response.data
+    return await apiClient.get<ConfiguracionValidadores>(`${this.baseUrl}/configuracion-validadores`)
   }
 
   // Obtener ejemplos de corrección
   async obtenerEjemplos(): Promise<any> {
-    const response = await apiClient.get(`${this.baseUrl}/ejemplos-correccion`)
-    return response.data
+    return await apiClient.get(`${this.baseUrl}/ejemplos-correccion`)
   }
 
   // Detectar errores masivos
   async detectarErroresMasivo(): Promise<any> {
-    const response = await apiClient.get(`${this.baseUrl}/detectar-errores-masivo`)
-    return response.data
+    return await apiClient.get(`${this.baseUrl}/detectar-errores-masivo`)
   }
 
   // Corregir datos de cliente
   async corregirCliente(clienteId: number, correcciones: Record<string, string>, pais: string = 'VENEZUELA'): Promise<any> {
-    const response = await apiClient.post(`${this.baseUrl}/corregir-cliente/${clienteId}`, {
+    return await apiClient.post(`${this.baseUrl}/corregir-cliente/${clienteId}`, {
       correcciones,
       pais
     })
-    return response.data
   }
 }
 
