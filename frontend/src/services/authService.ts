@@ -25,8 +25,8 @@ export class AuthService {
       
       console.log('AuthService: Respuesta del servidor recibida')
       
-      // NO GUARDAR TOKENS AQUÍ - Solo retornar la respuesta
-      return response
+      // NO GUARDAR TOKENS AQUÍ - Solo retornar los datos
+      return response.data
     } catch (error: any) {
       console.error('AuthService: Error en login:', error)
       
