@@ -1,3 +1,4 @@
+// Formulario simplificado - Solo campos esenciales
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
