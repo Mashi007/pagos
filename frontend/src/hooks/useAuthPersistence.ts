@@ -14,7 +14,7 @@ export function useAuthPersistence() {
       console.log('Restaurando sesión...')
       
       try {
-        // Buscar datos en localStorage primero
+        // Buscar datos en localStorage primero (recordarme)
         const localToken = localStorage.getItem('access_token')
         const localUser = localStorage.getItem('user')
         
@@ -48,10 +48,8 @@ export function useAuthPersistence() {
       }
     }
 
-    if (!isInitialized) {
-      restoreSession()
-    }
-  }, [isInitialized, setUser])
+    restoreSession()
+  }, [setUser])
 
   return { isInitialized }
 }

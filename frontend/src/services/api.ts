@@ -28,116 +28,11 @@ class ApiClient {
         const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint))
         
         if (!isAuthEndpoint) {
-          // DEBUGGING COMPLETO DEL ESTADO DE TOKENS
-          const localToken = localStorage.getItem('access_token')
-          const localUser = localStorage.getItem('user')
-          const sessionToken = sessionStorage.getItem('access_token')
-          const sessionUser = sessionStorage.getItem('user')
+          // Lógica simplificada para obtener token
+          let token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token')
           
-          console.log('🔍 INTERCEPTOR DEBUG COMPLETO:', {
-            url: config.url,
-            localToken: localToken ? `${localToken.substring(0, 20)}...` : 'null',
-            localUser: localUser ? 'EXISTS' : 'null',
-            sessionToken: sessionToken ? `${sessionToken.substring(0, 20)}...` : 'null',
-            sessionUser: sessionUser ? 'EXISTS' : 'null',
-            allLocalStorageKeys: Object.keys(localStorage).filter(k => k.includes('token') || k.includes('user')),
-            allSessionStorageKeys: Object.keys(sessionStorage).filter(k => k.includes('token') || k.includes('user'))
-          })
-          
-          // LÓGICA DEFINITIVA: Buscar token en AMBOS storages con prioridad
-          let token, storageType
-          
-          // PRIORIDAD 1: localStorage (recordarme)
-          if (localToken && localToken.trim() !== '') {
-            token = localToken
-            storageType = 'localStorage'
-            console.log('✅ Interceptor: Usando token de localStorage')
-          } 
-          // PRIORIDAD 2: sessionStorage (sesión temporal)
-          else if (sessionToken && sessionToken.trim() !== '') {
-            token = sessionToken
-            storageType = 'sessionStorage'
-            console.log('✅ Interceptor: Usando token de sessionStorage')
-          } 
-          // FALLBACK: Buscar en ambos storages de nuevo
-          else {
-            console.log('🔍 Interceptor: Buscando tokens en ambos storages...')
-            const retryLocal = localStorage.getItem('access_token')
-            const retrySession = sessionStorage.getItem('access_token')
-            
-            if (retryLocal && retryLocal.trim() !== '') {
-              token = retryLocal
-              storageType = 'localStorage (retry)'
-              console.log('✅ Interceptor: Token encontrado en localStorage (retry)')
-            } else if (retrySession && retrySession.trim() !== '') {
-              token = retrySession
-              storageType = 'sessionStorage (retry)'
-              console.log('✅ Interceptor: Token encontrado en sessionStorage (retry)')
-            } else {
-              token = null
-              storageType = 'none'
-              console.error('❌ Interceptor: NO HAY TOKENS DISPONIBLES EN NINGÚN STORAGE')
-              console.error('🔍 Debug completo storage:', {
-                localStorage_keys: Object.keys(localStorage).filter(k => k.includes('token') || k.includes('user')),
-                sessionStorage_keys: Object.keys(sessionStorage).filter(k => k.includes('token') || k.includes('user')),
-                localToken_value: localStorage.getItem('access_token'),
-                sessionToken_value: sessionStorage.getItem('access_token')
-              })
-            }
-          }
-            
-          if (token && token.trim() !== '') {
+          if (token) {
             config.headers.Authorization = `Bearer ${token}`
-            console.log('🔑 Token enviado en request:', config.url, token.substring(0, 20) + '...')
-            console.log('🔍 Headers configurados:', {
-              Authorization: config.headers.Authorization ? 'SET' : 'NOT_SET',
-              ContentType: config.headers['Content-Type'],
-              url: config.url
-            })
-            
-            // VERIFICACIÓN FINAL: Asegurar que el header se configuró correctamente
-            if (!config.headers.Authorization) {
-              console.error('🚨 CRÍTICO: Authorization header NO se configuró correctamente')
-            } else {
-              console.log('✅ Authorization header configurado correctamente')
-            }
-          } else {
-            console.warn('⚠️ No se encontró token para la request:', config.url)
-            console.error('🚨 CRÍTICO: Request sin token - esto causará 403 Forbidden')
-            console.log('🔍 Debug completo de storage MEJORADO:', {
-              hasLocalToken: !!localToken,
-              hasSessionToken: !!sessionToken,
-              storageType,
-              localStorage: {
-                access_token: localStorage.getItem('access_token') ? 'EXISTS' : 'NOT_FOUND',
-                refresh_token: localStorage.getItem('refresh_token') ? 'EXISTS' : 'NOT_FOUND',
-                user: localStorage.getItem('user') ? 'EXISTS' : 'NOT_FOUND',
-                remember_me: localStorage.getItem('remember_me')
-              },
-              sessionStorage: {
-                access_token: sessionStorage.getItem('access_token') ? 'EXISTS' : 'NOT_FOUND',
-                refresh_token: sessionStorage.getItem('refresh_token') ? 'EXISTS' : 'NOT_FOUND',
-                user: sessionStorage.getItem('user') ? 'EXISTS' : 'NOT_FOUND'
-              }
-            })
-            // Para endpoints que requieren autenticación, cancelar la request
-            const protectedEndpoints = ['/api/v1/clientes', '/api/v1/concesionarios/activos', '/api/v1/asesores/activos', '/api/v1/dashboard', '/api/v1/configuracion', '/api/v1/validadores']
-            const unprotectedEndpoints = ['/api/v1/clientes-temp/test-sin-auth', '/api/v1/health', '/api/v1/auth/login', '/api/v1/validadores/test-simple']
-            
-            // Usar startsWith para evitar coincidencias parciales
-            const isProtectedEndpoint = protectedEndpoints.some(endpoint => config.url?.startsWith(endpoint))
-            const isUnprotectedEndpoint = unprotectedEndpoints.some(endpoint => config.url?.includes(endpoint))
-            
-            if (isProtectedEndpoint && !isUnprotectedEndpoint) {
-              console.error('🚫 Request protegida sin token, intentando continuar:', config.url)
-              // En lugar de cancelar, intentar continuar y dejar que el backend responda con 401
-              // Esto permitirá que el interceptor de respuesta maneje la renovación del token
-              console.log('⚠️ Continuando request sin token - el backend manejará la autenticación')
-            } else if (isUnprotectedEndpoint) {
-              console.log('✅ Endpoint no protegido, continuando sin token:', config.url)
-            } else {
-              console.log('ℹ️ Endpoint no clasificado, continuando sin token:', config.url)
-            }
           }
         }
         return config

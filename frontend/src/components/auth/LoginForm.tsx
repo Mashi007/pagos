@@ -56,7 +56,15 @@ export function LoginForm() {
       console.log('🔑 Intentando login con:', data)
       console.log('🔍 Valor de remember en onSubmit:', data.remember)
       console.log('🔍 Tipo de remember:', typeof data.remember)
-      await login(data)
+      
+      // Asegurar que remember sea boolean
+      const loginData = {
+        ...data,
+        remember: Boolean(data.remember)
+      }
+      
+      console.log('🔍 Datos finales para login:', loginData)
+      await login(loginData)
       navigate(from, { replace: true })
     } catch (error: any) {
       console.error('Error en login:', error)

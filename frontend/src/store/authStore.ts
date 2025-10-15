@@ -42,9 +42,27 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           
           // 2. GUARDAR TOKENS (RESPONSABILIDAD ÚNICA DEL STORE)
           const rememberMe = credentials.remember || false
-          const accessToken = response.data.access_token
-          const refreshToken = response.data.refresh_token
-          const userData = response.user
+          
+          // Verificar estructura de respuesta
+          console.log('Store: Estructura de respuesta:', response)
+          console.log('Store: response.data:', response.data)
+          console.log('Store: response.user:', response.user)
+          
+          // Acceder a tokens según la estructura real de la respuesta
+          const accessToken = response.data?.access_token || response.access_token
+          const refreshToken = response.data?.refresh_token || response.refresh_token
+          const userData = response.user || response.data?.user
+          
+          console.log('Store: Tokens extraídos:', {
+            accessToken: accessToken ? 'EXISTS' : 'MISSING',
+            refreshToken: refreshToken ? 'EXISTS' : 'MISSING',
+            userData: userData ? 'EXISTS' : 'MISSING'
+          })
+          
+          // Validar que tenemos los datos necesarios
+          if (!accessToken || !refreshToken || !userData) {
+            throw new Error('Datos de respuesta incompletos')
+          }
           
           // Guardar en el storage apropiado
           if (rememberMe) {
@@ -53,12 +71,21 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
             localStorage.setItem('user', JSON.stringify(userData))
             localStorage.setItem('remember_me', 'true')
             console.log('Store: Tokens guardados en localStorage')
+            console.log('Store: Verificación localStorage:', {
+              access_token: localStorage.getItem('access_token') ? 'GUARDADO' : 'ERROR',
+              user: localStorage.getItem('user') ? 'GUARDADO' : 'ERROR',
+              remember_me: localStorage.getItem('remember_me')
+            })
           } else {
             sessionStorage.setItem('access_token', accessToken)
             sessionStorage.setItem('refresh_token', refreshToken)
             sessionStorage.setItem('user', JSON.stringify(userData))
             localStorage.setItem('remember_me', 'false')
             console.log('Store: Tokens guardados en sessionStorage')
+            console.log('Store: Verificación sessionStorage:', {
+              access_token: sessionStorage.getItem('access_token') ? 'GUARDADO' : 'ERROR',
+              user: sessionStorage.getItem('user') ? 'GUARDADO' : 'ERROR'
+            })
           }
           
           // 3. ACTUALIZAR ESTADO
