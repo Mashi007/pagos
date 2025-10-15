@@ -142,4 +142,4 @@ def ping():
     """
     🏓 Ping simple
     """
-    return {"message": "pong", "status": "ok", "version": "v2.1_FIXED", "update": "models_to_dict_simplified"}
+    return {"message": "pong", "status": "ok", "version": "v2.2_FORCE", "update": "force_deploy_skip_blocked"}
