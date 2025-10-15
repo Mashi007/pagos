@@ -364,6 +364,18 @@ class ValidadorCedula:
         # Limpiar entrada: solo letras y números
         cedula_limpia = re.sub(r'[^VEJ\d]', '', cedula_limpia.upper())
         
+        # Validar que tenga un prefijo válido desde el inicio
+        if cedula_limpia and cedula_limpia[0] not in ['V', 'E', 'J']:
+            # Si no tiene prefijo válido, rechazar inmediatamente
+            return {
+                "valido": False,
+                "error": f"Prefijo '{cedula_limpia[0] if cedula_limpia else 'ninguno'}' no válido. DEBE empezar por V, E o J",
+                "valor_original": cedula_limpia,
+                "valor_formateado": None,
+                "formato_esperado": config["descripcion"],
+                "requisitos": config["requisitos"]
+            }
+        
         # Si no tiene prefijo, asumir V
         if cedula_limpia.isdigit():
             cedula_formateada = f"V{cedula_limpia}"
