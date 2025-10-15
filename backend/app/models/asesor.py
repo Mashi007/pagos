@@ -24,20 +24,15 @@ class Asesor(Base):
 
     @property
     def nombre_completo(self):
-        return f"{self.nombre} {self.apellido}".strip()
+        if self.apellido:
+            return f"{self.nombre} {self.apellido}".strip()
+        return self.nombre
 
     def to_dict(self):
         return {
             "id": self.id,
             "nombre": self.nombre,
-            "apellido": self.apellido,
-            "nombre_completo": self.nombre_completo,
-            "email": self.email,
-            "telefono": self.telefono,
-            "especialidad": self.especialidad,
-            "comision_porcentaje": self.comision_porcentaje,
             "activo": self.activo,
-            "notas": self.notas,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
