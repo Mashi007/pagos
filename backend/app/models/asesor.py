@@ -7,8 +7,8 @@ class Asesor(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(255), nullable=False, index=True)
-    apellido = Column(String(255), nullable=False, index=True)
-    email = Column(String(255), nullable=False, unique=True, index=True)
+    apellido = Column(String(255), nullable=True, index=True)
+    email = Column(String(255), nullable=True, unique=True, index=True)
     telefono = Column(String(20), nullable=True)
     especialidad = Column(String(255), nullable=True)  # Ej: "Vehículos nuevos", "Usados", "Comercial"
     comision_porcentaje = Column(Integer, nullable=True)  # Porcentaje de comisión (0-100)
