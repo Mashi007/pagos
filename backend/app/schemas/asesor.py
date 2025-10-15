@@ -59,7 +59,8 @@ class AsesorResponse(AsesorBase):
         from_attributes = True
 
 class AsesorListResponse(BaseModel):
+    items: List[AsesorResponse]
     total: int
     page: int
-    per_page: int
-    data: List[AsesorResponse]
+    size: int
+    pages: int

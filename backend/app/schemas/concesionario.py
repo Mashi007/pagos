@@ -42,7 +42,8 @@ class ConcesionarioResponse(ConcesionarioBase):
         from_attributes = True
 
 class ConcesionarioListResponse(BaseModel):
+    items: List[ConcesionarioResponse]
     total: int
     page: int
-    per_page: int
-    data: List[ConcesionarioResponse]
+    size: int
+    pages: int
