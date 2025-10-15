@@ -53,7 +53,7 @@ export interface Cliente {
   modalidad_pago?: string;
   
   // Asignación y gestión
-  asesor_id?: number;
+   asesor_config_id?: number;
   fecha_asignacion?: string;
   
   // Estados (coincide con backend)
@@ -194,7 +194,7 @@ export interface ClienteForm {
   modalidad_pago?: string;
   
   // Asignación
-  asesor_id?: number;
+   asesor_config_id?: number;
   
   // Notas
   notas?: string;
@@ -237,7 +237,7 @@ export interface ClienteFilters {
   search?: string;
   estado?: Cliente['estado'];
   estado_financiero?: string;
-  asesor_id?: string;
+   asesor_config_id?: string;
   fecha_desde?: string;
   fecha_hasta?: string;
   per_page?: number;

@@ -510,7 +510,7 @@ export function CrearClienteForm({
         
         // Concesionario y asesor (coincide con backend)
         concesionario: formData.concesionario,  // ✅ Backend: "concesionario"
-        asesor_id: parseInt(formData.asesorAsignado) || undefined,  // ✅ Backend: "asesor_id"
+        asesor_config_id: parseInt(formData.asesorAsignado) || undefined,  // ✅ Backend: "asesor_config_id"
         
         // Datos del financiamiento (coincide con backend)
         total_financiamiento: parseFloat(formData.totalFinanciamiento.replace(/[^\d.-]/g, '')) || 0,  // ✅ Backend: "total_financiamiento"
