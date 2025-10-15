@@ -141,4 +141,4 @@ def ping():
     """
     🏓 Ping simple
     """
-    return {"message": "pong", "status": "ok"}
+    return {"message": "pong", "status": "ok", "version": "1e605ea", "update": "enum_fix_compatible"}
