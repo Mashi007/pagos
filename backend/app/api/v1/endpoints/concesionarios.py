@@ -56,7 +56,7 @@ def listar_concesionarios(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al listar concesionarios: {str(e)}")
 
-@router.get("/activos", response_model=List[ConcesionarioResponse])
+@router.get("/activos")
 def listar_concesionarios_activos(
     db: Session = Depends(get_db)
 ):
@@ -65,7 +65,7 @@ def listar_concesionarios_activos(
     """
     try:
         concesionarios = db.query(Concesionario).filter(Concesionario.activo == True).all()
-        return [ConcesionarioResponse.from_orm(c) for c in concesionarios]
+        return [c.to_dict() for c in concesionarios]
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al listar concesionarios activos: {str(e)}")

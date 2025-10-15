@@ -75,7 +75,7 @@ def listar_modelos_vehiculos(
         raise HTTPException(status_code=500, detail=f"Error al listar modelos de vehículos: {str(e)}")
 
 
-@router.get("/activos", response_model=List[ModeloVehiculoActivosResponse])
+@router.get("/activos")
 def listar_modelos_activos(
     categoria: Optional[str] = Query(None, description="Filtrar por categoría"),
     marca: Optional[str] = Query(None, description="Filtrar por marca"),
@@ -94,7 +94,7 @@ def listar_modelos_activos(
             query = query.filter(ModeloVehiculo.marca == marca)
         
         modelos = query.order_by(ModeloVehiculo.modelo).all()
-        return [ModeloVehiculoActivosResponse.from_orm(m) for m in modelos]
+        return [m.to_dict() for m in modelos]
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al listar modelos activos: {str(e)}")

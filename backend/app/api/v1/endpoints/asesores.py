@@ -77,7 +77,7 @@ def test_asesores_activos():
     """
     return {"mensaje": "Endpoint de asesores funcionando", "status": "ok"}
 
-@router.get("/activos", response_model=List[AsesorResponse])
+@router.get("/activos")
 def listar_asesores_activos(
     especialidad: Optional[str] = Query(None, description="Filtrar por especialidad"),
     db: Session = Depends(get_db)
@@ -92,7 +92,7 @@ def listar_asesores_activos(
             query = query.filter(Asesor.especialidad == especialidad)
         
         asesores = query.all()
-        return [AsesorResponse.from_orm(a) for a in asesores]
+        return [a.to_dict() for a in asesores]
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al listar asesores activos: {str(e)}")
