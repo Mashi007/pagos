@@ -203,10 +203,10 @@ export function CrearClienteForm({
           console.warn('Error validando cédula con backend, usando validación local:', error)
         }
         
-        // Fallback: validación local mejorada
+        // Fallback: validación local mejorada (coincide con backend)
         const cedulaPattern = /^[VEJ]\d{7,10}$/
         if (!cedulaPattern.test(value.toUpperCase())) {
-          return { isValid: false, message: 'Formato: V/E/J + 7-10 dígitos (ej: V12345678)' }
+          return { isValid: false, message: 'Formato: V/E/J + exactamente entre 7 y 10 dígitos (ej: V12345678)' }
         }
         return { isValid: true }
 
@@ -242,14 +242,23 @@ export function CrearClienteForm({
           console.warn('Error validando teléfono con backend, usando validación local:', error)
         }
         
-        // Fallback: validación local mejorada
+        // Fallback: validación local mejorada (coincide con backend)
         const cleanMovilFallback = value.replace(/\D/g, '')
+        // Validar formato: +58 + 10 dígitos (primer dígito no puede ser 0)
         if (cleanMovilFallback.length === 10) {
+          // Formato local: 4241234567 -> +58 424 1234567
+          if (cleanMovilFallback[0] === '0') {
+            return { isValid: false, message: 'Primer dígito no puede ser 0 (ej: 4241234567)' }
+          }
           return { isValid: true }
         } else if (cleanMovilFallback.length === 12 && cleanMovilFallback.startsWith('58')) {
+          // Ya tiene código de país: 584241234567 -> +58 424 1234567
+          if (cleanMovilFallback[2] === '0') {
+            return { isValid: false, message: 'Primer dígito no puede ser 0 (ej: 584241234567)' }
+          }
           return { isValid: true }
         }
-        return { isValid: false, message: 'Formato: +58 XXXXXXXXXX (10 dígitos)' }
+        return { isValid: false, message: 'Formato: +58 XXXXXXXXXX (10 dígitos, primer dígito no puede ser 0)' }
 
       case 'email':
         if (!value.trim()) return { isValid: false, message: 'Email requerido' }
@@ -282,11 +291,19 @@ export function CrearClienteForm({
           console.warn('Error validando email con backend, usando validación local:', error)
         }
         
-        // Fallback: validación local mejorada
-        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        // Fallback: validación local mejorada (coincide con backend)
+        const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
         if (!emailPattern.test(value.toLowerCase())) {
-          return { isValid: false, message: 'Formato: usuario@dominio.com' }
+          return { isValid: false, message: 'Formato: usuario@dominio.com (se normaliza a minúsculas)' }
         }
+        
+        // Validar dominios bloqueados (coincide con backend)
+        const dominiosBloqueados = ['tempmail.org', '10minutemail.com', 'guerrillamail.com']
+        const dominio = value.toLowerCase().split('@')[1]
+        if (dominiosBloqueados.includes(dominio)) {
+          return { isValid: false, message: `Dominio bloqueado: ${dominio}` }
+        }
+        
         return { isValid: true }
 
       case 'modeloVehiculo':
@@ -295,10 +312,56 @@ export function CrearClienteForm({
 
       case 'totalFinanciamiento':
         if (!value.trim()) return { isValid: false, message: 'Total requerido' }
-        const total = parseFloat(value.replace(/[^\d.-]/g, ''))
-        if (isNaN(total) || total < 1000 || total > 50000000) {
+        
+        // Validación de monto (coincide con backend)
+        const cleanTotal = value.replace(/[^\d.-]/g, '')
+        const total = parseFloat(cleanTotal)
+        
+        if (isNaN(total)) {
+          return { isValid: false, message: 'Debe ser un número válido' }
+        }
+        
+        if (total <= 0) {
+          return { isValid: false, message: 'Debe ser un número positivo' }
+        }
+        
+        // Validar máximo 2 decimales
+        const decimales = cleanTotal.split('.')[1]
+        if (decimales && decimales.length > 2) {
+          return { isValid: false, message: 'Máximo 2 decimales permitidos' }
+        }
+        
+        if (total < 1000 || total > 50000000) {
           return { isValid: false, message: 'Entre $1,000 y $50,000,000' }
         }
+        
+        return { isValid: true }
+
+      case 'cuotaInicial':
+        if (!value.trim()) return { isValid: true } // Opcional
+        
+        // Validación de monto (coincide con backend)
+        const cleanCuota = value.replace(/[^\d.-]/g, '')
+        const cuota = parseFloat(cleanCuota)
+        
+        if (isNaN(cuota)) {
+          return { isValid: false, message: 'Debe ser un número válido' }
+        }
+        
+        if (cuota < 0) {
+          return { isValid: false, message: 'No puede ser negativo' }
+        }
+        
+        // Validar máximo 2 decimales
+        const decimalesCuota = cleanCuota.split('.')[1]
+        if (decimalesCuota && decimalesCuota.length > 2) {
+          return { isValid: false, message: 'Máximo 2 decimales permitidos' }
+        }
+        
+        if (cuota > 50000000) {
+          return { isValid: false, message: 'Máximo $50,000,000' }
+        }
+        
         return { isValid: true }
 
       case 'numeroAmortizaciones':
@@ -311,12 +374,28 @@ export function CrearClienteForm({
 
       case 'fechaEntrega':
         if (!value.trim()) return { isValid: false, message: 'Fecha requerida' }
+        
+        // Validación de fecha (coincide con backend)
         const fecha = new Date(value)
         const hoy = new Date()
         hoy.setHours(0, 0, 0, 0)
+        
+        // Validar que sea una fecha válida
+        if (isNaN(fecha.getTime())) {
+          return { isValid: false, message: 'Fecha inválida' }
+        }
+        
+        // Validar que no sea fecha pasada
         if (fecha < hoy) {
           return { isValid: false, message: 'No puede ser fecha pasada' }
         }
+        
+        // Validar rango de años (1900-2100 como en backend)
+        const año = fecha.getFullYear()
+        if (año < 1900 || año > 2100) {
+          return { isValid: false, message: 'Año debe estar entre 1900 y 2100' }
+        }
+        
         return { isValid: true }
 
       case 'asesorAsignado':
@@ -573,7 +652,11 @@ export function CrearClienteForm({
                     className={getFieldStatus('movil') === 'invalid' ? 'border-red-500' : ''}
                   />
                   {validations.movil?.isValid && (
-                    <p className="text-xs text-green-600">✓ Formato correcto</p>
+                    <div className="text-xs text-green-600 space-y-1">
+                      <p>✓ Formato: +58 XXXXXXXXXX</p>
+                      <p>✓ Primer dígito no puede ser 0</p>
+                      <p>✓ Teléfono válido</p>
+                    </div>
                   )}
                   {validations.movil?.message && (
                     <div className="text-xs text-red-600 space-y-1">
@@ -597,8 +680,12 @@ export function CrearClienteForm({
                     placeholder="juan@email.com"
                     className={getFieldStatus('email') === 'invalid' ? 'border-red-500' : ''}
                   />
-                  {validations.email?.message && (
-                    <p className="text-xs text-red-600">✗ {validations.email.message}</p>
+                  {validations.email?.isValid && (
+                    <div className="text-xs text-green-600 space-y-1">
+                      <p>✓ Formato: usuario@dominio.com</p>
+                      <p>✓ Normalización automática a minúsculas</p>
+                      <p>✓ Dominio válido</p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -651,26 +738,41 @@ export function CrearClienteForm({
                     placeholder="$25,000"
                     className={getFieldStatus('totalFinanciamiento') === 'invalid' ? 'border-red-500' : ''}
                   />
-                  {!formData.totalFinanciamiento && (
-                    <p className="text-xs text-yellow-600">(Esperando valor...)</p>
-                  )}
-                  {validations.totalFinanciamiento?.message && (
-                    <p className="text-xs text-red-600">✗ {validations.totalFinanciamiento.message}</p>
+                  {validations.totalFinanciamiento?.isValid && (
+                    <div className="text-xs text-green-600 space-y-1">
+                      <p>✓ Número positivo válido</p>
+                      <p>✓ Máximo 2 decimales</p>
+                      <p>✓ Rango: $1,000 - $50,000,000</p>
+                    </div>
                   )}
                 </div>
 
                 {/* Cuota inicial */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">
+                  <label className="text-sm font-medium flex items-center">
                     <DollarSign className="mr-1 h-4 w-4 inline" />
                     Cuota inicial
+                    {getFieldIcon('cuotaInicial')}
                   </label>
                   <Input
                     value={formatCurrency(formData.cuotaInicial)}
                     onChange={(e) => handleFieldChange('cuotaInicial', e.target.value)}
                     placeholder="$5,000"
+                    className={getFieldStatus('cuotaInicial') === 'invalid' ? 'border-red-500' : ''}
                   />
-                  <p className="text-xs text-gray-600">(Opcional, pero recomendado)</p>
+                  {validations.cuotaInicial?.isValid && formData.cuotaInicial && (
+                    <div className="text-xs text-green-600 space-y-1">
+                      <p>✓ Número válido</p>
+                      <p>✓ Máximo 2 decimales</p>
+                      <p>✓ Máximo $50,000,000</p>
+                    </div>
+                  )}
+                  {validations.cuotaInicial?.message && (
+                    <p className="text-xs text-red-600">✗ {validations.cuotaInicial.message}</p>
+                  )}
+                  {!formData.cuotaInicial && (
+                    <p className="text-xs text-gray-600">(Opcional, pero recomendado)</p>
+                  )}
                 </div>
 
                 {/* Número de amortizaciones */}
@@ -735,7 +837,11 @@ export function CrearClienteForm({
                     className={getFieldStatus('fechaEntrega') === 'invalid' ? 'border-red-500' : ''}
                   />
                   {validations.fechaEntrega?.isValid && (
-                    <p className="text-xs text-green-600">✓ Fecha válida, no es futura</p>
+                    <div className="text-xs text-green-600 space-y-1">
+                      <p>✓ Fecha válida</p>
+                      <p>✓ No es fecha pasada</p>
+                      <p>✓ Año entre 1900-2100</p>
+                    </div>
                   )}
                   {validations.fechaEntrega?.message && (
                     <p className="text-xs text-red-600">✗ {validations.fechaEntrega.message}</p>
