@@ -846,3 +846,67 @@ def verificar_sistema_validadores(
             "🎯 Reglas de negocio específicas del dominio"
         ]
     }
+
+
+@router.get("/configuracion-validadores")
+async def obtener_configuracion_validadores():
+    """
+    🔧 Obtener configuración actualizada de validadores para el frontend
+    """
+    return {
+        "cedula_venezuela": {
+            "descripcion": "Cédula venezolana: V/E/J + exactamente entre 7 y 10 dígitos, sin caracteres especiales",
+            "requisitos": {
+                "debe_empezar_por": "V, E o J",
+                "longitud_digitos": "Entre 7 y 10 dígitos",
+                "sin_caracteres_especiales": "Solo letra inicial + números",
+                "ejemplos_validos": ["V1234567", "E12345678", "J123456789", "V1234567890"]
+            },
+            "patron_regex": r"^[VEJ]\d{7,10}$",
+            "formato_display": "V12345678",
+            "tipos": {
+                "V": "Venezolano",
+                "E": "Extranjero", 
+                "J": "Jurídico"
+            }
+        },
+        "telefono_venezuela": {
+            "descripcion": "Teléfono venezolano: +58 seguido de 10 dígitos (primer dígito no puede ser 0)",
+            "requisitos": {
+                "debe_empezar_por": "+58",
+                "longitud_total": 10,
+                "primer_digito": "No puede ser 0",
+                "digitos_validos": "0-9"
+            },
+            "patron_regex": r"^\+58[1-9][0-9]{9}$",
+            "formato_display": "+58 XXXXXXXXXX"
+        },
+        "email": {
+            "descripcion": "Email válido con normalización automática a minúsculas",
+            "requisitos": {
+                "formato": "usuario@dominio.com",
+                "normalizacion": "Automática a minúsculas",
+                "dominios_bloqueados": ["tempmail.org", "10minutemail.com", "guerrillamail.com"]
+            },
+            "patron_regex": r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+        },
+        "fecha": {
+            "descripcion": "Fecha en formato DD/MM/YYYY",
+            "requisitos": {
+                "formato": "DD/MM/YYYY",
+                "dia": "01-31",
+                "mes": "01-12", 
+                "año": "1900-2100"
+            },
+            "patron_regex": r"^\d{2}/\d{2}/\d{4}$"
+        },
+        "monto": {
+            "descripcion": "Monto numérico positivo con máximo 2 decimales",
+            "requisitos": {
+                "formato": "Número positivo",
+                "decimales": "Máximo 2",
+                "separador_miles": "Comas opcionales",
+                "simbolo_moneda": "$ opcional"
+            }
+        }
+    }

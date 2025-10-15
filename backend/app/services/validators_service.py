@@ -270,10 +270,16 @@ class ValidadorCedula:
     PAISES_CEDULA = {
         "VENEZUELA": {
             "prefijos": ["V", "E", "J"],  # V=Venezolano, E=Extranjero, J=Jurídico
-            "longitud_numero": [7, 8, 9, 10],  # 7 a 10 dígitos
+            "longitud_numero": [7, 8, 9, 10],  # Exactamente entre 7 y 10 dígitos
             "patron": r"^[VEJ]\d{7,10}$",
             "formato_display": "V12345678",
-            "descripcion": "Cédula venezolana: V/E/J + 7-10 dígitos"
+            "descripcion": "Cédula venezolana: V/E/J + exactamente entre 7 y 10 dígitos, sin caracteres especiales",
+            "requisitos": {
+                "debe_empezar_por": "V, E o J",
+                "longitud_digitos": "Entre 7 y 10 dígitos",
+                "sin_caracteres_especiales": "Solo letra inicial + números",
+                "ejemplos_validos": ["V1234567", "E12345678", "J123456789", "V1234567890"]
+            }
         },
         "DOMINICANA": {
             "prefijos": [],  # Sin prefijo de letra
@@ -349,46 +355,59 @@ class ValidadorCedula:
     
     @staticmethod
     def _formatear_cedula_venezolana(cedula_limpia: str, config: Dict) -> Dict[str, Any]:
-        """Formatear cédula venezolana"""
+        """
+        Formatear cédula venezolana con validación estricta:
+        - DEBE empezar por V, E o J (siempre)
+        - Seguido de exactamente entre 7 y 10 dígitos
+        - Sin caracteres especiales
+        """
+        # Limpiar entrada: solo letras y números
+        cedula_limpia = re.sub(r'[^VEJ\d]', '', cedula_limpia.upper())
+        
         # Si no tiene prefijo, asumir V
         if cedula_limpia.isdigit():
             cedula_formateada = f"V{cedula_limpia}"
         else:
             cedula_formateada = cedula_limpia
         
-        # Validar formato final
+        # Validar formato final con regex estricto
         if re.match(config["patron"], cedula_formateada):
             prefijo = cedula_formateada[0]
             numero = cedula_formateada[1:]
             
-            # Validar que el prefijo sea válido
+            # Validar que el prefijo sea válido (V, E, J)
             if prefijo not in config["prefijos"]:
                 return {
                     "valido": False,
-                    "error": f"Prefijo '{prefijo}' no válido. Válidos: {', '.join(config['prefijos'])}",
+                    "error": f"Prefijo '{prefijo}' no válido. DEBE empezar por V, E o J",
                     "valor_original": cedula_limpia,
                     "valor_formateado": None,
-                    "formato_esperado": config["descripcion"]
+                    "formato_esperado": config["descripcion"],
+                    "requisitos": config["requisitos"]
                 }
             
-            # Validar longitud del número
-            if len(numero) not in config["longitud_numero"]:
+            # Validar longitud del número (exactamente entre 7 y 10)
+            if len(numero) < 7 or len(numero) > 10:
                 return {
                     "valido": False,
-                    "error": f"Longitud inválida: {len(numero)} dígitos. Válidos: {config['longitud_numero']} dígitos",
+                    "error": f"Longitud inválida: {len(numero)} dígitos. DEBE tener entre 7 y 10 dígitos",
                     "valor_original": cedula_limpia,
                     "valor_formateado": None,
-                    "formato_esperado": config["descripcion"]
+                    "formato_esperado": config["descripcion"],
+                    "requisitos": config["requisitos"],
+                    "longitud_actual": len(numero),
+                    "longitud_requerida": "7-10 dígitos"
                 }
             
-            # Validar que todos los dígitos sean números
+            # Validar que todos los dígitos sean números (sin caracteres especiales)
             if not numero.isdigit():
                 return {
                     "valido": False,
-                    "error": "Los dígitos deben ser números del 0 al 9",
+                    "error": "Los dígitos deben ser números del 0 al 9 (sin caracteres especiales)",
                     "valor_original": cedula_limpia,
                     "valor_formateado": None,
-                    "formato_esperado": config["descripcion"]
+                    "formato_esperado": config["descripcion"],
+                    "requisitos": config["requisitos"]
                 }
             
             return {
@@ -398,21 +417,29 @@ class ValidadorCedula:
                 "pais": "VENEZUELA",
                 "tipo": {
                     "V": "Venezolano",
-                    "E": "Extranjero",
+                    "E": "Extranjero", 
                     "J": "Jurídico"
                 }.get(prefijo, "Desconocido"),
                 "cambio_realizado": cedula_limpia != cedula_formateada,
                 "prefijo": prefijo,
                 "numero": numero,
-                "longitud": len(numero)
+                "longitud": len(numero),
+                "requisitos_cumplidos": {
+                    "prefijo_valido": prefijo in ["V", "E", "J"],
+                    "longitud_correcta": 7 <= len(numero) <= 10,
+                    "solo_numeros": numero.isdigit(),
+                    "sin_caracteres_especiales": True
+                }
             }
         
         return {
             "valido": False,
-            "error": f"Formato inválido. Esperado: {config['formato_display']}",
+            "error": f"Formato inválido. DEBE empezar por V/E/J seguido de 7-10 dígitos",
             "valor_original": cedula_limpia,
             "valor_formateado": cedula_formateada,
-            "formato_esperado": config["descripcion"]
+            "formato_esperado": config["descripcion"],
+            "requisitos": config["requisitos"],
+            "ejemplos_validos": config["requisitos"]["ejemplos_validos"]
         }
     
     @staticmethod
@@ -1198,19 +1225,38 @@ class AutoFormateador:
     
     @staticmethod
     def _formatear_cedula_tiempo_real(valor: str, pais: str) -> Dict[str, Any]:
-        """Formatear cédula mientras se escribe"""
+        """Formatear cédula mientras se escribe con validación estricta"""
         if pais.upper() == "VENEZUELA":
-            # Limpiar entrada
-            limpio = re.sub(r'[^\dVEJG]', '', valor.upper())
+            # Limpiar entrada: solo V, E, J y números
+            limpio = re.sub(r'[^VEJ\d]', '', valor.upper())
             
             # Auto-agregar V si empieza con número
             if limpio and limpio[0].isdigit():
                 limpio = "V" + limpio
             
+            # Validar longitud mientras se escribe
+            if len(limpio) == 0:
+                valido = False
+            elif len(limpio) == 1:
+                valido = limpio[0] in ["V", "E", "J"]
+            elif len(limpio) >= 2:
+                prefijo = limpio[0]
+                numero = limpio[1:]
+                valido = (prefijo in ["V", "E", "J"] and 
+                         numero.isdigit() and 
+                         7 <= len(numero) <= 10)
+            else:
+                valido = False
+            
             return {
                 "valor_formateado": limpio,
                 "cursor_posicion": len(limpio),
-                "valido": len(limpio) >= 8 and len(limpio) <= 9 and limpio[0] in ["V", "E", "J", "G"]
+                "valido": valido,
+                "requisitos": {
+                    "prefijo": "V, E o J",
+                    "longitud": "7-10 dígitos",
+                    "sin_caracteres_especiales": True
+                }
             }
         
         return {"valor_formateado": valor, "cursor_posicion": len(valor), "valido": False}
