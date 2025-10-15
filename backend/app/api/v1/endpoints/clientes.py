@@ -210,14 +210,8 @@ def listar_clientes(
     - COMERCIAL/ASESOR: Ve SOLO sus clientes asignados
     """
     try:
-        # Construir query base con relaciones
-        from sqlalchemy.orm import joinedload
-        query = db.query(Cliente).options(
-            joinedload(Cliente.concesionario_rel),
-            joinedload(Cliente.modelo_vehiculo_rel),
-            joinedload(Cliente.asesor_config_rel),
-            joinedload(Cliente.asesor)
-        )
+        # Construir query base SIN relaciones para evitar errores
+        query = db.query(Cliente)
         
         # FILTRO POR ROL - MATRIZ DE ACCESO
         if current_user.rol in ["COMERCIAL", "ASESOR"]:
