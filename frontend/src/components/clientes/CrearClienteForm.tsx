@@ -138,15 +138,15 @@ export function CrearClienteForm({
           // Fallback final: usar datos mock
           console.log('🔄 Usando datos mock para formulario...')
           const mockConcesionarios = [
-            { id: 1, nombre: 'AutoCenter Caracas', direccion: 'Av. Francisco de Miranda, Caracas', telefono: '+58 212-555-0101', email: 'caracas@autocenter.com', responsable: 'María González', activo: true },
-            { id: 2, nombre: 'Motors Valencia', direccion: 'Zona Industrial Norte, Valencia', telefono: '+58 241-555-0202', email: 'valencia@motors.com', responsable: 'Carlos Rodríguez', activo: true },
-            { id: 3, nombre: 'Vehiculos Maracaibo', direccion: 'Av. 5 de Julio, Maracaibo', telefono: '+58 261-555-0303', email: 'maracaibo@vehiculos.com', responsable: 'Ana Pérez', activo: true }
+            { id: 1, nombre: 'AutoCenter Caracas', direccion: 'Av. Francisco de Miranda, Caracas', telefono: '+58 212-555-0101', email: 'caracas@autocenter.com', responsable: 'María González', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: 2, nombre: 'Motors Valencia', direccion: 'Zona Industrial Norte, Valencia', telefono: '+58 241-555-0202', email: 'valencia@motors.com', responsable: 'Carlos Rodríguez', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: 3, nombre: 'Vehiculos Maracaibo', direccion: 'Av. 5 de Julio, Maracaibo', telefono: '+58 261-555-0303', email: 'maracaibo@vehiculos.com', responsable: 'Ana Pérez', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
           ]
           
           const mockAsesores = [
-            { id: 1, nombre: 'Roberto', apellido: 'Martínez', nombre_completo: 'Roberto Martínez', email: 'roberto.martinez@rapicredit.com', telefono: '+58 414-555-0404', especialidad: 'Vehículos Nuevos', comision_porcentaje: 2.5, activo: true, notas: 'Especialista en vehículos de gama alta' },
-            { id: 2, nombre: 'Sandra', apellido: 'López', nombre_completo: 'Sandra López', email: 'sandra.lopez@rapicredit.com', telefono: '+58 424-555-0505', especialidad: 'Vehículos Usados', comision_porcentaje: 3.0, activo: true, notas: 'Experta en financiamiento de vehículos usados' },
-            { id: 3, nombre: 'Miguel', apellido: 'Hernández', nombre_completo: 'Miguel Hernández', email: 'miguel.hernandez@rapicredit.com', telefono: '+58 414-555-0606', especialidad: 'Motocicletas', comision_porcentaje: 4.0, activo: true, notas: 'Especialista en financiamiento de motocicletas' }
+            { id: 1, nombre: 'Roberto', apellido: 'Martínez', nombre_completo: 'Roberto Martínez', email: 'roberto.martinez@rapicredit.com', telefono: '+58 414-555-0404', especialidad: 'Vehículos Nuevos', comision_porcentaje: 2.5, activo: true, notas: 'Especialista en vehículos de gama alta', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: 2, nombre: 'Sandra', apellido: 'López', nombre_completo: 'Sandra López', email: 'sandra.lopez@rapicredit.com', telefono: '+58 424-555-0505', especialidad: 'Vehículos Usados', comision_porcentaje: 3.0, activo: true, notas: 'Experta en financiamiento de vehículos usados', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: 3, nombre: 'Miguel', apellido: 'Hernández', nombre_completo: 'Miguel Hernández', email: 'miguel.hernandez@rapicredit.com', telefono: '+58 414-555-0606', especialidad: 'Motocicletas', comision_porcentaje: 4.0, activo: true, notas: 'Especialista en financiamiento de motocicletas', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
           ]
           
           setConcesionarios(mockConcesionarios)
