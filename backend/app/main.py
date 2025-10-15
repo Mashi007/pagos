@@ -44,6 +44,7 @@ from app.api.v1.endpoints import (
     emergency_fix,
     sql_direct,
     emergency_fix_models,
+    debug_asesores,
 )
 
 # Configurar logging
@@ -113,6 +114,7 @@ app.include_router(fix_roles.router, prefix=f"{settings.API_V1_PREFIX}/fix", tag
 app.include_router(emergency_fix.router, prefix=f"{settings.API_V1_PREFIX}/emergency", tags=["Emergency Fix"])
 app.include_router(sql_direct.router, prefix=f"{settings.API_V1_PREFIX}/sql", tags=["SQL Direct"])
 app.include_router(emergency_fix_models.router, prefix=f"{settings.API_V1_PREFIX}/emergency-models", tags=["Emergency Models Fix"])
+app.include_router(debug_asesores.router, prefix=f"{settings.API_V1_PREFIX}/debug-asesores", tags=["Debug Asesores"])
 
 
 @app.get("/", include_in_schema=False)
