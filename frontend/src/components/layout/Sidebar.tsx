@@ -22,6 +22,8 @@ import {
   ChevronDown,
   ChevronRight,
   Wrench,
+  Building,
+  Car,
 } from 'lucide-react'
 import { cn } from '@/utils'
 import { usePermissions } from '@/store/authStore'
@@ -121,9 +123,17 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     },
     {
       title: 'Configuración',
-      href: '/configuracion',
       icon: Settings,
+      isSubmenu: true,
       requiredRoles: ['ADMIN', 'GERENTE'],
+      children: [
+        { title: 'General', href: '/configuracion', icon: Settings },
+        { title: 'Validadores', href: '/validadores', icon: CheckCircle },
+        { title: 'Asesores', href: '/asesores', icon: Users },
+        { title: 'Concesionarios', href: '/concesionarios', icon: Building },
+        { title: 'Modelos de Vehículos', href: '/modelos-vehiculos', icon: Car },
+        { title: 'Usuarios', href: '/usuarios', icon: Shield, requiredRoles: ['ADMIN'] },
+      ],
     },
   ]
 
