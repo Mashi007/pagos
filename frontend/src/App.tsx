@@ -30,6 +30,12 @@ import { PagosPage } from '@/pages/PagosPage'
 import { AmortizacionPage } from '@/pages/AmortizacionPage'
 import { ReportesPage } from '@/pages/ReportesPage'
 import { VisualizacionBD } from '@/pages/VisualizacionBD'
+import { Validadores } from '@/pages/Validadores'
+import { Asesores } from '@/pages/Asesores'
+import { Concesionarios } from '@/pages/Concesionarios'
+import { ModelosVehiculos } from '@/pages/ModelosVehiculos'
+import { Usuarios } from '@/pages/Usuarios'
+import { Solicitudes } from '@/pages/Solicitudes'
 
 // Todas las páginas ahora están importadas desde archivos reales
 
@@ -199,6 +205,66 @@ function App() {
             element={
               <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE']}>
                 <Configuracion />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Validadores */}
+          <Route
+            path="validadores"
+            element={
+              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE']}>
+                <Validadores />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Asesores */}
+          <Route
+            path="asesores"
+            element={
+              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE']}>
+                <Asesores />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Concesionarios */}
+          <Route
+            path="concesionarios"
+            element={
+              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE']}>
+                <Concesionarios />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Modelos de Vehículos */}
+          <Route
+            path="modelos-vehiculos"
+            element={
+              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE']}>
+                <ModelosVehiculos />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Usuarios */}
+          <Route
+            path="usuarios"
+            element={
+              <ProtectedRoute requiredRoles={['ADMIN']}>
+                <Usuarios />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Solicitudes */}
+          <Route
+            path="solicitudes"
+            element={
+              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE', 'ASESOR_COMERCIAL']}>
+                <Solicitudes />
               </ProtectedRoute>
             }
           />
