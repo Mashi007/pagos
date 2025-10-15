@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { concesionarioService, type Concesionario } from '@/services/concesionarioService'
 import { asesorService, type Asesor } from '@/services/asesorService'
+import { modeloVehiculoService, type ModeloVehiculo } from '@/services/modeloVehiculoService'
 import { clienteService } from '@/services/clienteService'
 
 interface FormData {
@@ -52,19 +53,6 @@ interface FieldValidation {
   [key: string]: ValidationResult
 }
 
-const MODELOS_VEHICULOS = [
-  'Toyota Corolla',
-  'Nissan Versa',
-  'Hyundai Accent',
-  'Chevrolet Aveo',
-  'Ford Fiesta',
-  'Kia Rio',
-  'Mazda 2',
-  'Suzuki Swift',
-  'Renault Logan',
-  'Volkswagen Polo'
-]
-
 export function CrearClienteForm({ 
   onClose, 
   onClienteCreated 
@@ -91,6 +79,7 @@ export function CrearClienteForm({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [concesionarios, setConcesionarios] = useState<Concesionario[]>([])
   const [asesores, setAsesores] = useState<Asesor[]>([])
+  const [modelosVehiculos, setModelosVehiculos] = useState<ModeloVehiculo[]>([])
   const [loadingData, setLoadingData] = useState(true)
 
   // 🔄 CARGAR DATOS DINÁMICOS: Asesores y Concesionarios desde configuración
@@ -98,9 +87,9 @@ export function CrearClienteForm({
     const loadData = async () => {
       try {
         setLoadingData(true)
-        console.log('🔄 Cargando asesores y concesionarios desde configuración...')
+        console.log('🔄 Cargando asesores, concesionarios y modelos de vehículos desde configuración...')
         
-        const [concesionariosData, asesoresData] = await Promise.all([
+        const [concesionariosData, asesoresData, modelosData] = await Promise.all([
           // 🔄 Usar endpoints de configuración
           fetch('/api/v1/concesionarios/activos', {
             headers: {
@@ -112,26 +101,36 @@ export function CrearClienteForm({
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
             }
+          }).then(res => res.json()).then(data => data.data || []),
+          
+          fetch('/api/v1/modelos-vehiculos/activos', {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
+            }
           }).then(res => res.json()).then(data => data.data || [])
         ])
         
         console.log('✅ Datos cargados:', {
           concesionarios: concesionariosData.length,
-          asesores: asesoresData.length
+          asesores: asesoresData.length,
+          modelos: modelosData.length
         })
         
         setConcesionarios(concesionariosData)
         setAsesores(asesoresData)
+        setModelosVehiculos(modelosData)
       } catch (error) {
         console.error('❌ Error al cargar datos de configuración:', error)
         // Fallback a servicios locales si falla
         try {
-          const [concesionariosData, asesoresData] = await Promise.all([
+          const [concesionariosData, asesoresData, modelosData] = await Promise.all([
             concesionarioService.listarConcesionariosActivos(),
-            asesorService.listarAsesoresActivos()
+            asesorService.listarAsesoresActivos(),
+            modeloVehiculoService.listarModelosActivos()
           ])
           setConcesionarios(concesionariosData)
           setAsesores(asesoresData)
+          setModelosVehiculos(modelosData)
         } catch (fallbackError) {
           console.error('❌ Error en fallback:', fallbackError)
           
@@ -149,11 +148,21 @@ export function CrearClienteForm({
             { id: 3, nombre: 'Miguel', apellido: 'Hernández', nombre_completo: 'Miguel Hernández', email: 'miguel.hernandez@rapicredit.com', telefono: '+58 414-555-0606', especialidad: 'Motocicletas', comision_porcentaje: 4.0, activo: true, notas: 'Especialista en financiamiento de motocicletas', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
           ]
           
+          const mockModelos = [
+            { id: 1, modelo: 'Toyota Corolla', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: 2, modelo: 'Nissan Versa', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: 3, modelo: 'Hyundai Accent', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: 4, modelo: 'Chevrolet Aveo', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+            { id: 5, modelo: 'Ford Fiesta', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+          ]
+          
           setConcesionarios(mockConcesionarios)
           setAsesores(mockAsesores)
+          setModelosVehiculos(mockModelos)
           console.log('✅ Datos mock cargados:', {
             concesionarios: mockConcesionarios.length,
-            asesores: mockAsesores.length
+            asesores: mockAsesores.length,
+            modelos: mockModelos.length
           })
         }
       } finally {
@@ -713,9 +722,9 @@ export function CrearClienteForm({
                       <SelectValue placeholder="Seleccionar modelo" />
                     </SelectTrigger>
                     <SelectContent>
-                      {MODELOS_VEHICULOS.map((modelo) => (
-                        <SelectItem key={modelo} value={modelo}>
-                          {modelo}
+                      {modelosVehiculos.map((modelo) => (
+                        <SelectItem key={modelo.id} value={modelo.modelo}>
+                          {modelo.modelo}
                         </SelectItem>
                       ))}
                     </SelectContent>
