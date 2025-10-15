@@ -2,14 +2,8 @@ import { apiClient, ApiResponse } from './api'
 
 export interface ModeloVehiculo {
   id: number
-  marca: string
   modelo: string
-  nombre_completo: string
-  categoria?: string
-  precio_base?: number
   activo: boolean
-  descripcion?: string
-  especificaciones?: string
   created_at: string
   updated_at?: string
 }
