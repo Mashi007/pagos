@@ -8,14 +8,13 @@ from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 from decimal import Decimal
+import logging
+import json
 
 from app.db.session import get_db
 from app.models.user import User
 from app.models.cliente import Cliente
 from app.api.deps import get_current_user
-import logging
-import json
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -93,6 +92,7 @@ def habilitar_monitoreo_basico(
 @router.get("/sistema/completa")
 def obtener_configuracion_completa(
     categoria: Optional[str] = Query(None, description="Filtrar por categoría"),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -104,6 +104,7 @@ def obtener_configuracion_completa(
     
     try:
         from app.models.configuracion_sistema import ConfiguracionSistema
+        from datetime import datetime
         
         query = db.query(ConfiguracionSistema).filter(
             ConfiguracionSistema.visible_frontend == True
@@ -1316,11 +1317,11 @@ def actualizar_configuracion_general(
 
 
 @router.get("/completa")
-def obtener_configuracion_completa(
+def obtener_configuracion_cache(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Obtener toda la configuración del sistema.
+    Obtener toda la configuración del sistema desde caché.
     """
     return {
         "tasas": _config_cache["tasas"],
