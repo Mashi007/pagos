@@ -142,4 +142,4 @@ def ping():
     """
     🏓 Ping simple
     """
-    return {"message": "pong", "status": "ok", "version": "v1.0_final", "update": "all_admin_refs_removed"}
+    return {"message": "pong", "status": "ok", "version": "v1.1_clean", "update": "legacy_roles_removed"}

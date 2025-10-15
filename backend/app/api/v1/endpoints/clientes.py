@@ -206,16 +206,14 @@ def listar_clientes(
     Listar clientes con filtros básicos y paginación
     
     IMPLEMENTA MATRIZ DE ACCESO POR ROL:
-    - ADMIN: Ve TODOS los clientes
-    - COMERCIAL/ASESOR: Ve SOLO sus clientes asignados
+    - ADMINISTRADOR_GENERAL y GERENTE: Ve TODOS los clientes
+    - COBRANZAS: Ve TODOS los clientes (para gestión de cobranza)
     """
     try:
         # Construir query base SIN relaciones para evitar errores
         query = db.query(Cliente)
         
-        # FILTRO POR ROL - MATRIZ DE ACCESO
-        if current_user.rol in ["COMERCIAL", "ASESOR"]:
-            query = query.filter(Cliente.asesor_id == current_user.id)
+        # Todos los roles actuales tienen acceso a todos los clientes
         
         # APLICAR FILTROS
         if search:
@@ -394,9 +392,8 @@ def test_main_logic(
         # Construir query base
         query = db.query(Cliente)
         
-        # FILTRO POR ROL - MATRIZ DE ACCESO
-        if current_user.rol in ["COMERCIAL", "ASESOR"]:
-            query = query.filter(Cliente.asesor_id == current_user.id)
+        # FILTRO POR ROL - Todos los roles tienen acceso completo
+        # (ADMINISTRADOR_GENERAL, GERENTE, COBRANZAS)
         
         # ORDENAMIENTO
         query = query.order_by(desc(Cliente.fecha_registro))
@@ -435,9 +432,7 @@ def test_step_by_step(
         # Paso 1: Query base
         query = db.query(Cliente)
         
-        # Paso 2: Filtro por rol
-        if current_user.rol in ["COMERCIAL", "ASESOR"]:
-            query = query.filter(Cliente.asesor_id == current_user.id)
+        # Paso 2: Filtro por rol - Todos los roles tienen acceso completo
         
         # Paso 3: Count (sin ordenamiento)
         total = query.count()
@@ -474,8 +469,7 @@ def test_no_desc(
     try:
         query = db.query(Cliente)
         
-        if current_user.rol in ["COMERCIAL", "ASESOR"]:
-            query = query.filter(Cliente.asesor_id == current_user.id)
+        # Todos los roles tienen acceso completo
         
         total = query.count()
         
@@ -645,13 +639,8 @@ def crear_clientes_prueba(db: Session = Depends(get_db), current_user: User = De
 def test_sin_join(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Test sin join para verificar si el problema es el join con User"""
     try:
-        # Query sin join, solo con filtro por rol
-        if current_user.rol in ["COMERCIAL", "ASESOR"]:
-            # Solo sus clientes asignados
-            query = db.query(Cliente).filter(Cliente.asesor_id == current_user.id)
-        else:
-            # ADMIN y COBRANZAS ven todos los clientes
-            query = db.query(Cliente)
+        # Query sin join - Todos los roles tienen acceso completo
+        query = db.query(Cliente)
         
         count = query.count()
         return {
@@ -842,8 +831,9 @@ def crear_cliente_con_financiamiento(
         if not asesor:
             raise HTTPException(status_code=400, detail="❌ Asesor no encontrado")
         
-        if asesor.rol not in ["ASESOR", "COMERCIAL", "GERENTE"]:
-            raise HTTPException(status_code=400, detail="❌ El usuario no tiene rol de asesor")
+        # Validar que el usuario esté activo (cualquier rol puede ser asesor)
+        if not asesor.is_active:
+            raise HTTPException(status_code=400, detail="❌ El usuario no está activo")
         
         if not asesor.is_active:
             raise HTTPException(status_code=400, detail="❌ El asesor está inactivo")
@@ -1110,10 +1100,11 @@ def reasignar_asesor(
         raise HTTPException(status_code=400, detail="Asesor no encontrado")
     
     # Verificar que el nuevo asesor tiene rol apropiado
-    if nuevo_asesor.rol not in ["ASESOR", "COMERCIAL", "GERENTE"]:
+    # Validar que el usuario esté activo (cualquier rol puede ser asesor)
+    if not nuevo_asesor.is_active:
         raise HTTPException(
             status_code=400, 
-            detail="El usuario debe tener rol ASESOR, COMERCIAL o GERENTE"
+            detail="El usuario debe estar activo"
         )
     
     # Actualizar asignación
@@ -1142,7 +1133,6 @@ def obtener_asesores_disponibles(
     Obtener lista de asesores disponibles para asignación
     """
     asesores = db.query(User).filter(
-        User.rol.in_(["ASESOR", "COMERCIAL", "GERENTE"]),
         User.is_active == True
     ).all()
     
@@ -1519,7 +1509,7 @@ def estadisticas_clientes(
         User.full_name,
         func.count(Cliente.id).label('total_clientes')
     ).outerjoin(Cliente, User.id == Cliente.asesor_id).filter(
-        User.rol.in_(["ASESOR", "COMERCIAL", "GERENTE"])
+        User.is_active == True
     ).group_by(User.id, User.full_name).all()
     
     # Por concesionario
