@@ -77,22 +77,15 @@ def listar_modelos_vehiculos(
 
 @router.get("/activos")
 def listar_modelos_activos(
-    categoria: Optional[str] = Query(None, description="Filtrar por categoría"),
-    marca: Optional[str] = Query(None, description="Filtrar por marca"),
     db: Session = Depends(get_db)
 ):
     """
     🚗 Listar solo modelos activos (para formularios)
+    
+    Simplificado: Sin filtros adicionales, solo modelos activos
     """
     try:
         query = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo == True)
-        
-        if categoria:
-            query = query.filter(ModeloVehiculo.categoria == categoria)
-        
-        if marca:
-            query = query.filter(ModeloVehiculo.marca == marca)
-        
         modelos = query.order_by(ModeloVehiculo.modelo).all()
         return [m.to_dict() for m in modelos]
         

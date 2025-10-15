@@ -79,18 +79,15 @@ def test_asesores_activos():
 
 @router.get("/activos")
 def listar_asesores_activos(
-    especialidad: Optional[str] = Query(None, description="Filtrar por especialidad"),
     db: Session = Depends(get_db)
 ):
     """
     👨‍💼 Listar solo asesores activos (para formularios)
+    
+    Simplificado: Sin filtros adicionales, solo asesores activos
     """
     try:
         query = db.query(Asesor).filter(Asesor.activo == True)
-        
-        if especialidad:
-            query = query.filter(Asesor.especialidad == especialidad)
-        
         asesores = query.all()
         return [a.to_dict() for a in asesores]
         

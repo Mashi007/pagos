@@ -48,7 +48,6 @@ class Cliente(Base):
     # ============================================
     # ASIGNACIÓN Y GESTIÓN
     # ============================================
-    asesor_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Asesor del sistema (users)
     asesor_config_id = Column(Integer, ForeignKey("asesores.id"), nullable=True, index=True)  # Asesor de configuración
     fecha_asignacion = Column(Date, nullable=True)
     
@@ -71,7 +70,6 @@ class Cliente(Base):
     # Relaciones
     prestamos = relationship("Prestamo", back_populates="cliente")
     notificaciones = relationship("Notificacion", back_populates="cliente")
-    asesor = relationship("User", foreign_keys=[asesor_id], back_populates="clientes_asignados")
     
     # Nuevas relaciones con ForeignKeys
     concesionario_rel = relationship("Concesionario", foreign_keys=[concesionario_id])
