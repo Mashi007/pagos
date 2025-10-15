@@ -103,8 +103,7 @@ export function Validadores() {
       </div>
 
       {/* Sección: Probar Validadores */}
-      <div className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-2">
             {/* Panel de prueba */}
             <Card>
               <CardHeader>
@@ -229,11 +228,10 @@ export function Validadores() {
                 </div>
               </CardContent>
             </Card>
-          </div>
+      </div>
 
-
-        {/* Sección: Configuración */}
-        <div className="mt-6">
+      {/* Sección: Configuración */}
+      <div>
           <Card>
             <CardHeader>
               <CardTitle>Configuración de Validadores</CardTitle>
@@ -300,10 +298,10 @@ export function Validadores() {
               </div>
             </CardContent>
           </Card>
-        </div>
+      </div>
 
-        {/* Sección: Ejemplos */}
-        <div className="mt-6">
+      {/* Sección: Ejemplos */}
+      <div>
           <div className="grid gap-6 md:grid-cols-2">
             <Card>
               <CardHeader>
@@ -385,10 +383,10 @@ export function Validadores() {
               </CardContent>
             </Card>
           </div>
-        </div>
+      </div>
 
-        {/* Sección: Diagnóstico */}
-        <div className="mt-6">
+      {/* Sección: Diagnóstico */}
+      <div>
           <Card>
             <CardHeader>
               <CardTitle>Diagnóstico de Datos</CardTitle>
@@ -409,9 +407,7 @@ export function Validadores() {
               </div>
             </CardContent>
           </Card>
-        </div>
       </div>
     </div>
   )
 }
-
