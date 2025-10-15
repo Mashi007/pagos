@@ -45,7 +45,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           
           // Verificar estructura de respuesta
           console.log('Store: Estructura de respuesta:', response)
-          console.log('Store: response.data:', response.data)
+          console.log('Store: response.access_token:', response.access_token ? 'EXISTS' : 'MISSING')
           console.log('Store: response.user:', response.user)
           
           // Acceder a tokens directamente (apiClient.post ya devuelve response.data)
