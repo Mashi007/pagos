@@ -274,7 +274,7 @@ async def solicitar_modificacion_pago_completo(
         "estado": "PENDIENTE",
         "prioridad": solicitud.prioridad,
         "fecha_limite": solicitud.fecha_limite,
-        "requiere_aprobacion_de": "ADMIN",
+        "requiere_aprobacion_de": "ADMINISTRADOR_GENERAL",
         "bloqueado_temporalmente": True,
         "archivo_adjunto": bool(archivo_path),
         "pago_afectado": {
@@ -414,7 +414,7 @@ def solicitar_modificacion_pago(
         "solicitud_id": solicitud.id,
         "mensaje": "✅ Solicitud de modificación de pago enviada para aprobación",
         "estado": "PENDIENTE",
-        "requiere_aprobacion_de": "ADMIN",
+        "requiere_aprobacion_de": "ADMINISTRADOR_GENERAL",
         "pago_afectado": {
             "id": pago.id,
             "monto_actual": float(pago.monto_pagado),
@@ -462,7 +462,7 @@ def solicitar_anulacion_pago(
         "solicitud_id": solicitud.id,
         "mensaje": "✅ Solicitud de anulación de pago enviada para aprobación",
         "estado": "PENDIENTE",
-        "requiere_aprobacion_de": "ADMIN",
+        "requiere_aprobacion_de": "ADMINISTRADOR_GENERAL",
         "pago_afectado": {
             "id": pago.id,
             "monto": float(pago.monto_pagado),
@@ -512,7 +512,7 @@ def solicitar_modificacion_amortizacion(
         "solicitud_id": solicitud.id,
         "mensaje": "✅ Solicitud de modificación de amortización enviada para aprobación",
         "estado": "PENDIENTE",
-        "requiere_aprobacion_de": "ADMIN",
+        "requiere_aprobacion_de": "ADMINISTRADOR_GENERAL",
         "prestamo_afectado": {
             "id": prestamo.id,
             "cliente": prestamo.cliente.nombre_completo if prestamo.cliente else "N/A",
@@ -564,7 +564,7 @@ def solicitar_edicion_cliente_comercial(
         "solicitud_id": solicitud.id,
         "mensaje": "✅ Solicitud de edición de cliente enviada para autorización de Admin",
         "estado": "PENDIENTE",
-        "requiere_autorizacion_de": "ADMIN",
+        "requiere_autorizacion_de": "ADMINISTRADOR_GENERAL",
         "cliente_afectado": {
             "id": cliente.id,
             "nombre": cliente.nombre_completo,
@@ -624,7 +624,7 @@ def solicitar_edicion_cliente_propio(
         "solicitud_id": solicitud.id,
         "mensaje": "✅ Solicitud de edición enviada para autorización de Admin",
         "estado": "PENDIENTE",
-        "requiere_autorizacion_de": "ADMIN",
+        "requiere_autorizacion_de": "ADMINISTRADOR_GENERAL",
         "cliente_afectado": {
             "id": cliente.id,
             "nombre": cliente.nombre_completo,
@@ -651,7 +651,7 @@ def listar_solicitudes_pendientes(
     📋 Listar solicitudes pendientes de aprobación (Solo Admin)
     """
     # Verificar permisos
-    if current_user.rol not in ["ADMIN", "GERENTE", "DIRECTOR"]:
+    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE", "DIRECTOR"]:
         raise HTTPException(status_code=403, detail="Sin permisos para ver solicitudes")
     
     query = db.query(Aprobacion).filter(Aprobacion.estado == "PENDIENTE")
@@ -700,7 +700,7 @@ async def aprobar_solicitud(
     ✅ Aprobar solicitud (Solo Admin)
     """
     # Verificar permisos
-    if current_user.rol not in ["ADMIN", "GERENTE", "DIRECTOR"]:
+    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE", "DIRECTOR"]:
         raise HTTPException(status_code=403, detail="Sin permisos para aprobar solicitudes")
     
     # Buscar solicitud
@@ -743,7 +743,7 @@ async def rechazar_solicitud(
     ❌ Rechazar solicitud (Solo Admin)
     """
     # Verificar permisos
-    if current_user.rol not in ["ADMIN", "GERENTE", "DIRECTOR"]:
+    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE", "DIRECTOR"]:
         raise HTTPException(status_code=403, detail="Sin permisos para rechazar solicitudes")
     
     # Buscar solicitud
@@ -867,7 +867,7 @@ def estadisticas_solicitudes(
     📊 Estadísticas de solicitudes de aprobación
     """
     # Verificar permisos
-    if current_user.rol not in ["ADMIN", "GERENTE", "DIRECTOR"]:
+    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE", "DIRECTOR"]:
         raise HTTPException(status_code=403, detail="Sin permisos")
     
     # Estadísticas generales
@@ -920,7 +920,7 @@ def dashboard_aprobaciones(
     📊 Dashboard visual completo del sistema de aprobaciones
     """
     # Verificar permisos
-    if current_user.rol not in ["ADMIN", "GERENTE", "DIRECTOR"]:
+    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE", "DIRECTOR"]:
         raise HTTPException(status_code=403, detail="Sin permisos para ver dashboard")
     
     # Estadísticas principales
@@ -1100,7 +1100,7 @@ def obtener_matriz_permisos_actualizada(
         },
         "usuario_actual": {
             "rol": current_user.rol,
-            "puede_aprobar": current_user.rol in ["ADMIN", "GERENTE", "DIRECTOR"],
+            "puede_aprobar": current_user.rol in ["ADMINISTRADOR_GENERAL", "GERENTE", "DIRECTOR"],
             "requiere_aprobacion_para": _get_actions_requiring_approval(current_user.rol)
         }
     }
@@ -1122,7 +1122,7 @@ def _get_actions_requiring_approval(user_role: str) -> list:
         "ASESOR": [
             "Editar sus clientes asignados"
         ],
-        "ADMIN": [],
+        "ADMINISTRADOR_GENERAL": [],
         "GERENTE": [],
         "DIRECTOR": []
     }
@@ -1140,7 +1140,7 @@ async def _notificar_nueva_solicitud_admin(solicitud: Aprobacion, db: Session):
     """
     try:
         # Obtener todos los administradores
-        admins = db.query(User).filter(User.rol.in_(["ADMIN", "GERENTE", "DIRECTOR"])).all()
+        admins = db.query(User).filter(User.rol.in_(["ADMINISTRADOR_GENERAL", "GERENTE", "DIRECTOR"])).all()
         
         for admin in admins:
             # Crear notificación in-app

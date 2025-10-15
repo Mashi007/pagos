@@ -393,7 +393,7 @@ def detectar_errores_masivo(
     • Montos = "ERROR"
     """
     # Solo admin y gerente pueden ejecutar análisis masivo
-    if current_user.rol not in ["ADMIN", "GERENTE"]:
+    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE"]:
         raise HTTPException(status_code=403, detail="Sin permisos para análisis masivo")
     
     try:
@@ -429,7 +429,7 @@ def corregir_datos_masivo(
     """
     🔧 Corrección masiva de datos incorrectos
     """
-    if current_user.rol not in ["ADMIN", "GERENTE"]:
+    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE"]:
         raise HTTPException(status_code=403, detail="Sin permisos para corrección masiva")
     
     try:

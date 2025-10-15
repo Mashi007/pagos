@@ -31,15 +31,15 @@ def verificar_rol_administracion(
     """
     try:
         # Buscar todos los administradores
-        admins = db.query(User).filter(User.rol == "ADMIN").all()
+        admins = db.query(User).filter(User.rol == "ADMINISTRADOR_GENERAL").all()
         admins_activos = db.query(User).filter(
-            User.rol == "ADMIN",
+            User.rol == "ADMINISTRADOR_GENERAL",
             User.is_active == True
         ).all()
         
         # Estadísticas de usuarios por rol
         roles_stats = {}
-        for rol in ["ADMIN", "GERENTE", "DIRECTOR", "COBRANZAS", "COMERCIAL", "ASESOR", "CONTADOR", "INVITADO"]:
+        for rol in ["ADMINISTRADOR_GENERAL", "GERENTE", "DIRECTOR", "COBRANZAS", "COMERCIAL", "ASESOR", "CONTADOR", "INVITADO"]:
             count = db.query(User).filter(User.rol == rol).count()
             activos = db.query(User).filter(User.rol == rol, User.is_active == True).count()
             roles_stats[rol] = {"total": count, "activos": activos}

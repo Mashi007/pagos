@@ -1298,7 +1298,7 @@ async def _notificar_cobranzas_nuevo_cliente(cliente_id: int, asesor_nombre: str
         if cliente:
             # Obtener usuarios de cobranzas
             usuarios_cobranzas = db.query(User).filter(
-                User.rol.in_(["COBRANZAS", "GERENTE", "ADMIN"]),
+                User.rol.in_(["COBRANZAS", "GERENTE", "ADMINISTRADOR_GENERAL"]),
                 User.is_active == True,
                 User.email.isnot(None)
             ).all()
@@ -1567,8 +1567,7 @@ def obtener_acciones_rapidas(
         puede_generar_estado_cuenta=has_permission(user_role, Permission.REPORTE_READ),
         puede_modificar_financiamiento=has_permission(user_role, Permission.PRESTAMO_UPDATE),
         puede_reasignar_asesor=(
-            user_role == UserRole.ADMIN or 
-            (user_role in [UserRole.GERENTE, UserRole.DIRECTOR] and cliente.asesor_id == current_user.id)
+            user_role in [UserRole.ADMINISTRADOR_GENERAL, UserRole.GERENTE]
         )
     )
     

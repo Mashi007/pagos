@@ -110,7 +110,7 @@ def require_role(*allowed_roles: UserRole):
         Función de dependencia
         
     Usage:
-        @app.get("/admin", dependencies=[Depends(require_role(UserRole.ADMIN))])
+        @app.get("/admin", dependencies=[Depends(require_role(UserRole.ADMINISTRADOR_GENERAL))])
     """
     def role_checker(current_user: User = Depends(get_current_user)) -> User:
         if current_user.rol not in allowed_roles:
@@ -151,13 +151,13 @@ def require_permission(*required_permissions: Permission):
 
 
 def get_admin_user(
-    current_user: User = Depends(require_role(UserRole.ADMIN))
+    current_user: User = Depends(require_role(UserRole.ADMINISTRADOR_GENERAL, UserRole.GERENTE))
 ) -> User:
     """
-    Dependency para endpoints que requieren rol ADMIN
+    Dependency para endpoints que requieren rol de administrador
     
     Returns:
-        Usuario con rol ADMIN
+        Usuario con rol ADMINISTRADOR_GENERAL o GERENTE
     """
     return current_user
 

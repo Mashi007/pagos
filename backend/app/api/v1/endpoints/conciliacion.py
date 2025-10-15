@@ -795,7 +795,7 @@ async def flujo_completo_conciliacion(
         # ============================================
         
         # Verificar permisos
-        if current_user.rol not in ["COBRANZAS", "ADMIN", "GERENTE"]:
+        if current_user.rol not in ["COBRANZAS", "ADMINISTRADOR_GENERAL", "GERENTE"]:
             raise HTTPException(status_code=403, detail="Sin permisos para conciliación bancaria")
         
         # Validar archivo (reutilizar endpoint existente)
@@ -1066,7 +1066,7 @@ def obtener_paso_flujo_conciliacion(
             "titulo": "Ingresa a 'Conciliación Bancaria'",
             "endpoint": "GET /dashboard/cobranzas",
             "navegacion": "Dashboard → Conciliación Bancaria → Nuevo Proceso",
-            "permisos_requeridos": ["COBRANZAS", "ADMIN", "GERENTE"],
+            "permisos_requeridos": ["COBRANZAS", "ADMINISTRADOR_GENERAL", "GERENTE"],
             "siguiente_paso": "Cargar archivo Excel"
         }
     
@@ -1240,7 +1240,7 @@ async def _notificar_admin_conciliacion(
         
         # Obtener administradores
         admins = db.query(User).filter(
-            User.rol.in_(["ADMIN", "GERENTE", "DIRECTOR"]),
+            User.rol.in_(["ADMINISTRADOR_GENERAL", "GERENTE", "DIRECTOR"]),
             User.is_active == True,
             User.email.isnot(None)
         ).all()

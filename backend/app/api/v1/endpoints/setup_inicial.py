@@ -26,7 +26,7 @@ def inicializar_sistema_completo(
     """
     try:
         # Verificar si ya hay administradores
-        admin_existente = db.query(User).filter(User.rol == "ADMIN").first()
+        admin_existente = db.query(User).filter(User.rol == "ADMINISTRADOR_GENERAL").first()
         
         if admin_existente:
             raise HTTPException(
@@ -80,9 +80,9 @@ def verificar_estado_inicializacion(
     """
     try:
         # Verificar si hay administradores
-        total_admins = db.query(User).filter(User.rol == "ADMIN").count()
+        total_admins = db.query(User).filter(User.rol == "ADMINISTRADOR_GENERAL").count()
         admin_activo = db.query(User).filter(
-            User.rol == "ADMIN",
+            User.rol == "ADMINISTRADOR_GENERAL",
             User.is_active == True
         ).first()
         
@@ -192,7 +192,7 @@ def obtener_configuracion_para_frontend(
                 "cuota_inicial_minima": 10.0
             },
             "roles_disponibles": [
-                "ADMIN", "GERENTE", "DIRECTOR", 
+                "ADMINISTRADOR_GENERAL", "GERENTE", "DIRECTOR", 
                 "COBRANZAS", "COMERCIAL", "ASESOR", "CONTADOR"
             ]
         }

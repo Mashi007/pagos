@@ -111,7 +111,7 @@ def crear_modelo_vehiculo(
     ➕ Crear un nuevo modelo de vehículo
     """
     # Solo admin puede crear modelos
-    if current_user.rol not in ["ADMIN", "GERENTE"]:
+    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE"]:
         raise HTTPException(
             status_code=403, 
             detail="Solo administradores y gerentes pueden crear modelos de vehículos"
@@ -171,7 +171,7 @@ def actualizar_modelo_vehiculo(
     ✏️ Actualizar un modelo de vehículo existente
     """
     # Solo admin puede actualizar modelos
-    if current_user.rol not in ["ADMIN", "GERENTE"]:
+    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE"]:
         raise HTTPException(
             status_code=403, 
             detail="Solo administradores y gerentes pueden actualizar modelos de vehículos"
@@ -222,7 +222,7 @@ def eliminar_modelo_vehiculo(
     🗑️ Eliminar un modelo de vehículo (soft delete - marcar como inactivo)
     """
     # Solo admin puede eliminar modelos
-    if current_user.rol not in ["ADMIN", "GERENTE"]:
+    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE"]:
         raise HTTPException(
             status_code=403, 
             detail="Solo administradores y gerentes pueden eliminar modelos de vehículos"

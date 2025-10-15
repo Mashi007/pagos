@@ -33,7 +33,7 @@ def obtener_estado_monitoreo(
     🔍 Verificar estado del sistema de monitoreo y observabilidad
     """
     # Solo admin puede ver configuración de monitoreo
-    if current_user.rol != "ADMIN":
+    if current_user.rol != "ADMINISTRADOR_GENERAL":
         raise HTTPException(status_code=403, detail="Solo administradores pueden ver configuración de monitoreo")
     
     from app.core.monitoring import get_monitoring_status
@@ -47,7 +47,7 @@ def habilitar_monitoreo_basico(
     """
     ⚡ Habilitar monitoreo básico sin dependencias externas
     """
-    if current_user.rol != "ADMIN":
+    if current_user.rol != "ADMINISTRADOR_GENERAL":
         raise HTTPException(status_code=403, detail="Solo administradores pueden configurar monitoreo")
     
     try:
@@ -99,7 +99,7 @@ def obtener_configuracion_completa(
     🔧 Obtener configuración completa del sistema para el frontend
     """
     # Solo admin puede ver configuración completa
-    if current_user.rol != "ADMIN":
+    if current_user.rol != "ADMINISTRADOR_GENERAL":
         raise HTTPException(status_code=403, detail="Solo administradores pueden ver configuración completa")
     
     try:
@@ -429,7 +429,7 @@ def actualizar_configuracion_sistema(
     }
     """
     # Solo admin puede actualizar configuración
-    if current_user.rol != "ADMIN":
+    if current_user.rol != "ADMINISTRADOR_GENERAL":
         raise HTTPException(status_code=403, detail="Solo administradores pueden actualizar configuración")
     
     try:
@@ -517,7 +517,7 @@ def probar_integracion(
     """
     🧪 Probar integración de una categoría específica
     """
-    if current_user.rol != "ADMIN":
+    if current_user.rol != "ADMINISTRADOR_GENERAL":
         raise HTTPException(status_code=403, detail="Solo administradores pueden probar integraciones")
     
     try:
@@ -609,7 +609,7 @@ def inicializar_configuraciones_default(
     """
     🔧 Inicializar configuraciones por defecto del sistema
     """
-    if current_user.rol != "ADMIN":
+    if current_user.rol != "ADMINISTRADOR_GENERAL":
         raise HTTPException(status_code=403, detail="Solo administradores pueden inicializar configuraciones")
     
     try:
@@ -736,7 +736,7 @@ def actualizar_configuracion_ia(
     """
     🤖 Actualizar configuración de IA
     """
-    if current_user.rol != "ADMIN":
+    if current_user.rol != "ADMINISTRADOR_GENERAL":
         raise HTTPException(status_code=403, detail="Solo administradores pueden configurar IA")
     
     try:
@@ -876,7 +876,7 @@ def actualizar_configuracion_email(
     """
     📧 Actualizar configuración de email
     """
-    if current_user.rol != "ADMIN":
+    if current_user.rol != "ADMINISTRADOR_GENERAL":
         raise HTTPException(status_code=403, detail="Solo administradores pueden configurar email")
     
     try:
@@ -988,7 +988,7 @@ def dashboard_configuracion_sistema(
     """
     📊 Dashboard principal de configuración del sistema
     """
-    if current_user.rol != "ADMIN":
+    if current_user.rol != "ADMINISTRADOR_GENERAL":
         raise HTTPException(status_code=403, detail="Solo administradores pueden ver dashboard de configuración")
     
     try:
@@ -1169,7 +1169,7 @@ def actualizar_configuracion_tasas(
     Actualizar configuración de tasas de interés.
     Solo accesible para ADMIN.
     """
-    if current_user.rol != "ADMIN":
+    if current_user.rol != "ADMINISTRADOR_GENERAL":
         raise HTTPException(status_code=403, detail="Solo administradores pueden modificar tasas")
     
     _config_cache["tasas"] = {
@@ -1205,7 +1205,7 @@ def actualizar_configuracion_limites(
     Actualizar configuración de límites.
     Solo accesible para ADMIN.
     """
-    if current_user.rol != "ADMIN":
+    if current_user.rol != "ADMINISTRADOR_GENERAL":
         raise HTTPException(status_code=403, detail="Solo administradores pueden modificar límites")
     
     # Validar que máximo > mínimo
@@ -1256,7 +1256,7 @@ def actualizar_configuracion_notificaciones(
     Actualizar configuración de notificaciones.
     Solo accesible para ADMIN y GERENTE.
     """
-    if current_user.rol not in ["ADMIN", "GERENTE"]:
+    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE"]:
         raise HTTPException(status_code=403, detail="Sin permisos para modificar notificaciones")
     
     _config_cache["notificaciones"] = {
@@ -1294,7 +1294,7 @@ def actualizar_configuracion_general(
     Actualizar configuración general.
     Solo accesible para ADMIN.
     """
-    if current_user.rol != "ADMIN":
+    if current_user.rol != "ADMINISTRADOR_GENERAL":
         raise HTTPException(status_code=403, detail="Solo administradores pueden modificar configuración general")
     
     _config_cache["general"] = {
@@ -1339,7 +1339,7 @@ def restablecer_configuracion_defecto(
     Restablecer configuración a valores por defecto.
     Solo accesible para ADMIN.
     """
-    if current_user.rol != "ADMIN":
+    if current_user.rol != "ADMINISTRADOR_GENERAL":
         raise HTTPException(status_code=403, detail="Solo administradores pueden restablecer configuración")
     
     defaults = {
