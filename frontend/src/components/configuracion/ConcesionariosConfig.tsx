@@ -167,7 +167,7 @@ export function ConcesionariosConfig() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium">Nombre del Concesionario *</label>
                   <Input
@@ -177,6 +177,41 @@ export function ConcesionariosConfig() {
                     required
                   />
                 </div>
+                <div>
+                  <label className="text-sm font-medium">Responsable</label>
+                  <Input
+                    value={formData.responsable}
+                    onChange={(e) => setFormData({ ...formData, responsable: e.target.value })}
+                    placeholder="Nombre del responsable"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Email</label>
+                  <Input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="email@ejemplo.com"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Teléfono</label>
+                  <Input
+                    value={formData.telefono}
+                    onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                    placeholder="+58 424 1234567"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Dirección</label>
+                <textarea
+                  value={formData.direccion}
+                  onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+                  placeholder="Dirección completa del concesionario"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                />
               </div>
               <div className="flex items-center space-x-2">
                 <input
@@ -243,6 +278,30 @@ export function ConcesionariosConfig() {
                   </Badge>
                 </div>
               </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Responsable</label>
+                <p>{viewingConcesionario.responsable || 'No especificado'}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Email</label>
+                <p className="flex items-center">
+                  <Mail className="mr-2 h-4 w-4 text-gray-400" />
+                  {viewingConcesionario.email || 'No especificado'}
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Teléfono</label>
+                <p className="flex items-center">
+                  <Phone className="mr-2 h-4 w-4 text-gray-400" />
+                  {viewingConcesionario.telefono || 'No especificado'}
+                </p>
+              </div>
+              {viewingConcesionario.direccion && (
+                <div className="md:col-span-2">
+                  <label className="text-sm font-medium text-gray-500">Dirección</label>
+                  <p className="text-sm text-gray-700">{viewingConcesionario.direccion}</p>
+                </div>
+              )}
             </div>
             <div className="flex justify-end space-x-2 mt-6">
               <Button variant="outline" onClick={() => setViewingConcesionario(null)}>
