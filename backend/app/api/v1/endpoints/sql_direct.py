@@ -103,6 +103,78 @@ def fix_roles_now():
             "status": "error"
         }
 
+@router.get("/delete-wrong-admin")
+def delete_wrong_admin():
+    """
+    🗑️ Eliminar admin@financiamiento.com específicamente
+    """
+    try:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
+            return {"error": "DATABASE_URL no encontrada", "status": "error"}
+        
+        conn = psycopg2.connect(database_url)
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Verificar si existe admin@financiamiento.com
+        cursor.execute("SELECT id, email, rol FROM users WHERE email = %s", ("admin@financiamiento.com",))
+        wrong_admin = cursor.fetchone()
+        
+        if wrong_admin:
+            # Eliminar el usuario
+            cursor.execute("DELETE FROM users WHERE email = %s", ("admin@financiamiento.com",))
+            deleted_rows = cursor.rowcount
+            
+            if deleted_rows > 0:
+                # Verificar usuarios restantes
+                cursor.execute("SELECT id, email, rol, is_active FROM users WHERE rol = 'ADMINISTRADOR_GENERAL'")
+                remaining_admins = cursor.fetchall()
+                
+                conn.commit()
+                cursor.close()
+                conn.close()
+                
+                return {
+                    "message": f"✅ Usuario admin@financiamiento.com eliminado exitosamente",
+                    "deleted_user": {
+                        "id": wrong_admin['id'],
+                        "email": wrong_admin['email'],
+                        "role": wrong_admin['rol']
+                    },
+                    "remaining_admins": len(remaining_admins),
+                    "remaining_admin_details": [
+                        {
+                            "id": admin['id'],
+                            "email": admin['email'],
+                            "role": admin['rol'],
+                            "active": admin['is_active']
+                        } for admin in remaining_admins
+                    ],
+                    "status": "success"
+                }
+            else:
+                raise Exception("No se pudo eliminar el usuario")
+        else:
+            cursor.close()
+            conn.close()
+            
+            return {
+                "message": "✅ admin@financiamiento.com no existe",
+                "status": "already_clean"
+            }
+            
+    except Exception as e:
+        if 'conn' in locals():
+            conn.rollback()
+            conn.close()
+        return {
+            "message": f"❌ Error: {str(e)}",
+            "status": "error"
+        }
+
 @router.get("/status")
 def check_status():
     """
