@@ -127,8 +127,7 @@ def test_cedula_custom(cedula: str):
 
 @router.post("/validar-campo")
 def validar_campo_tiempo_real(
-    validacion: ValidacionCampo,
-    current_user: User = Depends(get_current_user)
+    validacion: ValidacionCampo
 ):
     """
     🔍 Validar campo individual en tiempo real (para frontend)
