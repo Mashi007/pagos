@@ -197,7 +197,7 @@ def listar_clientes(
     # Filtros específicos
     estado: Optional[str] = Query(None, description="ACTIVO, INACTIVO, MORA"),
     estado_financiero: Optional[str] = Query(None, description="AL_DIA, MORA, VENCIDO"),
-    asesor_id: Optional[int] = Query(None, description="ID del asesor asignado"),
+    asesor_config_id: Optional[int] = Query(None, description="ID del asesor de configuración asignado"),
     
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -233,8 +233,8 @@ def listar_clientes(
         if estado_financiero:
             query = query.filter(Cliente.estado_financiero == estado_financiero)
         
-        if asesor_id:
-            query = query.filter(Cliente.asesor_id == asesor_id)
+        if asesor_config_id:
+            query = query.filter(Cliente.asesor_config_id == asesor_config_id)
         
         # ORDENAMIENTO
         query = query.order_by(Cliente.id.desc())
@@ -266,7 +266,7 @@ def listar_clientes(
                 "monto_financiado": float(cliente.monto_financiado) if cliente.monto_financiado else None,
                 "modalidad_pago": cliente.modalidad_pago,
                 "numero_amortizaciones": cliente.numero_amortizaciones,
-                "asesor_id": cliente.asesor_id,
+                "asesor_config_id": cliente.asesor_config_id,
                 "estado": cliente.estado,
                 "activo": cliente.activo,
                 "estado_financiero": cliente.estado_financiero,
@@ -557,7 +557,7 @@ def crear_clientes_prueba(db: Session = Depends(get_db), current_user: User = De
                 "numero_amortizaciones": 48,
                 "estado": "ACTIVO",
                 "estado_financiero": "AL_DIA",
-                "asesor_id": current_user.id
+                "asesor_config_id": None
             },
             {
                 "cedula": "87654321",
@@ -579,7 +579,7 @@ def crear_clientes_prueba(db: Session = Depends(get_db), current_user: User = De
                 "numero_amortizaciones": 36,
                 "estado": "ACTIVO",
                 "estado_financiero": "AL_DIA",
-                "asesor_id": current_user.id
+                "asesor_config_id": None
             },
             {
                 "cedula": "11223344",
@@ -602,7 +602,7 @@ def crear_clientes_prueba(db: Session = Depends(get_db), current_user: User = De
                 "estado": "ACTIVO",
                 "estado_financiero": "MORA",
                 "dias_mora": 15,
-                "asesor_id": current_user.id
+                "asesor_config_id": None
             }
         ]
         
@@ -678,7 +678,7 @@ def aplicar_migracion_manual(db: Session = Depends(get_db)):
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS fecha_entrega DATE",
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS numero_amortizaciones INTEGER",
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS modalidad_pago VARCHAR(20)",
-            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS asesor_id INTEGER",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS asesor_config_id INTEGER",
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS fecha_asignacion DATE",
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS estado_financiero VARCHAR(20) DEFAULT 'AL_DIA'",
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS dias_mora INTEGER DEFAULT 0"
@@ -746,8 +746,9 @@ def obtener_cliente(cliente_id: int, db: Session = Depends(get_db)):
     # Obtener información del asesor
     asesor_nombre = None
     asesor_email = None
-    if cliente.asesor_id:
-        asesor = db.query(User).filter(User.id == cliente.asesor_id).first()
+    if cliente.asesor_config_id:
+        from app.models.asesor import Asesor
+        asesor = db.query(Asesor).filter(Asesor.id == cliente.asesor_config_id).first()
         if asesor:
             asesor_nombre = asesor.full_name
             asesor_email = asesor.email
@@ -827,16 +828,14 @@ def crear_cliente_con_financiamiento(
                 raise HTTPException(status_code=400, detail="❌ Formato de email inválido")
         
         # Validar que el asesor existe y tiene rol apropiado
-        asesor = db.query(User).filter(User.id == cliente_data.asesor_id).first()
+        from app.models.asesor import Asesor
+        asesor = db.query(Asesor).filter(Asesor.id == cliente_data.asesor_config_id).first()
         if not asesor:
             raise HTTPException(status_code=400, detail="❌ Asesor no encontrado")
         
-        # Validar que el usuario esté activo (cualquier rol puede ser asesor)
-        if not asesor.is_active:
-            raise HTTPException(status_code=400, detail="❌ El usuario no está activo")
-        
-        if not asesor.is_active:
-            raise HTTPException(status_code=400, detail="❌ El asesor está inactivo")
+        # Validar que el asesor esté activo
+        if not asesor.activo:
+            raise HTTPException(status_code=400, detail="❌ El asesor no está activo")
         
         # Validar montos coherentes
         if cliente_data.cuota_inicial >= cliente_data.total_financiamiento:
@@ -1083,7 +1082,7 @@ def preview_tabla_amortizacion(
 @router.post("/{cliente_id}/reasignar-asesor")
 def reasignar_asesor(
     cliente_id: int,
-    nuevo_asesor_id: int,
+    nuevo_asesor_config_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -1095,21 +1094,21 @@ def reasignar_asesor(
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     
     # Verificar que el nuevo asesor existe
-    nuevo_asesor = db.query(User).filter(User.id == nuevo_asesor_id).first()
+    from app.models.asesor import Asesor
+    nuevo_asesor = db.query(Asesor).filter(Asesor.id == nuevo_asesor_config_id).first()
     if not nuevo_asesor:
         raise HTTPException(status_code=400, detail="Asesor no encontrado")
     
-    # Verificar que el nuevo asesor tiene rol apropiado
-    # Validar que el usuario esté activo (cualquier rol puede ser asesor)
-    if not nuevo_asesor.is_active:
+    # Verificar que el nuevo asesor esté activo
+    if not nuevo_asesor.activo:
         raise HTTPException(
             status_code=400, 
-            detail="El usuario debe estar activo"
+            detail="El asesor no está activo"
         )
     
     # Actualizar asignación
-    asesor_anterior = cliente.asesor_id
-    cliente.asesor_id = nuevo_asesor_id
+    asesor_config_anterior = cliente.asesor_config_id
+    cliente.asesor_config_id = nuevo_asesor_config_id
     cliente.fecha_asignacion = date.today()
     cliente.fecha_actualizacion = func.now()
     
@@ -1118,9 +1117,9 @@ def reasignar_asesor(
     return {
         "message": "Asesor reasignado exitosamente",
         "cliente_id": cliente_id,
-        "asesor_anterior": asesor_anterior,
-        "asesor_nuevo": nuevo_asesor_id,
-        "asesor_nombre": nuevo_asesor.full_name
+        "asesor_config_anterior": asesor_config_anterior,
+        "asesor_config_nuevo": nuevo_asesor_config_id,
+        "asesor_nombre": nuevo_asesor.nombre_completo
     }
 
 
@@ -1140,7 +1139,7 @@ def obtener_asesores_disponibles(
     result = []
     for asesor in asesores:
         clientes_asignados = db.query(Cliente).filter(
-            Cliente.asesor_id == asesor.id,
+            Cliente.asesor_config_id == asesor.id,
             Cliente.activo == True
         ).count()
         
@@ -1424,8 +1423,8 @@ def busqueda_avanzada_clientes(
     if filters.estado:
         query = query.filter(Cliente.estado == filters.estado)
     
-    if filters.asesor_id:
-        query = query.filter(Cliente.asesor_id == filters.asesor_id)
+    if filters.asesor_config_id:
+        query = query.filter(Cliente.asesor_config_id == filters.asesor_config_id)
     
     if filters.concesionario:
         query = query.filter(Cliente.concesionario.ilike(f"%{filters.concesionario}%"))
@@ -1504,13 +1503,14 @@ def estadisticas_clientes(
     total_inactivos = db.query(Cliente).filter(Cliente.estado == "INACTIVO").count()
     total_mora = db.query(Cliente).filter(Cliente.estado_financiero == "MORA").count()
     
-    # Por asesor
+    # Por asesor de configuración
+    from app.models.asesor import Asesor
     por_asesor = db.query(
-        User.full_name,
+        Asesor.nombre_completo,
         func.count(Cliente.id).label('total_clientes')
-    ).outerjoin(Cliente, User.id == Cliente.asesor_id).filter(
-        User.is_active == True
-    ).group_by(User.id, User.full_name).all()
+    ).outerjoin(Cliente, Asesor.id == Cliente.asesor_config_id).filter(
+        Asesor.activo == True
+    ).group_by(Asesor.id, Asesor.nombre, Asesor.apellido).all()
     
     # Por concesionario
     por_concesionario = db.query(

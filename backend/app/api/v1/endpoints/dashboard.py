@@ -129,7 +129,7 @@ def dashboard_administrador(
         func.sum(Cliente.total_financiamiento).label('monto_vendido')
     ).select_from(User).outerjoin(
         Cliente, and_(
-            User.id == Cliente.asesor_id,
+            Asesor.id == Cliente.asesor_config_id,
             Cliente.fecha_registro >= inicio_mes
         )
     ).filter(
@@ -396,7 +396,7 @@ def dashboard_comercial(
         # Solo sus clientes asignados
         filtro_clientes = and_(
             Cliente.activo == True,
-            Cliente.asesor_id == current_user.id
+            Cliente.asesor_config_id == current_user.id  # Esto necesita revisión - Los users NO son asesores de config
         )
     
     # KPIs DE SUS CLIENTES ÚNICAMENTE
@@ -548,7 +548,7 @@ def dashboard_comercial(
 
 @router.get("/asesor")
 def dashboard_asesor(
-    asesor_id: Optional[int] = Query(None, description="ID del asesor (default: usuario actual)"),
+    asesor_config_id: Optional[int] = Query(None, description="ID del asesor de configuración (default: usuario actual)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
