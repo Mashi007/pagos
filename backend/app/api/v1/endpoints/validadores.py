@@ -75,6 +75,34 @@ def test_cedula_simple(cedula: str):
         }
 
 
+@router.get("/test-simple")
+def test_simple():
+    """Endpoint de prueba muy simple para verificar que el servidor responde"""
+    return {
+        "mensaje": "Servidor funcionando correctamente",
+        "timestamp": datetime.now().isoformat(),
+        "status": "ok"
+    }
+
+
+@router.post("/test-cedula-post")
+def test_cedula_post(cedula: str = "E12345678"):
+    """Endpoint POST simple para probar validación sin autenticación"""
+    try:
+        resultado = ValidadorCedula.validar_y_formatear_cedula(cedula, "VENEZUELA")
+        return {
+            "cedula_test": cedula,
+            "resultado": resultado,
+            "deberia_ser_valido": True,
+            "explicacion": f"E12345678: E (válido) + 8 dígitos (válido) = VÁLIDO"
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "cedula_test": cedula
+        }
+
+
 @router.post("/validar-campo")
 def validar_campo_tiempo_real(
     validacion: ValidacionCampo,
