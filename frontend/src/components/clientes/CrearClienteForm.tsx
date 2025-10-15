@@ -204,9 +204,9 @@ export function CrearClienteForm({
         }
         
         // Fallback: validación local mejorada
-        const cedulaPattern = /^[VEJ]\d{6,8}$/
+        const cedulaPattern = /^[VEJ]\d{7,10}$/
         if (!cedulaPattern.test(value.toUpperCase())) {
-          return { isValid: false, message: 'Formato: V/E/J + 6-8 dígitos (ej: V12345678)' }
+          return { isValid: false, message: 'Formato: V/E/J + 7-10 dígitos (ej: V12345678)' }
         }
         return { isValid: true }
 
@@ -550,7 +550,7 @@ export function CrearClienteForm({
                   />
                   {validations.cedula?.isValid && (
                     <div className="text-xs text-green-600 space-y-1">
-                      <p>✓ Formato: V/E + 6-8 dígitos</p>
+                      <p>✓ Formato: V/E/J + 7-10 dígitos</p>
                       <p>✓ Cédula disponible (no duplicada)</p>
                     </div>
                   )}
