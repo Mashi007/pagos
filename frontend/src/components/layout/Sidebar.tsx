@@ -24,6 +24,7 @@ import {
   Wrench,
   Building,
   Car,
+  CheckCircle,
 } from 'lucide-react'
 import { cn } from '@/utils'
 import { usePermissions } from '@/store/authStore'

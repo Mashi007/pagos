@@ -15,7 +15,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 export function Validadores() {
   const [campoTest, setCampoTest] = useState('')
@@ -103,29 +102,8 @@ export function Validadores() {
         </Button>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="probar" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="probar">
-            <PlayCircle className="w-4 h-4 mr-2" />
-            Probar Validadores
-          </TabsTrigger>
-          <TabsTrigger value="configuracion">
-            <Settings className="w-4 h-4 mr-2" />
-            Configuración
-          </TabsTrigger>
-          <TabsTrigger value="ejemplos">
-            <FileText className="w-4 h-4 mr-2" />
-            Ejemplos
-          </TabsTrigger>
-          <TabsTrigger value="diagnostico">
-            <Search className="w-4 h-4 mr-2" />
-            Diagnóstico
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Tab: Probar Validadores */}
-        <TabsContent value="probar">
+      {/* Sección: Probar Validadores */}
+      <div className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2">
             {/* Panel de prueba */}
             <Card>
@@ -252,10 +230,10 @@ export function Validadores() {
               </CardContent>
             </Card>
           </div>
-        </TabsContent>
 
-        {/* Tab: Configuración */}
-        <TabsContent value="configuracion">
+
+        {/* Sección: Configuración */}
+        <div className="mt-6">
           <Card>
             <CardHeader>
               <CardTitle>Configuración de Validadores</CardTitle>
@@ -322,10 +300,10 @@ export function Validadores() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        {/* Tab: Ejemplos */}
-        <TabsContent value="ejemplos">
+
+        {/* Sección: Ejemplos */}
+        <div className="mt-6">
           <div className="grid gap-6 md:grid-cols-2">
             <Card>
               <CardHeader>
@@ -407,10 +385,10 @@ export function Validadores() {
               </CardContent>
             </Card>
           </div>
-        </TabsContent>
 
-        {/* Tab: Diagnóstico */}
-        <TabsContent value="diagnostico">
+
+        {/* Sección: Diagnóstico */}
+        <div className="mt-6">
           <Card>
             <CardHeader>
               <CardTitle>Diagnóstico de Datos</CardTitle>
@@ -431,8 +409,8 @@ export function Validadores() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
     </div>
   )
 }
