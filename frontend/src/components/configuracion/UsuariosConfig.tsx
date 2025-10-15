@@ -503,17 +503,31 @@ export default function UsuariosConfig() {
                 </div>
 
                 {/* Estado */}
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="is_active"
-                    checked={formData.is_active}
-                    onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="is_active" className="text-sm font-medium text-gray-700">
-                    Usuario activo
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700">
+                    Estado del Usuario
                   </label>
+                  <div className="flex items-center">
+                    <span className={`text-sm mr-3 ${!formData.is_active ? 'text-gray-900' : 'text-gray-500'}`}>
+                      OFF
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                        formData.is_active ? 'bg-blue-600' : 'bg-gray-200'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          formData.is_active ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                    <span className={`text-sm ml-3 ${formData.is_active ? 'text-gray-900' : 'text-gray-500'}`}>
+                      ON
+                    </span>
+                  </div>
                 </div>
 
                 {/* Botones */}
