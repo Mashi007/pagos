@@ -63,6 +63,13 @@ def listar_asesores(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al listar asesores: {str(e)}")
 
+@router.get("/test-activos")
+def test_asesores_activos():
+    """
+    🧪 Endpoint de prueba para diagnosticar problemas
+    """
+    return {"mensaje": "Endpoint de asesores funcionando", "status": "ok"}
+
 @router.get("/activos", response_model=List[AsesorResponse])
 def listar_asesores_activos(
     especialidad: Optional[str] = Query(None, description="Filtrar por especialidad"),
