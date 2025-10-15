@@ -1251,3 +1251,320 @@ class AutoFormateador:
                 
         except ValueError:
             return {"valor_formateado": valor, "cursor_posicion": len(valor), "valido": False}
+
+
+# ============================================
+# VALIDADORES ADICIONALES CRÍTICOS
+# ============================================
+
+class ValidadorEdad:
+    """
+    📅 Validador de edad del cliente
+    Requisito legal para contratos de financiamiento
+    """
+    
+    EDAD_MINIMA = 18  # Mayoría de edad
+    EDAD_MAXIMA = 80  # Límite prudencial
+    
+    @staticmethod
+    def validar_edad(fecha_nacimiento: str) -> Dict[str, Any]:
+        """
+        Validar que el cliente tenga edad legal para contratar
+        
+        Args:
+            fecha_nacimiento: Fecha en formato DD/MM/YYYY, YYYY-MM-DD o date object
+            
+        Returns:
+            Dict con validación y edad calculada
+        """
+        try:
+            # Convertir a date si es string
+            if isinstance(fecha_nacimiento, str):
+                # Intentar diferentes formatos
+                for formato in ["%d/%m/%Y", "%Y-%m-%d", "%Y/%m/%d"]:
+                    try:
+                        fecha = datetime.strptime(fecha_nacimiento, formato).date()
+                        break
+                    except ValueError:
+                        continue
+                else:
+                    return {
+                        "valido": False,
+                        "error": "Formato de fecha inválido. Use DD/MM/YYYY",
+                        "edad": None
+                    }
+            elif isinstance(fecha_nacimiento, date):
+                fecha = fecha_nacimiento
+            else:
+                return {
+                    "valido": False,
+                    "error": "Tipo de dato inválido para fecha",
+                    "edad": None
+                }
+            
+            # Calcular edad
+            hoy = date.today()
+            edad = hoy.year - fecha.year - ((hoy.month, hoy.day) < (fecha.month, fecha.day))
+            
+            # Validar que no sea fecha futura
+            if fecha > hoy:
+                return {
+                    "valido": False,
+                    "error": "La fecha de nacimiento no puede ser futura",
+                    "edad": None,
+                    "fecha_nacimiento": fecha.isoformat()
+                }
+            
+            # Validar edad mínima
+            if edad < ValidadorEdad.EDAD_MINIMA:
+                return {
+                    "valido": False,
+                    "error": f"El cliente debe ser mayor de {ValidadorEdad.EDAD_MINIMA} años (edad actual: {edad} años)",
+                    "edad": edad,
+                    "edad_minima": ValidadorEdad.EDAD_MINIMA,
+                    "fecha_nacimiento": fecha.isoformat()
+                }
+            
+            # Validar edad máxima
+            if edad > ValidadorEdad.EDAD_MAXIMA:
+                return {
+                    "valido": False,
+                    "error": f"La edad máxima permitida es {ValidadorEdad.EDAD_MAXIMA} años (edad actual: {edad} años)",
+                    "edad": edad,
+                    "edad_maxima": ValidadorEdad.EDAD_MAXIMA,
+                    "fecha_nacimiento": fecha.isoformat()
+                }
+            
+            # Todo correcto
+            return {
+                "valido": True,
+                "edad": edad,
+                "fecha_nacimiento": fecha.isoformat(),
+                "mensaje": f"Cliente tiene {edad} años (edad válida para contrato)"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error validando edad: {e}")
+            return {
+                "valido": False,
+                "error": f"Error al validar edad: {str(e)}",
+                "edad": None
+            }
+
+
+class ValidadorCoherenciaFinanciera:
+    """
+    💰 Validador de coherencia financiera
+    Asegura que los datos de financiamiento sean coherentes y viables
+    """
+    
+    CUOTA_INICIAL_MINIMA_PORCENTAJE = 10.0  # 10% mínimo
+    CUOTA_INICIAL_MAXIMA_PORCENTAJE = 50.0  # 50% máximo recomendado
+    
+    @staticmethod
+    def validar_coherencia(
+        total_financiamiento: Decimal,
+        cuota_inicial: Decimal,
+        numero_amortizaciones: int,
+        modalidad_pago: str = "MENSUAL"
+    ) -> Dict[str, Any]:
+        """
+        Validar coherencia entre datos financieros
+        
+        Args:
+            total_financiamiento: Monto total del financiamiento
+            cuota_inicial: Cuota inicial a pagar
+            numero_amortizaciones: Número de cuotas
+            modalidad_pago: SEMANAL, QUINCENAL, MENSUAL, BIMENSUAL
+        """
+        errores = []
+        advertencias = []
+        
+        try:
+            # Convertir a Decimal si es necesario
+            if not isinstance(total_financiamiento, Decimal):
+                total_financiamiento = Decimal(str(total_financiamiento))
+            if not isinstance(cuota_inicial, Decimal):
+                cuota_inicial = Decimal(str(cuota_inicial))
+            
+            # 1. Cuota inicial no puede ser mayor al total
+            if cuota_inicial > total_financiamiento:
+                errores.append("La cuota inicial no puede ser mayor al total del financiamiento")
+            
+            # 2. Validar cuota inicial mínima (10%)
+            cuota_minima = total_financiamiento * Decimal(ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE) / Decimal("100")
+            if cuota_inicial < cuota_minima:
+                errores.append(f"La cuota inicial debe ser al menos el {ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE}% del total (mínimo: ${cuota_minima:.2f})")
+            
+            # 3. Advertencia si cuota inicial es muy alta
+            cuota_maxima_recomendada = total_financiamiento * Decimal(ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MAXIMA_PORCENTAJE) / Decimal("100")
+            if cuota_inicial > cuota_maxima_recomendada:
+                advertencias.append(f"La cuota inicial es muy alta ({(cuota_inicial/total_financiamiento*100):.1f}% del total)")
+            
+            # 4. Monto financiado debe ser positivo
+            monto_financiado = total_financiamiento - cuota_inicial
+            if monto_financiado <= 0:
+                errores.append("El monto a financiar debe ser mayor a cero")
+            
+            # 5. Validar número de amortizaciones coherente con modalidad
+            if modalidad_pago == "SEMANAL" and numero_amortizaciones > 208:  # 4 años máximo
+                advertencias.append("Número de amortizaciones muy alto para modalidad semanal")
+            elif modalidad_pago == "QUINCENAL" and numero_amortizaciones > 96:  # 4 años máximo
+                advertencias.append("Número de amortizaciones muy alto para modalidad quincenal")
+            elif modalidad_pago == "MENSUAL" and numero_amortizaciones > 84:  # 7 años máximo
+                advertencias.append("Número de amortizaciones muy alto para modalidad mensual")
+            
+            # Calcular cuota aproximada
+            if monto_financiado > 0 and numero_amortizaciones > 0:
+                cuota_aproximada = monto_financiado / Decimal(str(numero_amortizaciones))
+            else:
+                cuota_aproximada = Decimal("0")
+            
+            # Resultado
+            if errores:
+                return {
+                    "valido": False,
+                    "errores": errores,
+                    "advertencias": advertencias,
+                    "detalles": {
+                        "total_financiamiento": float(total_financiamiento),
+                        "cuota_inicial": float(cuota_inicial),
+                        "monto_financiado": float(monto_financiado),
+                        "porcentaje_cuota_inicial": float((cuota_inicial / total_financiamiento * 100)) if total_financiamiento > 0 else 0,
+                        "cuota_aproximada": float(cuota_aproximada)
+                    }
+                }
+            else:
+                return {
+                    "valido": True,
+                    "advertencias": advertencias,
+                    "mensaje": "Datos financieros coherentes",
+                    "detalles": {
+                        "total_financiamiento": float(total_financiamiento),
+                        "cuota_inicial": float(cuota_inicial),
+                        "monto_financiado": float(monto_financiado),
+                        "porcentaje_cuota_inicial": float((cuota_inicial / total_financiamiento * 100)) if total_financiamiento > 0 else 0,
+                        "cuota_aproximada": float(cuota_aproximada)
+                    }
+                }
+                
+        except Exception as e:
+            logger.error(f"Error validando coherencia financiera: {e}")
+            return {
+                "valido": False,
+                "error": f"Error al validar coherencia: {str(e)}"
+            }
+
+
+class ValidadorDuplicados:
+    """
+    🔍 Validador de duplicados en base de datos
+    Previene fraude y errores de captura
+    """
+    
+    @staticmethod
+    def validar_chasis_unico(chasis: str, db_session, cliente_id: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Validar que el número de chasis sea único en la BD
+        
+        Args:
+            chasis: Número de chasis del vehículo
+            db_session: Sesión de base de datos
+            cliente_id: ID del cliente (para excluir en updates)
+        """
+        try:
+            from app.models.cliente import Cliente
+            
+            if not chasis or not chasis.strip():
+                return {
+                    "valido": True,  # Chasis es opcional
+                    "mensaje": "Chasis no proporcionado (opcional)"
+                }
+            
+            # Limpiar y normalizar
+            chasis_limpio = chasis.strip().upper()
+            
+            # Buscar duplicados
+            query = db_session.query(Cliente).filter(Cliente.chasis == chasis_limpio)
+            
+            # Excluir el cliente actual si es un update
+            if cliente_id:
+                query = query.filter(Cliente.id != cliente_id)
+            
+            existe = query.first()
+            
+            if existe:
+                return {
+                    "valido": False,
+                    "error": f"El número de chasis ya está registrado para el cliente {existe.nombre_completo} (ID: {existe.id})",
+                    "chasis": chasis_limpio,
+                    "cliente_existente": {
+                        "id": existe.id,
+                        "nombre": existe.nombre_completo,
+                        "cedula": existe.cedula
+                    }
+                }
+            
+            return {
+                "valido": True,
+                "chasis": chasis_limpio,
+                "mensaje": "Número de chasis único"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error validando chasis: {e}")
+            return {
+                "valido": False,
+                "error": f"Error al validar chasis: {str(e)}"
+            }
+    
+    @staticmethod
+    def validar_email_unico(email: str, db_session, cliente_id: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Validar que el email sea único (opcional, puede haber clientes sin email)
+        """
+        try:
+            from app.models.cliente import Cliente
+            
+            if not email or not email.strip():
+                return {
+                    "valido": True,  # Email es opcional
+                    "mensaje": "Email no proporcionado (opcional)"
+                }
+            
+            # Normalizar
+            email_limpio = email.strip().lower()
+            
+            # Buscar duplicados
+            query = db_session.query(Cliente).filter(Cliente.email == email_limpio)
+            
+            # Excluir el cliente actual si es un update
+            if cliente_id:
+                query = query.filter(Cliente.id != cliente_id)
+            
+            existe = query.first()
+            
+            if existe:
+                return {
+                    "valido": False,
+                    "error": f"El email ya está registrado para el cliente {existe.nombre_completo}",
+                    "email": email_limpio,
+                    "cliente_existente": {
+                        "id": existe.id,
+                        "nombre": existe.nombre_completo,
+                        "cedula": existe.cedula
+                    }
+                }
+            
+            return {
+                "valido": True,
+                "email": email_limpio,
+                "mensaje": "Email único"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error validando email: {e}")
+            return {
+                "valido": False,
+                "error": f"Error al validar email: {str(e)}"
+            }
