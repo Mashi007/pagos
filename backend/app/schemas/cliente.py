@@ -24,9 +24,13 @@ class ClienteBase(BaseModel):
     chasis: Optional[str] = Field(None, max_length=50)
     motor: Optional[str] = Field(None, max_length=50)
     
-    # Concesionario
-    concesionario: Optional[str] = Field(None, max_length=100)
+    # Concesionario - ForeignKeys + campos legacy
+    concesionario_id: Optional[int] = None  # NUEVO: ForeignKey a concesionarios
+    concesionario: Optional[str] = Field(None, max_length=100)  # Legacy
     vendedor_concesionario: Optional[str] = Field(None, max_length=100)
+    
+    # Modelo de vehículo - ForeignKey + campo legacy
+    modelo_vehiculo_id: Optional[int] = None  # NUEVO: ForeignKey a modelos_vehiculos
     
     # Financiamiento
     total_financiamiento: Optional[Decimal] = Field(None, ge=0)
@@ -35,8 +39,9 @@ class ClienteBase(BaseModel):
     numero_amortizaciones: Optional[int] = Field(None, ge=1, le=360)
     modalidad_pago: Optional[str] = Field(None, pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
     
-    # Asignación
-    asesor_id: Optional[int] = None
+    # Asignación - ForeignKeys
+    asesor_id: Optional[int] = None  # Asesor del sistema (users)
+    asesor_config_id: Optional[int] = None  # NUEVO: Asesor de configuración
     
     # Notas
     notas: Optional[str] = None

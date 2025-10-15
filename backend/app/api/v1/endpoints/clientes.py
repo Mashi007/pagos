@@ -111,6 +111,32 @@ def crear_cliente(
         # 🔍 AUDITORÍA: Registrar datos antes de la creación
         datos_cliente = cliente.model_dump()
         
+        # ============================================
+        # MAPEAR NOMBRES A FOREIGNKEYS
+        # ============================================
+        
+        # Buscar concesionario_id por nombre
+        if cliente.concesionario and not cliente.concesionario_id:
+            from app.models.concesionario import Concesionario
+            concesionario_obj = db.query(Concesionario).filter(
+                Concesionario.nombre.ilike(f"%{cliente.concesionario}%"),
+                Concesionario.activo == True
+            ).first()
+            if concesionario_obj:
+                cliente.concesionario_id = concesionario_obj.id
+                print(f"✅ Concesionario mapeado: {cliente.concesionario} -> ID {concesionario_obj.id}")
+        
+        # Buscar modelo_vehiculo_id por nombre
+        if cliente.modelo_vehiculo and not cliente.modelo_vehiculo_id:
+            from app.models.modelo_vehiculo import ModeloVehiculo
+            modelo_obj = db.query(ModeloVehiculo).filter(
+                ModeloVehiculo.modelo.ilike(f"%{cliente.modelo_vehiculo}%"),
+                ModeloVehiculo.activo == True
+            ).first()
+            if modelo_obj:
+                cliente.modelo_vehiculo_id = modelo_obj.id
+                print(f"✅ Modelo de vehículo mapeado: {cliente.modelo_vehiculo} -> ID {modelo_obj.id}")
+        
         # Convertir a dict para SQLAlchemy
         cliente_dict = cliente.model_dump()
         
@@ -184,8 +210,14 @@ def listar_clientes(
     - COMERCIAL/ASESOR: Ve SOLO sus clientes asignados
     """
     try:
-        # Construir query base
-        query = db.query(Cliente)
+        # Construir query base con relaciones
+        from sqlalchemy.orm import joinedload
+        query = db.query(Cliente).options(
+            joinedload(Cliente.concesionario_rel),
+            joinedload(Cliente.modelo_vehiculo_rel),
+            joinedload(Cliente.asesor_config_rel),
+            joinedload(Cliente.asesor)
+        )
         
         # FILTRO POR ROL - MATRIZ DE ACCESO
         if current_user.rol in ["COMERCIAL", "ASESOR"]:

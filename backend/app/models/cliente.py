@@ -24,15 +24,17 @@ class Cliente(Base):
     # ============================================
     # DATOS DEL VEHÍCULO Y FINANCIAMIENTO
     # ============================================
-    modelo_vehiculo = Column(String(100), nullable=True, index=True)
+    modelo_vehiculo_id = Column(Integer, ForeignKey("modelos_vehiculos.id"), nullable=True, index=True)
+    modelo_vehiculo = Column(String(100), nullable=True, index=True)  # Campo legacy - mantener por compatibilidad
     marca_vehiculo = Column(String(50), nullable=True, index=True)
     anio_vehiculo = Column(Integer, nullable=True)
     color_vehiculo = Column(String(30), nullable=True)
     chasis = Column(String(50), nullable=True, unique=True)
     motor = Column(String(50), nullable=True)
     
-    # Concesionario
-    concesionario = Column(String(100), nullable=True, index=True)
+    # Concesionario - NUEVO: ForeignKey + campo legacy
+    concesionario_id = Column(Integer, ForeignKey("concesionarios.id"), nullable=True, index=True)
+    concesionario = Column(String(100), nullable=True, index=True)  # Campo legacy - mantener por compatibilidad
     vendedor_concesionario = Column(String(100), nullable=True)
     
     # Financiamiento
@@ -46,7 +48,8 @@ class Cliente(Base):
     # ============================================
     # ASIGNACIÓN Y GESTIÓN
     # ============================================
-    asesor_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    asesor_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Asesor del sistema (users)
+    asesor_config_id = Column(Integer, ForeignKey("asesores.id"), nullable=True, index=True)  # Asesor de configuración
     fecha_asignacion = Column(Date, nullable=True)
     
     # Estado - CON VALORES POR DEFECTO
@@ -69,6 +72,11 @@ class Cliente(Base):
     prestamos = relationship("Prestamo", back_populates="cliente")
     notificaciones = relationship("Notificacion", back_populates="cliente")
     asesor = relationship("User", foreign_keys=[asesor_id], back_populates="clientes_asignados")
+    
+    # Nuevas relaciones con ForeignKeys
+    concesionario_rel = relationship("Concesionario", foreign_keys=[concesionario_id])
+    modelo_vehiculo_rel = relationship("ModeloVehiculo", foreign_keys=[modelo_vehiculo_id])
+    asesor_config_rel = relationship("Asesor", foreign_keys=[asesor_config_id])
     
     def __repr__(self):
         return f"<Cliente {self.nombres} {self.apellidos} - {self.cedula}>"
@@ -104,6 +112,31 @@ class Cliente(Base):
     def esta_en_mora(self) -> bool:
         """Verifica si el cliente está en mora"""
         return self.estado_financiero == "MORA" and self.dias_mora > 0
+    
+    # ============================================
+    # PROPIEDADES PARA ACCESO A DATOS RELACIONADOS
+    # ============================================
+    
+    @property
+    def concesionario_nombre(self) -> str:
+        """Retorna el nombre del concesionario (ForeignKey o campo legacy)"""
+        if self.concesionario_rel:
+            return self.concesionario_rel.nombre
+        return self.concesionario or "No especificado"
+    
+    @property
+    def modelo_vehiculo_nombre(self) -> str:
+        """Retorna el nombre del modelo de vehículo (ForeignKey o campo legacy)"""
+        if self.modelo_vehiculo_rel:
+            return self.modelo_vehiculo_rel.modelo
+        return self.modelo_vehiculo or "No especificado"
+    
+    @property
+    def asesor_config_nombre(self) -> str:
+        """Retorna el nombre del asesor de configuración"""
+        if self.asesor_config_rel:
+            return self.asesor_config_rel.nombre_completo
+        return "No asignado"
     
     def calcular_resumen_financiero(self, db_session):
         """Calcula resumen financiero del cliente"""
