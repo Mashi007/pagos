@@ -48,10 +48,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           console.log('Store: response.data:', response.data)
           console.log('Store: response.user:', response.user)
           
-          // Acceder a tokens según la estructura real del backend
-          const accessToken = response.data?.access_token || response.access_token
-          const refreshToken = response.data?.refresh_token || response.refresh_token
-          const userData = response.data?.user || response.user
+          // Acceder a tokens directamente (apiClient.post ya devuelve response.data)
+          const accessToken = response.access_token
+          const refreshToken = response.refresh_token
+          const userData = response.user
           
           console.log('Store: Tokens extraídos:', {
             accessToken: accessToken ? 'EXISTS' : 'MISSING',
