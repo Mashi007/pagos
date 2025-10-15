@@ -580,7 +580,7 @@ def generar_reporte_personalizado(
     fecha_inicio: Optional[date] = Query(None),
     fecha_fin: Optional[date] = Query(None),
     cliente_ids: Optional[str] = Query(None, description="IDs separados por coma"),
-    asesor_ids: Optional[str] = Query(None, description="IDs separados por coma"),
+    asesor_config_ids: Optional[str] = Query(None, description="IDs de asesores de configuración separados por coma"),
     concesionarios: Optional[str] = Query(None, description="Nombres separados por coma"),
     modelos: Optional[str] = Query(None, description="Modelos separados por coma"),
     estado: Optional[str] = Query(None, description="AL_DIA, MORA, TODOS"),
@@ -612,9 +612,9 @@ def generar_reporte_personalizado(
         ids = [int(id.strip()) for id in cliente_ids.split(",")]
         query = query.filter(Cliente.id.in_(ids))
     
-    if asesor_ids:
-        ids = [int(id.strip()) for id in asesor_ids.split(",")]
-        query = query.filter(Cliente.asesor_id.in_(ids))
+    if asesor_config_ids:
+        ids = [int(id.strip()) for id in asesor_config_ids.split(",")]
+        query = query.filter(Cliente.asesor_config_id.in_(ids))
     
     if concesionarios:
         concesionarios_list = [c.strip() for c in concesionarios.split(",")]
@@ -828,9 +828,9 @@ async def reporte_mensual_cartera_pdf(
         raise HTTPException(status_code=500, detail="reportlab no está instalado")
 
 
-@router.get("/asesor/{asesor_id}/pdf")
+@router.get("/asesor/{asesor_config_id}/pdf")
 async def reporte_asesor_pdf(
-    asesor_id: int,
+    asesor_config_id: int,
     fecha_inicio: Optional[date] = Query(None),
     fecha_fin: Optional[date] = Query(None),
     db: Session = Depends(get_db),
@@ -852,7 +852,8 @@ async def reporte_asesor_pdf(
         import io
         
         # Verificar que el asesor existe
-        asesor = db.query(User).filter(User.id == asesor_id).first()
+        from app.models.asesor import Asesor
+        asesor = db.query(Asesor).filter(Asesor.id == asesor_config_id).first()
         if not asesor:
             raise HTTPException(status_code=404, detail="Asesor no encontrado")
         
@@ -864,13 +865,13 @@ async def reporte_asesor_pdf(
         
         # Obtener clientes del asesor
         clientes_asesor = db.query(Cliente).filter(
-            Cliente.asesor_id == asesor_id,
+            Cliente.asesor_config_id == asesor_config_id,
             Cliente.activo == True
         ).all()
         
         # Ventas del período
         ventas_periodo = db.query(Cliente).filter(
-            Cliente.asesor_id == asesor_id,
+            Cliente.asesor_config_id == asesor_config_id,
             Cliente.fecha_registro >= fecha_inicio,
             Cliente.fecha_registro <= fecha_fin
         ).count()
@@ -1025,7 +1026,7 @@ def verificar_reportes_pdf_implementados(
             
             "5_reporte_asesor": {
                 "nombre": "✅ Reporte por asesor",
-                "endpoint": "GET /api/v1/reportes/asesor/{asesor_id}/pdf",
+                "endpoint": "GET /api/v1/reportes/asesor/{asesor_config_id}/pdf",
                 "descripcion": "Clientes del asesor, ventas del período, estado de cobranza, ranking vs otros asesores, cartera asignada",
                 "implementado": True,
                 "formato": "PDF",

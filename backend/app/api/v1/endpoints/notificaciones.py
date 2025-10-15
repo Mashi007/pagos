@@ -819,7 +819,7 @@ async def enviar_reporte_semanal_usuarios(
         User.full_name,
         func.count(Cliente.id).label('nuevos_clientes')
     ).outerjoin(Cliente, and_(
-        User.id == Cliente.asesor_id,
+        Asesor.id == Cliente.asesor_config_id,
         func.date(Cliente.fecha_registro) >= inicio_semana,
         func.date(Cliente.fecha_registro) <= fin_semana
     )).filter(

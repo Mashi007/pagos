@@ -596,7 +596,7 @@ def solicitar_edicion_cliente_propio(
     # Verificar que el cliente existe y está asignado al asesor
     cliente = db.query(Cliente).filter(
         Cliente.id == cliente_id,
-        Cliente.asesor_id == current_user.id
+        Cliente.asesor_config_id == current_user.id  # NOTA: Esto requiere mapeo User->Asesor
     ).first()
     
     if not cliente:
