@@ -247,16 +247,6 @@ export function AsesoresConfig() {
                   </Badge>
                 </div>
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Email</label>
-                <p className="text-sm text-gray-600">{viewingAsesor.email}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Fecha de Creación</label>
-                <p className="text-sm text-gray-600">
-                  {new Date(viewingAsesor.created_at).toLocaleDateString('es-ES')}
-                </p>
-              </div>
             </div>
             <div className="flex justify-end space-x-2 mt-6">
               <Button variant="outline" onClick={() => setViewingAsesor(null)}>
