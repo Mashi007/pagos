@@ -151,13 +151,13 @@ def require_permission(*required_permissions: Permission):
 
 
 def get_admin_user(
-    current_user: User = Depends(require_role(UserRole.ADMINISTRADOR_GENERAL, UserRole.GERENTE))
+    current_user: User = Depends(require_role(UserRole.ADMINISTRADOR_GENERAL))
 ) -> User:
     """
     Dependency para endpoints que requieren rol de administrador
     
     Returns:
-        Usuario con rol ADMINISTRADOR_GENERAL o GERENTE
+        Usuario con rol ADMINISTRADOR_GENERAL
     """
     return current_user
 

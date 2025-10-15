@@ -742,7 +742,7 @@ Financiamiento Automotriz"""
         try:
             # Obtener usuarios de cobranzas para enviar reporte
             usuarios_cobranzas = self.db.query(User).filter(
-                User.rol.in_(["ADMINISTRADOR_GENERAL", "COBRANZAS", "GERENTE"]),
+                User.rol.in_(["ADMINISTRADOR_GENERAL", "COBRANZAS"]),
                 User.is_active == True,
                 User.email.isnot(None)
             ).all()

@@ -1314,7 +1314,7 @@ async def _notificar_cobranzas_nuevo_cliente(cliente_id: int, asesor_nombre: str
         if cliente:
             # Obtener usuarios de cobranzas
             usuarios_cobranzas = db.query(User).filter(
-                User.rol.in_(["COBRANZAS", "GERENTE", "ADMINISTRADOR_GENERAL"]),
+                User.rol.in_(["ADMINISTRADOR_GENERAL", "COBRANZAS"]),
                 User.is_active == True,
                 User.email.isnot(None)
             ).all()

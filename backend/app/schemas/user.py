@@ -15,7 +15,6 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 class UserRole(str, Enum):
     """Roles de usuario en el sistema."""
     ADMINISTRADOR_GENERAL = "ADMINISTRADOR_GENERAL"
-    GERENTE = "GERENTE"
     COBRANZAS = "COBRANZAS"
 
 
