@@ -446,17 +446,17 @@ def dashboard_comercial(
     
     # VENTAS POR ASESOR
     ventas_por_asesor_query = db.query(
-        User.id,
-        User.nombre,
-        User.apellido,
+        Asesor.id,
+        Asesor.nombre,
+        Asesor.apellido,
         func.count(Cliente.id).label('ventas'),
         func.sum(Cliente.total_financiamiento).label('monto')
-    ).select_from(User).outerjoin(Cliente, and_(
-        User.id == Cliente.asesor_id,
+    ).select_from(Asesor).outerjoin(Cliente, and_(
+        Asesor.id == Cliente.asesor_config_id,
         Cliente.fecha_registro >= inicio_mes
     )).filter(
-        User.rol.in_(["ASESOR_COMERCIAL", "GERENTE"])
-    ).group_by(User.id, User.nombre, User.apellido).order_by(
+        Asesor.activo == True
+    ).group_by(Asesor.id, Asesor.nombre, Asesor.apellido).order_by(
         func.count(Cliente.id).desc()
     ).all()
     
@@ -562,24 +562,11 @@ def dashboard_asesor(
        • Estadísticas de sus clientes
        • NO ve datos de otros asesores/comerciales
     """
-    # Determinar asesor a consultar
-    if asesor_id:
-        # Solo admin puede ver dashboard de otros asesores
-        if current_user.rol != "ADMINISTRADOR_GENERAL" and current_user.id != asesor_id:
-            from fastapi import HTTPException
-            raise HTTPException(status_code=403, detail="Sin permisos para ver dashboard de otro asesor")
-        
-        asesor = db.query(User).filter(User.id == asesor_id).first()
-        if not asesor:
-            from fastapi import HTTPException
-            raise HTTPException(status_code=404, detail="Asesor no encontrado")
-    else:
-        asesor = current_user
-        asesor_id = current_user.id
+    # NOTA: Este endpoint necesita rediseño - Los Users no son Asesores de configuración
+    # Por ahora, mostrar dashboard general
     
-    # MIS CLIENTES
+    # Dashboard general del sistema (todos los clientes)
     mis_clientes = db.query(Cliente).filter(
-        Cliente.asesor_id == asesor_id,
         Cliente.activo == True
     ).all()
     
@@ -609,21 +596,24 @@ def dashboard_asesor(
     
     # MI POSICIÓN EN RANKING
     ranking_general = db.query(
-        User.id,
-        User.nombre,
-        User.apellido,
+        Asesor.id,
+        Asesor.nombre,
+        Asesor.apellido,
         func.count(Cliente.id).label('total_clientes'),
         func.sum(Cliente.total_financiamiento).label('monto_total')
-    ).outerjoin(Cliente, User.id == Cliente.asesor_id).filter(
-        User.rol.in_(["ASESOR_COMERCIAL", "GERENTE"]),
+    ).outerjoin(Cliente, Asesor.id == Cliente.asesor_config_id).filter(
+        Asesor.activo == True,
         Cliente.activo == True
-    ).group_by(User.id, User.nombre, User.apellido).order_by(
+    ).group_by(Asesor.id, Asesor.nombre, Asesor.apellido).order_by(
         func.count(Cliente.id).desc()
     ).all()
     
     mi_posicion = None
+    # NOTA: La lógica de posición individual requiere mapeo User->Asesor
+    # Por ahora, no calcular posición individual
     for idx, asesor_rank in enumerate(ranking_general):
-        if asesor_rank.id == asesor_id:
+        # Lógica de posición deshabilitada - requiere rediseño
+        if False:  # asesor_rank.id == asesor_config_id:
             mi_posicion = {
                 "posicion": idx + 1,
                 "total_asesores": len(ranking_general),
@@ -732,7 +722,7 @@ def obtener_matriz_acceso_roles(
                     "• NO ve datos de otros asesores/comerciales"
                 ],
                 "endpoint": "/api/v1/dashboard/comercial",
-                "filtro_aplicado": "asesor_id = current_user.id"
+                "filtro_aplicado": "TODOS LOS CLIENTES (roles sin asesor individual)"
             },
             "ASESOR": {
                 "emoji": "👤", 
@@ -746,13 +736,13 @@ def obtener_matriz_acceso_roles(
                     "• NO ve datos de otros asesores/comerciales"
                 ],
                 "endpoint": "/api/v1/dashboard/asesor",
-                "filtro_aplicado": "asesor_id = current_user.id"
+                "filtro_aplicado": "TODOS LOS CLIENTES (roles sin asesor individual)"
             }
         },
         "implementacion_tecnica": {
             "filtros_por_rol": {
                 "ADMIN_COBRANZAS": "Sin filtros - acceso completo",
-                "COMERCIAL_ASESOR": "WHERE cliente.asesor_id = current_user.id"
+                "COMERCIAL_ASESOR": "Dashboard general - sin filtro por asesor individual"
             },
             "endpoints_disponibles": {
                 "admin": "/api/v1/dashboard/admin",
