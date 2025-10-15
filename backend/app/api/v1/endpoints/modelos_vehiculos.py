@@ -79,8 +79,7 @@ def listar_modelos_vehiculos(
 def listar_modelos_activos(
     categoria: Optional[str] = Query(None, description="Filtrar por categoría"),
     marca: Optional[str] = Query(None, description="Filtrar por marca"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """
     🚗 Listar solo modelos activos (para formularios)

@@ -66,8 +66,7 @@ def listar_asesores(
 @router.get("/activos", response_model=List[AsesorResponse])
 def listar_asesores_activos(
     especialidad: Optional[str] = Query(None, description="Filtrar por especialidad"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """
     👨‍💼 Listar solo asesores activos (para formularios)

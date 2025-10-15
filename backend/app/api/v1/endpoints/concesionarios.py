@@ -58,8 +58,7 @@ def listar_concesionarios(
 
 @router.get("/activos", response_model=List[ConcesionarioResponse])
 def listar_concesionarios_activos(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """
     🏢 Listar solo concesionarios activos (para formularios)
