@@ -45,7 +45,13 @@ export function AsesoresConfig() {
   // Form state
   const [formData, setFormData] = useState<AsesorCreate>({
     nombre: '',
-    activo: true
+    apellido: '',
+    email: '',
+    telefono: '',
+    especialidad: '',
+    comision_porcentaje: 0,
+    activo: true,
+    notas: ''
   })
 
   useEffect(() => {
@@ -99,7 +105,13 @@ export function AsesoresConfig() {
     setEditingAsesor(asesor)
     setFormData({
       nombre: asesor.nombre,
-      activo: asesor.activo
+      apellido: asesor.apellido || '',
+      email: asesor.email || '',
+      telefono: asesor.telefono || '',
+      especialidad: asesor.especialidad || '',
+      comision_porcentaje: asesor.comision_porcentaje || 0,
+      activo: asesor.activo,
+      notas: asesor.notas || ''
     })
     setShowForm(true)
   }
@@ -121,7 +133,13 @@ export function AsesoresConfig() {
   const resetForm = () => {
     setFormData({
       nombre: '',
-      activo: true
+      apellido: '',
+      email: '',
+      telefono: '',
+      especialidad: '',
+      comision_porcentaje: 0,
+      activo: true,
+      notas: ''
     })
     setEditingAsesor(null)
     setViewingAsesor(null)
@@ -171,9 +189,9 @@ export function AsesoresConfig() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium">Nombre del Asesor *</label>
+                  <label className="text-sm font-medium">Nombre *</label>
                   <Input
                     value={formData.nombre}
                     onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
@@ -181,6 +199,65 @@ export function AsesoresConfig() {
                     required
                   />
                 </div>
+                <div>
+                  <label className="text-sm font-medium">Apellido</label>
+                  <Input
+                    value={formData.apellido}
+                    onChange={(e) => setFormData({ ...formData, apellido: e.target.value })}
+                    placeholder="Apellido del asesor"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Email</label>
+                  <Input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="email@ejemplo.com"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Teléfono</label>
+                  <Input
+                    value={formData.telefono}
+                    onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                    placeholder="+58 424 1234567"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Especialidad</label>
+                  <select
+                    value={formData.especialidad}
+                    onChange={(e) => setFormData({ ...formData, especialidad: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Seleccionar especialidad</option>
+                    {ESPECIALIDADES.map(esp => (
+                      <option key={esp} value={esp}>{esp}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Comisión (%)</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formData.comision_porcentaje}
+                    onChange={(e) => setFormData({ ...formData, comision_porcentaje: parseInt(e.target.value) || 0 })}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Notas</label>
+                <textarea
+                  value={formData.notas}
+                  onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
+                  placeholder="Notas adicionales sobre el asesor"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                />
               </div>
               <div className="flex items-center space-x-2">
                 <input
@@ -226,7 +303,7 @@ export function AsesoresConfig() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-500">Nombre del Asesor</label>
+                <label className="text-sm font-medium text-gray-500">Nombre Completo</label>
                 <p className="text-lg font-semibold">{viewingAsesor.nombre_completo}</p>
               </div>
               <div>
@@ -247,6 +324,34 @@ export function AsesoresConfig() {
                   </Badge>
                 </div>
               </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Email</label>
+                <p className="flex items-center">
+                  <Mail className="mr-2 h-4 w-4 text-gray-400" />
+                  {viewingAsesor.email || 'No especificado'}
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Teléfono</label>
+                <p className="flex items-center">
+                  <Phone className="mr-2 h-4 w-4 text-gray-400" />
+                  {viewingAsesor.telefono || 'No especificado'}
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Especialidad</label>
+                <p>{viewingAsesor.especialidad || 'No especificada'}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Comisión</label>
+                <p>{viewingAsesor.comision_porcentaje || 0}%</p>
+              </div>
+              {viewingAsesor.notas && (
+                <div className="md:col-span-2">
+                  <label className="text-sm font-medium text-gray-500">Notas</label>
+                  <p className="text-sm text-gray-700">{viewingAsesor.notas}</p>
+                </div>
+              )}
             </div>
             <div className="flex justify-end space-x-2 mt-6">
               <Button variant="outline" onClick={() => setViewingAsesor(null)}>

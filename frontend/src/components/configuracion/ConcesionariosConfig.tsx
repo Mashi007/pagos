@@ -34,6 +34,10 @@ export function ConcesionariosConfig() {
   // Form state
   const [formData, setFormData] = useState<ConcesionarioCreate>({
     nombre: '',
+    direccion: '',
+    telefono: '',
+    email: '',
+    responsable: '',
     activo: true
   })
 
@@ -88,6 +92,10 @@ export function ConcesionariosConfig() {
     setEditingConcesionario(concesionario)
     setFormData({
       nombre: concesionario.nombre,
+      direccion: concesionario.direccion || '',
+      telefono: concesionario.telefono || '',
+      email: concesionario.email || '',
+      responsable: concesionario.responsable || '',
       activo: concesionario.activo
     })
     setShowForm(true)
