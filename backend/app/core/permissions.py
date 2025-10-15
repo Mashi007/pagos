@@ -8,15 +8,9 @@ from typing import List
 
 class UserRole(str, Enum):
     """Roles de usuario del sistema"""
-    ADMIN = "ADMIN"
-    ASESOR = "ASESOR"
-    COBRANZAS = "COBRANZAS"
-    CONTADOR = "CONTADOR"
-    COMERCIAL = "COMERCIAL"  # Rol para equipo comercial/ventas
-    # ROLES AÑADIDOS PARA EL WORKFLOW DE APROBACIÓN DE PRÉSTAMOS
+    ADMINISTRADOR_GENERAL = "ADMINISTRADOR_GENERAL"
     GERENTE = "GERENTE"
-    DIRECTOR = "DIRECTOR"
-    COMITE = "COMITE"
+    COBRANZAS = "COBRANZAS"
 
 
 class Permission(str, Enum):
@@ -81,7 +75,7 @@ class Permission(str, Enum):
 
 # Mapeo de roles a permisos
 ROLE_PERMISSIONS: dict[UserRole, List[Permission]] = {
-    UserRole.ADMIN: [
+    UserRole.ADMINISTRADOR_GENERAL: [
         # Acceso total - todos los permisos
         Permission.USER_CREATE,
         Permission.USER_READ,
@@ -113,96 +107,68 @@ ROLE_PERMISSIONS: dict[UserRole, List[Permission]] = {
         Permission.AUDITORIA_READ,
     ],
     
-    UserRole.ASESOR: [
-        # Puede gestionar solo sus clientes asignados
+    UserRole.GERENTE: [
+        # Acceso total - mismos permisos que Administrador General
+        Permission.USER_CREATE,
+        Permission.USER_READ,
+        Permission.USER_UPDATE,
+        Permission.USER_DELETE,
         Permission.CLIENTE_CREATE,
         Permission.CLIENTE_READ,
-        Permission.CLIENTE_UPDATE,  # ⚠️ Solo sus clientes + autorización Admin
+        Permission.CLIENTE_UPDATE,
+        Permission.CLIENTE_DELETE,
         Permission.PRESTAMO_CREATE,
         Permission.PRESTAMO_READ,
         Permission.PRESTAMO_UPDATE,
-        Permission.PAGO_READ,
-        Permission.REPORTE_READ,
-        Permission.KPI_READ,
-        Permission.NOTIFICACION_READ,
-        # NUEVOS PERMISOS ESPECÍFICOS
-        Permission.CLIENTE_EDIT_OWN_WITH_AUTH,    # ⚠️ Solo sus clientes + autorización Admin
-        Permission.CLIENTE_VIEW_OWN_ONLY,         # ✅ Solo puede ver sus clientes asignados
-    ],
-    
-    UserRole.COBRANZAS: [
-        # Puede gestionar clientes y pagos con algunas restricciones
-        Permission.CLIENTE_CREATE,  # ✅ NUEVO: Crear clientes
-        Permission.CLIENTE_READ,
-        Permission.CLIENTE_UPDATE,  # ✅ NUEVO: Editar clientes
-        Permission.PRESTAMO_READ,
+        Permission.PRESTAMO_DELETE,
+        Permission.PRESTAMO_APPROVE,
         Permission.PAGO_CREATE,
         Permission.PAGO_READ,
-        Permission.PAGO_UPDATE,     # ⚠️ Con aprobación para modificar montos
-        Permission.PAGO_DELETE,     # ⚠️ Con aprobación para anular/eliminar
-        Permission.REPORTE_READ,
-        Permission.KPI_READ,
-        Permission.NOTIFICACION_SEND,
-        Permission.NOTIFICACION_READ,
-        # NUEVOS PERMISOS ESPECÍFICOS
-        Permission.PRESTAMO_MODIFY_AMORTIZATION,  # ⚠️ Con aprobación
-        Permission.CLIENTE_CREATE_WITH_CREDIT,    # ✅ Ingresar clientes con crédito aprobado
-        Permission.PAGO_MODIFY_WITH_APPROVAL,     # ⚠️ Modificar pagos con aprobación
-        Permission.PAGO_DELETE_WITH_APPROVAL,     # ⚠️ Eliminar pagos con aprobación
-    ],
-    
-    UserRole.CONTADOR: [
-        # Solo lectura de reportes y KPIs
-        Permission.CLIENTE_READ,
-        Permission.PRESTAMO_READ,
-        Permission.PAGO_READ,
+        Permission.PAGO_UPDATE,
+        Permission.PAGO_DELETE,
         Permission.REPORTE_READ,
         Permission.REPORTE_CREATE,
         Permission.KPI_READ,
+        Permission.CONCILIACION_CREATE,
         Permission.CONCILIACION_READ,
+        Permission.CONCILIACION_APPROVE,
+        Permission.NOTIFICACION_SEND,
+        Permission.NOTIFICACION_READ,
+        Permission.CONFIG_READ,
+        Permission.CONFIG_UPDATE,
         Permission.AUDITORIA_READ,
     ],
     
-    UserRole.COMERCIAL: [
-        # Puede gestionar clientes con autorización admin para edición
+    UserRole.COBRANZAS: [
+        # Acceso completo EXCEPTO editar usuarios y auditoría
+        Permission.USER_CREATE,  # Puede crear usuarios
+        Permission.USER_READ,    # Puede ver usuarios
+        Permission.USER_DELETE,  # Puede eliminar usuarios
+        # NO tiene USER_UPDATE - no puede editar usuarios
         Permission.CLIENTE_CREATE,
         Permission.CLIENTE_READ,
-        Permission.CLIENTE_UPDATE,  # ⚠️ Con autorización de Admin
+        Permission.CLIENTE_UPDATE,
+        Permission.CLIENTE_DELETE,
         Permission.PRESTAMO_CREATE,
         Permission.PRESTAMO_READ,
         Permission.PRESTAMO_UPDATE,
-        Permission.REPORTE_READ,  # Reportes limitados
-        Permission.KPI_READ,
-        Permission.NOTIFICACION_READ,
-        # NUEVOS PERMISOS ESPECÍFICOS
-        Permission.CLIENTE_EDIT_WITH_ADMIN_AUTH,  # ⚠️ Requiere autorización Admin
-    ],
-
-    # CONFIGURACIÓN DE ROLES PARA LA APROBACIÓN DE PRÉSTAMOS
-    UserRole.GERENTE: [
-        Permission.PRESTAMO_READ,       # Debe poder ver los detalles del préstamo
-        Permission.PRESTAMO_APPROVE,    # Permiso general de aprobación
-        Permission.CLIENTE_READ,
-        Permission.REPORTE_READ,
-        Permission.KPI_READ,
-    ],
-
-    UserRole.DIRECTOR: [
-        Permission.PRESTAMO_READ,
+        Permission.PRESTAMO_DELETE,
         Permission.PRESTAMO_APPROVE,
-        Permission.CLIENTE_READ,
+        Permission.PAGO_CREATE,
+        Permission.PAGO_READ,
+        Permission.PAGO_UPDATE,
+        Permission.PAGO_DELETE,
         Permission.REPORTE_READ,
+        Permission.REPORTE_CREATE,
         Permission.KPI_READ,
+        Permission.CONCILIACION_CREATE,
         Permission.CONCILIACION_READ,
-    ],
-
-    UserRole.COMITE: [
-        Permission.PRESTAMO_READ,
-        Permission.PRESTAMO_APPROVE,
-        Permission.CLIENTE_READ,
-        Permission.REPORTE_READ,
-        Permission.KPI_READ,
-        Permission.AUDITORIA_READ,
+        Permission.CONCILIACION_APPROVE,
+        Permission.NOTIFICACION_SEND,
+        Permission.NOTIFICACION_READ,
+        Permission.CONFIG_READ,
+        Permission.CONFIG_UPDATE,
+        # NO tiene AUDITORIA_READ - no puede acceder a auditoría
     ],
 }
 
@@ -284,62 +250,47 @@ def get_permissions_by_module(role: UserRole, module: str) -> List[Permission]:
 # FUNCIONES AUXILIARES PARA SISTEMA DE APROBACIONES
 # ============================================
 
-def can_edit_client_without_approval(user_role: str) -> bool:
+def can_edit_users(user_role: str) -> bool:
     """
-    Verificar si puede editar cliente sin solicitar aprobación
+    Verificar si puede editar usuarios
     """
-    # Solo ADMIN puede editar sin aprobación
-    return user_role == "ADMIN"
+    # Solo ADMINISTRADOR_GENERAL y GERENTE pueden editar usuarios
+    return user_role in ["ADMINISTRADOR_GENERAL", "GERENTE"]
 
 
-def can_modify_payment_without_approval(user_role: str) -> bool:
+def can_access_audit_tools(user_role: str) -> bool:
     """
-    Verificar si puede modificar pagos sin solicitar aprobación
+    Verificar si puede acceder a herramientas de auditoría
     """
-    # Solo ADMIN puede modificar pagos sin aprobación
-    return user_role == "ADMIN"
+    # Solo ADMINISTRADOR_GENERAL y GERENTE pueden acceder a auditoría
+    return user_role in ["ADMINISTRADOR_GENERAL", "GERENTE"]
 
 
 def can_view_all_clients(user_role: str) -> bool:
     """
-    Verificar si puede ver todos los clientes o solo los asignados
+    Verificar si puede ver todos los clientes
     """
-    # ASESOR solo ve sus clientes asignados
-    if user_role == "ASESOR":
-        return False
-    
-    # Otros roles pueden ver todos
-    return user_role in ["ADMIN", "GERENTE", "DIRECTOR", "COBRANZAS", "COMERCIAL", "CONTADOR"]
+    # Todos los roles pueden ver todos los clientes
+    return True
 
 
 def requires_admin_authorization(user_role: str, action: str) -> bool:
     """
     Verificar si una acción requiere autorización de Admin
     """
-    # ADMIN no necesita autorización
-    if user_role == "ADMIN":
+    # ADMINISTRADOR_GENERAL y GERENTE no necesitan autorización
+    if user_role in ["ADMINISTRADOR_GENERAL", "GERENTE"]:
         return False
     
-    # Acciones que requieren autorización para ciertos roles
-    authorization_required = {
-        "edit_client": ["COMERCIAL", "ASESOR"],
-        "modify_payment": ["COBRANZAS"],
-        "delete_payment": ["COBRANZAS"],
-        "modify_amortization": ["COBRANZAS"]
-    }
-    
-    return user_role in authorization_required.get(action, [])
+    # COBRANZAS no necesita autorización para acciones permitidas
+    return False
 
 
 def get_client_filter_for_user(user_role: str, user_id: int):
     """
     Obtener filtro de clientes según el rol del usuario
     """
-    # ASESOR solo ve sus clientes asignados
-    if user_role == "ASESOR":
-        return {"asesor_id": user_id}
-    
-    # Otros roles ven todos los clientes
+    # Todos los roles ven todos los clientes
     return None
 
 
@@ -348,20 +299,22 @@ def get_permission_matrix_summary() -> dict:
     Obtener resumen de la matriz de permisos actualizada
     """
     return {
-        "COBRANZAS": {
-            "crear_editar_clientes": "✅ SÍ",
-            "modificar_montos_pagos": "⚠️ SÍ (con solicitud de aprobación)",
-            "anular_eliminar_pagos": "⚠️ SÍ (con solicitud de aprobación)",
-            "modificar_tabla_amortizacion": "⚠️ SÍ (con solicitud de aprobación)",
-            "ingresar_clientes_credito": "✅ SÍ"
-        },
-        "COMERCIAL": {
-            "editar_clientes": "⚠️ SÍ (con autorización de Admin)"
-        },
-        "ASESOR": {
-            "editar_clientes": "⚠️ SÍ (solo sus clientes, con autorización de Admin)"
-        },
-        "ADMIN": {
+        "ADMINISTRADOR_GENERAL": {
+            "editar_usuarios": "✅ SÍ",
+            "acceder_auditoria": "✅ SÍ",
             "todas_las_acciones": "✅ SÍ (sin restricciones)"
+        },
+        "GERENTE": {
+            "editar_usuarios": "✅ SÍ",
+            "acceder_auditoria": "✅ SÍ",
+            "todas_las_acciones": "✅ SÍ (sin restricciones)"
+        },
+        "COBRANZAS": {
+            "editar_usuarios": "❌ NO",
+            "acceder_auditoria": "❌ NO",
+            "crear_usuarios": "✅ SÍ",
+            "eliminar_usuarios": "✅ SÍ",
+            "ver_usuarios": "✅ SÍ",
+            "todas_las_demas_acciones": "✅ SÍ"
         }
     }

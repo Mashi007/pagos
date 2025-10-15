@@ -14,6 +14,7 @@ from app.db.session import get_db
 from app.models.auditoria import Auditoria, TipoAccion
 from app.models.user import User
 from app.api.deps import get_current_user
+from app.core.permissions import can_access_audit_tools
 import logging
 
 logger = logging.getLogger(__name__)
@@ -59,10 +60,13 @@ def obtener_log_auditoria(
     """
     Obtener log de auditoría con filtros.
     """
-    # Verificar permisos (solo admin o roles con permiso AUDITORIA_VER)
-    if current_user.rol not in ["ADMIN", "GERENTE", "DIRECTOR"]:
+    # Verificar permisos de acceso a auditoría
+    if not can_access_audit_tools(current_user.rol):
         from fastapi import HTTPException
-        raise HTTPException(status_code=403, detail="Sin permisos para ver auditoría")
+        raise HTTPException(
+            status_code=403, 
+            detail="No tienes permisos para acceder a las herramientas de auditoría"
+        )
     
     # Construir query
     query = db.query(Auditoria)
@@ -123,10 +127,13 @@ def actividad_usuario(
     """
     Obtener actividad de un usuario específico.
     """
-    # Solo admin o el mismo usuario
-    if current_user.rol != "ADMIN" and current_user.id != usuario_id:
+    # Verificar permisos de acceso a auditoría
+    if not can_access_audit_tools(current_user.rol):
         from fastapi import HTTPException
-        raise HTTPException(status_code=403, detail="Sin permisos")
+        raise HTTPException(
+            status_code=403, 
+            detail="No tienes permisos para acceder a las herramientas de auditoría"
+        )
     
     fecha_inicio = datetime.now() - timedelta(days=dias)
     
@@ -173,6 +180,13 @@ def historial_cambios_registro(
     """
     Obtener historial completo de cambios de un registro específico.
     """
+    # Verificar permisos de acceso a auditoría
+    if not can_access_audit_tools(current_user.rol):
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=403, 
+            detail="No tienes permisos para acceder a las herramientas de auditoría"
+        )
     cambios = db.query(Auditoria).filter(
         and_(
             Auditoria.tabla == tabla,
@@ -209,9 +223,13 @@ def estadisticas_auditoria(
     """
     Obtener estadísticas generales de auditoría.
     """
-    if current_user.rol not in ["ADMIN", "GERENTE", "DIRECTOR"]:
+    # Verificar permisos de acceso a auditoría
+    if not can_access_audit_tools(current_user.rol):
         from fastapi import HTTPException
-        raise HTTPException(status_code=403, detail="Sin permisos")
+        raise HTTPException(
+            status_code=403, 
+            detail="No tienes permisos para acceder a las herramientas de auditoría"
+        )
     
     # Periodo por defecto: últimos 30 días
     if not fecha_inicio:
@@ -311,9 +329,13 @@ def acciones_criticas(
     """
     Obtener acciones críticas recientes (eliminaciones, rechazos, etc.).
     """
-    if current_user.rol not in ["ADMIN", "GERENTE", "DIRECTOR"]:
+    # Verificar permisos de acceso a auditoría
+    if not can_access_audit_tools(current_user.rol):
         from fastapi import HTTPException
-        raise HTTPException(status_code=403, detail="Sin permisos")
+        raise HTTPException(
+            status_code=403, 
+            detail="No tienes permisos para acceder a las herramientas de auditoría"
+        )
     
     fecha_inicio = datetime.now() - timedelta(days=dias)
     
@@ -360,9 +382,13 @@ async def exportar_auditoria(
     """
     Exportar log de auditoría en CSV o Excel.
     """
-    if current_user.rol not in ["ADMIN", "GERENTE"]:
+    # Verificar permisos de acceso a auditoría
+    if not can_access_audit_tools(current_user.rol):
         from fastapi import HTTPException
-        raise HTTPException(status_code=403, detail="Sin permisos para exportar")
+        raise HTTPException(
+            status_code=403, 
+            detail="No tienes permisos para acceder a las herramientas de auditoría"
+        )
     
     # Query
     query = db.query(Auditoria)

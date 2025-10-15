@@ -36,20 +36,15 @@ export default function UsuariosConfig() {
     email: '',
     nombre: '',
     apellido: '',
-    rol: 'ASESOR',
+    rol: 'COBRANZAS',
     password: '',
     is_active: true
   })
 
   const roles = [
-    { value: 'ADMIN', label: '👑 Administrador', description: 'Acceso total al sistema' },
-    { value: 'GERENTE', label: '📊 Gerente', description: 'Supervisión y aprobaciones' },
-    { value: 'DIRECTOR', label: '🎯 Director', description: 'Decisiones estratégicas' },
-    { value: 'COBRANZAS', label: '💰 Cobranzas', description: 'Gestión de cobros' },
-    { value: 'COMERCIAL', label: '🤝 Comercial', description: 'Ventas y clientes' },
-    { value: 'ASESOR', label: '👔 Asesor', description: 'Atención al cliente' },
-    { value: 'CONTADOR', label: '📈 Contador', description: 'Gestión financiera' },
-    { value: 'COMITE', label: '🏛️ Comité', description: 'Revisión de casos especiales' }
+    { value: 'ADMINISTRADOR_GENERAL', label: '👑 Administrador General', description: 'Acceso completo al sistema' },
+    { value: 'GERENTE', label: '📊 Gerente', description: 'Acceso completo al sistema' },
+    { value: 'COBRANZAS', label: '💰 Cobranzas', description: 'Gestión completa excepto editar usuarios y auditoría' }
   ]
 
   useEffect(() => {
@@ -150,7 +145,7 @@ export default function UsuariosConfig() {
       email: '',
       nombre: '',
       apellido: '',
-      rol: 'ASESOR',
+      rol: 'COBRANZAS',
       password: '',
       is_active: true
     })
@@ -624,14 +619,28 @@ export default function UsuariosConfig() {
                   </div>
                 </div>
 
-                {viewingUser.rol === 'ADMIN' && (
+                {(viewingUser.rol === 'ADMINISTRADOR_GENERAL' || viewingUser.rol === 'GERENTE') && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
                     <div className="flex items-start gap-2">
                       <Shield className="h-5 w-5 text-blue-600 mt-0.5" />
                       <div>
-                        <p className="text-sm font-medium text-blue-900">Permisos de Administrador</p>
+                        <p className="text-sm font-medium text-blue-900">Permisos Completos</p>
                         <p className="text-xs text-blue-700 mt-1">
-                          Este usuario tiene acceso completo a todas las funcionalidades del sistema
+                          Este usuario tiene acceso completo a todas las funcionalidades del sistema, incluyendo editar usuarios y herramientas de auditoría
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {viewingUser.rol === 'COBRANZAS' && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-yellow-900">Permisos Limitados</p>
+                        <p className="text-xs text-yellow-700 mt-1">
+                          Este usuario NO puede editar usuarios ni acceder a herramientas de auditoría. Todas las demás funcionalidades están disponibles.
                         </p>
                       </div>
                     </div>

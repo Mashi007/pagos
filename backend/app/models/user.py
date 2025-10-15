@@ -7,6 +7,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.db.session import Base
+from app.core.permissions import UserRole
 class User(Base):
     """Modelo de Usuario"""
     
@@ -17,7 +18,7 @@ class User(Base):
     nombre = Column(String(100), nullable=False)
     apellido = Column(String(100), nullable=False)
     hashed_password = Column(String(255), nullable=False)
-    rol = Column(String(20), nullable=False, default="ASESOR")
+    rol = Column(SQLEnum(UserRole), nullable=False, default=UserRole.COBRANZAS)
     is_active = Column(Boolean, default=True, nullable=False)
     
     # Timestamps
