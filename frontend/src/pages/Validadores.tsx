@@ -300,7 +300,7 @@ export function Validadores() {
               </div>
             </CardContent>
           </Card>
-
+        </div>
 
         {/* Sección: Ejemplos */}
         <div className="mt-6">
@@ -385,7 +385,7 @@ export function Validadores() {
               </CardContent>
             </Card>
           </div>
-
+        </div>
 
         {/* Sección: Diagnóstico */}
         <div className="mt-6">
