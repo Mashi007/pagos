@@ -47,6 +47,7 @@ from app.api.v1.endpoints import (
     debug_asesores,
     clean_system,
     delete_wrong_admin,
+    sql_delete_admin,
 )
 
 # Configurar logging
@@ -119,6 +120,7 @@ app.include_router(emergency_fix_models.router, prefix=f"{settings.API_V1_PREFIX
 app.include_router(debug_asesores.router, prefix=f"{settings.API_V1_PREFIX}/debug-asesores", tags=["Debug Asesores"])
 app.include_router(clean_system.router, prefix=f"{settings.API_V1_PREFIX}/clean", tags=["Clean System"])
 app.include_router(delete_wrong_admin.router, prefix=f"{settings.API_V1_PREFIX}/fix-admin", tags=["Fix Admin"])
+app.include_router(sql_delete_admin.router, prefix=f"{settings.API_V1_PREFIX}/sql-delete", tags=["SQL Delete Admin"])
 
 
 @app.get("/", include_in_schema=False)
