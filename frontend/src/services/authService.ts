@@ -120,23 +120,23 @@ export class AuthService {
   }
 
   static isAdmin(user: User | null): boolean {
-    return AuthService.hasAnyRole(user, ['ADMIN', 'GERENTE', 'DIRECTOR'])
+    return AuthService.hasAnyRole(user, ['ADMINISTRADOR_GENERAL'])
   }
 
   static canManagePayments(user: User | null): boolean {
-    return AuthService.hasAnyRole(user, ['ADMIN', 'GERENTE', 'COBRADOR', 'ASESOR_COMERCIAL'])
+    return AuthService.hasAnyRole(user, ['ADMINISTRADOR_GENERAL', 'COBRANZAS'])
   }
 
   static canViewReports(user: User | null): boolean {
-    return AuthService.hasAnyRole(user, ['ADMIN', 'GERENTE', 'DIRECTOR', 'CONTADOR', 'AUDITOR'])
+    return AuthService.hasAnyRole(user, ['ADMINISTRADOR_GENERAL', 'COBRANZAS'])
   }
 
   static canManageConfig(user: User | null): boolean {
-    return AuthService.hasAnyRole(user, ['ADMIN', 'GERENTE'])
+    return AuthService.hasAnyRole(user, ['ADMINISTRADOR_GENERAL'])
   }
 
   static canViewAllClients(user: User | null): boolean {
-    return AuthService.hasAnyRole(user, ['ADMIN', 'GERENTE', 'DIRECTOR', 'CONTADOR', 'AUDITOR'])
+    return AuthService.hasAnyRole(user, ['ADMINISTRADOR_GENERAL', 'COBRANZAS'])
   }
 
   static getCurrentUserName(user: User | null): string {

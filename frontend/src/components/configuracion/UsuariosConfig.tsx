@@ -43,7 +43,6 @@ export default function UsuariosConfig() {
 
   const roles = [
     { value: 'ADMINISTRADOR_GENERAL', label: '👑 Administrador General', description: 'Acceso completo al sistema' },
-    { value: 'GERENTE', label: '📊 Gerente', description: 'Acceso completo al sistema' },
     { value: 'COBRANZAS', label: '💰 Cobranzas', description: 'Gestión completa excepto editar usuarios y auditoría' }
   ]
 
@@ -633,7 +632,7 @@ export default function UsuariosConfig() {
                   </div>
                 </div>
 
-                {(viewingUser.rol === 'ADMINISTRADOR_GENERAL' || viewingUser.rol === 'GERENTE') && (
+                {viewingUser.rol === 'ADMINISTRADOR_GENERAL' && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
                     <div className="flex items-start gap-2">
                       <Shield className="h-5 w-5 text-blue-600 mt-0.5" />

@@ -122,7 +122,7 @@ function App() {
           <Route
             path="carga-masiva"
             element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE']}>
+              <ProtectedRoute requiredRoles={['ADMINISTRADOR_GENERAL']}>
                 <CargaMasiva />
               </ProtectedRoute>
             }
@@ -132,7 +132,7 @@ function App() {
           <Route
             path="prestamos"
             element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE', 'ASESOR_COMERCIAL']}>
+              <ProtectedRoute requiredRoles={['ADMINISTRADOR_GENERAL', 'COBRANZAS']}>
                 <PrestamosPage />
               </ProtectedRoute>
             }
@@ -149,7 +149,7 @@ function App() {
           <Route
             path="conciliacion"
             element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE', 'CONTADOR']}>
+              <ProtectedRoute requiredRoles={['ADMINISTRADOR_GENERAL', 'COBRANZAS']}>
                 <Conciliacion />
               </ProtectedRoute>
             }
@@ -159,7 +159,7 @@ function App() {
           <Route
             path="reportes"
             element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE', 'DIRECTOR', 'CONTADOR', 'AUDITOR']}>
+              <ProtectedRoute requiredRoles={['ADMINISTRADOR_GENERAL', 'COBRANZAS']}>
                 <ReportesPage />
               </ProtectedRoute>
             }
@@ -170,7 +170,7 @@ function App() {
           <Route
             path="aprobaciones"
             element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE', 'ASESOR_COMERCIAL']}>
+              <ProtectedRoute requiredRoles={['ADMINISTRADOR_GENERAL', 'COBRANZAS']}>
                 <Aprobaciones />
               </ProtectedRoute>
             }
@@ -180,7 +180,7 @@ function App() {
           <Route
             path="auditoria"
             element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE', 'AUDITOR']}>
+              <ProtectedRoute requiredRoles={['ADMINISTRADOR_GENERAL']}>
                 <Auditoria />
               </ProtectedRoute>
             }
@@ -193,7 +193,7 @@ function App() {
           <Route
             path="scheduler"
             element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE']}>
+              <ProtectedRoute requiredRoles={['ADMINISTRADOR_GENERAL']}>
                 <Programador />
               </ProtectedRoute>
             }
@@ -203,7 +203,7 @@ function App() {
           <Route
             path="configuracion"
             element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE']}>
+              <ProtectedRoute requiredRoles={['ADMINISTRADOR_GENERAL']}>
                 <Configuracion />
               </ProtectedRoute>
             }
@@ -213,7 +213,7 @@ function App() {
           <Route
             path="validadores"
             element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE']}>
+              <ProtectedRoute requiredRoles={['ADMINISTRADOR_GENERAL']}>
                 <Validadores />
               </ProtectedRoute>
             }
@@ -223,7 +223,7 @@ function App() {
           <Route
             path="asesores"
             element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE']}>
+              <ProtectedRoute requiredRoles={['ADMINISTRADOR_GENERAL']}>
                 <Asesores />
               </ProtectedRoute>
             }
@@ -233,7 +233,7 @@ function App() {
           <Route
             path="concesionarios"
             element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE']}>
+              <ProtectedRoute requiredRoles={['ADMINISTRADOR_GENERAL']}>
                 <Concesionarios />
               </ProtectedRoute>
             }
@@ -243,7 +243,7 @@ function App() {
           <Route
             path="modelos-vehiculos"
             element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE']}>
+              <ProtectedRoute requiredRoles={['ADMINISTRADOR_GENERAL']}>
                 <ModelosVehiculos />
               </ProtectedRoute>
             }
@@ -253,7 +253,7 @@ function App() {
           <Route
             path="usuarios"
             element={
-              <ProtectedRoute requiredRoles={['ADMIN']}>
+              <ProtectedRoute requiredRoles={['ADMINISTRADOR_GENERAL']}>
                 <Usuarios />
               </ProtectedRoute>
             }
@@ -263,7 +263,7 @@ function App() {
           <Route
             path="solicitudes"
             element={
-              <ProtectedRoute requiredRoles={['ADMIN', 'GERENTE', 'ASESOR_COMERCIAL']}>
+              <ProtectedRoute requiredRoles={['ADMINISTRADOR_GENERAL', 'COBRANZAS']}>
                 <Solicitudes />
               </ProtectedRoute>
             }

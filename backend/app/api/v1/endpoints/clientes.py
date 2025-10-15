@@ -206,7 +206,7 @@ def listar_clientes(
     Listar clientes con filtros básicos y paginación
     
     IMPLEMENTA MATRIZ DE ACCESO POR ROL:
-    - ADMINISTRADOR_GENERAL y GERENTE: Ve TODOS los clientes
+    - ADMINISTRADOR_GENERAL: Ve TODOS los clientes
     - COBRANZAS: Ve TODOS los clientes (para gestión de cobranza)
     """
     try:
@@ -404,7 +404,7 @@ def test_main_logic(
         query = db.query(Cliente)
         
         # FILTRO POR ROL - Todos los roles tienen acceso completo
-        # (ADMINISTRADOR_GENERAL, GERENTE, COBRANZAS)
+        # (ADMINISTRADOR_GENERAL, COBRANZAS)
         
         # ORDENAMIENTO
         query = query.order_by(desc(Cliente.fecha_registro))
@@ -1594,7 +1594,7 @@ def obtener_acciones_rapidas(
         puede_generar_estado_cuenta=has_permission(user_role, Permission.REPORTE_READ),
         puede_modificar_financiamiento=has_permission(user_role, Permission.PRESTAMO_UPDATE),
         puede_reasignar_asesor=(
-            user_role in [UserRole.ADMINISTRADOR_GENERAL, UserRole.GERENTE]
+            user_role == UserRole.ADMINISTRADOR_GENERAL
         )
     )
     

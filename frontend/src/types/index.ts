@@ -12,14 +12,8 @@ export interface User {
 }
 
 export type UserRole = 
-  | 'ADMIN'
-  | 'GERENTE' 
-  | 'DIRECTOR'
-  | 'ASESOR_COMERCIAL'
-  | 'COBRADOR'
-  | 'CONTADOR'
-  | 'AUDITOR'
-  | 'USUARIO';
+  | 'ADMINISTRADOR_GENERAL'
+  | 'COBRANZAS';
 
 export interface Cliente {
   id: number;

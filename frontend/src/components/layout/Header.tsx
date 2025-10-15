@@ -51,14 +51,8 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
 
   const getRoleColor = (role: string) => {
     const colors = {
-      ADMIN: 'bg-red-100 text-red-800',
-      GERENTE: 'bg-purple-100 text-purple-800',
-      DIRECTOR: 'bg-blue-100 text-blue-800',
-      ASESOR_COMERCIAL: 'bg-green-100 text-green-800',
-      COBRADOR: 'bg-yellow-100 text-yellow-800',
-      CONTADOR: 'bg-indigo-100 text-indigo-800',
-      AUDITOR: 'bg-gray-100 text-gray-800',
-      USUARIO: 'bg-gray-100 text-gray-800',
+      ADMINISTRADOR_GENERAL: 'bg-red-100 text-red-800',
+      COBRANZAS: 'bg-green-100 text-green-800',
     }
     return colors[role as keyof typeof colors] || 'bg-gray-100 text-gray-800'
   }
