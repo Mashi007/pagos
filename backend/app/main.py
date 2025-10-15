@@ -40,6 +40,7 @@ from app.api.v1.endpoints import (
     asesores,
     modelos_vehiculos,
     test_router,
+    fix_roles,
 )
 
 # Configurar logging
@@ -105,6 +106,7 @@ app.include_router(concesionarios.router, prefix=f"{settings.API_V1_PREFIX}/conc
 app.include_router(asesores.router, prefix=f"{settings.API_V1_PREFIX}/asesores", tags=["Asesores"])
 app.include_router(modelos_vehiculos.router, prefix=f"{settings.API_V1_PREFIX}/modelos-vehiculos", tags=["Modelos Vehículos"])
 app.include_router(test_router.router, prefix=f"{settings.API_V1_PREFIX}/test", tags=["Test"])
+app.include_router(fix_roles.router, prefix=f"{settings.API_V1_PREFIX}/fix", tags=["Fix Roles"])
 
 
 @app.get("/", include_in_schema=False)
