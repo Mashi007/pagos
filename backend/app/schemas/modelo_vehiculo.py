@@ -9,27 +9,14 @@ from datetime import datetime
 
 
 class ModeloVehiculoBase(BaseModel):
-    marca: str = Field(..., min_length=2, max_length=50, description="Marca del vehículo")
     modelo: str = Field(..., min_length=1, max_length=100, description="Modelo del vehículo")
-    categoria: Optional[str] = Field(None, max_length=50, description="Categoría del vehículo")
-    precio_base: Optional[Decimal] = Field(None, ge=0, description="Precio base del vehículo")
     activo: bool = Field(True, description="Si el modelo está activo")
-    descripcion: Optional[str] = Field(None, description="Descripción del modelo")
-    especificaciones: Optional[str] = Field(None, description="Especificaciones técnicas")
 
-    @validator('marca', 'modelo')
-    def validate_text_fields(cls, v):
+    @validator('modelo')
+    def validate_modelo(cls, v):
         if v and not v.strip():
-            raise ValueError('Campo no puede estar vacío')
+            raise ValueError('Campo modelo no puede estar vacío')
         return v.strip().title() if v else v
-
-    @validator('categoria')
-    def validate_categoria(cls, v):
-        if v:
-            categorias_validas = ['Sedán', 'SUV', 'Hatchback', 'Pickup', 'Motocicleta', 'Camioneta', 'Van']
-            if v not in categorias_validas:
-                raise ValueError(f'Categoría debe ser una de: {", ".join(categorias_validas)}')
-        return v
 
 
 class ModeloVehiculoCreate(ModeloVehiculoBase):
@@ -39,21 +26,15 @@ class ModeloVehiculoCreate(ModeloVehiculoBase):
 
 class ModeloVehiculoUpdate(BaseModel):
     """Schema para actualizar un modelo de vehículo"""
-    marca: Optional[str] = Field(None, min_length=2, max_length=50)
     modelo: Optional[str] = Field(None, min_length=1, max_length=100)
-    categoria: Optional[str] = Field(None, max_length=50)
-    precio_base: Optional[Decimal] = Field(None, ge=0)
     activo: Optional[bool] = None
-    descripcion: Optional[str] = None
-    especificaciones: Optional[str] = None
 
 
 class ModeloVehiculoResponse(ModeloVehiculoBase):
     """Schema para respuesta de modelo de vehículo"""
     id: int
-    nombre_completo: str = Field(..., description="Nombre completo del modelo")
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -71,11 +52,8 @@ class ModeloVehiculoListResponse(BaseModel):
 class ModeloVehiculoActivosResponse(BaseModel):
     """Schema para modelos activos (para formularios)"""
     id: int
-    nombre_completo: str
-    marca: str
     modelo: str
-    categoria: Optional[str]
-    precio_base: Optional[Decimal]
+    activo: bool
     
     class Config:
         from_attributes = True

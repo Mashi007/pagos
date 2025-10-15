@@ -51,8 +51,6 @@ def listar_modelos_vehiculos(
         
         if search:
             query = query.filter(
-                ModeloVehiculo.nombre_completo.ilike(f"%{search}%") |
-                ModeloVehiculo.marca.ilike(f"%{search}%") |
                 ModeloVehiculo.modelo.ilike(f"%{search}%")
             )
         
@@ -60,7 +58,7 @@ def listar_modelos_vehiculos(
         total = query.count()
         
         # Aplicar paginación
-        modelos = query.order_by(ModeloVehiculo.marca, ModeloVehiculo.modelo).offset(skip).limit(limit).all()
+        modelos = query.order_by(ModeloVehiculo.modelo).offset(skip).limit(limit).all()
         
         # Calcular páginas
         pages = (total + limit - 1) // limit
@@ -96,7 +94,7 @@ def listar_modelos_activos(
         if marca:
             query = query.filter(ModeloVehiculo.marca == marca)
         
-        modelos = query.order_by(ModeloVehiculo.marca, ModeloVehiculo.modelo).all()
+        modelos = query.order_by(ModeloVehiculo.modelo).all()
         return [ModeloVehiculoActivosResponse.from_orm(m) for m in modelos]
         
     except Exception as e:
@@ -122,13 +120,13 @@ def crear_modelo_vehiculo(
     try:
         # Verificar que no existe ya
         existing = db.query(ModeloVehiculo).filter(
-            ModeloVehiculo.nombre_completo == modelo_data.nombre_completo
+            ModeloVehiculo.modelo == modelo_data.modelo
         ).first()
         
         if existing:
             raise HTTPException(
                 status_code=400, 
-                detail="Ya existe un modelo con este nombre completo"
+                detail="Ya existe un modelo con este nombre"
             )
         
         # Crear el modelo
@@ -186,15 +184,15 @@ def actualizar_modelo_vehiculo(
             raise HTTPException(status_code=404, detail="Modelo de vehículo no encontrado")
         
         # Verificar nombre único si se está cambiando
-        if modelo_data.nombre_completo and modelo_data.nombre_completo != modelo.nombre_completo:
+        if modelo_data.modelo and modelo_data.modelo != modelo.modelo:
             existing = db.query(ModeloVehiculo).filter(
-                ModeloVehiculo.nombre_completo == modelo_data.nombre_completo,
+                ModeloVehiculo.modelo == modelo_data.modelo,
                 ModeloVehiculo.id != modelo_id
             ).first()
             if existing:
                 raise HTTPException(
                     status_code=400, 
-                    detail="Ya existe un modelo con este nombre completo"
+                    detail="Ya existe un modelo con este nombre"
                 )
         
         # Actualizar campos
