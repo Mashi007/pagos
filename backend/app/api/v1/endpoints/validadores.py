@@ -103,6 +103,28 @@ def test_cedula_post(cedula: str = "E12345678"):
         }
 
 
+@router.post("/test-cedula-custom")
+def test_cedula_custom(cedula: str):
+    """Endpoint POST para probar cualquier cédula sin autenticación"""
+    try:
+        resultado = ValidadorCedula.validar_y_formatear_cedula(cedula, "VENEZUELA")
+        return {
+            "cedula_test": cedula,
+            "resultado": resultado,
+            "reglas": {
+                "prefijos_validos": ["V", "E", "J"],
+                "longitud_digitos": "7-10 dígitos",
+                "patron": "^[VEJ]\\d{7,10}$",
+                "ejemplos_validos": ["V1234567", "E12345678", "J123456789", "V1234567890"]
+            }
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "cedula_test": cedula
+        }
+
+
 @router.post("/validar-campo")
 def validar_campo_tiempo_real(
     validacion: ValidacionCampo,
