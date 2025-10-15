@@ -63,6 +63,13 @@ def listar_asesores(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al listar asesores: {str(e)}")
 
+@router.get("/test-simple")
+def test_simple():
+    """
+    🧪 Endpoint simple sin base de datos
+    """
+    return {"mensaje": "Router de asesores funcionando", "status": "ok", "timestamp": "2025-10-15"}
+
 @router.get("/test-activos")
 def test_asesores_activos():
     """
