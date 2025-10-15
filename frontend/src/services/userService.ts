@@ -6,7 +6,7 @@ export interface User {
   email: string
   nombre: string
   apellido: string
-  rol: 'ADMIN' | 'GERENTE' | 'DIRECTOR' | 'COBRANZAS' | 'COMERCIAL' | 'ASESOR' | 'CONTADOR' | 'COMITE'
+  rol: 'ADMINISTRADOR_GENERAL' | 'GERENTE' | 'COBRANZAS'
   is_active: boolean
   created_at: string
   updated_at?: string
@@ -18,7 +18,7 @@ export interface UserCreate {
   email: string
   nombre: string
   apellido: string
-  rol: 'ADMIN' | 'GERENTE' | 'DIRECTOR' | 'COBRANZAS' | 'COMERCIAL' | 'ASESOR' | 'CONTADOR' | 'COMITE'
+  rol: 'ADMINISTRADOR_GENERAL' | 'GERENTE' | 'COBRANZAS'
   password: string
   is_active: boolean
 }
@@ -27,7 +27,7 @@ export interface UserUpdate {
   email?: string
   nombre?: string
   apellido?: string
-  rol?: 'ADMIN' | 'GERENTE' | 'DIRECTOR' | 'COBRANZAS' | 'COMERCIAL' | 'ASESOR' | 'CONTADOR' | 'COMITE'
+  rol?: 'ADMINISTRADOR_GENERAL' | 'GERENTE' | 'COBRANZAS'
   password?: string
   is_active?: boolean
 }
