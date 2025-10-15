@@ -244,36 +244,47 @@ def listar_clientes(
         clientes = query.all()
         total_pages = 1
         
-        # Serialización manual
+        # Serialización simplificada para evitar errores 503
         clientes_dict = []
         for cliente in clientes:
-            clientes_dict.append({
-                "id": cliente.id,
-                "cedula": cliente.cedula,
-                "nombres": cliente.nombres,
-                "apellidos": cliente.apellidos,
-                "telefono": cliente.telefono,
-                "email": cliente.email,
-                "direccion": cliente.direccion,
-                "ocupacion": cliente.ocupacion,
-                "modelo_vehiculo": cliente.modelo_vehiculo,
-                "marca_vehiculo": cliente.marca_vehiculo,
-                "anio_vehiculo": cliente.anio_vehiculo,
-                "color_vehiculo": cliente.color_vehiculo,
-                "concesionario": cliente.concesionario,
-                "total_financiamiento": float(cliente.total_financiamiento) if cliente.total_financiamiento else None,
-                "cuota_inicial": float(cliente.cuota_inicial) if cliente.cuota_inicial else None,
-                "monto_financiado": float(cliente.monto_financiado) if cliente.monto_financiado else None,
-                "modalidad_pago": cliente.modalidad_pago,
-                "numero_amortizaciones": cliente.numero_amortizaciones,
-                "asesor_config_id": cliente.asesor_config_id,
-                "estado": cliente.estado,
-                "activo": cliente.activo,
-                "estado_financiero": cliente.estado_financiero,
-                "dias_mora": cliente.dias_mora,
-                "fecha_registro": cliente.fecha_registro.isoformat() if cliente.fecha_registro else None,
-                "fecha_asignacion": cliente.fecha_asignacion.isoformat() if cliente.fecha_asignacion else None
-            })
+            try:
+                cliente_data = {
+                    "id": cliente.id,
+                    "cedula": cliente.cedula or "",
+                    "nombres": cliente.nombres or "",
+                    "apellidos": cliente.apellidos or "",
+                    "telefono": cliente.telefono or "",
+                    "email": cliente.email or "",
+                    "direccion": cliente.direccion or "",
+                    "ocupacion": cliente.ocupacion or "",
+                    "modelo_vehiculo": cliente.modelo_vehiculo or "",
+                    "marca_vehiculo": cliente.marca_vehiculo or "",
+                    "anio_vehiculo": cliente.anio_vehiculo,
+                    "color_vehiculo": cliente.color_vehiculo or "",
+                    "concesionario": cliente.concesionario or "",
+                    "total_financiamiento": float(cliente.total_financiamiento) if cliente.total_financiamiento else 0.0,
+                    "cuota_inicial": float(cliente.cuota_inicial) if cliente.cuota_inicial else 0.0,
+                    "monto_financiado": float(cliente.monto_financiado) if cliente.monto_financiado else 0.0,
+                    "modalidad_pago": cliente.modalidad_pago or "MENSUAL",
+                    "numero_amortizaciones": cliente.numero_amortizaciones or 0,
+                    "asesor_config_id": cliente.asesor_config_id,
+                    "estado": cliente.estado or "ACTIVO",
+                    "activo": cliente.activo if cliente.activo is not None else True,
+                    "estado_financiero": cliente.estado_financiero or "AL_DIA",
+                    "dias_mora": cliente.dias_mora or 0,
+                    "fecha_registro": cliente.fecha_registro.isoformat() if cliente.fecha_registro else None,
+                    "fecha_asignacion": cliente.fecha_asignacion.isoformat() if cliente.fecha_asignacion else None
+                }
+                clientes_dict.append(cliente_data)
+            except Exception as serialization_error:
+                # Si hay error en la serialización de un cliente específico, agregarlo con datos mínimos
+                clientes_dict.append({
+                    "id": cliente.id,
+                    "cedula": cliente.cedula or "",
+                    "nombres": cliente.nombres or "",
+                    "apellidos": cliente.apellidos or "",
+                    "error": f"Error serializando cliente: {str(serialization_error)}"
+                })
         
         return {
             "items": clientes_dict,
