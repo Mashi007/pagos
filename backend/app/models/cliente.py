@@ -24,8 +24,10 @@ class Cliente(Base):
     # ============================================
     # DATOS DEL VEHÍCULO Y FINANCIAMIENTO
     # ============================================
-    modelo_vehiculo_id = Column(Integer, ForeignKey("modelos_vehiculos.id"), nullable=True, index=True)
-    modelo_vehiculo = Column(String(100), nullable=True, index=True)  # Campo legacy - mantener por compatibilidad
+    # NOTA: modelo_vehiculo_id NO EXISTE en la base de datos actual
+    # Se comenta temporalmente para permitir funcionamiento con datos reales
+    # modelo_vehiculo_id = Column(Integer, ForeignKey("modelos_vehiculos.id"), nullable=True, index=True)
+    modelo_vehiculo = Column(String(100), nullable=True, index=True)  # Campo existente en BD
     marca_vehiculo = Column(String(50), nullable=True, index=True)
     anio_vehiculo = Column(Integer, nullable=True)
     color_vehiculo = Column(String(30), nullable=True)
@@ -33,8 +35,10 @@ class Cliente(Base):
     motor = Column(String(50), nullable=True)
     
     # Concesionario - NUEVO: ForeignKey + campo legacy
-    concesionario_id = Column(Integer, ForeignKey("concesionarios.id"), nullable=True, index=True)
-    concesionario = Column(String(100), nullable=True, index=True)  # Campo legacy - mantener por compatibilidad
+    # NOTA: concesionario_id NO EXISTE en la base de datos actual
+    # Se comenta temporalmente para permitir funcionamiento con datos reales
+    # concesionario_id = Column(Integer, ForeignKey("concesionarios.id"), nullable=True, index=True)
+    concesionario = Column(String(100), nullable=True, index=True)  # Campo existente en BD
     vendedor_concesionario = Column(String(100), nullable=True)
     
     # Financiamiento
@@ -72,8 +76,9 @@ class Cliente(Base):
     notificaciones = relationship("Notificacion", back_populates="cliente")
     
     # Nuevas relaciones con ForeignKeys
-    concesionario_rel = relationship("Concesionario", foreign_keys=[concesionario_id])
-    modelo_vehiculo_rel = relationship("ModeloVehiculo", foreign_keys=[modelo_vehiculo_id])
+    # NOTA: Comentadas temporalmente porque las columnas FK no existen en BD
+    # concesionario_rel = relationship("Concesionario", foreign_keys=[concesionario_id])
+    # modelo_vehiculo_rel = relationship("ModeloVehiculo", foreign_keys=[modelo_vehiculo_id])
     asesor_config_rel = relationship("Asesor", foreign_keys=[asesor_config_id])
     
     def __repr__(self):
