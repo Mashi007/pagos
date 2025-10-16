@@ -33,7 +33,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatDate } from '@/utils'
 import { ValidadoresConfig } from '@/components/configuracion/ValidadoresConfig'
 import { ConcesionariosConfig } from '@/components/configuracion/ConcesionariosConfig'
-import { AsesoresConfig } from '@/components/configuracion/AsesoresConfig'
+import { AnalistasConfig } from '@/components/configuracion/AnalistasConfig'
 import UsuariosConfig from '@/components/configuracion/UsuariosConfig'
 
 // Mock data para configuración
@@ -996,7 +996,7 @@ export function Configuracion() {
       case 'inteligenciaArtificial': return renderSeccionInteligenciaArtificial()
       case 'validadores': return <ValidadoresConfig />
       case 'concesionarios': return <ConcesionariosConfig />
-      case 'analistaes': return <AsesoresConfig />
+      case 'analistaes': return <AnalistasConfig />
       case 'usuarios': return <UsuariosConfig />
       default: return renderSeccionGeneral()
     }

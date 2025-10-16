@@ -22,7 +22,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { concesionarioService, type Concesionario } from '@/services/concesionarioService'
-import { analistaService, type Asesor } from '@/services/analistaService'
+import { analistaService, type Analista } from '@/services/analistaService'
 import { modeloVehiculoService, type ModeloVehiculo } from '@/services/modeloVehiculoService'
 import { clienteService } from '@/services/clienteService'
 
@@ -78,11 +78,11 @@ export function CrearClienteForm({
   const [validations, setValidations] = useState<FieldValidation>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [concesionarios, setConcesionarios] = useState<Concesionario[]>([])
-  const [analistaes, setAsesores] = useState<Asesor[]>([])
+  const [analistaes, setAnalistaes] = useState<Analista[]>([])
   const [modelosVehiculos, setModelosVehiculos] = useState<ModeloVehiculo[]>([])
   const [loadingData, setLoadingData] = useState(true)
 
-  // 🔄 CARGAR DATOS DINÁMICOS: Asesores y Concesionarios desde configuración
+  // 🔄 CARGAR DATOS DINÁMICOS: Analistaes y Concesionarios desde configuración
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -117,7 +117,7 @@ export function CrearClienteForm({
         })
         
         setConcesionarios(concesionariosData)
-        setAsesores(analistaesData)
+        setAnalistaes(analistaesData)
         setModelosVehiculos(modelosData)
       } catch (error) {
         console.error('❌ Error al cargar datos de configuración:', error)
@@ -125,11 +125,11 @@ export function CrearClienteForm({
         try {
           const [concesionariosData, analistaesData, modelosData] = await Promise.all([
             concesionarioService.listarConcesionariosActivos(),
-            analistaService.listarAsesoresActivos(),
+            analistaService.listarAnalistaesActivos(),
             modeloVehiculoService.listarModelosActivos()
           ])
           setConcesionarios(concesionariosData)
-          setAsesores(analistaesData)
+          setAnalistaes(analistaesData)
           setModelosVehiculos(modelosData)
         } catch (fallbackError) {
           console.error('❌ Error en fallback:', fallbackError)
@@ -142,7 +142,7 @@ export function CrearClienteForm({
             { id: 3, nombre: 'Vehiculos Maracaibo', direccion: 'Av. 5 de Julio, Maracaibo', telefono: '+58 261-555-0303', email: 'maracaibo@vehiculos.com', responsable: 'Ana Pérez', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
           ]
           
-          const mockAsesores = [
+          const mockAnalistaes = [
             { id: 1, nombre: 'Roberto', apellido: 'Martínez', nombre_completo: 'Roberto Martínez', email: 'roberto.martinez@rapicredit.com', telefono: '+58 414-555-0404', especialidad: 'Vehículos Nuevos', comision_porcentaje: 2.5, activo: true, notas: 'Especialista en vehículos de gama alta', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
             { id: 2, nombre: 'Sandra', apellido: 'López', nombre_completo: 'Sandra López', email: 'sandra.lopez@rapicredit.com', telefono: '+58 424-555-0505', especialidad: 'Vehículos Usados', comision_porcentaje: 3.0, activo: true, notas: 'Experta en financiamiento de vehículos usados', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
             { id: 3, nombre: 'Miguel', apellido: 'Hernández', nombre_completo: 'Miguel Hernández', email: 'miguel.hernandez@rapicredit.com', telefono: '+58 414-555-0606', especialidad: 'Motocicletas', comision_porcentaje: 4.0, activo: true, notas: 'Especialista en financiamiento de motocicletas', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
@@ -157,11 +157,11 @@ export function CrearClienteForm({
           ]
           
           setConcesionarios(mockConcesionarios)
-          setAsesores(mockAsesores)
+          setAnalistaes(mockAnalistaes)
           setModelosVehiculos(mockModelos)
           console.log('✅ Datos mock cargados:', {
             concesionarios: mockConcesionarios.length,
-            analistaes: mockAsesores.length,
+            analistaes: mockAnalistaes.length,
             modelos: mockModelos.length
           })
         }
@@ -408,7 +408,7 @@ export function CrearClienteForm({
         return { isValid: true }
 
       case 'analistaAsignado':
-        if (!value.trim()) return { isValid: false, message: 'Asesor requerido' }
+        if (!value.trim()) return { isValid: false, message: 'Analista requerido' }
         return { isValid: true }
 
       case 'concesionario':
@@ -857,11 +857,11 @@ export function CrearClienteForm({
                   )}
                 </div>
 
-                {/* Asesor asignado */}
+                {/* Analista asignado */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium flex items-center">
                     <Users className="mr-1 h-4 w-4" />
-                    Asesor asignado *
+                    Analista asignado *
                     {getFieldIcon('analistaAsignado')}
                   </label>
                   <Select value={formData.analistaAsignado} onValueChange={(value) => handleFieldChange('analistaAsignado', value)}>

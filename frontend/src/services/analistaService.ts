@@ -49,39 +49,39 @@ class AnalistaService {
   private baseUrl = '/api/v1/analistas'
 
   // Listar analistaes con paginación y filtros
-  async listarAsesores(params?: {
+  async listarAnalistaes(params?: {
     skip?: number
     limit?: number
     activo?: boolean
     search?: string
     especialidad?: string
-  }): Promise<AsesorListResponse> {
-    return await apiClient.get<AsesorListResponse>(this.baseUrl, { params })
+  }): Promise<AnalistaListResponse> {
+    return await apiClient.get<AnalistaListResponse>(this.baseUrl, { params })
   }
 
   // Listar solo analistaes activos (para formularios)
-  async listarAsesoresActivos(especialidad?: string): Promise<Asesor[]> {
+  async listarAnalistaesActivos(especialidad?: string): Promise<Analista[]> {
     const params = especialidad ? { especialidad } : undefined
-    return await apiClient.get<Asesor[]>(`${this.baseUrl}/activos`, { params })
+    return await apiClient.get<Analista[]>(`${this.baseUrl}/activos`, { params })
   }
 
   // Obtener un analista por ID
-  async obtenerAsesor(id: number): Promise<Asesor> {
+  async obtenerAnalista(id: number): Promise<Analista> {
     return await apiClient.get<Analista>(`${this.baseUrl}/${id}`)
   }
 
   // Crear un nuevo analista
-  async crearAsesor(data: AsesorCreate): Promise<Asesor> {
+  async crearAnalista(data: AnalistaCreate): Promise<Analista> {
     return await apiClient.post<Analista>(this.baseUrl, data)
   }
 
   // Actualizar un analista existente
-  async actualizarAsesor(id: number, data: AsesorUpdate): Promise<Asesor> {
+  async actualizarAnalista(id: number, data: AnalistaUpdate): Promise<Analista> {
     return await apiClient.put<Analista>(`${this.baseUrl}/${id}`, data)
   }
 
   // Eliminar un analista (soft delete)
-  async eliminarAsesor(id: number): Promise<{ message: string }> {
+  async eliminarAnalista(id: number): Promise<{ message: string }> {
     return await apiClient.delete<{ message: string }>(`${this.baseUrl}/${id}`)
   }
 }

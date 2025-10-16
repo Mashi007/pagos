@@ -22,7 +22,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
-import { analistaService, type Asesor, type AsesorCreate } from '@/services/analistaService'
+import { analistaService, type Analista, type AnalistaCreate } from '@/services/analistaService'
 
 const ESPECIALIDADES = [
   'Vehículos Nuevos',
@@ -33,30 +33,30 @@ const ESPECIALIDADES = [
   'Otros'
 ]
 
-export function AsesoresConfig() {
-  const [analistaes, setAsesores] = useState<Asesor[]>([])
+export function AnalistaesConfig() {
+  const [analistaes, setAnalistaes] = useState<Analista[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [showForm, setShowForm] = useState(false)
-  const [editingAsesor, setEditingAsesor] = useState<Asesor | null>(null)
-  const [viewingAsesor, setViewingAsesor] = useState<Asesor | null>(null)
+  const [editingAnalista, setEditingAnalista] = useState<Analista | null>(null)
+  const [viewingAnalista, setViewingAnalista] = useState<Analista | null>(null)
 
   // Form state
-  const [formData, setFormData] = useState<AsesorCreate>({
+  const [formData, setFormData] = useState<AnalistaCreate>({
     nombre: '',
     activo: true
   })
 
   useEffect(() => {
-    loadAsesores()
+    loadAnalistaes()
   }, [])
 
-  const loadAsesores = async () => {
+  const loadAnalistaes = async () => {
     try {
       setLoading(true)
-      const data = await analistaService.listarAsesoresActivos()
-      setAsesores(data)
+      const data = await analistaService.listarAnalistaesActivos()
+      setAnalistaes(data)
     } catch (err: any) {
       console.error('Error al cargar analistaes:', err)
       if (err.response?.status === 503) {
@@ -76,14 +76,14 @@ export function AsesoresConfig() {
     try {
       setError(null) // Limpiar errores previos
       
-      if (editingAsesor) {
-        await analistaService.actualizarAsesor(editingAsesor.id, formData)
+      if (editingAnalista) {
+        await analistaService.actualizarAnalista(editingAnalista.id, formData)
       } else {
-        await analistaService.crearAsesor(formData)
+        await analistaService.crearAnalista(formData)
       }
       
       // Recargar la lista de analistaes para actualizar la tabla
-      await loadAsesores()
+      await loadAnalistaes()
       resetForm()
     } catch (err) {
       console.error('Error al guardar analista:', err)
@@ -91,12 +91,12 @@ export function AsesoresConfig() {
     }
   }
 
-  const handleView = (analista: Asesor) => {
-    setViewingAsesor(analista)
+  const handleView = (analista: Analista) => {
+    setViewingAnalista(analista)
   }
 
-  const handleEdit = (analista: Asesor) => {
-    setEditingAsesor(analista)
+  const handleEdit = (analista: Analista) => {
+    setEditingAnalista(analista)
     setFormData({
       nombre: analista.nombre,
       activo: analista.activo
@@ -110,8 +110,8 @@ export function AsesoresConfig() {
     }
     
     try {
-      await analistaService.eliminarAsesor(id)
-      await loadAsesores()
+      await analistaService.eliminarAnalista(id)
+      await loadAnalistaes()
     } catch (err) {
       console.error('Error al eliminar analista:', err)
       setError('Error al eliminar el analista.')
@@ -123,12 +123,12 @@ export function AsesoresConfig() {
       nombre: '',
       activo: true
     })
-    setEditingAsesor(null)
-    setViewingAsesor(null)
+    setEditingAnalista(null)
+    setViewingAnalista(null)
     setShowForm(false)
   }
 
-  const filteredAsesores = analistaes.filter(analista =>
+  const filteredAnalistaes = analistaes.filter(analista =>
     analista.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase()) ||
     analista.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   )
@@ -149,7 +149,7 @@ export function AsesoresConfig() {
         <div>
           <h3 className="text-2xl font-bold flex items-center">
             <Users className="mr-2 h-6 w-6" />
-            Gestión de Asesores
+            Gestión de Analistaes
           </h3>
           <p className="text-gray-600 mt-1">
             Administra los analistaes comerciales del sistema
@@ -157,7 +157,7 @@ export function AsesoresConfig() {
         </div>
         <Button onClick={() => setShowForm(true)}>
           <Plus className="mr-2 h-4 w-4" />
-          Nuevo Asesor
+          Nuevo Analista
         </Button>
       </div>
 
@@ -166,14 +166,14 @@ export function AsesoresConfig() {
         <Card>
           <CardHeader>
             <CardTitle>
-              {editingAsesor ? 'Editar Asesor' : 'Nuevo Asesor'}
+              {editingAnalista ? 'Editar Analista' : 'Nuevo Analista'}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 gap-4">
                 <div>
-                  <label className="text-sm font-medium">Nombre del Asesor *</label>
+                  <label className="text-sm font-medium">Nombre del Analista *</label>
                   <Input
                     value={formData.nombre}
                     onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
@@ -201,7 +201,7 @@ export function AsesoresConfig() {
                 </Button>
                 <Button type="submit">
                   <Save className="mr-2 h-4 w-4" />
-                  {editingAsesor ? 'Actualizar' : 'Crear'}
+                  {editingAnalista ? 'Actualizar' : 'Crear'}
                 </Button>
               </div>
             </form>
@@ -210,15 +210,15 @@ export function AsesoresConfig() {
       )}
 
       {/* Modal de Visualización */}
-      {viewingAsesor && (
+      {viewingAnalista && (
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle className="flex items-center">
                 <Eye className="mr-2 h-5 w-5 text-blue-600" />
-                Detalles del Asesor
+                Detalles del Analista
               </CardTitle>
-              <Button variant="outline" size="sm" onClick={() => setViewingAsesor(null)}>
+              <Button variant="outline" size="sm" onClick={() => setViewingAnalista(null)}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -226,14 +226,14 @@ export function AsesoresConfig() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-500">Nombre del Asesor</label>
-                <p className="text-lg font-semibold">{viewingAsesor.nombre_completo}</p>
+                <label className="text-sm font-medium text-gray-500">Nombre del Analista</label>
+                <p className="text-lg font-semibold">{viewingAnalista.nombre_completo}</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-500">Estado</label>
                 <div className="mt-1">
-                  <Badge variant={viewingAsesor.activo ? 'default' : 'destructive'}>
-                    {viewingAsesor.activo ? (
+                  <Badge variant={viewingAnalista.activo ? 'default' : 'destructive'}>
+                    {viewingAnalista.activo ? (
                       <>
                         <CheckCircle className="mr-1 h-3 w-3" />
                         Activo
@@ -249,12 +249,12 @@ export function AsesoresConfig() {
               </div>
             </div>
             <div className="flex justify-end space-x-2 mt-6">
-              <Button variant="outline" onClick={() => setViewingAsesor(null)}>
+              <Button variant="outline" onClick={() => setViewingAnalista(null)}>
                 Cerrar
               </Button>
               <Button onClick={() => {
-                handleEdit(viewingAsesor)
-                setViewingAsesor(null)
+                handleEdit(viewingAnalista)
+                setViewingAnalista(null)
               }}>
                 <Edit className="mr-2 h-4 w-4" />
                 Editar
@@ -279,20 +279,20 @@ export function AsesoresConfig() {
         </CardContent>
       </Card>
 
-      {/* Lista de Asesores */}
+      {/* Lista de Analistaes */}
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nombre del Asesor</TableHead>
+                  <TableHead>Nombre del Analista</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAsesores.map((analista) => (
+                {filteredAnalistaes.map((analista) => (
                   <TableRow key={analista.id}>
                     <TableCell>
                       <div className="font-medium">{analista.nombre_completo}</div>
@@ -356,7 +356,7 @@ export function AsesoresConfig() {
           <div className="flex items-center justify-between">
             <span>{error}</span>
             <Button 
-              onClick={loadAsesores}
+              onClick={loadAnalistaes}
               variant="outline" 
               size="sm"
               className="ml-4"

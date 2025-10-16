@@ -61,7 +61,7 @@ export function useClientesEnMora() {
 export function useClientesByAsesor(analistaId: string) {
   return useQuery({
     queryKey: clienteKeys.byAsesor(analistaId),
-    queryFn: () => clienteService.getClientesByAsesor(analistaId),
+    queryFn: () => clienteService.getClientesByAnalista(analistaId),
     enabled: !!analistaId,
     staleTime: 10 * 60 * 1000, // 10 minutos
   })

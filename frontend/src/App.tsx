@@ -31,7 +31,7 @@ import { AmortizacionPage } from '@/pages/AmortizacionPage'
 import { ReportesPage } from '@/pages/ReportesPage'
 import { VisualizacionBD } from '@/pages/VisualizacionBD'
 import { Validadores } from '@/pages/Validadores'
-import { Asesores } from '@/pages/Asesores'
+import { Analistas } from '@/pages/Analistas'
 import { Concesionarios } from '@/pages/Concesionarios'
 import { ModelosVehiculos } from '@/pages/ModelosVehiculos'
 import { Usuarios } from '@/pages/Usuarios'
@@ -224,7 +224,7 @@ function App() {
             path="analistaes"
             element={
               <ProtectedRoute requiredRoles={['USER']}>
-                <Asesores />
+                <Analistas />
               </ProtectedRoute>
             }
           />
