@@ -189,9 +189,9 @@ async def solicitar_modificacion_pago_completo(
     4. ✅ Notifica al Admin (in-app + email)
     5. ✅ Bloquea temporalmente el registro
     """
-    # Verificar permisos
+    # Verificar permisos - Todos los usuarios pueden usar este endpoint
     if current_user.rol != "USER":
-        raise HTTPException(status_code=403, detail="Solo rol COBRANZAS puede usar este endpoint")
+        raise HTTPException(status_code=403, detail="Usuario no autorizado")
     
     # Verificar que el pago existe
     pago = db.query(Pago).filter(Pago.id == formulario.pago_id).first()
@@ -274,7 +274,7 @@ async def solicitar_modificacion_pago_completo(
         "estado": "PENDIENTE",
         "prioridad": solicitud.prioridad,
         "fecha_limite": solicitud.fecha_limite,
-        "requiere_aprobacion_de": "ADMINISTRADOR_GENERAL",
+        "requiere_aprobacion": True,
         "bloqueado_temporalmente": True,
         "archivo_adjunto": bool(archivo_path),
         "pago_afectado": {
@@ -298,9 +298,9 @@ async def solicitar_anulacion_pago_completo(
     """
     ⚠️ COBRANZAS: Solicitar anulación de pago con formulario completo
     """
-    # Verificar permisos
+    # Verificar permisos - Todos los usuarios pueden usar este endpoint
     if current_user.rol != "USER":
-        raise HTTPException(status_code=403, detail="Solo rol COBRANZAS puede usar este endpoint")
+        raise HTTPException(status_code=403, detail="Usuario no autorizado")
     
     # Verificar que el pago existe y no está anulado
     pago = db.query(Pago).filter(Pago.id == formulario.pago_id).first()
@@ -386,9 +386,9 @@ def solicitar_modificacion_pago(
     """
     ⚠️ COBRANZAS: Solicitar modificación de monto de pago
     """
-    # Verificar permisos
+    # Verificar permisos - Todos los usuarios pueden usar este endpoint
     if current_user.rol != "USER":
-        raise HTTPException(status_code=403, detail="Solo rol COBRANZAS puede usar este endpoint")
+        raise HTTPException(status_code=403, detail="Usuario no autorizado")
     
     # Verificar que el pago existe
     pago = db.query(Pago).filter(Pago.id == pago_id).first()
@@ -414,7 +414,7 @@ def solicitar_modificacion_pago(
         "solicitud_id": solicitud.id,
         "mensaje": "✅ Solicitud de modificación de pago enviada para aprobación",
         "estado": "PENDIENTE",
-        "requiere_aprobacion_de": "ADMINISTRADOR_GENERAL",
+        "requiere_aprobacion": True,
         "pago_afectado": {
             "id": pago.id,
             "monto_actual": float(pago.monto_pagado),
@@ -434,9 +434,9 @@ def solicitar_anulacion_pago(
     """
     ⚠️ COBRANZAS: Solicitar anulación de pago
     """
-    # Verificar permisos
+    # Verificar permisos - Todos los usuarios pueden usar este endpoint
     if current_user.rol != "USER":
-        raise HTTPException(status_code=403, detail="Solo rol COBRANZAS puede usar este endpoint")
+        raise HTTPException(status_code=403, detail="Usuario no autorizado")
     
     # Verificar que el pago existe
     pago = db.query(Pago).filter(Pago.id == pago_id).first()
@@ -462,7 +462,7 @@ def solicitar_anulacion_pago(
         "solicitud_id": solicitud.id,
         "mensaje": "✅ Solicitud de anulación de pago enviada para aprobación",
         "estado": "PENDIENTE",
-        "requiere_aprobacion_de": "ADMINISTRADOR_GENERAL",
+        "requiere_aprobacion": True,
         "pago_afectado": {
             "id": pago.id,
             "monto": float(pago.monto_pagado),
@@ -483,9 +483,9 @@ def solicitar_modificacion_amortizacion(
     """
     ⚠️ COBRANZAS: Solicitar modificación de tabla de amortización
     """
-    # Verificar permisos
+    # Verificar permisos - Todos los usuarios pueden usar este endpoint
     if current_user.rol != "USER":
-        raise HTTPException(status_code=403, detail="Solo rol COBRANZAS puede usar este endpoint")
+        raise HTTPException(status_code=403, detail="Usuario no autorizado")
     
     # Verificar que el préstamo existe
     from app.models.prestamo import Prestamo
@@ -512,7 +512,7 @@ def solicitar_modificacion_amortizacion(
         "solicitud_id": solicitud.id,
         "mensaje": "✅ Solicitud de modificación de amortización enviada para aprobación",
         "estado": "PENDIENTE",
-        "requiere_aprobacion_de": "ADMINISTRADOR_GENERAL",
+        "requiere_aprobacion": True,
         "prestamo_afectado": {
             "id": prestamo.id,
             "cliente": prestamo.cliente.nombre_completo if prestamo.cliente else "N/A",
@@ -564,7 +564,7 @@ def solicitar_edicion_cliente_comercial(
         "solicitud_id": solicitud.id,
         "mensaje": "✅ Solicitud de edición de cliente enviada para autorización de Admin",
         "estado": "PENDIENTE",
-        "requiere_autorizacion_de": "ADMINISTRADOR_GENERAL",
+        "requiere_autorizacion": True,
         "cliente_afectado": {
             "id": cliente.id,
             "nombre": cliente.nombre_completo,
@@ -624,7 +624,7 @@ def solicitar_edicion_cliente_propio(
         "solicitud_id": solicitud.id,
         "mensaje": "✅ Solicitud de edición enviada para autorización de Admin",
         "estado": "PENDIENTE",
-        "requiere_autorizacion_de": "ADMINISTRADOR_GENERAL",
+        "requiere_autorizacion": True,
         "cliente_afectado": {
             "id": cliente.id,
             "nombre": cliente.nombre_completo,

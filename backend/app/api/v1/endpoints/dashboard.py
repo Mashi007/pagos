@@ -390,16 +390,10 @@ def dashboard_comercial(
     hoy = date.today()
     inicio_mes = hoy.replace(day=1)
     
-    # FILTRO POR ROL: COMERCIAL solo ve SUS clientes
+    # Todos los usuarios tienen acceso completo
     filtro_clientes = Cliente.activo == True
-    if current_user.rol == "COMERCIAL":
-        # Solo sus clientes asignados
-        filtro_clientes = and_(
-            Cliente.activo == True,
-            Cliente.asesor_config_id == current_user.id  # Esto necesita revisión - Los users NO son asesores de config
-        )
     
-    # KPIs DE SUS CLIENTES ÚNICAMENTE
+    # KPIs - TODOS LOS CLIENTES
     mis_clientes_total = db.query(Cliente).filter(filtro_clientes).count()
     
     mis_clientes_al_dia = db.query(Cliente).filter(
@@ -771,36 +765,13 @@ def dashboard_por_rol(
     """
     user_role = current_user.rol
     
-    # Agregar información de acceso según rol
+    # Todos los usuarios tienen acceso completo
     info_acceso = {
-        "ADMINISTRADOR_GENERAL": "✅ ACCESO COMPLETO - Todos los datos del sistema",
-        "COBRANZAS": "✅ ACCESO COMPLETO - Todos los datos (excepto usuarios)",
-        "COMERCIAL": "⚠️ ACCESO LIMITADO - Solo sus clientes asignados",
-        "ASESOR": "⚠️ ACCESO LIMITADO - Solo sus clientes asignados"
+        "USER": "✅ ACCESO COMPLETO - Todos los datos del sistema"
     }
     
-    # Redirigir según rol con información de acceso
-    dashboard_data = None
-    if user_role == "ADMINISTRADOR_GENERAL":
-        dashboard_data = dashboard_administrador(db=db, current_user=current_user)
-    elif user_role == "COBRANZAS":
-        dashboard_data = dashboard_cobranzas(db=db, current_user=current_user)
-    elif user_role == "COMERCIAL":
-        dashboard_data = dashboard_comercial(db=db, current_user=current_user)
-    elif user_role in ["ASESOR", "GERENTE"]:
-        dashboard_data = dashboard_asesor(db=db, current_user=current_user)
-    else:
-        # Dashboard básico para otros roles
-        dashboard_data = {
-            "tipo_dashboard": "BASICO",
-            "usuario": current_user.full_name,
-            "rol": user_role,
-            "mensaje": "Dashboard básico - Contacte al administrador para acceso completo",
-            "kpis_basicos": {
-                "total_clientes": db.query(Cliente).filter(Cliente.activo == True).count(),
-                "total_pagos_hoy": db.query(Pago).filter(Pago.fecha_pago == date.today()).count()
-            }
-        }
+    # Todos usan el mismo dashboard con acceso completo
+    dashboard_data = dashboard_administrador(db=db, current_user=current_user)
     
     # Agregar información de acceso al dashboard
     if dashboard_data:

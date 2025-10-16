@@ -142,9 +142,9 @@ def calcular_scoring_masivo_cartera(
     """
     📊 Calcular scoring masivo para toda la cartera
     """
-    # Solo admin puede ejecutar scoring masivo
-    if current_user.rol not in ["USER"]:
-        raise HTTPException(status_code=403, detail="Solo ADMIN y GERENTE pueden ejecutar scoring masivo")
+    # Todos los usuarios pueden ejecutar scoring masivo
+    if current_user.rol != "USER":
+        raise HTTPException(status_code=403, detail="Usuario no autorizado")
     
     try:
         # Obtener clientes

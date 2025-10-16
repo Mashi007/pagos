@@ -11,7 +11,7 @@ from app.core.permissions import UserRole
 class User(Base):
     """Modelo de Usuario"""
     
-    __tablename__ = "users"
+    __tablename__ = "usuarios"
     
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
