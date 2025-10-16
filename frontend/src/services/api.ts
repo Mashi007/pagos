@@ -1,8 +1,10 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import toast from 'react-hot-toast'
+import { env } from '@/config/env'
+import { logger } from '@/utils/logger'
 
 // Configuración base de Axios
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://pagos-f2qf.onrender.com'
+const API_BASE_URL = env.API_URL
 
 class ApiClient {
   private client: AxiosInstance

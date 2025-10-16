@@ -6,8 +6,14 @@ import { Toaster } from 'react-hot-toast'
 import App from './App.tsx'
 import './index.css'
 
+// Validación de variables de entorno
+import './config/env'
+
+// Error Boundary
+import { ErrorBoundary } from './components/ErrorBoundary'
+
 // Configuración del cliente de React Query
-// Versión: 2025-10-15 - Build v1.0.2 - Módulo cliente auditado
+// Versión: 2025-10-16 - Build v1.0.3 - Mejoras de seguridad implementadas
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -23,10 +29,11 @@ const queryClient = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <App />
-        <Toaster
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <App />
+          <Toaster
           position="top-right"
           toastOptions={{
             duration: 4000,
@@ -49,7 +56,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             },
           }}
         />
-      </BrowserRouter>
-    </QueryClientProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 )

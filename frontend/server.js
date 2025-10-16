@@ -7,8 +7,46 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Configuración de seguridad
+// ============================================
+// SECURITY HEADERS - OWASP Best Practices
+// ============================================
 app.disable('x-powered-by');
+
+// Middleware para security headers
+app.use((req, res, next) => {
+  // Prevenir MIME sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  
+  // Prevenir clickjacking
+  res.setHeader('X-Frame-Options', 'DENY');
+  
+  // XSS Protection
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  
+  // HSTS - Solo en producción
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  
+  // Content Security Policy
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+    "style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data: https:; " +
+    "font-src 'self' data:; " +
+    "connect-src 'self' " + (process.env.VITE_API_URL || 'http://localhost:8080')
+  );
+  
+  // Referrer Policy
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  
+  // Permissions Policy
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  
+  next();
+});
 
 // Servir archivos estáticos con cache headers
 app.use(express.static(path.join(__dirname, 'dist'), {

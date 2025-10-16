@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { User, LoginForm } from '@/types'
 import { authService, AuthService } from '@/services/authService'
 import toast from 'react-hot-toast'
+import { logger } from '@/utils/logger'
 
 interface AuthState {
   // Estado
@@ -33,33 +34,33 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         set({ isLoading: true, error: null })
         
         try {
-          console.log('Store: Iniciando login...')
+          logger.log('Store: Iniciando login...')
           
           // 1. HACER API CALL
           const response = await authService.login(credentials)
           
-          console.log('Store: Login exitoso, guardando tokens...')
+          logger.log('Store: Login exitoso, guardando tokens...')
           
           // 2. GUARDAR TOKENS (RESPONSABILIDAD ÚNICA DEL STORE)
           const rememberMe = credentials.remember || false
           
           // Verificar estructura de respuesta
-          console.log('Store: Estructura de respuesta:', response)
-          console.log('Store: response.access_token:', response.access_token ? 'EXISTS' : 'MISSING')
-          console.log('Store: response.user:', response.user)
+          logger.log('Store: Estructura de respuesta:', response)
+          logger.log('Store: response.access_token:', response.access_token ? 'EXISTS' : 'MISSING')
+          logger.log('Store: response.user:', response.user)
           
           // Acceder a tokens directamente (apiClient.post ya devuelve response.data)
           const accessToken = response.access_token
           const refreshToken = response.refresh_token
           const userData = response.user
           
-          console.log('Store: Tokens extraídos:', {
+          logger.log('Store: Tokens extraídos:', {
             accessToken: accessToken ? 'EXISTS' : 'MISSING',
             refreshToken: refreshToken ? 'EXISTS' : 'MISSING',
             userData: userData ? 'EXISTS' : 'MISSING'
           })
           
-          console.log('Store: Valores reales:', {
+          logger.log('Store: Valores reales:', {
             accessToken: accessToken,
             refreshToken: refreshToken ? 'EXISTS' : 'MISSING',
             userData: userData ? 'EXISTS' : 'MISSING'
@@ -72,13 +73,13 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           
           // Guardar en el storage apropiado
           if (rememberMe) {
-            console.log('Store: Guardando en localStorage...')
+            logger.log('Store: Guardando en localStorage...')
             localStorage.setItem('access_token', accessToken)
             localStorage.setItem('refresh_token', refreshToken)
             localStorage.setItem('user', JSON.stringify(userData))
             localStorage.setItem('remember_me', 'true')
-            console.log('Store: Tokens guardados en localStorage')
-            console.log('Store: Verificación localStorage:', {
+            logger.log('Store: Tokens guardados en localStorage')
+            logger.log('Store: Verificación localStorage:', {
               access_token: localStorage.getItem('access_token') ? 'GUARDADO' : 'ERROR',
               user: localStorage.getItem('user') ? 'GUARDADO' : 'ERROR',
               remember_me: localStorage.getItem('remember_me')
@@ -86,14 +87,14 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
             
             // Verificación inmediata
             const savedToken = localStorage.getItem('access_token')
-            console.log('Store: Token guardado inmediatamente:', savedToken ? 'EXISTS' : 'ERROR')
+            logger.log('Store: Token guardado inmediatamente:', savedToken ? 'EXISTS' : 'ERROR')
           } else {
             sessionStorage.setItem('access_token', accessToken)
             sessionStorage.setItem('refresh_token', refreshToken)
             sessionStorage.setItem('user', JSON.stringify(userData))
             localStorage.setItem('remember_me', 'false')
-            console.log('Store: Tokens guardados en sessionStorage')
-            console.log('Store: Verificación sessionStorage:', {
+            logger.log('Store: Tokens guardados en sessionStorage')
+            logger.log('Store: Verificación sessionStorage:', {
               access_token: sessionStorage.getItem('access_token') ? 'GUARDADO' : 'ERROR',
               user: sessionStorage.getItem('user') ? 'GUARDADO' : 'ERROR'
             })
@@ -107,10 +108,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
             error: null,
           })
 
-          console.log('Store: Login completado exitosamente')
+          logger.log('Store: Login completado exitosamente')
           toast.success(`¡Bienvenido, ${userData.nombre}!`)
         } catch (error: any) {
-          console.error('Store: Error en login:', error)
+          logger.error('Store: Error en login:', error)
           set({
             user: null,
             isAuthenticated: false,
@@ -128,7 +129,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         try {
           await authService.logout()
         } catch (error) {
-          console.error('Error en logout:', error)
+          logger.error('Error en logout:', error)
         } finally {
           set({
             user: null,
