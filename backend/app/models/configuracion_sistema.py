@@ -56,17 +56,17 @@ class ConfiguracionSistema(Base):
         elif self.tipo_dato == "INTEGER":
             try:
                 return int(self.valor) if self.valor else 0
-            except:
+            except (ValueError, TypeError):
                 return 0
         elif self.tipo_dato == "DECIMAL":
             try:
                 return float(self.valor) if self.valor else 0.0
-            except:
+            except (ValueError, TypeError):
                 return 0.0
         elif self.tipo_dato == "JSON":
             try:
                 return json.loads(self.valor) if self.valor else {}
-            except:
+            except (json.JSONDecodeError, TypeError):
                 return self.valor_json or {}
         else:
             return self.valor or ""
