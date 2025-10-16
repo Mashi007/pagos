@@ -1,5 +1,5 @@
 # ============================================================
-# PASO MANUAL 1: CREAR UN ASESOR
+# PASO MANUAL 1: CREAR UN ANALISTA
 # ============================================================
 
 # ============================================================
@@ -49,42 +49,42 @@ $authHeaders = @{
     "Content-Type" = "application/json"
 }
 
-# Crear asesor
-Write-Host "Creando asesor..." -ForegroundColor Yellow
+# Crear analista
+Write-Host "Creando analista..." -ForegroundColor Yellow
 Write-Host "Nombre: Juan Perez" -ForegroundColor White
 Write-Host "Email: juan.perez@rapicreditca.com" -ForegroundColor White
 Write-Host ""
 
-$asesorBody = @{
+$analistaBody = @{
     nombre = "JUAN PEREZ"
 } | ConvertTo-Json
 
-Write-Host "Enviando request a: $baseUrl/api/v1/asesores" -ForegroundColor Gray
+Write-Host "Enviando request a: $baseUrl/api/v1/analistas" -ForegroundColor Gray
 Write-Host ""
 
 try {
-    $asesor = Invoke-RestMethod -Uri "$baseUrl/api/v1/asesores" -Method Post -Headers $authHeaders -Body $asesorBody
+    $analista = Invoke-RestMethod -Uri "$baseUrl/api/v1/analistas" -Method Post -Headers $authHeaders -Body $analistaBody
     
     Write-Host "EXITO! Asesor creado" -ForegroundColor Green
     Write-Host ""
-    Write-Host "Datos del asesor creado:" -ForegroundColor Cyan
-    Write-Host "  ID: $($asesor.id)" -ForegroundColor White
-    Write-Host "  Nombre: $($asesor.nombre)" -ForegroundColor White
+    Write-Host "Datos del analista creado:" -ForegroundColor Cyan
+    Write-Host "  ID: $($analista.id)" -ForegroundColor White
+    Write-Host "  Nombre: $($analista.nombre)" -ForegroundColor White
     Write-Host ""
-    Write-Host "IMPORTANTE: Guarda este ID para crear clientes: $($asesor.id)" -ForegroundColor Yellow
+    Write-Host "IMPORTANTE: Guarda este ID para crear clientes: $($analista.id)" -ForegroundColor Yellow
     Write-Host ""
     
     # Verificar que se creo
-    Write-Host "Verificando que el asesor existe..." -ForegroundColor Yellow
-    $asesores = Invoke-RestMethod -Uri "$baseUrl/api/v1/asesores/" -Method Get -Headers $authHeaders
-    Write-Host "Total de asesores en el sistema: $($asesores.total)" -ForegroundColor Green
+    Write-Host "Verificando que el analista existe..." -ForegroundColor Yellow
+    $analistas = Invoke-RestMethod -Uri "$baseUrl/api/v1/analistas/" -Method Get -Headers $authHeaders
+    Write-Host "Total de analistas en el sistema: $($analistas.total)" -ForegroundColor Green
     Write-Host ""
     
     Write-Host "PROXIMO PASO: Ejecutar paso_manual_2_crear_cliente.ps1" -ForegroundColor Cyan
-    Write-Host "Usa el ID del asesor: $($asesor.id)" -ForegroundColor Yellow
+    Write-Host "Usa el ID del analista: $($analista.id)" -ForegroundColor Yellow
     
 } catch {
-    Write-Host "ERROR: No se pudo crear el asesor" -ForegroundColor Red
+    Write-Host "ERROR: No se pudo crear el analista" -ForegroundColor Red
     Write-Host ""
     Write-Host "Detalles del error:" -ForegroundColor Yellow
     Write-Host $_.Exception.Message -ForegroundColor Red

@@ -236,7 +236,7 @@ rm Procfile render.yaml requirements.txt runtime.txt
 ├── config_variables.ps1
 ├── paso_0_obtener_token.ps1
 ├── paso_7_verificar_sistema.ps1
-├── paso_manual_1_crear_asesor.ps1
+├── paso_manual_1_crear_analista.ps1
 └── paso_manual_2_crear_cliente.ps1
 ```
 
@@ -285,7 +285,7 @@ mv *.ps1 scripts/
 | Prestamo | prestamos | 18 | 18 | ✅ Sync |
 | Pago | pagos | 14 | 14 | ✅ Sync |
 | Cuota | amortizaciones | 12 | 12 | ✅ Sync |
-| Asesor | asesores | 10 | 10 | ✅ Sync |
+| Asesor | analistaes | 10 | 10 | ✅ Sync |
 | Concesionario | concesionarios | 8 | 8 | ✅ Sync |
 | ModeloVehiculo | modelos_vehiculos | 4 | 4 | ✅ Sync |
 
@@ -411,7 +411,7 @@ mv AUDITORIA_SCRIPTS_COMPLETA.md Documentos/
 mkdir -p scripts/powershell
 mv paso_0_obtener_token.ps1 scripts/powershell/
 mv paso_7_verificar_sistema.ps1 scripts/powershell/
-mv paso_manual_1_crear_asesor.ps1 scripts/powershell/
+mv paso_manual_1_crear_analista.ps1 scripts/powershell/
 mv paso_manual_2_crear_cliente.ps1 scripts/powershell/
 mv config_variables.ps1 scripts/powershell/
 ```

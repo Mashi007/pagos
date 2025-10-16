@@ -87,7 +87,7 @@ $clienteBody = @{
     numero_amortizaciones = 36
     modalidad_pago = "MENSUAL"
     
-    # Asignación (usando el ID del asesor creado)
+    # Asignación (usando el ID del analista creado)
     asesor_id = 1
     
     # Estado
@@ -111,7 +111,7 @@ try {
     Write-Host "  Email: $($cliente.email)" -ForegroundColor White
     Write-Host "  Vehiculo: $($cliente.modelo_vehiculo)" -ForegroundColor White
     Write-Host "  Monto Financiado: $($cliente.monto_financiado)" -ForegroundColor White
-    Write-Host "  Asesor ID: $($cliente.asesor_id)" -ForegroundColor White
+    Write-Host "  Analista ID: $($cliente.asesor_id)" -ForegroundColor White
     Write-Host ""
     Write-Host "IMPORTANTE: Guarda este ID para crear prestamos: $($cliente.id)" -ForegroundColor Yellow
     Write-Host ""

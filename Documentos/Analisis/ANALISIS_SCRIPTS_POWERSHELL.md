@@ -54,13 +54,13 @@
   - ✅ **Documentación**: Reporte automático de estado
   - ✅ **Producción**: Esencial para operaciones
 
-### **4. `paso_manual_1_crear_asesor.ps1`** ✅ **NECESARIO**
-- **Propósito**: Creación manual de asesores para carga inicial de datos
+### **4. `paso_manual_1_crear_analista.ps1`** ✅ **NECESARIO**
+- **Propósito**: Creación manual de analistaes para carga inicial de datos
 - **Funcionalidad**:
   - ✅ **Datos realistas**: Juan Perez con datos completos
   - ✅ **Validación**: Verificación post-creación
   - ✅ **Error handling**: Manejo de errores HTTP específicos
-  - ✅ **Feedback**: Información detallada del asesor creado
+  - ✅ **Feedback**: Información detallada del analista creado
   - ✅ **Integración**: Guarda ID para siguientes pasos
   - ✅ **Debugging**: Códigos de error específicos (405, 422, 401)
 - **Justificación**:
@@ -74,7 +74,7 @@
 - **Propósito**: Creación manual de clientes para carga inicial de datos
 - **Funcionalidad**:
   - ✅ **Datos completos**: Cliente con vehículo, financiamiento, concesionario
-  - ✅ **Relaciones**: Asignación a asesor (ID 1)
+  - ✅ **Relaciones**: Asignación a analista (ID 1)
   - ✅ **Validación**: Verificación post-creación
   - ✅ **Error handling**: Manejo de errores HTTP específicos
   - ✅ **Feedback**: Información detallada del cliente creado
@@ -133,8 +133,8 @@
 # 2. Obtener token
 . .\paso_0_obtener_token.ps1
 
-# 3. Crear asesor
-. .\paso_manual_1_crear_asesor.ps1
+# 3. Crear analista
+. .\paso_manual_1_crear_analista.ps1
 
 # 4. Crear cliente
 . .\paso_manual_2_crear_cliente.ps1
@@ -152,8 +152,8 @@
 
 ### **3. Carga de Datos Adicionales** ✅
 ```powershell
-# Crear más asesores/clientes
-. .\paso_manual_1_crear_asesor.ps1
+# Crear más analistaes/clientes
+. .\paso_manual_1_crear_analista.ps1
 . .\paso_manual_2_crear_cliente.ps1
 ```
 
@@ -186,9 +186,9 @@
 ## 🔧 **MEJORAS MENORES IDENTIFICADAS**
 
 ### **1. Campo Obsoleto en Cliente** ⚠️ **MENOR**
-- **Problema**: `asesor_config_id` en línea 91 (debería ser `asesor_id`)
+- **Problema**: `analista_config_id` en línea 91 (debería ser `analista_id`)
 - **Impacto**: Bajo (script funciona pero usa campo incorrecto)
-- **Acción**: Actualizar a `asesor_id`
+- **Acción**: Actualizar a `analista_id`
 
 ### **2. Campo Inexistente en Asesor** ⚠️ **MENOR**
 - **Problema**: `especialidad` en línea 63 (campo no existe en modelo)
@@ -213,8 +213,8 @@
 
 ### **Recomendaciones**:
 1. ✅ **Mantener** todos los 5 scripts
-2. ⚠️ **Corregir** campo `asesor_config_id` → `asesor_id` (menor)
-3. ⚠️ **Revisar** campo `especialidad` en asesor (menor)
+2. ⚠️ **Corregir** campo `analista_config_id` → `analista_id` (menor)
+3. ⚠️ **Revisar** campo `especialidad` en analista (menor)
 4. ✅ **Documentar** en README el flujo de uso
 
 ---
