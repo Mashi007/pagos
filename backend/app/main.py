@@ -64,12 +64,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
+# CORS - Configuración desde settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permitir todos los orígenes
+    allow_origins=settings.CORS_ORIGINS,  # ✅ Configurado desde settings
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Incluir OPTIONS explícitamente
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
 )
 

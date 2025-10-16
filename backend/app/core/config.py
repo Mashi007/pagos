@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     PORT: int = 8080
     
     # ============================================
+    # CORS (Cross-Origin Resource Sharing)
+    # ============================================
+    CORS_ORIGINS: List[str] = ["*"]  # En producción, especificar orígenes permitidos
+    
+    # ============================================
     # BASE DE DATOS
     # ============================================
     DATABASE_URL: str
