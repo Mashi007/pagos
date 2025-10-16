@@ -125,6 +125,11 @@ def create_admin_user():
         db.close()
         return True
         
+    except LookupError as e:
+        # Error de enum - esto es esperado si la DB tiene roles antiguos
+        logger.warning(f"⚠️  Error de enum detectado (esperado): {e}")
+        logger.warning(f"⚠️  Esto se resolverá ejecutando /api/v1/emergency/migrate-roles")
+        return False
     except Exception as e:
         logger.error(f"❌ Error creando usuario admin: {e}")
         import traceback
@@ -141,11 +146,11 @@ def init_db() -> bool:
             logger.error("❌ No se pudo conectar a la base de datos")
             return False
         
-        # Intentar ejecutar migraciones primero
-        logger.info("🔄 Intentando aplicar migraciones...")
-        migrations_success = run_migrations()
+        # NO ejecutar migraciones automáticamente para evitar conflictos con enum
+        # Las migraciones deben ejecutarse manualmente vía endpoint de emergencia
+        logger.info("ℹ️  Saltando migraciones automáticas (usar endpoint de emergencia si es necesario)")
         
-        main_tables = ["users", "clientes", "prestamos", "pagos"]
+        main_tables = ["usuarios", "clientes", "prestamos", "pagos"]
         tables_exist = all(table_exists(table) for table in main_tables)
         
         if not tables_exist:
@@ -160,9 +165,7 @@ def init_db() -> bool:
                 return False
         else:
             logger.info("✅ Base de datos ya inicializada, tablas existentes")
-            if migrations_success:
-                logger.info("✅ Migraciones aplicadas correctamente")
-            # Crear usuario admin si no existe
+            # Intentar crear usuario admin si no existe (puede fallar con enum error)
             create_admin_user()
             return True
             
