@@ -47,7 +47,7 @@ export interface Cliente {
   modalidad_pago?: string;
   
   // Asignación y gestión
-   asesor_config_id?: number;
+  asesor_config_id?: number;
   fecha_asignacion?: string;
   
   // Estados (coincide con backend)

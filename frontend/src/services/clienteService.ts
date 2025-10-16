@@ -14,9 +14,17 @@ class ClienteService {
     const params = { ...filters, page, per_page: perPage }
     const url = buildUrl(this.baseUrl, params)
     
-    const response = await apiClient.get<PaginatedResponse<Cliente>>(url)
+    const response = await apiClient.get<any>(url)
     console.log('✅ Clientes obtenidos correctamente:', response)
-    return response
+    
+    // Adaptar respuesta del backend al formato esperado
+    return {
+      data: response.clientes || [],
+      total: response.total || 0,
+      page: response.page || page,
+      per_page: response.limit || perPage,
+      total_pages: response.total_pages || Math.ceil((response.total || 0) / perPage)
+    }
   }
 
   // Obtener cliente por ID
@@ -51,7 +59,7 @@ class ClienteService {
 
   // Obtener clientes por asesor (usando filtros en endpoint principal)
   async getClientesByAsesor(asesorId: string): Promise<Cliente[]> {
-     const filters: ClienteFilters = { asesor_config_id: asesorId }
+    const filters: ClienteFilters = { asesor_config_id: parseInt(asesorId) }
     const response = await this.getClientes(filters, 1, 100)
     return response.data
   }

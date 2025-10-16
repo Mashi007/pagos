@@ -16,7 +16,7 @@ import logging
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-@router.get("/", response_model=List[ClienteResponse])
+@router.get("/")
 def listar_clientes(
     # Paginación
     page: int = Query(1, ge=1, description="Número de página"),
@@ -98,8 +98,8 @@ def listar_clientes(
                 "activo": bool(getattr(cliente, 'activo', True)),
                 "estado_financiero": getattr(cliente, 'estado_financiero', 'AL_DIA') or 'AL_DIA',
                 "dias_mora": getattr(cliente, 'dias_mora', 0) or 0,
-                "fecha_registro": getattr(cliente, 'fecha_registro', None).isoformat() if getattr(cliente, 'fecha_registro', None) else None,
-                "fecha_asignacion": getattr(cliente, 'fecha_asignacion', None).isoformat() if getattr(cliente, 'fecha_asignacion', None) else None
+                "fecha_registro": cliente.fecha_registro.isoformat() if cliente.fecha_registro else None,
+                "fecha_asignacion": cliente.fecha_asignacion.isoformat() if cliente.fecha_asignacion else None
             }
             clientes_dict.append(cliente_data)
         

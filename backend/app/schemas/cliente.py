@@ -1,6 +1,6 @@
 # backend/app/schemas/cliente.py
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
-from typing import Optional
+from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -138,7 +138,7 @@ class ClienteResponse(ClienteBase):
 
 class ClienteList(BaseModel):
     """Schema para lista de clientes con paginación"""
-    items: list[ClienteResponse]
+    items: List[ClienteResponse]
     total: int
     page: int = 1
     page_size: int = 10
