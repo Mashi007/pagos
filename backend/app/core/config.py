@@ -25,7 +25,8 @@ class Settings(BaseSettings):
     # ============================================
     # CORS (Cross-Origin Resource Sharing)
     # ============================================
-    CORS_ORIGINS: List[str] = ["*"]  # En producción, especificar orígenes permitidos
+    CORS_ORIGINS: List[str] = ["http://localhost:3000"]  # ✅ Default seguro para desarrollo
+    # En producción configurar: CORS_ORIGINS='["https://tu-dominio.com"]'
     
     # ============================================
     # BASE DE DATOS
@@ -64,19 +65,15 @@ class Settings(BaseSettings):
             raise ValueError("⚠️ CRÍTICO: Contraseña por defecto detectada en producción. Configure ADMIN_PASSWORD")
         return True
     
-    # CORS
-    ALLOWED_ORIGINS: str = "*"
-    
-    @property
-    def allowed_origins_list(self) -> List[str]:
-        """Convierte ALLOWED_ORIGINS string a lista"""
-        if self.ALLOWED_ORIGINS == "*":
-            return ["*"]
-        return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",")]
-    
-    # Rate Limiting
-    RATE_LIMIT_ENABLED: bool = False
-    RATE_LIMIT_PER_MINUTE: int = 60
+    def validate_cors_origins(self) -> bool:
+        """Valida que CORS no esté abierto en producción"""
+        if self.ENVIRONMENT == "production" and "*" in self.CORS_ORIGINS:
+            raise ValueError(
+                "⚠️ CRÍTICO: CORS con wildcard (*) detectado en producción. "
+                "Configure CORS_ORIGINS con dominios específicos: "
+                "CORS_ORIGINS='[\"https://tu-dominio.com\"]'"
+            )
+        return True
     
     # ============================================
     # AMORTIZACIÓN Y REGLAS DE NEGOCIO

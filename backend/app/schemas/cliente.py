@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
+from app.utils.validators import sanitize_html
 
 
 class ClienteBase(BaseModel):
@@ -63,6 +64,14 @@ class ClienteBase(BaseModel):
             total = info.data['total_financiamiento']
             if total is not None and v > total:
                 raise ValueError('La cuota inicial no puede ser mayor al total del financiamiento')
+        return v
+    
+    @field_validator('notas', 'direccion', mode='before')
+    @classmethod
+    def sanitize_text_fields(cls, v):
+        """Sanitiza campos de texto libre para prevenir XSS"""
+        if v:
+            return sanitize_html(v)
         return v
 
 

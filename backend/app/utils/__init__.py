@@ -23,6 +23,7 @@ from app.utils.validators import (
     format_dni,
     format_phone,
     sanitize_string,
+    sanitize_html,
     normalize_text
 )
 
@@ -46,5 +47,6 @@ __all__ = [
     "format_dni",
     "format_phone",
     "sanitize_string",
+    "sanitize_html",
     "normalize_text",
 ]

@@ -3,7 +3,7 @@
 Endpoints de autenticación
 Login, logout, refresh token, cambio de contraseña
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -19,7 +19,14 @@ from app.schemas.auth import (
 from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
 
+# Rate Limiting
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
+# Security Audit Logging
+from app.core.security_audit import log_login_attempt, log_password_change
+
+limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 
 
@@ -30,7 +37,9 @@ async def options_login():
 
 
 @router.post("/login", response_model=LoginResponse, summary="Login de usuario")
+@limiter.limit("5/minute")  # ✅ Rate limiting: 5 intentos por minuto
 def login(
+    request: Request,
     login_data: LoginRequest,
     db: Session = Depends(get_db)
 ):
@@ -41,8 +50,28 @@ def login(
     
     - **email**: Email del usuario
     - **password**: Contraseña del usuario
+    
+    **Rate Limit:** 5 intentos por minuto por IP
     """
-    token, user = AuthService.login(db, login_data)
+    try:
+        token, user = AuthService.login(db, login_data)
+        
+        # ✅ Log de login exitoso
+        log_login_attempt(
+            email=login_data.email,
+            ip_address=request.client.host if request.client else "unknown",
+            success=True
+        )
+        
+    except HTTPException as e:
+        # ❌ Log de login fallido
+        log_login_attempt(
+            email=login_data.email,
+            ip_address=request.client.host if request.client else "unknown",
+            success=False,
+            reason=str(e.detail)
+        )
+        raise
     
     # Crear respuesta con tokens y usuario
     login_response = LoginResponse(
@@ -63,7 +92,9 @@ def login(
 
 
 @router.post("/refresh", response_model=Token, summary="Refresh token")
+@limiter.limit("10/minute")  # ✅ Rate limiting: 10 intentos por minuto
 def refresh_token(
+    request: Request,
     refresh_data: RefreshTokenRequest,
     db: Session = Depends(get_db)
 ):
@@ -71,6 +102,8 @@ def refresh_token(
     Genera un nuevo access token usando un refresh token válido
     
     - **refresh_token**: Refresh token válido
+    
+    **Rate Limit:** 10 intentos por minuto por IP
     """
     token = AuthService.refresh_access_token(db, refresh_data.refresh_token)
     

@@ -2,13 +2,19 @@
 """
 Aplicación principal FastAPI - Sistema de Préstamos y Cobranza.
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
 import logging
 
 from app.core.config import settings
 from app.db.init_db import init_db_startup, init_db_shutdown
+
+# Rate Limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # Routers
 from app.api.v1.endpoints import (
@@ -46,6 +52,50 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Configurar rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
+
+# ============================================
+# SECURITY HEADERS MIDDLEWARE
+# ============================================
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware para agregar security headers según OWASP
+    - Content-Security-Policy
+    - Strict-Transport-Security (HSTS)
+    - X-Frame-Options
+    - X-Content-Type-Options
+    - X-XSS-Protection
+    - Referrer-Policy
+    """
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        
+        # Prevenir MIME sniffing
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        
+        # Prevenir clickjacking
+        response.headers["X-Frame-Options"] = "DENY"
+        
+        # XSS Protection (legacy pero útil)
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        
+        # HSTS - Solo en producción con HTTPS
+        if settings.ENVIRONMENT == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        
+        # Content Security Policy
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+        
+        # Referrer Policy
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        
+        # Permissions Policy
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        
+        return response
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -63,6 +113,17 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+# Configurar rate limiter en app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ============================================
+# MIDDLEWARES DE SEGURIDAD
+# ============================================
+
+# Security Headers - OWASP Best Practices
+app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS - Configuración desde settings
 app.add_middleware(

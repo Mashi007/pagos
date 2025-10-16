@@ -259,6 +259,36 @@ def sanitize_string(text: Optional[str]) -> Optional[str]:
     return text.strip()
 
 
+def sanitize_html(text: Optional[str]) -> Optional[str]:
+    """
+    Sanitiza HTML para prevenir XSS
+    Escapa caracteres HTML peligrosos
+    
+    Args:
+        text: Texto que puede contener HTML
+        
+    Returns:
+        Optional[str]: Texto sanitizado sin HTML peligroso
+    """
+    if not text:
+        return None
+    
+    import html
+    
+    # Escapar caracteres HTML
+    text = html.escape(text)
+    
+    # Remover caracteres peligrosos adicionales
+    text = re.sub(r'[<>]', '', text)
+    
+    # Remover scripts obvios
+    text = re.sub(r'<script.*?>.*?</script>', '', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'javascript:', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'on\w+\s*=', '', text, flags=re.IGNORECASE)
+    
+    return text.strip()
+
+
 def format_dni(dni: str) -> str:
     """
     Formatea DNI con puntos
