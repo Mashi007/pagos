@@ -34,24 +34,9 @@ from app.api.v1.endpoints import (
     notificaciones_multicanal,
     scheduler_notificaciones,
     validadores,
-    diagnostico,
-    clientes_temp,
     concesionarios,
     asesores,
     modelos_vehiculos,
-    test_router,
-    fix_roles,
-    emergency_fix,
-    sql_direct,
-    emergency_fix_models,
-    debug_asesores,
-    clean_system,
-    delete_wrong_admin,
-    sql_delete_admin,
-    test_clientes,
-    emergency_migrate_roles,
-    debug_clientes,
-    # mock_data removido - se usarán datos reales
 )
 
 # Configurar logging
@@ -111,23 +96,9 @@ app.include_router(setup_inicial.router, prefix=f"{settings.API_V1_PREFIX}/setup
 app.include_router(notificaciones_multicanal.router, prefix=f"{settings.API_V1_PREFIX}/notificaciones-multicanal", tags=["Notificaciones Multicanal"])
 app.include_router(scheduler_notificaciones.router, prefix=f"{settings.API_V1_PREFIX}/scheduler", tags=["Scheduler"])
 app.include_router(validadores.router, prefix=f"{settings.API_V1_PREFIX}/validadores", tags=["Validadores"])
-app.include_router(diagnostico.router, prefix=f"{settings.API_V1_PREFIX}/diagnostico", tags=["Diagnostico"])
-app.include_router(clientes_temp.router, prefix=f"{settings.API_V1_PREFIX}/clientes-temp", tags=["Clientes Temp"])
 app.include_router(concesionarios.router, prefix=f"{settings.API_V1_PREFIX}/concesionarios", tags=["Concesionarios"])
 app.include_router(asesores.router, prefix=f"{settings.API_V1_PREFIX}/asesores", tags=["Asesores"])
 app.include_router(modelos_vehiculos.router, prefix=f"{settings.API_V1_PREFIX}/modelos-vehiculos", tags=["Modelos Vehículos"])
-app.include_router(test_router.router, prefix=f"{settings.API_V1_PREFIX}/test", tags=["Test"])
-app.include_router(fix_roles.router, prefix=f"{settings.API_V1_PREFIX}/fix", tags=["Fix Roles"])
-app.include_router(emergency_fix.router, prefix=f"{settings.API_V1_PREFIX}/emergency", tags=["Emergency Fix"])
-app.include_router(sql_direct.router, prefix=f"{settings.API_V1_PREFIX}/sql", tags=["SQL Direct"])
-app.include_router(emergency_fix_models.router, prefix=f"{settings.API_V1_PREFIX}/emergency-models", tags=["Emergency Models Fix"])
-app.include_router(debug_asesores.router, prefix=f"{settings.API_V1_PREFIX}/debug-asesores", tags=["Debug Asesores"])
-app.include_router(clean_system.router, prefix=f"{settings.API_V1_PREFIX}/clean", tags=["Clean System"])
-app.include_router(delete_wrong_admin.router, prefix=f"{settings.API_V1_PREFIX}/fix-admin", tags=["Fix Admin"])
-app.include_router(sql_delete_admin.router, prefix=f"{settings.API_V1_PREFIX}/sql-delete", tags=["SQL Delete Admin"])
-app.include_router(test_clientes.router, prefix=f"{settings.API_V1_PREFIX}/test-clientes", tags=["Test Clientes"])
-app.include_router(emergency_migrate_roles.router, prefix=f"{settings.API_V1_PREFIX}", tags=["Emergency Migration"])
-app.include_router(debug_clientes.router, prefix=f"{settings.API_V1_PREFIX}", tags=["Debug Clientes"])
 # app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])  # Removido - se usarán datos reales
 
 
