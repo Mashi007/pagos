@@ -2,7 +2,26 @@
 # PASO MANUAL 1: CREAR UN ASESOR
 # ============================================================
 
-$baseUrl = "https://pagos-f2qf.onrender.com"
+# ============================================================
+# CONFIGURACION - Cambiar estas variables según tu entorno
+# ============================================================
+$baseUrl = $env:API_BASE_URL
+if (-not $baseUrl) {
+    $baseUrl = "https://pagos-f2qf.onrender.com"
+}
+
+$adminEmail = $env:ADMIN_EMAIL
+if (-not $adminEmail) {
+    $adminEmail = "itmaster@rapicreditca.com"
+}
+
+$adminPassword = $env:ADMIN_PASSWORD
+if (-not $adminPassword) {
+    Write-Host "ERROR: Variable ADMIN_PASSWORD no configurada" -ForegroundColor Red
+    Write-Host "Configura la variable de entorno o ingresa la contraseña:" -ForegroundColor Yellow
+    $adminPassword = Read-Host "Contraseña del administrador" -AsSecureString
+    $adminPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($adminPassword))
+}
 
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "PASO 1: CREAR UN ASESOR" -ForegroundColor Cyan
@@ -11,7 +30,10 @@ Write-Host ""
 
 # Obtener token
 Write-Host "Obteniendo token..." -ForegroundColor Yellow
-$loginBody = '{"email":"itmaster@rapicreditca.com","password":"R@pi_2025**"}'
+$loginBody = @{
+    email = $adminEmail
+    password = $adminPassword
+} | ConvertTo-Json
 try {
     $loginResponse = Invoke-RestMethod -Uri "$baseUrl/api/v1/auth/login" -Method Post -Body $loginBody -ContentType "application/json"
     $token = $loginResponse.access_token

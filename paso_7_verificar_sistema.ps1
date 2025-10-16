@@ -3,7 +3,13 @@
 # Verifica que todos los endpoints funcionen correctamente
 # ============================================================
 
-$baseUrl = "https://pagos-f2qf.onrender.com"
+# ============================================================
+# CONFIGURACION - Cambiar estas variables según tu entorno
+# ============================================================
+$baseUrl = $env:API_BASE_URL
+if (-not $baseUrl) {
+    $baseUrl = "https://pagos-f2qf.onrender.com"
+}
 
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "PASO 7: VERIFICACION FINAL DEL SISTEMA" -ForegroundColor Cyan
