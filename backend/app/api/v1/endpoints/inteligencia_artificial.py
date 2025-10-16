@@ -252,7 +252,7 @@ def listar_clientes_alto_riesgo(
                         "cedula": cliente.cedula,
                         "telefono": cliente.telefono,
                         "vehiculo": cliente.vehiculo_completo,
-                        "asesor": cliente.asesor.full_name if cliente.asesor else "N/A"
+                        "analista": cliente.analista.full_name if cliente.analista else "N/A"
                     },
                     "riesgo": {
                         "probabilidad_mora": prediccion["probabilidad_mora"],

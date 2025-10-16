@@ -133,7 +133,7 @@ export function Configuracion() {
     { id: 'inteligenciaArtificial', nombre: 'Inteligencia Artificial', icono: Brain },
     { id: 'validadores', nombre: 'Validadores', icono: CheckSquare },
     { id: 'concesionarios', nombre: 'Concesionarios', icono: Building },
-    { id: 'asesores', nombre: 'Asesores', icono: Users },
+    { id: 'analistaes', nombre: 'Asesores', icono: Users },
     { id: 'usuarios', nombre: 'Usuarios', icono: Users },
   ]
 
@@ -996,7 +996,7 @@ export function Configuracion() {
       case 'inteligenciaArtificial': return renderSeccionInteligenciaArtificial()
       case 'validadores': return <ValidadoresConfig />
       case 'concesionarios': return <ConcesionariosConfig />
-      case 'asesores': return <AsesoresConfig />
+      case 'analistaes': return <AsesoresConfig />
       case 'usuarios': return <UsuariosConfig />
       default: return renderSeccionGeneral()
     }

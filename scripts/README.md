@@ -34,7 +34,7 @@ Estos scripts proporcionan:
 cd scripts/powershell
 . .\config_variables.ps1
 . .\paso_0_obtener_token.ps1
-. .\paso_manual_1_crear_asesor.ps1
+. .\paso_manual_1_crear_analista.ps1
 . .\paso_manual_2_crear_cliente.ps1
 . .\paso_7_verificar_sistema.ps1
 ```

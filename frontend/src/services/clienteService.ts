@@ -57,9 +57,9 @@ class ClienteService {
     return response.data
   }
 
-  // Obtener clientes por asesor (usando filtros en endpoint principal)
-  async getClientesByAsesor(asesorId: string): Promise<Cliente[]> {
-    const filters: ClienteFilters = { asesor_config_id: parseInt(asesorId) }
+  // Obtener clientes por analista (usando filtros en endpoint principal)
+  async getClientesByAnalista(analistaId: string): Promise<Cliente[]> {
+    const filters: ClienteFilters = { analista_config_id: parseInt(analistaId) }
     const response = await this.getClientes(filters, 1, 100)
     return response.data
   }
@@ -107,11 +107,11 @@ class ClienteService {
     return response.data
   }
 
-  // Asignar asesor a cliente
-  async asignarAsesor(clienteId: string, asesorId: string): Promise<Cliente> {
+  // Asignar analista a cliente
+  async asignarAsesor(clienteId: string, analistaId: string): Promise<Cliente> {
     const response = await apiClient.patch<ApiResponse<Cliente>>(
-      `${this.baseUrl}/${clienteId}/asesor`,
-       { asesor_config_id: asesorId }
+      `${this.baseUrl}/${clienteId}/analista`,
+       { analista_config_id: analistaId }
     )
     return response.data
   }

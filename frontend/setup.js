@@ -39,6 +39,6 @@ console.log('3. Abrir http://localhost:3000');
 console.log('\n👤 Usuarios de prueba:');
 console.log('- admin@sistema.com / admin123');
 console.log('- gerente@sistema.com / gerente123');
-console.log('- asesor@sistema.com / asesor123');
+console.log('- analista@sistema.com / analista123');
 console.log('\n🌐 API Backend: https://pagos-f2qf.onrender.com');
 console.log('📚 Documentación: https://pagos-f2qf.onrender.com/docs');

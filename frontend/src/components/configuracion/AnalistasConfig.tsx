@@ -22,7 +22,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
-import { asesorService, type Asesor, type AsesorCreate } from '@/services/asesorService'
+import { analistaService, type Asesor, type AsesorCreate } from '@/services/analistaService'
 
 const ESPECIALIDADES = [
   'Vehículos Nuevos',
@@ -34,7 +34,7 @@ const ESPECIALIDADES = [
 ]
 
 export function AsesoresConfig() {
-  const [asesores, setAsesores] = useState<Asesor[]>([])
+  const [analistaes, setAsesores] = useState<Asesor[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -55,16 +55,16 @@ export function AsesoresConfig() {
   const loadAsesores = async () => {
     try {
       setLoading(true)
-      const data = await asesorService.listarAsesoresActivos()
+      const data = await analistaService.listarAsesoresActivos()
       setAsesores(data)
     } catch (err: any) {
-      console.error('Error al cargar asesores:', err)
+      console.error('Error al cargar analistaes:', err)
       if (err.response?.status === 503) {
         setError('Servicio temporalmente no disponible. Intenta nuevamente.')
       } else if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
         setError('Error de conexión. Verifica que el servidor esté funcionando.')
       } else {
-        setError('No se pudieron cargar los asesores.')
+        setError('No se pudieron cargar los analistaes.')
       }
     } finally {
       setLoading(false)
@@ -77,44 +77,44 @@ export function AsesoresConfig() {
       setError(null) // Limpiar errores previos
       
       if (editingAsesor) {
-        await asesorService.actualizarAsesor(editingAsesor.id, formData)
+        await analistaService.actualizarAsesor(editingAsesor.id, formData)
       } else {
-        await asesorService.crearAsesor(formData)
+        await analistaService.crearAsesor(formData)
       }
       
-      // Recargar la lista de asesores para actualizar la tabla
+      // Recargar la lista de analistaes para actualizar la tabla
       await loadAsesores()
       resetForm()
     } catch (err) {
-      console.error('Error al guardar asesor:', err)
-      setError('Error al guardar el asesor.')
+      console.error('Error al guardar analista:', err)
+      setError('Error al guardar el analista.')
     }
   }
 
-  const handleView = (asesor: Asesor) => {
-    setViewingAsesor(asesor)
+  const handleView = (analista: Asesor) => {
+    setViewingAsesor(analista)
   }
 
-  const handleEdit = (asesor: Asesor) => {
-    setEditingAsesor(asesor)
+  const handleEdit = (analista: Asesor) => {
+    setEditingAsesor(analista)
     setFormData({
-      nombre: asesor.nombre,
-      activo: asesor.activo
+      nombre: analista.nombre,
+      activo: analista.activo
     })
     setShowForm(true)
   }
 
   const handleDelete = async (id: number) => {
-    if (!confirm('¿Estás seguro de que deseas eliminar este asesor?')) {
+    if (!confirm('¿Estás seguro de que deseas eliminar este analista?')) {
       return
     }
     
     try {
-      await asesorService.eliminarAsesor(id)
+      await analistaService.eliminarAsesor(id)
       await loadAsesores()
     } catch (err) {
-      console.error('Error al eliminar asesor:', err)
-      setError('Error al eliminar el asesor.')
+      console.error('Error al eliminar analista:', err)
+      setError('Error al eliminar el analista.')
     }
   }
 
@@ -128,9 +128,9 @@ export function AsesoresConfig() {
     setShowForm(false)
   }
 
-  const filteredAsesores = asesores.filter(asesor =>
-    asesor.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    asesor.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredAsesores = analistaes.filter(analista =>
+    analista.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    analista.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   if (loading) {
@@ -152,7 +152,7 @@ export function AsesoresConfig() {
             Gestión de Asesores
           </h3>
           <p className="text-gray-600 mt-1">
-            Administra los asesores comerciales del sistema
+            Administra los analistaes comerciales del sistema
           </p>
         </div>
         <Button onClick={() => setShowForm(true)}>
@@ -177,7 +177,7 @@ export function AsesoresConfig() {
                   <Input
                     value={formData.nombre}
                     onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                    placeholder="Nombre del asesor"
+                    placeholder="Nombre del analista"
                     required
                   />
                 </div>
@@ -270,7 +270,7 @@ export function AsesoresConfig() {
           <div className="flex items-center space-x-2">
             <Search className="h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Buscar asesores..."
+              placeholder="Buscar analistaes..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="flex-1"
@@ -292,14 +292,14 @@ export function AsesoresConfig() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAsesores.map((asesor) => (
-                  <TableRow key={asesor.id}>
+                {filteredAsesores.map((analista) => (
+                  <TableRow key={analista.id}>
                     <TableCell>
-                      <div className="font-medium">{asesor.nombre_completo}</div>
+                      <div className="font-medium">{analista.nombre_completo}</div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={asesor.activo ? 'default' : 'destructive'}>
-                        {asesor.activo ? (
+                      <Badge variant={analista.activo ? 'default' : 'destructive'}>
+                        {analista.activo ? (
                           <>
                             <CheckCircle className="mr-1 h-3 w-3" />
                             Activo
@@ -317,7 +317,7 @@ export function AsesoresConfig() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleView(asesor)}
+                          onClick={() => handleView(analista)}
                           title="Ver detalles"
                           className="text-blue-600 hover:text-blue-700"
                         >
@@ -326,8 +326,8 @@ export function AsesoresConfig() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleEdit(asesor)}
-                          title="Editar asesor"
+                          onClick={() => handleEdit(analista)}
+                          title="Editar analista"
                           className="text-green-600 hover:text-green-700"
                         >
                           <Edit className="h-4 w-4" />
@@ -335,8 +335,8 @@ export function AsesoresConfig() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDelete(asesor.id)}
-                          title="Eliminar asesor"
+                          onClick={() => handleDelete(analista.id)}
+                          title="Eliminar analista"
                           className="text-red-600 hover:text-red-700"
                         >
                           <Trash2 className="h-4 w-4" />

@@ -220,7 +220,7 @@ def track_business_metrics(
         labels: Labels adicionales
         
     Examples:
-        track_business_metrics("clientes_creados", 1, {"asesor": "Juan", "concesionario": "AutoCenter"})
+        track_business_metrics("clientes_creados", 1, {"analista": "Juan", "concesionario": "AutoCenter"})
         track_business_metrics("pagos_procesados", monto, {"estado": "EXITOSO", "metodo": "TRANSFERENCIA"})
         track_business_metrics("mora_acumulada", dias_mora, {"cliente_id": 123})
         track_business_metrics("conciliacion_exitosa", 1, {"banco": "Popular", "registros": 50})
@@ -430,7 +430,7 @@ def get_monitoring_status() -> dict:
                 "Tracking de operaciones financieras críticas",
                 "Monitoreo de flujos de aprobación",
                 "Alertas de errores en pagos/conciliación",
-                "Métricas de rendimiento de asesores",
+                "Métricas de rendimiento de analistaes",
                 "Análisis de patrones de mora",
                 "Debugging de migraciones masivas"
             ]

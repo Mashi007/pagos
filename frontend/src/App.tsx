@@ -221,7 +221,7 @@ function App() {
 
           {/* Asesores */}
           <Route
-            path="asesores"
+            path="analistaes"
             element={
               <ProtectedRoute requiredRoles={['USER']}>
                 <Asesores />

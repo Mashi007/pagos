@@ -28,7 +28,7 @@ def listar_clientes(
     # Filtros específicos
     estado: Optional[str] = Query(None, description="ACTIVO, INACTIVO, MORA"),
     estado_financiero: Optional[str] = Query(None, description="AL_DIA, MORA, VENCIDO"),
-    asesor_id: Optional[int] = Query(None, description="ID del asesor de configuración asignado"),
+    analista_id: Optional[int] = Query(None, description="ID del analista de configuración asignado"),
     
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -58,8 +58,8 @@ def listar_clientes(
         if estado_financiero:
             query = query.filter(Cliente.estado_financiero == estado_financiero)
         
-        if asesor_id:
-            query = query.filter(Cliente.asesor_id == asesor_id)
+        if analista_id:
+            query = query.filter(Cliente.analista_id == analista_id)
         
         # Ordenamiento
         query = query.order_by(Cliente.id.desc())
@@ -100,7 +100,7 @@ def listar_clientes(
                     "monto_financiado": float(getattr(cliente, 'monto_financiado', 0) or 0),
                     "modalidad_pago": getattr(cliente, 'modalidad_pago', 'MENSUAL') or 'MENSUAL',
                     "numero_amortizaciones": getattr(cliente, 'numero_amortizaciones', 0) or 0,
-                    "asesor_id": getattr(cliente, 'asesor_id', None),
+                    "analista_id": getattr(cliente, 'analista_id', None),
                     "estado": getattr(cliente, 'estado', 'ACTIVO') or 'ACTIVO',
                     "activo": bool(getattr(cliente, 'activo', True)),
                     "estado_financiero": getattr(cliente, 'estado_financiero', 'AL_DIA') or 'AL_DIA',
@@ -196,7 +196,7 @@ def crear_cliente(
             'anio_vehiculo', 'color_vehiculo', 'chasis', 'motor', 'concesionario',
             'vendedor_concesionario', 'total_financiamiento', 'cuota_inicial',
             'fecha_entrega', 'numero_amortizaciones', 'modalidad_pago',
-            'asesor_id', 'notas'
+            'analista_id', 'notas'
         }
         
         # Crear diccionario solo con campos válidos

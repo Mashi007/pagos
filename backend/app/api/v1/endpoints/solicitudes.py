@@ -578,7 +578,7 @@ def solicitar_edicion_cliente_comercial(
 # SOLICITUDES DE ASESOR
 # ============================================
 
-@router.post("/asesor/editar-cliente-propio")
+@router.post("/analista/editar-cliente-propio")
 def solicitar_edicion_cliente_propio(
     cliente_id: int,
     nuevos_datos: Dict[str, Any],
@@ -593,10 +593,10 @@ def solicitar_edicion_cliente_propio(
     if current_user.rol != "ASESOR":
         raise HTTPException(status_code=403, detail="Solo rol ASESOR puede usar este endpoint")
     
-    # Verificar que el cliente existe y está asignado al asesor
+    # Verificar que el cliente existe y está asignado al analista
     cliente = db.query(Cliente).filter(
         Cliente.id == cliente_id,
-        Cliente.asesor_id == current_user.id  # NOTA: Esto requiere mapeo User->Asesor
+        Cliente.analista_id == current_user.id  # NOTA: Esto requiere mapeo User->Asesor
     ).first()
     
     if not cliente:
@@ -844,7 +844,7 @@ def _ejecutar_accion_aprobada(solicitud: Aprobacion, db: Session) -> Dict[str, A
                 return {"accion": "Cliente editado", "cliente_id": cliente.id}
         
         elif solicitud.tipo_solicitud == "EDITAR_CLIENTE_PROPIO":
-            # Editar cliente propio (asesor)
+            # Editar cliente propio (analista)
             cliente = db.query(Cliente).filter(Cliente.id == solicitud.entidad_id).first()
             if cliente:
                 for campo, valor in datos.items():
@@ -1083,8 +1083,8 @@ def obtener_matriz_permisos_actualizada(
             "comercial": {
                 "editar_clientes": "POST /solicitudes/comercial/editar-cliente"
             },
-            "asesor": {
-                "editar_clientes_propios": "POST /solicitudes/asesor/editar-cliente-propio"
+            "analista": {
+                "editar_clientes_propios": "POST /solicitudes/analista/editar-cliente-propio"
             },
             "admin": {
                 "aprobar_solicitudes": "POST /solicitudes/aprobar/{solicitud_id}",

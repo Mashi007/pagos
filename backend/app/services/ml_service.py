@@ -1316,7 +1316,7 @@ class DetectorPatrones:
                 })
             
             # 2. CONCENTRACIÓN DE MORA POR ASESOR
-            concentracion_mora = DetectorPatrones._detectar_concentracion_mora_asesor(db)
+            concentracion_mora = DetectorPatrones._detectar_concentracion_mora_analista(db)
             if concentracion_mora:
                 anomalias.append({
                     "tipo": "CONCENTRACION_MORA_ASESOR",
@@ -1385,33 +1385,33 @@ class DetectorPatrones:
         return resultado[:20]  # Top 20
     
     @staticmethod
-    def _detectar_concentracion_mora_asesor(db: Session) -> List[Dict]:
-        """Detectar asesores con alta concentración de mora"""
-        # Agrupar mora por asesor
-        mora_por_asesor = db.query(
+    def _detectar_concentracion_mora_analista(db: Session) -> List[Dict]:
+        """Detectar analistaes con alta concentración de mora"""
+        # Agrupar mora por analista
+        mora_por_analista = db.query(
             User.id,
             User.full_name,
             func.count(Cliente.id).label('total_clientes'),
             func.sum(func.case([(Cliente.dias_mora > 0, 1)], else_=0)).label('clientes_mora'),
             func.avg(Cliente.dias_mora).label('promedio_mora')
-        ).join(Cliente, Asesor.id == Cliente.asesor_id).filter(
+        ).join(Cliente, Asesor.id == Cliente.analista_id).filter(
             Cliente.activo == True
         ).group_by(User.id, User.full_name).all()
         
         resultado = []
-        for asesor in mora_por_asesor:
-            if asesor.total_clientes > 0:
-                tasa_mora = (asesor.clientes_mora / asesor.total_clientes) * 100
+        for analista in mora_por_analista:
+            if analista.total_clientes > 0:
+                tasa_mora = (analista.clientes_mora / analista.total_clientes) * 100
                 
                 # Alertar si tasa de mora > 20%
                 if tasa_mora > 20:
                     resultado.append({
-                        "asesor_id": asesor.id,
-                        "asesor_nombre": asesor.full_name,
-                        "total_clientes": asesor.total_clientes,
-                        "clientes_mora": asesor.clientes_mora,
+                        "analista_id": analista.id,
+                        "analista_nombre": analista.full_name,
+                        "total_clientes": analista.total_clientes,
+                        "clientes_mora": analista.clientes_mora,
                         "tasa_mora": round(tasa_mora, 2),
-                        "promedio_dias_mora": round(float(asesor.promedio_mora or 0), 1)
+                        "promedio_dias_mora": round(float(analista.promedio_mora or 0), 1)
                     })
         
         return sorted(resultado, key=lambda x: x["tasa_mora"], reverse=True)

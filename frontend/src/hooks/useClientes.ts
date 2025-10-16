@@ -12,7 +12,7 @@ export const clienteKeys = {
   detail: (id: string) => [...clienteKeys.details(), id] as const,
   search: (query: string) => [...clienteKeys.all, 'search', query] as const,
   mora: () => [...clienteKeys.all, 'mora'] as const,
-  byAsesor: (asesorId: string) => [...clienteKeys.all, 'asesor', asesorId] as const,
+  byAsesor: (analistaId: string) => [...clienteKeys.all, 'analista', analistaId] as const,
 }
 
 // Hook para obtener lista de clientes
@@ -57,12 +57,12 @@ export function useClientesEnMora() {
   })
 }
 
-// Hook para clientes por asesor
-export function useClientesByAsesor(asesorId: string) {
+// Hook para clientes por analista
+export function useClientesByAsesor(analistaId: string) {
   return useQuery({
-    queryKey: clienteKeys.byAsesor(asesorId),
-    queryFn: () => clienteService.getClientesByAsesor(asesorId),
-    enabled: !!asesorId,
+    queryKey: clienteKeys.byAsesor(analistaId),
+    queryFn: () => clienteService.getClientesByAsesor(analistaId),
+    enabled: !!analistaId,
     staleTime: 10 * 60 * 1000, // 10 minutos
   })
 }
@@ -156,13 +156,13 @@ export function useCambiarEstadoCliente() {
   })
 }
 
-// Hook para asignar asesor
+// Hook para asignar analista
 export function useAsignarAsesor() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ clienteId, asesorId }: { clienteId: string; asesorId: string }) =>
-      clienteService.asignarAsesor(clienteId, asesorId),
+    mutationFn: ({ clienteId, analistaId }: { clienteId: string; analistaId: string }) =>
+      clienteService.asignarAsesor(clienteId, analistaId),
     onSuccess: (updatedCliente) => {
       // Actualizar cache específico
       queryClient.setQueryData(
@@ -170,14 +170,14 @@ export function useAsignarAsesor() {
         updatedCliente
       )
       
-      // Invalidar listas y clientes por asesor
+      // Invalidar listas y clientes por analista
       queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
-      queryClient.invalidateQueries({ queryKey: [...clienteKeys.all, 'asesor'] })
+      queryClient.invalidateQueries({ queryKey: [...clienteKeys.all, 'analista'] })
       
       toast.success('Asesor asignado exitosamente')
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Error al asignar asesor')
+      toast.error(error.response?.data?.message || 'Error al asignar analista')
     },
   })
 }

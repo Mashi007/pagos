@@ -30,7 +30,7 @@ Write-Host "VERIFICANDO TODOS LOS ENDPOINTS CON DATOS REALES..." -ForegroundColo
 Write-Host ""
 
 $endpoints = @(
-    @{name="Asesores"; url="/api/v1/asesores/"; tipo="Catálogo"},
+    @{name="Asesores"; url="/api/v1/analistaes/"; tipo="Catálogo"},
     @{name="Concesionarios"; url="/api/v1/concesionarios/"; tipo="Catálogo"},
     @{name="Modelos Vehículos"; url="/api/v1/modelos-vehiculos/"; tipo="Catálogo"},
     @{name="Clientes"; url="/api/v1/clientes/"; tipo="Principal"; critical=$true},

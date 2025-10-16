@@ -121,7 +121,7 @@ def dashboard_administrador(
     
     # TOP 5 ASESORES DEL MES
     inicio_mes = hoy.replace(day=1)
-    top_asesores_query = db.query(
+    top_analistaes_query = db.query(
         User.id,
         User.nombre,
         User.apellido,
@@ -129,7 +129,7 @@ def dashboard_administrador(
         func.sum(Cliente.total_financiamiento).label('monto_vendido')
     ).select_from(User).outerjoin(
         Cliente, and_(
-            Asesor.id == Cliente.asesor_id,
+            Analista.id == Cliente.analista_id,
             Cliente.fecha_registro >= inicio_mes
         )
     ).filter(
@@ -139,13 +139,13 @@ def dashboard_administrador(
     ).limit(5).all()
     
     # Formatear resultados
-    top_asesores = [
+    top_analistaes = [
         {
-            "nombre": f"{asesor.nombre} {asesor.apellido}",
-            "nuevos_clientes": asesor.nuevos_clientes,
-            "monto_vendido": float(asesor.monto_vendido or 0)
+            "nombre": f"{analista.nombre} {analista.apellido}",
+            "nuevos_clientes": analista.nuevos_clientes,
+            "monto_vendido": float(analista.monto_vendido or 0)
         }
-        for asesor in top_asesores_query
+        for analista in top_analistaes_query
     ]
     
     # ALERTAS CRÍTICAS
@@ -205,14 +205,14 @@ def dashboard_administrador(
         },
         
         "rankings": {
-            "top_asesores": [
+            "top_analistaes": [
                 {
-                    "asesor": asesor,
+                    "analista": analista,
                     "nuevos_clientes": nuevos,
                     "monto_vendido": float(monto or 0),
                     "posicion": idx + 1
                 }
-                for idx, (asesor, nuevos, monto) in enumerate(top_asesores)
+                for idx, (analista, nuevos, monto) in enumerate(top_analistaes)
             ]
         },
         
@@ -312,7 +312,7 @@ def dashboard_cobranzas(
             "telefono": cliente.telefono,
             "dias_mora": cliente.dias_mora,
             "color": color,
-            "asesor": cliente.asesor.full_name if cliente.asesor else "Sin asignar"
+            "analista": cliente.analista.full_name if cliente.analista else "Sin asignar"
         })
     
     # PAGOS SIN CONCILIAR
@@ -355,7 +355,7 @@ def dashboard_cobranzas(
         "tablas": {
             "clientes_contactar": {
                 "titulo": "Clientes a Contactar Hoy",
-                "columnas": ["Prioridad", "Cliente", "Días Mora", "Teléfono", "Asesor"],
+                "columnas": ["Prioridad", "Cliente", "Días Mora", "Teléfono", "Analista"],
                 "datos": tabla_contactar
             }
         },
@@ -380,7 +380,7 @@ def dashboard_comercial(
        • Gráfico de mora vs al día (solo sus clientes)
        • Lista de sus clientes
        • Estadísticas de sus clientes
-       • NO ve datos de otros asesores/comerciales
+       • NO ve datos de otros analistaes/comerciales
     """
     # Verificar permisos
     if current_user.rol not in ["USER"]:
@@ -439,29 +439,29 @@ def dashboard_comercial(
     ).all()
     
     # VENTAS POR ASESOR
-    ventas_por_asesor_query = db.query(
-        Asesor.id,
-        Asesor.nombre,
-        Asesor.apellido,
+    ventas_por_analista_query = db.query(
+        Analista.id,
+        Analista.nombre,
+        Analista.apellido,
         func.count(Cliente.id).label('ventas'),
         func.sum(Cliente.total_financiamiento).label('monto')
-    ).select_from(Asesor).outerjoin(Cliente, and_(
-        Asesor.id == Cliente.asesor_id,
+    ).select_from(Analista).outerjoin(Cliente, and_(
+        Analista.id == Cliente.analista_id,
         Cliente.fecha_registro >= inicio_mes
     )).filter(
-        Asesor.activo == True
-    ).group_by(Asesor.id, Asesor.nombre, Asesor.apellido).order_by(
+        Analista.activo == True
+    ).group_by(Analista.id, Analista.nombre, Analista.apellido).order_by(
         func.count(Cliente.id).desc()
     ).all()
     
     # Formatear resultados
-    ventas_por_asesor = [
+    ventas_por_analista = [
         {
             "nombre": f"{v.nombre} {v.apellido}",
             "ventas": v.ventas,
             "monto": float(v.monto or 0)
         }
-        for v in ventas_por_asesor_query
+        for v in ventas_por_analista_query
     ]
     
     # ÚLTIMAS VENTAS REGISTRADAS
@@ -498,16 +498,16 @@ def dashboard_comercial(
                     for modelo, marca, cantidad, monto in ventas_por_modelo
                 ]
             },
-            "ventas_por_asesor": {
+            "ventas_por_analista": {
                 "tipo": "bar",
-                "titulo": "Ventas por Asesor",
+                "titulo": "Ventas por Analista",
                 "datos": [
                     {
-                        "asesor": asesor,
+                        "analista": analista,
                         "ventas": ventas,
                         "monto": float(monto or 0)
                     }
-                    for asesor, ventas, monto in ventas_por_asesor
+                    for analista, ventas, monto in ventas_por_analista
                 ]
             }
         },
@@ -521,28 +521,28 @@ def dashboard_comercial(
                         "cliente": cliente.nombre_completo,
                         "vehiculo": cliente.vehiculo_completo,
                         "monto": f"${float(cliente.total_financiamiento or 0):,.0f}",
-                        "asesor": cliente.asesor.full_name if cliente.asesor else "N/A"
+                        "analista": cliente.analista.full_name if cliente.analista else "N/A"
                     }
                     for cliente in ultimas_ventas
                 ]
             }
         },
         
-        "ranking_asesores": [
+        "ranking_analistaes": [
             {
                 "posicion": idx + 1,
-                "asesor": asesor,
+                "analista": analista,
                 "ventas": ventas,
                 "monto": float(monto or 0)
             }
-            for idx, (asesor, ventas, monto) in enumerate(ventas_por_asesor)
+            for idx, (analista, ventas, monto) in enumerate(ventas_por_analista)
         ]
     }
 
 
-@router.get("/asesor")
-def dashboard_asesor(
-    asesor_id: Optional[int] = Query(None, description="ID del asesor de configuración (default: usuario actual)"),
+@router.get("/analista")
+def dashboard_analista(
+    analista_id: Optional[int] = Query(None, description="ID del analista de configuración (default: usuario actual)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -554,9 +554,9 @@ def dashboard_asesor(
        • Gráfico de mora vs al día (solo sus clientes)
        • Lista de sus clientes
        • Estadísticas de sus clientes
-       • NO ve datos de otros asesores/comerciales
+       • NO ve datos de otros analistaes/comerciales
     """
-    # NOTA: Este endpoint necesita rediseño - Los Users no son Asesores de configuración
+    # NOTA: Este endpoint necesita rediseño - Los Users no son Analistaes de configuración
     # Por ahora, mostrar dashboard general
     
     # Dashboard general del sistema (todos los clientes)
@@ -590,36 +590,36 @@ def dashboard_asesor(
     
     # MI POSICIÓN EN RANKING
     ranking_general = db.query(
-        Asesor.id,
-        Asesor.nombre,
-        Asesor.apellido,
+        Analista.id,
+        Analista.nombre,
+        Analista.apellido,
         func.count(Cliente.id).label('total_clientes'),
         func.sum(Cliente.total_financiamiento).label('monto_total')
-    ).outerjoin(Cliente, Asesor.id == Cliente.asesor_id).filter(
-        Asesor.activo == True,
+    ).outerjoin(Cliente, Analista.id == Cliente.analista_id).filter(
+        Analista.activo == True,
         Cliente.activo == True
-    ).group_by(Asesor.id, Asesor.nombre, Asesor.apellido).order_by(
+    ).group_by(Analista.id, Analista.nombre, Analista.apellido).order_by(
         func.count(Cliente.id).desc()
     ).all()
     
     mi_posicion = None
-    # NOTA: La lógica de posición individual requiere mapeo User->Asesor
+    # NOTA: La lógica de posición individual requiere mapeo User->Analista
     # Por ahora, no calcular posición individual
-    for idx, asesor_rank in enumerate(ranking_general):
+    for idx, analista_rank in enumerate(ranking_general):
         # Lógica de posición deshabilitada - requiere rediseño
-        if False:  # asesor_rank.id == asesor_id:
+        if False:  # analista_rank.id == analista_id:
             mi_posicion = {
                 "posicion": idx + 1,
-                "total_asesores": len(ranking_general),
-                "clientes": asesor_rank.total_clientes,
-                "monto": float(asesor_rank.monto_total or 0),
+                "total_analistaes": len(ranking_general),
+                "clientes": analista_rank.total_clientes,
+                "monto": float(analista_rank.monto_total or 0),
                 "percentil": round((1 - idx / len(ranking_general)) * 100, 1) if len(ranking_general) > 0 else 0
             }
             break
     
     return {
         "tipo_dashboard": "ASESOR",
-        "asesor": asesor.full_name,
+        "analista": analista.full_name,
         "fecha_actualizacion": datetime.now(),
         
         "mis_estadisticas": {
@@ -713,10 +713,10 @@ def obtener_matriz_acceso_roles(
                     "• Gráfico de mora vs al día (solo sus clientes)",
                     "• Lista de sus clientes",
                     "• Estadísticas de sus clientes",
-                    "• NO ve datos de otros asesores/comerciales"
+                    "• NO ve datos de otros analistaes/comerciales"
                 ],
                 "endpoint": "/api/v1/dashboard/comercial",
-                "filtro_aplicado": "TODOS LOS CLIENTES (roles sin asesor individual)"
+                "filtro_aplicado": "TODOS LOS CLIENTES (roles sin analista individual)"
             },
             "ASESOR": {
                 "emoji": "👤", 
@@ -727,22 +727,22 @@ def obtener_matriz_acceso_roles(
                     "• Gráfico de mora vs al día (solo sus clientes)",
                     "• Lista de sus clientes", 
                     "• Estadísticas de sus clientes",
-                    "• NO ve datos de otros asesores/comerciales"
+                    "• NO ve datos de otros analistaes/comerciales"
                 ],
-                "endpoint": "/api/v1/dashboard/asesor",
-                "filtro_aplicado": "TODOS LOS CLIENTES (roles sin asesor individual)"
+                "endpoint": "/api/v1/dashboard/analista",
+                "filtro_aplicado": "TODOS LOS CLIENTES (roles sin analista individual)"
             }
         },
         "implementacion_tecnica": {
             "filtros_por_rol": {
                 "ADMIN_COBRANZAS": "Sin filtros - acceso completo",
-                "COMERCIAL_ASESOR": "Dashboard general - sin filtro por asesor individual"
+                "COMERCIAL_ASESOR": "Dashboard general - sin filtro por analista individual"
             },
             "endpoints_disponibles": {
                 "admin": "/api/v1/dashboard/admin",
                 "cobranzas": "/api/v1/dashboard/cobranzas", 
                 "comercial": "/api/v1/dashboard/comercial",
-                "asesor": "/api/v1/dashboard/asesor",
+                "analista": "/api/v1/dashboard/analista",
                 "por_rol": "/api/v1/dashboard/por-rol"
             }
         }
@@ -752,7 +752,7 @@ def obtener_matriz_acceso_roles(
 @router.get("/por-rol")
 def dashboard_por_rol(
     filtro_fecha: Optional[str] = Query("mes", description="dia, semana, mes, año"),
-    filtro_asesor: Optional[int] = Query(None, description="Filtrar por asesor específico"),
+    filtro_analista: Optional[int] = Query(None, description="Filtrar por analista específico"),
     filtro_estado: Optional[str] = Query(None, description="AL_DIA, MORA, TODOS"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -779,7 +779,7 @@ def dashboard_por_rol(
             "rol": user_role,
             "descripcion": info_acceso.get(user_role, "Acceso básico"),
             "filtros_aplicados": "Solo sus clientes" if user_role in ["COMERCIAL", "ASESOR"] else "Sin filtros",
-            "puede_ver_otros_asesores": user_role in ["ADMINISTRADOR_GENERAL", "COBRANZAS"]
+            "puede_ver_otros_analistaes": user_role in ["ADMINISTRADOR_GENERAL", "COBRANZAS"]
         }
     
     return dashboard_data
@@ -789,7 +789,7 @@ def dashboard_por_rol(
 def obtener_datos_grafico(
     tipo_grafico: str,
     periodo: Optional[str] = Query("mes", description="dia, semana, mes, año"),
-    filtro_asesor: Optional[int] = Query(None),
+    filtro_analista: Optional[int] = Query(None),
     filtro_modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -890,7 +890,7 @@ def obtener_configuracion_dashboard(
         "filtros_disponibles": {
             "fechas": ["dia", "semana", "mes", "año", "personalizado"],
             "estados": ["TODOS", "AL_DIA", "MORA", "CRITICO"],
-            "asesores": [
+            "analistaes": [
                 {"id": u.id, "nombre": u.full_name}
                 for u in db.query(User).filter(
                     User.is_active == True
@@ -986,12 +986,12 @@ def obtener_alertas_tiempo_real(
 def _get_dashboards_disponibles(rol: str) -> List[str]:
     """Obtener dashboards disponibles según rol"""
     dashboards_por_rol = {
-        "ADMINISTRADOR_GENERAL": ["admin", "cobranzas", "comercial", "asesor"],
-        "GERENTE": ["admin", "cobranzas", "comercial", "asesor"],
+        "ADMINISTRADOR_GENERAL": ["admin", "cobranzas", "comercial", "analista"],
+        "GERENTE": ["admin", "cobranzas", "comercial", "analista"],
         "DIRECTOR": ["admin", "cobranzas", "comercial"],
         "COBRANZAS": ["cobranzas"],
-        "COMERCIAL": ["comercial", "asesor"],
-        "ASESOR": ["asesor"],
+        "COMERCIAL": ["comercial", "analista"],
+        "ASESOR": ["analista"],
         "CONTADOR": ["admin"]
     }
     
@@ -1046,7 +1046,7 @@ def obtener_detalle_tabla(
                         "monto": float(cuota.monto_cuota),
                         "fecha_vencimiento": cuota.fecha_vencimiento,
                         "dias_hasta": (cuota.fecha_vencimiento - date.today()).days,
-                        "asesor": cliente.asesor.full_name if cliente.asesor else "Sin asignar"
+                        "analista": cliente.analista.full_name if cliente.analista else "Sin asignar"
                     })
         
         return {
@@ -1076,7 +1076,7 @@ def obtener_detalle_tabla(
                 "dias_mora": cliente.dias_mora,
                 "monto_financiamiento": float(cliente.total_financiamiento or 0),
                 "vehiculo": cliente.vehiculo_completo,
-                "asesor": cliente.asesor.full_name if cliente.asesor else "Sin asignar",
+                "analista": cliente.analista.full_name if cliente.analista else "Sin asignar",
                 "prioridad": "CRITICA" if cliente.dias_mora > 60 else ("ALTA" if cliente.dias_mora > 30 else "MEDIA")
             }
             for cliente in clientes

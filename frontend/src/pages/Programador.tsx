@@ -110,7 +110,7 @@ const mockTareas = [
   {
     id: 'TASK005',
     nombre: 'Notificación de Pagos Recibidos',
-    descripcion: 'Notificar a asesores sobre pagos recibidos de sus clientes',
+    descripcion: 'Notificar a analistaes sobre pagos recibidos de sus clientes',
     tipo: 'NOTIFICACION',
     frecuencia: 'CONTINUO',
     hora: '00:00',

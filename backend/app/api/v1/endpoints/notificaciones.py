@@ -814,12 +814,12 @@ async def enviar_reporte_semanal_usuarios(
         func.date(Cliente.fecha_registro) <= fin_semana
     ).all()
     
-    # Top asesor de la semana
-    top_asesor = db.query(
+    # Top analista de la semana
+    top_analista = db.query(
         User.full_name,
         func.count(Cliente.id).label('nuevos_clientes')
     ).outerjoin(Cliente, and_(
-        Asesor.id == Cliente.asesor_id,
+        Asesor.id == Cliente.analista_id,
         func.date(Cliente.fecha_registro) >= inicio_semana,
         func.date(Cliente.fecha_registro) <= fin_semana
     )).filter(
@@ -848,7 +848,7 @@ REPORTE SEMANAL - {inicio_semana.strftime('%d/%m')} al {fin_semana.strftime('%d/
 
 👥 NUEVOS CLIENTES: {len(nuevos_clientes)}
 
-🏆 TOP PERFORMER: {top_asesor[0] if top_asesor else 'N/A'} ({top_asesor[1] if top_asesor else 0} nuevos clientes)
+🏆 TOP PERFORMER: {top_analista[0] if top_analista else 'N/A'} ({top_analista[1] if top_analista else 0} nuevos clientes)
 
 📈 EVOLUCIÓN DE CARTERA:
 • Clientes activos: {db.query(Cliente).filter(Cliente.activo == True).count()}

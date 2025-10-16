@@ -22,7 +22,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { concesionarioService, type Concesionario } from '@/services/concesionarioService'
-import { asesorService, type Asesor } from '@/services/asesorService'
+import { analistaService, type Asesor } from '@/services/analistaService'
 import { modeloVehiculoService, type ModeloVehiculo } from '@/services/modeloVehiculoService'
 import { clienteService } from '@/services/clienteService'
 
@@ -40,7 +40,7 @@ interface FormData {
   numeroAmortizaciones: string
   modalidadFinanciamiento: 'semanal' | 'quincenal' | 'mensual'
   fechaEntrega: string
-  asesorAsignado: string
+  analistaAsignado: string
   concesionario: string
 }
 
@@ -71,14 +71,14 @@ export function CrearClienteForm({
     numeroAmortizaciones: '12',
     modalidadFinanciamiento: 'quincenal',
     fechaEntrega: '',
-    asesorAsignado: '',
+    analistaAsignado: '',
     concesionario: ''
   })
 
   const [validations, setValidations] = useState<FieldValidation>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [concesionarios, setConcesionarios] = useState<Concesionario[]>([])
-  const [asesores, setAsesores] = useState<Asesor[]>([])
+  const [analistaes, setAsesores] = useState<Asesor[]>([])
   const [modelosVehiculos, setModelosVehiculos] = useState<ModeloVehiculo[]>([])
   const [loadingData, setLoadingData] = useState(true)
 
@@ -87,9 +87,9 @@ export function CrearClienteForm({
     const loadData = async () => {
       try {
         setLoadingData(true)
-        console.log('🔄 Cargando asesores, concesionarios y modelos de vehículos desde configuración...')
+        console.log('🔄 Cargando analistaes, concesionarios y modelos de vehículos desde configuración...')
         
-        const [concesionariosData, asesoresData, modelosData] = await Promise.all([
+        const [concesionariosData, analistaesData, modelosData] = await Promise.all([
           // 🔄 Usar endpoints de configuración
           fetch('/api/v1/concesionarios/activos', {
             headers: {
@@ -97,7 +97,7 @@ export function CrearClienteForm({
             }
           }).then(res => res.json()).then(data => data.data || []),
           
-          fetch('/api/v1/asesores/activos', {
+          fetch('/api/v1/analistaes/activos', {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
             }
@@ -112,24 +112,24 @@ export function CrearClienteForm({
         
         console.log('✅ Datos cargados:', {
           concesionarios: concesionariosData.length,
-          asesores: asesoresData.length,
+          analistaes: analistaesData.length,
           modelos: modelosData.length
         })
         
         setConcesionarios(concesionariosData)
-        setAsesores(asesoresData)
+        setAsesores(analistaesData)
         setModelosVehiculos(modelosData)
       } catch (error) {
         console.error('❌ Error al cargar datos de configuración:', error)
         // Fallback a servicios locales si falla
         try {
-          const [concesionariosData, asesoresData, modelosData] = await Promise.all([
+          const [concesionariosData, analistaesData, modelosData] = await Promise.all([
             concesionarioService.listarConcesionariosActivos(),
-            asesorService.listarAsesoresActivos(),
+            analistaService.listarAsesoresActivos(),
             modeloVehiculoService.listarModelosActivos()
           ])
           setConcesionarios(concesionariosData)
-          setAsesores(asesoresData)
+          setAsesores(analistaesData)
           setModelosVehiculos(modelosData)
         } catch (fallbackError) {
           console.error('❌ Error en fallback:', fallbackError)
@@ -161,7 +161,7 @@ export function CrearClienteForm({
           setModelosVehiculos(mockModelos)
           console.log('✅ Datos mock cargados:', {
             concesionarios: mockConcesionarios.length,
-            asesores: mockAsesores.length,
+            analistaes: mockAsesores.length,
             modelos: mockModelos.length
           })
         }
@@ -407,7 +407,7 @@ export function CrearClienteForm({
         
         return { isValid: true }
 
-      case 'asesorAsignado':
+      case 'analistaAsignado':
         if (!value.trim()) return { isValid: false, message: 'Asesor requerido' }
         return { isValid: true }
 
@@ -477,7 +477,7 @@ export function CrearClienteForm({
     const requiredFields: (keyof FormData)[] = [
       'nombreCompleto', 'cedula', 'movil', 'email',
       'modeloVehiculo', 'totalFinanciamiento', 'numeroAmortizaciones',
-      'fechaEntrega', 'asesorAsignado', 'concesionario'
+      'fechaEntrega', 'analistaAsignado', 'concesionario'
     ]
     
     return requiredFields.every(field => {
@@ -508,9 +508,9 @@ export function CrearClienteForm({
         marca_vehiculo: formData.modeloVehiculo.split(' ')[0] || '',  // ✅ Backend: "marca_vehiculo"
         anio_vehiculo: new Date().getFullYear(),  // ✅ Backend: "anio_vehiculo"
         
-        // Concesionario y asesor (coincide con backend)
+        // Concesionario y analista (coincide con backend)
         concesionario: formData.concesionario,  // ✅ Backend: "concesionario"
-        asesor_config_id: parseInt(formData.asesorAsignado) || undefined,  // ✅ Backend: "asesor_config_id"
+        analista_config_id: parseInt(formData.analistaAsignado) || undefined,  // ✅ Backend: "analista_config_id"
         
         // Datos del financiamiento (coincide con backend)
         total_financiamiento: parseFloat(formData.totalFinanciamiento.replace(/[^\d.-]/g, '')) || 0,  // ✅ Backend: "total_financiamiento"
@@ -555,7 +555,7 @@ export function CrearClienteForm({
         >
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <h3 className="text-lg font-semibold mb-2">Cargando datos...</h3>
-          <p className="text-gray-600">Cargando concesionarios y asesores</p>
+          <p className="text-gray-600">Cargando concesionarios y analistaes</p>
         </motion.div>
       </motion.div>
     )
@@ -862,19 +862,19 @@ export function CrearClienteForm({
                   <label className="text-sm font-medium flex items-center">
                     <Users className="mr-1 h-4 w-4" />
                     Asesor asignado *
-                    {getFieldIcon('asesorAsignado')}
+                    {getFieldIcon('analistaAsignado')}
                   </label>
-                  <Select value={formData.asesorAsignado} onValueChange={(value) => handleFieldChange('asesorAsignado', value)}>
-                    <SelectTrigger className={getFieldStatus('asesorAsignado') === 'invalid' ? 'border-red-500' : ''}>
-                      <SelectValue placeholder="Seleccionar asesor" />
+                  <Select value={formData.analistaAsignado} onValueChange={(value) => handleFieldChange('analistaAsignado', value)}>
+                    <SelectTrigger className={getFieldStatus('analistaAsignado') === 'invalid' ? 'border-red-500' : ''}>
+                      <SelectValue placeholder="Seleccionar analista" />
                     </SelectTrigger>
                     <SelectContent>
-                      {asesores.map((asesor) => (
-                        <SelectItem key={asesor.id} value={asesor.nombre_completo}>
+                      {analistaes.map((analista) => (
+                        <SelectItem key={analista.id} value={analista.nombre_completo}>
                           <div className="flex flex-col">
-                            <span>{asesor.nombre_completo}</span>
-                            {asesor.especialidad && (
-                              <span className="text-xs text-gray-500">{asesor.especialidad}</span>
+                            <span>{analista.nombre_completo}</span>
+                            {analista.especialidad && (
+                              <span className="text-xs text-gray-500">{analista.especialidad}</span>
                             )}
                           </div>
                         </SelectItem>

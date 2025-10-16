@@ -22,7 +22,7 @@ export function Asesores() {
   const [searchTerm, setSearchTerm] = useState('')
 
   // Mock data - reemplazar con useQuery
-  const asesores = [
+  const analistaes = [
     {
       id: 1,
       nombre: 'Roberto',
@@ -56,7 +56,7 @@ export function Asesores() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Asesores Comerciales</h1>
           <p className="text-gray-500 mt-1">
-            Gestión de asesores y equipo de ventas
+            Gestión de analistaes y equipo de ventas
           </p>
         </div>
         <Button>
@@ -72,7 +72,7 @@ export function Asesores() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">Total Asesores</p>
-                <p className="text-2xl font-bold">{asesores.length}</p>
+                <p className="text-2xl font-bold">{analistaes.length}</p>
               </div>
               <Users className="w-8 h-8 text-primary" />
             </div>
@@ -84,7 +84,7 @@ export function Asesores() {
               <div>
                 <p className="text-sm text-gray-500">Activos</p>
                 <p className="text-2xl font-bold text-green-600">
-                  {asesores.filter(a => a.activo).length}
+                  {analistaes.filter(a => a.activo).length}
                 </p>
               </div>
               <UserCheck className="w-8 h-8 text-green-600" />
@@ -97,7 +97,7 @@ export function Asesores() {
               <div>
                 <p className="text-sm text-gray-500">Clientes Asignados</p>
                 <p className="text-2xl font-bold">
-                  {asesores.reduce((sum, a) => sum + a.clientes_asignados, 0)}
+                  {analistaes.reduce((sum, a) => sum + a.clientes_asignados, 0)}
                 </p>
               </div>
               <Users className="w-8 h-8 text-blue-600" />
@@ -110,7 +110,7 @@ export function Asesores() {
               <div>
                 <p className="text-sm text-gray-500">Ventas Este Mes</p>
                 <p className="text-2xl font-bold text-purple-600">
-                  {asesores.reduce((sum, a) => sum + a.ventas_mes, 0)}
+                  {analistaes.reduce((sum, a) => sum + a.ventas_mes, 0)}
                 </p>
               </div>
               <Award className="w-8 h-8 text-purple-600" />
@@ -125,7 +125,7 @@ export function Asesores() {
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Buscar asesor por nombre, email o especialidad..."
+              placeholder="Buscar analista por nombre, email o especialidad..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -151,38 +151,38 @@ export function Asesores() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {asesores.map((asesor) => (
-                <TableRow key={asesor.id}>
+              {analistaes.map((analista) => (
+                <TableRow key={analista.id}>
                   <TableCell>
                     <div>
-                      <p className="font-medium">{asesor.nombre} {asesor.apellido}</p>
-                      <p className="text-xs text-gray-500">ID: {asesor.id}</p>
+                      <p className="font-medium">{analista.nombre} {analista.apellido}</p>
+                      <p className="text-xs text-gray-500">ID: {analista.id}</p>
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="space-y-1">
                       <div className="flex items-center text-sm">
                         <Mail className="w-3 h-3 mr-1 text-gray-400" />
-                        {asesor.email}
+                        {analista.email}
                       </div>
                       <div className="flex items-center text-sm">
                         <Phone className="w-3 h-3 mr-1 text-gray-400" />
-                        {asesor.telefono}
+                        {analista.telefono}
                       </div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">{asesor.especialidad}</Badge>
+                    <Badge variant="outline">{analista.especialidad}</Badge>
                   </TableCell>
-                  <TableCell>{asesor.comision_porcentaje}%</TableCell>
-                  <TableCell>{asesor.clientes_asignados}</TableCell>
+                  <TableCell>{analista.comision_porcentaje}%</TableCell>
+                  <TableCell>{analista.clientes_asignados}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className="bg-purple-50">
-                      {asesor.ventas_mes}
+                      {analista.ventas_mes}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {asesor.activo ? (
+                    {analista.activo ? (
                       <Badge className="bg-green-600">Activo</Badge>
                     ) : (
                       <Badge variant="outline">Inactivo</Badge>
@@ -194,7 +194,7 @@ export function Asesores() {
                         <Edit className="w-4 h-4" />
                       </Button>
                       <Button variant="ghost" size="sm">
-                        {asesor.activo ? (
+                        {analista.activo ? (
                           <UserX className="w-4 h-4 text-red-600" />
                         ) : (
                           <UserCheck className="w-4 h-4 text-green-600" />

@@ -26,17 +26,17 @@ Esta carpeta contiene 5 scripts PowerShell esenciales para el sistema RapiCredit
 - **Reportes**: Genera métricas detalladas y veredicto final
 - **Uso**: Para verificación post-deploy o QA
 
-### **4. `paso_manual_1_crear_asesor.ps1`** 👤
-- **Propósito**: Creación manual de un asesor de prueba
-- **Función**: Crea asesor "Juan Perez" con datos completos
-- **Testing**: Prueba endpoint POST de asesores
+### **4. `paso_manual_1_crear_analista.ps1`** 👤
+- **Propósito**: Creación manual de un analista de prueba
+- **Función**: Crea analista "Juan Perez" con datos completos
+- **Testing**: Prueba endpoint POST de analistaes
 - **Uso**: Para carga inicial de datos o testing
 
 ### **5. `paso_manual_2_crear_cliente.ps1`** 👥
 - **Propósito**: Creación manual de un cliente completo
 - **Función**: Crea cliente "Roberto Sanchez" con vehículo y financiamiento
 - **Testing**: Prueba endpoint POST de clientes (módulo crítico)
-- **Uso**: Después de crear asesor, para testing completo
+- **Uso**: Después de crear analista, para testing completo
 
 ---
 
@@ -50,8 +50,8 @@ Esta carpeta contiene 5 scripts PowerShell esenciales para el sistema RapiCredit
 # 2. Obtener token de autenticación
 . .\paso_0_obtener_token.ps1
 
-# 3. Crear asesor de prueba
-. .\paso_manual_1_crear_asesor.ps1
+# 3. Crear analista de prueba
+. .\paso_manual_1_crear_analista.ps1
 
 # 4. Crear cliente de prueba
 . .\paso_manual_2_crear_cliente.ps1

@@ -66,7 +66,7 @@ export function ClientesList() {
       estado: 'ACTIVO',
       saldo_pendiente: 5000,
       fecha_ultimo_pago: '2024-01-15',
-       asesor_config_id: 1  // Ahora es ID numérico de tabla asesores
+       analista_config_id: 1  // Ahora es ID numérico de tabla analistaes
     },
     {
       id: '2',
@@ -76,7 +76,7 @@ export function ClientesList() {
       estado: 'MORA',
       saldo_pendiente: 3000,
       fecha_ultimo_pago: '2024-01-10',
-       asesor_config_id: 2  // Ahora es ID numérico de tabla asesores
+       analista_config_id: 2  // Ahora es ID numérico de tabla analistaes
     }
   ]
 
@@ -200,12 +200,12 @@ export function ClientesList() {
                   </label>
                   <select
                     className="w-full p-2 border border-gray-300 rounded-md"
-                     value={filters.asesor_config_id || ''}
-                     onChange={(e) => handleFilterChange('asesor_config_id', e.target.value || undefined)}
+                     value={filters.analista_config_id || ''}
+                     onChange={(e) => handleFilterChange('analista_config_id', e.target.value || undefined)}
                   >
                     <option value="">Todos</option>
-                    <option value="asesor1">Asesor 1</option>
-                    <option value="asesor2">Asesor 2</option>
+                    <option value="analista1">Asesor 1</option>
+                    <option value="analista2">Asesor 2</option>
                   </select>
                 </div>
                 

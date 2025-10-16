@@ -48,7 +48,7 @@ interface DashboardData {
   avance_meta: number
   financieros?: any
   cobranza?: any
-  asesores?: any
+  analistaes?: any
   productos?: any
 }
 
@@ -90,9 +90,9 @@ const mockData: DashboardData = {
   },
   
   // Métricas de Asesores
-  asesores: {
+  analistaes: {
     totalAsesores: 8,
-    asesoresActivos: 7,
+    analistaesActivos: 7,
     ventasMejorAsesor: 12,
     montoMejorAsesor: 75000.00,
     promedioVentas: 8.5,
@@ -505,8 +505,8 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {mockTopAsesores.map((asesor, index) => (
-                <div key={asesor.nombre} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+              {mockTopAsesores.map((analista, index) => (
+                <div key={analista.nombre} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                   <div className="flex items-center space-x-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                       index === 0 ? 'bg-yellow-500 text-white' : 
@@ -516,13 +516,13 @@ export function Dashboard() {
                       {index + 1}
                     </div>
                     <div>
-                      <div className="font-semibold text-gray-900">{asesor.nombre}</div>
-                      <div className="text-sm text-gray-500">{asesor.clientes} clientes • {asesor.ventas} ventas</div>
+                      <div className="font-semibold text-gray-900">{analista.nombre}</div>
+                      <div className="text-sm text-gray-500">{analista.clientes} clientes • {analista.ventas} ventas</div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-semibold text-gray-900">{formatCurrency(asesor.monto)}</div>
-                    <div className="text-sm text-green-600">{asesor.tasaConversion}% conversión</div>
+                    <div className="font-semibold text-gray-900">{formatCurrency(analista.monto)}</div>
+                    <div className="text-sm text-green-600">{analista.tasaConversion}% conversión</div>
                   </div>
                 </div>
               ))}

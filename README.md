@@ -76,7 +76,7 @@ npm run dev
 .\scripts\powershell\paso_0_obtener_token.ps1
 
 # Crear datos de prueba
-.\scripts\powershell\paso_manual_1_crear_asesor.ps1
+.\scripts\powershell\paso_manual_1_crear_analista.ps1
 .\scripts\powershell\paso_manual_2_crear_cliente.ps1
 
 # Verificar sistema

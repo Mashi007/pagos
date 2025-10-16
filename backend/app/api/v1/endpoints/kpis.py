@@ -262,7 +262,7 @@ def kpis_cobranza(
     """
     👥 KPIs de Cobranza
     - Tasa de morosidad general
-    - Tasa de morosidad por asesor
+    - Tasa de morosidad por analista
     - Promedio de días de retraso
     - Porcentaje de cumplimiento
     - Top 10 clientes morosos
@@ -277,13 +277,13 @@ def kpis_cobranza(
     
     tasa_morosidad_general = (clientes_mora / total_clientes * 100) if total_clientes > 0 else 0
     
-    # Tasa de morosidad por asesor
-    morosidad_por_asesor = db.query(
+    # Tasa de morosidad por analista
+    morosidad_por_analista = db.query(
         User.full_name,
         func.count(Cliente.id).label('total_clientes'),
         func.sum(case((Cliente.dias_mora > 0, 1), else_=0)).label('clientes_mora')
-    ).outerjoin(Cliente, Asesor.id == Cliente.asesor_id).filter(
-        Asesor.activo == True,
+    ).outerjoin(Cliente, Analista.id == Cliente.analista_id).filter(
+        Analista.activo == True,
         Cliente.activo == True
     ).group_by(User.id, User.full_name).all()
     
@@ -342,14 +342,14 @@ def kpis_cobranza(
                 "total": total_clientes
             }
         },
-        "morosidad_por_asesor": [
+        "morosidad_por_analista": [
             {
-                "asesor": asesor,
+                "analista": analista,
                 "total_clientes": total,
                 "clientes_mora": mora,
                 "tasa_morosidad": round((mora / total * 100), 2) if total > 0 else 0
             }
-            for asesor, total, mora in morosidad_por_asesor
+            for analista, total, mora in morosidad_por_analista
         ],
         "top_clientes_morosos": [
             {
@@ -365,40 +365,40 @@ def kpis_cobranza(
     }
 
 
-@router.get("/asesores")
-def kpis_asesores(
+@router.get("/analistaes")
+def kpis_analistaes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    🏆 KPIs de Asesores
+    🏆 KPIs de Analistaes
     - Ranking de ventas
     - Gestión de cobranza
-    - Comparativa entre asesores
+    - Comparativa entre analistaes
     """
     # Ranking de ventas
-    ventas_por_asesor = db.query(
+    ventas_por_analista = db.query(
         User.id,
         User.full_name,
         func.count(Cliente.id).label('total_ventas'),
         func.sum(Cliente.total_financiamiento).label('monto_vendido'),
         func.avg(Cliente.total_financiamiento).label('ticket_promedio')
-    ).outerjoin(Cliente, Asesor.id == Cliente.asesor_id).filter(
-        Asesor.activo == True,
+    ).outerjoin(Cliente, Analista.id == Cliente.analista_id).filter(
+        Analista.activo == True,
         Cliente.activo == True
     ).group_by(User.id, User.full_name).order_by(
         func.sum(Cliente.total_financiamiento).desc()
     ).all()
     
-    # Gestión de cobranza por asesor
-    cobranza_por_asesor = db.query(
+    # Gestión de cobranza por analista
+    cobranza_por_analista = db.query(
         User.id,
         User.full_name,
         func.count(Cliente.id).label('total_clientes'),
         func.sum(case((Cliente.dias_mora == 0, 1), else_=0)).label('clientes_al_dia'),
         func.sum(case((Cliente.dias_mora > 0, 1), else_=0)).label('clientes_mora')
-    ).outerjoin(Cliente, Asesor.id == Cliente.asesor_id).filter(
-        Asesor.activo == True,
+    ).outerjoin(Cliente, Analista.id == Cliente.analista_id).filter(
+        Analista.activo == True,
         Cliente.activo == True
     ).group_by(User.id, User.full_name).all()
     
@@ -406,19 +406,19 @@ def kpis_asesores(
     ranking_ventas = []
     ranking_cobranza = []
     
-    for asesor_id, nombre, ventas, monto, ticket in ventas_por_asesor:
+    for analista_id, nombre, ventas, monto, ticket in ventas_por_analista:
         ranking_ventas.append({
-            "asesor_id": asesor_id,
+            "analista_id": analista_id,
             "nombre": nombre,
             "total_ventas": ventas or 0,
             "monto_vendido": float(monto or 0),
             "ticket_promedio": float(ticket or 0)
         })
     
-    for asesor_id, nombre, total, al_dia, mora in cobranza_por_asesor:
+    for analista_id, nombre, total, al_dia, mora in cobranza_por_analista:
         tasa_cobro = (al_dia / total * 100) if total > 0 else 0
         ranking_cobranza.append({
-            "asesor_id": asesor_id,
+            "analista_id": analista_id,
             "nombre": nombre,
             "total_clientes": total or 0,
             "clientes_al_dia": al_dia or 0,
@@ -439,15 +439,15 @@ def kpis_asesores(
             "mejor_vendedor_unidades": mejor_vendedor,
             "mayor_monto_vendido": mayor_monto,
             "menor_ventas": menor_ventas,
-            "todos_asesores": ranking_ventas
+            "todos_analistaes": ranking_ventas
         },
         "gestion_cobranza": {
             "mejor_cobrador": mejor_cobrador,
             "peor_cobrador": peor_cobrador,
-            "todos_asesores": ranking_cobranza
+            "todos_analistaes": ranking_cobranza
         },
         "comparativa": {
-            "total_asesores": len(ranking_ventas),
+            "total_analistaes": len(ranking_ventas),
             "promedio_ventas": sum(r["total_ventas"] for r in ranking_ventas) / len(ranking_ventas) if ranking_ventas else 0,
             "promedio_tasa_cobro": sum(r["tasa_cobro"] for r in ranking_cobranza) / len(ranking_cobranza) if ranking_cobranza else 0
         }

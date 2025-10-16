@@ -39,7 +39,7 @@ const mockAprobaciones = [
     fechaLimite: '2024-07-25',
     estado: 'PENDIENTE',
     prioridad: 'ALTA',
-    asesor: 'Carlos Mendoza',
+    analista: 'Carlos Mendoza',
     observaciones: 'Cliente con historial crediticio positivo',
     documentos: ['Cédula', 'Comprobante ingresos', 'Referencias'],
     score: 85,
@@ -54,7 +54,7 @@ const mockAprobaciones = [
     fechaLimite: '2024-07-24',
     estado: 'APROBADA',
     prioridad: 'MEDIA',
-    asesor: 'María González',
+    analista: 'María González',
     observaciones: 'Documentación completa, ingresos verificados',
     documentos: ['Cédula', 'Comprobante ingresos', 'Referencias', 'Garantías'],
     score: 92,
@@ -69,7 +69,7 @@ const mockAprobaciones = [
     fechaLimite: '2024-07-23',
     estado: 'RECHAZADA',
     prioridad: 'ALTA',
-    asesor: 'Luis Rodríguez',
+    analista: 'Luis Rodríguez',
     observaciones: 'Score crediticio bajo, ingresos insuficientes',
     documentos: ['Cédula', 'Comprobante ingresos'],
     score: 45,
@@ -84,7 +84,7 @@ const mockAprobaciones = [
     fechaLimite: '2024-07-22',
     estado: 'PENDIENTE',
     prioridad: 'BAJA',
-    asesor: 'Ana Pérez',
+    analista: 'Ana Pérez',
     observaciones: 'Cliente actual, solicita refinanciamiento',
     documentos: ['Cédula', 'Estado cuenta actual'],
     score: 78,
@@ -99,7 +99,7 @@ const mockAprobaciones = [
     fechaLimite: '2024-07-21',
     estado: 'PENDIENTE',
     prioridad: 'MEDIA',
-    asesor: 'José Silva',
+    analista: 'José Silva',
     observaciones: 'Documentación en revisión',
     documentos: ['Cédula', 'Comprobante ingresos', 'Referencias'],
     score: 72,
@@ -125,7 +125,7 @@ export function Aprobaciones() {
       aprobacion.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
       aprobacion.cedula.includes(searchTerm) ||
       aprobacion.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      aprobacion.asesor.toLowerCase().includes(searchTerm.toLowerCase())
+      aprobacion.analista.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesEstado = filterEstado === 'Todos' || aprobacion.estado === filterEstado
     const matchesTipo = filterTipo === 'Todos' || aprobacion.tipo === filterTipo
     const matchesPrioridad = filterPrioridad === 'Todos' || aprobacion.prioridad === filterPrioridad
@@ -217,7 +217,7 @@ export function Aprobaciones() {
         <CardContent>
           <div className="flex items-center gap-4 mb-4">
             <Input
-              placeholder="Buscar por cliente, cédula, asesor o ID..."
+              placeholder="Buscar por cliente, cédula, analista o ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-sm"
@@ -305,7 +305,7 @@ export function Aprobaciones() {
                         {aprobacion.prioridad}
                       </Badge>
                     </TableCell>
-                    <TableCell>{aprobacion.asesor}</TableCell>
+                    <TableCell>{aprobacion.analista}</TableCell>
                     <TableCell>
                       {(() => {
                         const fechaLimite = new Date(aprobacion.fechaLimite)
@@ -406,7 +406,7 @@ export function Aprobaciones() {
                       <div><strong>Tipo de Solicitud:</strong> {aprobacion.tipo}</div>
                       <div><strong>Monto Solicitado:</strong> {formatCurrency(aprobacion.monto)}</div>
                       <div><strong>Score Crediticio:</strong> {aprobacion.score}/100</div>
-                      <div><strong>Asesor:</strong> {aprobacion.asesor}</div>
+                      <div><strong>Asesor:</strong> {aprobacion.analista}</div>
                     </div>
                   </div>
 
