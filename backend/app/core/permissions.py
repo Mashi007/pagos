@@ -7,9 +7,8 @@ from typing import List
 
 
 class UserRole(str, Enum):
-    """Roles de usuario del sistema"""
-    ADMINISTRADOR_GENERAL = "ADMINISTRADOR_GENERAL"
-    COBRANZAS = "COBRANZAS"
+    """Rol único del sistema - todos tienen acceso completo"""
+    USER = "USER"
 
 
 class Permission(str, Enum):

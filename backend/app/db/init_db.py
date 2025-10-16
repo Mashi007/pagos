@@ -109,7 +109,7 @@ def create_admin_user():
             nombre="IT Master",
             apellido="Sistema",
             hashed_password=get_password_hash("R@pi_2025**"),
-            rol="ADMINISTRADOR_GENERAL",
+            rol="USER",
             is_active=True,
             created_at=datetime.utcnow()
         )

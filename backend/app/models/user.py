@@ -18,7 +18,7 @@ class User(Base):
     nombre = Column(String(100), nullable=False)
     apellido = Column(String(100), nullable=False)
     hashed_password = Column(String(255), nullable=False)
-    rol = Column(SQLEnum(UserRole), nullable=False, default=UserRole.COBRANZAS)
+    rol = Column(SQLEnum(UserRole), nullable=False, default=UserRole.USER)
     is_active = Column(Boolean, default=True, nullable=False)
     
     # Timestamps

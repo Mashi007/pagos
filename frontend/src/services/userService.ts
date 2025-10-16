@@ -6,7 +6,7 @@ export interface User {
   email: string
   nombre: string
   apellido: string
-  rol: 'ADMINISTRADOR_GENERAL' | 'COBRANZAS'
+  rol: 'USER'
   is_active: boolean
   created_at: string
   updated_at?: string
@@ -18,7 +18,7 @@ export interface UserCreate {
   email: string
   nombre: string
   apellido: string
-  rol: 'ADMINISTRADOR_GENERAL' | 'COBRANZAS'
+  rol: 'USER'
   password: string
   is_active: boolean
 }
