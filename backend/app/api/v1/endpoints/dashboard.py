@@ -40,7 +40,7 @@ def dashboard_administrador(
        • Estadísticas globales
     """
     # Verificar permisos
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL"]:
+    if current_user.rol not in ["USER"]:
         from fastapi import HTTPException
         raise HTTPException(status_code=403, detail="Sin permisos para dashboard administrativo")
     
@@ -133,7 +133,7 @@ def dashboard_administrador(
             Cliente.fecha_registro >= inicio_mes
         )
     ).filter(
-        User.rol.in_(["ADMINISTRADOR_GENERAL", "COBRANZAS"])
+        User.rol.in_(["USER"])
     ).group_by(User.id, User.nombre, User.apellido).order_by(
         func.count(Cliente.id).desc()
     ).limit(5).all()
@@ -237,7 +237,7 @@ def dashboard_cobranzas(
        • Estadísticas globales
     """
     # Verificar permisos
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "COBRANZAS"]:
+    if current_user.rol not in ["USER"]:
         from fastapi import HTTPException
         raise HTTPException(status_code=403, detail="Sin permisos para dashboard de cobranzas")
     
@@ -383,7 +383,7 @@ def dashboard_comercial(
        • NO ve datos de otros asesores/comerciales
     """
     # Verificar permisos
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL"]:
+    if current_user.rol not in ["USER"]:
         from fastapi import HTTPException
         raise HTTPException(status_code=403, detail="Sin permisos para dashboard comercial")
     

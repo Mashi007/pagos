@@ -280,7 +280,7 @@ class ConfiguracionPorDefecto:
         # ============================================
         "ROLES": {
             "ROLES_ACTIVOS": {
-                "valor_json": ["ADMINISTRADOR_GENERAL", "COBRANZAS"],
+                "valor_json": ["USER"],
                 "descripcion": "Roles activos en el sistema",
                 "tipo_dato": "JSON",
                 "requerido": True,

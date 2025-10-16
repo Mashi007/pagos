@@ -204,7 +204,7 @@ def create_test_user(db: Session = Depends(get_db)):
             password_hash=password_hash.decode('utf-8'),
             nombre="Admin",
             apellido="Sistema",
-            rol="ADMINISTRADOR_GENERAL",
+            rol="USER",
             is_active=True
         )
         
