@@ -24,13 +24,13 @@ class ClienteBase(BaseModel):
     chasis: Optional[str] = Field(None, max_length=50)
     motor: Optional[str] = Field(None, max_length=50)
     
-    # Concesionario - ForeignKeys + campos legacy
-    concesionario_id: Optional[int] = None  # NUEVO: ForeignKey a concesionarios
+    # Concesionario - Solo campo legacy (FK comentado en modelo)
+    # concesionario_id: Optional[int] = None  # COMENTADO: No existe en modelo Cliente
     concesionario: Optional[str] = Field(None, max_length=100)  # Legacy
     vendedor_concesionario: Optional[str] = Field(None, max_length=100)
     
-    # Modelo de vehículo - ForeignKey + campo legacy
-    modelo_vehiculo_id: Optional[int] = None  # NUEVO: ForeignKey a modelos_vehiculos
+    # Modelo de vehículo - Solo campo legacy (FK comentado en modelo)
+    # modelo_vehiculo_id: Optional[int] = None  # COMENTADO: No existe en modelo Cliente
     
     # Financiamiento
     total_financiamiento: Optional[Decimal] = Field(None, ge=0)
