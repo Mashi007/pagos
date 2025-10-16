@@ -29,19 +29,28 @@ from app.core.security_audit import log_login_attempt, log_password_change
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 
-
-@router.options("/login")
-async def options_login(request: Request, response: Response):
-    """Manejar preflight CORS para login"""
-    # HEADERS CORS DIRECTOS PARA OPTIONS
+def add_cors_headers(request: Request, response: Response) -> None:
+    """
+    Helper function para agregar headers CORS de forma consistente
+    
+    Args:
+        request: Request object con origin header
+        response: Response object donde agregar headers
+    """
+    from app.core.config import settings
     origin = request.headers.get("origin")
-    if origin in ["https://rapicredit.onrender.com", "http://localhost:3000"]:
+    if origin in settings.CORS_ORIGINS:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
         response.headers["Access-Control-Allow-Headers"] = "*"
         response.headers["Access-Control-Max-Age"] = "86400"
-    
+
+
+@router.options("/login")
+async def options_login(request: Request, response: Response):
+    """Manejar preflight CORS para login"""
+    add_cors_headers(request, response)
     return {"message": "OK"}
 
 @router.get("/cors-test")
@@ -76,13 +85,8 @@ def login(
     
     **Rate Limit:** 5 intentos por minuto por IP
     """
-    # HEADERS CORS DIRECTOS - SOLUCIÓN DEFINITIVA
-    origin = request.headers.get("origin")
-    if origin in ["https://rapicredit.onrender.com", "http://localhost:3000"]:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-        response.headers["Access-Control-Allow-Headers"] = "*"
+    # HEADERS CORS DIRECTOS - USANDO HELPER
+    add_cors_headers(request, response)
     
     try:
         token, user = AuthService.login(db, login_data)
