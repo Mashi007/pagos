@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
@@ -10,7 +10,8 @@ class ConcesionarioBase(BaseModel):
     responsable: Optional[str] = None
     activo: bool = True
 
-    @validator('nombre')
+    @field_validator('nombre')
+    @classmethod
     def nombre_must_not_be_empty(cls, v):
         if not v or not v.strip():
             raise ValueError('El nombre del concesionario no puede estar vacío')
@@ -27,7 +28,8 @@ class ConcesionarioUpdate(BaseModel):
     responsable: Optional[str] = None
     activo: Optional[bool] = None
 
-    @validator('nombre')
+    @field_validator('nombre')
+    @classmethod
     def nombre_must_not_be_empty(cls, v):
         if v is not None and (not v or not v.strip()):
             raise ValueError('El nombre del concesionario no puede estar vacío')
@@ -37,9 +39,8 @@ class ConcesionarioResponse(ConcesionarioBase):
     id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
+    
+    model_config = ConfigDict(from_attributes=True)
 
 class ConcesionarioListResponse(BaseModel):
     items: List[ConcesionarioResponse]

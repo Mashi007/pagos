@@ -1,5 +1,5 @@
 # backend/app/schemas/reportes.py
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 from datetime import date, datetime
 from decimal import Decimal
@@ -47,9 +47,8 @@ class RangoMorosidad(BaseModel):
     rango: str
     cantidad: int
     monto_total: Decimal
-
-    class Config:
-        from_attributes = True
+    
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ReporteMorosidad(BaseModel):

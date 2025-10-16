@@ -2,7 +2,7 @@
 """
 Schemas Pydantic para modelos de vehículos
 """
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
 from decimal import Decimal
 from datetime import datetime
@@ -12,7 +12,8 @@ class ModeloVehiculoBase(BaseModel):
     modelo: str = Field(..., min_length=1, max_length=100, description="Modelo del vehículo")
     activo: bool = Field(True, description="Si el modelo está activo")
 
-    @validator('modelo')
+    @field_validator('modelo')
+    @classmethod
     def validate_modelo(cls, v):
         if v and not v.strip():
             raise ValueError('Campo modelo no puede estar vacío')
@@ -35,9 +36,8 @@ class ModeloVehiculoResponse(ModeloVehiculoBase):
     id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
+    
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ModeloVehiculoListResponse(BaseModel):
