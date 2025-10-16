@@ -61,7 +61,7 @@ class Notificacion(Base):
     # Destinatario (puede ser un User o un Cliente por email/teléfono)
     user_id = Column(
         Integer,
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
         nullable=True,
         index=True
     )

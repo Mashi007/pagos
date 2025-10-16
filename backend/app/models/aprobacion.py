@@ -32,13 +32,13 @@ class Aprobacion(Base):
     # Solicitante y revisor
     solicitante_id = Column(
         Integer,
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
         nullable=False,
         index=True
     )
     revisor_id = Column(
         Integer,
-        ForeignKey("users.id", ondelete="SET NULL"),
+        ForeignKey("usuarios.id", ondelete="SET NULL"),
         nullable=True,
         index=True
     )

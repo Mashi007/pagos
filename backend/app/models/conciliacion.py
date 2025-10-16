@@ -46,7 +46,7 @@ class Conciliacion(Base):
     # Usuario que realizó la conciliación
     usuario_id = Column(
         Integer,
-        ForeignKey("users.id", ondelete="SET NULL"),
+        ForeignKey("usuarios.id", ondelete="SET NULL"),
         nullable=True,
         index=True
     )
