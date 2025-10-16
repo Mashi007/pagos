@@ -52,7 +52,7 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(['pago_id'], ['pagos.id'], ondelete='CASCADE'),
-        sa.ForeignKeyConstraint(['usuario_id'], ['users.id'], ondelete='SET NULL'),
+        sa.ForeignKeyConstraint(['usuario_id'], ['usuarios.id'], ondelete='SET NULL'),
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_conciliacion_id'), 'conciliacion', ['id'], unique=False)
@@ -75,7 +75,7 @@ def upgrade() -> None:
     op.add_column('clientes', sa.Column('requiere_actual', sa.Boolean(), nullable=True))
     
     # Crear foreign key para analista_id
-    op.create_foreign_key('fk_clientes_analista_id', 'clientes', 'users', ['analista_id'], ['id'])
+    op.create_foreign_key('fk_clientes_analista_id', 'clientes', 'usuarios', ['analista_id'], ['id'])
     op.create_index(op.f('ix_clientes_analista_id'), 'clientes', ['analista_id'], unique=False)
     
     # Insertar configuraciones por defecto

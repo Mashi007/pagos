@@ -47,7 +47,7 @@ def upgrade() -> None:
     op.create_foreign_key(
         'fk_clientes_asesor_id', 
         'clientes', 
-        'users', 
+        'usuarios', 
         ['asesor_id'], 
         ['id'], 
         ondelete='SET NULL'
