@@ -3,7 +3,7 @@
 Endpoints de autenticación
 Login, logout, refresh token, cambio de contraseña
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -31,8 +31,17 @@ router = APIRouter()
 
 
 @router.options("/login")
-async def options_login():
+async def options_login(request: Request, response: Response):
     """Manejar preflight CORS para login"""
+    # HEADERS CORS DIRECTOS PARA OPTIONS
+    origin = request.headers.get("origin")
+    if origin in ["https://rapicredit.onrender.com", "http://localhost:3000"]:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Max-Age"] = "86400"
+    
     return {"message": "OK"}
 
 @router.get("/cors-test")
@@ -54,6 +63,7 @@ async def cors_test(request: Request):
 def login(
     request: Request,
     login_data: LoginRequest,
+    response: Response,
     db: Session = Depends(get_db)
 ):
     """
@@ -66,6 +76,14 @@ def login(
     
     **Rate Limit:** 5 intentos por minuto por IP
     """
+    # HEADERS CORS DIRECTOS - SOLUCIÓN DEFINITIVA
+    origin = request.headers.get("origin")
+    if origin in ["https://rapicredit.onrender.com", "http://localhost:3000"]:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+    
     try:
         token, user = AuthService.login(db, login_data)
         
