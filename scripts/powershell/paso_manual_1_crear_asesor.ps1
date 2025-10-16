@@ -60,7 +60,7 @@ $asesorBody = @{
     apellido = "Perez"
     email = "juan.perez@rapicreditca.com"
     telefono = "809-555-0001"
-    especialidad = "Ventas de Vehiculos"
+    # especialidad = "Ventas de Vehiculos"  # Campo no existe en modelo actual
     activo = $true
 } | ConvertTo-Json
 
@@ -77,7 +77,7 @@ try {
     Write-Host "  Nombre: $($asesor.nombre) $($asesor.apellido)" -ForegroundColor White
     Write-Host "  Email: $($asesor.email)" -ForegroundColor White
     Write-Host "  Telefono: $($asesor.telefono)" -ForegroundColor White
-    Write-Host "  Especialidad: $($asesor.especialidad)" -ForegroundColor White
+    # Write-Host "  Especialidad: $($asesor.especialidad)" -ForegroundColor White  # Campo no existe
     Write-Host ""
     Write-Host "IMPORTANTE: Guarda este ID para crear clientes: $($asesor.id)" -ForegroundColor Yellow
     Write-Host ""
