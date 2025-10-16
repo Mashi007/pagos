@@ -125,20 +125,20 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Security Headers - OWASP Best Practices
 app.add_middleware(SecurityHeadersMiddleware)
 
-# CORS - Configuración desde settings
+# CORS - SOLUCIÓN DEFINITIVA CON MIDDLEWARE PERSONALIZADO
+from app.core.cors_fix import CORSFixMiddleware
+
 logger.info(f"🌐 CORS Origins configurados: {settings.CORS_ORIGINS}")
 logger.info(f"🌐 CORS Origins tipo: {type(settings.CORS_ORIGINS)}")
 logger.info(f"🌐 CORS Origins contenido: {list(settings.CORS_ORIGINS)}")
 
+# MIDDLEWARE CORS PERSONALIZADO - SOLUCIÓN DEFINITIVA
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,  # ✅ Configurado desde settings
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
+    CORSFixMiddleware,
+    allowed_origins=settings.CORS_ORIGINS
 )
 
-logger.info("✅ CORS Middleware registrado exitosamente")
+logger.info("✅ CORS Middleware personalizado registrado exitosamente")
 
 # Registrar routers
 app.include_router(health.router, prefix=f"{settings.API_V1_PREFIX}", tags=["Health"])

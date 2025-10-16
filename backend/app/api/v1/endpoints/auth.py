@@ -35,6 +35,19 @@ async def options_login():
     """Manejar preflight CORS para login"""
     return {"message": "OK"}
 
+@router.get("/cors-test")
+async def cors_test(request: Request):
+    """
+    Endpoint de prueba CORS - SOLUCIÓN DEFINITIVA
+    """
+    origin = request.headers.get("origin", "No origin")
+    return {
+        "message": "CORS Test OK",
+        "origin": origin,
+        "headers": dict(request.headers),
+        "cors_working": True
+    }
+
 
 @router.post("/login", response_model=LoginResponse, summary="Login de usuario")
 @limiter.limit("5/minute")  # ✅ Rate limiting: 5 intentos por minuto
