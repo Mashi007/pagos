@@ -16,11 +16,14 @@ from decimal import Decimal
 from datetime import date, datetime, timedelta
 import random
 
-def create_mock_data():
+def create_mock_data(db_session=None):
     """Crear datos de prueba para el sistema"""
     
     # Obtener sesión de base de datos
-    db = next(get_db())
+    if db_session is None:
+        db = next(get_db())
+    else:
+        db = db_session
     
     try:
         print("🚀 Iniciando creación de mock data...")

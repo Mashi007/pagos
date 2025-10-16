@@ -24,10 +24,13 @@ def create_mock_data_endpoint(
         logger.info(f"Usuario {current_user.email} solicitando creación de mock data")
         
         # Importar y ejecutar el script de mock data
-        from app.scripts.create_mock_data import create_mock_data
+        import sys
+        import os
+        sys.path.append(os.path.join(os.path.dirname(__file__), '../../../scripts'))
+        from create_mock_data import create_mock_data
         
         # Ejecutar creación de datos
-        create_mock_data()
+        create_mock_data(db_session=db)
         
         return {
             "success": True,
