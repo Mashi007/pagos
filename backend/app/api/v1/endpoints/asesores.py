@@ -20,7 +20,6 @@ def listar_asesores(
     limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
-    especialidad: Optional[str] = Query(None, description="Filtrar por especialidad"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -40,8 +39,6 @@ def listar_asesores(
                 Asesor.apellido.ilike(f"%{search}%")
             )
         
-        if especialidad:
-            query = query.filter(Asesor.especialidad == especialidad)
         
         # Obtener total
         total = query.count()
@@ -53,7 +50,7 @@ def listar_asesores(
         pages = (total + limit - 1) // limit
         
         return AsesorListResponse(
-            items=[AsesorResponse.from_orm(a) for a in asesores],
+            items=[AsesorResponse.model_validate(a) for a in asesores],
             total=total,
             page=(skip // limit) + 1,
             size=limit,
@@ -108,7 +105,7 @@ def obtener_asesor(
     if not asesor:
         raise HTTPException(status_code=404, detail="Asesor no encontrado")
     
-    return AsesorResponse.from_orm(asesor)
+    return AsesorResponse.model_validate(asesor)
 
 @router.post("", response_model=AsesorResponse)
 def crear_asesor(
@@ -144,7 +141,7 @@ def crear_asesor(
         db.commit()
         db.refresh(asesor)
         
-        return AsesorResponse.from_orm(asesor)
+        return AsesorResponse.model_validate(asesor)
         
     except HTTPException:
         raise
@@ -185,7 +182,7 @@ def actualizar_asesor(
         db.commit()
         db.refresh(asesor)
         
-        return AsesorResponse.from_orm(asesor)
+        return AsesorResponse.model_validate(asesor)
         
     except HTTPException:
         raise

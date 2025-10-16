@@ -321,7 +321,7 @@ def corregir_datos_cliente(
                 "mensaje": mensaje_recalculo
             },
             "fecha_correccion": datetime.now().isoformat(),
-            "corregido_por": current_user.full_name
+            "corregido_por": f"{current_user.nombre} {current_user.apellido}".strip()
         }
         
     except HTTPException:
@@ -405,7 +405,7 @@ def corregir_datos_pago(
         if correcciones_aplicadas:
             # Limpiar observaciones de error
             if pago.observaciones and "REQUIERE_VALIDACIÓN" in pago.observaciones:
-                pago.observaciones = f"CORREGIDO - {datetime.now().strftime('%d/%m/%Y')} por {current_user.full_name}"
+                pago.observaciones = f"CORREGIDO - {datetime.now().strftime('%d/%m/%Y')} por {f"{current_user.nombre} {current_user.apellido}".strip()}"
             
             db.commit()
             
@@ -431,7 +431,7 @@ def corregir_datos_pago(
             "errores_validacion": errores_validacion,
             "total_correcciones": len(correcciones_aplicadas),
             "fecha_correccion": datetime.now().isoformat(),
-            "corregido_por": current_user.full_name
+            "corregido_por": f"{current_user.nombre} {current_user.apellido}".strip()
         }
         
     except HTTPException:
@@ -463,8 +463,8 @@ def detectar_errores_masivo(
     • Fechas = "ERROR"
     • Montos = "ERROR"
     """
-    # Solo admin y gerente pueden ejecutar análisis masivo
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE"]:
+    # Solo administrador general puede ejecutar análisis masivo
+    if current_user.rol not in ["ADMINISTRADOR_GENERAL"]:
         raise HTTPException(status_code=403, detail="Sin permisos para análisis masivo")
     
     try:
@@ -476,7 +476,7 @@ def detectar_errores_masivo(
                 "limite": limite,
                 "tipo_analisis": tipo_analisis,
                 "pais": pais,
-                "ejecutado_por": current_user.full_name
+                "ejecutado_por": f"{current_user.nombre} {current_user.apellido}".strip()
             },
             "acciones_sugeridas": [
                 "Usar herramienta de corrección masiva para los casos detectados",
@@ -500,7 +500,7 @@ def corregir_datos_masivo(
     """
     🔧 Corrección masiva de datos incorrectos
     """
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE"]:
+    if current_user.rol not in ["ADMINISTRADOR_GENERAL"]:
         raise HTTPException(status_code=403, detail="Sin permisos para corrección masiva")
     
     try:
@@ -516,7 +516,7 @@ def corregir_datos_masivo(
             "mensaje": "✅ Corrección masiva iniciada en background",
             "total_clientes": len(correcciones_masivas),
             "estimacion_tiempo": f"{len(correcciones_masivas) * 2} segundos",
-            "ejecutado_por": current_user.full_name,
+            "ejecutado_por": f"{current_user.nombre} {current_user.apellido}".strip(),
             "timestamp": datetime.now().isoformat(),
             "seguimiento": "GET /api/v1/validadores/estado-correccion-masiva"
         }

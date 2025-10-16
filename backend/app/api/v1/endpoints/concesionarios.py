@@ -46,7 +46,7 @@ def listar_concesionarios(
         pages = (total + limit - 1) // limit
         
         return ConcesionarioListResponse(
-            items=[ConcesionarioResponse.from_orm(c) for c in concesionarios],
+            items=[ConcesionarioResponse.model_validate(c) for c in concesionarios],
             total=total,
             page=(skip // limit) + 1,
             size=limit,
@@ -84,7 +84,7 @@ def obtener_concesionario(
     if not concesionario:
         raise HTTPException(status_code=404, detail="Concesionario no encontrado")
     
-    return ConcesionarioResponse.from_orm(concesionario)
+    return ConcesionarioResponse.model_validate(concesionario)
 
 @router.post("", response_model=ConcesionarioResponse)
 def crear_concesionario(
@@ -120,7 +120,7 @@ def crear_concesionario(
         db.refresh(concesionario)
         
         print(f"✅ Concesionario creado: ID={concesionario.id}")
-        return ConcesionarioResponse.from_orm(concesionario)
+        return ConcesionarioResponse.model_validate(concesionario)
         
     except HTTPException:
         raise
@@ -164,7 +164,7 @@ def actualizar_concesionario(
         db.commit()
         db.refresh(concesionario)
         
-        return ConcesionarioResponse.from_orm(concesionario)
+        return ConcesionarioResponse.model_validate(concesionario)
         
     except HTTPException:
         raise

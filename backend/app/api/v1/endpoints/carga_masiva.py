@@ -1472,7 +1472,7 @@ async def dashboard_carga_masiva(
         
         return {
             "titulo": "📊 Dashboard de Carga Masiva",
-            "usuario": current_user.full_name,
+            "usuario": f"{current_user.nombre} {current_user.apellido}".strip(),
             "historial_cargas": [
                 {
                     "fecha": a.fecha,
