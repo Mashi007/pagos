@@ -71,9 +71,9 @@ class Permission(str, Enum):
     PAGO_DELETE_WITH_APPROVAL = "pago:delete_with_approval"
 
 
-# Mapeo de roles a permisos
+# Mapeo de roles a permisos - ROL ÚNICO CON ACCESO TOTAL
 ROLE_PERMISSIONS: dict[UserRole, List[Permission]] = {
-    UserRole.ADMINISTRADOR_GENERAL: [
+    UserRole.USER: [
         # Acceso total - todos los permisos
         Permission.USER_CREATE,
         Permission.USER_READ,
@@ -103,38 +103,6 @@ ROLE_PERMISSIONS: dict[UserRole, List[Permission]] = {
         Permission.CONFIG_READ,
         Permission.CONFIG_UPDATE,
         Permission.AUDITORIA_READ,
-    ],
-    
-    UserRole.COBRANZAS: [
-        # Acceso completo EXCEPTO editar usuarios y auditoría
-        Permission.USER_CREATE,  # Puede crear usuarios
-        Permission.USER_READ,    # Puede ver usuarios
-        Permission.USER_DELETE,  # Puede eliminar usuarios
-        # NO tiene USER_UPDATE - no puede editar usuarios
-        Permission.CLIENTE_CREATE,
-        Permission.CLIENTE_READ,
-        Permission.CLIENTE_UPDATE,
-        Permission.CLIENTE_DELETE,
-        Permission.PRESTAMO_CREATE,
-        Permission.PRESTAMO_READ,
-        Permission.PRESTAMO_UPDATE,
-        Permission.PRESTAMO_DELETE,
-        Permission.PRESTAMO_APPROVE,
-        Permission.PAGO_CREATE,
-        Permission.PAGO_READ,
-        Permission.PAGO_UPDATE,
-        Permission.PAGO_DELETE,
-        Permission.REPORTE_READ,
-        Permission.REPORTE_CREATE,
-        Permission.KPI_READ,
-        Permission.CONCILIACION_CREATE,
-        Permission.CONCILIACION_READ,
-        Permission.CONCILIACION_APPROVE,
-        Permission.NOTIFICACION_SEND,
-        Permission.NOTIFICACION_READ,
-        Permission.CONFIG_READ,
-        Permission.CONFIG_UPDATE,
-        # NO tiene AUDITORIA_READ - no puede acceder a auditoría
     ],
 }
 
@@ -220,16 +188,16 @@ def can_edit_users(user_role: str) -> bool:
     """
     Verificar si puede editar usuarios
     """
-    # Solo ADMINISTRADOR_GENERAL puede editar usuarios
-    return user_role == "ADMINISTRADOR_GENERAL"
+    # Todos los usuarios pueden editar usuarios
+    return user_role == "USER"
 
 
 def can_access_audit_tools(user_role: str) -> bool:
     """
     Verificar si puede acceder a herramientas de auditoría
     """
-    # Solo ADMINISTRADOR_GENERAL puede acceder a auditoría
-    return user_role == "ADMINISTRADOR_GENERAL"
+    # Todos los usuarios pueden acceder a auditoría
+    return user_role == "USER"
 
 
 def can_view_all_clients(user_role: str) -> bool:
@@ -244,11 +212,7 @@ def requires_admin_authorization(user_role: str, action: str) -> bool:
     """
     Verificar si una acción requiere autorización de Admin
     """
-    # ADMINISTRADOR_GENERAL no necesita autorización
-    if user_role == "ADMINISTRADOR_GENERAL":
-        return False
-    
-    # COBRANZAS no necesita autorización para acciones permitidas
+    # Rol USER tiene acceso completo - no necesita autorización
     return False
 
 
@@ -265,17 +229,9 @@ def get_permission_matrix_summary() -> dict:
     Obtener resumen de la matriz de permisos actualizada
     """
     return {
-        "ADMINISTRADOR_GENERAL": {
-            "editar_usuarios": "✅ SÍ",
-            "acceder_auditoria": "✅ SÍ",
-            "todas_las_acciones": "✅ SÍ (sin restricciones)"
-        },
-        "COBRANZAS": {
-            "editar_usuarios": "❌ NO",
-            "acceder_auditoria": "❌ NO",
-            "crear_usuarios": "✅ SÍ",
-            "eliminar_usuarios": "✅ SÍ",
-            "ver_usuarios": "✅ SÍ",
-            "todas_las_demas_acciones": "✅ SÍ"
+        "USER": {
+            "acceso": "✅ COMPLETO",
+            "descripcion": "Todos los usuarios tienen acceso total a todas las funcionalidades",
+            "permisos": "✅ SIN RESTRICCIONES"
         }
     }
