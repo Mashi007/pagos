@@ -154,19 +154,8 @@ export default function UsuariosConfig() {
   const filteredUsuarios = usuarios.filter(user => 
     user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.apellido.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.rol.toLowerCase().includes(searchTerm.toLowerCase())
+    user.apellido.toLowerCase().includes(searchTerm.toLowerCase())
   )
-
-  const getRolIcon = (rol: string) => {
-    const roleConfig = roles.find(r => r.value === rol)
-    return roleConfig?.label.split(' ')[0] || '👤'
-  }
-
-  const getRolLabel = (rol: string) => {
-    const roleConfig = roles.find(r => r.value === rol)
-    return roleConfig?.label || rol
-  }
 
   return (
     <div className="space-y-6">
@@ -178,7 +167,7 @@ export default function UsuariosConfig() {
             Gestión de Usuarios
           </h2>
           <p className="text-sm text-gray-600 mt-1">
-            Administra usuarios, roles y permisos del sistema
+            Administra usuarios del sistema - Todos tienen acceso completo
           </p>
         </div>
         <Button
@@ -196,7 +185,7 @@ export default function UsuariosConfig() {
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
-              placeholder="Buscar por nombre, email o rol..."
+              placeholder="Buscar por nombre o email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -279,9 +268,6 @@ export default function UsuariosConfig() {
                     Usuario
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Rol
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Estado
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -320,11 +306,6 @@ export default function UsuariosConfig() {
                             </div>
                           </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-sm">
-                          {getRolLabel(usuario.rol)}
-                        </span>
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -563,12 +544,6 @@ export default function UsuariosConfig() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Rol</p>
-                    <p className="text-sm text-gray-900 mt-1">
-                      {getRolLabel(viewingUser.rol)}
-                    </p>
-                  </div>
                   <div>
                     <p className="text-sm font-medium text-gray-500">Estado</p>
                     <p className="text-sm text-gray-900 mt-1">
