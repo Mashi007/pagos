@@ -40,7 +40,7 @@ class ClienteBase(BaseModel):
     modalidad_pago: Optional[str] = Field(None, pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
     
     # Asignación - ForeignKeys
-    asesor_config_id: Optional[int] = None  # Asesor de configuración (tabla asesores)
+    asesor_id: Optional[int] = None  # Asesor de configuración (tabla asesores)
     
     # Notas
     notas: Optional[str] = None
@@ -101,7 +101,7 @@ class ClienteUpdate(BaseModel):
     modalidad_pago: Optional[str] = Field(None, pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
     
     # Asignación y estado
-    asesor_config_id: Optional[int] = None
+    asesor_id: Optional[int] = None
     estado: Optional[str] = None
     estado_financiero: Optional[str] = None
     
