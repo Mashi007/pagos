@@ -10,7 +10,7 @@ from app.db.session import get_db
 from app.models.cliente import Cliente
 from app.models.user import User
 from app.api.deps import get_current_user
-from app.schemas.cliente import ClienteResponse
+from app.schemas.cliente import ClienteResponse, ClienteCreate
 import logging
 
 router = APIRouter()
@@ -163,3 +163,33 @@ def test_clientes_endpoint(
             "error": str(e),
             "message": "Error en test endpoint"
         }
+
+@router.post("", response_model=ClienteResponse)
+def crear_cliente(
+    cliente_data: ClienteCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Crear un nuevo cliente
+    """
+    try:
+        # Verificar que no exista un cliente con la misma cédula
+        existing = db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Ya existe un cliente con esta cédula")
+        
+        # Crear nuevo cliente
+        cliente_dict = cliente_data.model_dump()  # Pydantic v2
+        cliente = Cliente(**cliente_dict)
+        
+        db.add(cliente)
+        db.commit()
+        db.refresh(cliente)
+        
+        return ClienteResponse.model_validate(cliente)
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creando cliente: {e}")
+        raise HTTPException(status_code=500, detail=f"Error creando cliente: {str(e)}")
