@@ -795,7 +795,7 @@ async def flujo_completo_conciliacion(
         # ============================================
         
         # Verificar permisos
-        if current_user.rol not in ["COBRANZAS", "ADMINISTRADOR_GENERAL", "GERENTE"]:
+        if current_user.rol not in ["USER"]:
             raise HTTPException(status_code=403, detail="Sin permisos para conciliación bancaria")
         
         # Validar archivo (reutilizar endpoint existente)

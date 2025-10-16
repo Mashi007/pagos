@@ -190,7 +190,7 @@ async def solicitar_modificacion_pago_completo(
     5. ✅ Bloquea temporalmente el registro
     """
     # Verificar permisos
-    if current_user.rol != "COBRANZAS":
+    if current_user.rol != "USER":
         raise HTTPException(status_code=403, detail="Solo rol COBRANZAS puede usar este endpoint")
     
     # Verificar que el pago existe
@@ -299,7 +299,7 @@ async def solicitar_anulacion_pago_completo(
     ⚠️ COBRANZAS: Solicitar anulación de pago con formulario completo
     """
     # Verificar permisos
-    if current_user.rol != "COBRANZAS":
+    if current_user.rol != "USER":
         raise HTTPException(status_code=403, detail="Solo rol COBRANZAS puede usar este endpoint")
     
     # Verificar que el pago existe y no está anulado
@@ -387,7 +387,7 @@ def solicitar_modificacion_pago(
     ⚠️ COBRANZAS: Solicitar modificación de monto de pago
     """
     # Verificar permisos
-    if current_user.rol != "COBRANZAS":
+    if current_user.rol != "USER":
         raise HTTPException(status_code=403, detail="Solo rol COBRANZAS puede usar este endpoint")
     
     # Verificar que el pago existe
@@ -435,7 +435,7 @@ def solicitar_anulacion_pago(
     ⚠️ COBRANZAS: Solicitar anulación de pago
     """
     # Verificar permisos
-    if current_user.rol != "COBRANZAS":
+    if current_user.rol != "USER":
         raise HTTPException(status_code=403, detail="Solo rol COBRANZAS puede usar este endpoint")
     
     # Verificar que el pago existe
@@ -484,7 +484,7 @@ def solicitar_modificacion_amortizacion(
     ⚠️ COBRANZAS: Solicitar modificación de tabla de amortización
     """
     # Verificar permisos
-    if current_user.rol != "COBRANZAS":
+    if current_user.rol != "USER":
         raise HTTPException(status_code=403, detail="Solo rol COBRANZAS puede usar este endpoint")
     
     # Verificar que el préstamo existe
@@ -651,7 +651,7 @@ def listar_solicitudes_pendientes(
     📋 Listar solicitudes pendientes de aprobación (Solo Admin)
     """
     # Verificar permisos
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE", "DIRECTOR"]:
+    if current_user.rol not in ["USER"]:
         raise HTTPException(status_code=403, detail="Sin permisos para ver solicitudes")
     
     query = db.query(Aprobacion).filter(Aprobacion.estado == "PENDIENTE")
@@ -700,7 +700,7 @@ async def aprobar_solicitud(
     ✅ Aprobar solicitud (Solo Admin)
     """
     # Verificar permisos
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE", "DIRECTOR"]:
+    if current_user.rol not in ["USER"]:
         raise HTTPException(status_code=403, detail="Sin permisos para aprobar solicitudes")
     
     # Buscar solicitud
@@ -743,7 +743,7 @@ async def rechazar_solicitud(
     ❌ Rechazar solicitud (Solo Admin)
     """
     # Verificar permisos
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE", "DIRECTOR"]:
+    if current_user.rol not in ["USER"]:
         raise HTTPException(status_code=403, detail="Sin permisos para rechazar solicitudes")
     
     # Buscar solicitud
@@ -867,7 +867,7 @@ def estadisticas_solicitudes(
     📊 Estadísticas de solicitudes de aprobación
     """
     # Verificar permisos
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE", "DIRECTOR"]:
+    if current_user.rol not in ["USER"]:
         raise HTTPException(status_code=403, detail="Sin permisos")
     
     # Estadísticas generales
@@ -920,7 +920,7 @@ def dashboard_aprobaciones(
     📊 Dashboard visual completo del sistema de aprobaciones
     """
     # Verificar permisos
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE", "DIRECTOR"]:
+    if current_user.rol not in ["USER"]:
         raise HTTPException(status_code=403, detail="Sin permisos para ver dashboard")
     
     # Estadísticas principales

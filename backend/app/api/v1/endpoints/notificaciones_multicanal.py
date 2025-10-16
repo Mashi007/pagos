@@ -82,7 +82,7 @@ async def procesar_notificaciones_automaticas(
     4. Genera reporte diario para Cobranzas
     """
     # Solo admin y cobranzas pueden ejecutar procesamiento manual
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "COBRANZAS", "GERENTE"]:
+    if current_user.rol not in ["USER"]:
         raise HTTPException(status_code=403, detail="Sin permisos para procesar notificaciones")
     
     try:
@@ -502,7 +502,7 @@ def enviar_template_para_aprobacion(
     """
     📤 Enviar template de WhatsApp a Meta para aprobación
     """
-    if current_user.rol != "ADMINISTRADOR_GENERAL":
+    if current_user.rol != "USER":
         raise HTTPException(status_code=403, detail="Solo administradores pueden gestionar templates")
     
     try:
@@ -551,7 +551,7 @@ async def procesar_reintentos_fallidas(
     • Intervalo de 30 minutos entre reintentos
     • Notificar a Admin si falla después de todos los reintentos
     """
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "COBRANZAS"]:
+    if current_user.rol not in ["USER"]:
         raise HTTPException(status_code=403, detail="Sin permisos para procesar reintentos")
     
     try:
@@ -728,7 +728,7 @@ async def probar_envio_notificacion(
     """
     🧪 Probar envío de notificación a cliente específico
     """
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "COBRANZAS"]:
+    if current_user.rol not in ["USER"]:
         raise HTTPException(status_code=403, detail="Sin permisos para probar notificaciones")
     
     try:

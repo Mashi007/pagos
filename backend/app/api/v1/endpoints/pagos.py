@@ -805,7 +805,7 @@ def anular_pago(
     Anular un pago (Solo Admin)
     """
     # Verificar permisos (solo ADMIN)
-    if current_user.rol != "ADMINISTRADOR_GENERAL":
+    if current_user.rol != "USER":
         raise HTTPException(status_code=403, detail="Solo administradores pueden anular pagos")
     
     # Buscar pago

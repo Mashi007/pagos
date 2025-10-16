@@ -45,7 +45,7 @@ def obtener_configuracion_scheduler(
     """
     ⚙️ Obtener configuración actual del scheduler de notificaciones
     """
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE"]:
+    if current_user.rol not in ["USER"]:
         raise HTTPException(status_code=403, detail="Sin permisos para ver configuración del scheduler")
     
     try:
@@ -109,7 +109,7 @@ def configurar_scheduler(
     """
     ⚙️ Configurar scheduler de notificaciones
     """
-    if current_user.rol != "ADMINISTRADOR_GENERAL":
+    if current_user.rol != "USER":
         raise HTTPException(status_code=403, detail="Solo administradores pueden configurar el scheduler")
     
     try:
@@ -195,7 +195,7 @@ async def ejecutar_scheduler_manual(
     """
     ▶️ Ejecutar scheduler manualmente (fuera del horario programado)
     """
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "COBRANZAS"]:
+    if current_user.rol not in ["USER"]:
         raise HTTPException(status_code=403, detail="Sin permisos para ejecutar scheduler manual")
     
     try:
