@@ -95,23 +95,23 @@ export function useRoleCheck() {
   }
 
   const isAdmin = (): boolean => {
-    return hasAnyRole(['ADMINISTRADOR_GENERAL'])
+    return hasAnyRole(['USER'])
   }
 
   const canManagePayments = (): boolean => {
-    return hasAnyRole(['ADMINISTRADOR_GENERAL', 'COBRANZAS'])
+    return hasAnyRole(['USER'])
   }
 
   const canViewReports = (): boolean => {
-    return hasAnyRole(['ADMINISTRADOR_GENERAL', 'COBRANZAS'])
+    return hasAnyRole(['USER'])
   }
 
   const canManageConfig = (): boolean => {
-    return hasAnyRole(['ADMINISTRADOR_GENERAL'])
+    return hasAnyRole(['USER'])
   }
 
   const canViewAllClients = (): boolean => {
-    return hasAnyRole(['ADMINISTRADOR_GENERAL', 'COBRANZAS'])
+    return hasAnyRole(['USER'])
   }
 
   return {

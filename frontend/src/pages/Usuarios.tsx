@@ -34,18 +34,17 @@ export function Usuarios() {
       nombre: 'María',
       apellido: 'González',
       email: 'maria.gonzalez@rapicredit.com',
-      rol: 'GERENTE',
+      rol: 'USER',
       activo: true,
       ultimo_acceso: '2025-10-15'
     }
   ]
 
-  const roles = ['TODOS', 'ADMIN', 'GERENTE', 'ASESOR_COMERCIAL', 'COBRADOR', 'CONTADOR', 'AUDITOR']
+  const roles = ['TODOS', 'USER']
 
   const getRoleBadgeColor = (rol: string) => {
     const colors: any = {
-      'ADMIN': 'bg-red-600',
-      'GERENTE': 'bg-purple-600',
+      'USER': 'bg-blue-600',
       'ASESOR_COMERCIAL': 'bg-blue-600',
       'COBRADOR': 'bg-green-600',
       'CONTADOR': 'bg-yellow-600',
