@@ -56,12 +56,7 @@ Write-Host "Email: juan.perez@rapicreditca.com" -ForegroundColor White
 Write-Host ""
 
 $asesorBody = @{
-    nombre = "Juan"
-    apellido = "Perez"
-    email = "juan.perez@rapicreditca.com"
-    telefono = "809-555-0001"
-    # especialidad = "Ventas de Vehiculos"  # Campo no existe en modelo actual
-    activo = $true
+    nombre = "JUAN PEREZ"
 } | ConvertTo-Json
 
 Write-Host "Enviando request a: $baseUrl/api/v1/asesores" -ForegroundColor Gray
@@ -74,10 +69,7 @@ try {
     Write-Host ""
     Write-Host "Datos del asesor creado:" -ForegroundColor Cyan
     Write-Host "  ID: $($asesor.id)" -ForegroundColor White
-    Write-Host "  Nombre: $($asesor.nombre) $($asesor.apellido)" -ForegroundColor White
-    Write-Host "  Email: $($asesor.email)" -ForegroundColor White
-    Write-Host "  Telefono: $($asesor.telefono)" -ForegroundColor White
-    # Write-Host "  Especialidad: $($asesor.especialidad)" -ForegroundColor White  # Campo no existe
+    Write-Host "  Nombre: $($asesor.nombre)" -ForegroundColor White
     Write-Host ""
     Write-Host "IMPORTANTE: Guarda este ID para crear clientes: $($asesor.id)" -ForegroundColor Yellow
     Write-Host ""
