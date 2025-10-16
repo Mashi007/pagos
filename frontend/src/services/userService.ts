@@ -27,7 +27,7 @@ export interface UserUpdate {
   email?: string
   nombre?: string
   apellido?: string
-  rol?: 'ADMINISTRADOR_GENERAL' | 'GERENTE' | 'COBRANZAS'
+  rol?: 'USER'
   password?: string
   is_active?: boolean
 }
