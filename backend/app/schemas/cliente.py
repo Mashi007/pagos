@@ -155,7 +155,7 @@ class ClienteSearchFilters(BaseModel):
     # Filtros específicos
     estado: Optional[str] = Field(None, pattern="^(ACTIVO|INACTIVO|MORA)$")
     estado_financiero: Optional[str] = Field(None, pattern="^(AL_DIA|MORA|VENCIDO)$")
-    asesor_config_id: Optional[int] = None
+    asesor_id: Optional[int] = None
     concesionario: Optional[str] = None
     modelo_vehiculo: Optional[str] = None
     modalidad_pago: Optional[str] = Field(None, pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
@@ -225,7 +225,7 @@ class ClienteCreateWithLoan(ClienteBase):
     marca_vehiculo: str = Field(..., min_length=1, max_length=50)
     
     # Asesor asignado
-    asesor_config_id: int = Field(..., description="ID del asesor de configuración responsable")
+    asesor_id: int = Field(..., description="ID del asesor de configuración responsable")
     
     # Configuración del préstamo
     tasa_interes_anual: Optional[Decimal] = Field(None, ge=0, le=100, description="Tasa de interés anual (%)")

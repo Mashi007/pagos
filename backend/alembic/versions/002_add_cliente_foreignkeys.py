@@ -22,12 +22,12 @@ def upgrade():
     # 1. Agregar nuevas columnas con ForeignKeys
     op.add_column('clientes', sa.Column('concesionario_id', sa.Integer(), nullable=True))
     op.add_column('clientes', sa.Column('modelo_vehiculo_id', sa.Integer(), nullable=True))
-    op.add_column('clientes', sa.Column('asesor_config_id', sa.Integer(), nullable=True))
+    op.add_column('clientes', sa.Column('asesor_id', sa.Integer(), nullable=True))
     
     # 2. Crear índices para las nuevas columnas
     op.create_index('ix_clientes_concesionario_id', 'clientes', ['concesionario_id'])
     op.create_index('ix_clientes_modelo_vehiculo_id', 'clientes', ['modelo_vehiculo_id'])
-    op.create_index('ix_clientes_asesor_config_id', 'clientes', ['asesor_config_id'])
+    op.create_index('ix_clientes_asesor_id', 'clientes', ['asesor_id'])
     
     # 3. Crear ForeignKeys
     op.create_foreign_key(
@@ -49,10 +49,10 @@ def upgrade():
     )
     
     op.create_foreign_key(
-        'fk_clientes_asesor_config_id', 
+        'fk_clientes_asesor_id', 
         'clientes', 
         'asesores', 
-        ['asesor_config_id'], 
+        ['asesor_id'], 
         ['id'],
         ondelete='SET NULL'
     )
@@ -65,24 +65,24 @@ def upgrade():
     print("⚠️  IMPORTANTE: Las nuevas columnas están NULL. Actualizar manualmente si es necesario.")
     print("   - concesionario_id: Mapear desde campo 'concesionario' (String)")
     print("   - modelo_vehiculo_id: Mapear desde campo 'modelo_vehiculo' (String)")
-    print("   - asesor_config_id: Mapear desde tabla 'asesores' si es necesario")
+    print("   - asesor_id: Mapear desde tabla 'asesores' si es necesario")
 
 
 def downgrade():
     """Remover ForeignKeys del modelo Cliente"""
     
     # 1. Eliminar ForeignKeys
-    op.drop_constraint('fk_clientes_asesor_config_id', 'clientes', type_='foreignkey')
+    op.drop_constraint('fk_clientes_asesor_id', 'clientes', type_='foreignkey')
     op.drop_constraint('fk_clientes_modelo_vehiculo_id', 'clientes', type_='foreignkey')
     op.drop_constraint('fk_clientes_concesionario_id', 'clientes', type_='foreignkey')
     
     # 2. Eliminar índices
-    op.drop_index('ix_clientes_asesor_config_id', 'clientes')
+    op.drop_index('ix_clientes_asesor_id', 'clientes')
     op.drop_index('ix_clientes_modelo_vehiculo_id', 'clientes')
     op.drop_index('ix_clientes_concesionario_id', 'clientes')
     
     # 3. Eliminar columnas
-    op.drop_column('clientes', 'asesor_config_id')
+    op.drop_column('clientes', 'asesor_id')
     op.drop_column('clientes', 'modelo_vehiculo_id')
     op.drop_column('clientes', 'concesionario_id')
     

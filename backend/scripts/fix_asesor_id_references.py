@@ -1,8 +1,8 @@
 """
-Script para reemplazar todas las referencias a asesor_id por asesor_config_id
+Script para reemplazar todas las referencias a asesor_id por asesor_id
 Este cambio es necesario porque:
 - Cliente ya NO tiene asesor_id (relación con User)
-- Cliente solo tiene asesor_config_id (relación con Asesor de configuración)
+- Cliente solo tiene asesor_id (relación con Asesor de configuración)
 """
 
 import re
@@ -18,51 +18,51 @@ FILES_TO_PROCESS = [
 REPLACEMENTS = [
     # En endpoints
     (r'asesor_id: Optional\[int\] = Query\(None, description="ID del asesor asignado"\)', 
-     'asesor_config_id: Optional[int] = Query(None, description="ID del asesor de configuración asignado")'),
+     'asesor_id: Optional[int] = Query(None, description="ID del asesor de configuración asignado")'),
     
-    (r'Cliente\.asesor_id', 'Cliente.asesor_config_id'),
-    (r'cliente\.asesor_id', 'cliente.asesor_config_id'),
+    (r'Cliente\.asesor_id', 'Cliente.asesor_id'),
+    (r'cliente\.asesor_id', 'cliente.asesor_id'),
     
     # En schemas
     (r'asesor_id: Optional\[int\] = None  # Asesor del sistema \(users\)', 
-     '# asesor_id eliminado - solo usar asesor_config_id'),
+     '# asesor_id eliminado - solo usar asesor_id'),
     
     (r'asesor_id: Optional\[int\] = None', 
-     'asesor_config_id: Optional[int] = None'),
+     'asesor_id: Optional[int] = None'),
     
     (r'asesor_id: int = Field\(\.\.\., description="ID del asesor responsable"\)',
-     'asesor_config_id: int = Field(..., description="ID del asesor de configuración responsable")'),
+     'asesor_id: int = Field(..., description="ID del asesor de configuración responsable")'),
     
     # Parámetros de funciones
-    (r'nuevo_asesor_id: int', 'nuevo_asesor_config_id: int'),
-    (r'nuevo_asesor_id\)', 'nuevo_asesor_config_id)'),
+    (r'nuevo_asesor_id: int', 'nuevo_asesor_id: int'),
+    (r'nuevo_asesor_id\)', 'nuevo_asesor_id)'),
     
     # Queries que buscan en User - cambiar a buscar en Asesor
     (r'db\.query\(User\)\.filter\(User\.id == cliente\.asesor_id\)',
-     'db.query(Asesor).filter(Asesor.id == cliente.asesor_config_id)'),
+     'db.query(Asesor).filter(Asesor.id == cliente.asesor_id)'),
     
     (r'db\.query\(User\)\.filter\(User\.id == cliente_data\.asesor_id\)',
-     'db.query(Asesor).filter(Asesor.id == cliente_data.asesor_config_id)'),
+     'db.query(Asesor).filter(Asesor.id == cliente_data.asesor_id)'),
     
     (r'db\.query\(User\)\.filter\(User\.id == nuevo_asesor_id\)',
-     'db.query(Asesor).filter(Asesor.id == nuevo_asesor_config_id)'),
+     'db.query(Asesor).filter(Asesor.id == nuevo_asesor_id)'),
     
     # Joins con User - cambiar a Asesor
-    (r'User\.id == Cliente\.asesor_id', 'Asesor.id == Cliente.asesor_config_id'),
+    (r'User\.id == Cliente\.asesor_id', 'Asesor.id == Cliente.asesor_id'),
     
     # Diccionarios y strings
-    (r'"asesor_id": current_user\.id', '"asesor_config_id": None  # Los clientes NO se asignan automáticamente a users'),
-    (r'"asesor_id": cliente\.asesor_id', '"asesor_config_id": cliente.asesor_config_id'),
+    (r'"asesor_id": current_user\.id', '"asesor_id": None  # Los clientes NO se asignan automáticamente a users'),
+    (r'"asesor_id": cliente\.asesor_id', '"asesor_id": cliente.asesor_id'),
     (r'"asesor_anterior"', '"asesor_config_anterior"'),
     (r'"asesor_nuevo"', '"asesor_config_nuevo"'),
     (r'asesor_anterior = ', 'asesor_config_anterior = '),
     
     # ADD COLUMN en SQL
     (r'ALTER TABLE clientes ADD COLUMN IF NOT EXISTS asesor_id INTEGER',
-     'ALTER TABLE clientes ADD COLUMN IF NOT EXISTS asesor_config_id INTEGER'),
+     'ALTER TABLE clientes ADD COLUMN IF NOT EXISTS asesor_id INTEGER'),
     
     # Filtros
-    (r'filters\.asesor_id', 'filters.asesor_config_id'),
+    (r'filters\.asesor_id', 'filters.asesor_id'),
 ]
 
 def fix_file(file_path: str):
@@ -90,7 +90,7 @@ def fix_file(file_path: str):
         return False
 
 def main():
-    print("🔧 Iniciando corrección de referencias asesor_id → asesor_config_id")
+    print("🔧 Iniciando corrección de referencias asesor_id → asesor_id")
     print("="*70)
     
     files_updated = 0

@@ -55,7 +55,7 @@ columnas_requeridas = {
     'email': 'VARCHAR',
     'modelo_vehiculo_id': 'INTEGER',
     'concesionario_id': 'INTEGER',
-    'asesor_config_id': 'INTEGER',
+    'asesor_id': 'INTEGER',
     'total_financiamiento': 'NUMERIC',
     'cuota_inicial': 'NUMERIC',
     'estado': 'VARCHAR',
@@ -75,7 +75,7 @@ foreign_keys = inspector.get_foreign_keys('clientes')
 fks_requeridas = {
     'modelo_vehiculo_id': 'modelos_vehiculos',
     'concesionario_id': 'concesionarios',
-    'asesor_config_id': 'asesores'
+    'asesor_id': 'asesores'
 }
 
 fks_encontradas = {}
@@ -163,7 +163,7 @@ try:
         print(f"\n🧪 TEST DE RELACIONES CON CLIENTE ID {cliente.id}:")
         print(f"   - Cédula: {cliente.cedula}")
         print(f"   - Nombre: {cliente.nombre_completo}")
-        print(f"   - Asesor Config ID: {cliente.asesor_config_id}")
+        print(f"   - Asesor Config ID: {cliente.asesor_id}")
         print(f"   - Asesor Config Nombre: {cliente.asesor_config_nombre}")
         print(f"   - Concesionario ID: {cliente.concesionario_id}")
         print(f"   - Concesionario Nombre: {cliente.concesionario_nombre}")

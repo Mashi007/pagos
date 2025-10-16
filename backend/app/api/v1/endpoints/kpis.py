@@ -282,7 +282,7 @@ def kpis_cobranza(
         User.full_name,
         func.count(Cliente.id).label('total_clientes'),
         func.sum(case((Cliente.dias_mora > 0, 1), else_=0)).label('clientes_mora')
-    ).outerjoin(Cliente, Asesor.id == Cliente.asesor_config_id).filter(
+    ).outerjoin(Cliente, Asesor.id == Cliente.asesor_id).filter(
         Asesor.activo == True,
         Cliente.activo == True
     ).group_by(User.id, User.full_name).all()
@@ -383,7 +383,7 @@ def kpis_asesores(
         func.count(Cliente.id).label('total_ventas'),
         func.sum(Cliente.total_financiamiento).label('monto_vendido'),
         func.avg(Cliente.total_financiamiento).label('ticket_promedio')
-    ).outerjoin(Cliente, Asesor.id == Cliente.asesor_config_id).filter(
+    ).outerjoin(Cliente, Asesor.id == Cliente.asesor_id).filter(
         Asesor.activo == True,
         Cliente.activo == True
     ).group_by(User.id, User.full_name).order_by(
@@ -397,7 +397,7 @@ def kpis_asesores(
         func.count(Cliente.id).label('total_clientes'),
         func.sum(case((Cliente.dias_mora == 0, 1), else_=0)).label('clientes_al_dia'),
         func.sum(case((Cliente.dias_mora > 0, 1), else_=0)).label('clientes_mora')
-    ).outerjoin(Cliente, Asesor.id == Cliente.asesor_config_id).filter(
+    ).outerjoin(Cliente, Asesor.id == Cliente.asesor_id).filter(
         Asesor.activo == True,
         Cliente.activo == True
     ).group_by(User.id, User.full_name).all()
@@ -406,19 +406,19 @@ def kpis_asesores(
     ranking_ventas = []
     ranking_cobranza = []
     
-    for asesor_config_id, nombre, ventas, monto, ticket in ventas_por_asesor:
+    for asesor_id, nombre, ventas, monto, ticket in ventas_por_asesor:
         ranking_ventas.append({
-            "asesor_config_id": asesor_config_id,
+            "asesor_id": asesor_id,
             "nombre": nombre,
             "total_ventas": ventas or 0,
             "monto_vendido": float(monto or 0),
             "ticket_promedio": float(ticket or 0)
         })
     
-    for asesor_config_id, nombre, total, al_dia, mora in cobranza_por_asesor:
+    for asesor_id, nombre, total, al_dia, mora in cobranza_por_asesor:
         tasa_cobro = (al_dia / total * 100) if total > 0 else 0
         ranking_cobranza.append({
-            "asesor_config_id": asesor_config_id,
+            "asesor_id": asesor_id,
             "nombre": nombre,
             "total_clientes": total or 0,
             "clientes_al_dia": al_dia or 0,

@@ -129,7 +129,7 @@ def dashboard_administrador(
         func.sum(Cliente.total_financiamiento).label('monto_vendido')
     ).select_from(User).outerjoin(
         Cliente, and_(
-            Asesor.id == Cliente.asesor_config_id,
+            Asesor.id == Cliente.asesor_id,
             Cliente.fecha_registro >= inicio_mes
         )
     ).filter(
@@ -446,7 +446,7 @@ def dashboard_comercial(
         func.count(Cliente.id).label('ventas'),
         func.sum(Cliente.total_financiamiento).label('monto')
     ).select_from(Asesor).outerjoin(Cliente, and_(
-        Asesor.id == Cliente.asesor_config_id,
+        Asesor.id == Cliente.asesor_id,
         Cliente.fecha_registro >= inicio_mes
     )).filter(
         Asesor.activo == True
@@ -542,7 +542,7 @@ def dashboard_comercial(
 
 @router.get("/asesor")
 def dashboard_asesor(
-    asesor_config_id: Optional[int] = Query(None, description="ID del asesor de configuración (default: usuario actual)"),
+    asesor_id: Optional[int] = Query(None, description="ID del asesor de configuración (default: usuario actual)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -595,7 +595,7 @@ def dashboard_asesor(
         Asesor.apellido,
         func.count(Cliente.id).label('total_clientes'),
         func.sum(Cliente.total_financiamiento).label('monto_total')
-    ).outerjoin(Cliente, Asesor.id == Cliente.asesor_config_id).filter(
+    ).outerjoin(Cliente, Asesor.id == Cliente.asesor_id).filter(
         Asesor.activo == True,
         Cliente.activo == True
     ).group_by(Asesor.id, Asesor.nombre, Asesor.apellido).order_by(
@@ -607,7 +607,7 @@ def dashboard_asesor(
     # Por ahora, no calcular posición individual
     for idx, asesor_rank in enumerate(ranking_general):
         # Lógica de posición deshabilitada - requiere rediseño
-        if False:  # asesor_rank.id == asesor_config_id:
+        if False:  # asesor_rank.id == asesor_id:
             mi_posicion = {
                 "posicion": idx + 1,
                 "total_asesores": len(ranking_general),

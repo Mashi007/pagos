@@ -985,7 +985,7 @@ async def corregir_registro_en_linea(
                     errores_validacion.append(f"Asesor '{valor}' no existe en la BD")
                 else:
                     datos_corregidos[campo] = valor
-                    datos_corregidos['asesor_config_id'] = asesor.id
+                    datos_corregidos['asesor_id'] = asesor.id
             
             elif campo == 'modalidad_pago':
                 modalidades_validas = ['SEMANAL', 'QUINCENAL', 'MENSUAL', 'BIMENSUAL']
@@ -1116,7 +1116,7 @@ async def _guardar_cliente_desde_carga(
         
         concesionario_id = None
         modelo_vehiculo_id = None
-        asesor_config_id = None
+        asesor_id = None
         
         # Buscar concesionario_id
         if datos.get('concesionario'):
@@ -1136,14 +1136,14 @@ async def _guardar_cliente_desde_carga(
             if modelo_obj:
                 modelo_vehiculo_id = modelo_obj.id
         
-        # Buscar asesor_config_id
+        # Buscar asesor_id
         if datos.get('asesor'):
             asesor_obj = db.query(Asesor).filter(
                 Asesor.nombre.ilike(f"%{datos['asesor']}%"),
                 Asesor.activo == True
             ).first()
             if asesor_obj:
-                asesor_config_id = asesor_obj.id
+                asesor_id = asesor_obj.id
         
         # ============================================
         # CREAR CLIENTE CON FOREIGNKEYS
@@ -1160,7 +1160,7 @@ async def _guardar_cliente_desde_carga(
             # ForeignKeys
             "concesionario_id": concesionario_id,
             "modelo_vehiculo_id": modelo_vehiculo_id,
-            "asesor_config_id": asesor_config_id,
+            "asesor_id": asesor_id,
             
             # Campos legacy (mantener por compatibilidad)
             "concesionario": datos.get('concesionario', ''),

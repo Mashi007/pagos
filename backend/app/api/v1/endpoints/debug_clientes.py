@@ -152,7 +152,7 @@ def debug_test_create_schema(
             "fecha_entrega": "2024-01-15",
             "numero_amortizaciones": 36,
             "modalidad_pago": "MENSUAL",
-            "asesor_config_id": 1,
+            "asesor_id": 1,
             "notas": "Cliente nuevo"
         }
         
@@ -167,7 +167,7 @@ def debug_test_create_schema(
             'anio_vehiculo', 'color_vehiculo', 'chasis', 'motor', 'concesionario',
             'vendedor_concesionario', 'total_financiamiento', 'cuota_inicial',
             'fecha_entrega', 'numero_amortizaciones', 'modalidad_pago',
-            'asesor_config_id', 'notas'
+            'asesor_id', 'notas'
         }
         
         cliente_dict_filtrado = {k: v for k, v in cliente_dict.items() if k in campos_validos}

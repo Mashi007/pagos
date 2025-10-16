@@ -97,15 +97,15 @@ def test_estructura_modelos():
     # Verificar contenido de modelos críticos
     print(f"\n{Colors.BOLD}Verificando integridad de modelos...{Colors.RESET}")
     
-    # Cliente debe tener asesor_config_id, NO asesor_id
+    # Cliente debe tener asesor_id, NO asesor_id
     cliente_path = models_dir / "cliente.py"
     if cliente_path.exists():
         with open(cliente_path, 'r', encoding='utf-8') as f:
             content = f.read()
-            has_config_id = 'asesor_config_id' in content
+            has_config_id = 'asesor_id' in content
             has_old_id = 'asesor_id = Column' in content and 'ForeignKey("users.id")' in content
             
-            print_test("Cliente usa asesor_config_id", has_config_id, "No encontrado asesor_config_id")
+            print_test("Cliente usa asesor_id", has_config_id, "No encontrado asesor_id")
             print_test("Cliente NO usa asesor_id obsoleto", not has_old_id, "Encontrado asesor_id con ForeignKey users.id")
     
     # User NO debe tener clientes_asignados
@@ -193,8 +193,8 @@ def test_rutas_endpoints():
         archivo_path = endpoints_dir / archivo
         tests.append((f"Endpoint {archivo}", archivo_path.exists(), f"No encontrado: {archivo_path}"))
     
-    # Verificar que usan asesor_config_id, NO asesor_id
-    print(f"\n{Colors.BOLD}Verificando uso correcto de asesor_config_id...{Colors.RESET}")
+    # Verificar que usan asesor_id, NO asesor_id
+    print(f"\n{Colors.BOLD}Verificando uso correcto de asesor_id...{Colors.RESET}")
     
     archivos_a_verificar = ["clientes.py", "dashboard.py", "kpis.py", "reportes.py"]
     
@@ -209,14 +209,14 @@ def test_rutas_endpoints():
                 lines = content.split('\n')
                 bad_refs = 0
                 for line in lines:
-                    if 'asesor_id' in line and 'asesor_config_id' not in line:
+                    if 'asesor_id' in line and 'asesor_id' not in line:
                         # Ignorar comentarios y rutas path
                         if not line.strip().startswith('#') and '/{asesor_id}' not in line and '@router' not in line:
                             bad_refs += 1
                 
-                has_config = 'asesor_config_id' in content
+                has_config = 'asesor_id' in content
                 
-                print_test(f"{archivo} usa asesor_config_id", has_config, "No usa asesor_config_id")
+                print_test(f"{archivo} usa asesor_id", has_config, "No usa asesor_id")
                 print_test(f"{archivo} sin referencias incorrectas a asesor_id", bad_refs == 0, f"Encontradas {bad_refs} referencias")
     
     for name, passed, details in tests:
@@ -252,16 +252,16 @@ def test_schemas():
         schema_path = schemas_dir / schema
         tests.append((f"Schema {schema}", schema_path.exists(), f"No encontrado: {schema_path}"))
     
-    # Verificar cliente.py usa asesor_config_id
+    # Verificar cliente.py usa asesor_id
     cliente_schema = schemas_dir / "cliente.py"
     if cliente_schema.exists():
         with open(cliente_schema, 'r', encoding='utf-8') as f:
             content = f.read()
-            has_config_id = 'asesor_config_id' in content
-            # Verificar que NO tiene asesor_id sin asesor_config_id en la misma línea
-            has_old_only = 'asesor_id:' in content and 'asesor_config_id' not in content.split('asesor_id:')[0].split('\n')[-1]
+            has_config_id = 'asesor_id' in content
+            # Verificar que NO tiene asesor_id sin asesor_id en la misma línea
+            has_old_only = 'asesor_id:' in content and 'asesor_id' not in content.split('asesor_id:')[0].split('\n')[-1]
             
-            print_test("Schema Cliente usa asesor_config_id", has_config_id, "No encontrado asesor_config_id")
+            print_test("Schema Cliente usa asesor_id", has_config_id, "No encontrado asesor_id")
     
     for name, passed, details in tests:
         print_test(name, passed, details)
@@ -297,11 +297,11 @@ def test_migraciones():
             if 'asesor' in mig_file.name.lower() or 'cliente' in mig_file.name.lower():
                 with open(mig_file, 'r', encoding='utf-8') as f:
                     content = f.read()
-                    if 'asesor_id' in content or 'asesor_config_id' in content:
+                    if 'asesor_id' in content or 'asesor_id' in content:
                         has_asesor_migration = True
                         print(f"  └─ Migración encontrada: {mig_file.name}")
         
-        tests.append(("Migración para asesor_config_id", has_asesor_migration, "No encontrada migración relacionada"))
+        tests.append(("Migración para asesor_id", has_asesor_migration, "No encontrada migración relacionada"))
     
     for name, passed, details in tests:
         print_test(name, passed, details)

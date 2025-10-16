@@ -1394,7 +1394,7 @@ class DetectorPatrones:
             func.count(Cliente.id).label('total_clientes'),
             func.sum(func.case([(Cliente.dias_mora > 0, 1)], else_=0)).label('clientes_mora'),
             func.avg(Cliente.dias_mora).label('promedio_mora')
-        ).join(Cliente, Asesor.id == Cliente.asesor_config_id).filter(
+        ).join(Cliente, Asesor.id == Cliente.asesor_id).filter(
             Cliente.activo == True
         ).group_by(User.id, User.full_name).all()
         
@@ -1406,7 +1406,7 @@ class DetectorPatrones:
                 # Alertar si tasa de mora > 20%
                 if tasa_mora > 20:
                     resultado.append({
-                        "asesor_config_id": asesor.id,
+                        "asesor_id": asesor.id,
                         "asesor_nombre": asesor.full_name,
                         "total_clientes": asesor.total_clientes,
                         "clientes_mora": asesor.clientes_mora,

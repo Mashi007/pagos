@@ -20,7 +20,7 @@ def upgrade():
     """
     Eliminar columna asesor_id de tabla clientes
     Esta columna creaba una relación incorrecta con la tabla users
-    Los clientes deben relacionarse solo con asesores de configuración via asesor_config_id
+    Los clientes deben relacionarse solo con asesores de configuración via asesor_id
     """
     # Verificar si la columna existe antes de eliminarla
     op.execute("""
