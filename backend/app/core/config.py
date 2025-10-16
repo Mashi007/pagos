@@ -46,7 +46,18 @@ class Settings(BaseSettings):
     # USUARIO ADMINISTRADOR INICIAL
     # ============================================
     ADMIN_EMAIL: str = "itmaster@rapicreditca.com"
-    ADMIN_PASSWORD: str = "R@pi_2025**"  # Cambiar en producción mediante variable de entorno
+    ADMIN_PASSWORD: str = "R@pi_2025**"  # ⚠️ CAMBIAR EN PRODUCCIÓN: Usar variable de entorno ADMIN_PASSWORD
+    
+    # ============================================
+    # VALIDACIÓN DE CONFIGURACIÓN
+    # ============================================
+    def validate_admin_credentials(self) -> bool:
+        """Valida que las credenciales de admin estén configuradas correctamente"""
+        if not self.ADMIN_EMAIL or not self.ADMIN_PASSWORD:
+            return False
+        if self.ADMIN_PASSWORD == "R@pi_2025**" and self.ENVIRONMENT == "production":
+            raise ValueError("⚠️ CRÍTICO: Contraseña por defecto detectada en producción. Configure ADMIN_PASSWORD")
+        return True
     
     # CORS
     ALLOWED_ORIGINS: str = "*"

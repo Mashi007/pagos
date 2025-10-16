@@ -4,11 +4,8 @@ Constantes y enumeraciones del sistema de préstamos y cobranza.
 """
 from enum import Enum
 
-
-class UserRole(str, Enum):
-    """Rol único en el sistema"""
-    USER = "USER"
-
+# Importar UserRole desde permissions para evitar duplicación
+from app.core.permissions import UserRole
 
 # Alias para compatibilidad
 Roles = UserRole
