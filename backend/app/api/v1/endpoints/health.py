@@ -52,6 +52,18 @@ def check_database_cached() -> bool:
     return _last_db_check["status"]
 
 
+@router.get("/cors-debug")
+async def cors_debug():
+    """Endpoint para debuggear CORS"""
+    from app.core.config import settings
+    return {
+        "cors_origins": settings.CORS_ORIGINS,
+        "cors_origins_type": str(type(settings.CORS_ORIGINS)),
+        "cors_origins_list": list(settings.CORS_ORIGINS),
+        "environment": settings.ENVIRONMENT,
+        "message": "CORS Debug Info"
+    }
+
 @router.get("/health", status_code=status.HTTP_200_OK)
 async def health_check(response: Response):
     """

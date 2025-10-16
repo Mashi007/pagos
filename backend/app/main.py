@@ -127,6 +127,9 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS - Configuración desde settings
 logger.info(f"🌐 CORS Origins configurados: {settings.CORS_ORIGINS}")
+logger.info(f"🌐 CORS Origins tipo: {type(settings.CORS_ORIGINS)}")
+logger.info(f"🌐 CORS Origins contenido: {list(settings.CORS_ORIGINS)}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,  # ✅ Configurado desde settings
@@ -134,6 +137,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
 )
+
+logger.info("✅ CORS Middleware registrado exitosamente")
 
 # Registrar routers
 app.include_router(health.router, prefix=f"{settings.API_V1_PREFIX}", tags=["Health"])
