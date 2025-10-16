@@ -50,6 +50,7 @@ from app.api.v1.endpoints import (
     sql_delete_admin,
     test_clientes,
     emergency_migrate_roles,
+    mock_data,
 )
 
 # Configurar logging
@@ -125,6 +126,7 @@ app.include_router(delete_wrong_admin.router, prefix=f"{settings.API_V1_PREFIX}/
 app.include_router(sql_delete_admin.router, prefix=f"{settings.API_V1_PREFIX}/sql-delete", tags=["SQL Delete Admin"])
 app.include_router(test_clientes.router, prefix=f"{settings.API_V1_PREFIX}/test-clientes", tags=["Test Clientes"])
 app.include_router(emergency_migrate_roles.router, prefix=f"{settings.API_V1_PREFIX}", tags=["Emergency Migration"])
+app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])
 
 
 @app.get("/", include_in_schema=False)
