@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     # USUARIO ADMINISTRADOR INICIAL
     # ============================================
     ADMIN_EMAIL: str = "itmaster@rapicreditca.com"
-    ADMIN_PASSWORD: str = "R@pi_2025**"  # ⚠️ CAMBIAR EN PRODUCCIÓN: Usar variable de entorno ADMIN_PASSWORD
+    ADMIN_PASSWORD: str = Field(default="R@pi_2025**", env="ADMIN_PASSWORD")  # ✅ Variable de entorno
     
     # ============================================
     # VALIDACIÓN DE CONFIGURACIÓN

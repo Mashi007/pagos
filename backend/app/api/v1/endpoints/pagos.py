@@ -320,9 +320,17 @@ def registrar_pago_manual(
             mensaje=f"✅ Pago de ${pago_data.monto_pagado} procesado exitosamente"
         )
         
+    except HTTPException:
+        db.rollback()
+        raise
+    except ValueError as e:
+        db.rollback()
+        logger.error(f"Error de validación en pago: {e}")
+        raise HTTPException(status_code=400, detail=f"Error de validación: {str(e)}")
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error procesando pago: {str(e)}")
+        logger.error(f"Error inesperado procesando pago: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
 @router.get("/flujo-completo/paso/{paso}")

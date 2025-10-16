@@ -46,6 +46,15 @@ class ClienteBase(BaseModel):
     # Notas
     notas: Optional[str] = None
     
+    @field_validator('notas', 'direccion', mode='before')
+    @classmethod
+    def sanitize_html_fields(cls, v):
+        """Sanitizar campos de texto para prevenir XSS"""
+        if v is None or v == "":
+            return v
+        from app.utils.validators import sanitize_html
+        return sanitize_html(v)
+    
     @field_validator('total_financiamiento', 'cuota_inicial', mode='before')
     @classmethod
     def validate_decimal_fields(cls, v):

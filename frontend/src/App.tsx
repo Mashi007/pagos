@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -60,10 +60,23 @@ const NotFound = () => (
 )
 
 function App() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, initializeAuth } = useAuth()
+  const [isInitialized, setIsInitialized] = useState(false)
   
-  // Hook para manejar la persistencia de autenticación
-  const { isInitialized } = useAuthPersistence()
+  // Inicializar autenticación al cargar la aplicación
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        await initializeAuth()
+        setIsInitialized(true)
+      } catch (error) {
+        console.error('Error inicializando autenticación:', error)
+        setIsInitialized(true)
+      }
+    }
+    
+    initAuth()
+  }, [initializeAuth])
 
   // Mostrar loading screen mientras se inicializa la autenticación
   if (!isInitialized) {
