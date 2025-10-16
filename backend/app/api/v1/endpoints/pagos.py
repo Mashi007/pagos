@@ -146,8 +146,8 @@ def registrar_pago_manual(
         ).order_by(Cuota.numero_cuota).all()
         
         if len(cuotas) != len(pago_data.cuotas_seleccionadas):
-            raise HTTPException(
-                status_code=400, 
+        raise HTTPException(
+            status_code=400, 
                 detail="Algunas cuotas no existen o no están disponibles para pago"
             )
         
@@ -204,7 +204,7 @@ def registrar_pago_manual(
         distribucion["sobrante"] = monto_disponible
         
         # 5. Crear registro de pago
-        db_pago = Pago(
+    db_pago = Pago(
             prestamo_id=cuotas[0].prestamo_id,  # Tomar el préstamo de la primera cuota
             numero_cuota=cuotas[0].numero_cuota,
             monto_cuota_programado=sum(c.monto_cuota for c in cuotas),
@@ -229,9 +229,9 @@ def registrar_pago_manual(
         db.flush()  # Para obtener el ID
         db_pago.codigo_pago = db_pago.generar_codigo_pago()
         
-        db.commit()
-        db.refresh(db_pago)
-        
+    db.commit()
+    db.refresh(db_pago)
+    
         # 6. Actualizar estado del préstamo
         prestamo = cuotas[0].prestamo
         prestamo.total_pagado += pago_data.monto_pagado

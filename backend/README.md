@@ -1,2 +1,0 @@
-# PAGOS
-Sistema de pagos
