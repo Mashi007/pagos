@@ -20,6 +20,7 @@ interface AuthState {
   setLoading: (loading: boolean) => void
   setUser: (user: User) => void
   setTokens: (tokens: any) => void
+  initializeAuth: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>()((set, get) => ({
@@ -208,6 +209,92 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       setTokens: (tokens: any) => {
         set({ isAuthenticated: true })
       },
+
+      // Inicializar autenticación al cargar la aplicación
+      initializeAuth: async (): Promise<void> => {
+        try {
+          logger.log('Store: Inicializando autenticación...')
+          
+          // Verificar si hay tokens guardados
+          const rememberMe = localStorage.getItem('remember_me') === 'true'
+          const storage = rememberMe ? localStorage : sessionStorage
+          
+          const accessToken = storage.getItem('access_token')
+          const refreshToken = storage.getItem('refresh_token')
+          const userData = storage.getItem('user')
+          
+          logger.log('Store: Tokens encontrados:', {
+            accessToken: accessToken ? 'EXISTS' : 'MISSING',
+            refreshToken: refreshToken ? 'EXISTS' : 'MISSING',
+            userData: userData ? 'EXISTS' : 'MISSING',
+            rememberMe
+          })
+          
+          if (accessToken && refreshToken && userData) {
+            try {
+              // Verificar si el token sigue siendo válido
+              const user = JSON.parse(userData)
+              
+              // Actualizar estado con datos guardados
+              set({
+                user,
+                isAuthenticated: true,
+                isLoading: false,
+                error: null
+              })
+              
+              logger.log('Store: Autenticación restaurada exitosamente')
+              
+              // Opcional: Verificar con el servidor que el token sigue siendo válido
+              try {
+                await authService.getCurrentUser()
+                logger.log('Store: Token verificado con el servidor')
+              } catch (error) {
+                logger.log('Store: Token inválido, limpiando almacenamiento')
+                // Token inválido, limpiar almacenamiento
+                storage.removeItem('access_token')
+                storage.removeItem('refresh_token')
+                storage.removeItem('user')
+                set({
+                  user: null,
+                  isAuthenticated: false,
+                  isLoading: false,
+                  error: null
+                })
+              }
+              
+            } catch (error) {
+              logger.log('Store: Error al parsear datos de usuario:', error)
+              // Datos corruptos, limpiar almacenamiento
+              storage.removeItem('access_token')
+              storage.removeItem('refresh_token')
+              storage.removeItem('user')
+              set({
+                user: null,
+                isAuthenticated: false,
+                isLoading: false,
+                error: null
+              })
+            }
+          } else {
+            logger.log('Store: No hay tokens guardados')
+            set({
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+              error: null
+            })
+          }
+        } catch (error) {
+          logger.log('Store: Error al inicializar autenticación:', error)
+          set({
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+            error: 'Error al inicializar autenticación'
+          })
+        }
+      },
     })
 )
 
@@ -225,6 +312,7 @@ export const useAuth = () => {
     changePassword: store.changePassword,
     clearError: store.clearError,
     setUser: store.setUser,
+    initializeAuth: store.initializeAuth,
   }
 }
 
