@@ -25,8 +25,11 @@ class Settings(BaseSettings):
     # ============================================
     # CORS (Cross-Origin Resource Sharing)
     # ============================================
-    CORS_ORIGINS: List[str] = ["http://localhost:3000"]  # ✅ Default seguro para desarrollo
-    # En producción configurar: CORS_ORIGINS='["https://tu-dominio.com"]'
+    CORS_ORIGINS: List[str] = [
+        "http://localhost:3000",  # ✅ Desarrollo local
+        "https://rapicredit.onrender.com",  # ✅ Frontend en Render
+        "https://pagos-f2qf.onrender.com"  # ✅ Backend en Render (para referencias)
+    ]
     
     # ============================================
     # BASE DE DATOS
