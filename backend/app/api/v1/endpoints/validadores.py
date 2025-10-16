@@ -405,7 +405,8 @@ def corregir_datos_pago(
         if correcciones_aplicadas:
             # Limpiar observaciones de error
             if pago.observaciones and "REQUIERE_VALIDACIÓN" in pago.observaciones:
-                pago.observaciones = f"CORREGIDO - {datetime.now().strftime('%d/%m/%Y')} por {f"{current_user.nombre} {current_user.apellido}".strip()}"
+                usuario_nombre = f"{current_user.nombre} {current_user.apellido}".strip()
+                pago.observaciones = f"CORREGIDO - {datetime.now().strftime('%d/%m/%Y')} por {usuario_nombre}"
             
             db.commit()
             
