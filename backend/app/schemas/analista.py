@@ -2,7 +2,7 @@ from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
-class AsesorBase(BaseModel):
+class AnalistaBase(BaseModel):
     nombre: str
     apellido: Optional[str] = ""
     email: Optional[str] = ""
@@ -26,10 +26,10 @@ class AsesorBase(BaseModel):
             raise ValueError('La comisión debe estar entre 0 y 100')
         return v
 
-class AsesorCreate(AsesorBase):
+class AnalistaCreate(AnalistaBase):
     pass
 
-class AsesorUpdate(BaseModel):
+class AnalistaUpdate(BaseModel):
     nombre: Optional[str] = None
     apellido: Optional[str] = None
     email: Optional[str] = None
@@ -53,7 +53,7 @@ class AsesorUpdate(BaseModel):
             raise ValueError('La comisión debe estar entre 0 y 100')
         return v
 
-class AsesorResponse(AsesorBase):
+class AnalistaResponse(AnalistaBase):
     id: int
     nombre_completo: str
     created_at: datetime
@@ -62,8 +62,8 @@ class AsesorResponse(AsesorBase):
     
     model_config = ConfigDict(from_attributes=True)
 
-class AsesorListResponse(BaseModel):
-    items: List[AsesorResponse]
+class AnalistaListResponse(BaseModel):
+    items: List[AnalistaResponse]
     total: int
     page: int
     size: int

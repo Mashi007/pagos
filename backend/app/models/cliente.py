@@ -52,7 +52,7 @@ class Cliente(Base):
     # ============================================
     # ASIGNACIÓN Y GESTIÓN
     # ============================================
-    asesor_id = Column(Integer, ForeignKey("asesores.id"), nullable=True, index=True)  # Asesor de configuración
+    asesor_id = Column(Integer, ForeignKey("analistas.id"), nullable=True, index=True)  # Analista de configuración
     fecha_asignacion = Column(Date, nullable=True)
     
     # Estado - CON VALORES POR DEFECTO
@@ -79,7 +79,7 @@ class Cliente(Base):
     # NOTA: Comentadas temporalmente porque las columnas FK no existen en BD
     # concesionario_rel = relationship("Concesionario", foreign_keys=[concesionario_id])
     # modelo_vehiculo_rel = relationship("ModeloVehiculo", foreign_keys=[modelo_vehiculo_id])
-    asesor_config_rel = relationship("Asesor", foreign_keys=[asesor_id])
+    asesor_config_rel = relationship("Analista", foreign_keys=[asesor_id])
     
     def __repr__(self):
         return f"<Cliente {self.nombres} {self.apellidos} - {self.cedula}>"

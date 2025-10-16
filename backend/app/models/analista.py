@@ -1,9 +1,10 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.session import Base
 
-class Asesor(Base):
-    __tablename__ = "asesores"
+class Analista(Base):
+    __tablename__ = "analistas"
 
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(255), nullable=False, index=True)
@@ -18,9 +19,12 @@ class Asesor(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relaciones
+    clientes = relationship("Cliente", back_populates="asesor_config_rel")
 
     def __repr__(self):
-        return f"<Asesor(id={self.id}, nombre='{self.nombre_completo}', activo={self.activo})>"
+        return f"<Analista(id={self.id}, nombre='{self.nombre_completo}', activo={self.activo})>"
 
     @property
     def nombre_completo(self):

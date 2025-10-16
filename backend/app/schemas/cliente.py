@@ -41,7 +41,7 @@ class ClienteBase(BaseModel):
     modalidad_pago: Optional[str] = Field(None, pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
     
     # Asignación - ForeignKeys
-    asesor_id: Optional[int] = None  # Asesor de configuración (tabla asesores)
+    asesor_id: Optional[int] = None  # Analista de configuración (tabla analistas)
     
     # Notas
     notas: Optional[str] = None
@@ -203,7 +203,7 @@ class ClienteResumenFinanciero(BaseModel):
 
 class ClienteDetallado(ClienteResponse):
     """Cliente con información detallada"""
-    # Información del asesor
+    # Información del analista
     asesor_nombre: Optional[str] = None
     asesor_email: Optional[str] = None
     
@@ -234,7 +234,7 @@ class ClienteCreateWithLoan(ClienteBase):
     marca_vehiculo: str = Field(..., min_length=1, max_length=50)
     
     # Asesor asignado
-    asesor_id: int = Field(..., description="ID del asesor de configuración responsable")
+    asesor_id: int = Field(..., description="ID del analista de configuración responsable")
     
     # Configuración del préstamo
     tasa_interes_anual: Optional[Decimal] = Field(None, ge=0, le=100, description="Tasa de interés anual (%)")

@@ -1,6 +1,6 @@
 import { apiClient, ApiResponse } from './api'
 
-export interface Asesor {
+export interface Analista {
   id: number
   nombre: string
   apellido: string
@@ -15,7 +15,7 @@ export interface Asesor {
   updated_at?: string
 }
 
-export interface AsesorCreate {
+export interface AnalistaCreate {
   nombre: string
   apellido?: string
   email?: string
@@ -26,7 +26,7 @@ export interface AsesorCreate {
   notas?: string
 }
 
-export interface AsesorUpdate {
+export interface AnalistaUpdate {
   nombre?: string
   apellido?: string
   email?: string
@@ -37,18 +37,18 @@ export interface AsesorUpdate {
   notas?: string
 }
 
-export interface AsesorListResponse {
-  items: Asesor[]
+export interface AnalistaListResponse {
+  items: Analista[]
   total: number
   page: number
   size: number
   pages: number
 }
 
-class AsesorService {
-  private baseUrl = '/api/v1/asesores'
+class AnalistaService {
+  private baseUrl = '/api/v1/analistas'
 
-  // Listar asesores con paginación y filtros
+  // Listar analistaes con paginación y filtros
   async listarAsesores(params?: {
     skip?: number
     limit?: number
@@ -59,31 +59,31 @@ class AsesorService {
     return await apiClient.get<AsesorListResponse>(this.baseUrl, { params })
   }
 
-  // Listar solo asesores activos (para formularios)
+  // Listar solo analistaes activos (para formularios)
   async listarAsesoresActivos(especialidad?: string): Promise<Asesor[]> {
     const params = especialidad ? { especialidad } : undefined
     return await apiClient.get<Asesor[]>(`${this.baseUrl}/activos`, { params })
   }
 
-  // Obtener un asesor por ID
+  // Obtener un analista por ID
   async obtenerAsesor(id: number): Promise<Asesor> {
-    return await apiClient.get<Asesor>(`${this.baseUrl}/${id}`)
+    return await apiClient.get<Analista>(`${this.baseUrl}/${id}`)
   }
 
-  // Crear un nuevo asesor
+  // Crear un nuevo analista
   async crearAsesor(data: AsesorCreate): Promise<Asesor> {
-    return await apiClient.post<Asesor>(this.baseUrl, data)
+    return await apiClient.post<Analista>(this.baseUrl, data)
   }
 
-  // Actualizar un asesor existente
+  // Actualizar un analista existente
   async actualizarAsesor(id: number, data: AsesorUpdate): Promise<Asesor> {
-    return await apiClient.put<Asesor>(`${this.baseUrl}/${id}`, data)
+    return await apiClient.put<Analista>(`${this.baseUrl}/${id}`, data)
   }
 
-  // Eliminar un asesor (soft delete)
+  // Eliminar un analista (soft delete)
   async eliminarAsesor(id: number): Promise<{ message: string }> {
     return await apiClient.delete<{ message: string }>(`${this.baseUrl}/${id}`)
   }
 }
 
-export const asesorService = new AsesorService()
+export const analistaService = new AnalistaService()

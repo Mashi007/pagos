@@ -1,24 +1,24 @@
 """
-Endpoints de gestión de asesores
-CRUD completo para asesores
+Endpoints de gestión de analistas
+CRUD completo para analistas
 """
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
-from app.models.asesor import Asesor
+from app.models.analista import Analista
 from app.models.user import User
-from app.schemas.asesor import (
-    AsesorCreate, 
-    AsesorUpdate, 
-    AsesorResponse,
-    AsesorListResponse
+from app.schemas.analista import (
+    AnalistaCreate, 
+    AnalistaUpdate, 
+    AnalistaResponse,
+    AnalistaListResponse
 )
 from app.api.deps import get_current_user
 
 router = APIRouter()
 
-@router.get("/", response_model=AsesorListResponse)
+@router.get("/", response_model=AnalistaListResponse)
 def listar_asesores(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
@@ -31,16 +31,16 @@ def listar_asesores(
     👥 Listar todos los asesores con paginación y filtros
     """
     try:
-        query = db.query(Asesor)
+        query = db.query(Analista)
         
         # Aplicar filtros
         if activo is not None:
-            query = query.filter(Asesor.activo == activo)
+            query = query.filter(Analista.activo == activo)
         
         if search:
             query = query.filter(
-                Asesor.nombre.ilike(f"%{search}%") | 
-                Asesor.apellido.ilike(f"%{search}%")
+                Analista.nombre.ilike(f"%{search}%") | 
+                Analista.apellido.ilike(f"%{search}%")
             )
         
         
@@ -53,8 +53,8 @@ def listar_asesores(
         # Calcular páginas
         pages = (total + limit - 1) // limit
         
-        return AsesorListResponse(
-            items=[AsesorResponse.model_validate(a) for a in asesores],
+        return AnalistaListResponse(
+            items=[AnalistaResponse.model_validate(a) for a in asesores],
             total=total,
             page=(skip // limit) + 1,
             size=limit,
@@ -88,14 +88,14 @@ def listar_asesores_activos(
     Simplificado: Sin filtros adicionales, solo asesores activos
     """
     try:
-        query = db.query(Asesor).filter(Asesor.activo == True)
+        query = db.query(Analista).filter(Analista.activo == True)
         asesores = query.all()
         return [a.to_dict() for a in asesores]
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al listar asesores activos: {str(e)}")
 
-@router.get("/{asesor_id}", response_model=AsesorResponse)
+@router.get("/{asesor_id}", response_model=AnalistaResponse)
 def obtener_asesor(
     asesor_id: int,
     db: Session = Depends(get_db),
@@ -104,16 +104,16 @@ def obtener_asesor(
     """
     🔍 Obtener un asesor por ID
     """
-    asesor = db.query(Asesor).filter(Asesor.id == asesor_id).first()
+    asesor = db.query(Analista).filter(Analista.id == asesor_id).first()
     
     if not asesor:
-        raise HTTPException(status_code=404, detail="Asesor no encontrado")
+        raise HTTPException(status_code=404, detail="Analista no encontrado")
     
-    return AsesorResponse.model_validate(asesor)
+    return AnalistaResponse.model_validate(asesor)
 
-@router.post("", response_model=AsesorResponse)
+@router.post("", response_model=AnalistaResponse)
 def crear_asesor(
-    asesor_data: AsesorCreate,
+    asesor_data: AnalistaCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -127,19 +127,19 @@ def crear_asesor(
         
         # Verificar que no exista un asesor con el mismo email (solo si se proporciona email)
         if asesor_data.email:
-            existing = db.query(Asesor).filter(Asesor.email == asesor_data.email).first()
+            existing = db.query(Analista).filter(Analista.email == asesor_data.email).first()
             if existing:
                 raise HTTPException(status_code=400, detail="Ya existe un asesor con este email")
         
         # Crear nuevo asesor (nombre_completo es una propiedad, no se asigna)
         asesor_dict = asesor_data.model_dump()  # Pydantic v2
         
-        asesor = Asesor(**asesor_dict)
+        asesor = Analista(**asesor_dict)
         db.add(asesor)
         db.commit()
         db.refresh(asesor)
         
-        return AsesorResponse.model_validate(asesor)
+        return AnalistaResponse.model_validate(asesor)
         
     except HTTPException:
         raise
@@ -147,10 +147,10 @@ def crear_asesor(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al crear asesor: {str(e)}")
 
-@router.put("/{asesor_id}", response_model=AsesorResponse)
+@router.put("/{asesor_id}", response_model=AnalistaResponse)
 def actualizar_asesor(
     asesor_id: int,
-    asesor_data: AsesorUpdate,
+    asesor_data: AnalistaUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -158,16 +158,16 @@ def actualizar_asesor(
     ✏️ Actualizar un asesor existente
     """
     try:
-        asesor = db.query(Asesor).filter(Asesor.id == asesor_id).first()
+        asesor = db.query(Analista).filter(Analista.id == asesor_id).first()
         
         if not asesor:
-            raise HTTPException(status_code=404, detail="Asesor no encontrado")
+            raise HTTPException(status_code=404, detail="Analista no encontrado")
         
         # Verificar email único si se está cambiando
         if asesor_data.email and asesor_data.email != asesor.email:
-            existing = db.query(Asesor).filter(
-                Asesor.email == asesor_data.email,
-                Asesor.id != asesor_id
+            existing = db.query(Analista).filter(
+                Analista.email == asesor_data.email,
+                Analista.id != asesor_id
             ).first()
             if existing:
                 raise HTTPException(status_code=400, detail="Ya existe un asesor con este email")
@@ -180,7 +180,7 @@ def actualizar_asesor(
         db.commit()
         db.refresh(asesor)
         
-        return AsesorResponse.model_validate(asesor)
+        return AnalistaResponse.model_validate(asesor)
         
     except HTTPException:
         raise
@@ -198,16 +198,16 @@ def eliminar_asesor(
     🗑️ Eliminar un asesor (soft delete - marcar como inactivo)
     """
     try:
-        asesor = db.query(Asesor).filter(Asesor.id == asesor_id).first()
+        asesor = db.query(Analista).filter(Analista.id == asesor_id).first()
         
         if not asesor:
-            raise HTTPException(status_code=404, detail="Asesor no encontrado")
+            raise HTTPException(status_code=404, detail="Analista no encontrado")
         
         # Soft delete - marcar como inactivo
         asesor.activo = False
         db.commit()
         
-        return {"message": "Asesor eliminado exitosamente"}
+        return {"message": "Analista eliminado exitosamente"}
         
     except HTTPException:
         raise
