@@ -194,14 +194,14 @@ def create_test_user(db: Session = Depends(get_db)):
             db.delete(existing_user)
             db.commit()
         
-        # Crear hash de contraseña para "admin123"
-        password = "admin123"
-        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        # Crear hash de contraseña desde settings
+        from app.core.config import settings
+        password_hash = get_password_hash(settings.ADMIN_PASSWORD)
         
         # Crear usuario nuevo
         new_user = User(
             email="admin@rapicredit.com",
-            password_hash=password_hash.decode('utf-8'),
+            hashed_password=password_hash,
             nombre="Admin",
             apellido="Sistema",
             rol="USER",
