@@ -18,6 +18,7 @@ from app.db.session import SessionLocal
 from app.models.user import User
 from app.core.security import get_password_hash, verify_password
 from app.core.permissions import UserRole
+from app.core.config import settings
 from datetime import datetime
 
 
@@ -132,7 +133,7 @@ def create_admin_interactive():
             nombre=nombre,
             apellido=apellido,
             hashed_password=get_password_hash(password),
-            rol="ADMIN",
+            rol="USER",  # Corregido: usar rol USER en lugar de ADMIN
             is_active=True,
             created_at=datetime.utcnow()
         )
@@ -200,11 +201,11 @@ def create_admin_user():
         
         # Crear admin con datos por defecto mejorados
         admin = User(
-            email="itmaster@rapicreditca.com",
+            email=settings.ADMIN_EMAIL,
             nombre="Administrador",
             apellido="Sistema",
-            hashed_password=get_password_hash("Admin2025!"),
-            rol="ADMIN",
+            hashed_password=get_password_hash(settings.ADMIN_PASSWORD),
+            rol="USER",  # Corregido: usar rol USER en lugar de ADMIN
             is_active=True,
             created_at=datetime.utcnow()
         )
@@ -425,11 +426,11 @@ def create_admin_user():
         
         # Crear admin con datos por defecto mejorados
         admin = User(
-            email="itmaster@rapicreditca.com",
+            email=settings.ADMIN_EMAIL,
             nombre="Administrador",
             apellido="Sistema",
-            hashed_password=get_password_hash("Admin2025!"),
-            rol="ADMIN",
+            hashed_password=get_password_hash(settings.ADMIN_PASSWORD),
+            rol="USER",  # Corregido: usar rol USER en lugar de ADMIN
             is_active=True,
             created_at=datetime.utcnow()
         )
