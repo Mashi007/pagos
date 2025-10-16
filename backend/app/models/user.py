@@ -8,6 +8,8 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.db.session import Base
 from app.core.permissions import UserRole
+
+
 class User(Base):
     """Modelo de Usuario"""
     

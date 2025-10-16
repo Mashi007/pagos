@@ -1,3 +1,7 @@
+"""
+Endpoints de gestión de concesionarios
+CRUD completo para concesionarios
+"""
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session

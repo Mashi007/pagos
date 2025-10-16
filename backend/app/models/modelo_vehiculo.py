@@ -4,7 +4,7 @@ Modelo SQLAlchemy para modelos de vehículos configurables
 """
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Numeric
 from sqlalchemy.sql import func
-from app.db.base import Base
+from app.db.session import Base
 
 
 class ModeloVehiculo(Base):
