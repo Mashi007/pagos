@@ -135,5 +135,6 @@ async def root():
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "status": "running",
-        "docs": "/docs"
+        "docs": "/docs",
+        "deploy_timestamp": "2025-10-16T09:45:00Z"
     }
