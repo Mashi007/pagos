@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 from app.models.concesionario import Concesionario
-from app.models.asesor import Asesor
+from app.models.analista import Analista
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -99,16 +99,16 @@ def crear_asesores(db: Session):
     
     for data in asesores_data:
         # Verificar si ya existe
-        existing = db.query(Asesor).filter(Asesor.email == data["email"]).first()
+        existing = db.query(Analista).filter(Analista.email == data["email"]).first()
         if not existing:
-            asesor = Asesor(**data)
+            asesor = Analista(**data)
             db.add(asesor)
-            logger.info(f"Asesor creado: {data['nombre']} {data['apellido']}")
+            logger.info(f"Analista creado: {data['nombre']} {data['apellido']}")
         else:
-            logger.info(f"Asesor ya existe: {data['email']}")
+            logger.info(f"Analista ya existe: {data['email']}")
     
     db.commit()
-    logger.info("Asesores creados exitosamente")
+    logger.info("Analistaes creados exitosamente")
 
 def main():
     """Función principal"""

@@ -12,7 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.db.session import SessionLocal
 from app.models.cliente import Cliente
 from app.models.concesionario import Concesionario
-from app.models.asesor import Asesor
+from app.models.analista import Analista
 
 def create_sample_clients():
     """Crear 2 clientes de ejemplo con datos reales"""
@@ -22,7 +22,7 @@ def create_sample_clients():
     try:
         # Obtener un concesionario y asesor existentes
         concesionario = db.query(Concesionario).filter(Concesionario.activo == True).first()
-        asesor = db.query(Asesor).filter(Asesor.activo == True).first()
+        asesor = db.query(Analista).filter(Analista.activo == True).first()
         
         if not concesionario or not asesor:
             print("❌ Error: No hay concesionarios o asesores activos en la base de datos")

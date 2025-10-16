@@ -18,7 +18,7 @@ from app.db.session import get_db
 from app.models.cliente import Cliente
 from app.models.pago import Pago
 from app.models.concesionario import Concesionario
-from app.models.asesor import Asesor
+from app.models.analista import Analista
 from app.models.modelo_vehiculo import ModeloVehiculo
 from app.schemas.cliente import ClienteCreate
 from app.api.deps import get_current_user
@@ -391,14 +391,14 @@ async def _analizar_archivo_clientes(
                 ))
                 datos_vacios += 1
             
-            # Asesor (DATO_VACIO)
+            # Analista (DATO_VACIO)
             if not asesor:
                 errores_registro.append(ErrorCargaMasiva(
                     fila=fila_numero,
                     cedula=cedula,
                     campo='asesor',
                     valor_original='',
-                    error='Asesor vacío',
+                    error='Analista vacío',
                     tipo_error='DATO_VACIO',
                     puede_corregirse=True,
                     sugerencia='Seleccione un asesor de la lista'
@@ -549,9 +549,9 @@ async def _analizar_archivo_clientes(
             
             # Verificar si asesor existe
             if asesor:
-                asesor_obj = db.query(Asesor).filter(
-                    Asesor.nombre.ilike(f"%{asesor}%"),
-                    Asesor.activo == True
+                asesor_obj = db.query(Analista).filter(
+                    Analista.nombre.ilike(f"%{asesor}%"),
+                    Analista.activo == True
                 ).first()
                 
                 if not asesor_obj:
@@ -560,7 +560,7 @@ async def _analizar_archivo_clientes(
                         cedula=cedula,
                         campo='asesor',
                         valor_original=asesor,
-                        error=f'Asesor "{asesor}" no existe en la base de datos',
+                        error=f'Analista "{asesor}" no existe en la base de datos',
                         tipo_error='DATO_VACIO',
                         puede_corregirse=True,
                         sugerencia='Seleccione un asesor existente o créelo primero en Configuración'
@@ -977,12 +977,12 @@ async def corregir_registro_en_linea(
             
             elif campo == 'asesor':
                 # Verificar que existe
-                asesor = db.query(Asesor).filter(
-                    Asesor.nombre.ilike(f"%{valor}%"),
-                    Asesor.activo == True
+                asesor = db.query(Analista).filter(
+                    Analista.nombre.ilike(f"%{valor}%"),
+                    Analista.activo == True
                 ).first()
                 if not asesor:
-                    errores_validacion.append(f"Asesor '{valor}' no existe en la BD")
+                    errores_validacion.append(f"Analista '{valor}' no existe en la BD")
                 else:
                     datos_corregidos[campo] = valor
                     datos_corregidos['asesor_id'] = asesor.id
@@ -1138,9 +1138,9 @@ async def _guardar_cliente_desde_carga(
         
         # Buscar asesor_id
         if datos.get('asesor'):
-            asesor_obj = db.query(Asesor).filter(
-                Asesor.nombre.ilike(f"%{datos['asesor']}%"),
-                Asesor.activo == True
+            asesor_obj = db.query(Analista).filter(
+                Analista.nombre.ilike(f"%{datos['asesor']}%"),
+                Analista.activo == True
             ).first()
             if asesor_obj:
                 asesor_id = asesor_obj.id
@@ -1404,7 +1404,7 @@ async def obtener_opciones_configuracion(
     
     Retorna:
     - Concesionarios activos
-    - Asesores activos
+    - Analistaes activos
     - Modelos de vehículos activos
     - Modalidades de pago configurables
     """
@@ -1415,8 +1415,8 @@ async def obtener_opciones_configuracion(
         ).all()
         
         # Obtener asesores activos
-        asesores = db.query(Asesor).filter(
-            Asesor.activo == True
+        asesores = db.query(Analista).filter(
+            Analista.activo == True
         ).all()
         
         # Obtener modelos de vehículos activos

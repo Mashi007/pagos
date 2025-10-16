@@ -852,11 +852,11 @@ async def reporte_asesor_pdf(
         from reportlab.lib import colors
         import io
         
-        # Verificar que el asesor existe
-        from app.models.asesor import Asesor
-        asesor = db.query(Asesor).filter(Asesor.id == asesor_id).first()
+        # Verificar que el analista existe
+        from app.models.analista import Analista
+        asesor = db.query(Analista).filter(Analista.id == asesor_id).first()
         if not asesor:
-            raise HTTPException(status_code=404, detail="Asesor no encontrado")
+            raise HTTPException(status_code=404, detail="Analista no encontrado")
         
         # Establecer período por defecto
         if not fecha_inicio:
