@@ -205,7 +205,7 @@ def registrar_pago_manual(
         
         # 5. Crear registro de pago
         db_pago = Pago(
-            prestamo_id=cuotas[0].prestamo_id,  # Tomar el préstamo de la primera cuota
+            prestamo_id=cuotas[0].prestamo_id,
             numero_cuota=cuotas[0].numero_cuota,
             monto_cuota_programado=sum(c.monto_cuota for c in cuotas),
             monto_pagado=pago_data.monto_pagado,
