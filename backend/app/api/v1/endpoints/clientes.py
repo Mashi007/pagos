@@ -71,37 +71,44 @@ def listar_clientes(
         offset = (page - 1) * per_page
         clientes = query.offset(offset).limit(per_page).all()
         
-        # Serialización segura
+        # Serialización segura - usar Pydantic para consistencia
         clientes_dict = []
         for cliente in clientes:
-            cliente_data = {
-                "id": cliente.id,
-                "cedula": getattr(cliente, 'cedula', '') or '',
-                "nombres": getattr(cliente, 'nombres', '') or '',
-                "apellidos": getattr(cliente, 'apellidos', '') or '',
-                "telefono": getattr(cliente, 'telefono', '') or '',
-                "email": getattr(cliente, 'email', '') or '',
-                "direccion": getattr(cliente, 'direccion', '') or '',
-                "ocupacion": getattr(cliente, 'ocupacion', '') or '',
-                "modelo_vehiculo": getattr(cliente, 'modelo_vehiculo', '') or '',
-                "marca_vehiculo": getattr(cliente, 'marca_vehiculo', '') or '',
-                "anio_vehiculo": getattr(cliente, 'anio_vehiculo', None),
-                "color_vehiculo": getattr(cliente, 'color_vehiculo', '') or '',
-                "concesionario": getattr(cliente, 'concesionario', '') or '',
-                "total_financiamiento": float(getattr(cliente, 'total_financiamiento', 0) or 0),
-                "cuota_inicial": float(getattr(cliente, 'cuota_inicial', 0) or 0),
-                "monto_financiado": float(getattr(cliente, 'monto_financiado', 0) or 0),
-                "modalidad_pago": getattr(cliente, 'modalidad_pago', 'MENSUAL') or 'MENSUAL',
-                "numero_amortizaciones": getattr(cliente, 'numero_amortizaciones', 0) or 0,
-                "asesor_config_id": getattr(cliente, 'asesor_config_id', None),
-                "estado": getattr(cliente, 'estado', 'ACTIVO') or 'ACTIVO',
-                "activo": bool(getattr(cliente, 'activo', True)),
-                "estado_financiero": getattr(cliente, 'estado_financiero', 'AL_DIA') or 'AL_DIA',
-                "dias_mora": getattr(cliente, 'dias_mora', 0) or 0,
-                "fecha_registro": cliente.fecha_registro.isoformat() if cliente.fecha_registro else None,
-                "fecha_asignacion": cliente.fecha_asignacion.isoformat() if cliente.fecha_asignacion else None
-            }
-            clientes_dict.append(cliente_data)
+            try:
+                # Usar Pydantic para serialización consistente
+                cliente_response = ClienteResponse.model_validate(cliente)
+                clientes_dict.append(cliente_response.model_dump())
+            except Exception as e:
+                # Fallback a serialización manual si Pydantic falla
+                logger.warning(f"Error serializando cliente {cliente.id}: {e}")
+                cliente_data = {
+                    "id": cliente.id,
+                    "cedula": getattr(cliente, 'cedula', '') or '',
+                    "nombres": getattr(cliente, 'nombres', '') or '',
+                    "apellidos": getattr(cliente, 'apellidos', '') or '',
+                    "telefono": getattr(cliente, 'telefono', '') or '',
+                    "email": getattr(cliente, 'email', '') or '',
+                    "direccion": getattr(cliente, 'direccion', '') or '',
+                    "ocupacion": getattr(cliente, 'ocupacion', '') or '',
+                    "modelo_vehiculo": getattr(cliente, 'modelo_vehiculo', '') or '',
+                    "marca_vehiculo": getattr(cliente, 'marca_vehiculo', '') or '',
+                    "anio_vehiculo": getattr(cliente, 'anio_vehiculo', None),
+                    "color_vehiculo": getattr(cliente, 'color_vehiculo', '') or '',
+                    "concesionario": getattr(cliente, 'concesionario', '') or '',
+                    "total_financiamiento": float(getattr(cliente, 'total_financiamiento', 0) or 0),
+                    "cuota_inicial": float(getattr(cliente, 'cuota_inicial', 0) or 0),
+                    "monto_financiado": float(getattr(cliente, 'monto_financiado', 0) or 0),
+                    "modalidad_pago": getattr(cliente, 'modalidad_pago', 'MENSUAL') or 'MENSUAL',
+                    "numero_amortizaciones": getattr(cliente, 'numero_amortizaciones', 0) or 0,
+                    "asesor_config_id": getattr(cliente, 'asesor_config_id', None),
+                    "estado": getattr(cliente, 'estado', 'ACTIVO') or 'ACTIVO',
+                    "activo": bool(getattr(cliente, 'activo', True)),
+                    "estado_financiero": getattr(cliente, 'estado_financiero', 'AL_DIA') or 'AL_DIA',
+                    "dias_mora": getattr(cliente, 'dias_mora', 0) or 0,
+                    "fecha_registro": cliente.fecha_registro.isoformat() if cliente.fecha_registro else None,
+                    "fecha_asignacion": cliente.fecha_asignacion.isoformat() if cliente.fecha_asignacion else None
+                }
+                clientes_dict.append(cliente_data)
         
         return {
             "clientes": clientes_dict,
@@ -179,9 +186,29 @@ def crear_cliente(
         if existing:
             raise HTTPException(status_code=400, detail="Ya existe un cliente con esta cédula")
         
-        # Crear nuevo cliente
-        cliente_dict = cliente_data.model_dump()  # Pydantic v2
-        cliente = Cliente(**cliente_dict)
+        # Crear nuevo cliente - SOLO campos que existen en el modelo
+        cliente_dict = cliente_data.model_dump()
+        
+        # Filtrar campos que NO existen en el modelo Cliente
+        campos_validos = {
+            'cedula', 'nombres', 'apellidos', 'telefono', 'email', 'direccion',
+            'fecha_nacimiento', 'ocupacion', 'modelo_vehiculo', 'marca_vehiculo',
+            'anio_vehiculo', 'color_vehiculo', 'chasis', 'motor', 'concesionario',
+            'vendedor_concesionario', 'total_financiamiento', 'cuota_inicial',
+            'fecha_entrega', 'numero_amortizaciones', 'modalidad_pago',
+            'asesor_config_id', 'notas'
+        }
+        
+        # Crear diccionario solo con campos válidos
+        cliente_dict_filtrado = {k: v for k, v in cliente_dict.items() if k in campos_validos}
+        
+        # Calcular monto_financiado si no se proporciona
+        if 'total_financiamiento' in cliente_dict_filtrado and 'cuota_inicial' in cliente_dict_filtrado:
+            total = cliente_dict_filtrado.get('total_financiamiento', 0) or 0
+            inicial = cliente_dict_filtrado.get('cuota_inicial', 0) or 0
+            cliente_dict_filtrado['monto_financiado'] = total - inicial
+        
+        cliente = Cliente(**cliente_dict_filtrado)
         
         db.add(cliente)
         db.commit()
