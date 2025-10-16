@@ -7,6 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.db.session import get_db
 from app.models.user import User
@@ -209,8 +212,9 @@ def obtener_configuracion_para_frontend(
             config_financiera = ConfigHelper.get_financial_config(db)
             configuracion_publica["limites"].update(config_financiera)
             
-        except:
-            pass  # Usar valores por defecto si hay error
+        except Exception as e:
+            logger.warning(f"Error cargando configuración financiera: {e}")
+            # Usar valores por defecto si hay error
         
         return {
             "configuracion": configuracion_publica,
