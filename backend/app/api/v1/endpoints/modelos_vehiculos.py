@@ -27,9 +27,7 @@ def listar_modelos_vehiculos(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
-    marca: Optional[str] = Query(None, description="Filtrar por marca"),
-    categoria: Optional[str] = Query(None, description="Filtrar por categoría"),
-    search: Optional[str] = Query(None, description="Buscar por nombre"),
+    search: Optional[str] = Query(None, description="Buscar por modelo"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -42,12 +40,6 @@ def listar_modelos_vehiculos(
         # Aplicar filtros
         if activo is not None:
             query = query.filter(ModeloVehiculo.activo == activo)
-        
-        if marca:
-            query = query.filter(ModeloVehiculo.marca.ilike(f"%{marca}%"))
-        
-        if categoria:
-            query = query.filter(ModeloVehiculo.categoria == categoria)
         
         if search:
             query = query.filter(
@@ -64,7 +56,7 @@ def listar_modelos_vehiculos(
         pages = (total + limit - 1) // limit
         
         return ModeloVehiculoListResponse(
-            items=[ModeloVehiculoResponse.from_orm(m) for m in modelos],
+            items=[ModeloVehiculoResponse.model_validate(m) for m in modelos],
             total=total,
             page=(skip // limit) + 1,
             page_size=limit,
@@ -102,11 +94,11 @@ def crear_modelo_vehiculo(
     """
     ➕ Crear un nuevo modelo de vehículo
     """
-    # Solo admin puede crear modelos
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE"]:
+    # Solo administrador general puede crear modelos
+    if current_user.rol not in ["ADMINISTRADOR_GENERAL"]:
         raise HTTPException(
             status_code=403, 
-            detail="Solo administradores y gerentes pueden crear modelos de vehículos"
+            detail="Solo administradores pueden crear modelos de vehículos"
         )
     
     try:
@@ -127,7 +119,7 @@ def crear_modelo_vehiculo(
         db.commit()
         db.refresh(modelo)
         
-        return ModeloVehiculoResponse.from_orm(modelo)
+        return ModeloVehiculoResponse.model_validate(modelo)
         
     except HTTPException:
         raise
@@ -149,7 +141,7 @@ def obtener_modelo_vehiculo(
     if not modelo:
         raise HTTPException(status_code=404, detail="Modelo de vehículo no encontrado")
     
-    return ModeloVehiculoResponse.from_orm(modelo)
+    return ModeloVehiculoResponse.model_validate(modelo)
 
 
 @router.put("/{modelo_id}", response_model=ModeloVehiculoResponse)
@@ -162,11 +154,11 @@ def actualizar_modelo_vehiculo(
     """
     ✏️ Actualizar un modelo de vehículo existente
     """
-    # Solo admin puede actualizar modelos
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE"]:
+    # Solo administrador general puede actualizar modelos
+    if current_user.rol not in ["ADMINISTRADOR_GENERAL"]:
         raise HTTPException(
             status_code=403, 
-            detail="Solo administradores y gerentes pueden actualizar modelos de vehículos"
+            detail="Solo administradores pueden actualizar modelos de vehículos"
         )
     
     try:
@@ -195,7 +187,7 @@ def actualizar_modelo_vehiculo(
         db.commit()
         db.refresh(modelo)
         
-        return ModeloVehiculoResponse.from_orm(modelo)
+        return ModeloVehiculoResponse.model_validate(modelo)
         
     except HTTPException:
         raise
@@ -213,11 +205,11 @@ def eliminar_modelo_vehiculo(
     """
     🗑️ Eliminar un modelo de vehículo (soft delete - marcar como inactivo)
     """
-    # Solo admin puede eliminar modelos
-    if current_user.rol not in ["ADMINISTRADOR_GENERAL", "GERENTE"]:
+    # Solo administrador general puede eliminar modelos
+    if current_user.rol not in ["ADMINISTRADOR_GENERAL"]:
         raise HTTPException(
             status_code=403, 
-            detail="Solo administradores y gerentes pueden eliminar modelos de vehículos"
+            detail="Solo administradores pueden eliminar modelos de vehículos"
         )
     
     try:
@@ -253,64 +245,15 @@ def obtener_estadisticas_modelos(
         modelos_activos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo == True).count()
         modelos_inactivos = total_modelos - modelos_activos
         
-        # Por categoría
-        por_categoria = db.query(
-            ModeloVehiculo.categoria,
-            func.count(ModeloVehiculo.id).label('cantidad')
-        ).filter(ModeloVehiculo.activo == True).group_by(ModeloVehiculo.categoria).all()
-        
-        # Por marca
-        por_marca = db.query(
-            ModeloVehiculo.marca,
-            func.count(ModeloVehiculo.id).label('cantidad')
-        ).filter(ModeloVehiculo.activo == True).group_by(ModeloVehiculo.marca).all()
-        
         return ModeloVehiculoStatsResponse(
             total_modelos=total_modelos,
             modelos_activos=modelos_activos,
             modelos_inactivos=modelos_inactivos,
-            por_categoria={cat: cant for cat, cant in por_categoria},
-            por_marca={marca: cant for marca, cant in por_marca}
+            por_categoria={},
+            por_marca={}
         )
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo estadísticas: {str(e)}")
 
 
-@router.get("/categorias/lista")
-def listar_categorias_disponibles(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    📋 Listar todas las categorías disponibles
-    """
-    try:
-        categorias = db.query(ModeloVehiculo.categoria).filter(
-            ModeloVehiculo.categoria.isnot(None),
-            ModeloVehiculo.activo == True
-        ).distinct().all()
-        
-        return [cat[0] for cat in categorias if cat[0]]
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error listando categorías: {str(e)}")
-
-
-@router.get("/marcas/lista")
-def listar_marcas_disponibles(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    🏷️ Listar todas las marcas disponibles
-    """
-    try:
-        marcas = db.query(ModeloVehiculo.marca).filter(
-            ModeloVehiculo.activo == True
-        ).distinct().all()
-        
-        return [marca[0] for marca in marcas]
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error listando marcas: {str(e)}")
