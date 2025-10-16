@@ -893,7 +893,6 @@ def obtener_configuracion_dashboard(
             "asesores": [
                 {"id": u.id, "nombre": u.full_name}
                 for u in db.query(User).filter(
-                    User.rol.in_(["ASESOR", "COMERCIAL", "GERENTE"]),
                     User.is_active == True
                 ).all()
             ]

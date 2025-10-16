@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
+    # ============================================
+    # USUARIO ADMINISTRADOR INICIAL
+    # ============================================
+    ADMIN_EMAIL: str = "itmaster@rapicreditca.com"
+    ADMIN_PASSWORD: str = "R@pi_2025**"  # Cambiar en producción mediante variable de entorno
+    
     # CORS
     ALLOWED_ORIGINS: str = "*"
     

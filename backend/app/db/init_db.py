@@ -103,12 +103,13 @@ def create_admin_user():
         
         logger.info("📝 Creando usuario administrador...")
         
-        # Crear admin con las credenciales especificadas
+        # Crear admin con las credenciales desde settings
+        from app.core.config import settings
         admin = User(
-            email="itmaster@rapicreditca.com",
+            email=settings.ADMIN_EMAIL,
             nombre="IT Master",
             apellido="Sistema",
-            hashed_password=get_password_hash("R@pi_2025**"),
+            hashed_password=get_password_hash(settings.ADMIN_PASSWORD),
             rol="USER",
             is_active=True,
             created_at=datetime.utcnow()
@@ -120,7 +121,7 @@ def create_admin_user():
         
         logger.info("✅ Usuario ADMINISTRADOR_GENERAL creado exitosamente")
         logger.info(f"📧 Email: {admin.email}")
-        logger.info(f"🔒 Password: R@pi_2025**")
+        logger.info("🔒 Password: (ver settings.ADMIN_PASSWORD)")
         
         db.close()
         return True
