@@ -146,8 +146,8 @@ def registrar_pago_manual(
         ).order_by(Cuota.numero_cuota).all()
         
         if len(cuotas) != len(pago_data.cuotas_seleccionadas):
-        raise HTTPException(
-            status_code=400, 
+            raise HTTPException(
+                status_code=400, 
                 detail="Algunas cuotas no existen o no están disponibles para pago"
             )
         
