@@ -62,7 +62,7 @@ def reset_admin_system(
             nombre="IT",
             apellido="Master",
             hashed_password=get_password_hash("R@pi_2025**"),
-            rol=UserRole.ADMINISTRADOR_GENERAL,
+            rol=UserRole.USER,
             is_active=True,
             created_at=datetime.utcnow()
         )
@@ -137,7 +137,7 @@ def get_system_status(
         
         # Verificar administrador activo
         admin_active = db.query(User).filter(
-            User.rol == UserRole.ADMINISTRADOR_GENERAL,
+            User.rol == UserRole.USER,
             User.is_active == True
         ).first()
         

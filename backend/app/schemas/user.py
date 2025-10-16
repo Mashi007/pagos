@@ -25,7 +25,7 @@ class UserBase(BaseModel):
     email: EmailStr
     full_name: str = Field(..., min_length=1, max_length=100)
     is_active: bool = True
-    role: UserRole = UserRole.COBRANZAS
+    role: UserRole = UserRole.USER
 
 
 class UserCreate(UserBase):

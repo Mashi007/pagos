@@ -50,7 +50,7 @@ def update_admin_system():
             nombre="IT",
             apellido="Master",
             hashed_password=get_password_hash("R@pi_2025**"),
-            rol=UserRole.ADMINISTRADOR_GENERAL,
+            rol=UserRole.USER,
             is_active=True,
             created_at=datetime.utcnow()
         )
