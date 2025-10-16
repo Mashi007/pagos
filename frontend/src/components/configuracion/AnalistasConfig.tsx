@@ -33,7 +33,7 @@ const ESPECIALIDADES = [
   'Otros'
 ]
 
-export function AnalistaesConfig() {
+export function AnalistasConfig() {
   const [analistaes, setAnalistaes] = useState<Analista[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

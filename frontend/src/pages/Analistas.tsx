@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
-export function Asesores() {
+export function Analistas() {
   const [searchTerm, setSearchTerm] = useState('')
 
   // Mock data - reemplazar con useQuery
