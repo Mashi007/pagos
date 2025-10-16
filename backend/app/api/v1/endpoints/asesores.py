@@ -127,14 +127,8 @@ def crear_asesor(
             if existing:
                 raise HTTPException(status_code=400, detail="Ya existe un asesor con este email")
         
-        # Generar nombre_completo
-        nombre_completo = asesor_data.nombre
-        if asesor_data.apellido:
-            nombre_completo = f"{asesor_data.nombre} {asesor_data.apellido}"
-        
-        # Crear nuevo asesor
-        asesor_dict = asesor_data.dict()
-        asesor_dict['nombre_completo'] = nombre_completo
+        # Crear nuevo asesor (nombre_completo es una propiedad, no se asigna)
+        asesor_dict = asesor_data.model_dump()  # Pydantic v2
         
         asesor = Asesor(**asesor_dict)
         db.add(asesor)
