@@ -6,9 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Layout } from '@/components/layout/Layout'
 
 // Auth
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
-import { useAuth } from '@/store/authStore'
-import { useAuthPersistence } from '@/hooks/useAuthPersistence'
+import { SimpleProtectedRoute } from '@/components/auth/SimpleProtectedRoute'
+import { useSimpleAuth } from '@/store/simpleAuthStore'
 
 // Pages
 import { Login } from '@/pages/Login'
@@ -60,35 +59,7 @@ const NotFound = () => (
 )
 
 function App() {
-  const { isAuthenticated, initializeAuth } = useAuth()
-  const [isInitialized, setIsInitialized] = useState(false)
-  
-  // Inicializar autenticación al cargar la aplicación
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        await initializeAuth()
-        setIsInitialized(true)
-      } catch (error) {
-        console.error('Error inicializando autenticación:', error)
-        setIsInitialized(true)
-      }
-    }
-    
-    initAuth()
-  }, [initializeAuth])
-
-  // Mostrar loading screen mientras se inicializa la autenticación
-  if (!isInitialized) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-accent/5">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando...</p>
-        </div>
-      </div>
-    )
-  }
+  const { isAuthenticated } = useSimpleAuth()
 
   return (
     <AnimatePresence mode="wait">
@@ -117,9 +88,9 @@ function App() {
         <Route
           path="/*"
           element={
-            <ProtectedRoute>
+            <SimpleProtectedRoute>
               <Layout />
-            </ProtectedRoute>
+            </SimpleProtectedRoute>
           }
         >
           {/* Dashboard */}
@@ -134,11 +105,7 @@ function App() {
           {/* Carga Masiva */}
           <Route
             path="carga-masiva"
-            element={
-              <ProtectedRoute requiredRoles={['USER']}>
-                <CargaMasiva />
-              </ProtectedRoute>
-            }
+            element={<CargaMasiva />}
           />
 
           {/* Préstamos */}
