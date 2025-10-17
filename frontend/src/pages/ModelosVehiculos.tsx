@@ -113,7 +113,7 @@ export function ModelosVehiculos() {
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* Stats Dashboard */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="pt-6">
@@ -121,11 +121,15 @@ export function ModelosVehiculos() {
               <div>
                 <p className="text-sm text-gray-500">Total Modelos</p>
                 <p className="text-2xl font-bold">{modelos.length}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {modelos.length > 0 ? `${((modelos.filter(m => m.activo).length / modelos.length) * 100).toFixed(1)}% activos` : 'Sin datos'}
+                </p>
               </div>
-              <Car className="w-8 h-8 text-primary" />
+              <Car className="w-8 h-8 text-blue-600" />
             </div>
           </CardContent>
         </Card>
+        
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -134,11 +138,15 @@ export function ModelosVehiculos() {
                 <p className="text-2xl font-bold text-green-600">
                   {modelos.filter(m => m.activo).length}
                 </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Disponibles para financiamiento
+                </p>
               </div>
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
           </CardContent>
         </Card>
+        
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -146,26 +154,111 @@ export function ModelosVehiculos() {
                 <p className="text-sm text-gray-500">Inactivos</p>
                 <p className="text-2xl font-bold text-red-600">
                   {modelos.filter(m => !m.activo).length}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  No disponibles temporalmente
                 </p>
               </div>
               <XCircle className="w-8 h-8 text-red-600" />
             </div>
           </CardContent>
         </Card>
+        
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Inactivos</p>
-                <p className="text-2xl font-bold text-red-600">
-                  {modelos.filter(m => !m.activo).length}
+                <p className="text-sm text-gray-500">Último Mes</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {modelos.filter(m => {
+                    const fechaCreacion = new Date(m.created_at)
+                    const haceUnMes = new Date()
+                    haceUnMes.setMonth(haceUnMes.getMonth() - 1)
+                    return fechaCreacion >= haceUnMes
+                  }).length}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Modelos agregados
                 </p>
               </div>
-              <XCircle className="w-8 h-8 text-red-600" />
+              <Plus className="w-8 h-8 text-blue-600" />
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Resumen de Datos */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Car className="w-5 h-5 mr-2" />
+            Resumen de Datos
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <h4 className="font-medium text-gray-900">Distribución por Estado</h4>
+              <div className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-green-600">Activos</span>
+                  <span className="font-medium">{modelos.filter(m => m.activo).length}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-red-600">Inactivos</span>
+                  <span className="font-medium">{modelos.filter(m => !m.activo).length}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <h4 className="font-medium text-gray-900">Actividad Reciente</h4>
+              <div className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Última semana</span>
+                  <span className="font-medium">
+                    {modelos.filter(m => {
+                      const fechaCreacion = new Date(m.created_at)
+                      const haceUnaSemana = new Date()
+                      haceUnaSemana.setDate(haceUnaSemana.getDate() - 7)
+                      return fechaCreacion >= haceUnaSemana
+                    }).length}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Último mes</span>
+                  <span className="font-medium">
+                    {modelos.filter(m => {
+                      const fechaCreacion = new Date(m.created_at)
+                      const haceUnMes = new Date()
+                      haceUnMes.setMonth(haceUnMes.getMonth() - 1)
+                      return fechaCreacion >= haceUnMes
+                    }).length}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <h4 className="font-medium text-gray-900">Estadísticas</h4>
+              <div className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Tasa de activación</span>
+                  <span className="font-medium text-green-600">
+                    {modelos.length > 0 ? `${((modelos.filter(m => m.activo).length / modelos.length) * 100).toFixed(1)}%` : '0%'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Promedio por mes</span>
+                  <span className="font-medium">
+                    {modelos.length > 0 ? Math.round(modelos.length / Math.max(1, Math.ceil((new Date().getTime() - new Date(Math.min(...modelos.map(m => new Date(m.created_at).getTime()))).getTime()) / (1000 * 60 * 60 * 24 * 30)))) : 0}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Búsqueda */}
       <Card>
