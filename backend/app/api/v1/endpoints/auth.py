@@ -66,18 +66,17 @@ def add_cors_headers(request: Request, response: Response) -> None:
 @router.options("/login")
 async def options_login(request: Request, response: Response):
     """Manejar preflight CORS para login"""
-    try:
-        add_cors_headers(request, response)
-        return {"message": "OK"}
-    except Exception as e:
-        from app.core.logging import logger
-        logger.error(f"❌ Error en OPTIONS login: {str(e)}")
-        # FALLBACK: Headers básicos
-        response.headers["Access-Control-Allow-Origin"] = "https://rapicredit.onrender.com"
+    # HEADERS CORS DIRECTOS - SIN HELPER
+    origin = request.headers.get("origin")
+    
+    if origin == "https://rapicredit.onrender.com":
+        response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
         response.headers["Access-Control-Allow-Headers"] = "*"
-        return {"message": "OK"}
+        response.headers["Access-Control-Max-Age"] = "86400"
+    
+    return {"message": "OK"}
 
 @router.get("/cors-test")
 async def cors_test(request: Request):
@@ -111,8 +110,14 @@ def login(
     
     **Rate Limit:** 5 intentos por minuto por IP
     """
-    # HEADERS CORS DIRECTOS - USANDO HELPER
-    add_cors_headers(request, response)
+    # HEADERS CORS DIRECTOS - SIN HELPER
+    origin = request.headers.get("origin")
+    
+    if origin == "https://rapicredit.onrender.com":
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        response.headers["Access-Control-Allow-Headers"] = "*"
     
     try:
         token, user = AuthService.login(db, login_data)
