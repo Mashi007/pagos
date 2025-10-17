@@ -44,6 +44,7 @@ from app.api.v1.endpoints import (
     analistas,
     modelos_vehiculos,
     fix_database,
+    test_auth,
 )
 
 # Configurar logging
@@ -168,6 +169,7 @@ app.include_router(concesionarios.router, prefix=f"{settings.API_V1_PREFIX}/conc
 app.include_router(analistas.router, prefix=f"{settings.API_V1_PREFIX}/analistas", tags=["Analistas"])
 app.include_router(modelos_vehiculos.router, prefix=f"{settings.API_V1_PREFIX}/modelos-vehiculos", tags=["Modelos Vehículos"])
 app.include_router(fix_database.router, prefix=f"{settings.API_V1_PREFIX}/fix-db", tags=["Database Fix"])
+app.include_router(test_auth.router, prefix=f"{settings.API_V1_PREFIX}/test", tags=["Test Auth"])
 # app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])  # Removido - se usarán datos reales
 
 
