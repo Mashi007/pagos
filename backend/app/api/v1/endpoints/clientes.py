@@ -34,9 +34,10 @@ def listar_clientes(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Listar clientes - VERSIÓN DEFINITIVA FUNCIONAL
+    Listar clientes - VERSIÓN SIMPLIFICADA PARA DIAGNÓSTICO
     """
     try:
+        logger.info(f"🔍 Listar clientes - Usuario: {current_user.email}")
         # Query base simple
         query = db.query(Cliente)
         
@@ -110,6 +111,8 @@ def listar_clientes(
                 }
                 clientes_dict.append(cliente_data)
         
+        logger.info(f"✅ Clientes encontrados: {len(clientes_dict)}")
+        
         return {
             "clientes": clientes_dict,
             "total": total,
@@ -119,7 +122,7 @@ def listar_clientes(
         }
         
     except Exception as e:
-        logger.error(f"Error en listar_clientes: {e}")
+        logger.error(f"❌ Error en listar_clientes: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 @router.get("/count")
@@ -137,41 +140,43 @@ def contar_clientes(
         logger.error(f"Error contando clientes: {e}")
         raise HTTPException(status_code=500, detail=f"Error contando clientes: {str(e)}")
 
-@router.get("/test")
-def test_clientes_endpoint(
-    db: Session = Depends(get_db)
+@router.get("/ping")
+def ping_clientes():
+    """
+    Endpoint de prueba simple sin dependencias
+    """
+    return {
+        "status": "success",
+        "message": "Endpoint de clientes funcionando",
+        "timestamp": "2025-10-17T22:56:00Z"
+    }
+
+@router.get("/test-auth")
+def test_clientes_with_auth(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
-    Test endpoint sin autenticación
+    Test endpoint con autenticación
     """
     try:
         total = db.query(Cliente).count()
-        sample = db.query(Cliente).limit(3).all()
-        
-        sample_data = []
-        for cliente in sample:
-            sample_data.append({
-                "id": cliente.id,
-                "cedula": getattr(cliente, 'cedula', ''),
-                "nombres": getattr(cliente, 'nombres', '')
-            })
-        
         return {
             "status": "success",
             "total_clientes": total,
-            "sample": sample_data,
-            "message": "Test endpoint funcionando"
+            "user": current_user.email,
+            "message": "Test endpoint con auth funcionando"
         }
         
     except Exception as e:
-        logger.error(f"Error en test_clientes_endpoint: {e}")
+        logger.error(f"Error en test_clientes_with_auth: {e}")
         return {
             "status": "error",
             "error": str(e),
-            "message": "Error en test endpoint"
+            "message": "Error en test endpoint con auth"
         }
 
-@router.post("", response_model=ClienteResponse)
+@router.post("/crear", response_model=ClienteResponse)
 def crear_cliente(
     cliente_data: ClienteCreate,
     db: Session = Depends(get_db),
