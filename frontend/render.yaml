@@ -4,6 +4,8 @@ services:
     env: node
     region: oregon
     plan: free
+    branch: main
+    autoDeploy: true
     buildCommand: npm ci && npm run build
     startCommand: node server.js
     healthCheckPath: /
