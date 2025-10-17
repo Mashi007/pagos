@@ -18,6 +18,7 @@ export function ModelosVehiculos() {
 
   // Cargar modelos al montar el componente
   useEffect(() => {
+    console.log('🔄 Cargando modelos de vehículos desde API...')
     cargarModelos()
   }, [])
 
@@ -25,12 +26,14 @@ export function ModelosVehiculos() {
     try {
       setLoading(true)
       setError(null)
+      console.log('📡 Llamando a API: /api/v1/modelos-vehiculos')
       const response = await modeloVehiculoService.listarModelos({ limit: 100 })
+      console.log('✅ Respuesta API:', response)
       setModelos(response.items)
     } catch (err) {
+      console.error('❌ Error API:', err)
       setError('Error al cargar modelos de vehículos')
       toast.error('Error al cargar modelos de vehículos')
-      console.error('Error:', err)
     } finally {
       setLoading(false)
     }
