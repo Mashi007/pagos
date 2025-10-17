@@ -167,7 +167,7 @@ def exportar_auditoria_excel(
     """
     try:
         # Verificar permisos - solo ADMIN puede exportar
-        if not has_permission(current_user.rol, Permission.USER_CREATE_ADMIN):
+        if current_user.rol != "ADMIN":
             raise HTTPException(
                 status_code=403, 
                 detail="Solo los administradores pueden exportar auditoría"
