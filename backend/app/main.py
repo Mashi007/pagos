@@ -38,6 +38,7 @@ from app.api.v1.endpoints import (
     inteligencia_artificial,
     setup_inicial,
     notificaciones_multicanal,
+    monitoreo_auditoria,
     scheduler_notificaciones,
     validadores,
     concesionarios,
@@ -174,6 +175,7 @@ app.include_router(fix_database.router, prefix=f"{settings.API_V1_PREFIX}/fix-db
 app.include_router(test_auth.router, prefix=f"{settings.API_V1_PREFIX}/test", tags=["Test Auth"])
 app.include_router(debug_auth.router, prefix=f"{settings.API_V1_PREFIX}/debug", tags=["Debug Auth"])
 app.include_router(test_auditoria.router, prefix=f"{settings.API_V1_PREFIX}/test-auditoria", tags=["Test Auditoria"])
+app.include_router(monitoreo_auditoria.router, prefix=f"{settings.API_V1_PREFIX}/monitoreo-auditoria", tags=["Monitoreo Auditoría"])
 # app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])  # Removido - se usarán datos reales
 
 
