@@ -77,7 +77,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
             logger.log('Store: Guardando en localStorage...')
             localStorage.setItem('access_token', accessToken)
             localStorage.setItem('refresh_token', refreshToken)
-            localStorage.setItem('user', JSON.stringify(userData))
+            // Validar que userData no sea undefined antes de guardar
+            if (userData && typeof userData === 'object') {
+              localStorage.setItem('user', JSON.stringify(userData))
+            } else {
+              throw new Error('Datos de usuario inválidos para guardar')
+            }
             localStorage.setItem('remember_me', 'true')
             logger.log('Store: Tokens guardados en localStorage')
             logger.log('Store: Verificación localStorage:', {
@@ -92,7 +97,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           } else {
             sessionStorage.setItem('access_token', accessToken)
             sessionStorage.setItem('refresh_token', refreshToken)
-            sessionStorage.setItem('user', JSON.stringify(userData))
+            // Validar que userData no sea undefined antes de guardar
+            if (userData && typeof userData === 'object') {
+              sessionStorage.setItem('user', JSON.stringify(userData))
+            } else {
+              throw new Error('Datos de usuario inválidos para guardar')
+            }
             localStorage.setItem('remember_me', 'false')
             logger.log('Store: Tokens guardados en sessionStorage')
             logger.log('Store: Verificación sessionStorage:', {
@@ -233,6 +243,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           if (accessToken && refreshToken && userData) {
             try {
               // Verificar si el token sigue siendo válido
+              // Validar que userData no sea "undefined" o string vacío
+              if (userData === 'undefined' || userData === 'null' || userData.trim() === '') {
+                throw new Error('Datos de usuario inválidos')
+              }
               const user = JSON.parse(userData)
               
               // Actualizar estado con datos guardados
