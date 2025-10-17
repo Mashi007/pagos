@@ -19,7 +19,10 @@ export function ProtectedRoute({
 
   // Verificar autenticación temporal
   const isTemporaryAuth = localStorage.getItem('isAuthenticated') === 'true'
-  const tempUser = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!) : null
+  const tempUserData = localStorage.getItem('user')
+  const tempUser = tempUserData && tempUserData !== 'undefined' && tempUserData !== 'null' && tempUserData.trim() !== '' 
+    ? JSON.parse(tempUserData) 
+    : null
 
   useEffect(() => {
     // Si hay token pero no hay usuario, intentar refrescar
