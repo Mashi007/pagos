@@ -236,7 +236,7 @@ def eliminar_modelo_vehiculo(
     current_user: User = Depends(get_current_user)
 ):
     """
-    🗑️ Eliminar un modelo de vehículo (soft delete)
+    🗑️ Eliminar un modelo de vehículo (HARD DELETE - borrado completo de BD)
     """
     try:
         # Buscar modelo existente
@@ -247,13 +247,14 @@ def eliminar_modelo_vehiculo(
         if not modelo:
             raise HTTPException(status_code=404, detail="Modelo de vehículo no encontrado")
         
-        # Soft delete - marcar como inactivo
-        modelo.activo = False
+        # HARD DELETE - eliminar completamente de la base de datos
+        modelo_nombre = modelo.modelo  # Guardar nombre para log
+        db.delete(modelo)
         db.commit()
         
-        logger.info(f"Modelo de vehículo eliminado (soft delete): {modelo.modelo} (ID: {modelo.id})")
+        logger.info(f"Modelo de vehículo ELIMINADO COMPLETAMENTE: {modelo_nombre} (ID: {modelo_id})")
         
-        return {"message": "Modelo de vehículo eliminado exitosamente"}
+        return {"message": "Modelo de vehículo eliminado completamente de la base de datos"}
         
     except HTTPException:
         raise

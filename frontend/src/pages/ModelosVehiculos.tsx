@@ -28,28 +28,27 @@ export function ModelosVehiculos() {
       setError(null)
       console.log('📡 Llamando a API: /api/v1/modelos-vehiculos')
       
-      // TEMPORAL: Usar datos mock mientras solucionamos autenticación
-      const mockData = {
-        items: [
-          { id: 1, modelo: "Toyota Corolla", activo: true, created_at: "2025-01-01T00:00:00Z" },
-          { id: 2, modelo: "Nissan Versa", activo: true, created_at: "2025-01-01T00:00:00Z" },
-          { id: 3, modelo: "Hyundai Tucson", activo: true, created_at: "2025-01-01T00:00:00Z" },
-          { id: 4, modelo: "Ford F-150", activo: true, created_at: "2025-01-01T00:00:00Z" },
-          { id: 5, modelo: "Chevrolet Spark", activo: false, created_at: "2025-01-01T00:00:00Z" }
-        ],
-        total: 5,
-        page: 1,
-        page_size: 100,
-        total_pages: 1
-      }
+      // CONECTAR CON DATOS REALES DE LA BASE DE DATOS
+      const response = await modeloVehiculoService.listarModelos({ limit: 100 })
+      console.log('✅ Respuesta API:', response)
+      setModelos(response.items)
       
-      console.log('✅ Usando datos mock temporalmente:', mockData)
-      setModelos(mockData.items)
-      
-      // TODO: Restaurar llamada real cuando se solucione autenticación
-      // const response = await modeloVehiculoService.listarModelos({ limit: 100 })
-      // console.log('✅ Respuesta API:', response)
-      // setModelos(response.items)
+      // TEMPORAL: Si falla la API, usar datos mock
+      // const mockData = {
+      //   items: [
+      //     { id: 1, modelo: "Toyota Corolla", activo: true, created_at: "2025-01-01T00:00:00Z" },
+      //     { id: 2, modelo: "Nissan Versa", activo: true, created_at: "2025-01-01T00:00:00Z" },
+      //     { id: 3, modelo: "Hyundai Tucson", activo: true, created_at: "2025-01-01T00:00:00Z" },
+      //     { id: 4, modelo: "Ford F-150", activo: true, created_at: "2025-01-01T00:00:00Z" },
+      //     { id: 5, modelo: "Chevrolet Spark", activo: false, created_at: "2025-01-01T00:00:00Z" }
+      //   ],
+      //   total: 5,
+      //   page: 1,
+      //   page_size: 100,
+      //   total_pages: 1
+      // }
+      // console.log('✅ Usando datos mock temporalmente:', mockData)
+      // setModelos(mockData.items)
     } catch (err) {
       console.error('❌ Error API:', err)
       setError('Error al cargar modelos de vehículos')
@@ -61,11 +60,21 @@ export function ModelosVehiculos() {
 
   const handleEliminar = async (id: number) => {
     try {
+      // Confirmar eliminación permanente
+      const confirmar = window.confirm(
+        '⚠️ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este modelo?\n\n' +
+        'Esta acción NO se puede deshacer y el modelo será borrado completamente de la base de datos.'
+      )
+      
+      if (!confirmar) {
+        return
+      }
+      
       await modeloVehiculoService.eliminarModelo(id)
-      toast.success('Modelo eliminado exitosamente')
+      toast.success('✅ Modelo eliminado PERMANENTEMENTE de la base de datos')
       cargarModelos() // Recargar lista
     } catch (err) {
-      toast.error('Error al eliminar modelo')
+      toast.error('❌ Error al eliminar modelo permanentemente')
       console.error('Error:', err)
     }
   }
