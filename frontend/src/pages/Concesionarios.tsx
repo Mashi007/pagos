@@ -1,37 +1,72 @@
-import { useState } from 'react'
-import { Building, Plus, Search, Edit, Trash2, MapPin, Phone, Mail, User } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Building, Plus, Search, Edit, Trash2, MapPin, Phone, Mail, User, Loader2, UserCheck, UserX } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { concesionarioService, Concesionario } from '@/services/concesionarioService'
+import { toast } from 'sonner'
 
 export function Concesionarios() {
+  const [concesionarios, setConcesionarios] = useState<Concesionario[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [editingConcesionario, setEditingConcesionario] = useState<Concesionario | null>(null)
 
-  // Mock data - reemplazar con useQuery
-  const concesionarios = [
-    {
-      id: 1,
-      nombre: 'AutoCenter Caracas',
-      direccion: 'Av. Francisco de Miranda, Caracas',
-      telefono: '+58 212-555-0101',
-      email: 'caracas@autocenter.com',
-      responsable: 'María González',
-      activo: true,
-      clientes_referidos: 25
-    },
-    {
-      id: 2,
-      nombre: 'Motors Valencia',
-      direccion: 'Zona Industrial Norte, Valencia',
-      telefono: '+58 241-555-0202',
-      email: 'valencia@motors.com',
-      responsable: 'Carlos Rodríguez',
-      activo: true,
-      clientes_referidos: 18
+  // Cargar concesionarios al montar el componente
+  useEffect(() => {
+    cargarConcesionarios()
+  }, [])
+
+  const cargarConcesionarios = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await concesionarioService.listarConcesionarios({ limit: 100 })
+      setConcesionarios(response.items)
+    } catch (err) {
+      setError('Error al cargar concesionarios')
+      toast.error('Error al cargar concesionarios')
+      console.error('Error:', err)
+    } finally {
+      setLoading(false)
     }
-  ]
+  }
+
+  const handleEliminar = async (id: number) => {
+    try {
+      await concesionarioService.eliminarConcesionario(id)
+      toast.success('Concesionario eliminado exitosamente')
+      cargarConcesionarios() // Recargar lista
+    } catch (err) {
+      toast.error('Error al eliminar concesionario')
+      console.error('Error:', err)
+    }
+  }
+
+  const handleToggleActivo = async (concesionario: Concesionario) => {
+    try {
+      await concesionarioService.actualizarConcesionario(concesionario.id, {
+        activo: !concesionario.activo
+      })
+      toast.success(`Concesionario ${concesionario.activo ? 'desactivado' : 'activado'} exitosamente`)
+      cargarConcesionarios() // Recargar lista
+    } catch (err) {
+      toast.error('Error al cambiar estado del concesionario')
+      console.error('Error:', err)
+    }
+  }
+
+  // Filtrar concesionarios por término de búsqueda
+  const concesionariosFiltrados = concesionarios.filter(concesionario =>
+    concesionario.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (concesionario.direccion && concesionario.direccion.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (concesionario.email && concesionario.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (concesionario.responsable && concesionario.responsable.toLowerCase().includes(searchTerm.toLowerCase()))
+  )
 
   return (
     <div className="space-y-6">
@@ -43,7 +78,7 @@ export function Concesionarios() {
             Gestión de concesionarios y alianzas comerciales
           </p>
         </div>
-        <Button>
+        <Button onClick={() => setShowCreateForm(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Nuevo Concesionario
         </Button>
@@ -79,12 +114,12 @@ export function Concesionarios() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Clientes Referidos</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {concesionarios.reduce((sum, c) => sum + c.clientes_referidos, 0)}
+                <p className="text-sm text-gray-500">Inactivos</p>
+                <p className="text-2xl font-bold text-red-600">
+                  {concesionarios.filter(c => !c.activo).length}
                 </p>
               </div>
-              <User className="w-8 h-8 text-blue-600" />
+              <UserX className="w-8 h-8 text-red-600" />
             </div>
           </CardContent>
         </Card>
@@ -121,7 +156,30 @@ export function Concesionarios() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {concesionarios.map((concesionario) => (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+                    <p className="text-gray-500">Cargando concesionarios...</p>
+                  </TableCell>
+                </TableRow>
+              ) : error ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8">
+                    <p className="text-red-500">{error}</p>
+                    <Button onClick={cargarConcesionarios} className="mt-2">
+                      Reintentar
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ) : concesionariosFiltrados.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8">
+                    <p className="text-gray-500">No se encontraron concesionarios</p>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                concesionariosFiltrados.map((concesionario) => (
                 <TableRow key={concesionario.id}>
                   <TableCell>
                     <div className="flex items-center space-x-3">
@@ -133,31 +191,48 @@ export function Concesionarios() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center text-sm">
-                      <MapPin className="w-3 h-3 mr-1 text-gray-400" />
-                      {concesionario.direccion}
-                    </div>
+                    {concesionario.direccion ? (
+                      <div className="flex items-center text-sm">
+                        <MapPin className="w-3 h-3 mr-1 text-gray-400" />
+                        {concesionario.direccion}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">Sin dirección</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="space-y-1">
-                      <div className="flex items-center text-sm">
-                        <Mail className="w-3 h-3 mr-1 text-gray-400" />
-                        {concesionario.email}
-                      </div>
-                      <div className="flex items-center text-sm">
-                        <Phone className="w-3 h-3 mr-1 text-gray-400" />
-                        {concesionario.telefono}
-                      </div>
+                      {concesionario.email && (
+                        <div className="flex items-center text-sm">
+                          <Mail className="w-3 h-3 mr-1 text-gray-400" />
+                          {concesionario.email}
+                        </div>
+                      )}
+                      {concesionario.telefono && (
+                        <div className="flex items-center text-sm">
+                          <Phone className="w-3 h-3 mr-1 text-gray-400" />
+                          {concesionario.telefono}
+                        </div>
+                      )}
+                      {!concesionario.email && !concesionario.telefono && (
+                        <div className="text-sm text-gray-400">
+                          Sin contacto
+                        </div>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center text-sm">
-                      <User className="w-3 h-3 mr-1 text-gray-400" />
-                      {concesionario.responsable}
-                    </div>
+                    {concesionario.responsable ? (
+                      <div className="flex items-center text-sm">
+                        <User className="w-3 h-3 mr-1 text-gray-400" />
+                        {concesionario.responsable}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">Sin responsable</span>
+                    )}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">{concesionario.clientes_referidos}</Badge>
+                    <span className="text-gray-400">-</span>
                   </TableCell>
                   <TableCell>
                     {concesionario.activo ? (
@@ -168,18 +243,190 @@ export function Concesionarios() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end space-x-2">
-                      <Button variant="ghost" size="sm">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => setEditingConcesionario(concesionario)}
+                        title="Editar concesionario"
+                      >
                         <Edit className="w-4 h-4" />
                       </Button>
-                      <Button variant="ghost" size="sm">
-                        <Trash2 className="w-4 h-4 text-red-600" />
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleToggleActivo(concesionario)}
+                        title={concesionario.activo ? "Desactivar" : "Activar"}
+                      >
+                        {concesionario.activo ? (
+                          <UserX className="w-4 h-4 text-red-600" />
+                        ) : (
+                          <UserCheck className="w-4 h-4 text-green-600" />
+                        )}
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleEliminar(concesionario.id)}
+                        title="Eliminar concesionario"
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+              ))
+              )}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      {/* Formulario de Crear/Editar Concesionario */}
+      {(showCreateForm || editingConcesionario) && (
+        <CrearEditarConcesionarioForm
+          concesionario={editingConcesionario}
+          onClose={() => {
+            setShowCreateForm(false)
+            setEditingConcesionario(null)
+          }}
+          onSuccess={() => {
+            cargarConcesionarios()
+            setShowCreateForm(false)
+            setEditingConcesionario(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// Componente para crear/editar concesionario
+interface CrearEditarConcesionarioFormProps {
+  concesionario?: Concesionario | null
+  onClose: () => void
+  onSuccess: () => void
+}
+
+function CrearEditarConcesionarioForm({ concesionario, onClose, onSuccess }: CrearEditarConcesionarioFormProps) {
+  const [formData, setFormData] = useState({
+    nombre: concesionario?.nombre || '',
+    direccion: concesionario?.direccion || '',
+    telefono: concesionario?.telefono || '',
+    email: concesionario?.email || '',
+    responsable: concesionario?.responsable || ''
+  })
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!formData.nombre.trim()) {
+      toast.error('El nombre es obligatorio')
+      return
+    }
+
+    try {
+      setLoading(true)
+      
+      const data = {
+        nombre: formData.nombre.trim(),
+        direccion: formData.direccion.trim() || undefined,
+        telefono: formData.telefono.trim() || undefined,
+        email: formData.email.trim() || undefined,
+        responsable: formData.responsable.trim() || undefined
+      }
+
+      if (concesionario) {
+        await concesionarioService.actualizarConcesionario(concesionario.id, data)
+        toast.success('Concesionario actualizado exitosamente')
+      } else {
+        await concesionarioService.crearConcesionario(data)
+        toast.success('Concesionario creado exitosamente')
+      }
+      
+      onSuccess()
+    } catch (err) {
+      toast.error(concesionario ? 'Error al actualizar concesionario' : 'Error al crear concesionario')
+      console.error('Error:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <Card className="w-full max-w-md mx-4">
+        <CardHeader>
+          <CardTitle>
+            {concesionario ? 'Editar Concesionario' : 'Nuevo Concesionario'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Nombre *</label>
+              <Input
+                value={formData.nombre}
+                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                placeholder="Nombre del concesionario"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Dirección</label>
+              <Input
+                value={formData.direccion}
+                onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+                placeholder="Dirección del concesionario"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Teléfono</label>
+              <Input
+                value={formData.telefono}
+                onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                placeholder="+58 212-123-4567"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Email</label>
+              <Input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="email@concesionario.com"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Responsable</label>
+              <Input
+                value={formData.responsable}
+                onChange={(e) => setFormData({ ...formData, responsable: e.target.value })}
+                placeholder="Nombre del responsable"
+              />
+            </div>
+            
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {concesionario ? 'Actualizando...' : 'Creando...'}
+                  </>
+                ) : (
+                  concesionario ? 'Actualizar' : 'Crear'
+                )}
+              </Button>
+            </div>
+          </form>
         </CardContent>
       </Card>
     </div>
