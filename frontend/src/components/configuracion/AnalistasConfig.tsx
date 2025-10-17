@@ -55,7 +55,7 @@ export function AnalistasConfig() {
   const loadAnalistaes = async () => {
     try {
       setLoading(true)
-      const data = await analistaService.listarAnalistaesActivos()
+      const data = await analistaService.listarAnalistasActivos()
       setAnalistaes(data)
     } catch (err: any) {
       console.error('Error al cargar analistaes:', err)

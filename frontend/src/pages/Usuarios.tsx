@@ -80,17 +80,6 @@ export function Usuarios() {
   const getRoleBadgeColor = (rol: string) => {
     const colors: any = {
       'USER': 'bg-blue-600',
-      'ASESOR_COMERCIAL': 'bg-blue-600',
-      'COBRADOR': 'bg-green-600',
-      'CONTADOR': 'bg-yellow-600',
-      'AUDITOR': 'bg-gray-600'
-    }
-    return colors[rol] || 'bg-gray-600'
-  }
-
-  const getRoleBadgeColor = (rol: string) => {
-    const colors: any = {
-      'USER': 'bg-blue-600',
       'ADMIN': 'bg-red-600',
       'GERENTE': 'bg-purple-600',
       'COBRANZAS': 'bg-orange-600',

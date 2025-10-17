@@ -104,7 +104,7 @@ class AuditoriaService {
         params: filters,
         responseType: 'blob'
       })
-      return response
+      return response.data as Blob
     } catch (error) {
       console.error('❌ Error exportando Excel:', error)
       throw error

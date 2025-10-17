@@ -6,11 +6,11 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { auditoriaService, Auditoria, AuditoriaStats } from '@/services/auditoriaService'
+import { auditoriaService, Auditoria as AuditoriaType, AuditoriaStats } from '@/services/auditoriaService'
 import { toast } from 'sonner'
 
 export function Auditoria() {
-  const [auditorias, setAuditorias] = useState<Auditoria[]>([])
+  const [auditorias, setAuditorias] = useState<AuditoriaType[]>([])
   const [stats, setStats] = useState<AuditoriaStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

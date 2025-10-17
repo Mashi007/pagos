@@ -125,7 +125,7 @@ export function CrearClienteForm({
         try {
           const [concesionariosData, analistaesData, modelosData] = await Promise.all([
             concesionarioService.listarConcesionariosActivos(),
-            analistaService.listarAnalistaesActivos(),
+            analistaService.listarAnalistasActivos(),
             modeloVehiculoService.listarModelosActivos()
           ])
           setConcesionarios(concesionariosData)
