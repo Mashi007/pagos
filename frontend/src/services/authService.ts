@@ -120,7 +120,7 @@ export class AuthService {
   }
 
   static isAdmin(user: User | null): boolean {
-    return AuthService.hasAnyRole(user, ['USER'])
+    return AuthService.hasAnyRole(user, ['ADMIN'])
   }
 
   static canManagePayments(user: User | null): boolean {
