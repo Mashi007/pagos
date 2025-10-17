@@ -9,18 +9,19 @@ from sqlalchemy.orm import sessionmaker
 # ✅ CORRECTO: Importar desde app.core.config
 from app.core.config import settings
 
-# Crear engine de SQLAlchemy
+# Crear engine de SQLAlchemy con configuración optimizada para producción
 engine = create_engine(
     settings.DATABASE_URL,
-    pool_pre_ping=True,
-    pool_size=1,  # Reducido para Render
-    max_overflow=0,  # Sin overflow para evitar problemas
-    pool_timeout=10,  # Timeout más corto
-    pool_recycle=300,  # Reciclar cada 5 minutos
+    pool_pre_ping=True,  # ✅ Verifica conexión antes de usar
+    pool_size=5,  # ✅ 5 conexiones permanentes (aumentado)
+    max_overflow=10,  # ✅ 10 conexiones adicionales si es necesario
+    pool_timeout=30,  # ✅ 30 segundos timeout (aumentado)
+    pool_recycle=3600,  # ✅ Reciclar cada hora (más estable)
     echo=settings.DB_ECHO,
     connect_args={
-        "connect_timeout": 10,
-        "application_name": "rapicredit_backend"
+        "connect_timeout": 30,  # ✅ 30 segundos para conectar
+        "application_name": "rapicredit_backend",
+        "options": "-c statement_timeout=30000"  # ✅ 30 segundos para queries
     }
 )
 
