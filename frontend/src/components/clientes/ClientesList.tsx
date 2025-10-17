@@ -27,7 +27,7 @@ import { AlertWithIcon } from '@/components/ui/alert'
 import { CrearClienteForm } from './CrearClienteForm'
 
 import { useDebounce } from '@/hooks/useDebounce'
-import { usePermissions } from '@/store/authStore'
+import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { formatCurrency, formatDate } from '@/utils'
 import { ClienteFilters } from '@/types'
 import { useClientes } from '@/hooks/useClientes'
@@ -42,7 +42,8 @@ export function ClientesList() {
   const [showCrearCliente, setShowCrearCliente] = useState(false)
 
   const debouncedSearch = useDebounce(searchTerm, 300)
-  const { canViewAllClients } = usePermissions()
+  const { user } = useSimpleAuth()
+  const canViewAllClients = true // Todos pueden ver todos los clientes
   const queryClient = useQueryClient()
 
   // Queries

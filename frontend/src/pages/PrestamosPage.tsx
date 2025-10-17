@@ -3,10 +3,11 @@ import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { usePermissions } from '@/store/authStore'
+import { useSimpleAuth } from '@/store/simpleAuthStore'
 
 export function PrestamosPage() {
-  const { hasAnyRole } = usePermissions()
+  const { user } = useSimpleAuth()
+  const hasAnyRole = () => true // Todos tienen acceso completo
   const [loading, setLoading] = useState(false)
 
   return (

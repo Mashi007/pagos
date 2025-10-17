@@ -17,7 +17,7 @@ interface SimpleAuthState {
   initializeAuth: () => void
 }
 
-export const useSimpleAuthStore = create<SimpleAuthState>((set, get) => ({
+export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
   // Estado inicial
   user: null,
   isAuthenticated: false,

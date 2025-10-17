@@ -27,7 +27,7 @@ import {
   CheckCircle,
 } from 'lucide-react'
 import { cn } from '@/utils'
-import { usePermissions } from '@/store/authStore'
+import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
@@ -48,7 +48,8 @@ interface MenuItem {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation()
-  const { hasAnyRole, userRole } = usePermissions()
+  const { user } = useSimpleAuth()
+  const userRole = user?.rol || 'USER'
   const [openSubmenus, setOpenSubmenus] = useState<string[]>(['Herramientas'])
 
   const toggleSubmenu = (title: string) => {

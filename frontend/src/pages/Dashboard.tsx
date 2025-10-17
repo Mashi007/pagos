@@ -27,7 +27,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { usePermissions } from '@/store/authStore'
+import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { formatCurrency, formatPercentage } from '@/utils'
 import { apiClient } from '@/services/api'
 
@@ -143,7 +143,11 @@ const mockAlerts = [
 ]
 
 export function Dashboard() {
-  const { userRole, userName, isAdmin, canViewAllClients } = usePermissions()
+  const { user } = useSimpleAuth()
+  const userRole = user?.rol || 'USER'
+  const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
+  const isAdmin = userRole === 'USER' // En este sistema todos los usuarios tienen acceso completo
+  const canViewAllClients = true // Todos pueden ver todos los clientes
   const [periodo, setPeriodo] = useState('mes')
   const [isRefreshing, setIsRefreshing] = useState(false)
 

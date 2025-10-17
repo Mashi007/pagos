@@ -16,6 +16,11 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false)
   const { logout, user } = useSimpleAuth()
 
+  // Variables derivadas del usuario
+  const userInitials = user ? `${user.nombre?.charAt(0) || ''}${user.apellido?.charAt(0) || ''}`.toUpperCase() : 'U'
+  const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
+  const userRole = user?.rol || 'USER'
+
   // Mock de notificaciones - en producción vendrían del backend
   const notifications = [
     {
