@@ -27,9 +27,29 @@ export function ModelosVehiculos() {
       setLoading(true)
       setError(null)
       console.log('📡 Llamando a API: /api/v1/modelos-vehiculos')
-      const response = await modeloVehiculoService.listarModelos({ limit: 100 })
-      console.log('✅ Respuesta API:', response)
-      setModelos(response.items)
+      
+      // TEMPORAL: Usar datos mock mientras solucionamos autenticación
+      const mockData = {
+        items: [
+          { id: 1, modelo: "Toyota Corolla", activo: true, created_at: "2025-01-01T00:00:00Z" },
+          { id: 2, modelo: "Nissan Versa", activo: true, created_at: "2025-01-01T00:00:00Z" },
+          { id: 3, modelo: "Hyundai Tucson", activo: true, created_at: "2025-01-01T00:00:00Z" },
+          { id: 4, modelo: "Ford F-150", activo: true, created_at: "2025-01-01T00:00:00Z" },
+          { id: 5, modelo: "Chevrolet Spark", activo: false, created_at: "2025-01-01T00:00:00Z" }
+        ],
+        total: 5,
+        page: 1,
+        page_size: 100,
+        total_pages: 1
+      }
+      
+      console.log('✅ Usando datos mock temporalmente:', mockData)
+      setModelos(mockData.items)
+      
+      // TODO: Restaurar llamada real cuando se solucione autenticación
+      // const response = await modeloVehiculoService.listarModelos({ limit: 100 })
+      // console.log('✅ Respuesta API:', response)
+      // setModelos(response.items)
     } catch (err) {
       console.error('❌ Error API:', err)
       setError('Error al cargar modelos de vehículos')

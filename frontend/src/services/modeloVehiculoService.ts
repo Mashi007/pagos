@@ -36,7 +36,15 @@ class ModeloVehiculoService {
     activo?: boolean
     search?: string
   }): Promise<ModeloVehiculoListResponse> {
-    return await apiClient.get<ModeloVehiculoListResponse>(this.baseUrl, { params })
+    try {
+      console.log('🔍 Parámetros enviados:', params)
+      const response = await apiClient.get<ModeloVehiculoListResponse>(this.baseUrl, { params })
+      console.log('📦 Respuesta recibida:', response)
+      return response
+    } catch (error) {
+      console.error('❌ Error en listarModelos:', error)
+      throw error
+    }
   }
 
   // Listar solo modelos activos (para formularios)
