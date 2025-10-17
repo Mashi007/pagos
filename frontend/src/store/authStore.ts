@@ -220,7 +220,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         set({ isAuthenticated: true })
       },
 
-      // Inicializar autenticación al cargar la aplicación
+      // Inicializar autenticación al cargar la aplicación - FIX JSON ERROR
       initializeAuth: async (): Promise<void> => {
         try {
           logger.log('Store: Inicializando autenticación...')
@@ -237,6 +237,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
             accessToken: accessToken ? 'EXISTS' : 'MISSING',
             refreshToken: refreshToken ? 'EXISTS' : 'MISSING',
             userData: userData ? 'EXISTS' : 'MISSING',
+            userDataValue: userData, // DEBUG: Ver valor real
             rememberMe
           })
           
