@@ -63,20 +63,7 @@ def add_cors_headers(request: Request, response: Response) -> None:
             logger.info(f"✅ CORS Headers agregados (FALLBACK) para origin: {origin}")
 
 
-@router.options("/login")
-async def options_login(request: Request, response: Response):
-    """Manejar preflight CORS para login"""
-    # HEADERS CORS DIRECTOS - SIN HELPER
-    origin = request.headers.get("origin")
-    
-    if origin == "https://rapicredit.onrender.com":
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        response.headers["Access-Control-Max-Age"] = "86400"
-    
-    return {"message": "OK"}
+# ENDPOINT OPTIONS ELIMINADO - MANEJADO POR MIDDLEWARE
 
 @router.get("/cors-test")
 async def cors_test(request: Request):
