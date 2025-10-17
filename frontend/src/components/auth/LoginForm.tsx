@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AlertWithIcon } from '@/components/ui/alert'
-import { useAuth } from '@/store/authStore'
+import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { LoginForm as LoginFormType } from '@/types'
 
 // Schema de validación
@@ -30,7 +30,7 @@ type LoginFormData = z.infer<typeof loginSchema>
 
 export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
-  const { login, isLoading, error, clearError } = useAuth()
+  const { login, isLoading, error, clearError } = useSimpleAuth()
   const navigate = useNavigate()
   const location = useLocation()
 

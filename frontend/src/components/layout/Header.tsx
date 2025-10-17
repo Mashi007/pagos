@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Bell, Search, Menu, LogOut, Settings, User, ChevronDown } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useAuth, usePermissions } from '@/store/authStore'
+import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -14,8 +14,7 @@ interface HeaderProps {
 export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
-  const { logout } = useAuth()
-  const { userName, userInitials, userRole } = usePermissions()
+  const { logout, user } = useSimpleAuth()
 
   // Mock de notificaciones - en producción vendrían del backend
   const notifications = [
