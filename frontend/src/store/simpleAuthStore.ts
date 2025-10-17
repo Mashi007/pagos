@@ -3,6 +3,8 @@ import { create } from 'zustand'
 import { User, LoginForm } from '@/types'
 import { authService } from '@/services/authService'
 import toast from 'react-hot-toast'
+import { logger } from '@/utils/logger'
+import { safeGetItem, safeGetSessionItem } from '@/utils/safeStorage'
 
 interface SimpleAuthState {
   user: User | null
@@ -12,6 +14,7 @@ interface SimpleAuthState {
   login: (credentials: LoginForm) => Promise<void>
   logout: () => void
   clearError: () => void
+  initializeAuth: () => void
 }
 
 export const useSimpleAuthStore = create<SimpleAuthState>((set, get) => ({
@@ -21,18 +24,46 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  // Login simple - SIN PERSISTENCIA
+  // Inicializar autenticación desde almacenamiento seguro
+  initializeAuth: () => {
+    try {
+      const rememberMe = safeGetItem('remember_me', false)
+      const user = rememberMe 
+        ? safeGetItem('user', null) 
+        : safeGetSessionItem('user', null)
+      
+      if (user) {
+        set({
+          user,
+          isAuthenticated: true,
+          isLoading: false,
+          error: null,
+        })
+        logger.log('SimpleAuth: Usuario restaurado desde almacenamiento seguro')
+      }
+    } catch (error) {
+      logger.error('SimpleAuth: Error al inicializar autenticación:', error)
+      set({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        error: null,
+      })
+    }
+  },
+
+  // Login con persistencia segura
   login: async (credentials: LoginForm): Promise<void> => {
     set({ isLoading: true, error: null })
     
     try {
-      console.log('SimpleAuth: Iniciando login...')
+      logger.log('SimpleAuth: Iniciando login...')
       
       const response = await authService.login(credentials)
       
-      console.log('SimpleAuth: Login exitoso')
+      logger.log('SimpleAuth: Login exitoso')
       
-      // Solo guardar en memoria - SIN localStorage/sessionStorage
+      // El authService ya guarda los datos de forma segura
       set({
         user: response.user,
         isAuthenticated: true,
@@ -40,10 +71,10 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set, get) => ({
         error: null,
       })
 
-      console.log('SimpleAuth: Login completado exitosamente')
+      logger.log('SimpleAuth: Login completado exitosamente')
       toast.success(`¡Bienvenido, ${response.user.nombre}!`)
     } catch (error: any) {
-      console.error('SimpleAuth: Error en login:', error)
+      logger.error('SimpleAuth: Error en login:', error)
       set({
         user: null,
         isAuthenticated: false,
@@ -54,16 +85,21 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set, get) => ({
     }
   },
 
-  // Logout simple
-  logout: () => {
-    console.log('SimpleAuth: Logout')
-    set({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-      error: null,
-    })
-    toast.success('Sesión cerrada correctamente')
+  // Logout con limpieza segura
+  logout: async () => {
+    try {
+      await authService.logout()
+    } catch (error) {
+      logger.error('SimpleAuth: Error en logout:', error)
+    } finally {
+      set({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        error: null,
+      })
+      toast.success('Sesión cerrada correctamente')
+    }
   },
 
   // Limpiar error
@@ -83,5 +119,6 @@ export const useSimpleAuth = () => {
     login: store.login,
     logout: store.logout,
     clearError: store.clearError,
+    initializeAuth: store.initializeAuth,
   }
 }

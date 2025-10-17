@@ -1,5 +1,15 @@
 import { apiClient, ApiResponse } from './api'
 import { User, AuthTokens, LoginForm } from '@/types'
+import { 
+  safeSetItem, 
+  safeGetItem, 
+  safeRemoveItem, 
+  safeClear,
+  safeSetSessionItem,
+  safeGetSessionItem,
+  safeRemoveSessionItem,
+  safeClearSession
+} from '@/utils/safeStorage'
 
 export interface LoginResponse extends AuthTokens {
   user: User
@@ -16,7 +26,7 @@ export interface ChangePasswordRequest {
 }
 
 export class AuthService {
-  // Login de usuario - SOLO API CALL, NO GUARDA TOKENS
+  // Login de usuario - CON PERSISTENCIA SEGURA
   async login(credentials: LoginForm): Promise<LoginResponse> {
     try {
       console.log('AuthService: Enviando credenciales a:', '/api/v1/auth/login')
@@ -25,7 +35,20 @@ export class AuthService {
       
       console.log('AuthService: Respuesta del servidor recibida')
       
-      // NO GUARDAR TOKENS AQUÍ - Solo retornar los datos
+      // Guardar tokens de forma segura
+      if (response.access_token) {
+        if (credentials.remember) {
+          safeSetItem('access_token', response.access_token)
+          safeSetItem('refresh_token', response.refresh_token)
+          safeSetItem('user', response.user)
+          safeSetItem('remember_me', true)
+        } else {
+          safeSetSessionItem('access_token', response.access_token)
+          safeSetSessionItem('refresh_token', response.refresh_token)
+          safeSetSessionItem('user', response.user)
+        }
+      }
+      
       return response
     } catch (error: any) {
       console.error('AuthService: Error en login:', error)
@@ -40,7 +63,7 @@ export class AuthService {
     }
   }
 
-  // Logout de usuario - SIN PERSISTENCIA
+  // Logout de usuario - CON LIMPIEZA SEGURA
   async logout(): Promise<void> {
     try {
       await apiClient.post('/api/v1/auth/logout')
@@ -48,21 +71,58 @@ export class AuthService {
       // Continuar con el logout local aunque falle el servidor
       console.error('Error en logout del servidor:', error)
     } finally {
-      // NO usar localStorage/sessionStorage para evitar errores JSON
-      // Solo limpiar en memoria
+      // Limpiar datos de forma segura
+      safeRemoveItem('access_token')
+      safeRemoveItem('refresh_token')
+      safeRemoveItem('user')
+      safeRemoveItem('remember_me')
+      safeRemoveSessionItem('access_token')
+      safeRemoveSessionItem('refresh_token')
+      safeRemoveSessionItem('user')
     }
   }
 
-  // Renovar token - DESHABILITADO SIN PERSISTENCIA
+  // Renovar token - CON PERSISTENCIA SEGURA
   async refreshToken(): Promise<AuthTokens> {
-    throw new Error('Refresh token deshabilitado - sin persistencia')
+    const rememberMe = safeGetItem('remember_me', false)
+    const refreshToken = rememberMe 
+      ? safeGetItem('refresh_token', '') 
+      : safeGetSessionItem('refresh_token', '')
+      
+    if (!refreshToken) {
+      throw new Error('No hay refresh token disponible')
+    }
+
+    const response = await apiClient.post<ApiResponse<AuthTokens>>('/api/v1/auth/refresh', {
+      refresh_token: refreshToken,
+    })
+
+    // Actualizar tokens en el almacenamiento correspondiente
+    if (response.data) {
+      if (rememberMe) {
+        safeSetItem('access_token', response.data.access_token)
+        safeSetItem('refresh_token', response.data.refresh_token)
+      } else {
+        safeSetSessionItem('access_token', response.data.access_token)
+        safeSetSessionItem('refresh_token', response.data.refresh_token)
+      }
+    }
+
+    return response.data
   }
 
-  // Obtener información del usuario actual - SIN PERSISTENCIA
+  // Obtener información del usuario actual - CON PERSISTENCIA SEGURA
   async getCurrentUser(): Promise<User> {
     const response = await apiClient.get<ApiResponse<User>>('/api/v1/auth/me')
     
-    // NO guardar en localStorage/sessionStorage para evitar errores JSON
+    // Actualizar usuario en el almacenamiento correspondiente
+    const rememberMe = safeGetItem('remember_me', false)
+    if (rememberMe) {
+      safeSetItem('user', response.data)
+    } else {
+      safeSetSessionItem('user', response.data)
+    }
+    
     return response.data
   }
 

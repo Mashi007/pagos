@@ -2,6 +2,14 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import toast from 'react-hot-toast'
 import { env } from '@/config/env'
 import { logger } from '@/utils/logger'
+import { 
+  safeGetItem, 
+  safeGetSessionItem, 
+  safeSetItem, 
+  safeSetSessionItem, 
+  safeClear, 
+  safeClearSession 
+} from '@/utils/safeStorage'
 
 // Configuración base de Axios
 const API_BASE_URL = env.API_URL
@@ -30,9 +38,15 @@ class ApiClient {
         const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint))
         
         if (!isAuthEndpoint) {
-          // Lógica simplificada para obtener token - SIN PERSISTENCIA
-          // NO usar localStorage/sessionStorage para evitar errores JSON
-          // El token se maneja solo en memoria
+          // Obtener token de forma segura
+          const rememberMe = safeGetItem('remember_me', false)
+          const token = rememberMe 
+            ? safeGetItem('access_token', '') 
+            : safeGetSessionItem('access_token', '')
+          
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`
+          }
         }
         return config
       },
@@ -47,15 +61,43 @@ class ApiClient {
       async (error) => {
         const originalRequest = error.config
 
-        // Si el token expiró, NO intentar renovarlo - redirigir al login
+        // Si el token expiró, intentar renovarlo con persistencia segura
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true
-          
-          // Limpiar cualquier dato corrupto y redirigir
-          localStorage.clear()
-          sessionStorage.clear()
-          window.location.href = '/login'
-          return Promise.reject(error)
+
+          try {
+            const rememberMe = safeGetItem('remember_me', false)
+            const refreshToken = rememberMe 
+              ? safeGetItem('refresh_token', '') 
+              : safeGetSessionItem('refresh_token', '')
+              
+            if (refreshToken) {
+              const response = await this.client.post('/api/v1/auth/refresh', {
+                refresh_token: refreshToken,
+              })
+
+              const { access_token, refresh_token: newRefreshToken } = response.data
+              
+              // Guardar en el almacenamiento correspondiente usando funciones seguras
+              if (rememberMe) {
+                safeSetItem('access_token', access_token)
+                safeSetItem('refresh_token', newRefreshToken)
+              } else {
+                safeSetSessionItem('access_token', access_token)
+                safeSetSessionItem('refresh_token', newRefreshToken)
+              }
+
+              // Reintentar la petición original
+              originalRequest.headers.Authorization = `Bearer ${access_token}`
+              return this.client(originalRequest)
+            }
+          } catch (refreshError) {
+            // Si no se puede renovar el token, limpiar datos y redirigir al login
+            safeClear()
+            safeClearSession()
+            window.location.href = '/login'
+            return Promise.reject(refreshError)
+          }
         }
 
         // Manejar otros errores

@@ -59,7 +59,12 @@ const NotFound = () => (
 )
 
 function App() {
-  const { isAuthenticated } = useSimpleAuth()
+  const { isAuthenticated, initializeAuth } = useSimpleAuth()
+
+  useEffect(() => {
+    // Inicializar autenticación desde almacenamiento seguro
+    initializeAuth()
+  }, [initializeAuth])
 
   return (
     <AnimatePresence mode="wait">
