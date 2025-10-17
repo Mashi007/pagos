@@ -1,131 +1,110 @@
 # backend/app/api/v1/endpoints/modelos_vehiculos.py
 """
-Endpoints para gestión de modelos de vehículos configurables
+Endpoints para gestión de modelos de vehículos
 """
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-
+from sqlalchemy import or_, desc
+from typing import List, Optional
 from app.db.session import get_db
 from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.user import User
-from app.schemas.modelo_vehiculo import (
-    ModeloVehiculoCreate, 
-    ModeloVehiculoUpdate, 
-    ModeloVehiculoResponse,
-    ModeloVehiculoListResponse,
-    ModeloVehiculoActivosResponse,
-    ModeloVehiculoStatsResponse
-)
 from app.api.deps import get_current_user
+from app.schemas.modelo_vehiculo import (
+    ModeloVehiculoCreate,
+    ModeloVehiculoUpdate,
+    ModeloVehiculoResponse,
+    ModeloVehiculoListResponse
+)
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
 
 @router.get("/", response_model=ModeloVehiculoListResponse)
 def listar_modelos_vehiculos(
-    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
-    limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
+    # Paginación
+    page: int = Query(1, ge=1, description="Número de página"),
+    limit: int = Query(20, ge=1, le=100, description="Tamaño de página"),
+    
+    # Búsqueda
+    search: Optional[str] = Query(None, description="Buscar en modelo"),
+    
+    # Filtros
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
-    search: Optional[str] = Query(None, description="Buscar por modelo"),
+    
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    📋 Listar todos los modelos de vehículos con paginación y filtros
+    📋 Listar modelos de vehículos con paginación y filtros
     """
     try:
+        # Construir query base
         query = db.query(ModeloVehiculo)
         
         # Aplicar filtros
+        if search:
+            query = query.filter(
+                or_(
+                    ModeloVehiculo.modelo.ilike(f"%{search}%")
+                )
+            )
+        
         if activo is not None:
             query = query.filter(ModeloVehiculo.activo == activo)
         
-        if search:
-            query = query.filter(
-                ModeloVehiculo.modelo.ilike(f"%{search}%")
-            )
+        # Ordenar por modelo
+        query = query.order_by(ModeloVehiculo.modelo)
         
-        # Obtener total
+        # Contar total
         total = query.count()
         
-        # Aplicar paginación
-        modelos = query.order_by(ModeloVehiculo.modelo).offset(skip).limit(limit).all()
+        # Paginación
+        offset = (page - 1) * limit
+        modelos = query.offset(offset).limit(limit).all()
         
-        # Calcular páginas
-        pages = (total + limit - 1) // limit
+        # Serializar respuesta
+        modelos_response = [
+            ModeloVehiculoResponse.model_validate(modelo) 
+            for modelo in modelos
+        ]
         
         return ModeloVehiculoListResponse(
-            items=[ModeloVehiculoResponse.model_validate(m) for m in modelos],
+            items=modelos_response,
             total=total,
-            page=(skip // limit) + 1,
+            page=page,
             page_size=limit,
-            total_pages=pages
+            total_pages=(total + limit - 1) // limit
         )
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al listar modelos de vehículos: {str(e)}")
+        logger.error(f"Error listando modelos de vehículos: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
-@router.get("/activos")
+@router.get("/activos", response_model=List[ModeloVehiculoResponse])
 def listar_modelos_activos(
-    db: Session = Depends(get_db)
-):
-    """
-    🚗 Listar solo modelos activos (para formularios)
-    
-    Simplificado: Sin filtros adicionales, solo modelos activos
-    """
-    try:
-        query = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo == True)
-        modelos = query.order_by(ModeloVehiculo.modelo).all()
-        return [m.to_dict() for m in modelos]
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al listar modelos activos: {str(e)}")
-
-
-@router.post("/", response_model=ModeloVehiculoResponse, status_code=201)
-def crear_modelo_vehiculo(
-    modelo_data: ModeloVehiculoCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    ➕ Crear un nuevo modelo de vehículo
+    📋 Listar solo modelos de vehículos activos (para formularios)
     """
-    # Solo administrador general puede crear modelos
-    if current_user.rol not in ["USER"]:
-        raise HTTPException(
-            status_code=403, 
-            detail="Solo administradores pueden crear modelos de vehículos"
-        )
-    
     try:
-        # Verificar que no existe ya
-        existing = db.query(ModeloVehiculo).filter(
-            ModeloVehiculo.modelo == modelo_data.modelo
-        ).first()
+        modelos = db.query(ModeloVehiculo).filter(
+            ModeloVehiculo.activo == True
+        ).order_by(ModeloVehiculo.modelo).all()
         
-        if existing:
-            raise HTTPException(
-                status_code=400, 
-                detail="Ya existe un modelo con este nombre"
-            )
+        return [
+            ModeloVehiculoResponse.model_validate(modelo) 
+            for modelo in modelos
+        ]
         
-        # Crear el modelo
-        modelo = ModeloVehiculo(**modelo_data.dict())
-        db.add(modelo)
-        db.commit()
-        db.refresh(modelo)
-        
-        return ModeloVehiculoResponse.model_validate(modelo)
-        
-    except HTTPException:
-        raise
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error creando modelo de vehículo: {str(e)}")
+        logger.error(f"Error listando modelos activos: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
 @router.get("/{modelo_id}", response_model=ModeloVehiculoResponse)
@@ -137,11 +116,64 @@ def obtener_modelo_vehiculo(
     """
     🔍 Obtener un modelo de vehículo por ID
     """
-    modelo = db.query(ModeloVehiculo).filter(ModeloVehiculo.id == modelo_id).first()
-    if not modelo:
-        raise HTTPException(status_code=404, detail="Modelo de vehículo no encontrado")
-    
-    return ModeloVehiculoResponse.model_validate(modelo)
+    try:
+        modelo = db.query(ModeloVehiculo).filter(
+            ModeloVehiculo.id == modelo_id
+        ).first()
+        
+        if not modelo:
+            raise HTTPException(status_code=404, detail="Modelo de vehículo no encontrado")
+        
+        return ModeloVehiculoResponse.model_validate(modelo)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error obteniendo modelo {modelo_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
+@router.post("/", response_model=ModeloVehiculoResponse)
+def crear_modelo_vehiculo(
+    modelo_data: ModeloVehiculoCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    ➕ Crear un nuevo modelo de vehículo
+    """
+    try:
+        # Verificar si ya existe un modelo con el mismo nombre
+        existing_modelo = db.query(ModeloVehiculo).filter(
+            ModeloVehiculo.modelo.ilike(modelo_data.modelo)
+        ).first()
+        
+        if existing_modelo:
+            raise HTTPException(
+                status_code=400, 
+                detail="Ya existe un modelo de vehículo con ese nombre"
+            )
+        
+        # Crear nuevo modelo
+        nuevo_modelo = ModeloVehiculo(
+            modelo=modelo_data.modelo.strip(),
+            activo=modelo_data.activo
+        )
+        
+        db.add(nuevo_modelo)
+        db.commit()
+        db.refresh(nuevo_modelo)
+        
+        logger.info(f"Modelo de vehículo creado: {nuevo_modelo.modelo} (ID: {nuevo_modelo.id})")
+        
+        return ModeloVehiculoResponse.model_validate(nuevo_modelo)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creando modelo de vehículo: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
 @router.put("/{modelo_id}", response_model=ModeloVehiculoResponse)
@@ -154,38 +186,38 @@ def actualizar_modelo_vehiculo(
     """
     ✏️ Actualizar un modelo de vehículo existente
     """
-    # Solo administrador general puede actualizar modelos
-    if current_user.rol not in ["USER"]:
-        raise HTTPException(
-            status_code=403, 
-            detail="Solo administradores pueden actualizar modelos de vehículos"
-        )
-    
     try:
-        modelo = db.query(ModeloVehiculo).filter(ModeloVehiculo.id == modelo_id).first()
+        # Buscar modelo existente
+        modelo = db.query(ModeloVehiculo).filter(
+            ModeloVehiculo.id == modelo_id
+        ).first()
         
         if not modelo:
             raise HTTPException(status_code=404, detail="Modelo de vehículo no encontrado")
         
         # Verificar nombre único si se está cambiando
         if modelo_data.modelo and modelo_data.modelo != modelo.modelo:
-            existing = db.query(ModeloVehiculo).filter(
-                ModeloVehiculo.modelo == modelo_data.modelo,
+            existing_modelo = db.query(ModeloVehiculo).filter(
+                ModeloVehiculo.modelo.ilike(modelo_data.modelo),
                 ModeloVehiculo.id != modelo_id
             ).first()
-            if existing:
+            
+            if existing_modelo:
                 raise HTTPException(
                     status_code=400, 
-                    detail="Ya existe un modelo con este nombre"
+                    detail="Ya existe un modelo de vehículo con ese nombre"
                 )
         
         # Actualizar campos
-        update_data = modelo_data.dict(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(modelo, field, value)
+        if modelo_data.modelo is not None:
+            modelo.modelo = modelo_data.modelo.strip()
+        if modelo_data.activo is not None:
+            modelo.activo = modelo_data.activo
         
         db.commit()
         db.refresh(modelo)
+        
+        logger.info(f"Modelo de vehículo actualizado: {modelo.modelo} (ID: {modelo.id})")
         
         return ModeloVehiculoResponse.model_validate(modelo)
         
@@ -193,7 +225,8 @@ def actualizar_modelo_vehiculo(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error actualizando modelo de vehículo: {str(e)}")
+        logger.error(f"Error actualizando modelo {modelo_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
 @router.delete("/{modelo_id}")
@@ -203,17 +236,13 @@ def eliminar_modelo_vehiculo(
     current_user: User = Depends(get_current_user)
 ):
     """
-    🗑️ Eliminar un modelo de vehículo (soft delete - marcar como inactivo)
+    🗑️ Eliminar un modelo de vehículo (soft delete)
     """
-    # Solo administrador general puede eliminar modelos
-    if current_user.rol not in ["USER"]:
-        raise HTTPException(
-            status_code=403, 
-            detail="Solo administradores pueden eliminar modelos de vehículos"
-        )
-    
     try:
-        modelo = db.query(ModeloVehiculo).filter(ModeloVehiculo.id == modelo_id).first()
+        # Buscar modelo existente
+        modelo = db.query(ModeloVehiculo).filter(
+            ModeloVehiculo.id == modelo_id
+        ).first()
         
         if not modelo:
             raise HTTPException(status_code=404, detail="Modelo de vehículo no encontrado")
@@ -222,38 +251,13 @@ def eliminar_modelo_vehiculo(
         modelo.activo = False
         db.commit()
         
-        return {"message": "Modelo de vehículo desactivado exitosamente"}
+        logger.info(f"Modelo de vehículo eliminado (soft delete): {modelo.modelo} (ID: {modelo.id})")
+        
+        return {"message": "Modelo de vehículo eliminado exitosamente"}
         
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error eliminando modelo de vehículo: {str(e)}")
-
-
-@router.get("/estadisticas/resumen", response_model=ModeloVehiculoStatsResponse)
-def obtener_estadisticas_modelos(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    📊 Obtener estadísticas de modelos de vehículos
-    """
-    try:
-        # Estadísticas generales
-        total_modelos = db.query(ModeloVehiculo).count()
-        modelos_activos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo == True).count()
-        modelos_inactivos = total_modelos - modelos_activos
-        
-        return ModeloVehiculoStatsResponse(
-            total_modelos=total_modelos,
-            modelos_activos=modelos_activos,
-            modelos_inactivos=modelos_inactivos,
-            por_categoria={},
-            por_marca={}
-        )
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo estadísticas: {str(e)}")
-
-
+        logger.error(f"Error eliminando modelo {modelo_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")

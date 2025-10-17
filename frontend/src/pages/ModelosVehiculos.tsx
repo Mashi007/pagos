@@ -1,25 +1,69 @@
-import { useState } from 'react'
-import { Car, Plus, Search, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Car, Plus, Search, Edit, Trash2, CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { modeloVehiculoService, ModeloVehiculo } from '@/services/modeloVehiculoService'
+import { toast } from 'sonner'
 
 export function ModelosVehiculos() {
+  const [modelos, setModelos] = useState<ModeloVehiculo[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [categoriaFilter, setCategoriaFilter] = useState('TODOS')
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [editingModelo, setEditingModelo] = useState<ModeloVehiculo | null>(null)
 
-  // Mock data - reemplazar con useQuery
-  const modelos = [
-    { id: 1, marca: 'Toyota', modelo: 'Corolla', nombre_completo: 'Toyota Corolla', categoria: 'SEDAN', activo: true },
-    { id: 2, marca: 'Nissan', modelo: 'Versa', nombre_completo: 'Nissan Versa', categoria: 'SEDAN', activo: true },
-    { id: 3, marca: 'Hyundai', modelo: 'Tucson', nombre_completo: 'Hyundai Tucson', categoria: 'SUV', activo: true },
-    { id: 4, marca: 'Ford', modelo: 'F-150', nombre_completo: 'Ford F-150', categoria: 'PICKUP', activo: true },
-    { id: 5, marca: 'Chevrolet', modelo: 'Spark', nombre_completo: 'Chevrolet Spark', categoria: 'COMPACTO', activo: false }
-  ]
+  // Cargar modelos al montar el componente
+  useEffect(() => {
+    cargarModelos()
+  }, [])
 
-  const categorias = ['TODOS', 'SEDAN', 'SUV', 'PICKUP', 'COMPACTO', 'DEPORTIVO']
+  const cargarModelos = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await modeloVehiculoService.listarModelos({ limit: 100 })
+      setModelos(response.items)
+    } catch (err) {
+      setError('Error al cargar modelos de vehículos')
+      toast.error('Error al cargar modelos de vehículos')
+      console.error('Error:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleEliminar = async (id: number) => {
+    try {
+      await modeloVehiculoService.eliminarModelo(id)
+      toast.success('Modelo eliminado exitosamente')
+      cargarModelos() // Recargar lista
+    } catch (err) {
+      toast.error('Error al eliminar modelo')
+      console.error('Error:', err)
+    }
+  }
+
+  const handleToggleActivo = async (modelo: ModeloVehiculo) => {
+    try {
+      await modeloVehiculoService.actualizarModelo(modelo.id, {
+        activo: !modelo.activo
+      })
+      toast.success(`Modelo ${modelo.activo ? 'desactivado' : 'activado'} exitosamente`)
+      cargarModelos() // Recargar lista
+    } catch (err) {
+      toast.error('Error al cambiar estado del modelo')
+      console.error('Error:', err)
+    }
+  }
+
+  // Filtrar modelos por término de búsqueda
+  const modelosFiltrados = modelos.filter(modelo =>
+    modelo.modelo.toLowerCase().includes(searchTerm.toLowerCase())
+  )
 
   return (
     <div className="space-y-6">
@@ -31,7 +75,7 @@ export function ModelosVehiculos() {
             Catálogo de modelos disponibles para financiamiento
           </p>
         </div>
-        <Button>
+        <Button onClick={() => setShowCreateForm(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Agregar Modelo
         </Button>
@@ -80,12 +124,12 @@ export function ModelosVehiculos() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Marcas</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {new Set(modelos.map(m => m.marca)).size}
+                <p className="text-sm text-gray-500">Inactivos</p>
+                <p className="text-2xl font-bold text-red-600">
+                  {modelos.filter(m => !m.activo).length}
                 </p>
               </div>
-              <Car className="w-8 h-8 text-blue-600" />
+              <XCircle className="w-8 h-8 text-red-600" />
             </div>
           </CardContent>
         </Card>
@@ -131,22 +175,45 @@ export function ModelosVehiculos() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {modelos.map((modelo) => (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+                    <p className="text-gray-500">Cargando modelos de vehículos...</p>
+                  </TableCell>
+                </TableRow>
+              ) : error ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8">
+                    <p className="text-red-500">{error}</p>
+                    <Button onClick={cargarModelos} className="mt-2">
+                      Reintentar
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ) : modelosFiltrados.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8">
+                    <p className="text-gray-500">No se encontraron modelos de vehículos</p>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                modelosFiltrados.map((modelo) => (
                 <TableRow key={modelo.id}>
                   <TableCell>
                     <div className="flex items-center space-x-3">
                       <Car className="w-5 h-5 text-gray-400" />
                       <div>
-                        <p className="font-medium">{modelo.nombre_completo}</p>
+                        <p className="font-medium">{modelo.modelo}</p>
                         <p className="text-xs text-gray-500">ID: {modelo.id}</p>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">{modelo.marca}</Badge>
+                    <span className="text-gray-400">-</span>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary">{modelo.categoria}</Badge>
+                    <span className="text-gray-400">-</span>
                   </TableCell>
                   <TableCell>
                     {modelo.activo ? (
@@ -157,22 +224,145 @@ export function ModelosVehiculos() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end space-x-2">
-                      <Button variant="ghost" size="sm">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => setEditingModelo(modelo)}
+                        title="Editar modelo"
+                      >
                         <Edit className="w-4 h-4" />
                       </Button>
-                      <Button variant="ghost" size="sm">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleToggleActivo(modelo)}
+                        title={modelo.activo ? "Desactivar" : "Activar"}
+                      >
                         {modelo.activo ? (
                           <XCircle className="w-4 h-4 text-red-600" />
                         ) : (
                           <CheckCircle className="w-4 h-4 text-green-600" />
                         )}
                       </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleEliminar(modelo.id)}
+                        title="Eliminar modelo"
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+              ))
+              )}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      {/* Formulario de Crear/Editar Modelo */}
+      {(showCreateForm || editingModelo) && (
+        <CrearEditarModeloForm
+          modelo={editingModelo}
+          onClose={() => {
+            setShowCreateForm(false)
+            setEditingModelo(null)
+          }}
+          onSuccess={() => {
+            cargarModelos()
+            setShowCreateForm(false)
+            setEditingModelo(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// Componente para crear/editar modelo
+interface CrearEditarModeloFormProps {
+  modelo?: ModeloVehiculo | null
+  onClose: () => void
+  onSuccess: () => void
+}
+
+function CrearEditarModeloForm({ modelo, onClose, onSuccess }: CrearEditarModeloFormProps) {
+  const [formData, setFormData] = useState({
+    modelo: modelo?.modelo || ''
+  })
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!formData.modelo.trim()) {
+      toast.error('El modelo es obligatorio')
+      return
+    }
+
+    try {
+      setLoading(true)
+      
+      const data = {
+        modelo: formData.modelo.trim()
+      }
+
+      if (modelo) {
+        await modeloVehiculoService.actualizarModelo(modelo.id, data)
+        toast.success('Modelo actualizado exitosamente')
+      } else {
+        await modeloVehiculoService.crearModelo(data)
+        toast.success('Modelo creado exitosamente')
+      }
+      
+      onSuccess()
+    } catch (err) {
+      toast.error(modelo ? 'Error al actualizar modelo' : 'Error al crear modelo')
+      console.error('Error:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <Card className="w-full max-w-md mx-4">
+        <CardHeader>
+          <CardTitle>
+            {modelo ? 'Editar Modelo' : 'Nuevo Modelo'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Modelo *</label>
+              <Input
+                value={formData.modelo}
+                onChange={(e) => setFormData({ ...formData, modelo: e.target.value })}
+                placeholder="Nombre del modelo de vehículo"
+                required
+              />
+            </div>
+            
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {modelo ? 'Actualizando...' : 'Creando...'}
+                  </>
+                ) : (
+                  modelo ? 'Actualizar' : 'Crear'
+                )}
+              </Button>
+            </div>
+          </form>
         </CardContent>
       </Card>
     </div>

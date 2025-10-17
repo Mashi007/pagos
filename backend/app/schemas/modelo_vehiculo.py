@@ -1,23 +1,16 @@
 # backend/app/schemas/modelo_vehiculo.py
 """
-Schemas Pydantic para modelos de vehículos
+Schemas para ModeloVehiculo
 """
-from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import Optional, List
-from decimal import Decimal
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional
 from datetime import datetime
 
 
 class ModeloVehiculoBase(BaseModel):
-    modelo: str = Field(..., min_length=1, max_length=100, description="Modelo del vehículo")
-    activo: bool = Field(True, description="Si el modelo está activo")
-
-    @field_validator('modelo')
-    @classmethod
-    def validate_modelo(cls, v):
-        if v and not v.strip():
-            raise ValueError('Campo modelo no puede estar vacío')
-        return v.strip().title() if v else v
+    """Schema base para ModeloVehiculo"""
+    modelo: str = Field(..., min_length=1, max_length=100, description="Nombre del modelo de vehículo")
+    activo: bool = Field(default=True, description="Estado del modelo")
 
 
 class ModeloVehiculoCreate(ModeloVehiculoBase):
@@ -32,7 +25,7 @@ class ModeloVehiculoUpdate(BaseModel):
 
 
 class ModeloVehiculoResponse(ModeloVehiculoBase):
-    """Schema para respuesta de modelo de vehículo"""
+    """Schema de respuesta para ModeloVehiculo"""
     id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -41,28 +34,9 @@ class ModeloVehiculoResponse(ModeloVehiculoBase):
 
 
 class ModeloVehiculoListResponse(BaseModel):
-    """Schema para lista de modelos de vehículos"""
-    items: List[ModeloVehiculoResponse]
+    """Schema para respuesta de lista paginada"""
+    items: list[ModeloVehiculoResponse]
     total: int
     page: int
     page_size: int
     total_pages: int
-
-
-class ModeloVehiculoActivosResponse(BaseModel):
-    """Schema para modelos activos (para formularios)"""
-    id: int
-    modelo: str
-    activo: bool
-    
-    class Config:
-        from_attributes = True
-
-
-class ModeloVehiculoStatsResponse(BaseModel):
-    """Schema para estadísticas de modelos de vehículos"""
-    total_modelos: int
-    modelos_activos: int
-    modelos_inactivos: int
-    por_categoria: dict
-    por_marca: dict
