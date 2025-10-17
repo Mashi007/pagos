@@ -5,9 +5,13 @@ Configuración de SQLAlchemy: Engine, SessionLocal y Base.
 from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+import logging
 
 # ✅ CORRECTO: Importar desde app.core.config
 from app.core.config import settings
+
+# Configurar logger
+logger = logging.getLogger(__name__)
 
 # Crear engine de SQLAlchemy con configuración optimizada para producción
 engine = create_engine(
@@ -56,8 +60,6 @@ def get_db():
         
     except Exception as e:
         # Solo manejar errores reales de DB, no de autenticación
-        import logging
-        logger = logging.getLogger(__name__)
         
         # Verificar si es un error de autenticación HTTP
         error_str = str(e)

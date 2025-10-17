@@ -107,3 +107,64 @@ def check_database_structure(
             status_code=500,
             detail=f"Error verificando estructura: {str(e)}"
         )
+
+@router.post("/fix-auditorias-usuario-id")
+def fix_auditorias_usuario_id(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Corregir columna usuario_id faltante en tabla auditorias
+    Solo para administradores
+    """
+    # Verificar que el usuario sea admin
+    if current_user.rol != "ADMIN":
+        raise HTTPException(
+            status_code=403, 
+            detail="Solo administradores pueden ejecutar esta corrección"
+        )
+    
+    try:
+        # Verificar si la columna usuario_id existe
+        result = db.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'auditorias' 
+            AND column_name = 'usuario_id'
+        """))
+        
+        if not result.fetchone():
+            # La columna no existe, agregarla
+            db.execute(text("ALTER TABLE auditorias ADD COLUMN usuario_id INTEGER"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS ix_auditorias_usuario_id ON auditorias(usuario_id)"))
+            
+            # Intentar agregar foreign key constraint
+            try:
+                db.execute(text("""
+                    ALTER TABLE auditorias 
+                    ADD CONSTRAINT fk_auditorias_usuario_id 
+                    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
+                """))
+            except Exception as fk_error:
+                print(f"Warning: No se pudo crear la foreign key constraint: {fk_error}")
+            
+            db.commit()
+            
+            return {
+                "success": True,
+                "message": "✅ Columna 'usuario_id' agregada exitosamente a tabla 'auditorias'",
+                "action": "column_added"
+            }
+        else:
+            return {
+                "success": True,
+                "message": "ℹ️ Columna 'usuario_id' ya existe en tabla 'auditorias'",
+                "action": "column_exists"
+            }
+            
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error aplicando corrección: {str(e)}"
+        )
