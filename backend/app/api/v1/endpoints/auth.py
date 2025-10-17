@@ -66,8 +66,18 @@ def add_cors_headers(request: Request, response: Response) -> None:
 @router.options("/login")
 async def options_login(request: Request, response: Response):
     """Manejar preflight CORS para login"""
-    add_cors_headers(request, response)
-    return {"message": "OK"}
+    try:
+        add_cors_headers(request, response)
+        return {"message": "OK"}
+    except Exception as e:
+        from app.core.logging import logger
+        logger.error(f"❌ Error en OPTIONS login: {str(e)}")
+        # FALLBACK: Headers básicos
+        response.headers["Access-Control-Allow-Origin"] = "https://rapicredit.onrender.com"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        return {"message": "OK"}
 
 @router.get("/cors-test")
 async def cors_test(request: Request):
