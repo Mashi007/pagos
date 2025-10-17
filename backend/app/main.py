@@ -131,10 +131,10 @@ from fastapi.middleware.cors import CORSMiddleware
 logger.info(f"🌐 CORS Origins configurados: {settings.CORS_ORIGINS}")
 logger.info("✅ CORS: Middleware simple para OPTIONS + Headers directos en POST")
 
-# MIDDLEWARE CORS SIMPLE PARA OPTIONS (preflight)
+# MIDDLEWARE CORS CENTRALIZADO - USANDO CONFIGURACIÓN
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://rapicredit.onrender.com"],  # Solo frontend
+    allow_origins=settings.CORS_ORIGINS,  # ✅ Usar configuración centralizada
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],

@@ -38,7 +38,8 @@ def add_cors_headers(request: Request, response: Response) -> None:
         response: Response object donde agregar headers
     """
     from app.core.config import settings
-    from app.core.logging import logger
+    import logging
+    logger = logging.getLogger(__name__)
     
     origin = request.headers.get("origin")
     logger.info(f"🌐 CORS Debug - Origin recibido: {origin}")
@@ -63,7 +64,10 @@ def add_cors_headers(request: Request, response: Response) -> None:
             logger.info(f"✅ CORS Headers agregados (FALLBACK) para origin: {origin}")
 
 
-# ENDPOINT OPTIONS ELIMINADO - MANEJADO POR MIDDLEWARE
+@router.options("/login")
+async def options_login():
+    """Endpoint OPTIONS explícito para preflight CORS"""
+    return {"message": "OK"}
 
 @router.get("/cors-test")
 async def cors_test(request: Request):
@@ -97,14 +101,7 @@ def login(
     
     **Rate Limit:** 5 intentos por minuto por IP
     """
-    # HEADERS CORS DIRECTOS - SIN HELPER
-    origin = request.headers.get("origin")
-    
-    if origin == "https://rapicredit.onrender.com":
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-        response.headers["Access-Control-Allow-Headers"] = "*"
+    # CORS MANEJADO POR MIDDLEWARE - SIN CONFLICTOS
     
     try:
         token, user = AuthService.login(db, login_data)
