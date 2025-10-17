@@ -6,13 +6,10 @@ services:
     plan: free
     branch: main
     autoDeploy: true
-    buildCommand: npm ci && npm run build
-    startCommand: node server.js
-    healthCheckPath: /
+    buildCommand: npm install && npm run build
+    startCommand: npm run render-start
     envVars:
-      - key: NODE_ENV
-        value: production
+      - key: NODE_VERSION
+        value: 18.17.0
       - key: VITE_API_URL
         value: https://pagos-f2qf.onrender.com
-      - key: PORT
-        value: 10000

@@ -23,8 +23,9 @@ services:
     plan: free
     branch: main
     autoDeploy: true
-    buildCommand: cd frontend && npm run render-build
-    startCommand: cd frontend && npm run render-start
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm run render-start
     envVars:
       - key: NODE_VERSION
         value: 18.17.0
