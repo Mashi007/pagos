@@ -151,14 +151,19 @@ def require_permission(*required_permissions: Permission):
 
 
 def get_admin_user(
-    current_user: User = Depends(require_role(UserRole.USER))
+    current_user: User = Depends(get_current_user)
 ) -> User:
     """
-    Dependency para endpoints que requieren usuario autenticado
+    Dependency para endpoints que requieren usuario administrador
     
     Returns:
-        Usuario con rol USER (todos tienen acceso completo)
+        Usuario con rol ADMIN
     """
+    if current_user.rol != "ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo los administradores pueden acceder a este recurso"
+        )
     return current_user
 
 
