@@ -34,6 +34,7 @@ import { VisualizacionBD } from '@/pages/VisualizacionBD'
 import { Validadores } from '@/pages/Validadores'
 import { Concesionarios } from '@/pages/Concesionarios'
 import { ModelosVehiculos } from '@/pages/ModelosVehiculos'
+import { Auditoria } from '@/pages/Auditoria'
 import { Usuarios } from '@/pages/Usuarios'
 import { Solicitudes } from '@/pages/Solicitudes'
 
@@ -268,6 +269,16 @@ function App() {
             element={
               <ProtectedRoute requiredRoles={['USER']}>
                 <ModelosVehiculos />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Auditoría */}
+          <Route
+            path="auditoria"
+            element={
+              <ProtectedRoute requiredRoles={['USER']}>
+                <Auditoria />
               </ProtectedRoute>
             }
           />

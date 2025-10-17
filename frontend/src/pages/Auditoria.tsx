@@ -1,416 +1,394 @@
-import { useState } from 'react'
-import { motion } from 'framer-motion'
-import {
-  Shield,
-  Search,
-  Filter,
-  Calendar,
-  User,
-  Activity,
-  Eye,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-  Clock,
-  FileText,
-  RefreshCw,
-  Download,
-} from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { useState, useEffect } from 'react'
+import { Shield, Download, Search, Filter, Calendar, User, Activity, BarChart3, Loader2 } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { formatDate } from '@/utils'
-
-// Mock data para auditoría
-const mockAuditoria = [
-  {
-    id: 'AUD001',
-    usuario: 'itmaster@rapicreditca.com',
-    accion: 'LOGIN',
-    modulo: 'AUTH',
-    descripcion: 'Inicio de sesión exitoso',
-    ip: '192.168.1.100',
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    timestamp: '2024-07-20T10:30:00Z',
-    resultado: 'EXITOSO',
-    detalles: { metodo: 'POST', endpoint: '/api/v1/auth/login' },
-  },
-  {
-    id: 'AUD002',
-    usuario: 'carlos.mendoza@financiamiento.com',
-    accion: 'CREATE',
-    modulo: 'CLIENTES',
-    descripcion: 'Cliente creado: Juan Pérez',
-    ip: '192.168.1.101',
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    timestamp: '2024-07-20T10:25:00Z',
-    resultado: 'EXITOSO',
-    detalles: { cliente_id: 123, cedula: 'V12345678' },
-  },
-  {
-    id: 'AUD003',
-    usuario: 'maria.gonzalez@financiamiento.com',
-    accion: 'UPDATE',
-    modulo: 'PAGOS',
-    descripcion: 'Pago actualizado: TRF789012',
-    ip: '192.168.1.102',
-    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-    timestamp: '2024-07-20T10:20:00Z',
-    resultado: 'EXITOSO',
-    detalles: { pago_id: 456, monto_anterior: 450.00, monto_nuevo: 500.00 },
-  },
-  {
-    id: 'AUD004',
-    usuario: 'luis.rodriguez@financiamiento.com',
-    accion: 'DELETE',
-    modulo: 'NOTIFICACIONES',
-    descripcion: 'Notificación eliminada',
-    ip: '192.168.1.103',
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    timestamp: '2024-07-20T10:15:00Z',
-    resultado: 'FALLIDO',
-    detalles: { error: 'Permisos insuficientes', notificacion_id: 789 },
-  },
-  {
-    id: 'AUD005',
-    usuario: 'itmaster@rapicreditca.com',
-    accion: 'EXPORT',
-    modulo: 'REPORTES',
-    descripcion: 'Exportación de reporte de cartera',
-    ip: '192.168.1.100',
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    timestamp: '2024-07-20T10:10:00Z',
-    resultado: 'EXITOSO',
-    detalles: { reporte_tipo: 'CARTERA', formato: 'PDF', registros: 150 },
-  },
-]
-
-const modulos = [
-  'AUTH', 'CLIENTES', 'PAGOS', 'PRESTAMOS', 'AMORTIZACION', 'REPORTES', 
-  'APROBACIONES', 'AUDITORIA', 'CONFIGURACION', 'NOTIFICACIONES'
-]
-
-const acciones = [
-  'LOGIN', 'LOGOUT', 'CREATE', 'READ', 'UPDATE', 'DELETE', 'EXPORT', 'IMPORT'
-]
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { auditoriaService, Auditoria, AuditoriaStats } from '@/services/auditoriaService'
+import { toast } from 'sonner'
 
 export function Auditoria() {
-  const [searchTerm, setSearchTerm] = useState('')
-  const [filterModulo, setFilterModulo] = useState('Todos')
-  const [filterAccion, setFilterAccion] = useState('Todos')
-  const [filterResultado, setFilterResultado] = useState('Todos')
-  const [selectedAudit, setSelectedAudit] = useState<string | null>(null)
-
-  const filteredAuditoria = mockAuditoria.filter((audit) => {
-    const matchesSearch =
-      audit.usuario.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      audit.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      audit.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      audit.ip.includes(searchTerm)
-    const matchesModulo = filterModulo === 'Todos' || audit.modulo === filterModulo
-    const matchesAccion = filterAccion === 'Todos' || audit.accion === filterAccion
-    const matchesResultado = filterResultado === 'Todos' || audit.resultado === filterResultado
-    return matchesSearch && matchesModulo && matchesAccion && matchesResultado
+  const [auditorias, setAuditorias] = useState<Auditoria[]>([])
+  const [stats, setStats] = useState<AuditoriaStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [total, setTotal] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(50)
+  
+  // Filtros
+  const [filtros, setFiltros] = useState({
+    usuario_email: '',
+    modulo: '',
+    accion: '',
+    fecha_desde: '',
+    fecha_hasta: '',
+    ordenar_por: 'fecha',
+    orden: 'desc'
   })
 
-  const totalRegistros = mockAuditoria.length
-  const exitosos = mockAuditoria.filter((a) => a.resultado === 'EXITOSO').length
-  const fallidos = mockAuditoria.filter((a) => a.resultado === 'FALLIDO').length
-  const usuariosActivos = new Set(mockAuditoria.map(a => a.usuario)).size
+  // Cargar auditoría al montar el componente
+  useEffect(() => {
+    cargarAuditoria()
+    cargarEstadisticas()
+  }, [currentPage])
 
-  const getAccionIcon = (accion: string) => {
-    switch (accion) {
-      case 'LOGIN': return <CheckCircle className="h-4 w-4 text-green-600" />
-      case 'LOGOUT': return <XCircle className="h-4 w-4 text-gray-600" />
-      case 'CREATE': return <FileText className="h-4 w-4 text-blue-600" />
-      case 'UPDATE': return <RefreshCw className="h-4 w-4 text-yellow-600" />
-      case 'DELETE': return <XCircle className="h-4 w-4 text-red-600" />
-      case 'EXPORT': return <Download className="h-4 w-4 text-purple-600" />
-      default: return <Activity className="h-4 w-4 text-gray-600" />
+  const cargarAuditoria = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const params = {
+        skip: (currentPage - 1) * pageSize,
+        limit: pageSize,
+        ...filtros
+      }
+      
+      console.log('📡 Llamando a API: /api/v1/auditoria')
+      const response = await auditoriaService.listarAuditoria(params)
+      console.log('✅ Respuesta API:', response)
+      
+      setAuditorias(response.items)
+      setTotal(response.total)
+    } catch (err) {
+      console.error('❌ Error API:', err)
+      setError('Error al cargar auditoría')
+      toast.error('Error al cargar auditoría')
+    } finally {
+      setLoading(false)
     }
   }
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="space-y-6"
-    >
-      <h1 className="text-3xl font-bold text-gray-900">Auditoría del Sistema</h1>
-      <p className="text-gray-600">Monitorea todas las actividades y cambios realizados en el sistema.</p>
+  const cargarEstadisticas = async () => {
+    try {
+      const response = await auditoriaService.obtenerEstadisticas()
+      setStats(response)
+    } catch (err) {
+      console.error('❌ Error cargando estadísticas:', err)
+    }
+  }
 
-      {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Registros</CardTitle>
-            <Shield className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalRegistros}</div>
-            <p className="text-xs text-muted-foreground">Eventos registrados</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Exitosos</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{exitosos}</div>
-            <p className="text-xs text-muted-foreground">Acciones completadas</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Fallidos</CardTitle>
-            <XCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{fallidos}</div>
-            <p className="text-xs text-muted-foreground">Errores detectados</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Usuarios Activos</CardTitle>
-            <User className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{usuariosActivos}</div>
-            <p className="text-xs text-muted-foreground">Usuarios únicos</p>
-          </CardContent>
-        </Card>
+  const handleFiltrar = () => {
+    setCurrentPage(1)
+    cargarAuditoria()
+  }
+
+  const handleLimpiarFiltros = () => {
+    setFiltros({
+      usuario_email: '',
+      modulo: '',
+      accion: '',
+      fecha_desde: '',
+      fecha_hasta: '',
+      ordenar_por: 'fecha',
+      orden: 'desc'
+    })
+    setCurrentPage(1)
+  }
+
+  const handleExportarExcel = async () => {
+    try {
+      await auditoriaService.descargarExcel(filtros)
+      toast.success('✅ Auditoría exportada exitosamente')
+    } catch (err) {
+      toast.error('❌ Error al exportar auditoría')
+      console.error('Error:', err)
+    }
+  }
+
+  const getAccionBadgeColor = (accion: string) => {
+    const colors: any = {
+      'CREAR': 'bg-green-600',
+      'ACTUALIZAR': 'bg-blue-600',
+      'ELIMINAR': 'bg-red-600',
+      'LOGIN': 'bg-purple-600',
+      'LOGOUT': 'bg-gray-600',
+      'APROBAR': 'bg-green-600',
+      'RECHAZAR': 'bg-red-600',
+      'ACTIVAR': 'bg-green-600',
+      'DESACTIVAR': 'bg-red-600',
+    }
+    return colors[accion] || 'bg-gray-600'
+  }
+
+  const getModuloBadgeColor = (modulo: string) => {
+    const colors: any = {
+      'USUARIOS': 'bg-red-600',
+      'CLIENTES': 'bg-blue-600',
+      'PRESTAMOS': 'bg-green-600',
+      'PAGOS': 'bg-yellow-600',
+      'AUDITORIA': 'bg-purple-600',
+      'CONFIGURACION': 'bg-gray-600',
+    }
+    return colors[modulo] || 'bg-gray-600'
+  }
+
+  const totalPages = Math.ceil(total / pageSize)
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Auditoría del Sistema</h1>
+          <p className="text-gray-500 mt-1">
+            Seguimiento completo de todas las acciones realizadas
+          </p>
+        </div>
+        <Button onClick={handleExportarExcel} className="bg-green-600 hover:bg-green-700">
+          <Download className="w-4 h-4 mr-2" />
+          Exportar Excel
+        </Button>
       </div>
 
-      {/* Filtros y Búsqueda */}
+      {/* Stats Dashboard */}
+      {stats && (
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">Total Acciones</p>
+                  <p className="text-2xl font-bold">{stats.total_acciones.toLocaleString()}</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Registros históricos
+                  </p>
+                </div>
+                <Activity className="w-8 h-8 text-blue-600" />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">Hoy</p>
+                  <p className="text-2xl font-bold text-green-600">{stats.acciones_hoy}</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Acciones realizadas
+                  </p>
+                </div>
+                <Calendar className="w-8 h-8 text-green-600" />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">Esta Semana</p>
+                  <p className="text-2xl font-bold text-blue-600">{stats.acciones_esta_semana}</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Últimos 7 días
+                  </p>
+                </div>
+                <BarChart3 className="w-8 h-8 text-blue-600" />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">Este Mes</p>
+                  <p className="text-2xl font-bold text-purple-600">{stats.acciones_este_mes}</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Últimos 30 días
+                  </p>
+                </div>
+                <Shield className="w-8 h-8 text-purple-600" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Filtros */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
-            <Filter className="mr-2 h-5 w-5" /> Filtros de Auditoría
+            <Filter className="w-5 h-5 mr-2" />
+            Filtros de Búsqueda
           </CardTitle>
-          <CardDescription>Filtra los registros de auditoría por diferentes criterios.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-3">
             <div>
-              <label className="text-sm font-medium">Búsqueda</label>
+              <label className="block text-sm font-medium mb-1">Email Usuario</label>
               <Input
-                placeholder="Usuario, descripción, IP..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                leftIcon={<Search className="h-4 w-4 text-gray-400" />}
+                placeholder="Buscar por email..."
+                value={filtros.usuario_email}
+                onChange={(e) => setFiltros({ ...filtros, usuario_email: e.target.value })}
               />
             </div>
+            
             <div>
-              <label className="text-sm font-medium">Módulo</label>
-              <Select value={filterModulo} onValueChange={setFilterModulo}>
+              <label className="block text-sm font-medium mb-1">Módulo</label>
+              <Select value={filtros.modulo} onValueChange={(value) => setFiltros({ ...filtros, modulo: value })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar módulo" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Todos">Todos los módulos</SelectItem>
-                  {modulos.map((modulo) => (
-                    <SelectItem key={modulo} value={modulo}>{modulo}</SelectItem>
-                  ))}
+                  <SelectItem value="">Todos los módulos</SelectItem>
+                  <SelectItem value="USUARIOS">Usuarios</SelectItem>
+                  <SelectItem value="CLIENTES">Clientes</SelectItem>
+                  <SelectItem value="PRESTAMOS">Préstamos</SelectItem>
+                  <SelectItem value="PAGOS">Pagos</SelectItem>
+                  <SelectItem value="AUDITORIA">Auditoría</SelectItem>
+                  <SelectItem value="CONFIGURACION">Configuración</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            
             <div>
-              <label className="text-sm font-medium">Acción</label>
-              <Select value={filterAccion} onValueChange={setFilterAccion}>
+              <label className="block text-sm font-medium mb-1">Acción</label>
+              <Select value={filtros.accion} onValueChange={(value) => setFiltros({ ...filtros, accion: value })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar acción" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Todos">Todas las acciones</SelectItem>
-                  {acciones.map((accion) => (
-                    <SelectItem key={accion} value={accion}>{accion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Resultado</label>
-              <Select value={filterResultado} onValueChange={setFilterResultado}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar resultado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Todos">Todos los resultados</SelectItem>
-                  <SelectItem value="EXITOSO">Exitoso</SelectItem>
-                  <SelectItem value="FALLIDO">Fallido</SelectItem>
+                  <SelectItem value="">Todas las acciones</SelectItem>
+                  <SelectItem value="CREAR">Crear</SelectItem>
+                  <SelectItem value="ACTUALIZAR">Actualizar</SelectItem>
+                  <SelectItem value="ELIMINAR">Eliminar</SelectItem>
+                  <SelectItem value="LOGIN">Login</SelectItem>
+                  <SelectItem value="LOGOUT">Logout</SelectItem>
+                  <SelectItem value="APROBAR">Aprobar</SelectItem>
+                  <SelectItem value="RECHAZAR">Rechazar</SelectItem>
+                  <SelectItem value="ACTIVAR">Activar</SelectItem>
+                  <SelectItem value="DESACTIVAR">Desactivar</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
+          
+          <div className="flex gap-2 mt-4">
+            <Button onClick={handleFiltrar}>
+              <Search className="w-4 h-4 mr-2" />
+              Filtrar
+            </Button>
+            <Button variant="outline" onClick={handleLimpiarFiltros}>
+              Limpiar Filtros
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Tabla de Auditoría */}
+      {/* Tabla */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            Registros de Auditoría
-            <div className="flex space-x-2">
-              <Button variant="outline" size="sm">
-                <Download className="mr-2 h-4 w-4" /> Exportar
-              </Button>
-              <Button variant="outline" size="sm">
-                <RefreshCw className="mr-2 h-4 w-4" /> Actualizar
-              </Button>
-            </div>
-          </CardTitle>
-          <CardDescription>Lista detallada de todas las actividades del sistema.</CardDescription>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Usuario</TableHead>
+                <TableHead>Email Usuario</TableHead>
                 <TableHead>Acción</TableHead>
                 <TableHead>Módulo</TableHead>
                 <TableHead>Descripción</TableHead>
-                <TableHead>IP</TableHead>
-                <TableHead>Fecha/Hora</TableHead>
                 <TableHead>Resultado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
+                <TableHead>Fecha</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredAuditoria.length > 0 ? (
-                filteredAuditoria.map((audit) => (
-                  <TableRow key={audit.id}>
-                    <TableCell className="font-medium">{audit.id}</TableCell>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+                    <p className="text-gray-500">Cargando auditoría...</p>
+                  </TableCell>
+                </TableRow>
+              ) : error ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8">
+                    <p className="text-red-500">{error}</p>
+                    <Button onClick={cargarAuditoria} className="mt-2">
+                      Reintentar
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ) : auditorias.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8">
+                    <p className="text-gray-500">No se encontraron registros de auditoría</p>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                auditorias.map((auditoria) => (
+                  <TableRow key={auditoria.id}>
                     <TableCell>
-                      <div className="flex items-center">
-                        <User className="h-4 w-4 mr-2 text-gray-400" />
-                        <span className="text-sm">{audit.usuario}</span>
+                      <div className="flex items-center text-sm">
+                        <User className="w-3 h-3 mr-1 text-gray-400" />
+                        {auditoria.usuario_email || 'N/A'}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center">
-                        {getAccionIcon(audit.accion)}
-                        <span className="ml-2">{audit.accion}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{audit.modulo}</Badge>
-                    </TableCell>
-                    <TableCell className="max-w-[200px] truncate">{audit.descripcion}</TableCell>
-                    <TableCell className="font-mono text-sm">{audit.ip}</TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        {formatDate(audit.timestamp)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={audit.resultado === 'EXITOSO' ? 'success' : 'destructive'}
-                      >
-                        {audit.resultado === 'EXITOSO' ? (
-                          <>
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                            Exitoso
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="h-3 w-3 mr-1" />
-                            Fallido
-                          </>
-                        )}
+                      <Badge className={getAccionBadgeColor(auditoria.accion)}>
+                        {auditoria.accion}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedAudit(audit.id)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                    <TableCell>
+                      <Badge className={getModuloBadgeColor(auditoria.modulo)}>
+                        {auditoria.modulo}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-600 max-w-xs truncate">
+                      {auditoria.descripcion || 'N/A'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={auditoria.resultado === 'EXITOSO' ? 'bg-green-600' : 'bg-red-600'}>
+                        {auditoria.resultado}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-600">
+                      {new Date(auditoria.fecha).toLocaleString('es-VE', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
                     </TableCell>
                   </TableRow>
                 ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center text-gray-500">
-                    No se encontraron registros de auditoría.
-                  </TableCell>
-                </TableRow>
               )}
             </TableBody>
           </Table>
+          
+          {/* Paginación */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <p className="text-sm text-gray-500">
+                Mostrando {((currentPage - 1) * pageSize) + 1} a {Math.min(currentPage * pageSize, total)} de {total} registros
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <span className="px-3 py-1 text-sm">
+                  Página {currentPage} de {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      {/* Detalle de Auditoría */}
-      {selectedAudit && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Shield className="mr-2 h-5 w-5" /> Detalle de Auditoría - {selectedAudit}
-            </CardTitle>
-            <CardDescription>Información completa del evento de auditoría.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {(() => {
-              const audit = mockAuditoria.find(a => a.id === selectedAudit)
-              if (!audit) return null
-
-              return (
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="space-y-4">
-                    <h3 className="font-semibold">Información General</h3>
-                    <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                      <div><strong>ID:</strong> {audit.id}</div>
-                      <div><strong>Usuario:</strong> {audit.usuario}</div>
-                      <div><strong>Acción:</strong> {audit.accion}</div>
-                      <div><strong>Módulo:</strong> {audit.modulo}</div>
-                      <div><strong>Descripción:</strong> {audit.descripcion}</div>
-                      <div><strong>Resultado:</strong> 
-                        <Badge
-                          variant={audit.resultado === 'EXITOSO' ? 'success' : 'destructive'}
-                          className="ml-2"
-                        >
-                          {audit.resultado}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h3 className="font-semibold">Información Técnica</h3>
-                    <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                      <div><strong>IP:</strong> {audit.ip}</div>
-                      <div><strong>Timestamp:</strong> {audit.timestamp}</div>
-                      <div><strong>User Agent:</strong> 
-                        <div className="text-xs text-gray-600 mt-1 break-all">
-                          {audit.userAgent}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="md:col-span-2 space-y-4">
-                    <h3 className="font-semibold">Detalles Adicionales</h3>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <pre className="text-sm text-gray-700 whitespace-pre-wrap">
-                        {JSON.stringify(audit.detalles, null, 2)}
-                      </pre>
-                    </div>
-                  </div>
-                </div>
-              )
-            })()}
-          </CardContent>
-        </Card>
-      )}
-    </motion.div>
+    </div>
   )
 }

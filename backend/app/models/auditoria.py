@@ -46,12 +46,26 @@ class Auditoria(Base):
         index=True
     )
     
+    # Email del usuario (para ordenamiento rápido)
+    usuario_email = Column(
+        String(255),
+        nullable=True,
+        index=True
+    )
+    
     # Acción realizada
     accion = Column(
         String(50),
         nullable=False,
         index=True
     )  # CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.
+    
+    # Módulo del sistema
+    modulo = Column(
+        String(50),
+        nullable=False,
+        index=True
+    )  # USUARIOS, CLIENTES, PRESTAMOS, PAGOS, etc.
     
     # Entidad afectada
     tabla = Column(
@@ -100,7 +114,9 @@ class Auditoria(Base):
     def registrar(
         cls,
         usuario_id: int,
+        usuario_email: str,
         accion: str,
+        modulo: str,
         tabla: str,
         registro_id: int = None,
         descripcion: str = None,
@@ -116,7 +132,9 @@ class Auditoria(Base):
         
         Args:
             usuario_id: ID del usuario que realizó la acción
+            usuario_email: Email del usuario (para ordenamiento)
             accion: Tipo de acción (CREATE, UPDATE, DELETE, etc.)
+            modulo: Módulo del sistema (USUARIOS, CLIENTES, etc.)
             tabla: Tipo de entidad afectada
             registro_id: ID de la entidad afectada
             descripcion: Descripción de la acción
@@ -131,8 +149,10 @@ class Auditoria(Base):
             Auditoria: Instancia del registro de auditoría
         """
         return cls(
-            usuario_id=user_id,
+            usuario_id=usuario_id,
+            usuario_email=usuario_email,
             accion=accion,
+            modulo=modulo,
             tabla=tabla,
             registro_id=registro_id,
             descripcion=descripcion,

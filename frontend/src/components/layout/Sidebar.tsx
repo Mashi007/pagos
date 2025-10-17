@@ -119,7 +119,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       children: [
         { title: 'Notificaciones', href: '/notificaciones', icon: Bell },
         { title: 'Programador', href: '/scheduler', icon: Calendar, requiredRoles: ['USER'] },
-        { title: 'Auditoría', href: '/auditoria', icon: Search, requiredRoles: ['USER'] },
+        { title: 'Auditoría', href: '/auditoria', icon: Shield, requiredRoles: ['USER'] },
       ],
     },
     {

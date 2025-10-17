@@ -18,6 +18,7 @@ from app.schemas.auth import (
 )
 from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
+from app.utils.auditoria_helper import registrar_login_exitoso, registrar_logout, registrar_error
 
 # Rate Limiting
 from slowapi import Limiter
@@ -113,6 +114,17 @@ def login(
             success=True
         )
         
+        # Registrar auditoría de login exitoso
+        try:
+            registrar_login_exitoso(
+                db=db,
+                usuario=user,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent")
+            )
+        except Exception as e:
+            logger.warning(f"Error registrando auditoría de login: {e}")
+        
     except HTTPException as e:
         # ❌ Log de login fallido
         log_login_attempt(
@@ -121,6 +133,23 @@ def login(
             success=False,
             reason=str(e.detail)
         )
+        
+        # Registrar auditoría de login fallido
+        try:
+            registrar_error(
+                db=db,
+                usuario=None,  # Usuario no encontrado
+                accion="LOGIN",
+                modulo="AUTH",
+                tabla="usuarios",
+                descripcion=f"Intento de login fallido para {login_data.email}",
+                mensaje_error=str(e.detail),
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent")
+            )
+        except Exception as audit_error:
+            logger.warning(f"Error registrando auditoría de login fallido: {audit_error}")
+        
         raise
     
     # Crear respuesta con tokens y usuario

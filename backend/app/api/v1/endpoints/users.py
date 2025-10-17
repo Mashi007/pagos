@@ -11,8 +11,9 @@ from app.db.session import get_db
 from app.api.deps import get_admin_user, get_pagination_params, PaginationParams
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserListResponse
-from app.core.security import get_password_hash, validate_password_strength
-from datetime import datetime
+from app.utils.auditoria_helper import (
+    registrar_creacion, registrar_actualizacion, registrar_eliminacion, registrar_error
+)
 
 
 router = APIRouter()
@@ -164,6 +165,26 @@ def create_user(
     db.commit()
     db.refresh(new_user)
     
+    # Registrar auditoría
+    try:
+        registrar_creacion(
+            db=db,
+            usuario=current_user,
+            modulo="USUARIOS",
+            tabla="usuarios",
+            registro_id=new_user.id,
+            descripcion=f"Usuario creado: {new_user.email} con rol {new_user.rol}",
+            datos_nuevos={
+                "email": new_user.email,
+                "nombre": new_user.nombre,
+                "apellido": new_user.apellido,
+                "rol": new_user.rol,
+                "is_active": new_user.is_active
+            }
+        )
+    except Exception as e:
+        logger.warning(f"Error registrando auditoría de creación de usuario: {e}")
+    
     return new_user
 
 
@@ -274,9 +295,9 @@ def delete_user(
     current_user: User = Depends(get_admin_user)
 ):
     """
-    Desactivar un usuario (soft delete - solo ADMIN)
+    Eliminar un usuario (HARD DELETE - borrado completo de BD)
     
-    No se eliminan usuarios de la base de datos, solo se marcan como inactivos
+    Solo ADMIN puede eliminar usuarios permanentemente
     """
     user = db.query(User).filter(User.id == user_id).first()
     
@@ -293,14 +314,34 @@ def delete_user(
             detail="No puedes desactivar tu propio usuario"
         )
     
-    # Soft delete
-    user.is_active = False
-    user.updated_at = datetime.utcnow()
+    # HARD DELETE - eliminar completamente de la base de datos
+    user_email = user.email  # Guardar email para log
     
+    # Registrar auditoría antes de eliminar
+    try:
+        registrar_eliminacion(
+            db=db,
+            usuario=current_user,
+            modulo="USUARIOS",
+            tabla="usuarios",
+            registro_id=user.id,
+            descripcion=f"Usuario eliminado permanentemente: {user_email}",
+            datos_anteriores={
+                "email": user.email,
+                "nombre": user.nombre,
+                "apellido": user.apellido,
+                "rol": user.rol,
+                "is_active": user.is_active
+            }
+        )
+    except Exception as e:
+        logger.warning(f"Error registrando auditoría de eliminación de usuario: {e}")
+    
+    db.delete(user)
     db.commit()
     
     return {
-        "message": f"Usuario {user.email} desactivado exitosamente"
+        "message": f"Usuario {user_email} eliminado completamente de la base de datos"
     }
 
 

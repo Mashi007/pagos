@@ -7,8 +7,11 @@ from typing import List
 
 
 class UserRole(str, Enum):
-    """Rol único del sistema - todos tienen acceso completo"""
+    """Roles del sistema - solo ADMIN puede crear usuarios y cambiar estados"""
     USER = "USER"
+    ADMIN = "ADMIN"
+    GERENTE = "GERENTE"
+    COBRANZAS = "COBRANZAS"
 
 
 class Permission(str, Enum):
@@ -18,6 +21,8 @@ class Permission(str, Enum):
     USER_READ = "user:read"
     USER_UPDATE = "user:update"
     USER_DELETE = "user:delete"
+    USER_CREATE_ADMIN = "user:create_admin"  # Solo admins pueden crear usuarios
+    USER_CHANGE_STATUS = "user:change_status"  # Solo admins pueden cambiar estado
     
     # Clientes
     CLIENTE_CREATE = "cliente:create"
@@ -71,14 +76,97 @@ class Permission(str, Enum):
     PAGO_DELETE_WITH_APPROVAL = "pago:delete_with_approval"
 
 
-# Mapeo de roles a permisos - ROL ÚNICO CON ACCESO TOTAL
+# Mapeo de roles a permisos - SOLO ADMIN PUEDE CREAR USUARIOS Y CAMBIAR ESTADOS
 ROLE_PERMISSIONS: dict[UserRole, List[Permission]] = {
     UserRole.USER: [
-        # Acceso total - todos los permisos
+        # Acceso total - todos los permisos excepto gestión de usuarios
+        Permission.CLIENTE_CREATE,
+        Permission.CLIENTE_READ,
+        Permission.CLIENTE_UPDATE,
+        Permission.CLIENTE_DELETE,
+        Permission.PRESTAMO_CREATE,
+        Permission.PRESTAMO_READ,
+        Permission.PRESTAMO_UPDATE,
+        Permission.PRESTAMO_DELETE,
+        Permission.PRESTAMO_APPROVE,
+        Permission.PAGO_CREATE,
+        Permission.PAGO_READ,
+        Permission.PAGO_UPDATE,
+        Permission.PAGO_DELETE,
+        Permission.REPORTE_READ,
+        Permission.REPORTE_CREATE,
+        Permission.KPI_READ,
+        Permission.CONCILIACION_CREATE,
+        Permission.CONCILIACION_READ,
+        Permission.CONCILIACION_APPROVE,
+        Permission.NOTIFICACION_SEND,
+        Permission.NOTIFICACION_READ,
+        Permission.CONFIG_READ,
+        Permission.CONFIG_UPDATE,
+        Permission.AUDITORIA_READ,
+    ],
+    UserRole.GERENTE: [
+        # Gerentes tienen acceso total excepto gestión de usuarios
+        Permission.CLIENTE_CREATE,
+        Permission.CLIENTE_READ,
+        Permission.CLIENTE_UPDATE,
+        Permission.CLIENTE_DELETE,
+        Permission.PRESTAMO_CREATE,
+        Permission.PRESTAMO_READ,
+        Permission.PRESTAMO_UPDATE,
+        Permission.PRESTAMO_DELETE,
+        Permission.PRESTAMO_APPROVE,
+        Permission.PAGO_CREATE,
+        Permission.PAGO_READ,
+        Permission.PAGO_UPDATE,
+        Permission.PAGO_DELETE,
+        Permission.REPORTE_READ,
+        Permission.REPORTE_CREATE,
+        Permission.KPI_READ,
+        Permission.CONCILIACION_CREATE,
+        Permission.CONCILIACION_READ,
+        Permission.CONCILIACION_APPROVE,
+        Permission.NOTIFICACION_SEND,
+        Permission.NOTIFICACION_READ,
+        Permission.CONFIG_READ,
+        Permission.CONFIG_UPDATE,
+        Permission.AUDITORIA_READ,
+    ],
+    UserRole.COBRANZAS: [
+        # Cobranzas tienen acceso total excepto gestión de usuarios
+        Permission.CLIENTE_CREATE,
+        Permission.CLIENTE_READ,
+        Permission.CLIENTE_UPDATE,
+        Permission.CLIENTE_DELETE,
+        Permission.PRESTAMO_CREATE,
+        Permission.PRESTAMO_READ,
+        Permission.PRESTAMO_UPDATE,
+        Permission.PRESTAMO_DELETE,
+        Permission.PRESTAMO_APPROVE,
+        Permission.PAGO_CREATE,
+        Permission.PAGO_READ,
+        Permission.PAGO_UPDATE,
+        Permission.PAGO_DELETE,
+        Permission.REPORTE_READ,
+        Permission.REPORTE_CREATE,
+        Permission.KPI_READ,
+        Permission.CONCILIACION_CREATE,
+        Permission.CONCILIACION_READ,
+        Permission.CONCILIACION_APPROVE,
+        Permission.NOTIFICACION_SEND,
+        Permission.NOTIFICACION_READ,
+        Permission.CONFIG_READ,
+        Permission.CONFIG_UPDATE,
+        Permission.AUDITORIA_READ,
+    ],
+    UserRole.ADMIN: [
+        # Admins tienen acceso total + gestión de usuarios
         Permission.USER_CREATE,
         Permission.USER_READ,
         Permission.USER_UPDATE,
         Permission.USER_DELETE,
+        Permission.USER_CREATE_ADMIN,  # Solo admins pueden crear usuarios
+        Permission.USER_CHANGE_STATUS,  # Solo admins pueden cambiar estado
         Permission.CLIENTE_CREATE,
         Permission.CLIENTE_READ,
         Permission.CLIENTE_UPDATE,
@@ -231,7 +319,22 @@ def get_permission_matrix_summary() -> dict:
     return {
         "USER": {
             "acceso": "✅ COMPLETO",
-            "descripcion": "Todos los usuarios tienen acceso total a todas las funcionalidades",
-            "permisos": "✅ SIN RESTRICCIONES"
+            "descripcion": "Usuarios tienen acceso total a todas las funcionalidades",
+            "permisos": "✅ SIN RESTRICCIONES (excepto gestión de usuarios)"
+        },
+        "GERENTE": {
+            "acceso": "✅ COMPLETO",
+            "descripcion": "Gerentes tienen acceso total a todas las funcionalidades",
+            "permisos": "✅ SIN RESTRICCIONES (excepto gestión de usuarios)"
+        },
+        "COBRANZAS": {
+            "acceso": "✅ COMPLETO",
+            "descripcion": "Cobranzas tienen acceso total a todas las funcionalidades",
+            "permisos": "✅ SIN RESTRICCIONES (excepto gestión de usuarios)"
+        },
+        "ADMIN": {
+            "acceso": "✅ COMPLETO + ADMIN",
+            "descripcion": "Administradores tienen acceso total + pueden crear usuarios y cambiar estados",
+            "permisos": "✅ SIN RESTRICCIONES + GESTIÓN DE USUARIOS"
         }
     }
