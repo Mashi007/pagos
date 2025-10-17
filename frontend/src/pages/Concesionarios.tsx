@@ -38,11 +38,21 @@ export function Concesionarios() {
 
   const handleEliminar = async (id: number) => {
     try {
+      // Confirmar eliminación permanente
+      const confirmar = window.confirm(
+        '⚠️ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este concesionario?\n\n' +
+        'Esta acción NO se puede deshacer y el concesionario será borrado completamente de la base de datos.'
+      )
+      
+      if (!confirmar) {
+        return
+      }
+      
       await concesionarioService.eliminarConcesionario(id)
-      toast.success('Concesionario eliminado exitosamente')
+      toast.success('✅ Concesionario eliminado PERMANENTEMENTE de la base de datos')
       cargarConcesionarios() // Recargar lista
     } catch (err) {
-      toast.error('Error al eliminar concesionario')
+      toast.error('❌ Error al eliminar concesionario permanentemente')
       console.error('Error:', err)
     }
   }

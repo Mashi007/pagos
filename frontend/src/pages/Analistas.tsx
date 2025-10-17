@@ -38,7 +38,7 @@ export function Analistas() {
     try {
       setLoading(true)
       setError(null)
-      const response = await analistaService.listarAnalistaes({ limit: 100 })
+      const response = await analistaService.listarAnalistas({ limit: 100 })
       setAnalistas(response.items)
     } catch (err) {
       setError('Error al cargar analistas')
@@ -51,11 +51,21 @@ export function Analistas() {
 
   const handleEliminar = async (id: number) => {
     try {
+      // Confirmar eliminación permanente
+      const confirmar = window.confirm(
+        '⚠️ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este analista?\n\n' +
+        'Esta acción NO se puede deshacer y el analista será borrado completamente de la base de datos.'
+      )
+      
+      if (!confirmar) {
+        return
+      }
+      
       await analistaService.eliminarAnalista(id)
-      toast.success('Analista eliminado exitosamente')
+      toast.success('✅ Analista eliminado PERMANENTEMENTE de la base de datos')
       cargarAnalistas() // Recargar lista
     } catch (err) {
-      toast.error('Error al eliminar analista')
+      toast.error('❌ Error al eliminar analista permanentemente')
       console.error('Error:', err)
     }
   }

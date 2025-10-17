@@ -48,8 +48,8 @@ export interface AnalistaListResponse {
 class AnalistaService {
   private baseUrl = '/api/v1/analistas'
 
-  // Listar analistaes con paginación y filtros
-  async listarAnalistaes(params?: {
+  // Listar analistas con paginación y filtros
+  async listarAnalistas(params?: {
     skip?: number
     limit?: number
     activo?: boolean
@@ -59,8 +59,8 @@ class AnalistaService {
     return await apiClient.get<AnalistaListResponse>(this.baseUrl, { params })
   }
 
-  // Listar solo analistaes activos (para formularios)
-  async listarAnalistaesActivos(especialidad?: string): Promise<Analista[]> {
+  // Listar solo analistas activos (para formularios)
+  async listarAnalistasActivos(especialidad?: string): Promise<Analista[]> {
     const params = especialidad ? { especialidad } : undefined
     return await apiClient.get<Analista[]>(`${this.baseUrl}/activos`, { params })
   }

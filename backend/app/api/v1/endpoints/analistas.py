@@ -195,7 +195,7 @@ def eliminar_asesor(
     current_user: User = Depends(get_current_user)
 ):
     """
-    🗑️ Eliminar un asesor (soft delete - marcar como inactivo)
+    🗑️ Eliminar un analista (HARD DELETE - borrado completo de BD)
     """
     try:
         asesor = db.query(Analista).filter(Analista.id == asesor_id).first()
@@ -203,14 +203,15 @@ def eliminar_asesor(
         if not asesor:
             raise HTTPException(status_code=404, detail="Analista no encontrado")
         
-        # Soft delete - marcar como inactivo
-        asesor.activo = False
+        # HARD DELETE - eliminar completamente de la base de datos
+        asesor_nombre = asesor.nombre_completo  # Guardar nombre para log
+        db.delete(asesor)
         db.commit()
         
-        return {"message": "Analista eliminado exitosamente"}
+        return {"message": "Analista eliminado completamente de la base de datos"}
         
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error al eliminar asesor: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error al eliminar analista: {str(e)}")

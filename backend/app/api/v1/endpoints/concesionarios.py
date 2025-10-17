@@ -183,7 +183,7 @@ def eliminar_concesionario(
     current_user: User = Depends(get_current_user)
 ):
     """
-    🗑️ Eliminar un concesionario (soft delete - marcar como inactivo)
+    🗑️ Eliminar un concesionario (HARD DELETE - borrado completo de BD)
     """
     try:
         concesionario = db.query(Concesionario).filter(Concesionario.id == concesionario_id).first()
@@ -191,11 +191,12 @@ def eliminar_concesionario(
         if not concesionario:
             raise HTTPException(status_code=404, detail="Concesionario no encontrado")
         
-        # Soft delete - marcar como inactivo
-        concesionario.activo = False
+        # HARD DELETE - eliminar completamente de la base de datos
+        concesionario_nombre = concesionario.nombre  # Guardar nombre para log
+        db.delete(concesionario)
         db.commit()
         
-        return {"message": "Concesionario eliminado exitosamente"}
+        return {"message": "Concesionario eliminado completamente de la base de datos"}
         
     except HTTPException:
         raise
