@@ -441,6 +441,62 @@ def validate_payment_amount(
     return difference <= tolerance or payment_amount >= expected_amount
 
 
+def validate_password_strength(password: str) -> tuple[bool, str]:
+    """
+    Valida la fortaleza de una contraseña
+    
+    Args:
+        password: Contraseña a validar
+        
+    Returns:
+        tuple[bool, str]: (es_valida, mensaje_error)
+    """
+    if not password:
+        return False, "La contraseña es requerida"
+    
+    if len(password) < 8:
+        return False, "La contraseña debe tener al menos 8 caracteres"
+    
+    if len(password) > 128:
+        return False, "La contraseña no puede tener más de 128 caracteres"
+    
+    # Verificar que tenga al menos una letra minúscula
+    if not re.search(r'[a-z]', password):
+        return False, "La contraseña debe contener al menos una letra minúscula"
+    
+    # Verificar que tenga al menos una letra mayúscula
+    if not re.search(r'[A-Z]', password):
+        return False, "La contraseña debe contener al menos una letra mayúscula"
+    
+    # Verificar que tenga al menos un dígito
+    if not re.search(r'\d', password):
+        return False, "La contraseña debe contener al menos un número"
+    
+    # Verificar que tenga al menos un carácter especial
+    if not re.search(r'[!@#$%^&*()_+\-=\[\]{};:"\\|,.<>\/?]', password):
+        return False, "La contraseña debe contener al menos un carácter especial"
+    
+    # Verificar que no contenga espacios
+    if ' ' in password:
+        return False, "La contraseña no puede contener espacios"
+    
+    # Verificar patrones comunes débiles
+    weak_patterns = [
+        r'(.)\1{2,}',  # Caracteres repetidos
+        r'123456',     # Secuencia numérica
+        r'abcdef',    # Secuencia alfabética
+        r'password',   # Palabra común
+        r'qwerty',     # Teclado
+    ]
+    
+    password_lower = password.lower()
+    for pattern in weak_patterns:
+        if re.search(pattern, password_lower):
+            return False, "La contraseña contiene patrones débiles comunes"
+    
+    return True, "Contraseña válida"
+
+
 def normalize_text(text: str) -> str:
     """
     Normaliza texto para búsquedas
