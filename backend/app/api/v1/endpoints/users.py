@@ -8,12 +8,18 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.db.session import get_db
-from app.api.deps import get_admin_user, get_pagination_params, PaginationParams
+from app.api.deps import get_admin_user, get_current_user, get_pagination_params, PaginationParams
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserListResponse
 from app.utils.auditoria_helper import (
     registrar_creacion, registrar_actualizacion, registrar_eliminacion, registrar_error
 )
+from app.core.security import get_password_hash
+from app.utils.validators import validate_password_strength
+from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
@@ -32,15 +38,15 @@ def verificar_rol_administracion(
     """
     try:
         # Buscar todos los administradores
-        admins = db.query(User).filter(User.rol == "USER").all()
+        admins = db.query(User).filter(User.rol == "ADMINISTRADOR_GENERAL").all()
         admins_activos = db.query(User).filter(
-            User.rol == "USER",
+            User.rol == "ADMINISTRADOR_GENERAL",
             User.is_active == True
         ).all()
         
         # Estadísticas de usuarios por rol
         roles_stats = {}
-        for rol in ["USER"]:
+        for rol in ["ADMINISTRADOR_GENERAL", "COBRANZAS"]:
             count = db.query(User).filter(User.rol == rol).count()
             activos = db.query(User).filter(User.rol == rol, User.is_active == True).count()
             roles_stats[rol] = {"total": count, "activos": activos}
