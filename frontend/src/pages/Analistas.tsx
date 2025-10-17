@@ -335,7 +335,7 @@ function CrearEditarAnalistaForm({ analista, onClose, onSuccess }: CrearEditarAn
     email: analista?.email || '',
     telefono: analista?.telefono || '',
     especialidad: analista?.especialidad || '',
-    comision_porcentaje: analista?.comision_porcentaje || '',
+    comision_porcentaje: analista?.comision_porcentaje?.toString() || '',
     notas: analista?.notas || ''
   })
   const [loading, setLoading] = useState(false)

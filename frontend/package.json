@@ -30,6 +30,7 @@
     "lucide-react": "^0.294.0",
     "framer-motion": "^10.16.5",
     "react-hot-toast": "^2.4.1",
+    "sonner": "^1.2.4",
     "recharts": "^2.8.0",
     "date-fns": "^2.30.0",
     "class-variance-authority": "^0.7.0",
