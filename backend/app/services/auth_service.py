@@ -37,7 +37,11 @@ class AuthService:
         Returns:
             Usuario si la autenticación es exitosa, None si no
         """
-        user = db.query(User).filter(User.email == email).first()
+        # Consulta específica solo con columnas necesarias para autenticación
+        user = db.query(User).filter(
+            User.email == email,
+            User.is_active == True
+        ).first()
         
         if not user:
             return None
