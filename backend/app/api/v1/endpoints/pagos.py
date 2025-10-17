@@ -7,6 +7,7 @@ from typing import List, Optional
 from datetime import date, datetime
 from decimal import Decimal
 import io
+import logging
 
 from app.db.session import get_db
 from app.models.pago import Pago
@@ -30,6 +31,7 @@ from app.api.deps import get_current_user
 from app.core.permissions import UserRole, has_permission, Permission
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def calcular_proxima_fecha_pago(fecha_inicio, modalidad: str, cuotas_pagadas: int):
@@ -126,6 +128,7 @@ def obtener_cuotas_pendientes_por_cedula(
 @router.post("/manual", response_model=PagoManualResponse, status_code=201)
 def registrar_pago_manual(
     pago_data: PagoManualRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -204,7 +207,7 @@ def registrar_pago_manual(
         distribucion["sobrante"] = monto_disponible
         
         # 5. Crear registro de pago
-    db_pago = Pago(
+        db_pago = Pago(
             prestamo_id=cuotas[0].prestamo_id,
             numero_cuota=cuotas[0].numero_cuota,
             monto_cuota_programado=sum(c.monto_cuota for c in cuotas),
@@ -229,9 +232,9 @@ def registrar_pago_manual(
         db.flush()  # Para obtener el ID
         db_pago.codigo_pago = db_pago.generar_codigo_pago()
         
-    db.commit()
-    db.refresh(db_pago)
-    
+        db.commit()
+        db.refresh(db_pago)
+        
         # 6. Actualizar estado del préstamo
         prestamo = cuotas[0].prestamo
         prestamo.total_pagado += pago_data.monto_pagado
