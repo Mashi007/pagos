@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/store/authStore'
+import { safeParseUserData } from '@/utils/safeJson'
 
 /**
  * Hook simplificado para restaurar la sesión al cargar la aplicación
@@ -18,24 +19,28 @@ export function useAuthPersistence() {
         const localToken = localStorage.getItem('access_token')
         const localUser = localStorage.getItem('user')
         
-        if (localToken && localUser && localUser !== 'undefined' && localUser !== 'null' && localUser.trim() !== '') {
-          const user = JSON.parse(localUser)
-          setUser(user)
-          console.log('Sesión restaurada desde localStorage:', user.nombre)
-          setIsInitialized(true)
-          return
+        if (localToken && localUser) {
+          const user = safeParseUserData(localUser)
+          if (user) {
+            setUser(user)
+            console.log('Sesión restaurada desde localStorage:', user.nombre)
+            setIsInitialized(true)
+            return
+          }
         }
         
         // Si no hay en localStorage, buscar en sessionStorage
         const sessionToken = sessionStorage.getItem('access_token')
         const sessionUser = sessionStorage.getItem('user')
         
-        if (sessionToken && sessionUser && sessionUser !== 'undefined' && sessionUser !== 'null' && sessionUser.trim() !== '') {
-          const user = JSON.parse(sessionUser)
-          setUser(user)
-          console.log('Sesión restaurada desde sessionStorage:', user.nombre)
-          setIsInitialized(true)
-          return
+        if (sessionToken && sessionUser) {
+          const user = safeParseUserData(sessionUser)
+          if (user) {
+            setUser(user)
+            console.log('Sesión restaurada desde sessionStorage:', user.nombre)
+            setIsInitialized(true)
+            return
+          }
         }
         
         // No hay sesión para restaurar

@@ -3,6 +3,7 @@ import { User, LoginForm } from '@/types'
 import { authService, AuthService } from '@/services/authService'
 import toast from 'react-hot-toast'
 import { logger } from '@/utils/logger'
+import { safeParseUserData } from '@/utils/safeJson'
 
 interface AuthState {
   // Estado
@@ -244,11 +245,11 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           if (accessToken && refreshToken && userData) {
             try {
               // Verificar si el token sigue siendo válido
-              // Validar que userData no sea "undefined" o string vacío
-              if (userData === 'undefined' || userData === 'null' || userData.trim() === '') {
-                throw new Error('Datos de usuario inválidos')
+              // Usar función segura para parsear datos de usuario
+              const user = safeParseUserData(userData)
+              if (!user) {
+                throw new Error('Datos de usuario inválidos o corruptos')
               }
-              const user = JSON.parse(userData)
               
               // Actualizar estado con datos guardados
               set({

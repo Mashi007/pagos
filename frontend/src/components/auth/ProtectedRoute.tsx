@@ -2,6 +2,7 @@ import React, { useEffect } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/store/authStore'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
+import { safeParseUserData } from '@/utils/safeJson'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -20,9 +21,7 @@ export function ProtectedRoute({
   // Verificar autenticación temporal
   const isTemporaryAuth = localStorage.getItem('isAuthenticated') === 'true'
   const tempUserData = localStorage.getItem('user')
-  const tempUser = tempUserData && tempUserData !== 'undefined' && tempUserData !== 'null' && tempUserData.trim() !== '' 
-    ? JSON.parse(tempUserData) 
-    : null
+  const tempUser = safeParseUserData(tempUserData)
 
   useEffect(() => {
     // Si hay token pero no hay usuario, intentar refrescar
