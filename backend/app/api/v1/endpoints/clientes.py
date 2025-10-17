@@ -140,6 +140,19 @@ def contar_clientes(
         logger.error(f"Error contando clientes: {e}")
         raise HTTPException(status_code=500, detail=f"Error contando clientes: {str(e)}")
 
+@router.get("/test-final")
+def test_final_endpoint():
+    """
+    Test final - endpoint ultra simple para verificar que todo funciona
+    """
+    return {
+        "status": "success",
+        "message": "¡ENDPOINT FUNCIONANDO! Prueba 1000 exitosa",
+        "timestamp": "2025-10-17T22:56:00Z",
+        "modelo_cliente": "corregido",
+        "rutas": "sin_conflicto"
+    }
+
 @router.get("/ping")
 def ping_clientes():
     """
