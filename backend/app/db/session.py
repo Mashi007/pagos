@@ -67,9 +67,9 @@ def get_db():
             # Re-lanzar errores de autenticación sin modificar
             raise e
         
-        # Solo manejar errores reales de DB
-        logger.error(f"❌ Error real de base de datos: {e}")
-        logger.error(f"❌ Tipo de error: {type(e).__name__}")
+        # Solo manejar errores reales de DB - usar print para evitar problemas de logger
+        print(f"❌ Error real de base de datos: {e}")
+        print(f"❌ Tipo de error: {type(e).__name__}")
         
         # Importar HTTPException dentro de la función para evitar imports circulares
         from fastapi import HTTPException
