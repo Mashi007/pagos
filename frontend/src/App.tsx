@@ -26,6 +26,7 @@ import { Programador } from '@/pages/Programador'
 import { Configuracion } from '@/pages/Configuracion'
 import { CargaMasiva } from '@/pages/CargaMasiva'
 import { PrestamosPage } from '@/pages/PrestamosPage'
+import { Analistas } from '@/pages/Analistas'
 import { PagosPage } from '@/pages/PagosPage'
 import { AmortizacionPage } from '@/pages/AmortizacionPage'
 import { ReportesPage } from '@/pages/ReportesPage'
@@ -218,6 +219,16 @@ function App() {
             element={
               <ProtectedRoute requiredRoles={['USER']}>
                 <Configuracion />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Analistas */}
+          <Route
+            path="analistas"
+            element={
+              <ProtectedRoute requiredRoles={['USER']}>
+                <Analistas />
               </ProtectedRoute>
             }
           />

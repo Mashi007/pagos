@@ -130,7 +130,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       children: [
         { title: 'General', href: '/configuracion', icon: Settings },
         { title: 'Validadores', href: '/validadores', icon: CheckCircle },
-        { title: 'Asesores', href: '/analistaes', icon: Users },
+        { title: 'Analistas', href: '/analistas', icon: Users },
         { title: 'Concesionarios', href: '/concesionarios', icon: Building },
         { title: 'Modelos de Vehículos', href: '/modelos-vehiculos', icon: Car },
         { title: 'Usuarios', href: '/usuarios', icon: Shield, requiredRoles: ['USER'] },

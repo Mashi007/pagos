@@ -57,9 +57,10 @@ export function LoginForm() {
       console.log('🔍 Valor de remember en onSubmit:', data.remember)
       console.log('🔍 Tipo de remember:', typeof data.remember)
       
-      // Asegurar que remember sea boolean
+      // Asegurar que remember sea boolean y email en minúsculas
       const loginData = {
         ...data,
+        email: data.email.toLowerCase().trim(), // ✅ Convertir a minúsculas
         remember: Boolean(data.remember)
       }
       

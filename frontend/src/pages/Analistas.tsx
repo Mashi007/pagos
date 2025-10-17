@@ -54,14 +54,14 @@ export function Analistas() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Asesores Comerciales</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Analistas</h1>
           <p className="text-gray-500 mt-1">
-            Gestión de analistaes y equipo de ventas
+            Gestión de analistas y equipo de ventas
           </p>
         </div>
         <Button>
           <Plus className="w-4 h-4 mr-2" />
-          Nuevo Asesor
+          Nuevo Analista
         </Button>
       </div>
 
@@ -71,7 +71,7 @@ export function Analistas() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Total Asesores</p>
+                <p className="text-sm text-gray-500">Total Analistas</p>
                 <p className="text-2xl font-bold">{analistaes.length}</p>
               </div>
               <Users className="w-8 h-8 text-primary" />
@@ -140,7 +140,7 @@ export function Analistas() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Asesor</TableHead>
+                <TableHead>Analista</TableHead>
                 <TableHead>Contacto</TableHead>
                 <TableHead>Especialidad</TableHead>
                 <TableHead>Comisión</TableHead>
