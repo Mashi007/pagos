@@ -43,6 +43,7 @@ from app.api.v1.endpoints import (
     concesionarios,
     analistas,
     modelos_vehiculos,
+    fix_database,
 )
 
 # Configurar logging
@@ -166,6 +167,7 @@ app.include_router(validadores.router, prefix=f"{settings.API_V1_PREFIX}/validad
 app.include_router(concesionarios.router, prefix=f"{settings.API_V1_PREFIX}/concesionarios", tags=["Concesionarios"])
 app.include_router(analistas.router, prefix=f"{settings.API_V1_PREFIX}/analistas", tags=["Analistas"])
 app.include_router(modelos_vehiculos.router, prefix=f"{settings.API_V1_PREFIX}/modelos-vehiculos", tags=["Modelos Vehículos"])
+app.include_router(fix_database.router, prefix=f"{settings.API_V1_PREFIX}/fix-db", tags=["Database Fix"])
 # app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])  # Removido - se usarán datos reales
 
 
