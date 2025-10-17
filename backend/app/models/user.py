@@ -21,7 +21,7 @@ class User(Base):
     apellido = Column(String(100), nullable=False)
     hashed_password = Column(String(255), nullable=False)
     rol = Column(SQLEnum(UserRole), nullable=False, default=UserRole.USER)
-    # cargo = Column(String(100), nullable=True)  # Campo separado para cargo en la empresa - TEMPORALMENTE DESHABILITADO
+    cargo = Column(String(100), nullable=True)  # Campo separado para cargo en la empresa
     is_active = Column(Boolean, default=True, nullable=False)
     
     # Timestamps
