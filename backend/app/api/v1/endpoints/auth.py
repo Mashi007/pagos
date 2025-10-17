@@ -38,13 +38,29 @@ def add_cors_headers(request: Request, response: Response) -> None:
         response: Response object donde agregar headers
     """
     from app.core.config import settings
+    from app.core.logging import logger
+    
     origin = request.headers.get("origin")
+    logger.info(f"🌐 CORS Debug - Origin recibido: {origin}")
+    logger.info(f"🌐 CORS Debug - Origins permitidos: {settings.CORS_ORIGINS}")
+    
     if origin in settings.CORS_ORIGINS:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
         response.headers["Access-Control-Allow-Headers"] = "*"
         response.headers["Access-Control-Max-Age"] = "86400"
+        logger.info(f"✅ CORS Headers agregados para origin: {origin}")
+    else:
+        logger.warning(f"❌ CORS Origin no permitido: {origin}")
+        # FALLBACK: Permitir origin específico del frontend
+        if origin == "https://rapicredit.onrender.com":
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+            response.headers["Access-Control-Max-Age"] = "86400"
+            logger.info(f"✅ CORS Headers agregados (FALLBACK) para origin: {origin}")
 
 
 @router.options("/login")

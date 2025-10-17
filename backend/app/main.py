@@ -125,20 +125,18 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Security Headers - OWASP Best Practices
 app.add_middleware(SecurityHeadersMiddleware)
 
-# CORS - MIDDLEWARE BÁSICO PARA OPTIONS + HEADERS DIRECTOS EN ENDPOINTS
-from fastapi.middleware.cors import CORSMiddleware
-
+# CORS - HEADERS DIRECTOS EN ENDPOINTS (SIN MIDDLEWARE)
 logger.info(f"🌐 CORS Origins configurados: {settings.CORS_ORIGINS}")
-logger.info("✅ CORS: Middleware básico + Headers directos en endpoints")
+logger.info("✅ CORS manejado directamente en endpoints")
 
-# MIDDLEWARE CORS BÁSICO PARA OPTIONS (preflight)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
-)
+# NO USAR MIDDLEWARE CORS - SOLO HEADERS DIRECTOS
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=settings.CORS_ORIGINS,
+#     allow_credentials=True,
+#     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+#     allow_headers=["*"],
+# )
 
 # Registrar routers
 app.include_router(health.router, prefix=f"{settings.API_V1_PREFIX}", tags=["Health"])
