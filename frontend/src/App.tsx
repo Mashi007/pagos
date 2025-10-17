@@ -93,9 +93,9 @@ function App() {
         <Route
           path="/*"
           element={
-            <SimpleSimpleProtectedRoute>
+            <SimpleProtectedRoute>
               <Layout />
-            </SimpleSimpleProtectedRoute>
+            </SimpleProtectedRoute>
           }
         >
           {/* Dashboard */}
@@ -117,9 +117,9 @@ function App() {
           <Route
             path="prestamos"
             element={
-              <SimpleSimpleProtectedRoute requiredRoles={['USER']}>
+              <SimpleProtectedRoute requiredRoles={['USER']}>
                 <PrestamosPage />
-              </SimpleSimpleProtectedRoute>
+              </SimpleProtectedRoute>
             }
           />
 
