@@ -188,7 +188,48 @@ def create_user(
     return new_user
 
 
-@router.get("/", response_model=UserListResponse, summary="Listar usuarios")
+@router.get("/test")
+def test_users_endpoint(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Test endpoint para verificar usuarios
+    """
+    try:
+        total_users = db.query(User).count()
+        users = db.query(User).limit(5).all()
+        
+        users_data = []
+        for user in users:
+            users_data.append({
+                "id": user.id,
+                "email": user.email,
+                "nombre": user.nombre,
+                "apellido": user.apellido,
+                "rol": user.rol,
+                "is_active": user.is_active
+            })
+        
+        return {
+            "status": "success",
+            "total_users": total_users,
+            "current_user": {
+                "id": current_user.id,
+                "email": current_user.email,
+                "rol": current_user.rol
+            },
+            "users": users_data
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "message": "Error en test endpoint"
+        }
+
+@router.get("/")
 def list_users(
     db: Session = Depends(get_db),
     pagination: PaginationParams = Depends(get_pagination_params),
