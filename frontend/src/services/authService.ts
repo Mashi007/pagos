@@ -40,7 +40,7 @@ export class AuthService {
     }
   }
 
-  // Logout de usuario
+  // Logout de usuario - SIN PERSISTENCIA
   async logout(): Promise<void> {
     try {
       await apiClient.post('/api/v1/auth/logout')
@@ -48,58 +48,21 @@ export class AuthService {
       // Continuar con el logout local aunque falle el servidor
       console.error('Error en logout del servidor:', error)
     } finally {
-      // Limpiar datos locales y de sesión
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
-      localStorage.removeItem('user')
-      localStorage.removeItem('remember_me')
-      sessionStorage.removeItem('access_token')
-      sessionStorage.removeItem('refresh_token')
-      sessionStorage.removeItem('user')
+      // NO usar localStorage/sessionStorage para evitar errores JSON
+      // Solo limpiar en memoria
     }
   }
 
-  // Renovar token
+  // Renovar token - DESHABILITADO SIN PERSISTENCIA
   async refreshToken(): Promise<AuthTokens> {
-    const rememberMe = localStorage.getItem('remember_me') === 'true'
-    const refreshToken = rememberMe 
-      ? localStorage.getItem('refresh_token') 
-      : sessionStorage.getItem('refresh_token')
-      
-    if (!refreshToken) {
-      throw new Error('No hay refresh token disponible')
-    }
-
-    const response = await apiClient.post<ApiResponse<AuthTokens>>('/api/v1/auth/refresh', {
-      refresh_token: refreshToken,
-    })
-
-    // Actualizar tokens en el almacenamiento correspondiente
-    if (response.data) {
-      if (rememberMe) {
-        localStorage.setItem('access_token', response.data.access_token)
-        localStorage.setItem('refresh_token', response.data.refresh_token)
-      } else {
-        sessionStorage.setItem('access_token', response.data.access_token)
-        sessionStorage.setItem('refresh_token', response.data.refresh_token)
-      }
-    }
-
-    return response.data
+    throw new Error('Refresh token deshabilitado - sin persistencia')
   }
 
-  // Obtener información del usuario actual
+  // Obtener información del usuario actual - SIN PERSISTENCIA
   async getCurrentUser(): Promise<User> {
     const response = await apiClient.get<ApiResponse<User>>('/api/v1/auth/me')
     
-    // Actualizar usuario en el almacenamiento correspondiente
-    const rememberMe = localStorage.getItem('remember_me') === 'true'
-    if (rememberMe) {
-      localStorage.setItem('user', JSON.stringify(response.data))
-    } else {
-      sessionStorage.setItem('user', JSON.stringify(response.data))
-    }
-    
+    // NO guardar en localStorage/sessionStorage para evitar errores JSON
     return response.data
   }
 

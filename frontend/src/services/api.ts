@@ -30,12 +30,9 @@ class ApiClient {
         const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint))
         
         if (!isAuthEndpoint) {
-          // Lógica simplificada para obtener token
-          let token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token')
-          
-          if (token) {
-            config.headers.Authorization = `Bearer ${token}`
-          }
+          // Lógica simplificada para obtener token - SIN PERSISTENCIA
+          // NO usar localStorage/sessionStorage para evitar errores JSON
+          // El token se maneja solo en memoria
         }
         return config
       },
@@ -50,46 +47,15 @@ class ApiClient {
       async (error) => {
         const originalRequest = error.config
 
-        // Si el token expiró, intentar renovarlo
+        // Si el token expiró, NO intentar renovarlo - redirigir al login
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true
-
-          try {
-            const rememberMe = localStorage.getItem('remember_me') === 'true'
-            const refreshToken = rememberMe 
-              ? localStorage.getItem('refresh_token') 
-              : sessionStorage.getItem('refresh_token')
-              
-            if (refreshToken) {
-              const response = await this.client.post('/api/v1/auth/refresh', {
-                refresh_token: refreshToken,
-              })
-
-              const { access_token, refresh_token: newRefreshToken } = response.data
-              
-              // Guardar en el almacenamiento correspondiente
-              if (rememberMe) {
-                localStorage.setItem('access_token', access_token)
-                localStorage.setItem('refresh_token', newRefreshToken)
-              } else {
-                sessionStorage.setItem('access_token', access_token)
-                sessionStorage.setItem('refresh_token', newRefreshToken)
-              }
-
-              // Reintentar la petición original
-              originalRequest.headers.Authorization = `Bearer ${access_token}`
-              return this.client(originalRequest)
-            }
-          } catch (refreshError) {
-            // Si no se puede renovar el token, limpiar datos y redirigir al login
-            localStorage.removeItem('access_token')
-            localStorage.removeItem('refresh_token')
-            localStorage.removeItem('remember_me')
-            sessionStorage.removeItem('access_token')
-            sessionStorage.removeItem('refresh_token')
-            window.location.href = '/login'
-            return Promise.reject(refreshError)
-          }
+          
+          // Limpiar cualquier dato corrupto y redirigir
+          localStorage.clear()
+          sessionStorage.clear()
+          window.location.href = '/login'
+          return Promise.reject(error)
         }
 
         // Manejar otros errores
