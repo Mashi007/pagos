@@ -135,28 +135,17 @@ export function ModelosVehiculos() {
         </Card>
       </div>
 
-      {/* Filtros */}
+      {/* Búsqueda */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Buscar modelo o marca..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <select
-              className="px-4 py-2 border rounded-lg"
-              value={categoriaFilter}
-              onChange={(e) => setCategoriaFilter(e.target.value)}
-            >
-              {categorias.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
+          <div className="relative">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Buscar modelo de vehículo..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
           </div>
         </CardContent>
       </Card>
@@ -167,24 +156,23 @@ export function ModelosVehiculos() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Modelo</TableHead>
-                <TableHead>Marca</TableHead>
-                <TableHead>Categoría</TableHead>
+                <TableHead>Modelo de Vehículo</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead>Fecha Creación</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8">
+                  <TableCell colSpan={4} className="text-center py-8">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
                     <p className="text-gray-500">Cargando modelos de vehículos...</p>
                   </TableCell>
                 </TableRow>
               ) : error ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8">
+                  <TableCell colSpan={4} className="text-center py-8">
                     <p className="text-red-500">{error}</p>
                     <Button onClick={cargarModelos} className="mt-2">
                       Reintentar
@@ -193,7 +181,7 @@ export function ModelosVehiculos() {
                 </TableRow>
               ) : modelosFiltrados.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8">
+                  <TableCell colSpan={4} className="text-center py-8">
                     <p className="text-gray-500">No se encontraron modelos de vehículos</p>
                   </TableCell>
                 </TableRow>
@@ -210,17 +198,20 @@ export function ModelosVehiculos() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className="text-gray-400">-</span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-gray-400">-</span>
-                  </TableCell>
-                  <TableCell>
                     {modelo.activo ? (
                       <Badge className="bg-green-600">Activo</Badge>
                     ) : (
                       <Badge variant="outline">Inactivo</Badge>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm text-gray-500">
+                      {new Date(modelo.created_at).toLocaleDateString('es-VE', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                      })}
+                    </span>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end space-x-2">
