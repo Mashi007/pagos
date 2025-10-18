@@ -1,23 +1,12 @@
 # backend/app/schemas/user.py
 """
-Schemas de usuario y autenticación.
+Schemas de usuario simplificado.
+Solo 2 roles: ADMIN (acceso completo) y USER (acceso limitado)
 Compatible con Pydantic v2.
 """
 from typing import Optional
 from datetime import datetime
-from enum import Enum
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
-
-
-# ============================================
-# ENUMS
-# ============================================
-class UserRole(str, Enum):
-    """Roles del sistema - sincronizado con base de datos."""
-    USER = "USER"
-    ADMIN = "ADMIN"
-    GERENTE = "GERENTE"
-    COBRANZAS = "COBRANZAS"
 
 
 # ============================================
@@ -29,38 +18,42 @@ class UserBase(BaseModel):
     nombre: str = Field(..., min_length=1, max_length=100)
     apellido: str = Field(..., min_length=1, max_length=100)
     cargo: Optional[str] = Field(None, max_length=100)
-    is_active: bool = True
-    rol: UserRole = UserRole.USER
+    is_admin: bool = Field(default=False)  # Cambio clave: rol → is_admin
+    is_active: bool = Field(default=True)
 
 
 class UserCreate(UserBase):
     """Schema para crear usuario."""
-    password: str = Field(..., min_length=8, max_length=100)
+    password: str = Field(..., min_length=8)
 
 
 class UserUpdate(BaseModel):
-    """Schema para actualizar usuario (todos los campos opcionales)."""
+    """Schema para actualizar usuario."""
     email: Optional[EmailStr] = None
     nombre: Optional[str] = Field(None, min_length=1, max_length=100)
     apellido: Optional[str] = Field(None, min_length=1, max_length=100)
     cargo: Optional[str] = Field(None, max_length=100)
+    is_admin: Optional[bool] = None  # Cambio clave: rol → is_admin
     is_active: Optional[bool] = None
-    rol: Optional[UserRole] = None
-    password: Optional[str] = Field(None, min_length=8, max_length=100)
+    password: Optional[str] = Field(None, min_length=8)
 
 
+# ============================================
+# SCHEMAS DE RESPUESTA
+# ============================================
 class UserResponse(UserBase):
-    """Schema de respuesta de usuario (sin contraseña)."""
+    """Schema de respuesta de usuario."""
     id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
+    last_login: Optional[datetime] = None
+    
+    model_config = ConfigDict(from_attributes=True)
     
     @property
     def full_name(self) -> str:
-        """Retorna el nombre completo del usuario"""
+        """Nombre completo del usuario."""
         return f"{self.nombre} {self.apellido}"
-    
-    model_config = ConfigDict(from_attributes=True)
 
 
 class UserListResponse(BaseModel):
@@ -71,79 +64,26 @@ class UserListResponse(BaseModel):
     page_size: int
 
 
-class UserMeResponse(BaseModel):
-    """Schema para el usuario actual (puede incluir info adicional)."""
-    id: int
-    email: EmailStr
-    nombre: str
-    apellido: str
-    rol: str
-    is_active: bool
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    last_login: Optional[datetime] = None
-    permissions: list[str] = []
-    
-    model_config = ConfigDict(from_attributes=True)
-
-
 # ============================================
 # SCHEMAS DE AUTENTICACIÓN
 # ============================================
 class LoginRequest(BaseModel):
-    """Schema para solicitud de login."""
+    """Schema para login."""
     email: EmailStr
-    password: str = Field(..., min_length=1)
+    password: str
+    remember_me: bool = Field(default=False)
 
 
-class Token(BaseModel):
-    """Schema de respuesta de token."""
+class LoginResponse(BaseModel):
+    """Schema de respuesta de login."""
     access_token: str
-    refresh_token: Optional[str] = None
     token_type: str = "bearer"
-    expires_in: Optional[int] = None
+    user: UserResponse
 
 
-class RefreshTokenRequest(BaseModel):
-    """Schema para renovar token."""
-    refresh_token: str
-
-
-# ============================================
-# SCHEMAS DE GESTIÓN DE CONTRASEÑAS
-# ============================================
-class PasswordChange(BaseModel):
-    """Schema para cambio de contraseña."""
-    old_password: str = Field(..., min_length=1)
-    new_password: str = Field(..., min_length=8, max_length=100)
-
-
-class PasswordReset(BaseModel):
-    """Schema para solicitud de reseteo de contraseña."""
-    email: EmailStr
-
-
-class PasswordResetConfirm(BaseModel):
-    """Schema para confirmar reseteo de contraseña."""
-    token: str
-    new_password: str = Field(..., min_length=8, max_length=100)
-
-
-# ============================================
-# EXPORTS
-# ============================================
-__all__ = [
-    "UserRole",
-    "UserBase",
-    "UserCreate",
-    "UserUpdate",
-    "UserResponse",
-    "UserListResponse",
-    "UserMeResponse",
-    "LoginRequest",
-    "Token",
-    "RefreshTokenRequest",
-    "PasswordChange",
-    "PasswordReset",
-    "PasswordResetConfirm",
-]
+class TokenPayload(BaseModel):
+    """Schema del payload del token JWT."""
+    sub: str  # email del usuario
+    is_admin: bool  # Cambio clave: rol → is_admin
+    exp: int
+    iat: int

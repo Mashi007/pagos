@@ -38,18 +38,23 @@ def verificar_rol_administracion(
     """
     try:
         # Buscar todos los administradores
-        admins = db.query(User).filter(User.rol == "ADMIN").all()
+        admins = db.query(User).filter(User.is_admin == True).all()  # Cambio clave: rol → is_admin
         admins_activos = db.query(User).filter(
-            User.rol == "ADMIN",
+            User.is_admin == True,  # Cambio clave: rol → is_admin
             User.is_active == True
         ).all()
         
-        # Estadísticas de usuarios por rol
-        roles_stats = {}
-        for rol in ["ADMIN", "COBRANZAS"]:
-            count = db.query(User).filter(User.rol == rol).count()
-            activos = db.query(User).filter(User.rol == rol, User.is_active == True).count()
-            roles_stats[rol] = {"total": count, "activos": activos}
+        # Estadísticas de usuarios por tipo
+        tipos_stats = {
+            "ADMIN": {
+                "total": db.query(User).filter(User.is_admin == True).count(),
+                "activos": db.query(User).filter(User.is_admin == True, User.is_active == True).count()
+            },
+            "USER": {
+                "total": db.query(User).filter(User.is_admin == False).count(),
+                "activos": db.query(User).filter(User.is_admin == False, User.is_active == True).count()
+            }
+        }
         
         # Estado del sistema
         sistema_funcional = len(admins_activos) > 0
@@ -163,7 +168,7 @@ def create_user(
         nombre=user_data.nombre,
         apellido=user_data.apellido,
         cargo=user_data.cargo,
-        rol=user_data.rol.value,
+        is_admin=user_data.is_admin,  # Cambio clave: rol → is_admin
         hashed_password=get_password_hash(user_data.password),
         is_active=user_data.is_active,
         created_at=datetime.utcnow()
@@ -181,12 +186,12 @@ def create_user(
             modulo="USUARIOS",
             tabla="usuarios",
             registro_id=new_user.id,
-            descripcion=f"Usuario creado: {new_user.email} con rol {new_user.rol}",
+            descripcion=f"Usuario creado: {new_user.email} como {'Administrador' if new_user.is_admin else 'Usuario'}",
             datos_nuevos={
                 "email": new_user.email,
                 "nombre": new_user.nombre,
                 "apellido": new_user.apellido,
-                "rol": new_user.rol,
+                "is_admin": new_user.is_admin,  # Cambio clave: rol → is_admin
                 "is_active": new_user.is_active
             }
         )
@@ -214,7 +219,7 @@ def test_users_simple(
                 "email": user.email,
                 "nombre": user.nombre,
                 "apellido": user.apellido,
-                "rol": user.rol,
+                "is_admin": user.is_admin,  # Cambio clave: rol → is_admin
                 "is_active": user.is_active,
                 "created_at": user.created_at.isoformat() if user.created_at else None
             })
@@ -252,7 +257,7 @@ def test_users_endpoint(
                 "email": user.email,
                 "nombre": user.nombre,
                 "apellido": user.apellido,
-                "rol": user.rol,
+                "is_admin": user.is_admin,  # Cambio clave: rol → is_admin
                 "is_active": user.is_active
             })
         
@@ -262,7 +267,7 @@ def test_users_endpoint(
             "current_user": {
                 "id": current_user.id,
                 "email": current_user.email,
-                "rol": current_user.rol
+                "is_admin": current_user.is_admin  # Cambio clave: rol → is_admin
             },
             "users": users_data
         }
@@ -416,7 +421,7 @@ def delete_user(
                 "email": user.email,
                 "nombre": user.nombre,
                 "apellido": user.apellido,
-                "rol": user.rol,
+                "is_admin": user.is_admin,  # Cambio clave: rol → is_admin
                 "is_active": user.is_active
             }
         )

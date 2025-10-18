@@ -18,7 +18,7 @@ from app.core.security import (
     decode_token,
     validate_password_strength
 )
-from app.core.permissions import get_role_permissions, UserRole
+from app.core.permissions_simple import get_user_permissions
 
 
 class AuthService:
@@ -95,7 +95,7 @@ class AuthService:
         access_token = create_access_token(
             subject=user.id,
             additional_claims={
-                "rol": user.rol,
+                "is_admin": user.is_admin,  # Cambio clave: rol → is_admin
                 "email": user.email
             }
         )
@@ -160,7 +160,7 @@ class AuthService:
             new_access_token = create_access_token(
                 subject=user.id,
                 additional_claims={
-                    "rol": user.rol,
+                    "is_admin": user.is_admin,  # Cambio clave: rol → is_admin
                     "email": user.email
                 }
             )
@@ -235,10 +235,10 @@ class AuthService:
             Lista de permisos (strings)
         """
         try:
-            # Convertir el rol string a UserRole enum
-            user_role = UserRole[user.rol] if isinstance(user.rol, str) else user.rol
-            permissions = get_role_permissions(user_role)
+            # Usar is_admin directamente
+            from app.core.permissions_simple import get_user_permissions
+            permissions = get_user_permissions(user.is_admin)
             return [perm.value for perm in permissions]
-        except (KeyError, ValueError):
-            # Si el rol no es válido, retornar permisos vacíos
+        except Exception:
+            # Si hay error, retornar permisos vacíos
             return []
