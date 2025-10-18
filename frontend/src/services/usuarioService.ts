@@ -64,11 +64,11 @@ class UsuarioService {
       
       // Asegurar que tenga la estructura esperada
       const validResponse: UsuarioListResponse = {
-        items: response.items || [],
+        items: response.users || response.items || [],
         total: response.total || 0,
         page: response.page || 1,
         page_size: response.page_size || 10,
-        total_pages: response.total_pages || 1
+        total_pages: response.total_pages || Math.ceil((response.total || 0) / (response.page_size || 10))
       }
       
       return validResponse
