@@ -146,6 +146,11 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
       
       const freshUser = await authService.getCurrentUser()
       
+      if (!freshUser) {
+        console.error('SimpleAuth: Usuario refrescado es null/undefined')
+        throw new Error('Usuario no encontrado en la respuesta del servidor')
+      }
+      
       console.log('SimpleAuth: Usuario refrescado:', freshUser)
       
       set({
@@ -158,7 +163,15 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
       console.log('SimpleAuth: Usuario actualizado exitosamente')
     } catch (error: any) {
       console.error('SimpleAuth: Error al refrescar usuario:', error)
-      set({ error: error.response?.data?.message || 'Error al actualizar usuario' })
+      
+      // NO hacer logout automático, solo mostrar error
+      set({ 
+        error: error.message || 'Error al actualizar usuario',
+        isLoading: false 
+      })
+      
+      // Mantener el usuario actual si hay error
+      console.log('SimpleAuth: Manteniendo usuario actual debido a error')
     }
   },
 }))

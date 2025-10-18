@@ -196,17 +196,35 @@ export class AuthService {
 
   // Obtener información del usuario actual - CON PERSISTENCIA SEGURA
   async getCurrentUser(): Promise<User> {
-    const response = await apiClient.get<ApiResponse<User>>('/api/v1/auth/me')
-    
-    // Actualizar usuario en el almacenamiento correspondiente
-    const rememberMe = safeGetItem('remember_me', false)
-    if (rememberMe) {
-      safeSetItem('user', response.data)
-    } else {
-      safeSetSessionItem('user', response.data)
+    try {
+      console.log('AuthService: Obteniendo usuario actual desde /api/v1/auth/me')
+      
+      const response = await apiClient.get<User>('/api/v1/auth/me')
+      
+      console.log('AuthService: Respuesta recibida:', response)
+      
+      // El backend retorna directamente el objeto User, no envuelto en ApiResponse
+      const user = response
+      
+      if (!user) {
+        throw new Error('Usuario no encontrado en la respuesta')
+      }
+      
+      console.log('AuthService: Usuario obtenido:', user)
+      
+      // Actualizar usuario en el almacenamiento correspondiente
+      const rememberMe = safeGetItem('remember_me', false)
+      if (rememberMe) {
+        safeSetItem('user', user)
+      } else {
+        safeSetSessionItem('user', user)
+      }
+      
+      return user
+    } catch (error: any) {
+      console.error('AuthService: Error obteniendo usuario actual:', error)
+      throw error
     }
-    
-    return response.data
   }
 
   // Cambiar contraseña
