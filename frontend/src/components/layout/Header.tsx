@@ -53,11 +53,8 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
     setShowUserMenu(false)
   }
 
-  const getRoleColor = (role: string) => {
-    const colors = {
-      USER: 'bg-blue-100 text-blue-800',
-    }
-    return colors[role as keyof typeof colors] || 'bg-gray-100 text-gray-800'
+  const getRoleColor = (isAdmin: boolean) => {
+    return isAdmin ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
   }
 
   return (
@@ -214,7 +211,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                         <div className="font-medium text-gray-900">
                           {userName}
                         </div>
-                        <Badge className={getRoleColor(userRole || '')}>
+                        <Badge className={getRoleColor(user?.is_admin || false)}>
                           {userRole}
                         </Badge>
                       </div>
