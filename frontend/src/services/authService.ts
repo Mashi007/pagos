@@ -236,19 +236,19 @@ export class AuthService {
   }
 
   static canManagePayments(user: User | null): boolean {
-    return AuthService.hasAnyRole(user, ['USER'])
+    return AuthService.hasAnyRole(user, ['ADMIN'])
   }
 
   static canViewReports(user: User | null): boolean {
-    return AuthService.hasAnyRole(user, ['USER'])
+    return AuthService.hasAnyRole(user, ['ADMIN'])
   }
 
   static canManageConfig(user: User | null): boolean {
-    return AuthService.hasAnyRole(user, ['USER'])
+    return AuthService.hasAnyRole(user, ['ADMIN'])
   }
 
   static canViewAllClients(user: User | null): boolean {
-    return AuthService.hasAnyRole(user, ['USER'])
+    return AuthService.hasAnyRole(user, ['ADMIN'])
   }
 
   static getCurrentUserName(user: User | null): string {

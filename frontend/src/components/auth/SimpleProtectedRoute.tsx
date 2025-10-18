@@ -49,6 +49,9 @@ export function SimpleProtectedRoute({
           <p className="text-sm text-gray-500">
             Su rol actual: {user.is_admin ? 'Administrador' : 'Usuario'}
           </p>
+          <p className="text-sm text-red-600 font-semibold">
+            DEBUG: requireAdmin={requireAdmin ? 'true' : 'false'}, user.is_admin={user.is_admin ? 'true' : 'false'}
+          </p>
         </div>
       </div>
     )
