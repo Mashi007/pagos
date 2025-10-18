@@ -1,5 +1,5 @@
 import { apiClient, ApiResponse } from './api'
-import { User, AuthTokens, LoginForm } from '@/types'
+import { User, AuthTokens } from '@/types'
 import { 
   safeSetItem, 
   safeGetItem, 
@@ -106,7 +106,7 @@ export class AuthService {
         safeSetSessionItem('refresh_token', response.refresh_token)
       }
 
-      return response.data
+      return response
     } catch (error: any) {
       console.error('AuthService: Error refrescando token:', error)
       

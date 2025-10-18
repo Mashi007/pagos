@@ -20,7 +20,8 @@ import {
   Key,
   Copy
 } from 'lucide-react'
-import { userService, type User, type UserCreate, type UserUpdate } from '@/services/userService'
+import { userService, type UserCreate, type UserUpdate } from '@/services/userService'
+import { User } from '@/types'
 import { toast } from 'react-hot-toast'
 
 export default function UsuariosConfig() {
