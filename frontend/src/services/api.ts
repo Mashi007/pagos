@@ -77,6 +77,9 @@ const safeClearSession = () => {
   }
 }
 
+// Configuración base de Axios
+const API_BASE_URL = env.API_URL
+
 class ApiClient {
   private client: AxiosInstance
 
