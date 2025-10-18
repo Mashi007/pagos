@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Users, Plus, Search, Edit, Trash2, Shield, Mail, UserCheck, UserX, Loader2 } from 'lucide-react'
+import { Users, Plus, Search, Edit, Trash2, Shield, Mail, UserCheck, UserX, Loader2, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,14 +25,26 @@ export function Usuarios() {
     try {
       setLoading(true)
       setError(null)
+      console.log('🔄 Actualizando usuarios...')
       console.log('📡 Llamando a API: /api/v1/users')
+      
       const response = await usuarioService.listarUsuarios({ limit: 100 })
-      console.log('✅ Respuesta API:', response)
-      setUsuarios(response.items)
+      console.log('✅ Respuesta API recibida:', response)
+      console.log('📊 Total usuarios:', response.total)
+      console.log('📋 Items recibidos:', response.items?.length || 0)
+      
+      if (response.items && Array.isArray(response.items)) {
+        setUsuarios(response.items)
+        console.log('✅ Usuarios cargados exitosamente:', response.items.length)
+      } else {
+        console.warn('⚠️ Respuesta sin items válidos:', response)
+        setUsuarios([])
+      }
     } catch (err) {
       console.error('❌ Error API:', err)
       setError('Error al cargar usuarios')
       toast.error('Error al cargar usuarios')
+      setUsuarios([])
     } finally {
       setLoading(false)
     }
@@ -97,10 +109,21 @@ export function Usuarios() {
             Gestión de usuarios y control de acceso
           </p>
         </div>
-        <Button onClick={() => setShowCreateForm(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Nuevo Usuario
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={cargarUsuarios}
+            disabled={loading}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Actualizar
+          </Button>
+          <Button onClick={() => setShowCreateForm(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Nuevo Usuario
+          </Button>
+        </div>
       </div>
 
       {/* Stats Dashboard */}
@@ -112,7 +135,7 @@ export function Usuarios() {
                 <p className="text-sm text-gray-500">Total Usuarios</p>
                 <p className="text-2xl font-bold">{usuarios.length}</p>
                 <p className="text-xs text-gray-400 mt-1">
-                  {usuarios.length > 0 ? `${((usuarios.filter(u => u.is_active).length / usuarios.length) * 100).toFixed(1)}% activos` : 'Sin datos'}
+                  {usuarios.length > 0 ? `${((usuarios.filter(u => u.is_active).length / usuarios.length) * 100).toFixed(1)}% activos` : 'Conectando con BD...'}
                 </p>
               </div>
               <Users className="w-8 h-8 text-blue-600" />
@@ -129,7 +152,7 @@ export function Usuarios() {
                   {usuarios.filter(u => u.is_active).length}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  Pueden acceder al sistema
+                  {loading ? 'Cargando...' : 'Pueden acceder al sistema'}
                 </p>
               </div>
               <UserCheck className="w-8 h-8 text-green-600" />
@@ -146,7 +169,7 @@ export function Usuarios() {
                   {usuarios.filter(u => u.rol === 'ADMIN').length}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  Pueden crear usuarios
+                  {loading ? 'Cargando...' : 'Pueden crear usuarios'}
                 </p>
               </div>
               <Shield className="w-8 h-8 text-red-600" />
@@ -168,7 +191,7 @@ export function Usuarios() {
                   }).length}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  Usuarios agregados
+                  {loading ? 'Cargando...' : 'Usuarios agregados'}
                 </p>
               </div>
               <Plus className="w-8 h-8 text-blue-600" />
