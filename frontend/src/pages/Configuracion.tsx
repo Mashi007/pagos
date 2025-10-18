@@ -34,7 +34,8 @@ import { formatDate } from '@/utils'
 import { ValidadoresConfig } from '@/components/configuracion/ValidadoresConfig'
 import { ConcesionariosConfig } from '@/components/configuracion/ConcesionariosConfig'
 import { AnalistasConfig } from '@/components/configuracion/AnalistasConfig'
-import UsuariosConfig from '@/components/configuracion/UsuariosConfig'
+import { configuracionGeneralService, ConfiguracionGeneral } from '@/services/configuracionGeneralService'
+import { toast } from 'sonner'
 
 // Mock data para configuración
 const mockConfiguracion = {
@@ -108,10 +109,85 @@ const mockConfiguracion = {
 
 export function Configuracion() {
   const [configuracion, setConfiguracion] = useState(mockConfiguracion)
+  const [configuracionGeneral, setConfiguracionGeneral] = useState<ConfiguracionGeneral | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [seccionActiva, setSeccionActiva] = useState('general')
   const [mostrarPassword, setMostrarPassword] = useState(false)
   const [cambiosPendientes, setCambiosPendientes] = useState(false)
   const [submenuAbierto, setSubmenuAbierto] = useState(false)
+
+  // Cargar configuración general al montar el componente
+  useEffect(() => {
+    cargarConfiguracionGeneral()
+  }, [])
+
+  const cargarConfiguracionGeneral = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      console.log('🔄 Cargando configuración general...')
+      
+      const config = await configuracionGeneralService.obtenerConfiguracionGeneral()
+      console.log('✅ Configuración general cargada:', config)
+      
+      setConfiguracionGeneral(config)
+      
+      // Actualizar también el mock para compatibilidad
+      setConfiguracion(prev => ({
+        ...prev,
+        general: {
+          ...prev.general,
+          nombreEmpresa: config.nombre_empresa,
+          version: config.version_sistema,
+          idioma: config.idioma,
+          zonaHoraria: config.zona_horaria,
+          moneda: config.moneda,
+          formatoFecha: config.formato_fecha
+        }
+      }))
+    } catch (err) {
+      console.error('❌ Error cargando configuración general:', err)
+      setError('Error al cargar configuración general')
+      // Usar datos mock como fallback
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const actualizarConfiguracionGeneral = async (campo: string, valor: string) => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      console.log(`🔄 Actualizando ${campo} a:`, valor)
+      
+      const updateData = { [campo]: valor }
+      const response = await configuracionGeneralService.actualizarConfiguracionGeneral(updateData)
+      
+      console.log('✅ Configuración actualizada:', response)
+      
+      // Actualizar estado local
+      setConfiguracionGeneral(prev => prev ? { ...prev, [campo]: valor } : null)
+      setConfiguracion(prev => ({
+        ...prev,
+        general: {
+          ...prev.general,
+          [campo === 'formato_fecha' ? 'formatoFecha' : campo]: valor
+        }
+      }))
+      
+      // Mostrar mensaje de éxito
+      toast.success(`${campo} actualizado exitosamente`)
+      
+    } catch (err) {
+      console.error('❌ Error actualizando configuración:', err)
+      setError(`Error al actualizar ${campo}`)
+      toast.error(`Error al actualizar ${campo}`)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const secciones = [
     { id: 'general', nombre: 'General', icono: Globe },
@@ -144,6 +220,8 @@ export function Configuracion() {
   }
 
   const handleCambio = (seccion: string, campo: string, valor: any) => {
+    console.log(`🔄 Cambio en ${seccion}.${campo}:`, valor)
+    
     setConfiguracion(prev => ({
       ...prev,
       [seccion]: {
@@ -151,7 +229,13 @@ export function Configuracion() {
         [campo]: valor
       }
     }))
+    
     setCambiosPendientes(true)
+    
+    // Si es configuración general, actualizar también en el backend
+    if (seccion === 'general') {
+      actualizarConfiguracionGeneral(campo, valor)
+    }
   }
 
   const renderSeccionGeneral = () => (

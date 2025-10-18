@@ -1116,7 +1116,11 @@ class ConfiguracionGeneral(BaseModel):
     telefono: str
     email: str
     horario_atencion: str
-    zona_horaria: str = "America/Guayaquil"
+    zona_horaria: str = "America/Caracas"
+    formato_fecha: str = "DD/MM/YYYY"
+    idioma: str = "ES"
+    moneda: str = "VES"
+    version_sistema: str = "1.0.0"
 
 # Almacenamiento temporal de configuraciones (en producción usar Redis o DB)
 _config_cache: Dict[str, Any] = {
@@ -1140,16 +1144,51 @@ _config_cache: Dict[str, Any] = {
         "sms_notificaciones": False
     },
     "general": {
-        "nombre_empresa": "Sistema de Préstamos y Cobranza",
+        "nombre_empresa": "RAPICREDIT",
         "ruc": "0000000000001",
         "direccion": "Av. Principal 123",
-        "telefono": "+593 99 999 9999",
-        "email": "info@prestamos.com",
+        "telefono": "+58 99 999 9999",
+        "email": "info@rapicredit.com",
         "horario_atencion": "Lunes a Viernes 9:00 - 18:00",
-        "zona_horaria": "America/Guayaquil"
+        "zona_horaria": "America/Caracas",
+        "formato_fecha": "DD/MM/YYYY",
+        "idioma": "ES",
+        "moneda": "VES",
+        "version_sistema": "1.0.0"
     }
 }
 
+
+@router.get("/general")
+def obtener_configuracion_general(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    📋 Obtener configuración general del sistema
+    """
+    return _config_cache["general"]
+
+@router.put("/general")
+def actualizar_configuracion_general(
+    config: ConfiguracionGeneral,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    🔧 Actualizar configuración general del sistema
+    """
+    try:
+        # Actualizar cache
+        _config_cache["general"].update(config.dict())
+        
+        # TODO: En producción, guardar en base de datos
+        # db.query(ConfiguracionSistema).filter(...).update(...)
+        
+        return {
+            "message": "Configuración general actualizada exitosamente",
+            "configuracion": _config_cache["general"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error actualizando configuración: {str(e)}")
 
 @router.get("/tasas")
 def obtener_configuracion_tasas(
