@@ -49,6 +49,7 @@ from app.api.v1.endpoints import (
     debug_auth,
     test_auditoria,
     fix_admin_role,
+    simple_fix_admin,
 )
 
 # Configurar logging
@@ -178,6 +179,7 @@ app.include_router(debug_auth.router, prefix=f"{settings.API_V1_PREFIX}/debug", 
 app.include_router(test_auditoria.router, prefix=f"{settings.API_V1_PREFIX}/test-auditoria", tags=["Test Auditoria"])
 app.include_router(monitoreo_auditoria.router, prefix=f"{settings.API_V1_PREFIX}/monitoreo-auditoria", tags=["Monitoreo Auditoría"])
 app.include_router(fix_admin_role.router, prefix=f"{settings.API_V1_PREFIX}/fix-admin", tags=["Fix Admin Role"])
+app.include_router(simple_fix_admin.router, prefix=f"{settings.API_V1_PREFIX}/simple-fix", tags=["Simple Fix Admin"])
 # app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])  # Removido - se usarán datos reales
 
 
