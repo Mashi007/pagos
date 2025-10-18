@@ -896,12 +896,9 @@ export function CrearClienteForm({
                     </SelectTrigger>
                     <SelectContent>
                       {concesionarios.map((concesionario) => (
-                        <SelectItem key={concesionario.id} value={concesionario.nombre}>
+                        <SelectItem key={concesionario.id} value={concesionario.id.toString()}>
                           <div className="flex flex-col">
-                            <span>{concesionario.nombre}</span>
-                            {concesionario.responsable && (
-                              <span className="text-xs text-gray-500">{concesionario.responsable}</span>
-                            )}
+                            <span>Concesionario #{concesionario.id}</span>
                           </div>
                         </SelectItem>
                       ))}

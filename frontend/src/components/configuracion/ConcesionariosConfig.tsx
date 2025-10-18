@@ -1,27 +1,12 @@
-// Formulario simplificado - Solo campos esenciales
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import {
-  Building,
-  Plus,
-  Edit,
-  Trash2,
-  Search,
-  Filter,
-  CheckCircle,
-  XCircle,
-  Save,
-  X,
-  Eye,
-  RefreshCw,
-} from 'lucide-react'
+import { Building, Plus, Search, Edit, Trash2, Eye, Save, X, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { concesionarioService, Concesionario } from '@/services/concesionarioService'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
-import { concesionarioService, type Concesionario, type ConcesionarioCreate } from '@/services/concesionarioService'
+import { toast } from 'sonner'
 
 export function ConcesionariosConfig() {
   const [concesionarios, setConcesionarios] = useState<Concesionario[]>([])
@@ -32,12 +17,6 @@ export function ConcesionariosConfig() {
   const [editingConcesionario, setEditingConcesionario] = useState<Concesionario | null>(null)
   const [viewingConcesionario, setViewingConcesionario] = useState<Concesionario | null>(null)
 
-  // Form state
-  const [formData, setFormData] = useState<ConcesionarioCreate>({
-    nombre: '',
-    activo: true
-  })
-
   useEffect(() => {
     loadConcesionarios()
   }, [])
@@ -45,17 +24,13 @@ export function ConcesionariosConfig() {
   const loadConcesionarios = async () => {
     try {
       setLoading(true)
-      const data = await concesionarioService.listarConcesionariosActivos()
-      setConcesionarios(data)
-    } catch (err: any) {
+      setError(null)
+      const response = await concesionarioService.listarConcesionarios({ limit: 100 })
+      setConcesionarios(response.items || [])
+    } catch (err) {
       console.error('Error al cargar concesionarios:', err)
-      if (err.response?.status === 503) {
-        setError('Servicio temporalmente no disponible. Intenta nuevamente.')
-      } else if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
-        setError('Error de conexión. Verifica que el servidor esté funcionando.')
-      } else {
-        setError('No se pudieron cargar los concesionarios.')
-      }
+      setError('Error al cargar concesionarios')
+      toast.error('Error al cargar concesionarios')
     } finally {
       setLoading(false)
     }
@@ -64,20 +39,20 @@ export function ConcesionariosConfig() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      setError(null) // Limpiar errores previos
-      
       if (editingConcesionario) {
-        await concesionarioService.actualizarConcesionario(editingConcesionario.id, formData)
+        // Actualizar concesionario (solo id)
+        await concesionarioService.actualizarConcesionario(editingConcesionario.id, {})
+        toast.success('Concesionario actualizado exitosamente')
       } else {
-        await concesionarioService.crearConcesionario(formData)
+        // Crear nuevo concesionario
+        await concesionarioService.crearConcesionario({})
+        toast.success('Concesionario creado exitosamente')
       }
-      
-      // Recargar la lista de concesionarios para actualizar la tabla
       await loadConcesionarios()
       resetForm()
     } catch (err) {
       console.error('Error al guardar concesionario:', err)
-      setError('Error al guardar el concesionario.')
+      toast.error('Error al guardar concesionario')
     }
   }
 
@@ -87,10 +62,6 @@ export function ConcesionariosConfig() {
 
   const handleEdit = (concesionario: Concesionario) => {
     setEditingConcesionario(concesionario)
-    setFormData({
-      nombre: concesionario.nombre,
-      activo: concesionario.activo
-    })
     setShowForm(true)
   }
 
@@ -102,24 +73,21 @@ export function ConcesionariosConfig() {
     try {
       await concesionarioService.eliminarConcesionario(id)
       await loadConcesionarios()
+      toast.success('Concesionario eliminado exitosamente')
     } catch (err) {
       console.error('Error al eliminar concesionario:', err)
-      setError('Error al eliminar el concesionario.')
+      toast.error('Error al eliminar concesionario')
     }
   }
 
   const resetForm = () => {
-    setFormData({
-      nombre: '',
-      activo: true
-    })
     setEditingConcesionario(null)
     setViewingConcesionario(null)
     setShowForm(false)
   }
 
   const filteredConcesionarios = concesionarios.filter(concesionario =>
-    (concesionario.nombre && concesionario.nombre.toLowerCase().includes(searchTerm.toLowerCase()))
+    concesionario.id.toString().includes(searchTerm)
   )
 
   if (loading) {
@@ -127,61 +95,107 @@ export function ConcesionariosConfig() {
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="space-y-6"
-    >
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h3 className="text-2xl font-bold flex items-center">
-            <Building className="mr-2 h-6 w-6" />
-            Gestión de Concesionarios
-          </h3>
-          <p className="text-gray-600 mt-1">
-            Administra los concesionarios disponibles en el sistema
-          </p>
+          <h2 className="text-2xl font-bold text-gray-900">Concesionarios</h2>
+          <p className="text-gray-600">Gestión de concesionarios del sistema</p>
         </div>
-        <Button onClick={() => setShowForm(true)}>
+        <Button onClick={() => setShowForm(true)} className="flex items-center">
           <Plus className="mr-2 h-4 w-4" />
           Nuevo Concesionario
         </Button>
       </div>
 
-      {/* Formulario */}
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+        <Input
+          placeholder="Buscar por ID..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <p className="text-red-800">{error}</p>
+        </div>
+      )}
+
+      {/* Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Building className="mr-2 h-5 w-5" />
+            Lista de Concesionarios ({filteredConcesionarios.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID</TableHead>
+                <TableHead>Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredConcesionarios.map((concesionario) => (
+                <TableRow key={concesionario.id}>
+                  <TableCell className="font-medium">
+                    Concesionario #{concesionario.id}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleView(concesionario)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEdit(concesionario)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDelete(concesionario.id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Form Modal */}
       {showForm && (
         <Card>
           <CardHeader>
-            <CardTitle>
+            <CardTitle className="flex items-center">
+              <Save className="mr-2 h-5 w-5" />
               {editingConcesionario ? 'Editar Concesionario' : 'Nuevo Concesionario'}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="text-sm font-medium">Nombre del Concesionario *</label>
-                  <Input
-                    value={formData.nombre}
-                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                    placeholder="Nombre del concesionario"
-                    required
-                  />
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="activo"
-                  checked={formData.activo}
-                  onChange={(e) => setFormData({ ...formData, activo: e.target.checked })}
-                  className="rounded"
-                />
-                <label htmlFor="activo" className="text-sm font-medium">
-                  Activo
-                </label>
+              <div className="text-center py-8">
+                <p className="text-gray-600">
+                  Los concesionarios solo tienen ID. {editingConcesionario ? 'Actualizar' : 'Crear'} concesionario?
+                </p>
               </div>
               <div className="flex justify-end space-x-2">
                 <Button type="button" variant="outline" onClick={resetForm}>
@@ -198,7 +212,7 @@ export function ConcesionariosConfig() {
         </Card>
       )}
 
-      {/* Modal de Visualización */}
+      {/* View Modal */}
       {viewingConcesionario && (
         <Card>
           <CardHeader>
@@ -213,149 +227,15 @@ export function ConcesionariosConfig() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium text-gray-500">Nombre del Concesionario</label>
-                <p className="text-lg font-semibold">{viewingConcesionario.nombre}</p>
+                <label className="text-sm font-medium text-gray-700">ID</label>
+                <p className="text-lg font-semibold">Concesionario #{viewingConcesionario.id}</p>
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Estado</label>
-                <div className="mt-1">
-                  <Badge variant={viewingConcesionario.activo ? 'default' : 'destructive'}>
-                    {viewingConcesionario.activo ? (
-                      <>
-                        <CheckCircle className="mr-1 h-3 w-3" />
-                        Activo
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="mr-1 h-3 w-3" />
-                        Inactivo
-                      </>
-                    )}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end space-x-2 mt-6">
-              <Button variant="outline" onClick={() => setViewingConcesionario(null)}>
-                Cerrar
-              </Button>
-              <Button onClick={() => {
-                handleEdit(viewingConcesionario)
-                setViewingConcesionario(null)
-              }}>
-                <Edit className="mr-2 h-4 w-4" />
-                Editar
-              </Button>
             </div>
           </CardContent>
         </Card>
       )}
-
-      {/* Búsqueda */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center space-x-2">
-            <Search className="h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Buscar concesionarios..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Lista de Concesionarios */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nombre del Concesionario</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredConcesionarios.map((concesionario) => (
-                  <TableRow key={concesionario.id}>
-                    <TableCell>
-                      <div className="font-medium">{concesionario.nombre}</div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={concesionario.activo ? 'default' : 'destructive'}>
-                        {concesionario.activo ? (
-                          <>
-                            <CheckCircle className="mr-1 h-3 w-3" />
-                            Activo
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="mr-1 h-3 w-3" />
-                            Inactivo
-                          </>
-                        )}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end space-x-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleView(concesionario)}
-                          title="Ver detalles"
-                          className="text-blue-600 hover:text-blue-700"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(concesionario)}
-                          title="Editar concesionario"
-                          className="text-green-600 hover:text-green-700"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(concesionario.id)}
-                          title="Eliminar concesionario"
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          <div className="flex items-center justify-between">
-            <span>{error}</span>
-            <Button 
-              onClick={loadConcesionarios}
-              variant="outline" 
-              size="sm"
-              className="ml-4"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Reintentar
-            </Button>
-          </div>
-        </div>
-      )}
-    </motion.div>
+    </div>
   )
 }
