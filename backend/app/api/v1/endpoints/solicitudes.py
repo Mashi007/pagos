@@ -1065,9 +1065,22 @@ def obtener_matriz_permisos_actualizada(
     """
     📋 Obtener matriz de permisos actualizada con sistema de aprobaciones
     """
-    from app.core.permissions import get_permission_matrix_summary
+    # Función obsoleta - sistema de permisos simplificado no requiere matriz compleja
+    # from app.core.permissions import get_permission_matrix_summary
     
-    matriz = get_permission_matrix_summary()
+    # Sistema simplificado - matriz básica de permisos
+    matriz = {
+        "ADMIN": {
+            "acceso": "✅ COMPLETO",
+            "permisos": "✅ TODOS LOS PERMISOS",
+            "aprobaciones": "❌ NO REQUERIDAS"
+        },
+        "USER": {
+            "acceso": "⚠️ LIMITADO",
+            "permisos": "⚠️ PERMISOS BÁSICOS",
+            "aprobaciones": "✅ REQUERIDAS PARA ACCIONES CRÍTICAS"
+        }
+    }
     
     return {
         "titulo": "MATRIZ DE PERMISOS ACTUALIZADA",
