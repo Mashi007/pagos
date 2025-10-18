@@ -11,7 +11,7 @@ export interface User {
   updated_at: string;
 }
 
-export type UserRole = 'USER'; // Rol único - todos tienen acceso completo
+export type UserRole = 'ADMIN' | 'GERENTE' | 'ASESOR_COMERCIAL' | 'USER';
 
 export interface Cliente {
   id: number;

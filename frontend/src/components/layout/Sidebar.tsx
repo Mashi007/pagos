@@ -127,14 +127,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       title: 'Configuración',
       icon: Settings,
       isSubmenu: true,
-      requiredRoles: ['USER'],
+      requiredRoles: ['ADMIN', 'GERENTE'],
       children: [
         { title: 'General', href: '/configuracion', icon: Settings },
         { title: 'Validadores', href: '/validadores', icon: CheckCircle },
         { title: 'Analistas', href: '/analistas', icon: Users },
         { title: 'Concesionarios', href: '/concesionarios', icon: Building },
         { title: 'Modelos de Vehículos', href: '/modelos-vehiculos', icon: Car },
-        { title: 'Usuarios', href: '/usuarios', icon: Shield, requiredRoles: ['USER'] },
+        { title: 'Usuarios', href: '/usuarios', icon: Shield, requiredRoles: ['ADMIN'] },
       ],
     },
   ]
