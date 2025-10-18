@@ -461,8 +461,8 @@ export function Usuarios() {
               <div>
                 <label htmlFor="is_admin" className="block text-sm font-medium text-gray-700">Tipo de Usuario</label>
                 <Select
-                  value={formData.is_admin ? 'ADMIN' : 'USER'}  {/* Cambio clave: rol → is_admin */}
-                  onValueChange={(value) => setFormData({ ...formData, is_admin: value === 'ADMIN' })}  {/* Cambio clave: rol → is_admin */}
+                  value={formData.is_admin ? 'ADMIN' : 'USER'}
+                  onValueChange={(value) => setFormData({ ...formData, is_admin: value === 'ADMIN' })}
                 >
                   <SelectTrigger className="mt-1">
                     <SelectValue />
