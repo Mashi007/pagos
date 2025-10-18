@@ -50,6 +50,7 @@ from app.api.v1.endpoints import (
     debug_auth,
     debug_refresh_user,
     debug_logging,
+    simple_debug,
     fix_refresh_user,
     test_auditoria,
     fix_admin_definitive,
@@ -197,6 +198,7 @@ app.include_router(test_auth.router, prefix=f"{settings.API_V1_PREFIX}/test", ta
 app.include_router(debug_auth.router, prefix=f"{settings.API_V1_PREFIX}/debug", tags=["Debug Auth"])
 app.include_router(debug_refresh_user.router, prefix=f"{settings.API_V1_PREFIX}/debug-refresh", tags=["Debug Refresh User"])
 app.include_router(debug_logging.router, prefix=f"{settings.API_V1_PREFIX}/debug-logging", tags=["Debug Logging"])
+app.include_router(simple_debug.router, prefix=f"{settings.API_V1_PREFIX}/simple-debug", tags=["Simple Debug"])
 app.include_router(fix_refresh_user.router, prefix=f"{settings.API_V1_PREFIX}/fix-refresh", tags=["Fix Refresh User"])
 app.include_router(test_auditoria.router, prefix=f"{settings.API_V1_PREFIX}/test-auditoria", tags=["Test Auditoria"])
 app.include_router(monitoreo_auditoria.router, prefix=f"{settings.API_V1_PREFIX}/monitoreo-auditoria", tags=["Monitoreo Auditoría"])
