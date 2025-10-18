@@ -235,10 +235,11 @@ class AuthService:
             Lista de permisos (strings)
         """
         try:
-            # Usar is_admin directamente
-            from app.core.permissions_simple import get_user_permissions
-            permissions = get_user_permissions(user.is_admin)
+            # Usar is_admin directamente - evitar conflicto de nombres
+            from app.core.permissions_simple import get_user_permissions as get_permissions
+            permissions = get_permissions(user.is_admin)
             return [perm.value for perm in permissions]
-        except Exception:
+        except Exception as e:
             # Si hay error, retornar permisos vacíos
+            print(f"Error obteniendo permisos: {e}")
             return []
