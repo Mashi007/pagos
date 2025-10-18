@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Label } from '@/components/ui/label'
 import { usuarioService, Usuario, UsuarioCreate } from '@/services/usuarioService'
 import { toast } from 'sonner'
 
@@ -432,7 +431,7 @@ export function Usuarios() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label htmlFor="email">Email</Label>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
                 <Input
                   id="email"
                   type="email"
@@ -444,7 +443,7 @@ export function Usuarios() {
               </div>
 
               <div>
-                <Label htmlFor="nombre">Nombre</Label>
+                <label htmlFor="nombre" className="block text-sm font-medium text-gray-700">Nombre</label>
                 <Input
                   id="nombre"
                   value={formData.nombre}
@@ -455,7 +454,7 @@ export function Usuarios() {
               </div>
 
               <div>
-                <Label htmlFor="apellido">Apellido</Label>
+                <label htmlFor="apellido" className="block text-sm font-medium text-gray-700">Apellido</label>
                 <Input
                   id="apellido"
                   value={formData.apellido}
@@ -466,10 +465,10 @@ export function Usuarios() {
               </div>
 
               <div>
-                <Label htmlFor="rol">Rol</Label>
+                <label htmlFor="rol" className="block text-sm font-medium text-gray-700">Rol</label>
                 <Select
                   value={formData.rol}
-                  onValueChange={(value) => setFormData({ ...formData, rol: value })}
+                  onValueChange={(value) => setFormData({ ...formData, rol: value as "USER" | "ADMIN" | "GERENTE" | "COBRANZAS" })}
                 >
                   <SelectTrigger className="mt-1">
                     <SelectValue />
@@ -484,9 +483,9 @@ export function Usuarios() {
               </div>
 
               <div>
-                <Label htmlFor="password">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                   Contraseña {editingUsuario && '(dejar vacío para mantener la actual)'}
-                </Label>
+                </label>
                 <Input
                   id="password"
                   type="password"
@@ -505,7 +504,7 @@ export function Usuarios() {
                   onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                   className="rounded"
                 />
-                <Label htmlFor="is_active">Usuario activo</Label>
+                <label htmlFor="is_active" className="text-sm font-medium text-gray-700">Usuario activo</label>
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
