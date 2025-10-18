@@ -59,6 +59,31 @@ export function SimpleProtectedRoute({
             >
               🔄 Actualizar Permisos desde Servidor
             </button>
+            <button
+              onClick={async () => {
+                try {
+                  const response = await fetch('/api/v1/fix-refresh/fix-user-admin', {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`,
+                      'Content-Type': 'application/json'
+                    }
+                  })
+                  const result = await response.json()
+                  if (result.status === 'success') {
+                    alert('✅ Usuario marcado como administrador exitosamente')
+                    window.location.reload()
+                  } else {
+                    alert(`❌ Error: ${result.error}`)
+                  }
+                } catch (error) {
+                  alert(`❌ Error: ${error}`)
+                }
+              }}
+              className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors"
+            >
+              🔧 Marcar como Administrador
+            </button>
             <p className="text-sm text-blue-600 font-semibold">
               Si eres administrador, haz clic en el botón para actualizar tus permisos
             </p>
