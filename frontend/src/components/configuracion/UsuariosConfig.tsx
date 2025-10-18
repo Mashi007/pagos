@@ -16,7 +16,9 @@ import {
   RefreshCw,
   Save,
   X,
-  AlertCircle
+  AlertCircle,
+  Key,
+  Copy
 } from 'lucide-react'
 import { userService, type User, type UserCreate, type UserUpdate } from '@/services/userService'
 import { toast } from 'react-hot-toast'
@@ -40,6 +42,27 @@ export default function UsuariosConfig() {
     password: '',
     is_active: true
   })
+
+  // Función para generar contraseña automática
+  const generatePassword = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
+    let password = ''
+    for (let i = 0; i < 12; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+    setFormData({ ...formData, password })
+    toast.success('Contraseña generada automáticamente')
+  }
+
+  // Función para copiar contraseña al portapapeles
+  const copyPassword = async () => {
+    try {
+      await navigator.clipboard.writeText(formData.password)
+      toast.success('Contraseña copiada al portapapeles')
+    } catch (err) {
+      toast.error('No se pudo copiar la contraseña')
+    }
+  }
 
   useEffect(() => {
     loadUsuarios()
@@ -65,8 +88,27 @@ export default function UsuariosConfig() {
     }
   }
 
+  // Validación del formulario
+  const isFormValid = () => {
+    if (!formData.email || !formData.nombre || !formData.apellido) {
+      return false
+    }
+    if (!editingUser && !formData.password) {
+      return false
+    }
+    if (formData.password && formData.password.length < 8) {
+      return false
+    }
+    return true
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!isFormValid()) {
+      toast.error('Por favor completa todos los campos requeridos')
+      return
+    }
     
     try {
       if (editingUser) {
@@ -445,14 +487,41 @@ export default function UsuariosConfig() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Contraseña {editingUser ? '(dejar en blanco para no cambiar)' : '*'}
                   </label>
-                  <Input
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    required={!editingUser}
-                    placeholder={editingUser ? 'Nueva contraseña (opcional)' : 'Mínimo 8 caracteres'}
-                    minLength={8}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      required={!editingUser}
+                      placeholder={editingUser ? 'Nueva contraseña (opcional)' : 'Mínimo 8 caracteres'}
+                      minLength={8}
+                      className="flex-1"
+                    />
+                    {!editingUser && (
+                      <>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={generatePassword}
+                          className="px-3"
+                          title="Generar contraseña automática"
+                        >
+                          <Key className="h-4 w-4" />
+                        </Button>
+                        {formData.password && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={copyPassword}
+                            className="px-3"
+                            title="Copiar contraseña"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-500 mt-1">
                     Mínimo 8 caracteres, incluye mayúsculas, minúsculas y números
                   </p>
@@ -498,7 +567,8 @@ export default function UsuariosConfig() {
                   </Button>
                   <Button
                     type="submit"
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    disabled={!isFormValid()}
+                    className="bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     <Save className="h-4 w-4 mr-2" />
                     {editingUser ? 'Actualizar' : 'Crear'} Usuario
