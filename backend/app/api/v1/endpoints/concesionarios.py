@@ -35,13 +35,7 @@ def test_concesionarios_no_auth(
         concesionarios_data = []
         for concesionario in concesionarios:
             concesionarios_data.append({
-                "id": concesionario.id,
-                "nombre": concesionario.nombre,
-                "direccion": concesionario.direccion,
-                "telefono": concesionario.telefono,
-                "email": concesionario.email,
-                "activo": concesionario.activo,
-                "created_at": concesionario.created_at.isoformat() if concesionario.created_at else None
+                "id": concesionario.id
             })
         
         return {
@@ -72,13 +66,7 @@ def test_concesionarios_simple(
         concesionarios_data = []
         for concesionario in concesionarios:
             concesionarios_data.append({
-                "id": concesionario.id,
-                "nombre": concesionario.nombre,
-                "direccion": concesionario.direccion,
-                "telefono": concesionario.telefono,
-                "email": concesionario.email,
-                "activo": concesionario.activo,
-                "created_at": concesionario.created_at.isoformat() if concesionario.created_at else None
+                "id": concesionario.id
             })
         
         return {
@@ -242,30 +230,13 @@ def crear_concesionario(
     ➕ Crear un nuevo concesionario
     """
     try:
-        # 🔍 DEBUG: Imprimir los datos recibidos
-        print(f"📥 Concesionario recibido: {concesionario_data}")
-        print(f"📥 Tipo: {type(concesionario_data)}")
-        
-        # Verificar que no exista un concesionario con el mismo nombre
-        existing = db.query(Concesionario).filter(Concesionario.nombre == concesionario_data.nombre).first()
-        if existing:
-            raise HTTPException(status_code=400, detail="Ya existe un concesionario con este nombre")
-        
-        # Limpiar campos vacíos
-        concesionario_dict = concesionario_data.dict()
-        for key, value in concesionario_dict.items():
-            if value == "" or value is None:
-                concesionario_dict[key] = None
-        
-        print(f"📦 Dict limpio: {concesionario_dict}")
-        
-        # Crear nuevo concesionario
-        concesionario = Concesionario(**concesionario_dict)
+        # Crear nuevo concesionario (solo con id auto-generado)
+        concesionario = Concesionario()
         db.add(concesionario)
         db.commit()
         db.refresh(concesionario)
         
-        print(f"✅ Concesionario creado: ID={concesionario.id}")
+        print(f"Concesionario creado: ID={concesionario.id}")
         return ConcesionarioResponse.model_validate(concesionario)
         
     except HTTPException:

@@ -1,44 +1,17 @@
-from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
-from typing import Optional, List
-from datetime import datetime
+from pydantic import BaseModel, ConfigDict
+from typing import List
 
 class ConcesionarioBase(BaseModel):
-    nombre: str
-    direccion: Optional[str] = None
-    telefono: Optional[str] = None
-    email: Optional[EmailStr] = None
-    responsable: Optional[str] = None
-    activo: bool = True
-
-    @field_validator('nombre')
-    @classmethod
-    def nombre_must_not_be_empty(cls, v):
-        if not v or not v.strip():
-            raise ValueError('El nombre del concesionario no puede estar vacío')
-        return v.strip()
+    pass
 
 class ConcesionarioCreate(ConcesionarioBase):
     pass
 
 class ConcesionarioUpdate(BaseModel):
-    nombre: Optional[str] = None
-    direccion: Optional[str] = None
-    telefono: Optional[str] = None
-    email: Optional[EmailStr] = None
-    responsable: Optional[str] = None
-    activo: Optional[bool] = None
-
-    @field_validator('nombre')
-    @classmethod
-    def nombre_must_not_be_empty(cls, v):
-        if v is not None and (not v or not v.strip()):
-            raise ValueError('El nombre del concesionario no puede estar vacío')
-        return v.strip() if v else v
+    pass
 
 class ConcesionarioResponse(ConcesionarioBase):
     id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
     
     model_config = ConfigDict(from_attributes=True)
 
