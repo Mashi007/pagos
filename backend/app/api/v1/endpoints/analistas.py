@@ -18,6 +18,43 @@ from app.api.deps import get_current_user
 
 router = APIRouter()
 
+@router.get("/test-no-auth")
+def test_analistas_no_auth(
+    db: Session = Depends(get_db)
+):
+    """
+    Test endpoint sin autenticación para verificar analistas
+    """
+    try:
+        total_analistas = db.query(Analista).count()
+        analistas = db.query(Analista).limit(5).all()
+        
+        analistas_data = []
+        for analista in analistas:
+            analistas_data.append({
+                "id": analista.id,
+                "nombre": analista.nombre,
+                "apellido": analista.apellido,
+                "email": analista.email,
+                "telefono": analista.telefono,
+                "activo": analista.activo,
+                "created_at": analista.created_at.isoformat() if analista.created_at else None
+            })
+        
+        return {
+            "success": True,
+            "total_analistas": total_analistas,
+            "analistas": analistas_data,
+            "message": "Test endpoint analistas sin auth funcionando"
+        }
+    except Exception as e:
+        logger.error(f"Error en test endpoint analistas no auth: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Error en test endpoint analistas no auth"
+        }
+
 @router.get("/test-simple")
 def test_analistas_simple(
     db: Session = Depends(get_db)
@@ -54,6 +91,50 @@ def test_analistas_simple(
             "error": str(e),
             "message": "Error en test endpoint analistas"
         }
+
+@router.get("/list-no-auth")
+def listar_analistas_no_auth(
+    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
+    limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
+    activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
+    search: Optional[str] = Query(None, description="Buscar por nombre"),
+    db: Session = Depends(get_db)
+):
+    """
+    📋 Listar analistas SIN autenticación (para testing)
+    """
+    try:
+        query = db.query(Analista)
+        
+        # Aplicar filtros
+        if activo is not None:
+            query = query.filter(Analista.activo == activo)
+        
+        if search:
+            query = query.filter(
+                Analista.nombre.ilike(f"%{search}%") | 
+                Analista.apellido.ilike(f"%{search}%")
+            )
+        
+        # Obtener total
+        total = query.count()
+        
+        # Aplicar paginación
+        analistas = query.offset(skip).limit(limit).all()
+        
+        # Calcular páginas
+        pages = (total + limit - 1) // limit
+        
+        return {
+            "items": [AnalistaResponse.model_validate(a) for a in analistas],
+            "total": total,
+            "page": (skip // limit) + 1,
+            "size": limit,
+            "pages": pages
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al listar analistas: {str(e)}")
 
 @router.get("/", response_model=AnalistaListResponse)
 def listar_asesores(
