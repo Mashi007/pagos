@@ -7,7 +7,10 @@ from typing import List
 
 
 class Permission(str, Enum):
-    """Permisos del sistema - simplificado"""
+    """Permisos del sistema - COMPLETO"""
+    # Dashboard
+    VIEW_DASHBOARD = "dashboard:view"
+    
     # Usuarios
     USER_CREATE = "user:create"
     USER_READ = "user:read"
@@ -25,6 +28,7 @@ class Permission(str, Enum):
     PRESTAMO_READ = "prestamo:read"
     PRESTAMO_UPDATE = "prestamo:update"
     PRESTAMO_DELETE = "prestamo:delete"
+    PRESTAMO_APPROVE = "prestamo:approve"
     
     # Pagos
     PAGO_CREATE = "pago:create"
@@ -36,39 +40,110 @@ class Permission(str, Enum):
     REPORTE_READ = "reporte:read"
     
     # Auditoría
-    AUDITORIA_READ = "auditoria:read"
+    AUDIT_READ = "audit:read"
     
     # Configuración
     CONFIG_READ = "config:read"
     CONFIG_UPDATE = "config:update"
+    CONFIG_MANAGE = "config:manage"
+    
+    # Analistas
+    ANALISTA_CREATE = "analista:create"
+    ANALISTA_READ = "analista:read"
+    ANALISTA_UPDATE = "analista:update"
+    ANALISTA_DELETE = "analista:delete"
+    
+    # Concesionarios
+    CONCESIONARIO_CREATE = "concesionario:create"
+    CONCESIONARIO_READ = "concesionario:read"
+    CONCESIONARIO_UPDATE = "concesionario:update"
+    CONCESIONARIO_DELETE = "concesionario:delete"
+    
+    # Modelos de Vehículos
+    MODELO_CREATE = "modelo:create"
+    MODELO_READ = "modelo:read"
+    MODELO_UPDATE = "modelo:update"
+    MODELO_DELETE = "modelo:delete"
+    
+    # Validadores
+    VALIDADOR_CREATE = "validador:create"
+    VALIDADOR_READ = "validador:read"
+    VALIDADOR_UPDATE = "validador:update"
+    VALIDADOR_DELETE = "validador:delete"
 
 
-# Mapeo simplificado: Solo ADMIN tiene todos los permisos
-ADMIN_PERMISSIONS = [
+# ADMIN tiene TODOS los permisos - ACCESO COMPLETO
+ADMIN_PERMISSIONS: List[Permission] = [
+    # Dashboard
+    Permission.VIEW_DASHBOARD,
+    
+    # Usuarios - Gestión completa
     Permission.USER_CREATE,
     Permission.USER_READ,
     Permission.USER_UPDATE,
     Permission.USER_DELETE,
+    
+    # Clientes - Gestión completa
     Permission.CLIENTE_CREATE,
     Permission.CLIENTE_READ,
     Permission.CLIENTE_UPDATE,
     Permission.CLIENTE_DELETE,
+    
+    # Préstamos - Gestión completa
     Permission.PRESTAMO_CREATE,
     Permission.PRESTAMO_READ,
     Permission.PRESTAMO_UPDATE,
     Permission.PRESTAMO_DELETE,
+    Permission.PRESTAMO_APPROVE,
+    
+    # Pagos - Gestión completa
     Permission.PAGO_CREATE,
     Permission.PAGO_READ,
     Permission.PAGO_UPDATE,
     Permission.PAGO_DELETE,
+    
+    # Reportes
     Permission.REPORTE_READ,
-    Permission.AUDITORIA_READ,
+    
+    # Auditoría
+    Permission.AUDIT_READ,
+    
+    # Configuración - Gestión completa
     Permission.CONFIG_READ,
     Permission.CONFIG_UPDATE,
+    Permission.CONFIG_MANAGE,
+    
+    # Analistas - Gestión completa
+    Permission.ANALISTA_CREATE,
+    Permission.ANALISTA_READ,
+    Permission.ANALISTA_UPDATE,
+    Permission.ANALISTA_DELETE,
+    
+    # Concesionarios - Gestión completa
+    Permission.CONCESIONARIO_CREATE,
+    Permission.CONCESIONARIO_READ,
+    Permission.CONCESIONARIO_UPDATE,
+    Permission.CONCESIONARIO_DELETE,
+    
+    # Modelos de Vehículos - Gestión completa
+    Permission.MODELO_CREATE,
+    Permission.MODELO_READ,
+    Permission.MODELO_UPDATE,
+    Permission.MODELO_DELETE,
+    
+    # Validadores - Gestión completa
+    Permission.VALIDADOR_CREATE,
+    Permission.VALIDADOR_READ,
+    Permission.VALIDADOR_UPDATE,
+    Permission.VALIDADOR_DELETE,
 ]
 
-# USER solo tiene permisos básicos
-USER_PERMISSIONS = [
+# USER solo tiene permisos básicos - ACCESO LIMITADO
+USER_PERMISSIONS: List[Permission] = [
+    # Dashboard básico
+    Permission.VIEW_DASHBOARD,
+    
+    # Solo lectura de datos básicos
     Permission.CLIENTE_READ,
     Permission.PRESTAMO_READ,
     Permission.PAGO_READ,

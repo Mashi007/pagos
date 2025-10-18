@@ -62,7 +62,7 @@ export function SimpleProtectedRoute({
             <button
               onClick={async () => {
                 try {
-                  const response = await fetch('/api/v1/fix-refresh/fix-user-admin', {
+                  const response = await fetch('https://pagos-f2qf.onrender.com/api/v1/simple-debug/simple-fix-admin', {
                     method: 'POST',
                     headers: {
                       'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`,
