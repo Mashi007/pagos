@@ -229,7 +229,7 @@ def obtener_concesionario(
     
     return ConcesionarioResponse.model_validate(concesionario)
 
-@router.post("", response_model=ConcesionarioResponse)
+@router.post("/", response_model=ConcesionarioResponse)
 def crear_concesionario(
     concesionario_data: ConcesionarioCreate,
     db: Session = Depends(get_db),
