@@ -199,25 +199,39 @@ def get_current_user_info(
     
     Incluye permisos basados en el rol del usuario
     """
-    # Obtener permisos del usuario
-    permissions = AuthService.get_user_permissions(current_user)
-    
-    # Crear respuesta
-    user_response = UserMeResponse(
-        id=current_user.id,
-        email=current_user.email,
-        nombre=current_user.nombre,
-        apellido=current_user.apellido,
-        is_admin=current_user.is_admin,  # CRÍTICO: Incluir is_admin
-        cargo=current_user.cargo,
-        is_active=current_user.is_active,
-        created_at=current_user.created_at,
-        updated_at=current_user.updated_at,
-        last_login=current_user.last_login,
-        permissions=permissions
-    )
-    
-    return user_response
+    try:
+        print(f"🔍 /me endpoint - Usuario: {current_user.email}, is_admin: {current_user.is_admin}")
+        
+        # Obtener permisos del usuario
+        permissions = AuthService.get_user_permissions(current_user)
+        print(f"📋 /me endpoint - Permisos obtenidos: {len(permissions)} permisos")
+        
+        # Crear respuesta
+        user_response = UserMeResponse(
+            id=current_user.id,
+            email=current_user.email,
+            nombre=current_user.nombre,
+            apellido=current_user.apellido,
+            is_admin=current_user.is_admin,  # CRÍTICO: Incluir is_admin
+            cargo=current_user.cargo,
+            is_active=current_user.is_active,
+            created_at=current_user.created_at,
+            updated_at=current_user.updated_at,
+            last_login=current_user.last_login,
+            permissions=permissions
+        )
+        
+        print(f"✅ /me endpoint - Respuesta creada exitosamente para usuario: {current_user.email}")
+        print(f"📊 /me endpoint - is_admin en respuesta: {user_response.is_admin}")
+        
+        return user_response
+        
+    except Exception as e:
+        print(f"❌ /me endpoint - Error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error obteniendo información del usuario: {str(e)}"
+        )
 
 
 @router.post("/change-password", summary="Cambiar contraseña")

@@ -48,17 +48,37 @@ from app.api.v1.endpoints import (
     test_auth,
     debug_auth,
     debug_refresh_user,
+    debug_logging,
     fix_refresh_user,
     test_auditoria,
     fix_admin_definitive,
 )
 
-# Configurar logging
+# Configurar logging robusto
+import sys
+
+# Configurar logging básico pero efectivo
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),  # Asegurar que vaya a stdout
+    ],
+    force=True  # Forzar reconfiguración
 )
 logger = logging.getLogger(__name__)
+
+# Configurar loggers específicos para asegurar que funcionen
+app_logger = logging.getLogger("app")
+app_logger.setLevel(getattr(logging, settings.LOG_LEVEL))
+app_logger.handlers.clear()
+app_logger.addHandler(logging.StreamHandler(sys.stdout))
+
+# Log de inicio
+logger.info("🚀 Iniciando aplicación FastAPI - Sistema de Préstamos y Cobranza")
+logger.info(f"📊 Configuración: Environment={settings.ENVIRONMENT}, Log Level={settings.LOG_LEVEL}")
+logger.info(f"🌐 CORS Origins: {settings.CORS_ORIGINS}")
+logger.info(f"🔗 Database URL configurada: {bool(settings.DATABASE_URL)}")
 
 # Configurar rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -174,6 +194,7 @@ app.include_router(fix_database.router, prefix=f"{settings.API_V1_PREFIX}/fix-db
 app.include_router(test_auth.router, prefix=f"{settings.API_V1_PREFIX}/test", tags=["Test Auth"])
 app.include_router(debug_auth.router, prefix=f"{settings.API_V1_PREFIX}/debug", tags=["Debug Auth"])
 app.include_router(debug_refresh_user.router, prefix=f"{settings.API_V1_PREFIX}/debug-refresh", tags=["Debug Refresh User"])
+app.include_router(debug_logging.router, prefix=f"{settings.API_V1_PREFIX}/debug-logging", tags=["Debug Logging"])
 app.include_router(fix_refresh_user.router, prefix=f"{settings.API_V1_PREFIX}/fix-refresh", tags=["Fix Refresh User"])
 app.include_router(test_auditoria.router, prefix=f"{settings.API_V1_PREFIX}/test-auditoria", tags=["Test Auditoria"])
 app.include_router(monitoreo_auditoria.router, prefix=f"{settings.API_V1_PREFIX}/monitoreo-auditoria", tags=["Monitoreo Auditoría"])

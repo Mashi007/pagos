@@ -235,11 +235,18 @@ class AuthService:
             Lista de permisos (strings)
         """
         try:
+            print(f"🔐 AuthService.get_user_permissions - Usuario: {user.email}, is_admin: {user.is_admin}")
+            
             # Usar is_admin directamente - evitar conflicto de nombres
             from app.core.permissions_simple import get_user_permissions as get_permissions
             permissions = get_permissions(user.is_admin)
-            return [perm.value for perm in permissions]
+            permission_strings = [perm.value for perm in permissions]
+            
+            print(f"✅ AuthService.get_user_permissions - Permisos obtenidos: {len(permission_strings)} permisos")
+            print(f"📋 AuthService.get_user_permissions - Permisos: {permission_strings}")
+            
+            return permission_strings
         except Exception as e:
             # Si hay error, retornar permisos vacíos
-            print(f"Error obteniendo permisos: {e}")
+            print(f"❌ AuthService.get_user_permissions - Error: {e}")
             return []
