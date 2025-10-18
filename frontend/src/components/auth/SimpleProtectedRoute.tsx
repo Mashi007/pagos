@@ -33,7 +33,7 @@ export function SimpleProtectedRoute({
   }
 
   // Si se requieren roles específicos, verificar permisos
-  if (requiredRoles.length > 0 && !requiredRoles.includes(user.rol)) {
+  if (requiredRoles.length > 0 && !requiredRoles.includes(user.rol as string)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
