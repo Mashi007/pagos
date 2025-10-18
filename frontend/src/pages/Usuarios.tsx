@@ -22,7 +22,7 @@ export function Usuarios() {
     email: '',
     nombre: '',
     apellido: '',
-    rol: 'USER',
+    is_admin: false,  // Cambio clave: rol → is_admin
     password: '',
     is_active: true
   })
@@ -139,7 +139,7 @@ export function Usuarios() {
       email: '',
       nombre: '',
       apellido: '',
-      rol: 'USER',
+      is_admin: false,  // Cambio clave: rol → is_admin
       password: '',
       is_active: true
     })
