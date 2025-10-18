@@ -1,5 +1,3 @@
-// Tipos principales del sistema
-
 // Tipos principales del sistema - SIMPLIFICADO
 
 export interface User {
@@ -63,91 +61,6 @@ export interface Cliente {
   notas?: string;
 }
 
-export interface Pago {
-  id: string;
-  cliente_id: string;
-  cliente_nombre?: string;
-  monto_total: number;
-  fecha_pago: string;
-  forma_pago: 'EFECTIVO' | 'TRANSFERENCIA' | 'CHEQUE' | 'TARJETA';
-  referencia?: string;
-  observaciones?: string;
-  
-  // Distribución del pago
-  monto_capital: number;
-  monto_interes: number;
-  monto_mora: number;
-  monto_otros: number;
-  
-  // Datos de la cuota
-  numero_cuota: number;
-  cuota_id?: string;
-  
-  // Estado y auditoría
-  estado: 'PENDIENTE' | 'CONFIRMADO' | 'ANULADO';
-  usuario_registro_id: string;
-  usuario_registro_nombre?: string;
-  
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Cuota {
-  id: string;
-  cliente_id: string;
-  numero_cuota: number;
-  fecha_vencimiento: string;
-  monto_cuota: number;
-  monto_capital: number;
-  monto_interes: number;
-  saldo_pendiente: number;
-  
-  // Estado de la cuota
-  estado: 'PENDIENTE' | 'PAGADA' | 'VENCIDA' | 'PARCIAL';
-  monto_pagado: number;
-  fecha_pago?: string;
-  dias_mora: number;
-  monto_mora: number;
-  
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Reporte {
-  id: string;
-  nombre: string;
-  descripcion: string;
-  tipo: 'CARTERA' | 'FLUJO_CAJA' | 'MORA' | 'PRODUCTIVIDAD' | 'CONCILIACION';
-  parametros: Record<string, any>;
-  archivo_url?: string;
-  estado: 'GENERANDO' | 'COMPLETADO' | 'ERROR';
-  usuario_id: string;
-  created_at: string;
-}
-
-export interface KPI {
-  cartera_total: number;
-  cartera_al_dia: number;
-  cartera_vencida: number;
-  porcentaje_mora: number;
-  pagos_hoy: number;
-  monto_pagos_hoy: number;
-  clientes_activos: number;
-  clientes_mora: number;
-  meta_mensual: number;
-  avance_meta: number;
-}
-
-export interface Notificacion {
-  id: string;
-  titulo: string;
-  mensaje: string;
-  tipo: 'INFO' | 'WARNING' | 'ERROR' | 'SUCCESS';
-  leida: boolean;
-  usuario_id: string;
-  created_at: string;
-}
-
 // Tipos para formularios
 export interface LoginForm {
   email: string;
@@ -192,16 +105,6 @@ export interface ClienteForm {
   notas?: string;
 }
 
-export interface PagoForm {
-  cliente_id: string;
-  monto_total: number;
-  fecha_pago: string;
-  forma_pago: 'EFECTIVO' | 'TRANSFERENCIA' | 'CHEQUE' | 'TARJETA';
-  referencia?: string;
-  observaciones?: string;
-  numero_cuota?: number;
-}
-
 // Tipos para respuestas de API
 export interface ApiResponse<T> {
   data: T;
@@ -233,27 +136,4 @@ export interface ClienteFilters {
   fecha_desde?: string;
   fecha_hasta?: string;
   per_page?: number;
-}
-
-export interface PagoFilters {
-  search?: string;
-  cliente_id?: string;
-  fecha_desde?: string;
-  fecha_hasta?: string;
-  forma_pago?: Pago['forma_pago'];
-  estado?: Pago['estado'];
-}
-
-// Tipos para configuración
-export interface AppConfig {
-  app_name: string;
-  version: string;
-  environment: string;
-  api_url: string;
-  features: {
-    notifications: boolean;
-    reports: boolean;
-    conciliation: boolean;
-    ai: boolean;
-  };
 }
