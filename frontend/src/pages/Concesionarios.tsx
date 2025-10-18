@@ -86,7 +86,7 @@ export function Concesionarios() {
 
   // Filtrar concesionarios por término de búsqueda
   const concesionariosFiltrados = concesionarios.filter(concesionario =>
-    concesionario.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (concesionario.nombre && concesionario.nombre.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (concesionario.direccion && concesionario.direccion.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (concesionario.email && concesionario.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (concesionario.responsable && concesionario.responsable.toLowerCase().includes(searchTerm.toLowerCase()))

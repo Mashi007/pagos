@@ -100,7 +100,7 @@ export function Analistas() {
 
   // Filtrar analistas por término de búsqueda
   const analistasFiltrados = analistas.filter(analista =>
-    analista.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (analista.nombre && analista.nombre.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (analista.apellido && analista.apellido.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (analista.email && analista.email.toLowerCase().includes(searchTerm.toLowerCase()))
   )

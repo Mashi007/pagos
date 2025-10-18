@@ -153,9 +153,9 @@ export function Usuarios() {
 
   // Filtrar usuarios por término de búsqueda
   const usuariosFiltrados = usuarios.filter(usuario =>
-    usuario.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    usuario.apellido.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    usuario.email.toLowerCase().includes(searchTerm.toLowerCase())
+    (usuario.nombre && usuario.nombre.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (usuario.apellido && usuario.apellido.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (usuario.email && usuario.email.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
   const getRoleBadgeColor = (rol: string) => {
