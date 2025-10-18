@@ -83,7 +83,6 @@ class LoginResponse(BaseModel):
 
 class UserMeResponse(UserResponse):
     """Schema para respuesta de usuario actual (/me endpoint)."""
-    rol: str  # Campo para compatibilidad hacia atrás
     permissions: list[str] = Field(default_factory=list)
     
     @property
