@@ -163,7 +163,7 @@ export default function UsuariosConfig() {
   }
 
   const handleDelete = async (usuario: User) => {
-    if (!confirm(`¿Estás seguro de eliminar el usuario ${usuario.full_name || usuario.email}?`)) {
+    if (!confirm(`¿Estás seguro de eliminar el usuario ${usuario.nombre} ${usuario.apellido} (${usuario.email})?`)) {
       return
     }
     
