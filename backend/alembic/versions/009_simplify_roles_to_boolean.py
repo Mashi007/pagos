@@ -1,21 +1,44 @@
--- Migración para simplificar roles: rol → is_admin
--- Fecha: 2024-10-18
--- Descripción: Cambiar de sistema de roles múltiples a boolean is_admin
+"""Simplificar roles: cambiar rol enum a is_admin boolean
 
--- Paso 1: Agregar columna is_admin
-ALTER TABLE usuarios ADD COLUMN is_admin BOOLEAN DEFAULT FALSE;
+Revision ID: 009_simplify_roles_to_boolean
+Revises: 008_add_usuario_id_auditorias
+Create Date: 2024-10-18 12:00:00.000000
 
--- Paso 2: Migrar datos existentes
--- Los usuarios con rol 'ADMIN' serán is_admin = true
-UPDATE usuarios SET is_admin = TRUE WHERE rol = 'ADMIN';
+"""
+from typing import Sequence, Union
 
--- Paso 3: Hacer is_admin NOT NULL
-ALTER TABLE usuarios ALTER COLUMN is_admin SET NOT NULL;
+from alembic import op
+import sqlalchemy as sa
 
--- Paso 4: Eliminar columna rol (opcional, comentado por seguridad)
--- ALTER TABLE usuarios DROP COLUMN rol;
+# revision identifiers, used by Alembic.
+revision: str = '009_simplify_roles_to_boolean'
+down_revision: Union[str, None] = '008_add_usuario_id_auditorias'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
 
--- Verificar migración
-SELECT id, email, nombre, apellido, rol, is_admin, is_active 
-FROM usuarios 
-ORDER BY id;
+
+def upgrade() -> None:
+    """Aplicar cambios a la base de datos."""
+    
+    # Paso 1: Agregar columna is_admin
+    op.add_column('usuarios', sa.Column('is_admin', sa.Boolean(), nullable=False, server_default='false'))
+    
+    # Paso 2: Migrar datos existentes
+    # Los usuarios con rol 'ADMIN' serán is_admin = true
+    op.execute("UPDATE usuarios SET is_admin = TRUE WHERE rol = 'ADMIN'")
+    
+    # Paso 3: Eliminar columna rol (opcional, comentado por seguridad)
+    # op.drop_column('usuarios', 'rol')
+    
+    # Paso 4: Eliminar enum userrole (opcional, comentado por seguridad)
+    # op.execute("DROP TYPE IF EXISTS userrole")
+
+
+def downgrade() -> None:
+    """Revertir cambios de la base de datos."""
+    
+    # Revertir: eliminar columna is_admin
+    op.drop_column('usuarios', 'is_admin')
+    
+    # Nota: No revertimos la eliminación de rol porque puede causar conflictos
+    # Si es necesario, se debe hacer manualmente
