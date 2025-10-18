@@ -208,7 +208,8 @@ def get_current_user_info(
         email=current_user.email,
         nombre=current_user.nombre,
         apellido=current_user.apellido,
-        rol="ADMIN" if current_user.is_admin else "USER",
+        is_admin=current_user.is_admin,  # CRÍTICO: Incluir is_admin
+        cargo=current_user.cargo,
         is_active=current_user.is_active,
         created_at=current_user.created_at,
         updated_at=current_user.updated_at,
