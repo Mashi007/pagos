@@ -15,6 +15,9 @@ from app.schemas.concesionario import (
     ConcesionarioListResponse
 )
 from app.api.deps import get_current_user
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
