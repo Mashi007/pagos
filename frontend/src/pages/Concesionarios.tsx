@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Building, Plus, Search, Edit, Trash2, MapPin, Phone, Mail, User, Loader2, UserCheck, UserX } from 'lucide-react'
+import { Building, Plus, Search, Edit, Trash2, MapPin, Phone, Mail, User, Loader2, UserCheck, UserX, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,12 +25,26 @@ export function Concesionarios() {
     try {
       setLoading(true)
       setError(null)
+      console.log('🔄 Actualizando concesionarios...')
+      console.log('📡 Llamando a API: /api/v1/concesionarios')
+      
       const response = await concesionarioService.listarConcesionarios({ limit: 100 })
-      setConcesionarios(response.items)
+      console.log('✅ Respuesta API recibida:', response)
+      console.log('📊 Total concesionarios:', response.total)
+      console.log('📋 Items recibidos:', response.items?.length || 0)
+      
+      if (response.items && Array.isArray(response.items)) {
+        setConcesionarios(response.items)
+        console.log('✅ Concesionarios cargados exitosamente:', response.items.length)
+      } else {
+        console.warn('⚠️ Respuesta sin items válidos:', response)
+        setConcesionarios([])
+      }
     } catch (err) {
+      console.error('❌ Error API:', err)
       setError('Error al cargar concesionarios')
       toast.error('Error al cargar concesionarios')
-      console.error('Error:', err)
+      setConcesionarios([])
     } finally {
       setLoading(false)
     }
@@ -88,10 +102,21 @@ export function Concesionarios() {
             Gestión de concesionarios y alianzas comerciales
           </p>
         </div>
-        <Button onClick={() => setShowCreateForm(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Nuevo Concesionario
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={cargarConcesionarios}
+            disabled={loading}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Actualizar
+          </Button>
+          <Button onClick={() => setShowCreateForm(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Nuevo Concesionario
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -102,6 +127,9 @@ export function Concesionarios() {
               <div>
                 <p className="text-sm text-gray-500">Total Concesionarios</p>
                 <p className="text-2xl font-bold">{concesionarios.length}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {loading ? 'Cargando...' : 'Conectando con BD...'}
+                </p>
               </div>
               <Building className="w-8 h-8 text-primary" />
             </div>
@@ -115,6 +143,9 @@ export function Concesionarios() {
                 <p className="text-2xl font-bold text-green-600">
                   {concesionarios.filter(c => c.activo).length}
                 </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {loading ? 'Cargando...' : 'Pueden operar'}
+                </p>
               </div>
               <Building className="w-8 h-8 text-green-600" />
             </div>
@@ -127,6 +158,9 @@ export function Concesionarios() {
                 <p className="text-sm text-gray-500">Inactivos</p>
                 <p className="text-2xl font-bold text-red-600">
                   {concesionarios.filter(c => !c.activo).length}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {loading ? 'Cargando...' : 'No pueden operar'}
                 </p>
               </div>
               <UserX className="w-8 h-8 text-red-600" />
