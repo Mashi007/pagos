@@ -1,17 +1,17 @@
 // Tipos principales del sistema
 
+// Tipos principales del sistema - SIMPLIFICADO
+
 export interface User {
   id: string;
   email: string;
   nombre: string;
   apellido: string;
-  rol: UserRole;
-  activo: boolean;
+  is_admin: boolean; // Cambio clave: rol → is_admin
+  is_active: boolean; // Cambio clave: activo → is_active
   created_at: string;
   updated_at: string;
 }
-
-export type UserRole = 'ADMIN' | 'GERENTE' | 'COBRANZAS' | 'USER';
 
 export interface Cliente {
   id: number;

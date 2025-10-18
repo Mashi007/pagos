@@ -6,13 +6,13 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner'
 
 interface SimpleProtectedRouteProps {
   children: React.ReactNode
-  requiredRoles?: string[]
+  requireAdmin?: boolean  // Cambio clave: requiredRoles → requireAdmin
   fallbackPath?: string
 }
 
 export function SimpleProtectedRoute({ 
   children, 
-  requiredRoles = [], 
+  requireAdmin = false,  // Cambio clave: requiredRoles → requireAdmin
   fallbackPath = '/login' 
 }: SimpleProtectedRouteProps) {
   const { isAuthenticated, user, isLoading } = useSimpleAuth()
@@ -32,8 +32,8 @@ export function SimpleProtectedRoute({
     return <Navigate to={fallbackPath} state={{ from: location }} replace />
   }
 
-  // Si se requieren roles específicos, verificar permisos
-  if (requiredRoles.length > 0 && !requiredRoles.includes(user.rol as string)) {
+  // Si se requiere admin y el usuario no es admin
+  if (requireAdmin && !user.is_admin) {  // Cambio clave: rol → is_admin
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -44,10 +44,10 @@ export function SimpleProtectedRoute({
             No tiene permisos para acceder a esta página.
           </p>
           <p className="text-sm text-gray-500">
-            Rol requerido: {requiredRoles.join(', ')}
+            Se requiere acceso de administrador
           </p>
           <p className="text-sm text-gray-500">
-            Su rol actual: {user?.rol || 'No disponible'}
+            Su rol actual: {user.is_admin ? 'Administrador' : 'Usuario'}
           </p>
         </div>
       </div>

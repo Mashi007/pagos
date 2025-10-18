@@ -1,17 +1,16 @@
 """
-Modelo de Usuario
-Tabla de usuarios del sistema con autenticación y roles
+Modelo de Usuario Simplificado
+Solo 2 roles: ADMIN (acceso completo) y USER (acceso limitado)
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.db.session import Base
-from app.core.permissions import UserRole
 
 
 class User(Base):
-    """Modelo de Usuario"""
+    """Modelo de Usuario Simplificado"""
     
     __tablename__ = "usuarios"
     
@@ -20,7 +19,7 @@ class User(Base):
     nombre = Column(String(100), nullable=False)
     apellido = Column(String(100), nullable=False)
     hashed_password = Column(String(255), nullable=False)
-    rol = Column(SQLEnum(UserRole), nullable=False, default=UserRole.USER)
+    is_admin = Column(Boolean, default=False, nullable=False)  # Cambio clave: rol → is_admin
     cargo = Column(String(100), nullable=True)  # Campo separado para cargo en la empresa
     is_active = Column(Boolean, default=True, nullable=False)
     

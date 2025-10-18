@@ -7,7 +7,7 @@ export interface User {
   nombre: string
   apellido: string
   cargo?: string
-  rol: 'USER' | 'ADMIN' | 'GERENTE' | 'COBRANZAS'
+  is_admin: boolean  // Cambio clave: rol → is_admin
   is_active: boolean
   created_at: string
   updated_at?: string
@@ -20,7 +20,7 @@ export interface UserCreate {
   nombre: string
   apellido: string
   cargo?: string
-  rol: 'USER' | 'ADMIN' | 'GERENTE' | 'COBRANZAS'
+  is_admin: boolean  // Cambio clave: rol → is_admin
   password: string
   is_active: boolean
 }
@@ -30,7 +30,7 @@ export interface UserUpdate {
   nombre?: string
   apellido?: string
   cargo?: string
-  rol?: 'USER' | 'ADMIN' | 'GERENTE' | 'COBRANZAS'
+  is_admin?: boolean  // Cambio clave: rol → is_admin
   password?: string
   is_active?: boolean
 }

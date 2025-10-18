@@ -38,7 +38,7 @@ export default function UsuariosConfig() {
     email: '',
     nombre: '',
     apellido: '',
-    rol: 'USER',  // Rol único para todos
+    is_admin: false,  // Cambio clave: rol → is_admin
     password: '',
     is_active: true
   })
@@ -117,7 +117,7 @@ export default function UsuariosConfig() {
           email: formData.email,
           nombre: formData.nombre,
           apellido: formData.apellido,
-          rol: formData.rol,
+          is_admin: formData.is_admin,  // Cambio clave: rol → is_admin
           is_active: formData.is_active
         }
         
@@ -149,7 +149,7 @@ export default function UsuariosConfig() {
       email: usuario.email,
       nombre: usuario.nombre,
       apellido: usuario.apellido,
-      rol: usuario.rol,
+      is_admin: usuario.is_admin,  // Cambio clave: rol → is_admin
       password: '', // No pre-llenar password
       is_active: usuario.is_active
     })
@@ -480,6 +480,38 @@ export default function UsuariosConfig() {
                       placeholder="Apellido"
                     />
                   </div>
+                </div>
+
+                {/* Rol */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tipo de Usuario
+                  </label>
+                  <div className="flex items-center space-x-4">
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="is_admin"
+                        checked={!formData.is_admin}
+                        onChange={() => setFormData({ ...formData, is_admin: false })}
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-700">Usuario Normal</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="is_admin"
+                        checked={formData.is_admin}
+                        onChange={() => setFormData({ ...formData, is_admin: true })}
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-700">Administrador</span>
+                    </label>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Los administradores tienen acceso completo al sistema
+                  </p>
                 </div>
 
                 {/* Contraseña */}

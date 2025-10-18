@@ -157,9 +157,9 @@ def get_admin_user(
     Dependency para endpoints que requieren usuario administrador
     
     Returns:
-        Usuario con rol ADMIN
+        Usuario con is_admin = True
     """
-    if current_user.rol != "ADMIN":
+    if not current_user.is_admin:  # Cambio clave: rol → is_admin
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo los administradores pueden acceder a este recurso"
