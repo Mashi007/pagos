@@ -4,11 +4,9 @@ Constantes y enumeraciones del sistema de préstamos y cobranza.
 """
 from enum import Enum
 
-# Importar UserRole desde permissions para evitar duplicación
-from app.core.permissions import UserRole
-
-# Alias para compatibilidad
-Roles = UserRole
+# ✅ ELIMINADO: Import de UserRole - ahora se usa sistema simplificado con is_admin
+# from app.core.permissions import UserRole
+# Roles = UserRole
 
 
 class EstadoUsuario(str, Enum):

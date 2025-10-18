@@ -1,6 +1,9 @@
 """
-Sistema de permisos y roles
+Sistema de permisos y roles - DEPRECATED
 Define los roles del sistema y sus permisos
+
+⚠️ DEPRECATED: Este archivo está obsoleto.
+✅ USAR: app.core.permissions_simple.py (sistema simplificado con is_admin)
 """
 from enum import Enum
 from typing import List
