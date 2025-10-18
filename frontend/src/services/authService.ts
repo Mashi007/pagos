@@ -1,100 +1,25 @@
 import { apiClient, ApiResponse } from './api'
 import { User, AuthTokens, LoginForm } from '@/types'
+import { 
+  safeSetItem, 
+  safeGetItem, 
+  safeRemoveItem,
+  safeSetSessionItem,
+  safeGetSessionItem,
+  safeRemoveSessionItem,
+  clearAuthStorage
+} from '@/utils/storage'
 
-// Funciones de almacenamiento seguro simplificadas
-const safeSetItem = (key: string, value: any) => {
-  try {
-    if (value === undefined) return false
-    const stringValue = typeof value === 'string' ? value : JSON.stringify(value)
-    if (stringValue === 'undefined') return false
-    localStorage.setItem(key, stringValue)
-    return true
-  } catch {
-    return false
-  }
+export interface LoginForm {
+  email: string
+  password: string
+  remember?: boolean
 }
 
-const safeGetItem = (key: string, fallback: any = null) => {
-  try {
-    const item = localStorage.getItem(key)
-    if (item === null || item === '' || item === 'undefined' || item === 'null') {
-      return fallback
-    }
-    try {
-      return JSON.parse(item)
-    } catch {
-      return item
-    }
-  } catch {
-    return fallback
-  }
-}
-
-const safeRemoveItem = (key: string) => {
-  try {
-    localStorage.removeItem(key)
-    return true
-  } catch {
-    return false
-  }
-}
-
-const safeClear = () => {
-  try {
-    localStorage.clear()
-    return true
-  } catch {
-    return false
-  }
-}
-
-const safeSetSessionItem = (key: string, value: any) => {
-  try {
-    if (value === undefined) return false
-    const stringValue = typeof value === 'string' ? value : JSON.stringify(value)
-    if (stringValue === 'undefined') return false
-    sessionStorage.setItem(key, stringValue)
-    return true
-  } catch {
-    return false
-  }
-}
-
-const safeGetSessionItem = (key: string, fallback: any = null) => {
-  try {
-    const item = sessionStorage.getItem(key)
-    if (item === null || item === '' || item === 'undefined' || item === 'null') {
-      return fallback
-    }
-    try {
-      return JSON.parse(item)
-    } catch {
-      return item
-    }
-  } catch {
-    return fallback
-  }
-}
-
-const safeRemoveSessionItem = (key: string) => {
-  try {
-    sessionStorage.removeItem(key)
-    return true
-  } catch {
-    return false
-  }
-}
-
-const safeClearSession = () => {
-  try {
-    sessionStorage.clear()
-    return true
-  } catch {
-    return false
-  }
-}
-
-export interface LoginResponse extends AuthTokens {
+export interface LoginResponse {
+  access_token: string
+  refresh_token: string
+  token_type: string
   user: User
 }
 
@@ -151,47 +76,44 @@ export class AuthService {
     try {
       await apiClient.post('/api/v1/auth/logout')
     } catch (error) {
-      // Continuar con el logout local aunque falle el servidor
-      console.error('Error en logout del servidor:', error)
+      console.error('AuthService: Error en logout:', error)
     } finally {
-      // Limpiar datos de forma segura
-      safeRemoveItem('access_token')
-      safeRemoveItem('refresh_token')
-      safeRemoveItem('user')
-      safeRemoveItem('remember_me')
-      safeRemoveSessionItem('access_token')
-      safeRemoveSessionItem('refresh_token')
-      safeRemoveSessionItem('user')
+      // Limpiar todo el almacenamiento de autenticación
+      clearAuthStorage()
     }
   }
 
-  // Renovar token - CON PERSISTENCIA SEGURA
+  // Refresh token
   async refreshToken(): Promise<AuthTokens> {
-    const rememberMe = safeGetItem('remember_me', false)
-    const refreshToken = rememberMe 
-      ? safeGetItem('refresh_token', '') 
-      : safeGetSessionItem('refresh_token', '')
+    try {
+      const refreshToken = safeGetItem('refresh_token') || safeGetSessionItem('refresh_token')
       
-    if (!refreshToken) {
-      throw new Error('No hay refresh token disponible')
-    }
-
-    const response = await apiClient.post<ApiResponse<AuthTokens>>('/api/v1/auth/refresh', {
-      refresh_token: refreshToken,
-    })
-
-    // Actualizar tokens en el almacenamiento correspondiente
-    if (response.data) {
-      if (rememberMe) {
-        safeSetItem('access_token', response.data.access_token)
-        safeSetItem('refresh_token', response.data.refresh_token)
-      } else {
-        safeSetSessionItem('access_token', response.data.access_token)
-        safeSetSessionItem('refresh_token', response.data.refresh_token)
+      if (!refreshToken) {
+        throw new Error('No hay refresh token disponible')
       }
-    }
 
-    return response.data
+      const response = await apiClient.post<AuthTokens>('/api/v1/auth/refresh', {
+        refresh_token: refreshToken
+      })
+
+      // Actualizar tokens en almacenamiento
+      const rememberMe = safeGetItem('remember_me', false)
+      if (rememberMe) {
+        safeSetItem('access_token', response.access_token)
+        safeSetItem('refresh_token', response.refresh_token)
+      } else {
+        safeSetSessionItem('access_token', response.access_token)
+        safeSetSessionItem('refresh_token', response.refresh_token)
+      }
+
+      return response.data
+    } catch (error: any) {
+      console.error('AuthService: Error refrescando token:', error)
+      
+      // Si hay error, limpiar almacenamiento
+      clearAuthStorage()
+      throw error
+    }
   }
 
   // Obtener información del usuario actual - CON PERSISTENCIA SEGURA
@@ -232,56 +154,25 @@ export class AuthService {
     await apiClient.post('/api/v1/auth/change-password', data)
   }
 
-  // MÉTODOS DE TOKEN MANAGEMENT ELIMINADOS - AHORA EN authStore.ts
-
-  // MÉTODOS DE PERMISOS SIMPLIFICADOS - RECIBEN USER COMO PARÁMETRO
-  static hasRole(user: User | null, role: string): boolean {
-    if (role === 'ADMIN') {
-      return user?.is_admin || false  // Cambio clave: rol → is_admin
-    }
-    return !user?.is_admin || false  // Cambio clave: rol → is_admin
+  // Verificar si el usuario está autenticado
+  isAuthenticated(): boolean {
+    const token = safeGetItem('access_token') || safeGetSessionItem('access_token')
+    return !!token
   }
 
-  static hasAnyRole(user: User | null, roles: string[]): boolean {
-    if (!user) return false
-    if (roles.includes('ADMIN') && user.is_admin) return true  // Cambio clave: rol → is_admin
-    if (roles.includes('USER') && !user.is_admin) return true  // Cambio clave: rol → is_admin
-    return false
+  // Obtener token de acceso
+  getAccessToken(): string | null {
+    return safeGetItem('access_token') || safeGetSessionItem('access_token')
   }
 
-  static isAdmin(user: User | null): boolean {
-    return AuthService.hasAnyRole(user, ['ADMIN'])
-  }
-
-  static canManagePayments(user: User | null): boolean {
-    return AuthService.hasAnyRole(user, ['ADMIN'])
-  }
-
-  static canViewReports(user: User | null): boolean {
-    return AuthService.hasAnyRole(user, ['ADMIN'])
-  }
-
-  static canManageConfig(user: User | null): boolean {
-    return AuthService.hasAnyRole(user, ['ADMIN'])
-  }
-
-  static canViewAllClients(user: User | null): boolean {
-    return AuthService.hasAnyRole(user, ['ADMIN'])
-  }
-
-  static getCurrentUserName(user: User | null): string {
-    if (!user) return 'Usuario'
-    return `${user.nombre} ${user.apellido}`.trim()
-  }
-
-  static getCurrentUserInitials(user: User | null): string {
-    if (!user) return 'U'
-    
-    const firstInitial = user.nombre?.charAt(0)?.toUpperCase() || ''
-    const lastInitial = user.apellido?.charAt(0)?.toUpperCase() || ''
-    return firstInitial + lastInitial
+  // Obtener usuario desde almacenamiento
+  getStoredUser(): User | null {
+    const rememberMe = safeGetItem('remember_me', false)
+    return rememberMe 
+      ? safeGetItem('user', null) 
+      : safeGetSessionItem('user', null)
   }
 }
 
-// Instancia singleton del servicio de autenticación
+// Instancia singleton
 export const authService = new AuthService()

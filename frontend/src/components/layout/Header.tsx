@@ -14,7 +14,7 @@ interface HeaderProps {
 export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
-  const { logout, user } = useSimpleAuth()
+  const { logout, user, refreshUser } = useSimpleAuth()
 
   // Variables derivadas del usuario
   const userInitials = user ? `${user.nombre?.charAt(0) || ''}${user.apellido?.charAt(0) || ''}`.toUpperCase() : 'U'
@@ -227,6 +227,21 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                       <Settings className="h-4 w-4" />
                       <span>Configuración</span>
                     </button>
+                    {user?.is_admin === false && (
+                      <button 
+                        onClick={async () => {
+                          try {
+                            await refreshUser()
+                            window.location.reload()
+                          } catch (error) {
+                            console.error('Error actualizando usuario:', error)
+                          }
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-blue-50 flex items-center space-x-2"
+                      >
+                        <span>🔄 Actualizar Rol</span>
+                      </button>
+                    )}
                   </div>
 
                   <div className="border-t border-gray-200 py-2">

@@ -3,39 +3,13 @@ import { create } from 'zustand'
 import { User, LoginForm } from '@/types'
 import { authService } from '@/services/authService'
 import toast from 'react-hot-toast'
-
-// Funciones de almacenamiento seguro simplificadas
-const safeGetItem = (key: string, fallback: any = null) => {
-  try {
-    const item = localStorage.getItem(key)
-    if (item === null || item === '' || item === 'undefined' || item === 'null') {
-      return fallback
-    }
-    try {
-      return JSON.parse(item)
-    } catch {
-      return item
-    }
-  } catch {
-    return fallback
-  }
-}
-
-const safeGetSessionItem = (key: string, fallback: any = null) => {
-  try {
-    const item = sessionStorage.getItem(key)
-    if (item === null || item === '' || item === 'undefined' || item === 'null') {
-      return fallback
-    }
-    try {
-      return JSON.parse(item)
-    } catch {
-      return item
-    }
-  } catch {
-    return fallback
-  }
-}
+import { 
+  safeGetItem, 
+  safeSetItem, 
+  safeGetSessionItem, 
+  safeSetSessionItem,
+  clearAuthStorage 
+} from '@/utils/storage'
 
 interface SimpleAuthState {
   user: User | null
@@ -45,8 +19,8 @@ interface SimpleAuthState {
   login: (credentials: LoginForm) => Promise<void>
   logout: () => void
   clearError: () => void
-  initializeAuth: () => void
-  refreshUser: () => Promise<void>  // NUEVA FUNCIÓN
+  initializeAuth: () => Promise<void>  // Cambio: ahora es async
+  refreshUser: () => Promise<void>
 }
 
 export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
@@ -56,8 +30,8 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
   isLoading: false,
   error: null,
 
-  // Inicializar autenticación desde almacenamiento seguro
-  initializeAuth: () => {
+  // Inicializar autenticación desde almacenamiento seguro CON VERIFICACIÓN AUTOMÁTICA
+  initializeAuth: async () => {
     try {
       const rememberMe = safeGetItem('remember_me', false)
       const user = rememberMe 
@@ -65,13 +39,36 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
         : safeGetSessionItem('user', null)
       
       if (user) {
-        set({
-          user,
-          isAuthenticated: true,
-          isLoading: false,
-          error: null,
-        })
-        console.log('SimpleAuth: Usuario restaurado desde almacenamiento seguro')
+        console.log('SimpleAuth: Usuario encontrado en almacenamiento, verificando con backend...')
+        
+        // CRÍTICO: Siempre verificar con el backend al inicializar
+        try {
+          const freshUser = await authService.getCurrentUser()
+          
+          if (freshUser) {
+            console.log('SimpleAuth: Usuario verificado desde backend:', freshUser)
+            set({
+              user: freshUser,
+              isAuthenticated: true,
+              isLoading: false,
+              error: null,
+            })
+            console.log('SimpleAuth: Usuario actualizado desde backend exitosamente')
+          } else {
+            throw new Error('Usuario no encontrado en backend')
+          }
+        } catch (error) {
+          console.error('SimpleAuth: Error verificando usuario con backend:', error)
+          
+          // Si hay error, usar datos cacheados pero marcar como posiblemente obsoletos
+          set({
+            user,
+            isAuthenticated: true,
+            isLoading: false,
+            error: 'Datos posiblemente obsoletos - verificar conexión',
+          })
+          console.log('SimpleAuth: Usando datos cacheados debido a error de verificación')
+        }
       }
     } catch (error) {
       console.error('SimpleAuth: Error al inicializar autenticación:', error)
@@ -188,6 +185,6 @@ export const useSimpleAuth = () => {
     logout: store.logout,
     clearError: store.clearError,
     initializeAuth: store.initializeAuth,
-    refreshUser: store.refreshUser,  // NUEVA FUNCIÓN EXPUESTA
+    refreshUser: store.refreshUser,
   }
 }

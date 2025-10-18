@@ -62,7 +62,7 @@ function App() {
   const { isAuthenticated, initializeAuth } = useSimpleAuth()
 
   useEffect(() => {
-    // Inicializar autenticación desde almacenamiento seguro
+    // Inicializar autenticación desde almacenamiento seguro CON VERIFICACIÓN AUTOMÁTICA
     initializeAuth()
   }, [initializeAuth])
 
