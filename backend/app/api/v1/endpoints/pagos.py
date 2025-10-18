@@ -28,7 +28,7 @@ from app.schemas.pago import (
     DistribucionPagoResponse
 )
 from app.api.deps import get_current_user
-from app.core.permissions import UserRole, has_permission, Permission
+from app.core.permissions_simple import Permission, get_user_permissions
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -753,9 +753,9 @@ def modificar_pago(
     """
     Modificar un pago existente (Solo Cobranzas/Admin)
     """
-    # Verificar permisos
-    user_role = UserRole(current_user.rol)
-    if not has_permission(user_role, Permission.PAGO_UPDATE):
+    # Verificar permisos usando sistema simplificado
+    user_permissions = get_user_permissions(current_user.is_admin)
+    if Permission.PAGO_UPDATE not in user_permissions:
         raise HTTPException(status_code=403, detail="Sin permisos para modificar pagos")
     
     # Buscar pago
@@ -816,7 +816,7 @@ def anular_pago(
     Anular un pago (Solo Admin)
     """
     # Verificar permisos (solo ADMIN)
-    if current_user.rol != "USER":
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores pueden anular pagos")
     
     # Buscar pago
