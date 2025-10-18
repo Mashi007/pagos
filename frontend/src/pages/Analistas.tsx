@@ -11,7 +11,8 @@ import {
   Mail,
   Phone,
   Award,
-  Loader2
+  Loader2,
+  RefreshCw
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -38,12 +39,26 @@ export function Analistas() {
     try {
       setLoading(true)
       setError(null)
+      console.log('🔄 Actualizando analistas...')
+      console.log('📡 Llamando a API: /api/v1/analistas')
+      
       const response = await analistaService.listarAnalistas({ limit: 100 })
-      setAnalistas(response.items)
+      console.log('✅ Respuesta API recibida:', response)
+      console.log('📊 Total analistas:', response.total)
+      console.log('📋 Items recibidos:', response.items?.length || 0)
+      
+      if (response.items && Array.isArray(response.items)) {
+        setAnalistas(response.items)
+        console.log('✅ Analistas cargados exitosamente:', response.items.length)
+      } else {
+        console.warn('⚠️ Respuesta sin items válidos:', response)
+        setAnalistas([])
+      }
     } catch (err) {
+      console.error('❌ Error API:', err)
       setError('Error al cargar analistas')
       toast.error('Error al cargar analistas')
-      console.error('Error:', err)
+      setAnalistas([])
     } finally {
       setLoading(false)
     }
@@ -100,10 +115,21 @@ export function Analistas() {
             Gestión de analistas y equipo de ventas
           </p>
         </div>
-        <Button onClick={() => setShowCreateForm(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Nuevo Analista
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={cargarAnalistas}
+            disabled={loading}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Actualizar
+          </Button>
+          <Button onClick={() => setShowCreateForm(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Nuevo Analista
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -114,6 +140,9 @@ export function Analistas() {
               <div>
                 <p className="text-sm text-gray-500">Total Analistas</p>
                 <p className="text-2xl font-bold">{analistas.length}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {loading ? 'Cargando...' : 'Conectando con BD...'}
+                </p>
               </div>
               <Users className="w-8 h-8 text-primary" />
             </div>
@@ -126,6 +155,9 @@ export function Analistas() {
                 <p className="text-sm text-gray-500">Activos</p>
                 <p className="text-2xl font-bold text-green-600">
                   {analistas.filter(a => a.activo).length}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {loading ? 'Cargando...' : 'Pueden operar'}
                 </p>
               </div>
               <UserCheck className="w-8 h-8 text-green-600" />
@@ -140,6 +172,9 @@ export function Analistas() {
                 <p className="text-2xl font-bold text-red-600">
                   {analistas.filter(a => !a.activo).length}
                 </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {loading ? 'Cargando...' : 'No pueden operar'}
+                </p>
               </div>
               <UserX className="w-8 h-8 text-red-600" />
             </div>
@@ -152,6 +187,9 @@ export function Analistas() {
                 <p className="text-sm text-gray-500">Con Email</p>
                 <p className="text-2xl font-bold text-purple-600">
                   {analistas.filter(a => a.email && a.email.trim() !== '').length}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {loading ? 'Cargando...' : 'Tienen email'}
                 </p>
               </div>
               <Mail className="w-8 h-8 text-purple-600" />
