@@ -52,6 +52,9 @@ export function SimpleProtectedRoute({
           <p className="text-sm text-red-600 font-semibold">
             DEBUG: requireAdmin={requireAdmin ? 'true' : 'false'}, user.is_admin={user.is_admin ? 'true' : 'false'}
           </p>
+          <p className="text-sm text-blue-600 font-semibold">
+            CACHE CLEAR: Si ves "Rol requerido: USER", recarga la página con Ctrl+F5
+          </p>
         </div>
       </div>
     )
