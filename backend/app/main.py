@@ -64,7 +64,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 
 # ============================================
-# SECURITY HEADERS MIDDLEWARE
+# SECURITY HEADERS MIDDLEWARE - TEMPORALMENTE PERMISIVO
 # ============================================
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
@@ -79,27 +79,23 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         
-        # Prevenir MIME sniffing
+        # Headers básicos de seguridad (menos restrictivos)
         response.headers["X-Content-Type-Options"] = "nosniff"
         
-        # Prevenir clickjacking
-        response.headers["X-Frame-Options"] = "DENY"
+        # Permitir iframe para desarrollo
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
         
-        # XSS Protection (legacy pero útil)
+        # XSS Protection
         response.headers["X-XSS-Protection"] = "1; mode=block"
         
-        # HSTS - Solo en producción con HTTPS
-        if settings.ENVIRONMENT == "production":
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        # CSP más permisivo para desarrollo
+        response.headers["Content-Security-Policy"] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' *;"
         
-        # Content Security Policy
-        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+        # Referrer Policy más permisivo
+        response.headers["Referrer-Policy"] = "no-referrer-when-downgrade"
         
-        # Referrer Policy
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        
-        # Permissions Policy
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        # Permissions Policy más permisivo
+        response.headers["Permissions-Policy"] = "geolocation=*, microphone=*, camera=*"
         
         return response
 
@@ -138,13 +134,13 @@ from fastapi.middleware.cors import CORSMiddleware
 logger.info(f"🌐 CORS Origins configurados: {settings.CORS_ORIGINS}")
 logger.info("✅ CORS: Middleware simple para OPTIONS + Headers directos en POST")
 
-# MIDDLEWARE CORS CENTRALIZADO - USANDO CONFIGURACIÓN
+# MIDDLEWARE CORS CENTRALIZADO - USANDO CONFIGURACIÓN PERMISIVA
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,  # ✅ Usar configuración centralizada
+    allow_origins=["*"],  # ✅ Temporalmente permisivo para testing
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # ✅ Todos los métodos
+    allow_headers=["*"],  # ✅ Todos los headers
 )
 
 # Registrar routers
