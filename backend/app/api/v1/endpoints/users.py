@@ -194,6 +194,43 @@ def create_user(
     return new_user
 
 
+@router.get("/test-simple")
+def test_users_simple(
+    db: Session = Depends(get_db)
+):
+    """
+    Test endpoint simple para verificar usuarios (sin autenticación)
+    """
+    try:
+        total_users = db.query(User).count()
+        users = db.query(User).limit(5).all()
+        
+        users_data = []
+        for user in users:
+            users_data.append({
+                "id": user.id,
+                "email": user.email,
+                "nombre": user.nombre,
+                "apellido": user.apellido,
+                "rol": user.rol,
+                "is_active": user.is_active,
+                "created_at": user.created_at.isoformat() if user.created_at else None
+            })
+        
+        return {
+            "success": True,
+            "total_users": total_users,
+            "users": users_data,
+            "message": "Test endpoint funcionando"
+        }
+    except Exception as e:
+        logger.error(f"Error en test endpoint: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Error en test endpoint"
+        }
+
 @router.get("/test")
 def test_users_endpoint(
     db: Session = Depends(get_db),

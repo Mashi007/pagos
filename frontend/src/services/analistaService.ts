@@ -46,7 +46,7 @@ export interface AnalistaListResponse {
 }
 
 class AnalistaService {
-  private baseUrl = '/api/v1/analistas'
+  private baseUrl = '/api/v1/asesores'
 
   // Listar analistas con paginación y filtros
   async listarAnalistas(params?: {
