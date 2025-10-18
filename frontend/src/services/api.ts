@@ -1,18 +1,81 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import toast from 'react-hot-toast'
 import { env } from '@/config/env'
-import { logger } from '@/utils/logger'
-import { 
-  safeGetItem, 
-  safeGetSessionItem, 
-  safeSetItem, 
-  safeSetSessionItem, 
-  safeClear, 
-  safeClearSession 
-} from '@/utils/safeStorage'
 
-// Configuración base de Axios
-const API_BASE_URL = env.API_URL
+// Funciones de almacenamiento seguro simplificadas
+const safeGetItem = (key: string, fallback: any = null) => {
+  try {
+    const item = localStorage.getItem(key)
+    if (item === null || item === '' || item === 'undefined' || item === 'null') {
+      return fallback
+    }
+    try {
+      return JSON.parse(item)
+    } catch {
+      return item
+    }
+  } catch {
+    return fallback
+  }
+}
+
+const safeGetSessionItem = (key: string, fallback: any = null) => {
+  try {
+    const item = sessionStorage.getItem(key)
+    if (item === null || item === '' || item === 'undefined' || item === 'null') {
+      return fallback
+    }
+    try {
+      return JSON.parse(item)
+    } catch {
+      return item
+    }
+  } catch {
+    return fallback
+  }
+}
+
+const safeSetItem = (key: string, value: any) => {
+  try {
+    if (value === undefined) return false
+    const stringValue = typeof value === 'string' ? value : JSON.stringify(value)
+    if (stringValue === 'undefined') return false
+    localStorage.setItem(key, stringValue)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const safeSetSessionItem = (key: string, value: any) => {
+  try {
+    if (value === undefined) return false
+    const stringValue = typeof value === 'string' ? value : JSON.stringify(value)
+    if (stringValue === 'undefined') return false
+    sessionStorage.setItem(key, stringValue)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const safeClear = () => {
+  try {
+    localStorage.clear()
+    return true
+  } catch {
+    return false
+  }
+}
+
+const safeClearSession = () => {
+  try {
+    sessionStorage.clear()
+    return true
+  } catch {
+    return false
+  }
+}
 
 class ApiClient {
   private client: AxiosInstance

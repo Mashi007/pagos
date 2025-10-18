@@ -1,15 +1,98 @@
 import { apiClient, ApiResponse } from './api'
 import { User, AuthTokens, LoginForm } from '@/types'
-import { 
-  safeSetItem, 
-  safeGetItem, 
-  safeRemoveItem, 
-  safeClear,
-  safeSetSessionItem,
-  safeGetSessionItem,
-  safeRemoveSessionItem,
-  safeClearSession
-} from '@/utils/safeStorage'
+
+// Funciones de almacenamiento seguro simplificadas
+const safeSetItem = (key: string, value: any) => {
+  try {
+    if (value === undefined) return false
+    const stringValue = typeof value === 'string' ? value : JSON.stringify(value)
+    if (stringValue === 'undefined') return false
+    localStorage.setItem(key, stringValue)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const safeGetItem = (key: string, fallback: any = null) => {
+  try {
+    const item = localStorage.getItem(key)
+    if (item === null || item === '' || item === 'undefined' || item === 'null') {
+      return fallback
+    }
+    try {
+      return JSON.parse(item)
+    } catch {
+      return item
+    }
+  } catch {
+    return fallback
+  }
+}
+
+const safeRemoveItem = (key: string) => {
+  try {
+    localStorage.removeItem(key)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const safeClear = () => {
+  try {
+    localStorage.clear()
+    return true
+  } catch {
+    return false
+  }
+}
+
+const safeSetSessionItem = (key: string, value: any) => {
+  try {
+    if (value === undefined) return false
+    const stringValue = typeof value === 'string' ? value : JSON.stringify(value)
+    if (stringValue === 'undefined') return false
+    sessionStorage.setItem(key, stringValue)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const safeGetSessionItem = (key: string, fallback: any = null) => {
+  try {
+    const item = sessionStorage.getItem(key)
+    if (item === null || item === '' || item === 'undefined' || item === 'null') {
+      return fallback
+    }
+    try {
+      return JSON.parse(item)
+    } catch {
+      return item
+    }
+  } catch {
+    return fallback
+  }
+}
+
+const safeRemoveSessionItem = (key: string) => {
+  try {
+    sessionStorage.removeItem(key)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const safeClearSession = () => {
+  try {
+    sessionStorage.clear()
+    return true
+  } catch {
+    return false
+  }
+}
 
 export interface LoginResponse extends AuthTokens {
   user: User
