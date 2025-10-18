@@ -41,6 +41,16 @@ export interface UsuarioListResponse {
   total_pages: number
 }
 
+// Tipo para la respuesta del backend (puede tener 'users' o 'items')
+interface BackendUsuarioResponse {
+  users?: Usuario[]
+  items?: Usuario[]
+  total: number
+  page: number
+  page_size: number
+  total_pages?: number
+}
+
 class UsuarioService {
   private baseUrl = '/api/v1/users'
 
@@ -54,7 +64,7 @@ class UsuarioService {
   }): Promise<UsuarioListResponse> {
     try {
       console.log('🔍 Parámetros enviados:', params)
-      const response = await apiClient.get<UsuarioListResponse>(this.baseUrl, { params })
+      const response = await apiClient.get<BackendUsuarioResponse>(this.baseUrl, { params })
       console.log('📦 Respuesta recibida:', response)
       
       // Validar que la respuesta tenga la estructura esperada
