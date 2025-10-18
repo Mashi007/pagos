@@ -5,7 +5,7 @@ export interface Usuario {
   nombre: string
   apellido: string
   email: string
-  rol: 'USER' | 'ADMIN' | 'GERENTE' | 'COBRANZAS'
+  is_admin: boolean  // Cambio clave: rol → is_admin
   cargo?: string  // Campo separado para cargo en la empresa
   is_active: boolean
   last_login?: string
@@ -18,7 +18,7 @@ export interface UsuarioCreate {
   apellido: string
   email: string
   password: string
-  rol: 'USER' | 'ADMIN' | 'GERENTE' | 'COBRANZAS'
+  is_admin: boolean  // Cambio clave: rol → is_admin
   cargo?: string
   is_active?: boolean
 }
@@ -28,7 +28,7 @@ export interface UsuarioUpdate {
   apellido?: string
   email?: string
   password?: string
-  rol?: 'USER' | 'ADMIN' | 'GERENTE' | 'COBRANZAS'
+  is_admin?: boolean  // Cambio clave: rol → is_admin
   cargo?: string
   is_active?: boolean
 }
@@ -59,7 +59,7 @@ class UsuarioService {
     limit?: number
     is_active?: boolean
     search?: string
-    rol?: string
+    is_admin?: boolean  // Cambio clave: rol → is_admin
   }): Promise<UsuarioListResponse> {
     try {
       console.log('🔍 Parámetros enviados:', params)
