@@ -29,7 +29,7 @@ def inicializar_sistema_completo(
     """
     try:
         # Verificar si ya hay administradores
-        admin_existente = db.query(User).filter(User.rol == "ADMIN").first()
+        admin_existente = db.query(User).filter(User.is_admin == True).first()
         
         if admin_existente:
             raise HTTPException(
@@ -83,9 +83,9 @@ def verificar_estado_inicializacion(
     """
     try:
         # Verificar si hay administradores
-        total_admins = db.query(User).filter(User.rol == "ADMIN").count()
+        total_admins = db.query(User).filter(User.is_admin == True).count()
         admin_activo = db.query(User).filter(
-            User.rol == "ADMIN",
+            User.is_admin == True,
             User.is_active == True
         ).first()
         

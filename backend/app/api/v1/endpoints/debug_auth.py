@@ -35,7 +35,7 @@ def test_user_query(db: Session = Depends(get_db)):
     """Probar consulta de usuario específico"""
     try:
         result = db.execute(text("""
-            SELECT id, email, nombre, apellido, rol, is_active 
+            SELECT id, email, nombre, apellido, is_admin, is_active 
             FROM usuarios 
             WHERE email = 'itmaster@rapicreditca.com'
             LIMIT 1
@@ -50,7 +50,7 @@ def test_user_query(db: Session = Depends(get_db)):
                     "email": user[1],
                     "nombre": user[2],
                     "apellido": user[3],
-                    "rol": user[4],
+                    "is_admin": user[4],
                     "is_active": user[5]
                 }
             }
@@ -64,7 +64,7 @@ def test_sqlalchemy_query(db: Session = Depends(get_db)):
     """Probar consulta con SQLAlchemy ORM"""
     try:
         # Consulta específica solo con columnas necesarias
-        user = db.query(User.id, User.email, User.nombre, User.apellido, User.rol, User.is_active).filter(
+        user = db.query(User.id, User.email, User.nombre, User.apellido, User.is_admin, User.is_active).filter(
             User.email == 'itmaster@rapicreditca.com'
         ).first()
         
@@ -76,7 +76,7 @@ def test_sqlalchemy_query(db: Session = Depends(get_db)):
                     "email": user.email,
                     "nombre": user.nombre,
                     "apellido": user.apellido,
-                    "rol": user.rol,
+                    "is_admin": user.is_admin,
                     "is_active": user.is_active
                 }
             }

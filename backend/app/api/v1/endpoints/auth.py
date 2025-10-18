@@ -162,7 +162,7 @@ def login(
             "email": user.email,
             "nombre": user.nombre,
             "apellido": user.apellido,
-            "rol": user.rol,
+            "rol": "ADMIN" if user.is_admin else "USER",
             "is_active": user.is_active
         }
     )
@@ -208,7 +208,7 @@ def get_current_user_info(
         email=current_user.email,
         nombre=current_user.nombre,
         apellido=current_user.apellido,
-        rol=current_user.rol,
+        rol="ADMIN" if current_user.is_admin else "USER",
         is_active=current_user.is_active,
         created_at=current_user.created_at,
         updated_at=current_user.updated_at,
@@ -283,7 +283,7 @@ def verify_token(
         "valid": True,
         "user_id": current_user.id,
         "email": current_user.email,
-        "rol": current_user.rol
+        "rol": "ADMIN" if current_user.is_admin else "USER"
     }
 
 
@@ -316,7 +316,7 @@ def create_test_user(db: Session = Depends(get_db)):
             hashed_password=password_hash,
             nombre="Admin",
             apellido="Sistema",
-            rol="USER",
+            is_admin=True,
             is_active=True
         )
         
@@ -330,7 +330,7 @@ def create_test_user(db: Session = Depends(get_db)):
             "credentials": {
                 "email": "admin@rapicredit.com",
                 "password": "admin123",
-                "rol": "ADMIN"
+                "is_admin": True
             },
             "user_id": new_user.id
         }

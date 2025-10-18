@@ -96,9 +96,9 @@ def verificar_rol_administracion(
             },
             
             "estadisticas_usuarios": {
-                "por_rol": roles_stats,
-                "total_usuarios": sum(stats["total"] for stats in roles_stats.values()),
-                "usuarios_activos": sum(stats["activos"] for stats in roles_stats.values())
+                "por_tipo": tipos_stats,
+                "total_usuarios": sum(stats["total"] for stats in tipos_stats.values()),
+                "usuarios_activos": sum(stats["activos"] for stats in tipos_stats.values())
             },
             
             "recomendaciones": [
@@ -366,10 +366,7 @@ def update_user(
     update_data = user_data.model_dump(exclude_unset=True)
     
     for field, value in update_data.items():
-        if field == "rol":
-            setattr(user, field, value.value if value else None)
-        else:
-            setattr(user, field, value)
+        setattr(user, field, value)
     
     user.updated_at = datetime.utcnow()
     

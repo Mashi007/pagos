@@ -30,29 +30,29 @@ def change_to_admin(
                 detail="Usuario no encontrado"
             )
         
-        # Cambiar rol a ADMIN
-        usuario.rol = "ADMIN"
+        # Cambiar a administrador
+        usuario.is_admin = True
         db.commit()
         
-        logger.info(f"✅ Rol cambiado a ADMIN para {usuario.email}")
+        logger.info(f"✅ Usuario marcado como administrador para {usuario.email}")
         
         return {
             "status": "success",
-            "message": "Rol cambiado a ADMIN exitosamente",
+            "message": "Usuario marcado como administrador exitosamente",
             "user": {
                 "id": usuario.id,
                 "email": usuario.email,
                 "nombre": usuario.nombre,
                 "apellido": usuario.apellido,
-                "rol": usuario.rol,
+                "is_admin": usuario.is_admin,
                 "is_active": usuario.is_active
             }
         }
         
     except Exception as e:
-        logger.error(f"❌ Error cambiando rol: {e}")
+        logger.error(f"❌ Error marcando como administrador: {e}")
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error cambiando rol: {str(e)}"
+            detail=f"Error marcando como administrador: {str(e)}"
         )
