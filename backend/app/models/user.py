@@ -46,9 +46,14 @@ class User(Base):
     notificaciones = relationship("Notificacion", back_populates="user")
     
     def __repr__(self):
-        return f"<User(id={self.id}, email='{self.email}', rol='{self.rol}')>"
+        return f"<User(id={self.id}, email='{self.email}', is_admin={self.is_admin})>"
     
     @property
     def full_name(self) -> str:
         """Retorna el nombre completo del usuario"""
         return f"{self.nombre} {self.apellido}"
+    
+    @property
+    def rol(self) -> str:
+        """Propiedad para compatibilidad hacia atrás"""
+        return "ADMIN" if self.is_admin else "USER"
