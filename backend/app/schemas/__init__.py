@@ -36,9 +36,7 @@ from app.schemas.pago import (
 # ============================================
 # SCHEMAS DE USUARIO Y AUTENTICACIÓN
 # ============================================
-from app.schemas.user import (
-    UserRole,
-)
+# UserRole eliminado - ahora se usa is_admin boolean
 # ============================================
 # SCHEMAS DE CONCILIACIÓN BANCARIA
 # ============================================
@@ -96,7 +94,7 @@ __all__ = [
     "PagoResponse",
     
     # ========== USUARIO ==========
-    "UserRole",
+    # UserRole eliminado - ahora se usa is_admin boolean
     
     # ========== CONCILIACIÓN ==========
     "EstadoConciliacion",

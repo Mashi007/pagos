@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.core.security import decode_token
-from app.core.permissions import UserRole, Permission, has_permission
+from app.core.permissions_simple import Permission, get_user_permissions
 from app.models.user import User
 from app.schemas.auth import TokenPayload
 
@@ -99,24 +99,24 @@ def get_current_active_user(
     return current_user
 
 
-def require_role(*allowed_roles: UserRole):
+def require_role(require_admin: bool = True):
     """
-    Dependency para requerir uno o más roles específicos
+    Dependency para requerir rol de administrador
     
     Args:
-        allowed_roles: Roles permitidos
+        require_admin: Si True, requiere admin. Si False, cualquier usuario activo.
         
     Returns:
         Función de dependencia
         
     Usage:
-        @app.get("/admin", dependencies=[Depends(require_role(UserRole.USER))])
+        @app.get("/admin", dependencies=[Depends(require_role(True))])
     """
     def role_checker(current_user: User = Depends(get_current_user)) -> User:
-        if current_user.rol not in allowed_roles:
+        if require_admin and not current_user.is_admin:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Rol requerido: {', '.join(r.value for r in allowed_roles)}"
+                detail="Se requiere rol de administrador"
             )
         return current_user
     return role_checker
@@ -136,11 +136,12 @@ def require_permission(*required_permissions: Permission):
         @app.post("/clientes", dependencies=[Depends(require_permission(Permission.CLIENTE_CREATE))])
     """
     def permission_checker(current_user: User = Depends(get_current_user)) -> User:
-        user_role = UserRole(current_user.rol)
+        # Obtener permisos del usuario basado en is_admin
+        user_permissions = get_user_permissions(current_user.is_admin)
         
         # Verificar cada permiso requerido
         for perm in required_permissions:
-            if not has_permission(user_role, perm):
+            if perm not in user_permissions:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Permiso requerido: {perm.value}"
