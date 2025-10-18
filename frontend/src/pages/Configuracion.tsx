@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
   Settings,
@@ -36,6 +36,7 @@ import { ConcesionariosConfig } from '@/components/configuracion/ConcesionariosC
 import { AnalistasConfig } from '@/components/configuracion/AnalistasConfig'
 import { configuracionGeneralService, ConfiguracionGeneral } from '@/services/configuracionGeneralService'
 import { toast } from 'sonner'
+import UsuariosConfig from '@/components/configuracion/UsuariosConfig'
 
 // Mock data para configuración
 const mockConfiguracion = {
