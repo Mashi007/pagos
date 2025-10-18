@@ -26,9 +26,11 @@ class UserRole(str, Enum):
 class UserBase(BaseModel):
     """Schema base de usuario (campos comunes)."""
     email: EmailStr
-    full_name: str = Field(..., min_length=1, max_length=100)
+    nombre: str = Field(..., min_length=1, max_length=100)
+    apellido: str = Field(..., min_length=1, max_length=100)
+    cargo: Optional[str] = Field(None, max_length=100)
     is_active: bool = True
-    role: UserRole = UserRole.USER
+    rol: UserRole = UserRole.USER
 
 
 class UserCreate(UserBase):
@@ -39,9 +41,11 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     """Schema para actualizar usuario (todos los campos opcionales)."""
     email: Optional[EmailStr] = None
-    full_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    nombre: Optional[str] = Field(None, min_length=1, max_length=100)
+    apellido: Optional[str] = Field(None, min_length=1, max_length=100)
+    cargo: Optional[str] = Field(None, max_length=100)
     is_active: Optional[bool] = None
-    role: Optional[UserRole] = None
+    rol: Optional[UserRole] = None
     password: Optional[str] = Field(None, min_length=8, max_length=100)
 
 
@@ -50,6 +54,11 @@ class UserResponse(UserBase):
     id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
+    
+    @property
+    def full_name(self) -> str:
+        """Retorna el nombre completo del usuario"""
+        return f"{self.nombre} {self.apellido}"
     
     model_config = ConfigDict(from_attributes=True)
 

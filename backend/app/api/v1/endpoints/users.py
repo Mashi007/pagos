@@ -136,7 +136,8 @@ def create_user(
     - **email**: Email único del usuario
     - **nombre**: Nombre del usuario
     - **apellido**: Apellido del usuario
-    - **rol**: Rol del usuario (ADMIN, COBRANZAS)
+    - **cargo**: Cargo del usuario en la empresa (opcional)
+    - **rol**: Rol del usuario (ADMIN, GERENTE, COBRANZAS, USER)
     - **password**: Contraseña (mínimo 8 caracteres)
     - **is_active**: Si el usuario está activo
     """
@@ -161,6 +162,7 @@ def create_user(
         email=user_data.email,
         nombre=user_data.nombre,
         apellido=user_data.apellido,
+        cargo=user_data.cargo,
         rol=user_data.rol.value,
         hashed_password=get_password_hash(user_data.password),
         is_active=user_data.is_active,
