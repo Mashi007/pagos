@@ -55,6 +55,30 @@ def test_concesionarios_simple(
             "message": "Error en test endpoint concesionarios"
         }
 
+@router.get("/test-auth")
+def test_concesionarios_auth(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Test endpoint con autenticación para verificar concesionarios
+    """
+    try:
+        total_concesionarios = db.query(Concesionario).count()
+        return {
+            "success": True,
+            "total_concesionarios": total_concesionarios,
+            "user": current_user.email,
+            "message": "Test endpoint concesionarios con auth funcionando"
+        }
+    except Exception as e:
+        logger.error(f"Error en test endpoint concesionarios auth: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Error en test endpoint concesionarios auth"
+        }
+
 @router.get("/", response_model=ConcesionarioListResponse)
 def listar_concesionarios(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
