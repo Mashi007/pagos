@@ -522,7 +522,7 @@ def solicitar_modificacion_amortizacion(
 
 
 # ============================================
-# SOLICITUDES DE COMERCIAL
+# SOLICITUDES DE USER
 # ============================================
 
 @router.post("/comercial/editar-cliente")
@@ -534,11 +534,11 @@ def solicitar_edicion_cliente_comercial(
     current_user: User = Depends(get_current_user)
 ):
     """
-    ⚠️ COMERCIAL: Solicitar autorización para editar cliente
+    ⚠️ USER: Solicitar autorización para editar cliente
     """
     # Verificar permisos
-    if current_user.rol != "COMERCIAL":
-        raise HTTPException(status_code=403, detail="Solo rol COMERCIAL puede usar este endpoint")
+    if current_user.rol != "USER":
+        raise HTTPException(status_code=403, detail="Solo rol USER puede usar este endpoint")
     
     # Verificar que el cliente existe
     cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
@@ -548,7 +548,7 @@ def solicitar_edicion_cliente_comercial(
     # Crear solicitud de aprobación
     solicitud = Aprobacion(
         solicitante_id=current_user.id,
-        tipo_solicitud="EDITAR_CLIENTE_COMERCIAL",
+        tipo_solicitud="EDITAR_CLIENTE_USER",
         entidad="cliente",
         entidad_id=cliente_id,
         justificacion=justificacion,
@@ -575,7 +575,7 @@ def solicitar_edicion_cliente_comercial(
 
 
 # ============================================
-# SOLICITUDES DE ASESOR
+# SOLICITUDES DE USER
 # ============================================
 
 @router.post("/analista/editar-cliente-propio")
@@ -587,11 +587,11 @@ def solicitar_edicion_cliente_propio(
     current_user: User = Depends(get_current_user)
 ):
     """
-    ⚠️ ASESOR: Solicitar autorización para editar SUS clientes asignados
+    ⚠️ USER: Solicitar autorización para editar SUS clientes asignados
     """
     # Verificar permisos
-    if current_user.rol != "ASESOR":
-        raise HTTPException(status_code=403, detail="Solo rol ASESOR puede usar este endpoint")
+    if current_user.rol != "USER":
+        raise HTTPException(status_code=403, detail="Solo rol USER puede usar este endpoint")
     
     # Verificar que el cliente existe y está asignado al analista
     cliente = db.query(Cliente).filter(
@@ -834,7 +834,7 @@ def _ejecutar_accion_aprobada(solicitud: Aprobacion, db: Session) -> Dict[str, A
                 db.commit()
                 return {"accion": "Pago anulado", "pago_id": pago.id}
         
-        elif solicitud.tipo_solicitud == "EDITAR_CLIENTE_COMERCIAL":
+        elif solicitud.tipo_solicitud == "EDITAR_CLIENTE_USER":
             # Editar cliente (comercial)
             cliente = db.query(Cliente).filter(Cliente.id == solicitud.entidad_id).first()
             if cliente:
@@ -1100,7 +1100,7 @@ def obtener_matriz_permisos_actualizada(
         },
         "usuario_actual": {
             "rol": current_user.rol,
-            "puede_aprobar": current_user.rol in ["ADMINISTRADOR_GENERAL", "GERENTE", "DIRECTOR"],
+            "puede_aprobar": current_user.rol in ["ADMIN", "GERENTE", "GERENTE"],
             "requiere_aprobacion_para": _get_actions_requiring_approval(current_user.rol)
         }
     }
@@ -1116,15 +1116,15 @@ def _get_actions_requiring_approval(user_role: str) -> list:
             "Anular/Eliminar pagos", 
             "Modificar tabla de amortización"
         ],
-        "COMERCIAL": [
+        "USER": [
             "Editar clientes"
         ],
-        "ASESOR": [
+        "USER": [
             "Editar sus clientes asignados"
         ],
-        "ADMINISTRADOR_GENERAL": [],
+        "ADMIN": [],
         "GERENTE": [],
-        "DIRECTOR": []
+        "GERENTE": []
     }
     
     return actions_by_role.get(user_role, [])
@@ -1140,7 +1140,7 @@ async def _notificar_nueva_solicitud_admin(solicitud: Aprobacion, db: Session):
     """
     try:
         # Obtener todos los administradores
-        admins = db.query(User).filter(User.rol.in_(["ADMINISTRADOR_GENERAL", "GERENTE", "DIRECTOR"])).all()
+        admins = db.query(User).filter(User.rol.in_(["ADMIN", "GERENTE", "GERENTE"])).all()
         
         for admin in admins:
             # Crear notificación in-app

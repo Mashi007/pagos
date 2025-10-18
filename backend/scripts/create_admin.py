@@ -311,7 +311,7 @@ def verificar_sistema():
         
         # Verificar usuarios por rol
         roles_count = {}
-        for rol in ["ADMIN", "GERENTE", "DIRECTOR", "COBRANZAS", "COMERCIAL", "ASESOR", "CONTADOR", "INVITADO"]:
+        for rol in ["ADMIN", "GERENTE", "GERENTE", "COBRANZAS", "USER", "USER", "USER", "USER"]:
             count = db.query(User).filter(User.rol == rol).count()
             roles_count[rol] = count
         

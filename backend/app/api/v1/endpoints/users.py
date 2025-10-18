@@ -38,15 +38,15 @@ def verificar_rol_administracion(
     """
     try:
         # Buscar todos los administradores
-        admins = db.query(User).filter(User.rol == "ADMINISTRADOR_GENERAL").all()
+        admins = db.query(User).filter(User.rol == "ADMIN").all()
         admins_activos = db.query(User).filter(
-            User.rol == "ADMINISTRADOR_GENERAL",
+            User.rol == "ADMIN",
             User.is_active == True
         ).all()
         
         # Estadísticas de usuarios por rol
         roles_stats = {}
-        for rol in ["ADMINISTRADOR_GENERAL", "COBRANZAS"]:
+        for rol in ["ADMIN", "COBRANZAS"]:
             count = db.query(User).filter(User.rol == rol).count()
             activos = db.query(User).filter(User.rol == rol, User.is_active == True).count()
             roles_stats[rol] = {"total": count, "activos": activos}
@@ -136,7 +136,7 @@ def create_user(
     - **email**: Email único del usuario
     - **nombre**: Nombre del usuario
     - **apellido**: Apellido del usuario
-    - **rol**: Rol del usuario (ADMINISTRADOR_GENERAL, COBRANZAS)
+    - **rol**: Rol del usuario (ADMIN, COBRANZAS)
     - **password**: Contraseña (mínimo 8 caracteres)
     - **is_active**: Si el usuario está activo
     """

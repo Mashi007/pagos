@@ -330,7 +330,7 @@ def create_test_user(db: Session = Depends(get_db)):
             "credentials": {
                 "email": "admin@rapicredit.com",
                 "password": "admin123",
-                "rol": "ADMINISTRADOR_GENERAL"
+                "rol": "ADMIN"
             },
             "user_id": new_user.id
         }

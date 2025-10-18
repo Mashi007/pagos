@@ -26,11 +26,11 @@ def upgrade():
     """
     
     # Paso 1: Actualizar todos los usuarios al rol USER
-    # Esto incluye: ADMINISTRADOR_GENERAL, GERENTE, COBRANZAS, etc.
+    # Esto incluye: ADMIN, GERENTE, COBRANZAS, etc.
     op.execute("""
         UPDATE usuarios 
         SET rol = 'USER' 
-        WHERE rol IN ('ADMINISTRADOR_GENERAL', 'GERENTE', 'COBRANZAS', 'ADMIN')
+        WHERE rol IN ('ADMIN', 'GERENTE', 'COBRANZAS', 'ADMIN')
     """)
     
     # Paso 2: Recrear el enum con solo USER
@@ -108,7 +108,7 @@ def downgrade():
     op.execute("""
         CREATE TYPE userrole AS ENUM (
             'USER', 
-            'ADMINISTRADOR_GENERAL', 
+            'ADMIN', 
             'GERENTE', 
             'COBRANZAS'
         )

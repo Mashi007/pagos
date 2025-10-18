@@ -119,7 +119,7 @@ def create_admin_user():
         db.commit()
         db.refresh(admin)
         
-        logger.info("✅ Usuario ADMINISTRADOR_GENERAL creado exitosamente")
+        logger.info("✅ Usuario ADMIN creado exitosamente")
         logger.info(f"📧 Email: {admin.email}")
         logger.info("🔒 Password: (ver settings.ADMIN_PASSWORD)")
         

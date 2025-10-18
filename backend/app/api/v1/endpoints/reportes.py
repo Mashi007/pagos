@@ -891,7 +891,7 @@ async def reporte_asesor_pdf(
         story = []
         
         # Título
-        title = Paragraph(f"<b>REPORTE DE ASESOR</b><br/>{asesor.full_name}", styles['Title'])
+        title = Paragraph(f"<b>REPORTE DE USER</b><br/>{asesor.full_name}", styles['Title'])
         story.append(title)
         story.append(Spacer(1, 30))
         

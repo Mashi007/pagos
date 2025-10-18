@@ -240,7 +240,7 @@ class ScoringCrediticio:
             
             # Bonificación por ocupación
             ocupaciones_estables = [
-                "MEDICO", "INGENIERO", "ABOGADO", "CONTADOR", 
+                "MEDICO", "INGENIERO", "ABOGADO", "USER", 
                 "MAESTRO", "ENFERMERA", "FUNCIONARIO"
             ]
             if any(ocu in ocupacion for ocu in ocupaciones_estables):
@@ -1315,11 +1315,11 @@ class DetectorPatrones:
                     "accion_recomendada": "CONTACTAR_PROACTIVAMENTE"
                 })
             
-            # 2. CONCENTRACIÓN DE MORA POR ASESOR
+            # 2. CONCENTRACIÓN DE MORA POR USER
             concentracion_mora = DetectorPatrones._detectar_concentracion_mora_analista(db)
             if concentracion_mora:
                 anomalias.append({
-                    "tipo": "CONCENTRACION_MORA_ASESOR",
+                    "tipo": "CONCENTRACION_MORA_USER",
                     "descripcion": "Asesores con alta concentración de mora",
                     "datos": concentracion_mora,
                     "accion_recomendada": "REVISAR_PROCESO_APROBACION"

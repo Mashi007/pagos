@@ -119,7 +119,7 @@ def dashboard_administrador(
                     "color": "danger" if dias_hasta == 0 else ("warning" if dias_hasta <= 2 else "info")
                 })
     
-    # TOP 5 ASESORES DEL MES
+    # TOP 5 USERES DEL MES
     inicio_mes = hoy.replace(day=1)
     top_analistaes_query = db.query(
         User.id,
@@ -373,7 +373,7 @@ def dashboard_comercial(
     current_user: User = Depends(get_current_user)
 ):
     """
-    👔 DASHBOARD COMERCIAL - SOLO SUS CLIENTES
+    👔 DASHBOARD USER - SOLO SUS CLIENTES
     ⚠️ Acceso: SOLO SUS CLIENTES
     ✅ Vista Dashboard:
        • KPIs de sus clientes únicamente
@@ -438,7 +438,7 @@ def dashboard_comercial(
         func.count(Cliente.id).desc()
     ).all()
     
-    # VENTAS POR ASESOR
+    # VENTAS POR USER
     ventas_por_analista_query = db.query(
         Analista.id,
         Analista.nombre,
@@ -470,7 +470,7 @@ def dashboard_comercial(
     ).order_by(Cliente.fecha_registro.desc()).limit(10).all()
     
     return {
-        "tipo_dashboard": "COMERCIAL",
+        "tipo_dashboard": "USER",
         "usuario": current_user.full_name,
         "fecha_actualizacion": datetime.now(),
         
@@ -547,7 +547,7 @@ def dashboard_analista(
     current_user: User = Depends(get_current_user)
 ):
     """
-    👤 DASHBOARD ASESOR - SOLO SUS CLIENTES
+    👤 DASHBOARD USER - SOLO SUS CLIENTES
     ⚠️ Acceso: SOLO SUS CLIENTES
     ✅ Vista Dashboard:
        • KPIs de sus clientes únicamente
@@ -618,7 +618,7 @@ def dashboard_analista(
             break
     
     return {
-        "tipo_dashboard": "ASESOR",
+        "tipo_dashboard": "USER",
         "analista": analista.full_name,
         "fecha_actualizacion": datetime.now(),
         
@@ -674,7 +674,7 @@ def obtener_matriz_acceso_roles(
             "dashboard_asignado": f"/api/v1/dashboard/{current_user.rol.lower()}"
         },
         "matriz_acceso": {
-            "ADMINISTRADOR_GENERAL": {
+            "ADMIN": {
                 "emoji": "👑",
                 "titulo": "ADMINISTRADOR",
                 "acceso": "✅ TODO el sistema",
@@ -704,9 +704,9 @@ def obtener_matriz_acceso_roles(
                 "endpoint": "/api/v1/dashboard/cobranzas",
                 "restricciones": ["NO puede gestionar usuarios"]
             },
-            "COMERCIAL": {
+            "USER": {
                 "emoji": "👔",
-                "titulo": "COMERCIAL",
+                "titulo": "USER",
                 "acceso": "⚠️ SOLO SUS CLIENTES",
                 "vista_dashboard": [
                     "• KPIs de sus clientes únicamente",
@@ -718,9 +718,9 @@ def obtener_matriz_acceso_roles(
                 "endpoint": "/api/v1/dashboard/comercial",
                 "filtro_aplicado": "TODOS LOS CLIENTES (roles sin analista individual)"
             },
-            "ASESOR": {
+            "USER": {
                 "emoji": "👤", 
-                "titulo": "ASESOR",
+                "titulo": "USER",
                 "acceso": "⚠️ SOLO SUS CLIENTES",
                 "vista_dashboard": [
                     "• KPIs de sus clientes únicamente",
@@ -736,7 +736,7 @@ def obtener_matriz_acceso_roles(
         "implementacion_tecnica": {
             "filtros_por_rol": {
                 "ADMIN_COBRANZAS": "Sin filtros - acceso completo",
-                "COMERCIAL_ASESOR": "Dashboard general - sin filtro por analista individual"
+                "USER_USER": "Dashboard general - sin filtro por analista individual"
             },
             "endpoints_disponibles": {
                 "admin": "/api/v1/dashboard/admin",
@@ -761,7 +761,7 @@ def dashboard_por_rol(
     🎨 Dashboard adaptativo según rol del usuario actual
     IMPLEMENTA MATRIZ DE ACCESO POR ROL:
     - ADMIN/COBRANZAS: Acceso completo a todos los datos
-    - COMERCIAL/ASESOR: Solo sus clientes asignados
+    - USER/USER: Solo sus clientes asignados
     """
     user_role = current_user.rol
     
@@ -778,8 +778,8 @@ def dashboard_por_rol(
         dashboard_data["info_acceso"] = {
             "rol": user_role,
             "descripcion": info_acceso.get(user_role, "Acceso básico"),
-            "filtros_aplicados": "Solo sus clientes" if user_role in ["COMERCIAL", "ASESOR"] else "Sin filtros",
-            "puede_ver_otros_analistaes": user_role in ["ADMINISTRADOR_GENERAL", "COBRANZAS"]
+            "filtros_aplicados": "Solo sus clientes" if user_role in ["USER", "USER"] else "Sin filtros",
+            "puede_ver_otros_analistaes": user_role in ["ADMIN", "COBRANZAS"]
         }
     
     return dashboard_data
@@ -986,13 +986,13 @@ def obtener_alertas_tiempo_real(
 def _get_dashboards_disponibles(rol: str) -> List[str]:
     """Obtener dashboards disponibles según rol"""
     dashboards_por_rol = {
-        "ADMINISTRADOR_GENERAL": ["admin", "cobranzas", "comercial", "analista"],
+        "ADMIN": ["admin", "cobranzas", "comercial", "analista"],
         "GERENTE": ["admin", "cobranzas", "comercial", "analista"],
-        "DIRECTOR": ["admin", "cobranzas", "comercial"],
+        "GERENTE": ["admin", "cobranzas", "comercial"],
         "COBRANZAS": ["cobranzas"],
-        "COMERCIAL": ["comercial", "analista"],
-        "ASESOR": ["analista"],
-        "CONTADOR": ["admin"]
+        "USER": ["comercial", "analista"],
+        "USER": ["analista"],
+        "USER": ["admin"]
     }
     
     return dashboards_por_rol.get(rol, ["basico"])

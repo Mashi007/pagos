@@ -199,8 +199,8 @@ async def _analizar_archivo_clientes(
             'MODALIDAD': 'modalidad_pago',
             'FECHA ENTREGA': 'fecha_entrega',
             'ENTREGA': 'fecha_entrega',
-            'ASESOR': 'asesor',
-            'ASESOR ASIGNADO': 'asesor'
+            'USER': 'asesor',
+            'USER ASIGNADO': 'asesor'
         }
         
         # Renombrar columnas
@@ -1317,7 +1317,7 @@ async def descargar_template_excel(
                 'NUMERO AMORTIZACIONES',
                 'MODALIDAD PAGO',
                 'FECHA ENTREGA',
-                'ASESOR'
+                'USER'
             ])
             
             # Agregar fila de ejemplo
