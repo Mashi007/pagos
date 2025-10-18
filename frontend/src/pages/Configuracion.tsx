@@ -1097,85 +1097,9 @@ export function Configuracion() {
       <h1 className="text-3xl font-bold text-gray-900">Configuración del Sistema</h1>
       <p className="text-gray-600">Gestiona la configuración general del sistema RAPICREDIT.</p>
 
-      <div className="grid gap-6 lg:grid-cols-4">
-        {/* Sidebar de Secciones */}
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle className="text-lg">Secciones</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {secciones.map((seccion) => {
-                const IconComponent = seccion.icono
-                
-                if (seccion.submenu) {
-                  return (
-                    <div key={seccion.id}>
-                      <button
-                        onClick={() => setSubmenuAbierto(!submenuAbierto)}
-                        className={`w-full flex items-center justify-between space-x-3 p-3 rounded-lg text-left transition-colors ${
-                          seccionActiva === seccion.id || seccion.items?.some(item => seccionActiva === item.id)
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'hover:bg-gray-100'
-                        }`}
-                      >
-                        <div className="flex items-center space-x-3">
-                          <IconComponent className="h-5 w-5" />
-                          <span className="font-medium">{seccion.nombre}</span>
-                        </div>
-                        {submenuAbierto ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                      </button>
-                      
-                      {submenuAbierto && seccion.items && (
-                        <div className="ml-8 mt-1 space-y-1">
-                          {seccion.items.map((item) => {
-                            const ItemIconComponent = item.icono
-                            return (
-                              <button
-                                key={item.id}
-                                onClick={() => setSeccionActiva(item.id)}
-                                className={`w-full flex items-center space-x-3 p-2 rounded-lg text-left transition-colors ${
-                                  seccionActiva === item.id
-                                    ? 'bg-blue-100 text-blue-700'
-                                    : 'hover:bg-gray-100'
-                                }`}
-                              >
-                                <ItemIconComponent className="h-4 w-4" />
-                                <span className="text-sm font-medium">{item.nombre}</span>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )
-                }
-                
-                return (
-                  <button
-                    key={seccion.id}
-                    onClick={() => setSeccionActiva(seccion.id)}
-                    className={`w-full flex items-center space-x-3 p-3 rounded-lg text-left transition-colors ${
-                      seccionActiva === seccion.id
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'hover:bg-gray-100'
-                    }`}
-                  >
-                    <IconComponent className="h-5 w-5" />
-                    <span className="font-medium">{seccion.nombre}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
+      <div className="grid gap-6">
         {/* Contenido de la Sección */}
-        <Card className="lg:col-span-3">
+        <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
