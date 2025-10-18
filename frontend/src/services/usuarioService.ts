@@ -1,17 +1,8 @@
 import { apiClient, ApiResponse } from './api'
+import { User } from '@/types'  // IMPORTAR desde types centralizado
 
-export interface Usuario {
-  id: number
-  nombre: string
-  apellido: string
-  email: string
-  is_admin: boolean  // Cambio clave: rol → is_admin
-  cargo?: string  // Campo separado para cargo en la empresa
-  is_active: boolean
-  last_login?: string
-  created_at: string
-  updated_at?: string
-}
+// Usar alias para evitar conflicto de nombres
+export type Usuario = User
 
 export interface UsuarioCreate {
   nombre: string

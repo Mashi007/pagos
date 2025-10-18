@@ -1,19 +1,6 @@
 // frontend/src/services/userService.ts
 import { apiClient as api } from './api'
-
-export interface User {
-  id: number
-  email: string
-  nombre: string
-  apellido: string
-  cargo?: string
-  is_admin: boolean  // Cambio clave: rol → is_admin
-  is_active: boolean
-  created_at: string
-  updated_at?: string
-  last_login?: string
-  full_name?: string
-}
+import { User } from '@/types'  // IMPORTAR desde types centralizado
 
 export interface UserCreate {
   email: string

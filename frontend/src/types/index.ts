@@ -1,14 +1,16 @@
 // Tipos principales del sistema - SIMPLIFICADO
 
 export interface User {
-  id: string;
+  id: number;  // CORREGIDO: Cambiar de string a number para consistencia
   email: string;
   nombre: string;
   apellido: string;
+  cargo?: string;  // AGREGADO: Campo cargo
   is_admin: boolean; // Cambio clave: rol → is_admin
   is_active: boolean; // Cambio clave: activo → is_active
   created_at: string;
-  updated_at: string;
+  updated_at?: string;  // AGREGADO: Campo opcional
+  last_login?: string;  // AGREGADO: Campo opcional
 }
 
 export interface Cliente {
