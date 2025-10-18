@@ -46,6 +46,7 @@ interface SimpleAuthState {
   logout: () => void
   clearError: () => void
   initializeAuth: () => void
+  refreshUser: () => Promise<void>  // NUEVA FUNCIÓN
 }
 
 export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
@@ -137,6 +138,29 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
   clearError: () => {
     set({ error: null })
   },
+
+  // REFRESCAR USUARIO DESDE BACKEND - SOLUCIÓN DEFINITIVA AL CACHE
+  refreshUser: async () => {
+    try {
+      console.log('SimpleAuth: Refrescando usuario desde backend...')
+      
+      const freshUser = await authService.getCurrentUser()
+      
+      console.log('SimpleAuth: Usuario refrescado:', freshUser)
+      
+      set({
+        user: freshUser,
+        isAuthenticated: true,
+        isLoading: false,
+        error: null,
+      })
+      
+      console.log('SimpleAuth: Usuario actualizado exitosamente')
+    } catch (error: any) {
+      console.error('SimpleAuth: Error al refrescar usuario:', error)
+      set({ error: error.response?.data?.message || 'Error al actualizar usuario' })
+    }
+  },
 }))
 
 // Hook simplificado
@@ -151,5 +175,6 @@ export const useSimpleAuth = () => {
     logout: store.logout,
     clearError: store.clearError,
     initializeAuth: store.initializeAuth,
+    refreshUser: store.refreshUser,  // NUEVA FUNCIÓN EXPUESTA
   }
 }

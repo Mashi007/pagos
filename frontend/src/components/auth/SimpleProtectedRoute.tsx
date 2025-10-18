@@ -15,7 +15,7 @@ export function SimpleProtectedRoute({
   requireAdmin = false,  // Cambio clave: requiredRoles → requireAdmin
   fallbackPath = '/login' 
 }: SimpleProtectedRouteProps) {
-  const { isAuthenticated, user, isLoading } = useSimpleAuth()
+  const { isAuthenticated, user, isLoading, refreshUser } = useSimpleAuth()
   const location = useLocation()
 
   // Mostrar loading mientras se verifica la autenticación
@@ -52,9 +52,17 @@ export function SimpleProtectedRoute({
           <p className="text-sm text-red-600 font-semibold">
             DEBUG: requireAdmin={requireAdmin ? 'true' : 'false'}, user.is_admin={user.is_admin ? 'true' : 'false'}
           </p>
-          <p className="text-sm text-blue-600 font-semibold">
-            CACHE CLEAR: Si ves "Rol requerido: USER", recarga la página con Ctrl+F5
-          </p>
+          <div className="mt-4 space-y-2">
+            <button
+              onClick={refreshUser}
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+            >
+              🔄 Actualizar Permisos desde Servidor
+            </button>
+            <p className="text-sm text-blue-600 font-semibold">
+              Si eres administrador, haz clic en el botón para actualizar tus permisos
+            </p>
+          </div>
         </div>
       </div>
     )
