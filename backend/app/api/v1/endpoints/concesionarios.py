@@ -18,6 +18,43 @@ from app.api.deps import get_current_user
 
 router = APIRouter()
 
+@router.get("/test-simple")
+def test_concesionarios_simple(
+    db: Session = Depends(get_db)
+):
+    """
+    Test endpoint simple para verificar concesionarios (sin autenticación)
+    """
+    try:
+        total_concesionarios = db.query(Concesionario).count()
+        concesionarios = db.query(Concesionario).limit(5).all()
+        
+        concesionarios_data = []
+        for concesionario in concesionarios:
+            concesionarios_data.append({
+                "id": concesionario.id,
+                "nombre": concesionario.nombre,
+                "direccion": concesionario.direccion,
+                "telefono": concesionario.telefono,
+                "email": concesionario.email,
+                "activo": concesionario.activo,
+                "created_at": concesionario.created_at.isoformat() if concesionario.created_at else None
+            })
+        
+        return {
+            "success": True,
+            "total_concesionarios": total_concesionarios,
+            "concesionarios": concesionarios_data,
+            "message": "Test endpoint concesionarios funcionando"
+        }
+    except Exception as e:
+        logger.error(f"Error en test endpoint concesionarios: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Error en test endpoint concesionarios"
+        }
+
 @router.get("/", response_model=ConcesionarioListResponse)
 def listar_concesionarios(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),

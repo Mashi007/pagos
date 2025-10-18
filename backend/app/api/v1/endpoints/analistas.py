@@ -18,6 +18,43 @@ from app.api.deps import get_current_user
 
 router = APIRouter()
 
+@router.get("/test-simple")
+def test_analistas_simple(
+    db: Session = Depends(get_db)
+):
+    """
+    Test endpoint simple para verificar analistas (sin autenticación)
+    """
+    try:
+        total_analistas = db.query(Analista).count()
+        analistas = db.query(Analista).limit(5).all()
+        
+        analistas_data = []
+        for analista in analistas:
+            analistas_data.append({
+                "id": analista.id,
+                "nombre": analista.nombre,
+                "apellido": analista.apellido,
+                "email": analista.email,
+                "telefono": analista.telefono,
+                "activo": analista.activo,
+                "created_at": analista.created_at.isoformat() if analista.created_at else None
+            })
+        
+        return {
+            "success": True,
+            "total_analistas": total_analistas,
+            "analistas": analistas_data,
+            "message": "Test endpoint analistas funcionando"
+        }
+    except Exception as e:
+        logger.error(f"Error en test endpoint analistas: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Error en test endpoint analistas"
+        }
+
 @router.get("/", response_model=AnalistaListResponse)
 def listar_asesores(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
