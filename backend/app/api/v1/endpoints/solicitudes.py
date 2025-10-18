@@ -18,7 +18,7 @@ from app.models.user import User
 from app.models.cliente import Cliente
 from app.models.pago import Pago
 from app.api.deps import get_current_user
-from app.core.permissions import UserRole, has_permission, Permission
+from app.core.permissions_simple import Permission, get_user_permissions
 
 router = APIRouter()
 
@@ -190,7 +190,7 @@ async def solicitar_modificacion_pago_completo(
     5. ✅ Bloquea temporalmente el registro
     """
     # Verificar permisos - Todos los usuarios pueden usar este endpoint
-    if current_user.rol != "USER":
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Usuario no autorizado")
     
     # Verificar que el pago existe
@@ -299,7 +299,7 @@ async def solicitar_anulacion_pago_completo(
     ⚠️ COBRANZAS: Solicitar anulación de pago con formulario completo
     """
     # Verificar permisos - Todos los usuarios pueden usar este endpoint
-    if current_user.rol != "USER":
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Usuario no autorizado")
     
     # Verificar que el pago existe y no está anulado
@@ -387,7 +387,7 @@ def solicitar_modificacion_pago(
     ⚠️ COBRANZAS: Solicitar modificación de monto de pago
     """
     # Verificar permisos - Todos los usuarios pueden usar este endpoint
-    if current_user.rol != "USER":
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Usuario no autorizado")
     
     # Verificar que el pago existe
@@ -435,7 +435,7 @@ def solicitar_anulacion_pago(
     ⚠️ COBRANZAS: Solicitar anulación de pago
     """
     # Verificar permisos - Todos los usuarios pueden usar este endpoint
-    if current_user.rol != "USER":
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Usuario no autorizado")
     
     # Verificar que el pago existe
@@ -484,7 +484,7 @@ def solicitar_modificacion_amortizacion(
     ⚠️ COBRANZAS: Solicitar modificación de tabla de amortización
     """
     # Verificar permisos - Todos los usuarios pueden usar este endpoint
-    if current_user.rol != "USER":
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Usuario no autorizado")
     
     # Verificar que el préstamo existe
@@ -537,8 +537,8 @@ def solicitar_edicion_cliente_comercial(
     ⚠️ USER: Solicitar autorización para editar cliente
     """
     # Verificar permisos
-    if current_user.rol != "USER":
-        raise HTTPException(status_code=403, detail="Solo rol USER puede usar este endpoint")
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden usar este endpoint")
     
     # Verificar que el cliente existe
     cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
@@ -590,8 +590,8 @@ def solicitar_edicion_cliente_propio(
     ⚠️ USER: Solicitar autorización para editar SUS clientes asignados
     """
     # Verificar permisos
-    if current_user.rol != "USER":
-        raise HTTPException(status_code=403, detail="Solo rol USER puede usar este endpoint")
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden usar este endpoint")
     
     # Verificar que el cliente existe y está asignado al analista
     cliente = db.query(Cliente).filter(
@@ -651,7 +651,7 @@ def listar_solicitudes_pendientes(
     📋 Listar solicitudes pendientes de aprobación (Solo Admin)
     """
     # Verificar permisos
-    if current_user.rol not in ["USER"]:
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Sin permisos para ver solicitudes")
     
     query = db.query(Aprobacion).filter(Aprobacion.estado == "PENDIENTE")
@@ -700,7 +700,7 @@ async def aprobar_solicitud(
     ✅ Aprobar solicitud (Solo Admin)
     """
     # Verificar permisos
-    if current_user.rol not in ["USER"]:
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Sin permisos para aprobar solicitudes")
     
     # Buscar solicitud
@@ -743,7 +743,7 @@ async def rechazar_solicitud(
     ❌ Rechazar solicitud (Solo Admin)
     """
     # Verificar permisos
-    if current_user.rol not in ["USER"]:
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Sin permisos para rechazar solicitudes")
     
     # Buscar solicitud
@@ -867,7 +867,7 @@ def estadisticas_solicitudes(
     📊 Estadísticas de solicitudes de aprobación
     """
     # Verificar permisos
-    if current_user.rol not in ["USER"]:
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Sin permisos")
     
     # Estadísticas generales
@@ -920,7 +920,7 @@ def dashboard_aprobaciones(
     📊 Dashboard visual completo del sistema de aprobaciones
     """
     # Verificar permisos
-    if current_user.rol not in ["USER"]:
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Sin permisos para ver dashboard")
     
     # Estadísticas principales
@@ -1099,35 +1099,26 @@ def obtener_matriz_permisos_actualizada(
             "matriz_permisos": "GET /api/v1/solicitudes/matriz-permisos"
         },
         "usuario_actual": {
-            "rol": current_user.rol,
-            "puede_aprobar": current_user.rol in ["ADMIN", "GERENTE", "GERENTE"],
-            "requiere_aprobacion_para": _get_actions_requiring_approval(current_user.rol)
+            "rol": "ADMIN" if current_user.is_admin else "USER",
+            "puede_aprobar": current_user.is_admin,
+            "requiere_aprobacion_para": _get_actions_requiring_approval(current_user.is_admin)
         }
     }
 
 
-def _get_actions_requiring_approval(user_role: str) -> list:
+def _get_actions_requiring_approval(is_admin: bool) -> list:
     """
-    Obtener acciones que requieren aprobación para un rol específico
+    Obtener acciones que requieren aprobación para un usuario específico
     """
-    actions_by_role = {
-        "COBRANZAS": [
+    if is_admin:
+        return []  # Los administradores no necesitan aprobación
+    else:
+        return [
             "Modificar montos de pagos",
             "Anular/Eliminar pagos", 
-            "Modificar tabla de amortización"
-        ],
-        "USER": [
+            "Modificar tabla de amortización",
             "Editar clientes"
-        ],
-        "USER": [
-            "Editar sus clientes asignados"
-        ],
-        "ADMIN": [],
-        "GERENTE": [],
-        "GERENTE": []
-    }
-    
-    return actions_by_role.get(user_role, [])
+        ]
 
 
 # ============================================
@@ -1140,7 +1131,7 @@ async def _notificar_nueva_solicitud_admin(solicitud: Aprobacion, db: Session):
     """
     try:
         # Obtener todos los administradores
-        admins = db.query(User).filter(User.rol.in_(["ADMIN", "GERENTE", "GERENTE"])).all()
+        admins = db.query(User).filter(User.is_admin == True).all()
         
         for admin in admins:
             # Crear notificación in-app

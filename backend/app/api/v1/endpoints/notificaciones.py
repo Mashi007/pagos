@@ -726,7 +726,7 @@ async def enviar_resumen_diario_usuarios(
     
     # Obtener usuarios para notificar
     usuarios_notificar = db.query(User).filter(
-        User.rol.in_(["ADMIN", "GERENTE", "COBRANZAS"]),
+        User.is_admin == True,
         User.is_active == True,
         User.email.isnot(None)
     ).all()
@@ -823,14 +823,14 @@ async def enviar_reporte_semanal_usuarios(
         func.date(Cliente.fecha_registro) >= inicio_semana,
         func.date(Cliente.fecha_registro) <= fin_semana
     )).filter(
-        User.rol.in_(["USER", "USER", "GERENTE"])
+        User.is_admin == False,
     ).group_by(User.id, User.full_name).order_by(
         func.count(Cliente.id).desc()
     ).first()
     
     # Enviar a usuarios gerenciales
     usuarios_gerenciales = db.query(User).filter(
-        User.rol.in_(["ADMIN", "GERENTE", "GERENTE"]),
+        User.is_admin == True,
         User.is_active == True,
         User.email.isnot(None)
     ).all()

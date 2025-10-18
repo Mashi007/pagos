@@ -900,7 +900,7 @@ async def reporte_asesor_pdf(
         <b>Período:</b> {fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}<br/>
         <b>Asesor:</b> {asesor.full_name}<br/>
         <b>Email:</b> {asesor.email}<br/>
-        <b>Rol:</b> {asesor.rol}
+        <b>Rol:</b> {"Administrador" if asesor.is_admin else "Usuario"}
         """
         story.append(Paragraph(periodo_info, styles['Normal']))
         story.append(Spacer(1, 20))

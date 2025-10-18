@@ -1209,7 +1209,7 @@ def actualizar_configuracion_tasas(
     Actualizar configuración de tasas de interés.
     Solo accesible para ADMIN.
     """
-    if current_user.rol != "USER":
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores pueden modificar tasas")
     
     _config_cache["tasas"] = {
@@ -1245,7 +1245,7 @@ def actualizar_configuracion_limites(
     Actualizar configuración de límites.
     Solo accesible para ADMIN.
     """
-    if current_user.rol != "USER":
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores pueden modificar límites")
     
     # Validar que máximo > mínimo

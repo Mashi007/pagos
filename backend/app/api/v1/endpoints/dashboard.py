@@ -16,7 +16,7 @@ from app.models.pago import Pago
 from app.models.amortizacion import Cuota
 from app.models.user import User
 from app.api.deps import get_current_user
-from app.core.permissions import UserRole
+from app.core.permissions_simple import Permission, get_user_permissions
 
 router = APIRouter()
 
@@ -40,7 +40,7 @@ def dashboard_administrador(
        • Estadísticas globales
     """
     # Verificar permisos
-    if current_user.rol not in ["USER"]:
+    if not current_user.is_admin:
         from fastapi import HTTPException
         raise HTTPException(status_code=403, detail="Sin permisos para dashboard administrativo")
     
@@ -133,7 +133,7 @@ def dashboard_administrador(
             Cliente.fecha_registro >= inicio_mes
         )
     ).filter(
-        User.rol.in_(["USER"])
+        User.is_admin == False,
     ).group_by(User.id, User.nombre, User.apellido).order_by(
         func.count(Cliente.id).desc()
     ).limit(5).all()
@@ -237,7 +237,7 @@ def dashboard_cobranzas(
        • Estadísticas globales
     """
     # Verificar permisos
-    if current_user.rol not in ["USER"]:
+    if not current_user.is_admin:
         from fastapi import HTTPException
         raise HTTPException(status_code=403, detail="Sin permisos para dashboard de cobranzas")
     
@@ -383,7 +383,7 @@ def dashboard_comercial(
        • NO ve datos de otros analistaes/comerciales
     """
     # Verificar permisos
-    if current_user.rol not in ["USER"]:
+    if not current_user.is_admin:
         from fastapi import HTTPException
         raise HTTPException(status_code=403, detail="Sin permisos para dashboard comercial")
     
@@ -670,8 +670,8 @@ def obtener_matriz_acceso_roles(
         "fecha_actualizacion": datetime.now().isoformat(),
         "usuario_actual": {
             "nombre": current_user.full_name,
-            "rol": current_user.rol,
-            "dashboard_asignado": f"/api/v1/dashboard/{current_user.rol.lower()}"
+            "rol": "ADMIN" if current_user.is_admin else "USER",
+            "dashboard_asignado": f"/api/v1/dashboard/{'admin' if current_user.is_admin else 'user'}"
         },
         "matriz_acceso": {
             "ADMIN": {
@@ -763,7 +763,7 @@ def dashboard_por_rol(
     - ADMIN/COBRANZAS: Acceso completo a todos los datos
     - USER/USER: Solo sus clientes asignados
     """
-    user_role = current_user.rol
+    user_role = "ADMIN" if current_user.is_admin else "USER"
     
     # Todos los usuarios tienen acceso completo
     info_acceso = {
@@ -877,8 +877,8 @@ def obtener_configuracion_dashboard(
     return {
         "usuario": {
             "nombre": current_user.full_name,
-            "rol": current_user.rol,
-            "dashboards_disponibles": _get_dashboards_disponibles(current_user.rol)
+            "rol": "ADMIN" if current_user.is_admin else "USER",
+            "dashboards_disponibles": _get_dashboards_disponibles(current_user.is_admin)
         },
         "configuracion_visual": {
             "tema_disponibles": ["claro", "oscuro"],
@@ -983,19 +983,12 @@ def obtener_alertas_tiempo_real(
 # FUNCIONES AUXILIARES
 # ============================================
 
-def _get_dashboards_disponibles(rol: str) -> List[str]:
+def _get_dashboards_disponibles(is_admin: bool) -> List[str]:
     """Obtener dashboards disponibles según rol"""
-    dashboards_por_rol = {
-        "ADMIN": ["admin", "cobranzas", "comercial", "analista"],
-        "GERENTE": ["admin", "cobranzas", "comercial", "analista"],
-        "GERENTE": ["admin", "cobranzas", "comercial"],
-        "COBRANZAS": ["cobranzas"],
-        "USER": ["comercial", "analista"],
-        "USER": ["analista"],
-        "USER": ["admin"]
-    }
-    
-    return dashboards_por_rol.get(rol, ["basico"])
+    if is_admin:
+        return ["admin", "cobranzas", "comercial", "analista"]
+    else:
+        return ["comercial", "analista"]
 
 
 # ============================================

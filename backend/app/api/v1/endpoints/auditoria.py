@@ -16,7 +16,7 @@ from app.schemas.auditoria import (
     AuditoriaStatsResponse
 )
 from app.api.deps import get_current_user
-from app.core.permissions import UserRole, has_permission, Permission
+from app.core.permissions_simple import Permission, get_user_permissions
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -167,7 +167,7 @@ def exportar_auditoria_excel(
     """
     try:
         # Verificar permisos - solo ADMIN puede exportar
-        if current_user.rol != "ADMIN":
+        if not current_user.is_admin:
             raise HTTPException(
                 status_code=403, 
                 detail="Solo los administradores pueden exportar auditoría"

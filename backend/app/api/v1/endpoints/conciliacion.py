@@ -795,7 +795,7 @@ async def flujo_completo_conciliacion(
         # ============================================
         
         # Verificar permisos
-        if current_user.rol not in ["USER"]:
+        if not current_user.is_admin:
             raise HTTPException(status_code=403, detail="Sin permisos para conciliación bancaria")
         
         # Validar archivo (reutilizar endpoint existente)
@@ -1240,7 +1240,7 @@ async def _notificar_admin_conciliacion(
         
         # Obtener administradores
         admins = db.query(User).filter(
-            User.rol.in_(["ADMIN", "GERENTE", "GERENTE"]),
+            User.is_admin == True,
             User.is_active == True,
             User.email.isnot(None)
         ).all()

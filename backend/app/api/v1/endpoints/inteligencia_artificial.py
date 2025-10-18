@@ -143,7 +143,7 @@ def calcular_scoring_masivo_cartera(
     📊 Calcular scoring masivo para toda la cartera
     """
     # Todos los usuarios pueden ejecutar scoring masivo
-    if current_user.rol != "USER":
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Usuario no autorizado")
     
     try:
@@ -427,7 +427,7 @@ def analisis_predictivo_cartera(
     📈 Análisis predictivo completo de la cartera
     """
     # Solo roles gerenciales pueden ver análisis predictivo
-    if current_user.rol not in ["USER"]:
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Sin permisos para análisis predictivo")
     
     try:

@@ -22,7 +22,7 @@ def fix_cargo_column(
     Solo para administradores
     """
     # Verificar que el usuario sea admin
-    if current_user.rol != "ADMIN":
+    if not current_user.is_admin:
         raise HTTPException(
             status_code=403, 
             detail="Solo administradores pueden ejecutar esta corrección"
@@ -71,7 +71,7 @@ def check_database_structure(
     Verificar estructura de la base de datos
     Solo para administradores
     """
-    if current_user.rol != "ADMIN":
+    if not current_user.is_admin:
         raise HTTPException(
             status_code=403, 
             detail="Solo administradores pueden verificar la estructura"
@@ -118,7 +118,7 @@ def fix_auditorias_usuario_id(
     Solo para administradores
     """
     # Verificar que el usuario sea admin
-    if current_user.rol != "ADMIN":
+    if not current_user.is_admin:
         raise HTTPException(
             status_code=403, 
             detail="Solo administradores pueden ejecutar esta corrección"
