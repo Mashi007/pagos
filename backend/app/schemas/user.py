@@ -81,6 +81,17 @@ class LoginResponse(BaseModel):
     user: UserResponse
 
 
+class UserMeResponse(UserResponse):
+    """Schema para respuesta de usuario actual (/me endpoint)."""
+    rol: str  # Campo para compatibilidad hacia atrás
+    permissions: list[str] = Field(default_factory=list)
+    
+    @property
+    def rol(self) -> str:
+        """Propiedad para compatibilidad hacia atrás."""
+        return "ADMIN" if self.is_admin else "USER"
+
+
 class TokenPayload(BaseModel):
     """Schema del payload del token JWT."""
     sub: str  # email del usuario
