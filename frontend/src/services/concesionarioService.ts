@@ -2,32 +2,14 @@ import { apiClient, ApiResponse } from './api'
 
 export interface Concesionario {
   id: number
-  nombre: string
-  direccion?: string
-  telefono?: string
-  email?: string
-  responsable?: string
-  activo: boolean
-  created_at: string
-  updated_at?: string
 }
 
 export interface ConcesionarioCreate {
-  nombre: string
-  direccion?: string
-  telefono?: string
-  email?: string
-  responsable?: string
-  activo?: boolean
+  // Solo id se genera automáticamente
 }
 
 export interface ConcesionarioUpdate {
-  nombre?: string
-  direccion?: string
-  telefono?: string
-  email?: string
-  responsable?: string
-  activo?: boolean
+  // Solo id se puede actualizar
 }
 
 export interface ConcesionarioListResponse {

@@ -119,7 +119,7 @@ export function ConcesionariosConfig() {
   }
 
   const filteredConcesionarios = concesionarios.filter(concesionario =>
-    concesionario.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+    (concesionario.nombre && concesionario.nombre.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
   if (loading) {

@@ -152,9 +152,9 @@ export default function UsuariosConfig() {
   }
 
   const filteredUsuarios = usuarios.filter(user => 
-    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.apellido.toLowerCase().includes(searchTerm.toLowerCase())
+    (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (user.nombre && user.nombre.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (user.apellido && user.apellido.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
   return (

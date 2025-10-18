@@ -1116,7 +1116,7 @@ export function Configuracion() {
                   })()}
                 </CardTitle>
                 <CardDescription>
-                  Configuración de la sección {secciones.find(s => s.id === seccionActiva)?.nombre.toLowerCase()}
+                  Configuración de la sección {secciones.find(s => s.id === seccionActiva)?.nombre?.toLowerCase() || 'General'}
                 </CardDescription>
               </div>
               <div className="flex space-x-2">

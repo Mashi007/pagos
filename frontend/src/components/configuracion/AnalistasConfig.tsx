@@ -129,8 +129,8 @@ export function AnalistasConfig() {
   }
 
   const filteredAnalistaes = analistaes.filter(analista =>
-    analista.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    analista.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+    (analista.nombre_completo && analista.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (analista.nombre && analista.nombre.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
   if (loading) {
