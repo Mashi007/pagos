@@ -65,7 +65,7 @@ class UserResponse(UserBase):
 
 class UserListResponse(BaseModel):
     """Schema para lista de usuarios."""
-    users: list[UserResponse]
+    items: list[UserResponse]
     total: int
     page: int
     page_size: int

@@ -301,7 +301,7 @@ def list_users(
     users = query.offset(pagination.skip).limit(pagination.limit).all()
     
     return UserListResponse(
-        users=users,
+        items=users,
         total=total,
         page=pagination.page,
         page_size=pagination.page_size

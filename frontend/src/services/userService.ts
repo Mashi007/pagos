@@ -36,7 +36,7 @@ export interface UserUpdate {
 }
 
 export interface UserListResponse {
-  users: User[]
+  items: User[]
   total: number
   page: number
   page_size: number

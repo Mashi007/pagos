@@ -41,10 +41,9 @@ export interface UsuarioListResponse {
   total_pages: number
 }
 
-// Tipo para la respuesta del backend (puede tener 'users' o 'items')
+// Tipo para la respuesta del backend (ahora consistente con items)
 interface BackendUsuarioResponse {
-  users?: Usuario[]
-  items?: Usuario[]
+  items: Usuario[]
   total: number
   page: number
   page_size: number
@@ -74,7 +73,7 @@ class UsuarioService {
       
       // Asegurar que tenga la estructura esperada
       const validResponse: UsuarioListResponse = {
-        items: response.users || response.items || [],
+        items: response.items || [],
         total: response.total || 0,
         page: response.page || 1,
         page_size: response.page_size || 10,
