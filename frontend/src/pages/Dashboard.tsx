@@ -30,6 +30,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { formatCurrency, formatPercentage } from '@/utils'
 import { apiClient } from '@/services/api'
+import { usuarioService, Usuario } from '@/services/usuarioService'
 
 // Tipos para Dashboard
 interface DashboardData {
@@ -148,8 +149,37 @@ export function Dashboard() {
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
   const isAdmin = userRole === 'ADMIN' // Solo ADMIN tiene acceso completo
   const canViewAllClients = true // Todos pueden ver todos los clientes
+
+  // Estados para datos reales
+  const [usuarios, setUsuarios] = useState<Usuario[]>([])
+  const [usuariosLoading, setUsuariosLoading] = useState(true)
+  const [usuariosError, setUsuariosError] = useState<string | null>(null)
   const [periodo, setPeriodo] = useState('mes')
   const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Cargar usuarios reales
+  useEffect(() => {
+    const cargarUsuarios = async () => {
+      try {
+        setUsuariosLoading(true)
+        setUsuariosError(null)
+        const response = await usuarioService.listarUsuarios({ limit: 100 })
+        if (response.items && Array.isArray(response.items)) {
+          setUsuarios(response.items)
+        } else {
+          setUsuarios([])
+        }
+      } catch (error) {
+        console.error('Error cargando usuarios:', error)
+        setUsuariosError('Error al cargar usuarios')
+        setUsuarios([])
+      } finally {
+        setUsuariosLoading(false)
+      }
+    }
+
+    cargarUsuarios()
+  }, [])
 
   // ✅ CORRECCIÓN: Conectar a endpoints reales del backend con tipos explícitos
   const { data: dashboardData, isLoading: loadingDashboard, refetch: refetchDashboard } = useQuery<DashboardData>({
@@ -208,6 +238,15 @@ export function Dashboard() {
     }
   }
 
+  // Calcular KPIs reales de usuarios
+  const usuariosActivos = usuarios.filter(u => u.is_active).length
+  const usuariosInactivos = usuarios.filter(u => !u.is_active).length
+  const usuariosAdmin = usuarios.filter(u => u.rol === 'ADMIN').length
+  const usuariosGerente = usuarios.filter(u => u.rol === 'GERENTE').length
+  const usuariosCobranzas = usuarios.filter(u => u.rol === 'COBRANZAS').length
+  const usuariosUser = usuarios.filter(u => u.rol === 'USER').length
+  const porcentajeActivos = usuarios.length > 0 ? (usuariosActivos / usuarios.length) * 100 : 0
+
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
@@ -224,46 +263,46 @@ export function Dashboard() {
     }
   }
 
-  // KPIs Principales con tendencias
+  // KPIs Principales con tendencias (incluyendo datos reales de usuarios)
   const kpiCards = [
+    {
+      title: 'Total Usuarios',
+      value: usuariosLoading ? '...' : usuarios.length.toString(),
+      description: usuariosError ? 'Error al cargar' : `${usuariosActivos} activos`,
+      icon: Users,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-50',
+      variacion: { valor: 0, esPositivo: true, icono: TrendingUp, color: 'text-gray-600', bgColor: 'bg-gray-50' },
+      status: 'excellent'
+    },
+    {
+      title: 'Usuarios Activos',
+      value: usuariosLoading ? '...' : usuariosActivos.toString(),
+      description: usuariosError ? 'Error al cargar' : `${porcentajeActivos.toFixed(1)}% del total`,
+      icon: CheckCircle,
+      color: 'text-green-600',
+      bgColor: 'bg-green-50',
+      variacion: { valor: 0, esPositivo: true, icono: TrendingUp, color: 'text-green-600', bgColor: 'bg-green-50' },
+      status: 'good'
+    },
+    {
+      title: 'Administradores',
+      value: usuariosLoading ? '...' : usuariosAdmin.toString(),
+      description: usuariosError ? 'Error al cargar' : 'Acceso completo al sistema',
+      icon: Shield,
+      color: 'text-red-600',
+      bgColor: 'bg-red-50',
+      variacion: { valor: 0, esPositivo: true, icono: TrendingUp, color: 'text-gray-600', bgColor: 'bg-gray-50' },
+      status: 'warning'
+    },
     {
       title: 'Cartera Total',
       value: formatCurrency(data.cartera_total),
       description: 'Total de préstamos activos',
       icon: DollarSign,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
-      variacion: calcularVariacion(data.cartera_total, data.cartera_anterior),
-      status: 'excellent'
-    },
-    {
-      title: 'Cartera al Día',
-      value: formatCurrency(mockData.cartera_al_dia),
-      description: `${formatPercentage((mockData.cartera_al_dia / mockData.cartera_total) * 100)} de la cartera total`,
-      icon: CheckCircle,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
-      variacion: { valor: 2.1, esPositivo: true, icono: TrendingUp, color: 'text-green-600', bgColor: 'bg-green-50' },
-      status: 'good'
-    },
-    {
-      title: 'Cartera en Mora',
-      value: formatCurrency(mockData.cartera_vencida),
-      description: `${formatPercentage(mockData.porcentaje_mora)} de mora`,
-      icon: AlertTriangle,
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
-      variacion: calcularVariacion(mockData.porcentaje_mora, mockData.porcentaje_mora_anterior || 0),
-      status: 'warning'
-    },
-    {
-      title: 'Pagos Hoy',
-      value: mockData.pagos_hoy.toString(),
-      description: formatCurrency(mockData.monto_pagos_hoy),
-      icon: CreditCard,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
-      variacion: { valor: 12.5, esPositivo: true, icono: TrendingUp, color: 'text-green-600', bgColor: 'bg-green-50' },
+      variacion: calcularVariacion(data.cartera_total, data.cartera_anterior),
       status: 'excellent'
     }
   ]
@@ -453,6 +492,80 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Sección de Usuarios del Sistema */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Users className="mr-2 h-5 w-5 text-blue-600" />
+            Usuarios del Sistema
+          </CardTitle>
+          <CardDescription>Resumen de usuarios y roles en el sistema</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {usuariosLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
+              <span className="text-gray-600">Cargando usuarios...</span>
+            </div>
+          ) : usuariosError ? (
+            <div className="flex items-center justify-center py-8">
+              <AlertTriangle className="h-6 w-6 text-red-600 mr-2" />
+              <span className="text-red-600">{usuariosError}</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Total Usuarios */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-blue-600">Total Usuarios</p>
+                    <p className="text-2xl font-bold text-blue-900">{usuarios.length}</p>
+                  </div>
+                  <Users className="h-8 w-8 text-blue-600" />
+                </div>
+              </div>
+
+              {/* Usuarios Activos */}
+              <div className="bg-green-50 p-4 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-green-600">Activos</p>
+                    <p className="text-2xl font-bold text-green-900">{usuariosActivos}</p>
+                    <p className="text-xs text-green-700">{porcentajeActivos.toFixed(1)}%</p>
+                  </div>
+                  <CheckCircle className="h-8 w-8 text-green-600" />
+                </div>
+              </div>
+
+              {/* Administradores */}
+              <div className="bg-red-50 p-4 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-red-600">Administradores</p>
+                    <p className="text-2xl font-bold text-red-900">{usuariosAdmin}</p>
+                  </div>
+                  <Shield className="h-8 w-8 text-red-600" />
+                </div>
+              </div>
+
+              {/* Otros Roles */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Otros Roles</p>
+                    <p className="text-2xl font-bold text-gray-900">{usuariosGerente + usuariosCobranzas + usuariosUser}</p>
+                    <p className="text-xs text-gray-700">
+                      {usuariosGerente}G, {usuariosCobranzas}C, {usuariosUser}U
+                    </p>
+                  </div>
+                  <Award className="h-8 w-8 text-gray-600" />
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Gráficos y Análisis */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
