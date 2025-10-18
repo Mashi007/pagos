@@ -49,7 +49,7 @@ export default function UsuariosConfig() {
     try {
       setLoading(true)
       const data = await userService.listarUsuarios(1, 100, filterActive)
-      setUsuarios(data.users)
+      setUsuarios(data.items)
       setError(null)
     } catch (err: any) {
       console.error('Error al cargar usuarios:', err)
