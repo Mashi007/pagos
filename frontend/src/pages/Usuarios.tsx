@@ -99,7 +99,7 @@ export function Usuarios() {
       email: usuario.email,
       nombre: usuario.nombre,
       apellido: usuario.apellido,
-      rol: usuario.rol,
+      is_admin: usuario.is_admin,  // Cambio clave: rol → is_admin
       password: '',
       is_active: usuario.is_active
     })
@@ -158,14 +158,8 @@ export function Usuarios() {
     (usuario.email && usuario.email.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
-  const getRoleBadgeColor = (rol: string) => {
-    const colors: any = {
-      'USER': 'bg-blue-600',
-      'ADMIN': 'bg-red-600',
-      'GERENTE': 'bg-purple-600',
-      'COBRANZAS': 'bg-orange-600',
-    }
-    return colors[rol] || 'bg-gray-600'
+  const getRoleBadgeColor = (is_admin: boolean) => {  // Cambio clave: rol → is_admin
+    return is_admin ? 'bg-red-600' : 'bg-blue-600'  // Cambio clave: rol → is_admin
   }
 
   return (
@@ -235,7 +229,7 @@ export function Usuarios() {
               <div>
                 <p className="text-sm text-gray-500">Administradores</p>
                 <p className="text-2xl font-bold text-red-600">
-                  {usuarios.filter(u => u.rol === 'ADMIN').length}
+                  {usuarios.filter(u => u.is_admin).length}  {/* Cambio clave: rol → is_admin */}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
                   {loading ? 'Cargando...' : 'Pueden crear usuarios'}
@@ -343,8 +337,8 @@ export function Usuarios() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge className={getRoleBadgeColor(usuario.rol)}>
-                        {usuario.rol}
+                      <Badge className={getRoleBadgeColor(usuario.is_admin)}>  {/* Cambio clave: rol → is_admin */}
+                        {usuario.is_admin ? 'Administrador' : 'Usuario'}  {/* Cambio clave: rol → is_admin */}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-gray-600">
@@ -465,19 +459,17 @@ export function Usuarios() {
               </div>
 
               <div>
-                <label htmlFor="rol" className="block text-sm font-medium text-gray-700">Rol</label>
+                <label htmlFor="is_admin" className="block text-sm font-medium text-gray-700">Tipo de Usuario</label>
                 <Select
-                  value={formData.rol}
-                  onValueChange={(value) => setFormData({ ...formData, rol: value as "USER" | "ADMIN" | "GERENTE" | "COBRANZAS" })}
+                  value={formData.is_admin ? 'ADMIN' : 'USER'}  {/* Cambio clave: rol → is_admin */}
+                  onValueChange={(value) => setFormData({ ...formData, is_admin: value === 'ADMIN' })}  {/* Cambio clave: rol → is_admin */}
                 >
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="USER">Usuario</SelectItem>
+                    <SelectItem value="USER">Usuario Normal</SelectItem>
                     <SelectItem value="ADMIN">Administrador</SelectItem>
-                    <SelectItem value="GERENTE">Gerente</SelectItem>
-                    <SelectItem value="COBRANZAS">Cobranzas</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

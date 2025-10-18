@@ -181,7 +181,7 @@ export default function UsuariosConfig() {
       email: '',
       nombre: '',
       apellido: '',
-      rol: 'USER',
+      is_admin: false,  // Cambio clave: rol → is_admin
       password: '',
       is_active: true
     })

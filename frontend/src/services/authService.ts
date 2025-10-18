@@ -135,11 +135,17 @@ export class AuthService {
 
   // MÉTODOS DE PERMISOS SIMPLIFICADOS - RECIBEN USER COMO PARÁMETRO
   static hasRole(user: User | null, role: string): boolean {
-    return user?.rol === role
+    if (role === 'ADMIN') {
+      return user?.is_admin || false  // Cambio clave: rol → is_admin
+    }
+    return !user?.is_admin || false  // Cambio clave: rol → is_admin
   }
 
   static hasAnyRole(user: User | null, roles: string[]): boolean {
-    return user ? roles.includes(user.rol) : false
+    if (!user) return false
+    if (roles.includes('ADMIN') && user.is_admin) return true  // Cambio clave: rol → is_admin
+    if (roles.includes('USER') && !user.is_admin) return true  // Cambio clave: rol → is_admin
+    return false
   }
 
   static isAdmin(user: User | null): boolean {

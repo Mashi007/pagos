@@ -49,7 +49,7 @@ interface MenuItem {
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation()
   const { user } = useSimpleAuth()
-  const userRole = user?.rol || 'USER'
+  const userRole = user?.is_admin ? 'ADMIN' : 'USER'  // Cambio clave: rol → is_admin
   const [openSubmenus, setOpenSubmenus] = useState<string[]>(['Herramientas'])
 
   const toggleSubmenu = (title: string) => {

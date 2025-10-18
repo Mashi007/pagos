@@ -19,7 +19,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
   // Variables derivadas del usuario
   const userInitials = user ? `${user.nombre?.charAt(0) || ''}${user.apellido?.charAt(0) || ''}`.toUpperCase() : 'U'
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
-  const userRole = user?.rol || 'USER'
+  const userRole = user?.is_admin ? 'Administrador' : 'Usuario'  // Cambio clave: rol → is_admin
 
   // Mock de notificaciones - en producción vendrían del backend
   const notifications = [

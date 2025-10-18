@@ -146,9 +146,9 @@ const mockAlerts = [
 
 export function Dashboard() {
   const { user } = useSimpleAuth()
-  const userRole = user?.rol || 'USER'
+  const userRole = user?.is_admin ? 'ADMIN' : 'USER'  // Cambio clave: rol → is_admin
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
-  const isAdmin = userRole === 'ADMIN' // Solo ADMIN tiene acceso completo
+  const isAdmin = user?.is_admin || false  // Cambio clave: rol → is_admin
   const canViewAllClients = true // Todos pueden ver todos los clientes
 
   // Estados para datos reales
@@ -242,10 +242,8 @@ export function Dashboard() {
   // Calcular KPIs reales de usuarios
   const usuariosActivos = usuarios.filter(u => u.is_active).length
   const usuariosInactivos = usuarios.filter(u => !u.is_active).length
-  const usuariosAdmin = usuarios.filter(u => u.rol === 'ADMIN').length
-  const usuariosGerente = usuarios.filter(u => u.rol === 'GERENTE').length
-  const usuariosCobranzas = usuarios.filter(u => u.rol === 'COBRANZAS').length
-  const usuariosUser = usuarios.filter(u => u.rol === 'USER').length
+  const usuariosAdmin = usuarios.filter(u => u.is_admin).length  // Cambio clave: rol → is_admin
+  const usuariosUser = usuarios.filter(u => !u.is_admin).length  // Cambio clave: rol → is_admin
   const porcentajeActivos = usuarios.length > 0 ? (usuariosActivos / usuarios.length) * 100 : 0
 
   const handleRefresh = async () => {
@@ -550,14 +548,14 @@ export function Dashboard() {
                 </div>
               </div>
 
-              {/* Otros Roles */}
+              {/* Usuarios Normales */}
               <div className="bg-gray-50 p-4 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Otros Roles</p>
-                    <p className="text-2xl font-bold text-gray-900">{usuariosGerente + usuariosCobranzas + usuariosUser}</p>
+                    <p className="text-sm font-medium text-gray-600">Usuarios Normales</p>
+                    <p className="text-2xl font-bold text-gray-900">{usuariosUser}</p>
                     <p className="text-xs text-gray-700">
-                      {usuariosGerente}G, {usuariosCobranzas}C, {usuariosUser}U
+                      Acceso limitado
                     </p>
                   </div>
                   <Award className="h-8 w-8 text-gray-600" />
