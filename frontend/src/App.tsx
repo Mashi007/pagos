@@ -116,11 +116,7 @@ function App() {
           {/* Préstamos */}
           <Route
             path="prestamos"
-            element={
-              <SimpleProtectedRoute requiredRoles={['ADMIN', 'USER']}>
-                <PrestamosPage />
-              </SimpleProtectedRoute>
-            }
+            element={<PrestamosPage />}
           />
 
           {/* Pagos */}
@@ -133,39 +129,27 @@ function App() {
           {/* Conciliación */}
           <Route
             path="conciliacion"
-            element={
-              <SimpleProtectedRoute requiredRoles={['ADMIN', 'USER']}>
-                <Conciliacion />
-              </SimpleProtectedRoute>
-            }
+            element={<Conciliacion />}
           />
 
           {/* Reportes */}
           <Route
             path="reportes"
-            element={
-              <SimpleProtectedRoute requiredRoles={['ADMIN', 'USER']}>
-                <ReportesPage />
-              </SimpleProtectedRoute>
-            }
+            element={<ReportesPage />}
           />
 
 
           {/* Aprobaciones */}
           <Route
             path="aprobaciones"
-            element={
-              <SimpleProtectedRoute requiredRoles={['ADMIN', 'USER']}>
-                <Aprobaciones />
-              </SimpleProtectedRoute>
-            }
+            element={<Aprobaciones />}
           />
 
           {/* Auditoría */}
           <Route
             path="auditoria"
             element={
-              <SimpleProtectedRoute requiredRoles={['ADMIN', 'USER']}>
+              <SimpleProtectedRoute requiredRoles={['ADMIN']}>
                 <Auditoria />
               </SimpleProtectedRoute>
             }
@@ -178,7 +162,7 @@ function App() {
           <Route
             path="scheduler"
             element={
-              <SimpleProtectedRoute requiredRoles={['ADMIN', 'USER']}>
+              <SimpleProtectedRoute requiredRoles={['ADMIN']}>
                 <Programador />
               </SimpleProtectedRoute>
             }
@@ -188,7 +172,7 @@ function App() {
           <Route
             path="configuracion"
             element={
-              <SimpleProtectedRoute requiredRoles={['ADMIN', 'USER']}>
+              <SimpleProtectedRoute requiredRoles={['ADMIN']}>
                 <Configuracion />
               </SimpleProtectedRoute>
             }
@@ -198,7 +182,7 @@ function App() {
           <Route
             path="analistas"
             element={
-              <SimpleProtectedRoute requiredRoles={['ADMIN', 'USER']}>
+              <SimpleProtectedRoute requiredRoles={['ADMIN']}>
                 <Analistas />
               </SimpleProtectedRoute>
             }
@@ -208,7 +192,7 @@ function App() {
           <Route
             path="validadores"
             element={
-              <SimpleProtectedRoute requiredRoles={['ADMIN', 'USER']}>
+              <SimpleProtectedRoute requiredRoles={['ADMIN']}>
                 <Validadores />
               </SimpleProtectedRoute>
             }
@@ -218,7 +202,7 @@ function App() {
           <Route
             path="analistaes"
             element={
-              <SimpleProtectedRoute requiredRoles={['ADMIN', 'USER']}>
+              <SimpleProtectedRoute requiredRoles={['ADMIN']}>
                 <Analistas />
               </SimpleProtectedRoute>
             }
@@ -228,7 +212,7 @@ function App() {
           <Route
             path="concesionarios"
             element={
-              <SimpleProtectedRoute requiredRoles={['ADMIN', 'USER']}>
+              <SimpleProtectedRoute requiredRoles={['ADMIN']}>
                 <Concesionarios />
               </SimpleProtectedRoute>
             }
@@ -238,7 +222,7 @@ function App() {
           <Route
             path="modelos-vehiculos"
             element={
-              <SimpleProtectedRoute requiredRoles={['ADMIN', 'USER']}>
+              <SimpleProtectedRoute requiredRoles={['ADMIN']}>
                 <ModelosVehiculos />
               </SimpleProtectedRoute>
             }
@@ -248,7 +232,7 @@ function App() {
           <Route
             path="auditoria"
             element={
-              <SimpleProtectedRoute requiredRoles={['ADMIN', 'USER']}>
+              <SimpleProtectedRoute requiredRoles={['ADMIN']}>
                 <Auditoria />
               </SimpleProtectedRoute>
             }
@@ -258,7 +242,7 @@ function App() {
           <Route
             path="usuarios"
             element={
-              <SimpleProtectedRoute requiredRoles={['ADMIN', 'USER']}>
+              <SimpleProtectedRoute requiredRoles={['ADMIN']}>
                 <Usuarios />
               </SimpleProtectedRoute>
             }
@@ -268,7 +252,7 @@ function App() {
           <Route
             path="solicitudes"
             element={
-              <SimpleProtectedRoute requiredRoles={['ADMIN', 'USER']}>
+              <SimpleProtectedRoute requiredRoles={['ADMIN']}>
                 <Solicitudes />
               </SimpleProtectedRoute>
             }

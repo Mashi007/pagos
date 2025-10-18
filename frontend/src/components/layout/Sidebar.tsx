@@ -75,7 +75,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       title: 'Préstamos',
       href: '/prestamos',
       icon: CreditCard,
-      requiredRoles: ['USER'],
     },
     {
       title: 'Pagos',
@@ -91,36 +90,31 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       title: 'Conciliación',
       href: '/conciliacion',
       icon: Building2,
-      requiredRoles: ['USER'],
     },
     {
       title: 'Reportes',
       href: '/reportes',
       icon: FileText,
-      requiredRoles: ['USER'],
     },
     {
       title: 'Aprobaciones',
       href: '/aprobaciones',
       icon: CheckSquare,
       badge: '3',
-      requiredRoles: ['USER'],
     },
     {
       title: 'Carga Masiva',
       href: '/carga-masiva',
       icon: Upload,
-      requiredRoles: ['USER'],
     },
     {
       title: 'Herramientas',
       icon: Wrench,
       isSubmenu: true,
-      requiredRoles: ['USER'],
       children: [
         { title: 'Notificaciones', href: '/notificaciones', icon: Bell },
-        { title: 'Programador', href: '/scheduler', icon: Calendar, requiredRoles: ['USER'] },
-        { title: 'Auditoría', href: '/auditoria', icon: Shield, requiredRoles: ['USER'] },
+        { title: 'Programador', href: '/scheduler', icon: Calendar },
+        { title: 'Auditoría', href: '/auditoria', icon: Shield },
       ],
     },
     {

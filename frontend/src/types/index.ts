@@ -11,7 +11,7 @@ export interface User {
   updated_at: string;
 }
 
-export type UserRole = 'ADMIN' | 'GERENTE' | 'ASESOR_COMERCIAL' | 'USER';
+export type UserRole = 'ADMIN' | 'GERENTE' | 'COBRANZAS' | 'USER';
 
 export interface Cliente {
   id: number;

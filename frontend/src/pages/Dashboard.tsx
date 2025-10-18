@@ -146,7 +146,7 @@ export function Dashboard() {
   const { user } = useSimpleAuth()
   const userRole = user?.rol || 'USER'
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
-  const isAdmin = userRole === 'USER' // En este sistema todos los usuarios tienen acceso completo
+  const isAdmin = userRole === 'ADMIN' // Solo ADMIN tiene acceso completo
   const canViewAllClients = true // Todos pueden ver todos los clientes
   const [periodo, setPeriodo] = useState('mes')
   const [isRefreshing, setIsRefreshing] = useState(false)
