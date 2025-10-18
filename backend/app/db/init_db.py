@@ -110,7 +110,7 @@ def create_admin_user():
             nombre="IT Master",
             apellido="Sistema",
             hashed_password=get_password_hash(settings.ADMIN_PASSWORD),
-            rol="USER",
+            is_admin=True,  # Cambio clave: rol → is_admin
             is_active=True,
             created_at=datetime.utcnow()
         )
