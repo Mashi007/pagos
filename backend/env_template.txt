@@ -1,0 +1,29 @@
+# Configuración de Base de Datos
+DATABASE_URL=postgresql://usuario:password@localhost:5432/rapicredit
+
+# Configuración de Seguridad
+SECRET_KEY=tu_clave_secreta_muy_larga_y_segura_aqui_123456789
+
+# Configuración de Tokens
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# Configuración CORS
+CORS_ORIGINS=["http://localhost:3000", "https://rapicredit.onrender.com"]
+
+# Configuración de Email
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=tu_email@gmail.com
+SMTP_PASSWORD=tu_password_app
+
+# Configuración de WhatsApp
+WHATSAPP_API_URL=https://api.whatsapp.com
+WHATSAPP_TOKEN=tu_token_whatsapp
+
+# Configuración de Archivos
+UPLOAD_DIR=uploads
+MAX_FILE_SIZE=5242880
+
+# Configuración de Logging
+LOG_LEVEL=INFO

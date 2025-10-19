@@ -6,6 +6,7 @@ Este endpoint:
 - Obtiene datos reales desde las tablas de configuración
 - Genera plantilla Excel con listas desplegables actualizadas
 - Se actualiza automáticamente cuando admin cambia las listas
+- Campos obligatorios y validaciones completas
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -40,6 +41,7 @@ async def generar_plantilla_clientes_dinamica(
     - Listas desplegables con valores actuales
     - Se actualiza automáticamente cuando admin cambia listas
     - Instrucciones completas incluidas
+    - Campos obligatorios y validaciones
     """
     try:
         logger.info(f"Generando plantilla dinámica - Usuario: {current_user.email}")
@@ -48,32 +50,22 @@ async def generar_plantilla_clientes_dinamica(
         
         # Modelos de vehículos
         modelos_db = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo == True).all()
-        modelos_vehiculos = [modelo.modelo for modelo in modelos_db if modelo.modelo]
+        modelos_nombres = [m.nombre for m in modelos_db]
+        logger.info(f"Modelos encontrados: {len(modelos_nombres)}")
         
-        # Concesionarios - TABLA VACÍA, usar valores por defecto
-        concesionarios_db = db.query(Concesionario).all()
-        if concesionarios_db:
-            concesionarios = [f"Concesionario {c.id}" for c in concesionarios_db]
-        else:
-            # Valores por defecto ya que la tabla está vacía
-            concesionarios = [
-                "AutoMax Quito Norte",
-                "AutoCenter Guayaquil Centro", 
-                "CarDealer Cuenca Sur",
-                "AutoShop Ambato Centro",
-                "MotorCity Manta Puerto"
-            ]
+        # Concesionarios
+        concesionarios_db = db.query(Concesionario).filter(Concesionario.activo == True).all()
+        concesionarios_nombres = [c.nombre for c in concesionarios_db]
+        logger.info(f"Concesionarios encontrados: {len(concesionarios_nombres)}")
         
         # Analistas
         analistas_db = db.query(Analista).filter(Analista.activo == True).all()
-        analistas = [analista.nombre for analista in analistas_db if analista.nombre]
+        analistas_nombres = [a.nombre for a in analistas_db]
+        logger.info(f"Analistas encontrados: {len(analistas_nombres)}")
         
-        logger.info(f"Datos obtenidos - Modelos: {len(modelos_vehiculos)}, Concesionarios: {len(concesionarios)}, Analistas: {len(analistas)}")
-        
-        # KPIS DE ACTUALIZACIÓN AUTOMÁTICA
-        total_clientes = db.query(Cliente).count()
-        clientes_activos = db.query(Cliente).filter(Cliente.activo == True).count()
-        logger.info(f"KPIs - Total clientes: {total_clientes}, Activos: {clientes_activos}")
+        # KPIs de clientes
+        total_clientes = db.query(Cliente).filter(Cliente.activo == True).count()
+        clientes_activos = db.query(Cliente).filter(Cliente.activo == True, Cliente.estado == 'ACTIVO').count()
         
         # CREAR WORKBOOK
         wb = Workbook()
@@ -89,194 +81,196 @@ async def generar_plantilla_clientes_dinamica(
             ["   - Archivo Excel (.xlsx)"],
             ["   - Primera fila: encabezados de columnas"],
             ["   - Datos desde la segunda fila"],
+            ["   - Máximo 100 registros por archivo"],
             [""],
-            ["2. CAMPOS REQUERIDOS:"],
-            ["   - cedula: Cedula unica (V/E/J + 7-10 digitos)"],
-            ["   - nombres: Nombres completos"],
-            ["   - apellidos: Apellidos completos"],
-            ["   - modelo_vehiculo: Modelo del vehiculo (lista desplegable)"],
+            ["2. CAMPOS OBLIGATORIOS (marcados con *):"],
+            ["   - cedula: Cédula del cliente (8-20 caracteres)"],
+            ["   - nombres: Nombres del cliente (máximo 2 palabras)"],
+            ["   - apellidos: Apellidos del cliente (máximo 2 palabras)"],
+            ["   - telefono: Teléfono del cliente (8-15 caracteres)"],
+            ["   - email: Email del cliente (formato válido)"],
+            ["   - direccion: Dirección completa del cliente"],
+            ["   - fecha_nacimiento: Fecha de nacimiento (YYYY-MM-DD)"],
+            ["   - ocupacion: Ocupación del cliente"],
+            ["   - modelo_vehiculo: Modelo del vehículo (lista desplegable)"],
             ["   - concesionario: Concesionario (lista desplegable)"],
             ["   - analista: Analista asignado (lista desplegable)"],
-            ["   - total_financiamiento: Monto total del financiamiento"],
-            ["   - numero_amortizaciones: Numero de cuotas (1-60)"],
-            ["   - modalidad_pago: SEMANAL/QUINCENAL/MENSUAL"],
-            ["   - fecha_entrega: Fecha de entrega del vehiculo"],
+            ["   - estado: Estado del cliente (ACTIVO/INACTIVO/FINALIZADO)"],
             [""],
             ["3. CAMPOS OPCIONALES:"],
-            ["   - telefono: Numero de telefono"],
-            ["   - email: Correo electronico valido"],
-            ["   - direccion: Direccion completa"],
-            ["   - fecha_nacimiento: Formato YYYY-MM-DD"],
-            ["   - ocupacion: Ocupacion del cliente"],
-            ["   - cuota_inicial: Cuota inicial"],
-            ["   - estado: ACTIVO o INACTIVO"],
-            ["   - activo: true o false"],
-            ["   - notas: Observaciones adicionales"],
+            ["   - notas: Notas adicionales (si no llena, se pondrá 'NA')"],
             [""],
-            ["5. VALIDACIONES:"],
-            ["   - Cedula debe ser unica en el sistema"],
-            ["   - Email debe tener formato valido"],
-            ["   - Fecha de nacimiento en formato YYYY-MM-DD"],
-            ["   - Estado debe ser ACTIVO o INACTIVO"],
-            ["   - Usar solo valores de las listas desplegables"],
+            ["4. VALIDACIONES:"],
+            ["   - Cédula: Debe ser única en el sistema"],
+            ["   - Email: Debe tener formato válido"],
+            ["   - Fecha de nacimiento: No puede ser futura"],
+            ["   - Nombres/Apellidos: Máximo 2 palabras cada uno"],
+            ["   - Listas desplegables: Solo valores de configuración"],
             [""],
-            ["4. EJEMPLOS DE DATOS VALIDOS:"],
-            ["   - cedula: 'V12345678'"],
-            ["   - nombres: 'Juan Carlos'"],
-            ["   - apellidos: 'Perez Garcia'"],
-            ["   - telefono: '0987654321'"],
-            ["   - email: 'juan.perez@email.com'"],
-            ["   - direccion: 'Av. Principal 123, Quito'"],
-            ["   - fecha_nacimiento: '1990-05-15'"],
-            ["   - ocupacion: 'Ingeniero'"],
-            ["   - modelo_vehiculo: 'Toyota Corolla 2023'"],
-            ["   - concesionario: 'AutoMax Quito'"],
-            ["   - analista: 'Maria Gonzalez'"],
-            ["   - total_financiamiento: '25000'"],
-            ["   - cuota_inicial: '5000'"],
-            ["   - numero_amortizaciones: '12'"],
-            ["   - modalidad_pago: 'QUINCENAL'"],
-            ["   - fecha_entrega: '2024-12-31'"],
-            ["   - estado: 'ACTIVO'"],
-            ["   - activo: 'true'"],
+            ["5. ESTADÍSTICAS ACTUALES:"],
+            [f"   - Total de clientes: {total_clientes}"],
+            [f"   - Clientes activos: {clientes_activos}"],
+            [f"   - Modelos disponibles: {len(modelos_nombres)}"],
+            [f"   - Concesionarios disponibles: {len(concesionarios_nombres)}"],
+            [f"   - Analistas disponibles: {len(analistas_nombres)}"],
             [""],
-            ["7. NOTAS IMPORTANTES:"],
-            ["   - No eliminar las columnas"],
-            ["   - No cambiar el orden de las columnas"],
-            ["   - Usar solo caracteres ASCII"],
-            ["   - Evitar caracteres especiales en nombres"],
-            ["   - Verificar que las cedulas no esten duplicadas"],
-            ["   - Usar valores exactos de las listas desplegables"],
-            [""],
-            ["8. DATOS ACTUALES DESDE BASE DE DATOS:"],
-            [""],
-            [f"MODELOS DE VEHICULOS ({len(modelos_vehiculos)} disponibles):"],
+            ["6. IMPORTANTE:"],
+            ["   - No modifique los nombres de las columnas"],
+            ["   - Use las listas desplegables para evitar errores"],
+            ["   - Todos los campos obligatorios deben estar completos"],
+            ["   - La plantilla se actualiza automáticamente con los datos de configuración"],
         ]
         
-        # Agregar modelos reales
-        for modelo in modelos_vehiculos:
-            instrucciones.append([f"   - {modelo}"])
+        for row_data in instrucciones:
+            ws_instrucciones.append(row_data)
         
-        instrucciones.extend([
-            [""],
-            [f"CONCESIONARIOS ({len(concesionarios)} disponibles):"],
-        ])
+        # HOJA 2: TEMPLATE VACÍO
+        ws_template = wb.create_sheet("Template")
         
-        # Agregar concesionarios reales
-        for concesionario in concesionarios:
-            instrucciones.append([f"   - {concesionario}"])
-        
-        instrucciones.extend([
-            [""],
-            [f"ANALISTAS ({len(analistas)} disponibles):"],
-        ])
-        
-        # Agregar analistas reales
-        for analista in analistas:
-            instrucciones.append([f"   - {analista}"])
-        
-        # Agregar instrucciones a la hoja
-        for i, instruccion in enumerate(instrucciones, 1):
-            ws_instrucciones.cell(row=i, column=1, value=instruccion[0])
-        
-        # HOJA 2: PLANTILLA CON LISTAS DESPLEGABLES
-        ws_plantilla = wb.create_sheet("Plantilla_Clientes")
-        
-        # Encabezados completos - COMPATIBLES CON FORMULARIO WEB
-        encabezados = [
-            # Datos personales (coincide con formulario)
-            "cedula", "nombres", "apellidos", "telefono", "email",
-            "direccion", "fecha_nacimiento", "ocupacion",
-            
-            # Datos del vehículo (coincide con formulario)
-            "modelo_vehiculo", "concesionario", "analista",
-            
-            # Datos del financiamiento (coincide con formulario)
-            "total_financiamiento", "cuota_inicial", "numero_amortizaciones",
-            "modalidad_pago", "fecha_entrega",
-            
-            # Estado y control (coincide con BD)
-            "estado", "activo", "notas"
+        # Encabezados con campos obligatorios marcados
+        headers = [
+            "cedula*", "nombres*", "apellidos*", "telefono*", "email*", 
+            "direccion*", "fecha_nacimiento*", "ocupacion*", 
+            "modelo_vehiculo*", "concesionario*", "analista*", 
+            "estado*", "notas"
         ]
+        ws_template.append(headers)
         
-        for i, encabezado in enumerate(encabezados, 1):
-            ws_plantilla.cell(row=1, column=i, value=encabezado)
+        # VALIDACIONES DE DATOS
         
-        # Ejemplo de datos completos - COMPATIBLES CON FORMULARIO WEB
-        ejemplo = [
-            # Datos personales
-            "V12345678", "Juan Carlos", "Perez Garcia", "0987654321",
-            "juan.perez@email.com", "Av. Principal 123, Quito", "1990-05-15", "Ingeniero",
-            
-            # Datos del vehículo
-            modelos_vehiculos[0] if modelos_vehiculos else "Toyota Corolla 2023",
-            concesionarios[0] if concesionarios else "AutoMax Quito",
-            analistas[0] if analistas else "Maria Gonzalez",
-            
-            # Datos del financiamiento
-            "25000", "5000", "12", "QUINCENAL", "2024-12-31",
-            
-            # Estado y control
-            "ACTIVO", "true", "Cliente preferencial"
-        ]
+        # Validación para modelo_vehiculo (columna I)
+        if modelos_nombres:
+            dv_modelo = DataValidation(
+                type="list",
+                formula1=f'"{",".join(modelos_nombres)}"',
+                showDropDown=True
+            )
+            dv_modelo.error = "Seleccione un modelo válido de la lista"
+            dv_modelo.errorTitle = "Modelo inválido"
+            dv_modelo.add('I2:I101')  # Aplicar a 100 filas
+            ws_template.add_data_validation(dv_modelo)
         
-        for i, valor in enumerate(ejemplo, 1):
-            ws_plantilla.cell(row=2, column=i, value=valor)
+        # Validación para concesionario (columna J)
+        if concesionarios_nombres:
+            dv_concesionario = DataValidation(
+                type="list",
+                formula1=f'"{",".join(concesionarios_nombres)}"',
+                showDropDown=True
+            )
+            dv_concesionario.error = "Seleccione un concesionario válido de la lista"
+            dv_concesionario.errorTitle = "Concesionario inválido"
+            dv_concesionario.add('J2:J101')  # Aplicar a 100 filas
+            ws_template.add_data_validation(dv_concesionario)
         
-        # CONFIGURAR LISTAS DESPLEGABLES CON DATOS REALES - COMPATIBLES CON FORMULARIO
+        # Validación para analista (columna K)
+        if analistas_nombres:
+            dv_analista = DataValidation(
+                type="list",
+                formula1=f'"{",".join(analistas_nombres)}"',
+                showDropDown=True
+            )
+            dv_analista.error = "Seleccione un analista válido de la lista"
+            dv_analista.errorTitle = "Analista inválido"
+            dv_analista.add('K2:K101')  # Aplicar a 100 filas
+            ws_template.add_data_validation(dv_analista)
         
-        # Lista desplegable para modelo_vehiculo (columna I)
-        if modelos_vehiculos:
-            modelos_formula = f'"{",".join(modelos_vehiculos)}"'
-            dv_modelos = DataValidation(type="list", formula1=modelos_formula, allow_blank=True)
-            dv_modelos.add(f'I2:I1000')
-            ws_plantilla.add_data_validation(dv_modelos)
+        # Validación para estado (columna L)
+        dv_estado = DataValidation(
+            type="list",
+            formula1='"ACTIVO,INACTIVO,FINALIZADO"',
+            showDropDown=True
+        )
+        dv_estado.error = "Seleccione un estado válido: ACTIVO, INACTIVO o FINALIZADO"
+        dv_estado.errorTitle = "Estado inválido"
+        dv_estado.add('L2:L101')  # Aplicar a 100 filas
+        ws_template.add_data_validation(dv_estado)
         
-        # Lista desplegable para concesionario (columna J)
-        if concesionarios:
-            concesionarios_formula = f'"{",".join(concesionarios)}"'
-            dv_concesionarios = DataValidation(type="list", formula1=concesionarios_formula, allow_blank=True)
-            dv_concesionarios.add(f'J2:J1000')
-            ws_plantilla.add_data_validation(dv_concesionarios)
+        # Validación para fecha de nacimiento (columna G)
+        dv_fecha = DataValidation(
+            type="date",
+            operator="lessThanOrEqual",
+            formula1=f'DATE({datetime.now().year},{datetime.now().month},{datetime.now().day})',
+            showDropDown=True
+        )
+        dv_fecha.error = "La fecha de nacimiento no puede ser futura"
+        dv_fecha.errorTitle = "Fecha inválida"
+        dv_fecha.add('G2:G101')  # Aplicar a 100 filas
+        ws_template.add_data_validation(dv_fecha)
         
-        # Lista desplegable para analista (columna K)
-        if analistas:
-            analistas_formula = f'"{",".join(analistas)}"'
-            dv_analistas = DataValidation(type="list", formula1=analistas_formula, allow_blank=True)
-            dv_analistas.add(f'K2:K1000')
-            ws_plantilla.add_data_validation(dv_analistas)
+        # Validación para email (columna E)
+        dv_email = DataValidation(
+            type="custom",
+            formula1='AND(LEN(E2)>0,ISNUMBER(SEARCH("@",E2)),ISNUMBER(SEARCH(".",E2)))',
+            showDropDown=True
+        )
+        dv_email.error = "Ingrese un email válido con formato usuario@dominio.com"
+        dv_email.errorTitle = "Email inválido"
+        dv_email.add('E2:E101')  # Aplicar a 100 filas
+        ws_template.add_data_validation(dv_email)
         
-        # Lista desplegable para modalidad_pago (columna N)
-        dv_modalidad = DataValidation(type="list", formula1='"SEMANAL,QUINCENAL,MENSUAL"', allow_blank=True)
-        dv_modalidad.add(f'N2:N1000')
-        ws_plantilla.add_data_validation(dv_modalidad)
+        # Validación para cédula (columna A)
+        dv_cedula = DataValidation(
+            type="custom",
+            formula1='AND(LEN(A2)>=8,LEN(A2)<=20)',
+            showDropDown=True
+        )
+        dv_cedula.error = "La cédula debe tener entre 8 y 20 caracteres"
+        dv_cedula.errorTitle = "Cédula inválida"
+        dv_cedula.add('A2:A101')  # Aplicar a 100 filas
+        ws_template.add_data_validation(dv_cedula)
         
-        # Lista desplegable para estado (columna P)
-        dv_estado = DataValidation(type="list", formula1='"ACTIVO,INACTIVO"', allow_blank=True)
-        dv_estado.add(f'P2:P1000')
-        ws_plantilla.add_data_validation(dv_estado)
+        # Validación para teléfono (columna D)
+        dv_telefono = DataValidation(
+            type="custom",
+            formula1='AND(LEN(D2)>=8,LEN(D2)<=15)',
+            showDropDown=True
+        )
+        dv_telefono.error = "El teléfono debe tener entre 8 y 15 caracteres"
+        dv_telefono.errorTitle = "Teléfono inválido"
+        dv_telefono.add('D2:D101')  # Aplicar a 100 filas
+        ws_template.add_data_validation(dv_telefono)
         
-        # Lista desplegable para activo (columna Q)
-        dv_activo = DataValidation(type="list", formula1='"true,false"', allow_blank=True)
-        dv_activo.add(f'Q2:Q1000')
-        ws_plantilla.add_data_validation(dv_activo)
+        # HOJA 3: REFERENCIAS (OPCIONAL - para consulta rápida)
+        ws_referencias = wb.create_sheet("Referencias")
+        ws_referencias.append(["REFERENCIAS DE CONFIGURACIÓN"])
+        ws_referencias.append([""])
         
-        # GUARDAR EN MEMORIA
-        output = io.BytesIO()
-        wb.save(output)
-        output.seek(0)
+        # Modelos disponibles
+        ws_referencias.append(["MODELOS DE VEHÍCULOS DISPONIBLES:"])
+        for modelo in modelos_nombres:
+            ws_referencias.append([f"- {modelo}"])
+        ws_referencias.append([""])
         
-        # Configurar respuesta para descarga
+        # Concesionarios disponibles
+        ws_referencias.append(["CONCESIONARIOS DISPONIBLES:"])
+        for concesionario in concesionarios_nombres:
+            ws_referencias.append([f"- {concesionario}"])
+        ws_referencias.append([""])
+        
+        # Analistas disponibles
+        ws_referencias.append(["ANALISTAS DISPONIBLES:"])
+        for analista in analistas_nombres:
+            ws_referencias.append([f"- {analista}"])
+        
+        # GUARDAR EN BUFFER
+        excel_buffer = io.BytesIO()
+        wb.save(excel_buffer)
+        excel_buffer.seek(0)
+        
+        # CONFIGURAR RESPUESTA
         response.headers["Content-Disposition"] = "attachment; filename=plantilla_clientes_dinamica.xlsx"
         response.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         
-        logger.info(f"Plantilla generada exitosamente - Modelos: {len(modelos_vehiculos)}, Concesionarios: {len(concesionarios)}, Analistas: {len(analistas)}")
+        logger.info(f"Plantilla generada exitosamente - Modelos: {len(modelos_nombres)}, Concesionarios: {len(concesionarios_nombres)}, Analistas: {len(analistas_nombres)}")
         
-        return Response(content=output.getvalue(), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        return Response(
+            content=excel_buffer.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         
     except Exception as e:
-        logger.error(f"Error generando plantilla dinámica: {e}")
+        logger.error(f"Error generando plantilla dinámica: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Error generando plantilla Excel"
+            detail="Error interno del servidor al generar plantilla"
         )

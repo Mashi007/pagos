@@ -7,72 +7,91 @@ from app.utils.validators import sanitize_html
 
 
 class ClienteBase(BaseModel):
-    # Datos personales
-    cedula: str = Field(..., min_length=8, max_length=20)
-    nombres: str = Field(..., min_length=2, max_length=100)
-    apellidos: str = Field(..., min_length=2, max_length=100)
-    telefono: Optional[str] = Field(None, max_length=15)
-    email: Optional[EmailStr] = None
-    direccion: Optional[str] = None
-    fecha_nacimiento: Optional[date] = None
-    ocupacion: Optional[str] = Field(None, max_length=100)
+    # Datos personales - OBLIGATORIOS
+    cedula: str = Field(..., min_length=8, max_length=20, description="Cédula validada por validadores")
+    nombres: str = Field(..., min_length=2, max_length=100, description="1-2 palabras máximo")
+    apellidos: str = Field(..., min_length=2, max_length=100, description="1-2 palabras máximo")
+    telefono: str = Field(..., min_length=8, max_length=15, description="Validado por validadores")
+    email: EmailStr = Field(..., description="Validado por validadores")
+    direccion: str = Field(..., min_length=5, max_length=500, description="Dirección libre")
+    fecha_nacimiento: date = Field(..., description="Validado por validadores")
+    ocupacion: str = Field(..., min_length=2, max_length=100, description="Texto libre")
     
-    # Datos del vehículo
-    modelo_vehiculo: Optional[str] = Field(None, max_length=100)
-    marca_vehiculo: Optional[str] = Field(None, max_length=50)
-    anio_vehiculo: Optional[int] = Field(None, ge=1900, le=2030)
-    color_vehiculo: Optional[str] = Field(None, max_length=30)
-    chasis: Optional[str] = Field(None, max_length=50)
-    motor: Optional[str] = Field(None, max_length=50)
+    # Datos del vehículo - OBLIGATORIOS
+    modelo_vehiculo: str = Field(..., min_length=1, max_length=100, description="De configuración")
+    concesionario: str = Field(..., min_length=1, max_length=100, description="De configuración")
+    analista: str = Field(..., min_length=1, max_length=100, description="De configuración")
     
-    # Concesionario - Solo campo legacy (FK comentado en modelo)
-    # concesionario_id: Optional[int] = None  # COMENTADO: No existe en modelo Cliente
-    concesionario: Optional[str] = Field(None, max_length=100)  # Legacy
-    vendedor_concesionario: Optional[str] = Field(None, max_length=100)
+    # Estado - OBLIGATORIO
+    estado: str = Field(..., pattern="^(ACTIVO|INACTIVO|FINALIZADO)$", description="Activo/Inactivo/Finalizado")
     
-    # Modelo de vehículo - Solo campo legacy (FK comentado en modelo)
-    # modelo_vehiculo_id: Optional[int] = None  # COMENTADO: No existe en modelo Cliente
+    # Notas - OPCIONAL
+    notas: Optional[str] = Field("NA", max_length=1000, description="Si no llena 'NA'")
     
-    # Financiamiento
-    total_financiamiento: Optional[Decimal] = Field(None, ge=0)
-    cuota_inicial: Optional[Decimal] = Field(None, ge=0)
-    fecha_entrega: Optional[date] = None
-    numero_amortizaciones: Optional[int] = Field(None, ge=1, le=360)
-    modalidad_pago: Optional[str] = Field(None, pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
-    
-    # Asignación - ForeignKeys
-    asesor_id: Optional[int] = None  # Analista de configuración (tabla analistas)
-    
-    # Notas
-    notas: Optional[str] = None
+    @field_validator('nombres', 'apellidos', mode='after')
+    @classmethod
+    def validate_name_words(cls, v):
+        """Validar que nombres/apellidos tengan máximo 2 palabras"""
+        words = v.strip().split()
+        if len(words) > 2:
+            raise ValueError('Máximo 2 palabras permitidas')
+        return v
     
     @field_validator('notas', 'direccion', mode='before')
     @classmethod
     def sanitize_html_fields(cls, v):
         """Sanitizar campos de texto para prevenir XSS"""
         if v is None or v == "":
-            return v
+            return "NA" if v is None else v
         from app.utils.validators import sanitize_html
         return sanitize_html(v)
     
-    @field_validator('total_financiamiento', 'cuota_inicial', mode='before')
+    @field_validator('estado', mode='before')
     @classmethod
-    def validate_decimal_fields(cls, v):
-        """Validar campos decimales"""
-        if v is None:
-            return v
-        if not isinstance(v, Decimal):
-            v = Decimal(str(v))
-        return v.quantize(Decimal('0.01'))
+    def normalize_estado(cls, v):
+        """Normalizar estado a mayúsculas"""
+        if v:
+            return v.upper()
+        return v
+
+
+class ClienteCreate(ClienteBase):
+    """Schema para crear cliente - todos los campos son obligatorios"""
+    pass
+
+
+class ClienteUpdate(BaseModel):
+    """Schema para actualizar cliente - campos opcionales para actualización parcial"""
+    # Datos personales
+    cedula: Optional[str] = Field(None, min_length=8, max_length=20)
+    nombres: Optional[str] = Field(None, min_length=2, max_length=100)
+    apellidos: Optional[str] = Field(None, min_length=2, max_length=100)
+    telefono: Optional[str] = Field(None, min_length=8, max_length=15)
+    email: Optional[EmailStr] = None
+    direccion: Optional[str] = Field(None, min_length=5, max_length=500)
+    fecha_nacimiento: Optional[date] = None
+    ocupacion: Optional[str] = Field(None, min_length=2, max_length=100)
     
-    @field_validator('cuota_inicial', mode='after')
+    # Datos del vehículo
+    modelo_vehiculo: Optional[str] = Field(None, min_length=1, max_length=100)
+    concesionario: Optional[str] = Field(None, min_length=1, max_length=100)
+    analista: Optional[str] = Field(None, min_length=1, max_length=100)
+    
+    # Estado
+    estado: Optional[str] = Field(None, pattern="^(ACTIVO|INACTIVO|FINALIZADO)$")
+    activo: Optional[bool] = None
+    
+    # Notas
+    notas: Optional[str] = Field(None, max_length=1000)
+    
+    @field_validator('nombres', 'apellidos', mode='after')
     @classmethod
-    def validate_cuota_inicial(cls, v, info):
-        """Validar que cuota inicial no sea mayor al total"""
-        if v is not None and 'total_financiamiento' in info.data:
-            total = info.data['total_financiamiento']
-            if total is not None and v > total:
-                raise ValueError('La cuota inicial no puede ser mayor al total del financiamiento')
+    def validate_name_words(cls, v):
+        """Validar que nombres/apellidos tengan máximo 2 palabras"""
+        if v:
+            words = v.strip().split()
+            if len(words) > 2:
+                raise ValueError('Máximo 2 palabras permitidas')
         return v
     
     @field_validator('notas', 'direccion', mode='before')
@@ -84,74 +103,15 @@ class ClienteBase(BaseModel):
         return v
 
 
-class ClienteCreate(ClienteBase):
-    pass
-
-
-class ClienteUpdate(BaseModel):
-    # Datos personales
-    cedula: Optional[str] = Field(None, min_length=8, max_length=20)
-    nombres: Optional[str] = Field(None, min_length=2, max_length=100)
-    apellidos: Optional[str] = Field(None, min_length=2, max_length=100)
-    telefono: Optional[str] = Field(None, max_length=15)
-    email: Optional[EmailStr] = None
-    direccion: Optional[str] = None
-    fecha_nacimiento: Optional[date] = None
-    ocupacion: Optional[str] = Field(None, max_length=100)
-    
-    # Datos del vehículo
-    modelo_vehiculo: Optional[str] = Field(None, max_length=100)
-    marca_vehiculo: Optional[str] = Field(None, max_length=50)
-    anio_vehiculo: Optional[int] = Field(None, ge=1900, le=2030)
-    color_vehiculo: Optional[str] = Field(None, max_length=30)
-    chasis: Optional[str] = Field(None, max_length=50)
-    motor: Optional[str] = Field(None, max_length=50)
-    
-    # Concesionario
-    concesionario: Optional[str] = Field(None, max_length=100)
-    vendedor_concesionario: Optional[str] = Field(None, max_length=100)
-    
-    # Financiamiento
-    total_financiamiento: Optional[Decimal] = Field(None, ge=0)
-    cuota_inicial: Optional[Decimal] = Field(None, ge=0)
-    fecha_entrega: Optional[date] = None
-    numero_amortizaciones: Optional[int] = Field(None, ge=1, le=360)
-    modalidad_pago: Optional[str] = Field(None, pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
-    
-    # Asignación y estado
-    asesor_id: Optional[int] = None
-    estado: Optional[str] = None
-    estado_financiero: Optional[str] = None
-    
-    # Notas
-    notas: Optional[str] = None
-
-
 class ClienteResponse(ClienteBase):
+    """Schema de respuesta para cliente"""
     id: int
-    estado: str
     activo: bool
-    estado_financiero: Optional[str] = None
-    dias_mora: int = 0
-    fecha_asignacion: Optional[date] = None
     fecha_registro: datetime
     fecha_actualizacion: Optional[datetime] = None
-    usuario_registro: Optional[str] = None
-    
-    # Campos calculados
-    monto_financiado: Optional[Decimal] = None
+    usuario_registro: str  # Email del usuario que registró
     
     model_config = ConfigDict(from_attributes=True)
-    
-    @field_validator('monto_financiado', mode='before')
-    @classmethod
-    def calculate_monto_financiado(cls, v, info):
-        """Calcular monto financiado (total - cuota inicial)"""
-        if 'total_financiamiento' in info.data and 'cuota_inicial' in info.data:
-            total = info.data.get('total_financiamiento', 0) or 0
-            inicial = info.data.get('cuota_inicial', 0) or 0
-            return total - inicial
-        return v
 
 
 class ClienteList(BaseModel):
@@ -171,58 +131,29 @@ class ClienteSearchFilters(BaseModel):
     search_text: Optional[str] = Field(None, description="Búsqueda en nombre, cédula o móvil")
     
     # Filtros específicos
-    estado: Optional[str] = Field(None, pattern="^(ACTIVO|INACTIVO|MORA)$")
-    estado_financiero: Optional[str] = Field(None, pattern="^(AL_DIA|MORA|VENCIDO)$")
-    asesor_id: Optional[int] = None
+    estado: Optional[str] = Field(None, pattern="^(ACTIVO|INACTIVO|FINALIZADO)$")
+    activo: Optional[bool] = None
+    analista: Optional[str] = None
     concesionario: Optional[str] = None
     modelo_vehiculo: Optional[str] = None
-    modalidad_pago: Optional[str] = Field(None, pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
     
     # Filtros de fecha
     fecha_registro_desde: Optional[date] = None
     fecha_registro_hasta: Optional[date] = None
-    fecha_entrega_desde: Optional[date] = None
-    fecha_entrega_hasta: Optional[date] = None
-    
-    # Filtros de monto
-    monto_financiamiento_min: Optional[Decimal] = None
-    monto_financiamiento_max: Optional[Decimal] = None
-    
-    # Filtros de mora
-    dias_mora_min: Optional[int] = Field(None, ge=0)
-    dias_mora_max: Optional[int] = Field(None, ge=0)
     
     # Ordenamiento
-    order_by: Optional[str] = Field(None, pattern="^(nombre|fecha_registro|monto_financiamiento|dias_mora)$")
+    order_by: Optional[str] = Field(None, pattern="^(nombres|apellidos|cedula|fecha_registro|estado)$")
     order_direction: Optional[str] = Field("asc", pattern="^(asc|desc)$")
-
-
-class ClienteResumenFinanciero(BaseModel):
-    """Resumen financiero del cliente"""
-    total_financiado: Decimal
-    total_pagado: Decimal
-    saldo_pendiente: Decimal
-    cuotas_pagadas: int
-    cuotas_totales: int
-    porcentaje_avance: float
-    proxima_cuota: Optional[dict] = None
-    
-    model_config = ConfigDict(from_attributes=True)
 
 
 class ClienteDetallado(ClienteResponse):
     """Cliente con información detallada"""
     # Información del analista
-    asesor_nombre: Optional[str] = None
-    asesor_email: Optional[str] = None
-    
-    # Resumen financiero
-    resumen_financiero: Optional[ClienteResumenFinanciero] = None
+    analista_nombre: Optional[str] = None
     
     # Estadísticas
     total_prestamos: int = 0
     prestamos_activos: int = 0
-    ultimo_pago: Optional[dict] = None
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -238,13 +169,6 @@ class ClienteCreateWithLoan(ClienteBase):
     numero_amortizaciones: int = Field(..., ge=1, le=360, description="Número de cuotas")
     modalidad_pago: str = Field(..., pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
     
-    # Datos del vehículo (obligatorios para financiamiento)
-    modelo_vehiculo: str = Field(..., min_length=1, max_length=100)
-    marca_vehiculo: str = Field(..., min_length=1, max_length=50)
-    
-    # Asesor asignado
-    asesor_id: int = Field(..., description="ID del analista de configuración responsable")
-    
     # Configuración del préstamo
     tasa_interes_anual: Optional[Decimal] = Field(None, ge=0, le=100, description="Tasa de interés anual (%)")
     generar_tabla_automatica: bool = Field(True, description="Generar tabla de amortización automáticamente")
@@ -256,6 +180,6 @@ class ClienteQuickActions(BaseModel):
     puede_enviar_recordatorio: bool
     puede_generar_estado_cuenta: bool
     puede_modificar_financiamiento: bool
-    puede_reasignar_asesor: bool
+    puede_reasignar_analista: bool
     
     model_config = ConfigDict(from_attributes=True)
