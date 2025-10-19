@@ -50,10 +50,11 @@ interface ExcelRow extends ExcelData {
 
 interface ExcelUploaderProps {
   onClose: () => void
-  onDataProcessed: (data: ExcelRow[]) => void
+  onDataProcessed?: (data: ExcelRow[]) => void
+  onSuccess?: () => void
 }
 
-export function ExcelUploader({ onClose, onDataProcessed }: ExcelUploaderProps) {
+export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUploaderProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [excelData, setExcelData] = useState<ExcelRow[]>([])
@@ -331,7 +332,8 @@ export function ExcelUploader({ onClose, onDataProcessed }: ExcelUploaderProps) 
     }
     
     console.log('💾 Guardando datos:', validData.length, 'clientes')
-    onDataProcessed(validData)
+    onDataProcessed?.(validData)
+    onSuccess?.()
     onClose()
   }
 

@@ -346,6 +346,12 @@ export function ClientesList() {
         {showCrearCliente && (
           <CrearClienteForm 
             onClose={() => setShowCrearCliente(false)}
+            onSuccess={() => {
+              // ✅ CORRECCIÓN: Invalidar queries para actualizar datos
+              queryClient.invalidateQueries({ queryKey: ['clientes'] })
+              queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+              queryClient.invalidateQueries({ queryKey: ['kpis'] })
+            }}
             onClienteCreated={() => {
               // ✅ CORRECCIÓN: Invalidar queries para actualizar datos
               queryClient.invalidateQueries({ queryKey: ['clientes'] })

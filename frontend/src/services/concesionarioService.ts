@@ -2,6 +2,10 @@ import { apiClient, ApiResponse } from './api'
 
 export interface Concesionario {
   id: number
+  nombre: string
+  activo: boolean
+  created_at: string
+  updated_at?: string
 }
 
 export interface ConcesionarioCreate {
@@ -36,6 +40,11 @@ class ConcesionarioService {
   // Listar solo concesionarios activos (para formularios)
   async listarConcesionariosActivos(): Promise<Concesionario[]> {
     return await apiClient.get<Concesionario[]>(`${this.baseUrl}/activos`)
+  }
+
+  // Método alias para compatibilidad
+  async getConcesionarios(): Promise<Concesionario[]> {
+    return await this.listarConcesionariosActivos()
   }
 
   // Obtener un concesionario por ID

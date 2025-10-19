@@ -3,14 +3,7 @@ import { apiClient, ApiResponse } from './api'
 export interface Analista {
   id: number
   nombre: string
-  apellido: string
-  nombre_completo: string
-  email: string
-  telefono?: string
-  especialidad?: string
-  comision_porcentaje?: number
   activo: boolean
-  notas?: string
   created_at: string
   updated_at?: string
 }
@@ -88,10 +81,9 @@ class AnalistaService {
     throw lastError || new Error('Todos los endpoints de analistas fallaron')
   }
 
-  // Listar solo analistas activos (para formularios)
-  async listarAnalistasActivos(especialidad?: string): Promise<Analista[]> {
-    const params = especialidad ? { especialidad } : undefined
-    return await apiClient.get<Analista[]>(`${this.baseUrl}/activos`, { params })
+  // Método alias para compatibilidad
+  async getAnalistas(): Promise<Analista[]> {
+    return await this.listarAnalistasActivos()
   }
 
   // Obtener un analista por ID

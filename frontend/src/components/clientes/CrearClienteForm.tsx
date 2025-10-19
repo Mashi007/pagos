@@ -65,9 +65,10 @@ interface ValidationResult {
 interface CrearClienteFormProps {
   onClose: () => void
   onSuccess: () => void
+  onClienteCreated?: () => void
 }
 
-export function CrearClienteForm({ onClose, onSuccess }: CrearClienteFormProps) {
+export function CrearClienteForm({ onClose, onSuccess, onClienteCreated }: CrearClienteFormProps) {
   const [formData, setFormData] = useState<FormData>({
     cedula: '',
     nombres: '',
@@ -258,6 +259,7 @@ export function CrearClienteForm({ onClose, onSuccess }: CrearClienteFormProps) 
 
       await clienteService.createCliente(clienteData)
       onSuccess()
+      onClienteCreated?.()
       onClose()
     } catch (error) {
       console.error('Error creando cliente:', error)
@@ -277,6 +279,7 @@ export function CrearClienteForm({ onClose, onSuccess }: CrearClienteFormProps) 
         onSuccess={() => {
           setShowExcelUploader(false)
           onSuccess()
+          onClienteCreated?.()
         }}
       />
     )
@@ -502,7 +505,7 @@ export function CrearClienteForm({ onClose, onSuccess }: CrearClienteFormProps) 
                   <MapPin className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
                   <Textarea
                     value={formData.direccion}
-                    onChange={(e) => handleInputChange('direccion', e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleInputChange('direccion', e.target.value)}
                     className={`pl-10 ${getFieldValidation('direccion')?.isValid === false ? 'border-red-500' : ''}`}
                     placeholder="Dirección completa del cliente"
                     rows={2}
@@ -696,7 +699,7 @@ export function CrearClienteForm({ onClose, onSuccess }: CrearClienteFormProps) 
                 </label>
                 <Textarea
                   value={formData.notas}
-                  onChange={(e) => handleInputChange('notas', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleInputChange('notas', e.target.value)}
                   placeholder="Notas adicionales sobre el cliente"
                   rows={3}
                 />

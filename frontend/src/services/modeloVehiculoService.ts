@@ -2,7 +2,7 @@ import { apiClient, ApiResponse } from './api'
 
 export interface ModeloVehiculo {
   id: number
-  modelo: string
+  nombre: string
   activo: boolean
   created_at: string
   updated_at?: string
@@ -47,9 +47,9 @@ class ModeloVehiculoService {
     }
   }
 
-  // Listar solo modelos activos (para formularios)
-  async listarModelosActivos(): Promise<ModeloVehiculo[]> {
-    return await apiClient.get<ModeloVehiculo[]>(`${this.baseUrl}/activos`)
+  // Método alias para compatibilidad
+  async getModelosVehiculos(): Promise<ModeloVehiculo[]> {
+    return await this.listarModelosActivos()
   }
 
   // Obtener un modelo por ID
