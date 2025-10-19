@@ -64,12 +64,13 @@ interface ValidationResult {
 }
 
 interface CrearClienteFormProps {
+  cliente?: any // Cliente existente para edición
   onClose: () => void
   onSuccess: () => void
   onClienteCreated?: () => void
 }
 
-export function CrearClienteForm({ onClose, onSuccess, onClienteCreated }: CrearClienteFormProps) {
+export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated }: CrearClienteFormProps) {
   const [formData, setFormData] = useState<FormData>({
     cedula: '',
     nombres: '',
@@ -90,6 +91,28 @@ export function CrearClienteForm({ onClose, onSuccess, onClienteCreated }: Crear
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showExcelUploader, setShowExcelUploader] = useState(false)
   
+  // Pre-cargar datos del cliente si se está editando
+  useEffect(() => {
+    if (cliente) {
+      console.log('📝 Cargando datos del cliente para edición:', cliente)
+      setFormData({
+        cedula: cliente.cedula || '',
+        nombres: cliente.nombres || '',
+        apellidos: cliente.apellidos || '',
+        telefono: cliente.telefono || '',
+        email: cliente.email || '',
+        direccion: cliente.direccion || '',
+        fechaNacimiento: cliente.fecha_nacimiento || '',
+        ocupacion: cliente.ocupacion || '',
+        modeloVehiculo: cliente.modelo_vehiculo || '',
+        concesionario: cliente.concesionario || '',
+        analista: cliente.analista || '',
+        estado: cliente.estado || 'ACTIVO',
+        notas: cliente.notas || ''
+      })
+    }
+  }, [cliente])
+  
   // Datos de configuración
   const [concesionarios, setConcesionarios] = useState<Concesionario[]>([])
   const [analistas, setAnalistas] = useState<Analista[]>([])
@@ -99,17 +122,27 @@ export function CrearClienteForm({ onClose, onSuccess, onClienteCreated }: Crear
   useEffect(() => {
     const cargarDatosConfiguracion = async () => {
       try {
+        console.log('🔄 Cargando datos de configuración...')
+        
         const [concesionariosData, analistasData, modelosData] = await Promise.all([
           concesionarioService.getConcesionarios(),
           analistaService.getAnalistas(),
           modeloVehiculoService.getModelosVehiculos()
         ])
         
+        console.log('📊 Datos cargados:')
+        console.log('  - Concesionarios:', concesionariosData.length)
+        console.log('  - Analistas:', analistasData.length)
+        console.log('  - Modelos:', modelosData.length)
+        console.log('  - Modelos detalle:', modelosData)
+        
         setConcesionarios(concesionariosData)
         setAnalistas(analistasData)
         setModelosVehiculos(modelosData)
+        
+        console.log('✅ Estados actualizados correctamente')
       } catch (error) {
-        console.error('Error cargando datos de configuración:', error)
+        console.error('❌ Error cargando datos de configuración:', error)
       }
     }
 
@@ -258,7 +291,17 @@ export function CrearClienteForm({ onClose, onSuccess, onClienteCreated }: Crear
         notas: formData.notas || 'NA'
       }
 
-      await clienteService.createCliente(clienteData)
+      if (cliente) {
+        // Editar cliente existente
+        console.log('✏️ Editando cliente existente:', cliente.id)
+        await clienteService.actualizarCliente(cliente.id, clienteData)
+        console.log('✅ Cliente actualizado exitosamente')
+      } else {
+        // Crear nuevo cliente
+        console.log('➕ Creando nuevo cliente')
+        await clienteService.createCliente(clienteData)
+        console.log('✅ Cliente creado exitosamente')
+      }
       onSuccess()
       onClienteCreated?.()
       onClose()
@@ -300,7 +343,9 @@ export function CrearClienteForm({ onClose, onSuccess, onClienteCreated }: Crear
         className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"
       >
         <div className="sticky top-0 bg-white border-b p-6 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">Nuevo Cliente</h2>
+          <h2 className="text-2xl font-bold text-gray-900">
+            {cliente ? 'Editar Cliente' : 'Nuevo Cliente'}
+          </h2>
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -579,6 +624,7 @@ export function CrearClienteForm({ onClose, onSuccess, onClienteCreated }: Crear
                   placeholder="Buscar modelo de vehículo..."
                   className={getFieldValidation('modeloVehiculo')?.isValid === false ? 'border-red-500' : ''}
                 />
+                {console.log('🔍 Modelos disponibles para SearchableSelect:', modelosVehiculos.map(m => m.nombre))}
                 {getFieldValidation('modeloVehiculo') && (
                   <div className={`text-xs flex items-center gap-1 ${
                     getFieldValidation('modeloVehiculo')?.isValid ? 'text-green-600' : 'text-red-600'
