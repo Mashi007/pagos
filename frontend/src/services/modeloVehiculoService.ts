@@ -9,7 +9,7 @@ export interface ModeloVehiculo {
 }
 
 export interface ModeloVehiculoCreate {
-  modelo: string
+  nombre: string
   activo?: boolean
 }
 
@@ -47,9 +47,9 @@ class ModeloVehiculoService {
     }
   }
 
-  // Método alias para compatibilidad
-  async getModelosVehiculos(): Promise<ModeloVehiculo[]> {
-    return await this.listarModelosActivos()
+  // Listar solo modelos activos (para formularios)
+  async listarModelosActivos(): Promise<ModeloVehiculo[]> {
+    return await apiClient.get<ModeloVehiculo[]>(`${this.baseUrl}/activos`)
   }
 
   // Obtener un modelo por ID

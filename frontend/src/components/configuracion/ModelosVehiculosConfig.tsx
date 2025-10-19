@@ -32,7 +32,7 @@ export function ModelosVehiculosConfig() {
 
   // Form state
   const [formData, setFormData] = useState<ModeloVehiculoCreate>({
-    modelo: '',
+    nombre: '',
     activo: true
   })
 
@@ -86,7 +86,7 @@ export function ModelosVehiculosConfig() {
   const handleEdit = (modelo: ModeloVehiculo) => {
     setEditingModelo(modelo)
     setFormData({
-      modelo: modelo.modelo,
+      nombre: modelo.nombre,
       activo: modelo.activo
     })
     setShowForm(true)
@@ -108,7 +108,7 @@ export function ModelosVehiculosConfig() {
 
   const resetForm = () => {
     setFormData({
-      modelo: '',
+      nombre: '',
       activo: true
     })
     setEditingModelo(null)
@@ -117,7 +117,7 @@ export function ModelosVehiculosConfig() {
   }
 
   const filteredModelos = modelos.filter(modelo =>
-    (modelo.modelo && modelo.modelo.toLowerCase().includes(searchTerm.toLowerCase()))
+    (modelo.nombre && modelo.nombre.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
   if (loading) {
@@ -162,8 +162,8 @@ export function ModelosVehiculosConfig() {
                 <div>
                   <label className="text-sm font-medium">Modelo del Vehículo *</label>
                   <Input
-                    value={formData.modelo}
-                    onChange={(e) => setFormData({ ...formData, modelo: e.target.value })}
+                    value={formData.nombre}
+                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
                     placeholder="Nombre del modelo"
                     required
                   />
@@ -214,7 +214,7 @@ export function ModelosVehiculosConfig() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-500">Modelo del Vehículo</label>
-                <p className="text-lg font-semibold">{viewingModelo.modelo}</p>
+                <p className="text-lg font-semibold">{viewingModelo.nombre}</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-500">Estado</label>
@@ -282,7 +282,7 @@ export function ModelosVehiculosConfig() {
                 {filteredModelos.map((modelo) => (
                   <TableRow key={modelo.id}>
                     <TableCell>
-                      <div className="font-medium">{modelo.modelo}</div>
+                      <div className="font-medium">{modelo.nombre}</div>
                     </TableCell>
                     <TableCell>
                       <Badge variant={modelo.activo ? 'default' : 'destructive'}>

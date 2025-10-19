@@ -94,7 +94,7 @@ export function ModelosVehiculos() {
 
   // Filtrar modelos por término de búsqueda
   const modelosFiltrados = modelos.filter(modelo =>
-    modelo.modelo.toLowerCase().includes(searchTerm.toLowerCase())
+    modelo.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   return (
@@ -317,7 +317,7 @@ export function ModelosVehiculos() {
                     <div className="flex items-center space-x-3">
                       <Car className="w-5 h-5 text-gray-400" />
                       <div>
-                        <p className="font-medium">{modelo.modelo}</p>
+                        <p className="font-medium">{modelo.nombre}</p>
                         <p className="text-xs text-gray-500">ID: {modelo.id}</p>
                       </div>
                     </div>
@@ -407,14 +407,14 @@ interface CrearEditarModeloFormProps {
 
 function CrearEditarModeloForm({ modelo, onClose, onSuccess }: CrearEditarModeloFormProps) {
   const [formData, setFormData] = useState({
-    modelo: modelo?.modelo || ''
+    nombre: modelo?.nombre || ''
   })
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!formData.modelo.trim()) {
+    if (!formData.nombre.trim()) {
       toast.error('El modelo es obligatorio')
       return
     }
@@ -423,7 +423,7 @@ function CrearEditarModeloForm({ modelo, onClose, onSuccess }: CrearEditarModelo
       setLoading(true)
       
       const data = {
-        modelo: formData.modelo.trim()
+        nombre: formData.nombre.trim()
       }
 
       if (modelo) {
@@ -456,8 +456,8 @@ function CrearEditarModeloForm({ modelo, onClose, onSuccess }: CrearEditarModelo
             <div>
               <label className="block text-sm font-medium mb-1">Modelo *</label>
               <Input
-                value={formData.modelo}
-                onChange={(e) => setFormData({ ...formData, modelo: e.target.value })}
+                value={formData.nombre}
+                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
                 placeholder="Nombre del modelo de vehículo"
                 required
               />

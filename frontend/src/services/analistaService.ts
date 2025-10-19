@@ -81,6 +81,12 @@ class AnalistaService {
     throw lastError || new Error('Todos los endpoints de analistas fallaron')
   }
 
+  // Listar solo analistas activos (para formularios)
+  async listarAnalistasActivos(especialidad?: string): Promise<Analista[]> {
+    const params = especialidad ? { especialidad } : undefined
+    return await apiClient.get<Analista[]>(`${this.baseUrl}/activos`, { params })
+  }
+
   // Método alias para compatibilidad
   async getAnalistas(): Promise<Analista[]> {
     return await this.listarAnalistasActivos()

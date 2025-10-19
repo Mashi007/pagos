@@ -108,7 +108,7 @@ export function AnalistasConfig() {
   }
 
   // Filtrar analistas por término de búsqueda
-  const filteredAnalistas = analistas?.filter(analista =>
+  const filteredAnalistas = analistas?.filter((analista: Analista) =>
     analista.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   ) || []
 
@@ -177,7 +177,7 @@ export function AnalistasConfig() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {analistas?.filter(a => a.activo).length || 0}
+              {analistas?.filter((a: Analista) => a.activo).length || 0}
             </div>
           </CardContent>
         </Card>
@@ -188,7 +188,7 @@ export function AnalistasConfig() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              {analistas?.filter(a => !a.activo).length || 0}
+              {analistas?.filter((a: Analista) => !a.activo).length || 0}
             </div>
           </CardContent>
         </Card>
@@ -286,7 +286,7 @@ export function AnalistasConfig() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredAnalistas.map((analista) => (
+              {filteredAnalistas.map((analista: Analista) => (
                 <TableRow key={analista.id}>
                   <TableCell className="font-medium">{analista.id}</TableCell>
                   <TableCell>{analista.nombre}</TableCell>
