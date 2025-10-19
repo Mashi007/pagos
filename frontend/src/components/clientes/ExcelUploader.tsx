@@ -6,7 +6,6 @@ import {
   X,
   CheckCircle,
   AlertTriangle,
-  Download,
   Eye,
   Save,
 } from 'lucide-react'
@@ -62,37 +61,6 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const [showPreview, setShowPreview] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // 📥 DESCARGAR TEMPLATE
-  const handleDownloadTemplate = async () => {
-    try {
-      console.log('📥 Descargando template Excel...')
-      
-      const response = await fetch('/api/v1/plantilla/plantilla-clientes', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
-        }
-      })
-      
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`)
-      }
-      
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `Plantilla_Clientes_${new Date().toISOString().split('T')[0]}.xlsx`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-      
-      console.log('✅ Template descargado exitosamente')
-    } catch (error) {
-      console.error('❌ Error descargando template:', error)
-      alert('Error al descargar el template. Intenta nuevamente.')
-    }
-  }
 
   // 🔍 VALIDAR CAMPO INDIVIDUAL
   const validateField = async (field: string, value: string): Promise<ValidationResult> => {
@@ -361,15 +329,6 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
               <h2 className="text-xl font-bold">CARGA MASIVA DE CLIENTES</h2>
             </div>
             <div className="flex items-center space-x-2">
-              <Button
-                onClick={handleDownloadTemplate}
-                variant="outline"
-                size="sm"
-                className="bg-white text-green-700 border-green-300 hover:bg-green-50 hover:border-green-400 font-medium px-4 py-2 shadow-sm"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Descargar Template
-              </Button>
               <Button
                 onClick={onClose}
                 variant="ghost"
