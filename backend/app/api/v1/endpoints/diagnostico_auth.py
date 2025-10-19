@@ -85,7 +85,10 @@ async def debug_autenticacion(
             # Buscar usuario admin para test
             admin_user = db.query(User).filter(User.is_admin == True).first()
             if admin_user:
-                test_token = create_access_token(data={"sub": str(admin_user.id), "type": "access"})
+                test_token = create_access_token(
+                    subject=str(admin_user.id),
+                    additional_claims={"type": "access"}
+                )
                 token_test = {
                     "status": "success",
                     "token_created": True,
@@ -149,7 +152,10 @@ async def test_autenticacion(
             admin_user = db.query(User).filter(User.is_admin == True).first()
             if admin_user:
                 # Simular login
-                test_token = create_access_token(data={"sub": str(admin_user.id), "type": "access"})
+                test_token = create_access_token(
+                    subject=str(admin_user.id),
+                    additional_claims={"type": "access"}
+                )
                 login_test = {
                     "status": "success",
                     "user_found": True,

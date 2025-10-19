@@ -284,7 +284,10 @@ async def generar_token_prueba(
             }
         
         # Generar token
-        test_token = create_access_token(data={"sub": str(admin_user.id), "type": "access"})
+        test_token = create_access_token(
+            subject=str(admin_user.id),
+            additional_claims={"type": "access"}
+        )
         
         return {
             "timestamp": datetime.now().isoformat(),
