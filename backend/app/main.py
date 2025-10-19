@@ -56,7 +56,12 @@ from app.api.v1.endpoints import (
     predictive_token_analyzer,
     cross_validation_auth,
     intelligent_alerts_system,
-    network_diagnostic
+    network_diagnostic,
+    forensic_analysis,
+    experimental_tests,
+    comparative_analysis,
+    temporal_analysis,
+    architectural_analysis
 )
 
 # Configurar logging robusto
@@ -209,6 +214,11 @@ app.include_router(predictive_token_analyzer.router, prefix=f"{settings.API_V1_P
 app.include_router(cross_validation_auth.router, prefix=f"{settings.API_V1_PREFIX}/cross-validation", tags=["Validación Cruzada"])
 app.include_router(intelligent_alerts_system.router, prefix=f"{settings.API_V1_PREFIX}/intelligent-alerts", tags=["Sistema Alertas Inteligentes"])
 app.include_router(network_diagnostic.router, prefix=f"{settings.API_V1_PREFIX}/network", tags=["Diagnóstico Red"])
+app.include_router(forensic_analysis.router, prefix=f"{settings.API_V1_PREFIX}/forensic", tags=["Análisis Forense"])
+app.include_router(experimental_tests.router, prefix=f"{settings.API_V1_PREFIX}/experimental", tags=["Tests Experimentales"])
+app.include_router(comparative_analysis.router, prefix=f"{settings.API_V1_PREFIX}/comparative", tags=["Análisis Comparativo"])
+app.include_router(temporal_analysis.router, prefix=f"{settings.API_V1_PREFIX}/temporal", tags=["Análisis Temporal"])
+app.include_router(architectural_analysis.router, prefix=f"{settings.API_V1_PREFIX}/architectural", tags=["Análisis Arquitectural"])
 # app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])  # Removido - se usarán datos reales
 
 

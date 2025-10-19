@@ -43,7 +43,12 @@ from . import (
     predictive_token_analyzer,
     cross_validation_auth,
     intelligent_alerts_system,
-    network_diagnostic
+    network_diagnostic,
+    forensic_analysis,
+    experimental_tests,
+    comparative_analysis,
+    temporal_analysis,
+    architectural_analysis
 )
 
 __all__ = [
@@ -85,5 +90,10 @@ __all__ = [
     "predictive_token_analyzer",
     "cross_validation_auth",
     "intelligent_alerts_system",
-    "network_diagnostic"
+    "network_diagnostic",
+    "forensic_analysis",
+    "experimental_tests",
+    "comparative_analysis",
+    "temporal_analysis",
+    "architectural_analysis"
 ]
