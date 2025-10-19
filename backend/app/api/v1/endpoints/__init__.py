@@ -55,7 +55,8 @@ from . import (
     critical_error_monitor,
     strategic_measurements,
     verificar_concesionarios,
-    diagnostico_refresh_token
+    diagnostico_refresh_token,
+    test_excel_processing
 )
 
 __all__ = [
@@ -109,5 +110,6 @@ __all__ = [
     "critical_error_monitor",
     "strategic_measurements",
     "verificar_concesionarios",
-    "diagnostico_refresh_token"
+    "diagnostico_refresh_token",
+    "test_excel_processing"
 ]
