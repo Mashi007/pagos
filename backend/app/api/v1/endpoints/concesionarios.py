@@ -193,6 +193,8 @@ def listar_concesionarios(
 @router.get("/activos")
 def listar_concesionarios_activos(
     db: Session = Depends(get_db)
+    # TEMPORALMENTE SIN AUTENTICACIÓN PARA DROPDOWNS
+    # current_user: User = Depends(get_current_user)
 ):
     """
     🏢 Listar solo concesionarios activos (para formularios)
