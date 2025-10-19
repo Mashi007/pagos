@@ -43,7 +43,6 @@ from app.api.v1.endpoints import (
     concesionarios,
     analistas,
     modelos_vehiculos,
-    plantilla_clientes,
     migracion_emergencia,
     diagnostico,
     diagnostico_auth,
@@ -208,7 +207,6 @@ app.include_router(validadores.router, prefix=f"{settings.API_V1_PREFIX}/validad
 app.include_router(concesionarios.router, prefix=f"{settings.API_V1_PREFIX}/concesionarios", tags=["Concesionarios"])
 app.include_router(analistas.router, prefix=f"{settings.API_V1_PREFIX}/analistas", tags=["Analistas"])
 app.include_router(modelos_vehiculos.router, prefix=f"{settings.API_V1_PREFIX}/modelos-vehiculos", tags=["Modelos Vehiculos"])
-app.include_router(plantilla_clientes.router, prefix=f"{settings.API_V1_PREFIX}/plantilla", tags=["Plantilla Excel"])
 app.include_router(migracion_emergencia.router, prefix=f"{settings.API_V1_PREFIX}/migracion", tags=["Migración Emergencia"])
 app.include_router(diagnostico.router, prefix=f"{settings.API_V1_PREFIX}/diagnostico", tags=["Diagnóstico"])
 app.include_router(diagnostico_auth.router, prefix=f"{settings.API_V1_PREFIX}/auth-debug", tags=["Diagnóstico Auth"])

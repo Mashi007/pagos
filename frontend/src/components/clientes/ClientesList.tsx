@@ -7,8 +7,6 @@ import {
   Eye, 
   Edit, 
   Trash2, 
-  Download,
-  Upload,
   MoreHorizontal,
   Phone,
   Mail,
@@ -193,14 +191,6 @@ export function ClientesList() {
         </div>
         
         <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Download className="w-4 h-4 mr-2" />
-            Exportar
-          </Button>
-          <Button variant="outline" size="sm">
-            <Upload className="w-4 h-4 mr-2" />
-            Importar
-          </Button>
           <Button size="sm" onClick={() => setShowCrearCliente(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Nuevo Cliente
