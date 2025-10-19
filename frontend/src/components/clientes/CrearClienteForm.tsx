@@ -17,12 +17,16 @@ import {
   XCircle,
   Download,
   FileSpreadsheet,
+  MapPin,
+  Briefcase,
+  FileText,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
 import { concesionarioService, type Concesionario } from '@/services/concesionarioService'
 import { analistaService, type Analista } from '@/services/analistaService'
 import { modeloVehiculoService, type ModeloVehiculo } from '@/services/modeloVehiculoService'
@@ -30,617 +34,237 @@ import { clienteService } from '@/services/clienteService'
 import { ExcelUploader } from './ExcelUploader'
 
 interface FormData {
-  // Datos personales
-  nombreCompleto: string
+  // Datos personales - OBLIGATORIOS
   cedula: string
-  movil: string
+  nombres: string
+  apellidos: string
+  telefono: string
   email: string
+  direccion: string
+  fechaNacimiento: string
+  ocupacion: string
   
-  // Datos del financiamiento
+  // Datos del vehículo - OBLIGATORIOS
   modeloVehiculo: string
-  totalFinanciamiento: string
-  cuotaInicial: string
-  numeroAmortizaciones: string
-  modalidadFinanciamiento: 'semanal' | 'quincenal' | 'mensual'
-  fechaEntrega: string
-  analistaAsignado: string
   concesionario: string
+  analista: string
+  
+  // Estado - OBLIGATORIO
+  estado: 'ACTIVO' | 'INACTIVO' | 'FINALIZADO'
+  
+  // Notas - OPCIONAL
+  notas: string
 }
 
 interface ValidationResult {
+  field: string
   isValid: boolean
-  message?: string
+  message: string
 }
 
-interface FieldValidation {
-  [key: string]: ValidationResult
-}
-
-export function CrearClienteForm({ 
-  onClose, 
-  onClienteCreated 
-}: { 
+interface CrearClienteFormProps {
   onClose: () => void
-  onClienteCreated?: () => void 
-}) {
+  onSuccess: () => void
+}
+
+export function CrearClienteForm({ onClose, onSuccess }: CrearClienteFormProps) {
   const [formData, setFormData] = useState<FormData>({
-    nombreCompleto: '',
     cedula: '',
-    movil: '',
+    nombres: '',
+    apellidos: '',
+    telefono: '',
     email: '',
+    direccion: '',
+    fechaNacimiento: '',
+    ocupacion: '',
     modeloVehiculo: '',
-    totalFinanciamiento: '',
-    cuotaInicial: '',
-    numeroAmortizaciones: '12',
-    modalidadFinanciamiento: 'quincenal',
-    fechaEntrega: '',
-    analistaAsignado: '',
-    concesionario: ''
+    concesionario: '',
+    analista: '',
+    estado: 'ACTIVO',
+    notas: ''
   })
 
-  const [validations, setValidations] = useState<FieldValidation>({})
+  const [validations, setValidations] = useState<ValidationResult[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [concesionarios, setConcesionarios] = useState<Concesionario[]>([])
-  const [analistaes, setAnalistaes] = useState<Analista[]>([])
-  const [modelosVehiculos, setModelosVehiculos] = useState<ModeloVehiculo[]>([])
-  const [loadingData, setLoadingData] = useState(true)
-  const [downloadingTemplate, setDownloadingTemplate] = useState(false)
   const [showExcelUploader, setShowExcelUploader] = useState(false)
+  
+  // Datos de configuración
+  const [concesionarios, setConcesionarios] = useState<Concesionario[]>([])
+  const [analistas, setAnalistas] = useState<Analista[]>([])
+  const [modelosVehiculos, setModelosVehiculos] = useState<ModeloVehiculo[]>([])
 
-  // 🔄 CARGAR DATOS DINÁMICOS: Analistaes y Concesionarios desde configuración
+  // Cargar datos de configuración
   useEffect(() => {
-    const loadData = async () => {
+    const cargarDatosConfiguracion = async () => {
       try {
-        setLoadingData(true)
-        console.log('🔄 Cargando analistaes, concesionarios y modelos de vehículos desde configuración...')
-        
-        const [concesionariosData, analistaesData, modelosData] = await Promise.all([
-          // 🔄 Usar endpoints de configuración
-          fetch('/api/v1/concesionarios/activos', {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
-            }
-          }).then(res => res.json()).then(data => data.data || []),
-          
-          fetch('/api/v1/analistas/activos', {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
-            }
-          }).then(res => res.json()).then(data => data.data || []),
-          
-          fetch('/api/v1/modelos-vehiculos/activos', {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
-            }
-          }).then(res => res.json()).then(data => data.data || [])
+        const [concesionariosData, analistasData, modelosData] = await Promise.all([
+          concesionarioService.getConcesionarios(),
+          analistaService.getAnalistas(),
+          modeloVehiculoService.getModelosVehiculos()
         ])
         
-        console.log('✅ Datos cargados:', {
-          concesionarios: concesionariosData.length,
-          analistaes: analistaesData.length,
-          modelos: modelosData.length
-        })
-        
         setConcesionarios(concesionariosData)
-        setAnalistaes(analistaesData)
+        setAnalistas(analistasData)
         setModelosVehiculos(modelosData)
       } catch (error) {
-        console.error('❌ Error al cargar datos de configuración:', error)
-        // Fallback a servicios locales si falla
-        try {
-          const [concesionariosData, analistaesData, modelosData] = await Promise.all([
-            concesionarioService.listarConcesionariosActivos(),
-            analistaService.listarAnalistasActivos(),
-            modeloVehiculoService.listarModelosActivos()
-          ])
-          setConcesionarios(concesionariosData)
-          setAnalistaes(analistaesData)
-          setModelosVehiculos(modelosData)
-        } catch (fallbackError) {
-          console.error('❌ Error en fallback:', fallbackError)
-          
-          // Fallback final: usar datos mock
-          console.log('🔄 Usando datos mock para formulario...')
-          const mockConcesionarios = [
-            { id: 1, nombre: 'AutoCenter Caracas', direccion: 'Av. Francisco de Miranda, Caracas', telefono: '+58 212-555-0101', email: 'caracas@autocenter.com', responsable: 'María González', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-            { id: 2, nombre: 'Motors Valencia', direccion: 'Zona Industrial Norte, Valencia', telefono: '+58 241-555-0202', email: 'valencia@motors.com', responsable: 'Carlos Rodríguez', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-            { id: 3, nombre: 'Vehiculos Maracaibo', direccion: 'Av. 5 de Julio, Maracaibo', telefono: '+58 261-555-0303', email: 'maracaibo@vehiculos.com', responsable: 'Ana Pérez', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
-          ]
-          
-          const mockAnalistaes = [
-            { id: 1, nombre: 'Roberto', apellido: 'Martínez', nombre_completo: 'Roberto Martínez', email: 'roberto.martinez@rapicredit.com', telefono: '+58 414-555-0404', especialidad: 'Vehículos Nuevos', comision_porcentaje: 2.5, activo: true, notas: 'Especialista en vehículos de gama alta', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-            { id: 2, nombre: 'Sandra', apellido: 'López', nombre_completo: 'Sandra López', email: 'sandra.lopez@rapicredit.com', telefono: '+58 424-555-0505', especialidad: 'Vehículos Usados', comision_porcentaje: 3.0, activo: true, notas: 'Experta en financiamiento de vehículos usados', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-            { id: 3, nombre: 'Miguel', apellido: 'Hernández', nombre_completo: 'Miguel Hernández', email: 'miguel.hernandez@rapicredit.com', telefono: '+58 414-555-0606', especialidad: 'Motocicletas', comision_porcentaje: 4.0, activo: true, notas: 'Especialista en financiamiento de motocicletas', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
-          ]
-          
-          const mockModelos = [
-            { id: 1, modelo: 'Toyota Corolla', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-            { id: 2, modelo: 'Nissan Versa', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-            { id: 3, modelo: 'Hyundai Accent', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-            { id: 4, modelo: 'Chevrolet Aveo', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-            { id: 5, modelo: 'Ford Fiesta', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
-          ]
-          
-          setConcesionarios(mockConcesionarios)
-          setAnalistaes(mockAnalistaes)
-          setModelosVehiculos(mockModelos)
-          console.log('✅ Datos mock cargados:', {
-            concesionarios: mockConcesionarios.length,
-            analistaes: mockAnalistaes.length,
-            modelos: mockModelos.length
-          })
-        }
-      } finally {
-        setLoadingData(false)
+        console.error('Error cargando datos de configuración:', error)
       }
     }
 
-    loadData()
+    cargarDatosConfiguracion()
   }, [])
 
-  // 📥 DESCARGAR TEMPLATE EXCEL
-  const handleDownloadTemplate = async () => {
-    try {
-      setDownloadingTemplate(true)
-      console.log('📥 Descargando template Excel...')
-      
-      const response = await fetch('/api/v1/plantilla/plantilla-clientes', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
-        }
-      })
-      
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`)
-      }
-      
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `Plantilla_Clientes_${new Date().toISOString().split('T')[0]}.xlsx`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-      
-      console.log('✅ Template descargado exitosamente')
-    } catch (error) {
-      console.error('❌ Error descargando template:', error)
-      alert('Error al descargar el template. Intenta nuevamente.')
-    } finally {
-      setDownloadingTemplate(false)
-    }
-  }
-
-  // 📊 MANEJAR DATOS PROCESADOS DEL EXCEL
-  const handleExcelDataProcessed = async (data: any[]) => {
-    try {
-      console.log('📊 Guardando datos del Excel:', data.length, 'clientes')
-      
-      // Procesar cada cliente del Excel
-      for (const clienteData of data) {
-        const clienteFormatted = {
-          cedula: clienteData.cedula,
-          nombres: clienteData.nombres,
-          apellidos: clienteData.apellidos,
-          telefono: clienteData.telefono.replace(/[^\d]/g, ''),
-          email: clienteData.email,
-          direccion: clienteData.direccion,
-          fecha_nacimiento: clienteData.fecha_nacimiento,
-          ocupacion: clienteData.ocupacion,
-          modelo_vehiculo: clienteData.modelo_vehiculo,
-          concesionario: clienteData.concesionario,
-          analista: clienteData.analista,
-          total_financiamiento: parseFloat(clienteData.total_financiamiento.replace(/[^\d.-]/g, '')) || 0,
-          cuota_inicial: parseFloat(clienteData.cuota_inicial?.replace(/[^\d.-]/g, '') || '0') || 0,
-          numero_amortizaciones: parseInt(clienteData.numero_amortizaciones) || 12,
-          modalidad_pago: clienteData.modalidad_pago.toUpperCase(),
-          fecha_entrega: clienteData.fecha_entrega,
-          estado: clienteData.estado.toUpperCase(),
-          activo: clienteData.activo.toLowerCase() === 'true',
-          notas: clienteData.notas
-        }
-        
-        await clienteService.createCliente(clienteFormatted)
-      }
-      
-      console.log('✅ Todos los clientes guardados exitosamente')
-      if (onClienteCreated) {
-        onClienteCreated()
-      }
-      
-    } catch (error) {
-      console.error('❌ Error guardando datos del Excel:', error)
-      alert('Error al guardar algunos clientes. Revisa los logs.')
-    }
-  }
-
-  // 🔍 VALIDACIONES CON BACKEND: Usar validadores del sistema
-  const validateField = async (field: string, value: string): Promise<ValidationResult> => {
+  // Validaciones en tiempo real
+  const validateField = (field: string, value: string): ValidationResult => {
     switch (field) {
-      case 'nombreCompleto':
-        if (!value.trim()) return { isValid: false, message: 'Nombre requerido' }
-        if (value.trim().length < 3) return { isValid: false, message: 'Mínimo 3 caracteres' }
-        return { isValid: true }
-
       case 'cedula':
-        if (!value.trim()) return { isValid: false, message: 'Cédula requerida' }
-        
-        try {
-          // 🔍 VALIDAR CON BACKEND: Usar endpoint de validadores
-          const response = await fetch('/api/v1/validadores/validar-campo', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
-            },
-            body: JSON.stringify({
-              campo: 'cedula',
-              valor: value,
-              pais: 'VENEZUELA'
-            })
-          })
-          
-          if (response.ok) {
-            const result = await response.json()
-            // ✅ CORRECCIÓN: Acceder a result.validacion.valido
-            if (result.validacion && result.validacion.valido) {
-              return { isValid: true }
-            } else {
-              return { isValid: false, message: result.validacion?.mensaje || 'Formato de cédula inválido' }
-            }
-          }
-        } catch (error) {
-          console.warn('Error validando cédula con backend, usando validación local:', error)
+        if (!value) return { field, isValid: false, message: 'Cédula es obligatoria' }
+        if (value.length < 8 || value.length > 20) {
+          return { field, isValid: false, message: 'Cédula debe tener entre 8 y 20 caracteres' }
         }
-        
-        // Fallback: validación local mejorada (coincide con backend)
-        const cedulaPattern = /^[VEJ]\d{7,10}$/
-        if (!cedulaPattern.test(value.toUpperCase())) {
-          return { isValid: false, message: 'Formato: V/E/J + exactamente entre 7 y 10 dígitos (ej: V12345678)' }
+        return { field, isValid: true, message: 'Cédula válida' }
+      
+      case 'nombres':
+        if (!value) return { field, isValid: false, message: 'Nombres son obligatorios' }
+        const nombresWords = value.trim().split(' ')
+        if (nombresWords.length > 2) {
+          return { field, isValid: false, message: 'Máximo 2 palabras en nombres' }
         }
-        return { isValid: true }
-
-      case 'movil':
-        if (!value.trim()) return { isValid: false, message: 'Móvil requerido' }
-        
-        try {
-          // 🔍 VALIDAR CON BACKEND: Usar endpoint de validadores
-          const cleanMovil = value.replace(/[^\d]/g, '')
-          const response = await fetch('/api/v1/validadores/validar-campo', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
-            },
-            body: JSON.stringify({
-              campo: 'telefono',
-              valor: cleanMovil,
-              pais: 'VENEZUELA'
-            })
-          })
-          
-          if (response.ok) {
-            const result = await response.json()
-            // ✅ CORRECCIÓN: Acceder a result.validacion.valido
-            if (result.validacion && result.validacion.valido) {
-              return { isValid: true }
-            } else {
-              return { isValid: false, message: result.validacion?.mensaje || 'Formato de teléfono inválido' }
-            }
-          }
-        } catch (error) {
-          console.warn('Error validando teléfono con backend, usando validación local:', error)
+        return { field, isValid: true, message: 'Nombres válidos' }
+      
+      case 'apellidos':
+        if (!value) return { field, isValid: false, message: 'Apellidos son obligatorios' }
+        const apellidosWords = value.trim().split(' ')
+        if (apellidosWords.length > 2) {
+          return { field, isValid: false, message: 'Máximo 2 palabras en apellidos' }
         }
-        
-        // Fallback: validación local mejorada (coincide con backend)
-        const cleanMovilFallback = value.replace(/\D/g, '')
-        // Validar formato: +58 + 10 dígitos (primer dígito no puede ser 0)
-        if (cleanMovilFallback.length === 10) {
-          // Formato local: 4241234567 -> +58 424 1234567
-          if (cleanMovilFallback[0] === '0') {
-            return { isValid: false, message: 'Primer dígito no puede ser 0 (ej: 4241234567)' }
-          }
-          return { isValid: true }
-        } else if (cleanMovilFallback.length === 12 && cleanMovilFallback.startsWith('58')) {
-          // Ya tiene código de país: 584241234567 -> +58 424 1234567
-          if (cleanMovilFallback[2] === '0') {
-            return { isValid: false, message: 'Primer dígito no puede ser 0 (ej: 584241234567)' }
-          }
-          return { isValid: true }
+        return { field, isValid: true, message: 'Apellidos válidos' }
+      
+      case 'telefono':
+        if (!value) return { field, isValid: false, message: 'Teléfono es obligatorio' }
+        if (value.length < 8 || value.length > 15) {
+          return { field, isValid: false, message: 'Teléfono debe tener entre 8 y 15 caracteres' }
         }
-        return { isValid: false, message: 'Formato: +58 XXXXXXXXXX (10 dígitos, primer dígito no puede ser 0)' }
-
+        return { field, isValid: true, message: 'Teléfono válido' }
+      
       case 'email':
-        if (!value.trim()) return { isValid: false, message: 'Email requerido' }
-        
-        try {
-          // 🔍 VALIDAR CON BACKEND: Usar endpoint de validadores
-          const response = await fetch('/api/v1/validadores/validar-campo', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
-            },
-            body: JSON.stringify({
-              campo: 'email',
-              valor: value,
-              pais: 'VENEZUELA'
-            })
-          })
-          
-          if (response.ok) {
-            const result = await response.json()
-            // ✅ CORRECCIÓN: Acceder a result.validacion.valido
-            if (result.validacion && result.validacion.valido) {
-              return { isValid: true }
-            } else {
-              return { isValid: false, message: result.validacion?.mensaje || 'Formato de email inválido' }
-            }
-          }
-        } catch (error) {
-          console.warn('Error validando email con backend, usando validación local:', error)
+        if (!value) return { field, isValid: false, message: 'Email es obligatorio' }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (!emailRegex.test(value)) {
+          return { field, isValid: false, message: 'Email inválido' }
         }
-        
-        // Fallback: validación local mejorada (coincide con backend)
-        const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
-        if (!emailPattern.test(value.toLowerCase())) {
-          return { isValid: false, message: 'Formato: usuario@dominio.com (se normaliza a minúsculas)' }
+        return { field, isValid: true, message: 'Email válido' }
+      
+      case 'direccion':
+        if (!value) return { field, isValid: false, message: 'Dirección es obligatoria' }
+        if (value.length < 5) {
+          return { field, isValid: false, message: 'Dirección debe tener al menos 5 caracteres' }
         }
-        
-        // Validar dominios bloqueados (coincide con backend)
-        const dominiosBloqueados = ['tempmail.org', '10minutemail.com', 'guerrillamail.com']
-        const dominio = value.toLowerCase().split('@')[1]
-        if (dominiosBloqueados.includes(dominio)) {
-          return { isValid: false, message: `Dominio bloqueado: ${dominio}` }
-        }
-        
-        return { isValid: true }
-
-      case 'modeloVehiculo':
-        if (!value.trim()) return { isValid: false, message: 'Debe seleccionar un modelo' }
-        return { isValid: true }
-
-      case 'totalFinanciamiento':
-        if (!value.trim()) return { isValid: false, message: 'Total requerido' }
-        
-        // Validación de monto (coincide con backend)
-        const cleanTotal = value.replace(/[^\d.-]/g, '')
-        const total = parseFloat(cleanTotal)
-        
-        if (isNaN(total)) {
-          return { isValid: false, message: 'Debe ser un número válido' }
-        }
-        
-        if (total <= 0) {
-          return { isValid: false, message: 'Debe ser un número positivo' }
-        }
-        
-        // Validar máximo 2 decimales
-        const decimales = cleanTotal.split('.')[1]
-        if (decimales && decimales.length > 2) {
-          return { isValid: false, message: 'Máximo 2 decimales permitidos' }
-        }
-        
-        if (total < 1000 || total > 50000000) {
-          return { isValid: false, message: 'Entre $1,000 y $50,000,000' }
-        }
-        
-        return { isValid: true }
-
-      case 'cuotaInicial':
-        if (!value.trim()) return { isValid: true } // Opcional
-        
-        // Validación de monto (coincide con backend)
-        const cleanCuota = value.replace(/[^\d.-]/g, '')
-        const cuota = parseFloat(cleanCuota)
-        
-        if (isNaN(cuota)) {
-          return { isValid: false, message: 'Debe ser un número válido' }
-        }
-        
-        if (cuota < 0) {
-          return { isValid: false, message: 'No puede ser negativo' }
-        }
-        
-        // Validar máximo 2 decimales
-        const decimalesCuota = cleanCuota.split('.')[1]
-        if (decimalesCuota && decimalesCuota.length > 2) {
-          return { isValid: false, message: 'Máximo 2 decimales permitidos' }
-        }
-        
-        if (cuota > 50000000) {
-          return { isValid: false, message: 'Máximo $50,000,000' }
-        }
-        
-        return { isValid: true }
-
-      case 'numeroAmortizaciones':
-        if (!value.trim()) return { isValid: false, message: 'Número requerido' }
-        const amortizaciones = parseInt(value)
-        if (isNaN(amortizaciones) || amortizaciones < 1 || amortizaciones > 60) {
-          return { isValid: false, message: 'Entre 1 y 60 cuotas' }
-        }
-        return { isValid: true }
-
-      case 'fechaEntrega':
-        if (!value.trim()) return { isValid: false, message: 'Fecha requerida' }
-        
-        // Validación de fecha (coincide con backend)
+        return { field, isValid: true, message: 'Dirección válida' }
+      
+      case 'fechaNacimiento':
+        if (!value) return { field, isValid: false, message: 'Fecha de nacimiento es obligatoria' }
         const fecha = new Date(value)
         const hoy = new Date()
-        hoy.setHours(0, 0, 0, 0)
-        
-        // Validar que sea una fecha válida
-        if (isNaN(fecha.getTime())) {
-          return { isValid: false, message: 'Fecha inválida' }
+        if (fecha > hoy) {
+          return { field, isValid: false, message: 'Fecha de nacimiento no puede ser futura' }
         }
-        
-        // Validar que no sea fecha pasada
-        if (fecha < hoy) {
-          return { isValid: false, message: 'No puede ser fecha pasada' }
-        }
-        
-        // Validar rango de años (1900-2100 como en backend)
-        const año = fecha.getFullYear()
-        if (año < 1900 || año > 2100) {
-          return { isValid: false, message: 'Año debe estar entre 1900 y 2100' }
-        }
-        
-        return { isValid: true }
-
-      case 'analistaAsignado':
-        if (!value.trim()) return { isValid: false, message: 'Analista requerido' }
-        return { isValid: true }
-
+        return { field, isValid: true, message: 'Fecha válida' }
+      
+      case 'ocupacion':
+        if (!value) return { field, isValid: false, message: 'Ocupación es obligatoria' }
+        return { field, isValid: true, message: 'Ocupación válida' }
+      
+      case 'modeloVehiculo':
+        if (!value) return { field, isValid: false, message: 'Modelo de vehículo es obligatorio' }
+        return { field, isValid: true, message: 'Modelo válido' }
+      
       case 'concesionario':
-        if (!value.trim()) return { isValid: false, message: 'Concesionario requerido' }
-        return { isValid: true }
-
+        if (!value) return { field, isValid: false, message: 'Concesionario es obligatorio' }
+        return { field, isValid: true, message: 'Concesionario válido' }
+      
+      case 'analista':
+        if (!value) return { field, isValid: false, message: 'Analista es obligatorio' }
+        return { field, isValid: true, message: 'Analista válido' }
+      
       default:
-        return { isValid: true }
+        return { field, isValid: true, message: '' }
     }
   }
 
-  const handleFieldChange = async (field: keyof FormData, value: string) => {
+  const handleInputChange = (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
     
-    // 🔍 VALIDAR CAMPO CON BACKEND: Validación asíncrona
-    const validation = await validateField(field, value)
-    setValidations(prev => ({ ...prev, [field]: validation }))
-  }
-
-  const formatMovil = (value: string) => {
-    // Limpiar solo números
-    const cleanValue = value.replace(/\D/g, '')
-    
-    if (cleanValue.length <= 10) {
-      // Formato local: 4241234567 -> +58 424 1234567
-      if (cleanValue.length >= 3) {
-        return `+58 ${cleanValue.slice(0, 3)} ${cleanValue.slice(3)}`
-      }
-      return `+58 ${cleanValue}`
-    } else if (cleanValue.startsWith('58') && cleanValue.length === 12) {
-      // Ya tiene código de país: 584241234567 -> +58 424 1234567
-      return `+58 ${cleanValue.slice(2, 5)} ${cleanValue.slice(5)}`
-    }
-    
-    return value
-  }
-
-  const formatCurrency = (value: string) => {
-    const cleanValue = value.replace(/[^\d.-]/g, '')
-    if (!cleanValue) return ''
-    return `$${parseInt(cleanValue).toLocaleString()}`
-  }
-
-  const getFieldStatus = (field: string) => {
-    const validation = validations[field]
-    if (!validation) return 'pending'
-    return validation.isValid ? 'valid' : 'invalid'
-  }
-
-  const getFieldIcon = (field: string) => {
-    const status = getFieldStatus(field)
-    switch (status) {
-      case 'valid': return <CheckCircle className="h-4 w-4 text-green-500" />
-      case 'invalid': return <XCircle className="h-4 w-4 text-red-500" />
-      default: return <div className="h-4 w-4" />
-    }
-  }
-
-  const getPendingErrors = () => {
-    return Object.entries(validations)
-      .filter(([_, validation]) => !validation.isValid)
-      .map(([field, validation]) => ({ field, message: validation.message }))
+    // Validar campo en tiempo real
+    const validation = validateField(field, value)
+    setValidations(prev => {
+      const filtered = prev.filter(v => v.field !== field)
+      return [...filtered, validation]
+    })
   }
 
   const isFormValid = () => {
     const requiredFields: (keyof FormData)[] = [
-      'nombreCompleto', 'cedula', 'movil', 'email',
-      'modeloVehiculo', 'totalFinanciamiento', 'numeroAmortizaciones',
-      'fechaEntrega', 'analistaAsignado', 'concesionario'
+      'cedula', 'nombres', 'apellidos', 'telefono', 'email', 
+      'direccion', 'fechaNacimiento', 'ocupacion', 'modeloVehiculo', 
+      'concesionario', 'analista'
     ]
     
     return requiredFields.every(field => {
-      const validation = validations[field]
-      return validation?.isValid === true
+      const validation = validations.find(v => v.field === field)
+      return validation?.isValid && formData[field]
     })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!isFormValid()) return
+    
+    if (!isFormValid()) {
+      return
+    }
 
     setIsSubmitting(true)
+    
     try {
-      // 🔄 CONECTAR AL BACKEND: Usar servicio real
-      
-      // ✅ TRANSFORMAR DATOS: Convertir FormData a ClienteForm (coincide con backend)
       const clienteData = {
-        // Datos personales (coincide con backend/app/schemas/cliente.py)
         cedula: formData.cedula,
-        nombres: formData.nombreCompleto.split(' ')[0] || '',  // ✅ Backend: "nombres"
-        apellidos: formData.nombreCompleto.split(' ').slice(1).join(' ') || '',  // ✅ Backend: "apellidos"
-        telefono: formData.movil.replace(/[^\d]/g, ''),  // ✅ Backend: "telefono"
+        nombres: formData.nombres,
+        apellidos: formData.apellidos,
+        telefono: formData.telefono,
         email: formData.email,
-        
-        // Datos del vehículo (coincide con backend)
-        modelo_vehiculo: formData.modeloVehiculo,  // ✅ Backend: "modelo_vehiculo"
-        marca_vehiculo: formData.modeloVehiculo.split(' ')[0] || '',  // ✅ Backend: "marca_vehiculo"
-        anio_vehiculo: new Date().getFullYear(),  // ✅ Backend: "anio_vehiculo"
-        
-        // Concesionario y analista (coincide con backend)
-        concesionario: formData.concesionario,  // ✅ Backend: "concesionario"
-        analista_config_id: parseInt(formData.analistaAsignado) || undefined,  // ✅ Backend: "analista_config_id"
-        
-        // Datos del financiamiento (coincide con backend)
-        total_financiamiento: parseFloat(formData.totalFinanciamiento.replace(/[^\d.-]/g, '')) || 0,  // ✅ Backend: "total_financiamiento"
-        cuota_inicial: parseFloat(formData.cuotaInicial.replace(/[^\d.-]/g, '')) || 0,  // ✅ Backend: "cuota_inicial"
-        fecha_entrega: formData.fechaEntrega,  // ✅ Backend: "fecha_entrega"
-        numero_amortizaciones: parseInt(formData.numeroAmortizaciones) || 12,  // ✅ Backend: "numero_amortizaciones"
-        modalidad_pago: formData.modalidadFinanciamiento.toUpperCase()  // ✅ Backend: "modalidad_pago"
+        direccion: formData.direccion,
+        fecha_nacimiento: formData.fechaNacimiento,
+        ocupacion: formData.ocupacion,
+        modelo_vehiculo: formData.modeloVehiculo,
+        concesionario: formData.concesionario,
+        analista: formData.analista,
+        estado: formData.estado,
+        notas: formData.notas || 'NA'
       }
-      
-      console.log('🔄 Enviando cliente al backend:', clienteData)
-      const newCliente = await clienteService.createCliente(clienteData)
-      console.log('✅ Cliente creado exitosamente:', newCliente)
-      
-      // Éxito - cerrar modal y notificar que se creó un cliente
+
+      await clienteService.createCliente(clienteData)
+      onSuccess()
       onClose()
-      if (onClienteCreated) {
-        onClienteCreated()
-      }
     } catch (error) {
-      console.error('❌ Error al guardar cliente:', error)
-      // TODO: Mostrar error al usuario
+      console.error('Error creando cliente:', error)
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const pendingErrors = getPendingErrors()
+  const getFieldValidation = (field: string) => {
+    return validations.find(v => v.field === field)
+  }
 
-  if (loadingData) {
+  if (showExcelUploader) {
     return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-      >
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.9, opacity: 0 }}
-          className="bg-white rounded-lg shadow-xl p-8 text-center"
-        >
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <h3 className="text-lg font-semibold mb-2">Cargando datos...</h3>
-          <p className="text-gray-600">Cargando concesionarios y analistaes</p>
-        </motion.div>
-      </motion.div>
+      <ExcelUploader 
+        onClose={() => setShowExcelUploader(false)}
+        onSuccess={() => {
+          setShowExcelUploader(false)
+          onSuccess()
+        }}
+      />
     )
   }
 
@@ -649,447 +273,444 @@ export function CrearClienteForm({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
     >
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"
       >
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <User className="h-6 w-6" />
-              <h2 className="text-xl font-bold">CREAR NUEVO CLIENTE</h2>
-            </div>
-            <div className="flex items-center space-x-2">
-              {/* Botón de carga masiva */}
-              <Button
-                onClick={() => setShowExcelUploader(true)}
-                variant="outline"
-                size="sm"
-                className="text-white border-white/30 hover:bg-white/20"
-              >
-                <FileSpreadsheet className="mr-2 h-4 w-4" />
-                Carga Masiva
-              </Button>
-              {/* Botón de descarga de template */}
-              <Button
-                onClick={handleDownloadTemplate}
-                disabled={downloadingTemplate}
-                variant="outline"
-                size="sm"
-                className="text-white border-white/30 hover:bg-white/20"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                {downloadingTemplate ? 'Descargando...' : 'Template'}
-              </Button>
-              <Button
-                onClick={onClose}
-                variant="ghost"
-                size="sm"
-                className="text-white hover:bg-white/20"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
+        <div className="sticky top-0 bg-white border-b p-6 flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-gray-900">Nuevo Cliente</h2>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowExcelUploader(true)}
+              className="flex items-center gap-2"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Cargar Excel
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onClose}
+            >
+              <X className="w-4 h-4" />
+            </Button>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Información sobre opciones */}
-          <Card className="border-blue-200 bg-blue-50">
-            <CardContent className="pt-4">
-              <div className="flex items-center space-x-2 mb-2">
-                <FileSpreadsheet className="h-5 w-5 text-blue-600" />
-                <h3 className="font-semibold text-blue-700">OPCIONES DE CREACIÓN</h3>
-              </div>
-              <div className="text-sm text-blue-600 space-y-1">
-                <p>• <strong>Formulario web:</strong> Completa los campos individualmente</p>
-                <p>• <strong>Carga Masiva:</strong> Sube archivo Excel con múltiples clientes</p>
-                <p>• <strong>Template:</strong> Descarga el archivo modelo para llenar</p>
-                <p>• <strong>Todas las opciones</strong> son compatibles y se guardan en la misma base de datos</p>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Datos Personales */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center text-lg">
-                <User className="mr-2 h-5 w-5" />
-                DATOS PERSONALES
+              <CardTitle className="flex items-center gap-2">
+                <User className="w-5 h-5" />
+                Datos Personales
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Nombre completo */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center">
-                    Nombre completo *
-                    {getFieldIcon('nombreCompleto')}
-                  </label>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Cédula <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
-                    value={formData.nombreCompleto}
-                    onChange={(e) => handleFieldChange('nombreCompleto', e.target.value)}
-                    placeholder="Juan Pérez"
-                    className={getFieldStatus('nombreCompleto') === 'invalid' ? 'border-red-500' : ''}
-                  />
-                  {validations.nombreCompleto?.isValid && (
-                    <p className="text-xs text-green-600">✓ Mínimo 3 caracteres</p>
-                  )}
-                  {validations.nombreCompleto?.message && (
-                    <p className="text-xs text-red-600">✗ {validations.nombreCompleto.message}</p>
-                  )}
-                </div>
-
-                {/* Cédula */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center">
-                    <CreditCard className="mr-1 h-4 w-4" />
-                    Cédula de identidad *
-                    {getFieldIcon('cedula')}
-                  </label>
-                  <Input
+                    type="text"
                     value={formData.cedula}
-                    onChange={(e) => handleFieldChange('cedula', e.target.value.toUpperCase())}
-                    placeholder="V12345678"
-                    className={getFieldStatus('cedula') === 'invalid' ? 'border-red-500' : ''}
+                    onChange={(e) => handleInputChange('cedula', e.target.value)}
+                    className={`pl-10 ${getFieldValidation('cedula')?.isValid === false ? 'border-red-500' : ''}`}
+                    placeholder="12345678"
                   />
-                  {validations.cedula?.isValid && (
-                    <div className="text-xs text-green-600 space-y-1">
-                      <p>✓ Formato: V/E/J + 7-10 dígitos</p>
-                      <p>✓ Cédula disponible (no duplicada)</p>
-                    </div>
-                  )}
-                  {validations.cedula?.message && (
-                    <p className="text-xs text-red-600">✗ {validations.cedula.message}</p>
-                  )}
                 </div>
+                {getFieldValidation('cedula') && (
+                  <div className={`text-xs flex items-center gap-1 ${
+                    getFieldValidation('cedula')?.isValid ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {getFieldValidation('cedula')?.isValid ? (
+                      <CheckCircle className="w-3 h-3" />
+                    ) : (
+                      <XCircle className="w-3 h-3" />
+                    )}
+                    {getFieldValidation('cedula')?.message}
+                  </div>
+                )}
+              </div>
 
-                {/* Móvil */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center">
-                    <Phone className="mr-1 h-4 w-4" />
-                    Móvil *
-                    {getFieldIcon('movil')}
-                  </label>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Nombres <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
-                    value={formatMovil(formData.movil)}
-                    onChange={(e) => handleFieldChange('movil', e.target.value)}
-                    placeholder="+58 424 1234567"
-                    className={getFieldStatus('movil') === 'invalid' ? 'border-red-500' : ''}
+                    type="text"
+                    value={formData.nombres}
+                    onChange={(e) => handleInputChange('nombres', e.target.value)}
+                    className={`pl-10 ${getFieldValidation('nombres')?.isValid === false ? 'border-red-500' : ''}`}
+                    placeholder="Juan Carlos"
                   />
-                  {validations.movil?.isValid && (
-                    <div className="text-xs text-green-600 space-y-1">
-                      <p>✓ Formato: +58 XXXXXXXXXX</p>
-                      <p>✓ Primer dígito no puede ser 0</p>
-                      <p>✓ Teléfono válido</p>
-                    </div>
-                  )}
-                  {validations.movil?.message && (
-                    <div className="text-xs text-red-600 space-y-1">
-                      <p>✗ {validations.movil.message}</p>
-                      <p className="text-gray-600">(Escribe: 4241234567, sistema formatea)</p>
-                    </div>
-                  )}
                 </div>
+                {getFieldValidation('nombres') && (
+                  <div className={`text-xs flex items-center gap-1 ${
+                    getFieldValidation('nombres')?.isValid ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {getFieldValidation('nombres')?.isValid ? (
+                      <CheckCircle className="w-3 h-3" />
+                    ) : (
+                      <XCircle className="w-3 h-3" />
+                    )}
+                    {getFieldValidation('nombres')?.message}
+                  </div>
+                )}
+              </div>
 
-                {/* Email */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center">
-                    <Mail className="mr-1 h-4 w-4" />
-                    Correo electrónico *
-                    {getFieldIcon('email')}
-                  </label>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Apellidos <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    type="text"
+                    value={formData.apellidos}
+                    onChange={(e) => handleInputChange('apellidos', e.target.value)}
+                    className={`pl-10 ${getFieldValidation('apellidos')?.isValid === false ? 'border-red-500' : ''}`}
+                    placeholder="Pérez González"
+                  />
+                </div>
+                {getFieldValidation('apellidos') && (
+                  <div className={`text-xs flex items-center gap-1 ${
+                    getFieldValidation('apellidos')?.isValid ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {getFieldValidation('apellidos')?.isValid ? (
+                      <CheckCircle className="w-3 h-3" />
+                    ) : (
+                      <XCircle className="w-3 h-3" />
+                    )}
+                    {getFieldValidation('apellidos')?.message}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Teléfono <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    type="tel"
+                    value={formData.telefono}
+                    onChange={(e) => handleInputChange('telefono', e.target.value)}
+                    className={`pl-10 ${getFieldValidation('telefono')?.isValid === false ? 'border-red-500' : ''}`}
+                    placeholder="0987654321"
+                  />
+                </div>
+                {getFieldValidation('telefono') && (
+                  <div className={`text-xs flex items-center gap-1 ${
+                    getFieldValidation('telefono')?.isValid ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {getFieldValidation('telefono')?.isValid ? (
+                      <CheckCircle className="w-3 h-3" />
+                    ) : (
+                      <XCircle className="w-3 h-3" />
+                    )}
+                    {getFieldValidation('telefono')?.message}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
                     type="email"
                     value={formData.email}
-                    onChange={(e) => handleFieldChange('email', e.target.value.toLowerCase())}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    className={`pl-10 ${getFieldValidation('email')?.isValid === false ? 'border-red-500' : ''}`}
                     placeholder="juan@email.com"
-                    className={getFieldStatus('email') === 'invalid' ? 'border-red-500' : ''}
                   />
-                  {validations.email?.isValid && (
-                    <div className="text-xs text-green-600 space-y-1">
-                      <p>✓ Formato: usuario@dominio.com</p>
-                      <p>✓ Normalización automática a minúsculas</p>
-                      <p>✓ Dominio válido</p>
-                    </div>
-                  )}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Datos del Financiamiento */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center text-lg">
-                <Car className="mr-2 h-5 w-5" />
-                DATOS DEL FINANCIAMIENTO
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Modelo de vehículo */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center">
-                    Modelo de vehículo *
-                    {getFieldIcon('modeloVehiculo')}
-                  </label>
-                  <Select value={formData.modeloVehiculo} onValueChange={(value) => handleFieldChange('modeloVehiculo', value)}>
-                    <SelectTrigger className={getFieldStatus('modeloVehiculo') === 'invalid' ? 'border-red-500' : ''}>
-                      <SelectValue placeholder="Seleccionar modelo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {modelosVehiculos.map((modelo) => (
-                        <SelectItem key={modelo.id} value={modelo.modelo}>
-                          {modelo.modelo}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {validations.modeloVehiculo?.message && (
-                    <p className="text-xs text-red-600">✗ {validations.modeloVehiculo.message}</p>
-                  )}
-                </div>
-
-                {/* Total del financiamiento */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center">
-                    <DollarSign className="mr-1 h-4 w-4" />
-                    Total del financiamiento *
-                    {getFieldIcon('totalFinanciamiento')}
-                  </label>
-                  <Input
-                    value={formatCurrency(formData.totalFinanciamiento)}
-                    onChange={(e) => handleFieldChange('totalFinanciamiento', e.target.value)}
-                    placeholder="$25,000"
-                    className={getFieldStatus('totalFinanciamiento') === 'invalid' ? 'border-red-500' : ''}
-                  />
-                  {validations.totalFinanciamiento?.isValid && (
-                    <div className="text-xs text-green-600 space-y-1">
-                      <p>✓ Número positivo válido</p>
-                      <p>✓ Máximo 2 decimales</p>
-                      <p>✓ Rango: $1,000 - $50,000,000</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Cuota inicial */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center">
-                    <DollarSign className="mr-1 h-4 w-4 inline" />
-                    Cuota inicial
-                    {getFieldIcon('cuotaInicial')}
-                  </label>
-                  <Input
-                    value={formatCurrency(formData.cuotaInicial)}
-                    onChange={(e) => handleFieldChange('cuotaInicial', e.target.value)}
-                    placeholder="$5,000"
-                    className={getFieldStatus('cuotaInicial') === 'invalid' ? 'border-red-500' : ''}
-                  />
-                  {validations.cuotaInicial?.isValid && formData.cuotaInicial && (
-                    <div className="text-xs text-green-600 space-y-1">
-                      <p>✓ Número válido</p>
-                      <p>✓ Máximo 2 decimales</p>
-                      <p>✓ Máximo $50,000,000</p>
-                    </div>
-                  )}
-                  {validations.cuotaInicial?.message && (
-                    <p className="text-xs text-red-600">✗ {validations.cuotaInicial.message}</p>
-                  )}
-                  {!formData.cuotaInicial && (
-                    <p className="text-xs text-gray-600">(Opcional, pero recomendado)</p>
-                  )}
-                </div>
-
-                {/* Número de amortizaciones */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center">
-                    <Calendar className="mr-1 h-4 w-4" />
-                    Número de amortizaciones *
-                    {getFieldIcon('numeroAmortizaciones')}
-                  </label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="60"
-                    value={formData.numeroAmortizaciones}
-                    onChange={(e) => handleFieldChange('numeroAmortizaciones', e.target.value)}
-                    placeholder="12"
-                    className={getFieldStatus('numeroAmortizaciones') === 'invalid' ? 'border-red-500' : ''}
-                  />
-                  {validations.numeroAmortizaciones?.isValid && (
-                    <p className="text-xs text-green-600">✓ Entre 1 y 60 cuotas</p>
-                  )}
-                  {validations.numeroAmortizaciones?.message && (
-                    <p className="text-xs text-red-600">✗ {validations.numeroAmortizaciones.message}</p>
-                  )}
-                </div>
-
-                {/* Modalidad de financiamiento */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Modalidad de financiamiento *
-                  </label>
-                  <div className="flex space-x-4">
-                    {(['semanal', 'quincenal', 'mensual'] as const).map((modalidad) => (
-                      <label key={modalidad} className="flex items-center space-x-2">
-                        <input
-                          type="radio"
-                          name="modalidadFinanciamiento"
-                          value={modalidad}
-                          checked={formData.modalidadFinanciamiento === modalidad}
-                          onChange={(e) => handleFieldChange('modalidadFinanciamiento', e.target.value as any)}
-                          className="text-blue-600"
-                        />
-                        <span className="text-sm capitalize">{modalidad}</span>
-                      </label>
-                    ))}
+                {getFieldValidation('email') && (
+                  <div className={`text-xs flex items-center gap-1 ${
+                    getFieldValidation('email')?.isValid ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {getFieldValidation('email')?.isValid ? (
+                      <CheckCircle className="w-3 h-3" />
+                    ) : (
+                      <XCircle className="w-3 h-3" />
+                    )}
+                    {getFieldValidation('email')?.message}
                   </div>
-                  <p className="text-xs text-green-600">✅ Seleccionado</p>
-                </div>
+                )}
+              </div>
 
-                {/* Fecha de entrega */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center">
-                    <Calendar className="mr-1 h-4 w-4" />
-                    Fecha de entrega *
-                    {getFieldIcon('fechaEntrega')}
-                  </label>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Fecha de Nacimiento <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
                     type="date"
-                    value={formData.fechaEntrega}
-                    onChange={(e) => handleFieldChange('fechaEntrega', e.target.value)}
-                    min={new Date().toISOString().split('T')[0]}
-                    className={getFieldStatus('fechaEntrega') === 'invalid' ? 'border-red-500' : ''}
+                    value={formData.fechaNacimiento}
+                    onChange={(e) => handleInputChange('fechaNacimiento', e.target.value)}
+                    className={`pl-10 ${getFieldValidation('fechaNacimiento')?.isValid === false ? 'border-red-500' : ''}`}
                   />
-                  {validations.fechaEntrega?.isValid && (
-                    <div className="text-xs text-green-600 space-y-1">
-                      <p>✓ Fecha válida</p>
-                      <p>✓ No es fecha pasada</p>
-                      <p>✓ Año entre 1900-2100</p>
-                    </div>
-                  )}
-                  {validations.fechaEntrega?.message && (
-                    <p className="text-xs text-red-600">✗ {validations.fechaEntrega.message}</p>
-                  )}
                 </div>
+                {getFieldValidation('fechaNacimiento') && (
+                  <div className={`text-xs flex items-center gap-1 ${
+                    getFieldValidation('fechaNacimiento')?.isValid ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {getFieldValidation('fechaNacimiento')?.isValid ? (
+                      <CheckCircle className="w-3 h-3" />
+                    ) : (
+                      <XCircle className="w-3 h-3" />
+                    )}
+                    {getFieldValidation('fechaNacimiento')?.message}
+                  </div>
+                )}
+              </div>
 
-                {/* Analista asignado */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center">
-                    <Users className="mr-1 h-4 w-4" />
-                    Analista asignado *
-                    {getFieldIcon('analistaAsignado')}
-                  </label>
-                  <Select value={formData.analistaAsignado} onValueChange={(value) => handleFieldChange('analistaAsignado', value)}>
-                    <SelectTrigger className={getFieldStatus('analistaAsignado') === 'invalid' ? 'border-red-500' : ''}>
-                      <SelectValue placeholder="Seleccionar analista" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {analistaes.map((analista) => (
-                        <SelectItem key={analista.id} value={analista.nombre_completo}>
-                          <div className="flex flex-col">
-                            <span>{analista.nombre_completo}</span>
-                            {analista.especialidad && (
-                              <span className="text-xs text-gray-500">{analista.especialidad}</span>
-                            )}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Dirección <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
+                  <Textarea
+                    value={formData.direccion}
+                    onChange={(e) => handleInputChange('direccion', e.target.value)}
+                    className={`pl-10 ${getFieldValidation('direccion')?.isValid === false ? 'border-red-500' : ''}`}
+                    placeholder="Dirección completa del cliente"
+                    rows={2}
+                  />
                 </div>
+                {getFieldValidation('direccion') && (
+                  <div className={`text-xs flex items-center gap-1 ${
+                    getFieldValidation('direccion')?.isValid ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {getFieldValidation('direccion')?.isValid ? (
+                      <CheckCircle className="w-3 h-3" />
+                    ) : (
+                      <XCircle className="w-3 h-3" />
+                    )}
+                    {getFieldValidation('direccion')?.message}
+                  </div>
+                )}
+              </div>
 
-                {/* Concesionario */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center">
-                    <Building className="mr-1 h-4 w-4" />
-                    Concesionario *
-                    {getFieldIcon('concesionario')}
-                  </label>
-                  <Select value={formData.concesionario} onValueChange={(value) => handleFieldChange('concesionario', value)}>
-                    <SelectTrigger className={getFieldStatus('concesionario') === 'invalid' ? 'border-red-500' : ''}>
-                      <SelectValue placeholder="Seleccionar concesionario" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {concesionarios.map((concesionario) => (
-                        <SelectItem key={concesionario.id} value={concesionario.id.toString()}>
-                          <div className="flex flex-col">
-                            <span>Concesionario #{concesionario.id}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Ocupación <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    type="text"
+                    value={formData.ocupacion}
+                    onChange={(e) => handleInputChange('ocupacion', e.target.value)}
+                    className={`pl-10 ${getFieldValidation('ocupacion')?.isValid === false ? 'border-red-500' : ''}`}
+                    placeholder="Ingeniero"
+                  />
                 </div>
+                {getFieldValidation('ocupacion') && (
+                  <div className={`text-xs flex items-center gap-1 ${
+                    getFieldValidation('ocupacion')?.isValid ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {getFieldValidation('ocupacion')?.isValid ? (
+                      <CheckCircle className="w-3 h-3" />
+                    ) : (
+                      <XCircle className="w-3 h-3" />
+                    )}
+                    {getFieldValidation('ocupacion')?.message}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          {/* Errores pendientes */}
-          {pendingErrors.length > 0 && (
-            <Card className="border-red-200 bg-red-50">
-              <CardContent className="pt-4">
-                <div className="flex items-center space-x-2 mb-3">
-                  <AlertTriangle className="h-5 w-5 text-red-500" />
-                  <h3 className="font-semibold text-red-700">
-                    ERRORES PENDIENTES ({pendingErrors.length})
-                  </h3>
-                </div>
-                <div className="space-y-1">
-                  {pendingErrors.map((error, index) => (
-                    <p key={index} className="text-sm text-red-600">
-                      • {error.field}: {error.message}
-                    </p>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* Datos del Vehículo */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Car className="w-5 h-5" />
+                Datos del Vehículo
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Modelo de Vehículo <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  value={formData.modeloVehiculo}
+                  onValueChange={(value) => handleInputChange('modeloVehiculo', value)}
+                >
+                  <SelectTrigger className={getFieldValidation('modeloVehiculo')?.isValid === false ? 'border-red-500' : ''}>
+                    <SelectValue placeholder="Seleccionar modelo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {modelosVehiculos.map((modelo) => (
+                      <SelectItem key={modelo.id} value={modelo.nombre}>
+                        {modelo.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {getFieldValidation('modeloVehiculo') && (
+                  <div className={`text-xs flex items-center gap-1 ${
+                    getFieldValidation('modeloVehiculo')?.isValid ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {getFieldValidation('modeloVehiculo')?.isValid ? (
+                      <CheckCircle className="w-3 h-3" />
+                    ) : (
+                      <XCircle className="w-3 h-3" />
+                    )}
+                    {getFieldValidation('modeloVehiculo')?.message}
+                  </div>
+                )}
+              </div>
 
-          {/* Botones de acción */}
-          <div className="flex justify-end space-x-3 pt-4 border-t">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Concesionario <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  value={formData.concesionario}
+                  onValueChange={(value) => handleInputChange('concesionario', value)}
+                >
+                  <SelectTrigger className={getFieldValidation('concesionario')?.isValid === false ? 'border-red-500' : ''}>
+                    <SelectValue placeholder="Seleccionar concesionario" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {concesionarios.map((concesionario) => (
+                      <SelectItem key={concesionario.id} value={concesionario.nombre}>
+                        {concesionario.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {getFieldValidation('concesionario') && (
+                  <div className={`text-xs flex items-center gap-1 ${
+                    getFieldValidation('concesionario')?.isValid ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {getFieldValidation('concesionario')?.isValid ? (
+                      <CheckCircle className="w-3 h-3" />
+                    ) : (
+                      <XCircle className="w-3 h-3" />
+                    )}
+                    {getFieldValidation('concesionario')?.message}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Analista <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  value={formData.analista}
+                  onValueChange={(value) => handleInputChange('analista', value)}
+                >
+                  <SelectTrigger className={getFieldValidation('analista')?.isValid === false ? 'border-red-500' : ''}>
+                    <SelectValue placeholder="Seleccionar analista" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {analistas.map((analista) => (
+                      <SelectItem key={analista.id} value={analista.nombre}>
+                        {analista.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {getFieldValidation('analista') && (
+                  <div className={`text-xs flex items-center gap-1 ${
+                    getFieldValidation('analista')?.isValid ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {getFieldValidation('analista')?.isValid ? (
+                      <CheckCircle className="w-3 h-3" />
+                    ) : (
+                      <XCircle className="w-3 h-3" />
+                    )}
+                    {getFieldValidation('analista')?.message}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Estado y Notas */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                Estado y Notas
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Estado <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  value={formData.estado}
+                  onValueChange={(value: 'ACTIVO' | 'INACTIVO' | 'FINALIZADO') => handleInputChange('estado', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACTIVO">Activo</SelectItem>
+                    <SelectItem value="INACTIVO">Inactivo</SelectItem>
+                    <SelectItem value="FINALIZADO">Finalizado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Notas (Opcional)
+                </label>
+                <Textarea
+                  value={formData.notas}
+                  onChange={(e) => handleInputChange('notas', e.target.value)}
+                  placeholder="Notas adicionales sobre el cliente"
+                  rows={3}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Botones */}
+          <div className="flex justify-end gap-4 pt-6 border-t">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
               disabled={isSubmitting}
             >
-              <X className="mr-2 h-4 w-4" />
               Cancelar
             </Button>
             <Button
               type="submit"
               disabled={!isFormValid() || isSubmitting}
-              className={!isFormValid() ? 'bg-gray-400 cursor-not-allowed' : ''}
+              className="flex items-center gap-2"
             >
-              <Save className="mr-2 h-4 w-4" />
-              {isSubmitting ? 'Guardando...' : 'Guardar cliente'}
+              <Save className="w-4 h-4" />
+              {isSubmitting ? 'Guardando...' : 'Guardar Cliente'}
             </Button>
           </div>
-
-          {!isFormValid() && (
-            <div className="text-center text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
-              💡 El botón "Guardar" se habilitará cuando corrijas todos los errores
-            </div>
-          )}
         </form>
       </motion.div>
-
-      {/* Modal de carga masiva Excel */}
-      <AnimatePresence>
-        {showExcelUploader && (
-          <ExcelUploader
-            onClose={() => setShowExcelUploader(false)}
-            onDataProcessed={handleExcelDataProcessed}
-          />
-        )}
-      </AnimatePresence>
     </motion.div>
   )
 }
