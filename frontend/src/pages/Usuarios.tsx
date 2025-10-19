@@ -7,19 +7,19 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PasswordField } from '@/components/ui/PasswordField'
-import { usuarioService, Usuario, UsuarioCreate } from '@/services/usuarioService'
+import { userService, User, UserCreate } from '@/services/userService'
 import { toast } from 'sonner'
 
 export function Usuarios() {
-  const [usuarios, setUsuarios] = useState<Usuario[]>([])
+  const [usuarios, setUsuarios] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [editingUsuario, setEditingUsuario] = useState<Usuario | null>(null)
+  const [editingUsuario, setEditingUsuario] = useState<User | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   
-  const [formData, setFormData] = useState<UsuarioCreate>({
+  const [formData, setFormData] = useState<UserCreate>({
     email: '',
     nombre: '',
     apellido: '',
@@ -41,7 +41,7 @@ export function Usuarios() {
       console.log('🔄 Actualizando usuarios...')
       console.log('📡 Llamando a API: /api/v1/users')
       
-      const response = await usuarioService.listarUsuarios({ limit: 100 })
+      const response = await userService.listarUsuarios(1, 100)
       console.log('✅ Respuesta API recibida:', response)
       console.log('📊 Total usuarios:', response.total)
       console.log('📋 Items recibidos:', response.items?.length || 0)
@@ -75,7 +75,7 @@ export function Usuarios() {
         return
       }
       
-      await usuarioService.eliminarUsuario(id)
+      await userService.eliminarUsuario(id)
       toast.success('✅ Usuario eliminado PERMANENTEMENTE de la base de datos')
       cargarUsuarios() // Recargar lista
     } catch (err) {
@@ -84,9 +84,9 @@ export function Usuarios() {
     }
   }
 
-  const handleToggleActivo = async (usuario: Usuario) => {
+  const handleToggleActivo = async (usuario: User) => {
     try {
-      await usuarioService.toggleActivo(usuario.id, !usuario.is_active)
+      await userService.toggleActivo(usuario.id, !usuario.is_active)
       toast.success(`Usuario ${usuario.is_active ? 'desactivado' : 'activado'} exitosamente`)
       cargarUsuarios() // Recargar lista
     } catch (err) {
@@ -96,7 +96,7 @@ export function Usuarios() {
   }
 
 
-  const handleEdit = (usuario: Usuario) => {
+  const handleEdit = (usuario: User) => {
     setEditingUsuario(usuario)
     setFormData({
       email: usuario.email,
@@ -118,11 +118,11 @@ export function Usuarios() {
       
       if (editingUsuario) {
         // Actualizar usuario existente
-        await usuarioService.actualizarUsuario(editingUsuario.id, formData)
+        await userService.actualizarUsuario(editingUsuario.id, formData)
         toast.success('Usuario actualizado exitosamente')
       } else {
         // Crear nuevo usuario
-        await usuarioService.crearUsuario(formData)
+        await userService.crearUsuario(formData)
         toast.success('Usuario creado exitosamente')
       }
       
