@@ -195,7 +195,7 @@ app.include_router(scheduler_notificaciones.router, prefix=f"{settings.API_V1_PR
 app.include_router(validadores.router, prefix=f"{settings.API_V1_PREFIX}/validadores", tags=["Validadores"])
 app.include_router(concesionarios.router, prefix=f"{settings.API_V1_PREFIX}/concesionarios", tags=["Concesionarios"])
 app.include_router(analistas.router, prefix=f"{settings.API_V1_PREFIX}/analistas", tags=["Analistas"])
-app.include_router(modelos_vehiculos.router, prefix=f"{settings.API_V1_PREFIX}/modelos-vehiculos", tags=["Modelos Vehículos"])
+app.include_router(modelos_vehiculos.router, prefix=f"{settings.API_V1_PREFIX}/modelos-vehiculos", tags=["Modelos Vehiculos"])
 app.include_router(fix_database.router, prefix=f"{settings.API_V1_PREFIX}/fix-db", tags=["Database Fix"])
 app.include_router(test_auth.router, prefix=f"{settings.API_V1_PREFIX}/test", tags=["Test Auth"])
 app.include_router(debug_auth.router, prefix=f"{settings.API_V1_PREFIX}/debug", tags=["Debug Auth"])
