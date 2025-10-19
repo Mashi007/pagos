@@ -31,7 +31,13 @@ from app.schemas.prestamo import (
 # ============================================
 from app.schemas.pago import (
     PagoCreate,
+    PagoUpdate,
     PagoResponse,
+    PagoListResponse,
+    ConciliacionCreate,
+    ConciliacionResponse,
+    KPIsPagos,
+    ResumenCliente,
 )
 # ============================================
 # SCHEMAS DE USUARIO Y AUTENTICACIÓN
@@ -93,7 +99,13 @@ __all__ = [
     
     # ========== PAGO ==========
     "PagoCreate",
+    "PagoUpdate",
     "PagoResponse",
+    "PagoListResponse",
+    "ConciliacionCreate",
+    "ConciliacionResponse",
+    "KPIsPagos",
+    "ResumenCliente",
     
     # ========== USUARIO ==========
     # NOTA: UserRole eliminado - ahora se usa is_admin boolean

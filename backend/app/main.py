@@ -24,6 +24,7 @@ from app.api.v1.endpoints import (
     clientes,
     prestamos,
     pagos,
+    conciliacion_bancaria,
     amortizacion,
     conciliacion,
     reportes,
@@ -163,6 +164,7 @@ app.include_router(users.router, prefix=f"{settings.API_V1_PREFIX}/usuarios", ta
 app.include_router(clientes.router, prefix=f"{settings.API_V1_PREFIX}/clientes", tags=["Clientes"])
 app.include_router(prestamos.router, prefix=f"{settings.API_V1_PREFIX}/prestamos", tags=["Prestamos"])
 app.include_router(pagos.router, prefix=f"{settings.API_V1_PREFIX}/pagos", tags=["Pagos"])
+app.include_router(conciliacion_bancaria.router, prefix=f"{settings.API_V1_PREFIX}/conciliacion-bancaria", tags=["Conciliacion Bancaria"])
 app.include_router(amortizacion.router, prefix=f"{settings.API_V1_PREFIX}/amortizacion", tags=["Amortizacion"])
 app.include_router(conciliacion.router, prefix=f"{settings.API_V1_PREFIX}/conciliacion", tags=["Conciliacion"])
 app.include_router(reportes.router, prefix=f"{settings.API_V1_PREFIX}/reportes", tags=["Reportes"])
