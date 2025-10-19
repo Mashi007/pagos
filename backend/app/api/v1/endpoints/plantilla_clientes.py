@@ -44,7 +44,8 @@ async def generar_plantilla_clientes_dinamica(
     - Campos obligatorios y validaciones
     """
     try:
-        logger.info(f"Generando plantilla dinámica - Usuario: {current_user.email}")
+        logger.info(f"🚀 Iniciando generación de plantilla - Usuario: {current_user.email}")
+        logger.info(f"🔍 URL del endpoint: /api/v1/plantilla/plantilla-clientes")
         
         # OBTENER DATOS REALES DESDE BD
         
