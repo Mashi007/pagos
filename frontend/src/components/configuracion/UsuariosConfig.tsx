@@ -34,6 +34,49 @@ export default function UsuariosConfig() {
   const [viewingUser, setViewingUser] = useState<User | null>(null)
   const [filterActive, setFilterActive] = useState<boolean | undefined>(undefined)
 
+  // Función para validar email con el sistema
+  const validateEmailWithSystem = async (email: string) => {
+    try {
+      const response = await fetch('/api/v1/validadores/validar-campo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
+        },
+        body: JSON.stringify({
+          campo: 'email',
+          valor: email,
+          pais: 'VENEZUELA'
+        })
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        if (result.validacion && result.validacion.valido) {
+          return { 
+            isValid: true, 
+            formattedValue: result.validacion.valor_formateado 
+          }
+        } else {
+          return { 
+            isValid: false, 
+            message: result.validacion?.mensaje || 'Formato de email inválido' 
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Error validando email con backend, usando validación local:', error)
+    }
+    
+    // Fallback: validación local
+    const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+    if (!emailPattern.test(email.toLowerCase())) {
+      return { isValid: false, message: 'Formato: usuario@dominio.com' }
+    }
+    
+    return { isValid: true, formattedValue: email.toLowerCase() }
+  }
+
   const [formData, setFormData] = useState<UserCreate>({
     email: '',
     nombre: '',
@@ -92,10 +135,17 @@ export default function UsuariosConfig() {
     }
     
     try {
+      // Validar email con el validador del sistema
+      const emailValidation = await validateEmailWithSystem(formData.email)
+      if (!emailValidation.isValid) {
+        toast.error(emailValidation.message || 'Email inválido')
+        return
+      }
+      
       if (editingUser) {
         // Actualizar
         const updateData: UserUpdate = {
-          email: formData.email,
+          email: emailValidation.formattedValue || formData.email.toLowerCase(),
           nombre: formData.nombre,
           apellido: formData.apellido,
           is_admin: formData.is_admin,  // Cambio clave: rol → is_admin
@@ -111,7 +161,16 @@ export default function UsuariosConfig() {
         toast.success('Usuario actualizado exitosamente')
       } else {
         // Crear
-        await userService.crearUsuario(formData)
+        const createData: UserCreate = {
+          email: emailValidation.formattedValue || formData.email.toLowerCase(),
+          nombre: formData.nombre,
+          apellido: formData.apellido,
+          is_admin: formData.is_admin,
+          password: formData.password,
+          cargo: formData.cargo,
+          is_active: formData.is_active
+        }
+        await userService.crearUsuario(createData)
         toast.success('Usuario creado exitosamente')
       }
       
