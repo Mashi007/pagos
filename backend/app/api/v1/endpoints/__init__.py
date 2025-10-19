@@ -30,7 +30,9 @@ from . import (
     solicitudes,
     scheduler_notificaciones,
     notificaciones_multicanal,
-    plantilla_clientes
+    plantilla_clientes,
+    migracion_emergencia,
+    diagnostico
 )
 
 __all__ = [
@@ -59,5 +61,7 @@ __all__ = [
     "solicitudes",
     "scheduler_notificaciones",
     "notificaciones_multicanal",
-    "plantilla_clientes"
+    "plantilla_clientes",
+    "migracion_emergencia",
+    "diagnostico"
 ]
