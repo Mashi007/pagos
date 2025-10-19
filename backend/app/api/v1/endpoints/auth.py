@@ -19,7 +19,7 @@ from app.schemas.auth import (
 )
 from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
-from app.core.security import create_access_token, verify_password, get_password_hash
+from app.core.security import create_access_token, verify_password, get_password_hash, validate_password_strength
 
 logger = logging.getLogger(__name__)
 
@@ -162,24 +162,12 @@ async def refresh_token(
         # Agregar headers CORS
         add_cors_headers(request, response)
         
-        # Validar token de refresh
-        user = AuthService.validate_refresh_token(db, refresh_data.refresh_token)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token de refresh inválido"
-            )
-        
-        # Generar nuevo token
-        access_token = create_access_token(
-            subject=user.id,
-            additional_claims={
-                "is_admin": user.is_admin,
-                "email": user.email
-            }
-        )
-        
-        return Token(access_token=access_token, token_type="bearer")
+        # Validar token de refresh usando el método correcto
+        try:
+            token_data = AuthService.refresh_access_token(db, refresh_data.refresh_token)
+            return token_data
+        except HTTPException as e:
+            raise e
         
     except HTTPException:
         raise
@@ -210,6 +198,14 @@ async def change_password(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Contraseña actual incorrecta"
+            )
+        
+        # Validar fortaleza de nueva contraseña
+        is_valid, message = validate_password_strength(password_data.new_password)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=message
             )
         
         # Actualizar contraseña
