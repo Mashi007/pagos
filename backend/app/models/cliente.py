@@ -24,10 +24,10 @@ class Cliente(Base):
     # ============================================
     # DATOS DEL VEHÍCULO Y FINANCIAMIENTO
     # ============================================
-    # Solo campos que EXISTEN en la base de datos actual
+    # Campos de configuración necesarios para formulario y Excel
     modelo_vehiculo = Column(String(100), nullable=True, index=True)
-    # concesionario se obtiene desde configuración (/api/v1/concesionarios)
-    # analista se obtiene desde configuración (/api/v1/analistas)
+    concesionario = Column(String(100), nullable=True, index=True)
+    analista = Column(String(100), nullable=True, index=True)
     
     # Estado y control
     estado = Column(String(20), nullable=True, default="ACTIVO", index=True)

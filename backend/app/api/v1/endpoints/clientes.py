@@ -90,7 +90,8 @@ def listar_clientes(
                     "fecha_nacimiento": cliente.fecha_nacimiento.isoformat() if cliente.fecha_nacimiento else None,
                     "ocupacion": cliente.ocupacion,
                     "modelo_vehiculo": cliente.modelo_vehiculo,
-                    # concesionario se obtiene desde configuración
+                    "concesionario": cliente.concesionario,
+                    "analista": cliente.analista,
                     "estado": cliente.estado,
                     "activo": cliente.activo,
                     "fecha_registro": cliente.fecha_registro.isoformat() if cliente.fecha_registro else None,
