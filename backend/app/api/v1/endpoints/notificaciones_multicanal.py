@@ -9,12 +9,17 @@ from sqlalchemy import func, and_, or_, desc
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel, Field
+import logging
 
 from app.db.session import get_db
 from app.models.cliente import Cliente
 from app.models.notificacion import Notificacion
 from app.models.user import User
 from app.api.deps import get_current_user
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
 from app.services.notification_multicanal_service import (
     NotificacionMulticanal,
     NotificationScheduler,

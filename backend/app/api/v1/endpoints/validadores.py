@@ -9,6 +9,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, date
 from decimal import Decimal
 from pydantic import BaseModel, Field
+import logging
 
 from app.db.session import get_db
 from app.models.cliente import Cliente
@@ -16,6 +17,10 @@ from app.models.pago import Pago
 from app.models.user import User
 from app.models.auditoria import Auditoria, TipoAccion
 from app.api.deps import get_current_user
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
 from app.services.validators_service import (
     ValidadorTelefono,
     ValidadorCedula,
