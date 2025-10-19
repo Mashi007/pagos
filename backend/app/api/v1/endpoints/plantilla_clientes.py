@@ -21,6 +21,7 @@ from app.models.cliente import Cliente
 import logging
 from openpyxl import Workbook
 from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.styles import Font
 from datetime import datetime
 import io
 
@@ -101,13 +102,15 @@ async def generar_plantilla_clientes_dinamica(
             ["   - notas: Notas adicionales (si no llena, se pondrá 'NA')"],
             [""],
             ["4. VALIDACIONES:"],
-            ["   - Cédula: Debe ser única en el sistema (8-20 caracteres)"],
-            ["   - Email: Debe tener formato válido usuario@dominio.com"],
-            ["   - Teléfono: Formato venezolano +58 XXXXXXXXXX (10 dígitos, primer dígito no puede ser 0)"],
-            ["   - Fecha de nacimiento: No puede ser futura"],
+            ["   - Cédula: Entre 8 y 20 caracteres"],
+            ["   - Email: Formato válido usuario@dominio.com"],
+            ["   - Teléfono: Formato venezolano +58 XXXXXXXXXX (10 dígitos)"],
+            ["   - Fecha de nacimiento: Formato YYYY-MM-DD, no puede ser futura"],
             ["   - Nombres: Exactamente 2 palabras (nombre y apellido)"],
             ["   - Apellidos: Exactamente 2 palabras (paterno y materno)"],
-            ["   - Listas desplegables: Solo valores de configuración actualizados"],
+            ["   - Modelo/Concesionario/Analista: COPIE EXACTAMENTE de la hoja 'Referencias'"],
+            ["   - Estado: Solo ACTIVO, INACTIVO o FINALIZADO"],
+            ["   - Activo: Solo TRUE o FALSE"],
             [""],
             ["5. ESTADÍSTICAS ACTUALES:"],
             [f"   - Total de clientes: {total_clientes}"],
@@ -118,7 +121,7 @@ async def generar_plantilla_clientes_dinamica(
             [""],
             ["6. IMPORTANTE:"],
             ["   - No modifique los nombres de las columnas"],
-            ["   - Use las listas desplegables para evitar errores"],
+            ["   - COPIE EXACTAMENTE los valores de la hoja 'Referencias'"],
             ["   - Todos los campos obligatorios deben estar completos"],
             ["   - La plantilla se actualiza automáticamente con los datos de configuración"],
         ]
@@ -138,127 +141,75 @@ async def generar_plantilla_clientes_dinamica(
         ]
         ws_template.append(headers)
         
-        # VALIDACIONES DE DATOS
+        # VALIDACIONES SIMPLES - SOLO ESTADO Y ACTIVO
+        # Removemos validaciones complejas que pueden corromper el archivo
         
-        # Validación para modelo_vehiculo (columna I)
-        if modelos_nombres:
-            # Limpiar nombres para evitar caracteres problemáticos
-            modelos_limpios = [str(nombre).replace('"', '""') for nombre in modelos_nombres]
-            dv_modelo = DataValidation(
-                type="list",
-                formula1=f'"{",".join(modelos_limpios)}"',
-                showDropDown=True
-            )
-            dv_modelo.error = "Seleccione un modelo válido de la lista"
-            dv_modelo.errorTitle = "Modelo inválido"
-            dv_modelo.add('I2:I101')  # Aplicar a 100 filas
-            ws_template.add_data_validation(dv_modelo)
-        
-        # Validación para concesionario (columna J)
-        if concesionarios_nombres:
-            # Limpiar nombres para evitar caracteres problemáticos
-            concesionarios_limpios = [str(nombre).replace('"', '""') for nombre in concesionarios_nombres]
-            dv_concesionario = DataValidation(
-                type="list",
-                formula1=f'"{",".join(concesionarios_limpios)}"',
-                showDropDown=True
-            )
-            dv_concesionario.error = "Seleccione un concesionario válido de la lista"
-            dv_concesionario.errorTitle = "Concesionario inválido"
-            dv_concesionario.add('J2:J101')  # Aplicar a 100 filas
-            ws_template.add_data_validation(dv_concesionario)
-        
-        # Validación para analista (columna K)
-        if analistas_nombres:
-            # Limpiar nombres para evitar caracteres problemáticos
-            analistas_limpios = [str(nombre).replace('"', '""') for nombre in analistas_nombres]
-            dv_analista = DataValidation(
-                type="list",
-                formula1=f'"{",".join(analistas_limpios)}"',
-                showDropDown=True
-            )
-            dv_analista.error = "Seleccione un analista válido de la lista"
-            dv_analista.errorTitle = "Analista inválido"
-            dv_analista.add('K2:K101')  # Aplicar a 100 filas
-            ws_template.add_data_validation(dv_analista)
-        
-        # Validación para estado (columna L)
+        # Validación simple para estado (columna L)
         dv_estado = DataValidation(
             type="list",
             formula1='"ACTIVO,INACTIVO,FINALIZADO"',
             showDropDown=True
         )
-        dv_estado.error = "Seleccione un estado válido: ACTIVO, INACTIVO o FINALIZADO"
+        dv_estado.error = "Seleccione: ACTIVO, INACTIVO o FINALIZADO"
         dv_estado.errorTitle = "Estado inválido"
-        dv_estado.add('L2:L101')  # Aplicar a 100 filas
+        dv_estado.add('L2:L101')
         ws_template.add_data_validation(dv_estado)
         
-        # Validación para fecha de nacimiento (columna G)
-        dv_fecha = DataValidation(
-            type="date",
-            operator="lessThanOrEqual",
-            formula1=f'DATE({datetime.now().year},{datetime.now().month},{datetime.now().day})',
+        # Validación simple para activo (columna M)
+        dv_activo = DataValidation(
+            type="list",
+            formula1='"TRUE,FALSE"',
             showDropDown=True
         )
-        dv_fecha.error = "La fecha de nacimiento no puede ser futura"
-        dv_fecha.errorTitle = "Fecha inválida"
-        dv_fecha.add('G2:G101')  # Aplicar a 100 filas
-        ws_template.add_data_validation(dv_fecha)
+        dv_activo.error = "Seleccione: TRUE o FALSE"
+        dv_activo.errorTitle = "Valor inválido"
+        dv_activo.add('M2:M101')
+        ws_template.add_data_validation(dv_activo)
         
-        # Validación para email (columna E)
-        dv_email = DataValidation(
-            type="custom",
-            formula1='AND(LEN(E2)>0,ISNUMBER(SEARCH("@",E2)),ISNUMBER(SEARCH(".",E2)))',
-            showDropDown=True
-        )
-        dv_email.error = "Ingrese un email válido con formato usuario@dominio.com"
-        dv_email.errorTitle = "Email inválido"
-        dv_email.add('E2:E101')  # Aplicar a 100 filas
-        ws_template.add_data_validation(dv_email)
-        
-        # Validación para cédula (columna A)
-        dv_cedula = DataValidation(
-            type="custom",
-            formula1='AND(LEN(A2)>=8,LEN(A2)<=20)',
-            showDropDown=True
-        )
-        dv_cedula.error = "La cédula debe tener entre 8 y 20 caracteres"
-        dv_cedula.errorTitle = "Cédula inválida"
-        dv_cedula.add('A2:A101')  # Aplicar a 100 filas
-        ws_template.add_data_validation(dv_cedula)
-        
-        # Validación para teléfono (columna D)
-        dv_telefono = DataValidation(
-            type="custom",
-            formula1='AND(LEN(D2)>=8,LEN(D2)<=15)',
-            showDropDown=True
-        )
-        dv_telefono.error = "El teléfono debe tener entre 8 y 15 caracteres"
-        dv_telefono.errorTitle = "Teléfono inválido"
-        dv_telefono.add('D2:D101')  # Aplicar a 100 filas
-        ws_template.add_data_validation(dv_telefono)
-        
-        # HOJA 3: REFERENCIAS (OPCIONAL - para consulta rápida)
+        # HOJA 3: REFERENCIAS - LISTAS PARA COPIAR Y PEGAR
         ws_referencias = wb.create_sheet("Referencias")
-        ws_referencias.append(["REFERENCIAS DE CONFIGURACIÓN"])
-        ws_referencias.append([""])
+        
+        # Título
+        ws_referencias['A1'] = "REFERENCIAS DE CONFIGURACIÓN - COPIE Y PEGUE EXACTAMENTE"
+        ws_referencias['A1'].font = Font(name='Calibri', size=14, bold=True)
+        ws_referencias.merge_cells('A1:D1')
         
         # Modelos disponibles
-        ws_referencias.append(["MODELOS DE VEHÍCULOS DISPONIBLES:"])
+        ws_referencias['A3'] = "MODELOS DE VEHÍCULOS (Columna I):"
+        ws_referencias['A3'].font = Font(name='Calibri', size=12, bold=True)
+        row = 4
         for modelo in modelos_nombres:
-            ws_referencias.append([f"- {modelo}"])
-        ws_referencias.append([""])
+            ws_referencias[f'A{row}'] = modelo
+            row += 1
         
         # Concesionarios disponibles
-        ws_referencias.append(["CONCESIONARIOS DISPONIBLES:"])
+        ws_referencias['B3'] = "CONCESIONARIOS (Columna J):"
+        ws_referencias['B3'].font = Font(name='Calibri', size=12, bold=True)
+        row = 4
         for concesionario in concesionarios_nombres:
-            ws_referencias.append([f"- {concesionario}"])
-        ws_referencias.append([""])
+            ws_referencias[f'B{row}'] = concesionario
+            row += 1
         
         # Analistas disponibles
-        ws_referencias.append(["ANALISTAS DISPONIBLES:"])
+        ws_referencias['C3'] = "ANALISTAS (Columna K):"
+        ws_referencias['C3'].font = Font(name='Calibri', size=12, bold=True)
+        row = 4
         for analista in analistas_nombres:
-            ws_referencias.append([f"- {analista}"])
+            ws_referencias[f'C{row}'] = analista
+            row += 1
+        
+        # Estados disponibles
+        ws_referencias['D3'] = "ESTADOS (Columna L):"
+        ws_referencias['D3'].font = Font(name='Calibri', size=12, bold=True)
+        ws_referencias['D4'] = "ACTIVO"
+        ws_referencias['D5'] = "INACTIVO"
+        ws_referencias['D6'] = "FINALIZADO"
+        
+        # Ajustar ancho de columnas
+        ws_referencias.column_dimensions['A'].width = 25
+        ws_referencias.column_dimensions['B'].width = 25
+        ws_referencias.column_dimensions['C'].width = 25
+        ws_referencias.column_dimensions['D'].width = 15
         
         # GUARDAR EN BUFFER
         excel_buffer = io.BytesIO()
