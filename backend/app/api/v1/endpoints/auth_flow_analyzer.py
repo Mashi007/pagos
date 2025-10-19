@@ -620,30 +620,5 @@ def _generate_correlation_recommendations(error_groups: Dict, temporal_patterns:
     
     return recommendations
 
-# Middleware para capturar automáticamente traces de autenticación
-@router.middleware("http")
-async def auth_flow_middleware(request: Request, call_next):
-    """Middleware para capturar automáticamente flujos de autenticación"""
-    # Solo capturar requests de autenticación
-    if "/api/v1/auth/" in str(request.url) or "/api/v1/" in str(request.url):
-        tracer = AuthFlowTracer()
-        tracer.metadata["url"] = str(request.url)
-        tracer.metadata["method"] = request.method
-        
-        response = await call_next(request)
-        
-        # Analizar correlación
-        correlation_data = CorrelationAnalyzer.analyze_request_correlation(request)
-        tracer.metadata.update(correlation_data)
-        
-        # Finalizar trace basado en status code
-        if response.status_code == 401:
-            tracer.finalize("failed", "401 Unauthorized")
-        elif response.status_code == 200:
-            tracer.finalize("success")
-        else:
-            tracer.finalize("error", f"HTTP {response.status_code}")
-        
-        return response
-    
-    return await call_next(request)
+# Nota: Middleware removido - APIRouter no soporta middleware directamente
+# El middleware debe ser agregado a la aplicación principal en main.py

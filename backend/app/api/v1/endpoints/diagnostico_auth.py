@@ -356,27 +356,5 @@ def _generate_recommendations(headers_analysis: Dict, jwt_config: Dict, users_an
     
     return recommendations
 
-# Middleware para capturar requests fallidos
-@router.middleware("http")
-async def capture_failed_requests(request: Request, call_next):
-    """Middleware para capturar requests que fallan con 401"""
-    response = await call_next(request)
-    
-    if response.status_code == 401:
-        # Capturar información del request fallido
-        failed_request = {
-            "timestamp": datetime.now().isoformat(),
-            "method": request.method,
-            "url": str(request.url),
-            "headers": dict(request.headers),
-            "error_type": "401_unauthorized",
-            "user_agent": request.headers.get("user-agent", "unknown")
-        }
-        
-        # Agregar al cache (mantener solo últimos 100)
-        global failed_requests_cache
-        failed_requests_cache.append(failed_request)
-        if len(failed_requests_cache) > 100:
-            failed_requests_cache = failed_requests_cache[-100:]
-    
-    return response
+# Nota: Middleware removido - APIRouter no soporta middleware directamente
+# El middleware debe ser agregado a la aplicación principal en main.py

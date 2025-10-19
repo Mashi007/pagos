@@ -329,17 +329,5 @@ def _generate_dashboard_recommendations(auth_analysis: Dict, user_stats: Dict) -
     
     return recommendations
 
-# Middleware para capturar requests automáticamente
-@router.middleware("http")
-async def audit_middleware(request: Request, call_next):
-    """Middleware para auditoría automática de requests"""
-    response = await call_next(request)
-    
-    # Registrar request
-    error = None
-    if response.status_code >= 400:
-        error = f"HTTP_{response.status_code}"
-    
-    AuditLogger.log_request(request, response, error=error)
-    
-    return response
+# Nota: Middleware removido - APIRouter no soporta middleware directamente
+# El middleware debe ser agregado a la aplicación principal en main.py
