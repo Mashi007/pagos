@@ -148,7 +148,7 @@ def listar_asesores(
     current_user: User = Depends(get_current_user)
 ):
     """
-    👥 Listar todos los asesores con paginación y filtros
+    Listar todos los asesores con paginación y filtros
     """
     try:
         query = db.query(Analista)
@@ -186,7 +186,7 @@ def listar_asesores(
 @router.get("/test-simple")
 def test_simple():
     """
-    🧪 Endpoint simple sin base de datos
+    Endpoint simple sin base de datos
     """
     return {"mensaje": "Router de asesores funcionando", "status": "ok", "timestamp": "2025-10-15"}
 
@@ -221,7 +221,7 @@ def obtener_asesor(
     current_user: User = Depends(get_current_user)
 ):
     """
-    🔍 Obtener un asesor por ID
+    Obtener un asesor por ID
     """
     asesor = db.query(Analista).filter(Analista.id == asesor_id).first()
     
@@ -237,7 +237,7 @@ def crear_asesor(
     current_user: User = Depends(get_current_user)
 ):
     """
-    ➕ Crear un nuevo asesor
+    Crear un nuevo asesor
     """
     try:
         # Generar email automático si no se proporciona
