@@ -371,10 +371,10 @@ def eliminar_cliente(
     current_user: User = Depends(get_current_user)
 ):
     """
-    🗑️ Eliminar cliente (soft delete)
+    🗑️ Eliminar cliente (hard delete)
     
     Características:
-    - Soft delete (marcar como inactivo)
+    - Hard delete (eliminación física de la BD)
     - Auditoría automática
     - Validación de existencia
     """
@@ -398,11 +398,8 @@ def eliminar_cliente(
             "activo": cliente.activo
         }
         
-        # Soft delete - marcar como inactivo
-        cliente.activo = False
-        cliente.estado = "INACTIVO"
-        cliente.fecha_actualizacion = datetime.now()
-        
+        # Hard delete - eliminar físicamente de la BD
+        db.delete(cliente)
         db.commit()
         
         # Registrar auditoría
@@ -412,8 +409,8 @@ def eliminar_cliente(
             accion=TipoAccion.ELIMINAR.value,
             cliente_id=cliente_id,
             datos_anteriores=datos_anteriores,
-            datos_nuevos={"activo": False, "estado": "INACTIVO"},
-            descripcion=f"Cliente eliminado (soft delete): {cliente.nombres} {cliente.apellidos}"
+            datos_nuevos={"eliminado": True},
+            descripcion=f"Cliente eliminado físicamente: {cliente.nombres} {cliente.apellidos}"
         )
         
         logger.info(f"Cliente eliminado exitosamente: {cliente_id}")

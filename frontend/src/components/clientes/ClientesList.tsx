@@ -85,7 +85,7 @@ export function ClientesList() {
       setClienteSeleccionado(null)
       
       // Mostrar mensaje de éxito
-      alert('✅ Cliente eliminado exitosamente')
+      alert('✅ Cliente eliminado permanentemente de la base de datos')
       
     } catch (error) {
       console.error('❌ Error eliminando cliente:', error)
@@ -466,20 +466,23 @@ export function ClientesList() {
                   <h3 className="text-lg font-semibold text-gray-900">
                     Eliminar Cliente
                   </h3>
-                  <p className="text-sm text-gray-500">
-                    Esta acción no se puede deshacer
+                  <p className="text-sm text-red-600 font-medium">
+                    ⚠️ ELIMINACIÓN PERMANENTE - No se puede deshacer
                   </p>
                 </div>
               </div>
               
               <div className="mb-6">
                 <p className="text-gray-700">
-                  ¿Estás seguro de que quieres eliminar al cliente{' '}
+                  ¿Estás seguro de que quieres <span className="font-semibold text-red-600">ELIMINAR PERMANENTEMENTE</span> al cliente{' '}
                   <span className="font-semibold">
                     {clienteSeleccionado.nombres} {clienteSeleccionado.apellidos}
                   </span>?
                 </p>
-                <p className="text-sm text-gray-500 mt-2">
+                <p className="text-sm text-red-600 mt-2 font-medium">
+                  ⚠️ El cliente será eliminado completamente de la base de datos.
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
                   Cédula: {clienteSeleccionado.cedula}
                 </p>
               </div>
