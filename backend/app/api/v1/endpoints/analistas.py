@@ -5,6 +5,7 @@ CRUD completo para analistas
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+import logging
 from app.db.session import get_db
 from app.models.analista import Analista
 from app.models.user import User
@@ -16,6 +17,7 @@ from app.schemas.analista import (
 )
 from app.api.deps import get_current_user
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/test-no-auth")
