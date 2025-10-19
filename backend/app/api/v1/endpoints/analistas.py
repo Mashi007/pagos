@@ -387,6 +387,75 @@ def analistas_emergency(
             "message": "Error en endpoint de emergencia"
         }
 
+@router.get("/")
+def listar_analistas(
+    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
+    limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
+    activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
+    search: Optional[str] = Query(None, description="Buscar por nombre"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Listar analistas CON autenticación (endpoint principal)
+    """
+    try:
+        query = db.query(Analista)
+        
+        # Aplicar filtros
+        if activo is not None:
+            query = query.filter(Analista.activo == activo)
+        
+        if search:
+            query = query.filter(
+                Analista.nombre.ilike(f"%{search}%") | 
+                Analista.apellido.ilike(f"%{search}%")
+            )
+        
+        # Obtener total
+        total = query.count()
+        
+        # Aplicar paginación
+        analistas = query.offset(skip).limit(limit).all()
+        
+        # Calcular páginas
+        pages = (total + limit - 1) // limit
+        
+        # Convertir a formato de respuesta
+        items = []
+        for analista in analistas:
+            items.append({
+                "id": analista.id,
+                "nombre": analista.nombre,
+                "apellido": analista.apellido,
+                "email": analista.email or "",
+                "telefono": analista.telefono or "",
+                "especialidad": analista.especialidad or "",
+                "comision_porcentaje": analista.comision_porcentaje or 0,
+                "activo": analista.activo,
+                "notas": analista.notas or "",
+                "nombre_completo": analista.nombre,
+                "primer_nombre": analista.primer_nombre or "",
+                "created_at": analista.created_at.isoformat() if analista.created_at else None,
+                "updated_at": analista.updated_at.isoformat() if analista.updated_at else None
+            })
+        
+        return {
+            "items": items,
+            "total": total,
+            "page": (skip // limit) + 1,
+            "size": limit,
+            "pages": pages,
+            "message": "Analistas obtenidos exitosamente"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error listando analistas: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error obteniendo analistas: {str(e)}"
+        )
+
 @router.get("/list-no-auth")
 def listar_analistas_no_auth(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
