@@ -35,15 +35,17 @@ def registrar_auditoria_cliente(
     try:
         auditoria = Auditoria(
             usuario_id=None,  # Se puede obtener del usuario si es necesario
+            usuario_email=usuario_email,
             accion=accion,
+            modulo="CLIENTES",
             tabla="clientes",
             registro_id=cliente_id,
             descripcion=descripcion or f"{accion} cliente ID {cliente_id}",
             datos_anteriores=datos_anteriores,
             datos_nuevos=datos_nuevos,
             ip_address="127.0.0.1",  # Se puede obtener del request
-            user_agent="Sistema Interno",
-            created_at=datetime.now()
+            user_agent="Sistema Interno"
+            # ✅ CORREGIDO: Eliminado created_at, el modelo usa fecha con server_default
         )
         db.add(auditoria)
         db.commit()
@@ -56,6 +58,7 @@ def registrar_auditoria_cliente(
 # ENDPOINTS DE CONSULTA
 # ============================================
 
+@router.get("", response_model=dict)
 @router.get("/", response_model=dict)
 def listar_clientes(
     # Paginación
@@ -203,6 +206,7 @@ def obtener_cliente(
 # ENDPOINTS DE CREACIÓN
 # ============================================
 
+@router.post("", response_model=ClienteResponse, status_code=201)
 @router.post("/", response_model=ClienteResponse, status_code=201)
 def crear_cliente(
     cliente_data: ClienteCreate,

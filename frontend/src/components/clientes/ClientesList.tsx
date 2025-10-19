@@ -43,7 +43,12 @@ export function ClientesList() {
   const [showCrearCliente, setShowCrearCliente] = useState(false)
   const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null)
   const [showEditarCliente, setShowEditarCliente] = useState(false)
-  const [showEliminarCliente, setShowEliminarCliente] = useState(false)
+  const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null)
+
+  const showNotification = (type: 'success' | 'error', message: string) => {
+    setNotification({ type, message })
+    setTimeout(() => setNotification(null), 3000) // Auto-hide after 3 seconds
+  }
 
   const debouncedSearch = useDebounce(searchTerm, 300)
 
@@ -84,12 +89,12 @@ export function ClientesList() {
       setShowEliminarCliente(false)
       setClienteSeleccionado(null)
       
-      // Mostrar mensaje de éxito
-      alert('✅ Cliente eliminado permanentemente de la base de datos')
+      // Mostrar mensaje de éxito - UNA SOLA NOTIFICACIÓN
+      showNotification('success', '✅ Cliente eliminado permanentemente de la base de datos')
       
     } catch (error) {
       console.error('❌ Error eliminando cliente:', error)
-      alert('❌ Error al eliminar el cliente. Intenta nuevamente.')
+      showNotification('error', '❌ Error al eliminar el cliente. Intenta nuevamente.')
     }
   }
 
@@ -508,6 +513,33 @@ export function ClientesList() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ✅ NOTIFICACIÓN ÚNICA */}
+      {notification && (
+        <motion.div
+          initial={{ opacity: 0, y: -50 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -50 }}
+          className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg max-w-md ${
+            notification.type === 'success' 
+              ? 'bg-green-100 border border-green-300 text-green-800' 
+              : 'bg-red-100 border border-red-300 text-red-800'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${
+              notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'
+            }`} />
+            <span className="font-medium">{notification.message}</span>
+            <button
+              onClick={() => setNotification(null)}
+              className="ml-2 text-gray-500 hover:text-gray-700"
+            >
+              ×
+            </button>
+          </div>
+        </motion.div>
+      )}
     </div>
   )
 }

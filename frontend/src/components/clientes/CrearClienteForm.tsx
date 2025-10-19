@@ -71,6 +71,12 @@ interface CrearClienteFormProps {
 }
 
 export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated }: CrearClienteFormProps) {
+  // ✅ Función para obtener fecha de hoy en formato YYYY-MM-DD
+  const getTodayDate = () => {
+    const today = new Date()
+    return today.toISOString().split('T')[0]
+  }
+
   const [formData, setFormData] = useState<FormData>({
     cedula: '',
     nombres: '',
@@ -78,7 +84,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     telefono: '',
     email: '',
     direccion: '',
-    fechaNacimiento: '',
+    fechaNacimiento: getTodayDate(), // ✅ Fecha por defecto: hoy
     ocupacion: '',
     modeloVehiculo: '',
     concesionario: '',
@@ -571,7 +577,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                 )}
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 min-h-[80px]"> {/* ✅ Estabilizar altura del campo */}
                 <label className="text-sm font-medium text-gray-700">
                   Ocupación <span className="text-red-500">*</span>
                 </label>
@@ -581,7 +587,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     type="text"
                     value={formData.ocupacion}
                     onChange={(e) => handleInputChange('ocupacion', e.target.value)}
-                    className={`pl-10 ${getFieldValidation('ocupacion')?.isValid === false ? 'border-red-500' : ''}`}
+                    className={`pl-10 w-full ${getFieldValidation('ocupacion')?.isValid === false ? 'border-red-500' : ''}`}
                     placeholder="Ingeniero"
                   />
                 </div>
