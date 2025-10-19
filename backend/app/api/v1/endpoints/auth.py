@@ -162,8 +162,12 @@ def login(
             "email": user.email,
             "nombre": user.nombre,
             "apellido": user.apellido,
-            "rol": "ADMIN" if user.is_admin else "USER",
-            "is_active": user.is_active
+            "cargo": user.cargo,
+            "is_admin": user.is_admin,  # ✅ AGREGADO: Campo crítico faltante
+            "is_active": user.is_active,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+            "updated_at": user.updated_at.isoformat() if user.updated_at else None,
+            "last_login": user.last_login.isoformat() if user.last_login else None
         }
     )
     
