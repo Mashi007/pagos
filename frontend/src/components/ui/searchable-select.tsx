@@ -35,7 +35,7 @@ export function SearchableSelect({
       setFilteredOptions(options)
     } else {
       const filtered = options.filter(option =>
-        option.label.toLowerCase().includes(searchTerm.toLowerCase())
+        option.label && option.label.toLowerCase().includes(searchTerm.toLowerCase())
       )
       setFilteredOptions(filtered)
     }

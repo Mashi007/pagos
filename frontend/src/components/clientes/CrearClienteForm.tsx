@@ -615,10 +615,12 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                   Modelo de Vehículo <span className="text-red-500">*</span>
                 </label>
                 <SearchableSelect
-                  options={modelosVehiculos.map(modelo => ({
-                    value: modelo.nombre,
-                    label: modelo.nombre
-                  }))}
+                  options={modelosVehiculos
+                    .filter(modelo => modelo.nombre) // Filtrar modelos sin nombre
+                    .map(modelo => ({
+                      value: modelo.nombre,
+                      label: modelo.nombre
+                    }))}
                   value={formData.modeloVehiculo || ''}
                   onChange={(value) => handleInputChange('modeloVehiculo', value)}
                   placeholder="Buscar modelo de vehículo..."
