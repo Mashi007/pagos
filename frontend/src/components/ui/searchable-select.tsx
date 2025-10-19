@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { ChevronDown, Search, X } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { ChevronDownIcon, MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline'
+
+// Función utilitaria local
+const cn = (...classes: (string | undefined | null | false)[]): string => {
+  return classes.filter(Boolean).join(' ')
+}
 
 interface SearchableSelectProps {
   options: Array<{ value: string; label: string }>
@@ -86,20 +90,20 @@ export function SearchableSelect({
         onClick={handleToggle}
         disabled={disabled}
         className={cn(
-          "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
-          "placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+          "flex h-10 w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm",
+          "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
           "disabled:cursor-not-allowed disabled:opacity-50",
-          isOpen && "ring-2 ring-ring ring-offset-2",
+          isOpen && "ring-2 ring-blue-500 border-blue-500",
           className
         )}
       >
         <span className={cn(
           "truncate",
-          !displayValue && "text-muted-foreground"
+          !displayValue && "text-gray-500"
         )}>
           {displayValue || placeholder}
         </span>
-        <ChevronDown className={cn(
+        <ChevronDownIcon className={cn(
           "h-4 w-4 opacity-50 transition-transform",
           isOpen && "rotate-180"
         )} />
@@ -107,11 +111,11 @@ export function SearchableSelect({
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-lg">
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
           {/* Search Input */}
-          <div className="p-2 border-b border-border">
+          <div className="p-2 border-b border-gray-200">
             <div className="relative">
-              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <MagnifyingGlassIcon className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input
                 ref={inputRef}
                 type="text"
@@ -119,15 +123,15 @@ export function SearchableSelect({
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={`Buscar ${placeholder.toLowerCase()}...`}
-                className="w-full pl-8 pr-8 py-2 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full pl-8 pr-8 py-2 text-sm bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               {searchTerm && (
                 <button
                   type="button"
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 hover:text-gray-600"
                 >
-                  <X className="h-4 w-4" />
+                  <XMarkIcon className="h-4 w-4" />
                 </button>
               )}
             </div>
@@ -142,16 +146,16 @@ export function SearchableSelect({
                   type="button"
                   onClick={() => handleSelect(option)}
                   className={cn(
-                    "w-full px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
-                    "focus:bg-accent focus:text-accent-foreground focus:outline-none",
-                    value === option.value && "bg-accent text-accent-foreground"
+                    "w-full px-3 py-2 text-left text-sm hover:bg-gray-100",
+                    "focus:bg-gray-100 focus:outline-none",
+                    value === option.value && "bg-blue-50 text-blue-600"
                   )}
                 >
                   {option.label}
                 </button>
               ))
             ) : (
-              <div className="px-3 py-2 text-sm text-muted-foreground">
+              <div className="px-3 py-2 text-sm text-gray-500">
                 No se encontraron resultados
               </div>
             )}
@@ -159,7 +163,7 @@ export function SearchableSelect({
 
           {/* Footer con información */}
           {filteredOptions.length > 0 && (
-            <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border">
+            <div className="px-3 py-2 text-xs text-gray-500 border-t border-gray-200">
               {filteredOptions.length} resultado{filteredOptions.length !== 1 ? 's' : ''} encontrado{filteredOptions.length !== 1 ? 's' : ''}
             </div>
           )}
