@@ -625,29 +625,16 @@ def obtener_ejemplos_correccion(
 # ENDPOINTS DE PRUEBA
 # ============================================
 
-@router.get("/test-simple")
-def test_validadores_simple():
+@router.get("/ping")
+def ping_validadores():
     """
-    🔧 Endpoint de prueba simple para validadores
+    🏓 Endpoint de prueba para verificar conectividad
     """
     return {
-        "status": "ok",
+        "status": "success",
         "message": "Endpoint de validadores funcionando",
-        "timestamp": datetime.now().isoformat()
-    }
-
-@router.get("/test-con-auth")
-def test_validadores_con_auth(
-    current_user: User = Depends(get_current_user)
-):
-    """
-    🔧 Endpoint de prueba con autenticación para validadores
-    """
-    return {
-        "status": "ok",
-        "message": "Endpoint de validadores con auth funcionando",
-        "user": current_user.email,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": "2025-10-19T12:00:00Z",
+        "version": "1.0.0"
     }
 
 # ============================================
