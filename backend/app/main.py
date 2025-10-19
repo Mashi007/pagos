@@ -42,7 +42,8 @@ from app.api.v1.endpoints import (
     concesionarios,
     analistas,
     modelos_vehiculos,
-    plantilla_clientes
+    plantilla_clientes,
+    migracion_emergencia
 )
 
 # Configurar logging robusto
@@ -181,6 +182,7 @@ app.include_router(concesionarios.router, prefix=f"{settings.API_V1_PREFIX}/conc
 app.include_router(analistas.router, prefix=f"{settings.API_V1_PREFIX}/analistas", tags=["Analistas"])
 app.include_router(modelos_vehiculos.router, prefix=f"{settings.API_V1_PREFIX}/modelos-vehiculos", tags=["Modelos Vehiculos"])
 app.include_router(plantilla_clientes.router, prefix=f"{settings.API_V1_PREFIX}/plantilla", tags=["Plantilla Excel"])
+app.include_router(migracion_emergencia.router, prefix=f"{settings.API_V1_PREFIX}/migracion", tags=["Migración Emergencia"])
 # app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])  # Removido - se usarán datos reales
 
 
