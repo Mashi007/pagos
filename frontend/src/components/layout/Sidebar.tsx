@@ -86,11 +86,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       icon: Calculator,
     },
     {
-      title: 'Conciliación',
-      href: '/conciliacion',
-      icon: Building2,
-    },
-    {
       title: 'Reportes',
       href: '/reportes',
       icon: FileText,

@@ -18,7 +18,6 @@ import { Pagos } from '@/pages/Pagos'
 import { NuevoPago } from '@/pages/NuevoPago'
 import { ConciliacionBancaria } from '@/pages/ConciliacionBancaria'
 import { Amortizacion } from '@/pages/Amortizacion'
-import { Conciliacion } from '@/pages/Conciliacion'
 import { Reportes } from '@/pages/Reportes'
 import { Aprobaciones } from '@/pages/Aprobaciones'
 import { Auditoria } from '@/pages/Auditoria'
@@ -125,10 +124,6 @@ function App() {
           <Route path="amortizacion" element={<AmortizacionPage />} />
 
           {/* Conciliación */}
-          <Route
-            path="conciliacion"
-            element={<Conciliacion />}
-          />
 
           {/* Reportes */}
           <Route
