@@ -50,7 +50,10 @@ from . import (
     temporal_analysis,
     architectural_analysis,
     intermittent_failure_analyzer,
-    realtime_specific_monitor
+    realtime_specific_monitor,
+    schema_analyzer,
+    critical_error_monitor,
+    strategic_measurements
 )
 
 __all__ = [
@@ -99,5 +102,8 @@ __all__ = [
     "temporal_analysis",
     "architectural_analysis",
     "intermittent_failure_analyzer",
-    "realtime_specific_monitor"
+    "realtime_specific_monitor",
+    "schema_analyzer",
+    "critical_error_monitor",
+    "strategic_measurements"
 ]
