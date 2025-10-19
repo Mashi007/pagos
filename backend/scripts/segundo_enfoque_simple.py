@@ -23,8 +23,8 @@ def segundo_enfoque_validacion():
         print("\n1. VERIFICACION POST-CORRECCIONES:")
         
         # Esperar un poco para que el despliegue se complete
-        print("   Esperando 60 segundos para completar despliegue...")
-        time.sleep(60)
+        print("   Esperando 30 segundos para completar despliegue...")
+        time.sleep(30)
         
         # Verificar conectividad básica
         try:
