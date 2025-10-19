@@ -19,7 +19,7 @@ from app.schemas.auth import (
 )
 from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
-from app.core.security import create_access_token, verify_password, get_password_hash, validate_password_strength
+from app.core.security import create_access_token, verify_password, get_password_hash, validate_password_strength, create_refresh_token
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ async def login(
                 detail="Credenciales inválidas"
             )
         
-        # Generar token
+        # Generar tokens
         access_token = create_access_token(
             subject=user.id,
             additional_claims={
@@ -85,12 +85,19 @@ async def login(
             }
         )
         
+        # Generar refresh token nuevo
+        refresh_token = create_refresh_token(subject=user.id)
+        
         logger.info(f"Login exitoso para: {login_data.email}")
+        
+        # Convertir usuario a diccionario
+        user_dict = UserMeResponse.model_validate(user).model_dump()
         
         return LoginResponse(
             access_token=access_token,
+            refresh_token=refresh_token,
             token_type="bearer",
-            user=UserMeResponse.model_validate(user)
+            user=user_dict
         )
         
     except HTTPException:
