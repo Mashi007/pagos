@@ -32,7 +32,10 @@ from . import (
     notificaciones_multicanal,
     plantilla_clientes,
     migracion_emergencia,
-    diagnostico
+    diagnostico,
+    diagnostico_auth,
+    token_verification,
+    dashboard_diagnostico
 )
 
 __all__ = [
@@ -63,5 +66,8 @@ __all__ = [
     "notificaciones_multicanal",
     "plantilla_clientes",
     "migracion_emergencia",
-    "diagnostico"
+    "diagnostico",
+    "diagnostico_auth",
+    "token_verification",
+    "dashboard_diagnostico"
 ]

@@ -43,36 +43,51 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     
+    # Logging detallado para diagnóstico
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
         token = credentials.credentials
+        logger.info(f"🔍 Validando token JWT - Longitud: {len(token)}")
+        
         payload = decode_token(token)
+        logger.info(f"✅ Token decodificado exitosamente - Payload keys: {list(payload.keys())}")
         
         # Verificar que sea un access token
         if payload.get("type") != "access":
+            logger.warning(f"❌ Token tipo incorrecto: {payload.get('type')}")
             raise credentials_exception
         
         user_id: str = payload.get("sub")
         if user_id is None:
+            logger.warning("❌ Token sin user_id (sub)")
             raise credentials_exception
             
-    except JWTError:
+        logger.info(f"🔍 Buscando usuario con ID: {user_id}")
+            
+    except JWTError as e:
+        logger.error(f"❌ Error decodificando JWT: {e}")
         raise credentials_exception
     
     # Buscar usuario en BD
     user = db.query(User).filter(User.id == int(user_id)).first()
     
     if user is None:
+        logger.error(f"❌ Usuario no encontrado en BD - ID: {user_id}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Usuario no encontrado"
         )
     
     if not user.is_active:
+        logger.warning(f"⚠️ Usuario inactivo - Email: {user.email}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Usuario inactivo"
         )
     
+    logger.info(f"✅ Usuario autenticado exitosamente - Email: {user.email}")
     return user
 
 

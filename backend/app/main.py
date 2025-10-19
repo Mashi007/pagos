@@ -45,7 +45,10 @@ from app.api.v1.endpoints import (
     modelos_vehiculos,
     plantilla_clientes,
     migracion_emergencia,
-    diagnostico
+    diagnostico,
+    diagnostico_auth,
+    token_verification,
+    dashboard_diagnostico
 )
 
 # Configurar logging robusto
@@ -187,6 +190,9 @@ app.include_router(modelos_vehiculos.router, prefix=f"{settings.API_V1_PREFIX}/m
 app.include_router(plantilla_clientes.router, prefix=f"{settings.API_V1_PREFIX}/plantilla", tags=["Plantilla Excel"])
 app.include_router(migracion_emergencia.router, prefix=f"{settings.API_V1_PREFIX}/migracion", tags=["Migración Emergencia"])
 app.include_router(diagnostico.router, prefix=f"{settings.API_V1_PREFIX}/diagnostico", tags=["Diagnóstico"])
+app.include_router(diagnostico_auth.router, prefix=f"{settings.API_V1_PREFIX}/auth-debug", tags=["Diagnóstico Auth"])
+app.include_router(token_verification.router, prefix=f"{settings.API_V1_PREFIX}/token", tags=["Verificación Tokens"])
+app.include_router(dashboard_diagnostico.router, prefix=f"{settings.API_V1_PREFIX}/monitor", tags=["Monitor Diagnóstico"])
 # app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])  # Removido - se usarán datos reales
 
 
