@@ -365,6 +365,14 @@ def update_user(
     # Actualizar campos
     update_data = user_data.model_dump(exclude_unset=True)
     
+    # Manejar contraseña especial - solo actualizar si se proporciona un valor no vacío
+    if 'password' in update_data:
+        password_value = update_data.pop('password')
+        if password_value and password_value.strip():
+            # Solo actualizar contraseña si se proporciona un valor no vacío
+            user.hashed_password = get_password_hash(password_value)
+    
+    # Actualizar otros campos
     for field, value in update_data.items():
         setattr(user, field, value)
     

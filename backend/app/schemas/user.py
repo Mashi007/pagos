@@ -6,7 +6,7 @@ Compatible con Pydantic v2.
 """
 from typing import Optional
 from datetime import datetime
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 
 
 # ============================================
@@ -35,7 +35,16 @@ class UserUpdate(BaseModel):
     cargo: Optional[str] = Field(None, max_length=100)
     is_admin: Optional[bool] = None  # Cambio clave: rol → is_admin
     is_active: Optional[bool] = None
-    password: Optional[str] = Field(None, min_length=8)
+    password: Optional[str] = Field(None, description="Nueva contraseña (opcional, solo se valida si se proporciona)")
+
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v):
+        """Validar contraseña solo si se proporciona un valor no vacío"""
+        if v is not None and v.strip() != "":
+            if len(v) < 8:
+                raise ValueError('La contraseña debe tener al menos 8 caracteres')
+        return v
 
 
 # ============================================
