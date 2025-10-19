@@ -79,6 +79,9 @@ class ApiClient {
       async (error) => {
         const originalRequest = error.config
 
+        // TEMPORALMENTE DESACTIVADO: Auto-refresh para evitar loop infinito
+        // TODO: Reimplementar con cooldown y límite de intentos
+        /*
         // Si el token expiró, intentar renovarlo con persistencia segura
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true
@@ -117,6 +120,7 @@ class ApiClient {
             return Promise.reject(refreshError)
           }
         }
+        */
 
         // Manejar otros errores
         this.handleError(error)
@@ -243,10 +247,35 @@ class ApiClient {
   getAxiosInstance(): AxiosInstance {
     return this.client
   }
+
+  // FUNCIÓN DE EMERGENCIA: Limpiar completamente el storage
+  emergencyClearStorage(): void {
+    console.log('🚨 EMERGENCY: Limpiando storage completamente')
+    try {
+      // Limpiar localStorage
+      safeClear()
+      // Limpiar sessionStorage  
+      safeClearSession()
+      // Limpiar específicamente tokens de auth
+      clearAuthStorage()
+      console.log('✅ Storage limpiado exitosamente')
+    } catch (error) {
+      console.error('❌ Error limpiando storage:', error)
+    }
+  }
 }
 
 // Instancia singleton del cliente API
 export const apiClient = new ApiClient()
+
+// FUNCIÓN GLOBAL DE EMERGENCIA: Limpiar storage desde consola del navegador
+// Uso: window.clearAuthStorage() en la consola del navegador
+if (typeof window !== 'undefined') {
+  (window as any).clearAuthStorage = () => {
+    apiClient.emergencyClearStorage()
+    window.location.reload()
+  }
+}
 
 // Tipos para respuestas de API
 export interface ApiResponse<T> {
