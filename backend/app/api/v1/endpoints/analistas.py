@@ -183,17 +183,10 @@ def listar_asesores(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al listar asesores: {str(e)}")
 
-@router.get("/test-simple")
-def test_simple():
-    """
-    Endpoint simple sin base de datos
-    """
-    return {"mensaje": "Router de asesores funcionando", "status": "ok", "timestamp": "2025-10-15"}
-
 @router.get("/test-activos")
 def test_asesores_activos():
     """
-    🧪 Endpoint de prueba para diagnosticar problemas
+    Endpoint de prueba para diagnosticar problemas
     """
     return {"mensaje": "Endpoint de asesores funcionando", "status": "ok"}
 
@@ -202,14 +195,14 @@ def listar_asesores_activos(
     db: Session = Depends(get_db)
 ):
     """
-    👨‍💼 Listar solo asesores activos (para formularios)
+    Listar solo asesores activos (para formularios)
     
     Simplificado: Sin filtros adicionales, solo asesores activos
     """
     try:
         query = db.query(Analista).filter(Analista.activo == True)
         asesores = query.all()
-        return [a.to_dict() for a in asesores]
+        return [AnalistaResponse.model_validate(a) for a in asesores]
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al listar asesores activos: {str(e)}")
