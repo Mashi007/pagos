@@ -603,7 +603,7 @@ export function CrearClienteForm({ onClose, onSuccess, onClienteCreated }: Crear
                     label: concesionario.nombre
                   }))}
                   value={formData.concesionario}
-                  onValueChange={(value) => handleInputChange('concesionario', value)}
+                  onChange={(value) => handleInputChange('concesionario', value)}
                   placeholder="Buscar concesionario..."
                   className={getFieldValidation('concesionario')?.isValid === false ? 'border-red-500' : ''}
                 />
@@ -631,7 +631,7 @@ export function CrearClienteForm({ onClose, onSuccess, onClienteCreated }: Crear
                     label: analista.nombre
                   }))}
                   value={formData.analista}
-                  onValueChange={(value) => handleInputChange('analista', value)}
+                  onChange={(value) => handleInputChange('analista', value)}
                   placeholder="Buscar analista..."
                   className={getFieldValidation('analista')?.isValid === false ? 'border-red-500' : ''}
                 />
@@ -666,7 +666,7 @@ export function CrearClienteForm({ onClose, onSuccess, onClienteCreated }: Crear
                 </label>
                 <Select
                   value={formData.estado}
-                  onValueChange={(value: 'ACTIVO' | 'INACTIVO' | 'FINALIZADO') => handleInputChange('estado', value)}
+                  onChange={(value: 'ACTIVO' | 'INACTIVO' | 'FINALIZADO') => handleInputChange('estado', value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar estado" />
