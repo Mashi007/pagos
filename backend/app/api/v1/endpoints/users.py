@@ -167,7 +167,7 @@ def create_user(
         email=user_data.email,
         nombre=user_data.nombre,
         apellido=user_data.apellido,
-        cargo=user_data.cargo,
+        cargo=user_data.cargo or "Usuario",  # Valor por defecto si es None
         is_admin=user_data.is_admin,  # Cambio clave: rol → is_admin
         hashed_password=get_password_hash(user_data.password),
         is_active=user_data.is_active,
