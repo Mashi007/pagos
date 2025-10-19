@@ -27,6 +27,7 @@ import { concesionarioService, type Concesionario } from '@/services/concesionar
 import { analistaService, type Analista } from '@/services/analistaService'
 import { modeloVehiculoService, type ModeloVehiculo } from '@/services/modeloVehiculoService'
 import { clienteService } from '@/services/clienteService'
+import { ExcelUploader } from './ExcelUploader'
 
 interface FormData {
   // Datos personales
@@ -84,6 +85,7 @@ export function CrearClienteForm({
   const [modelosVehiculos, setModelosVehiculos] = useState<ModeloVehiculo[]>([])
   const [loadingData, setLoadingData] = useState(true)
   const [downloadingTemplate, setDownloadingTemplate] = useState(false)
+  const [showExcelUploader, setShowExcelUploader] = useState(false)
 
   // 🔄 CARGAR DATOS DINÁMICOS: Analistaes y Concesionarios desde configuración
   useEffect(() => {
@@ -208,6 +210,49 @@ export function CrearClienteForm({
       alert('Error al descargar el template. Intenta nuevamente.')
     } finally {
       setDownloadingTemplate(false)
+    }
+  }
+
+  // 📊 MANEJAR DATOS PROCESADOS DEL EXCEL
+  const handleExcelDataProcessed = async (data: any[]) => {
+    try {
+      console.log('📊 Guardando datos del Excel:', data.length, 'clientes')
+      
+      // Procesar cada cliente del Excel
+      for (const clienteData of data) {
+        const clienteFormatted = {
+          cedula: clienteData.cedula,
+          nombres: clienteData.nombres,
+          apellidos: clienteData.apellidos,
+          telefono: clienteData.telefono.replace(/[^\d]/g, ''),
+          email: clienteData.email,
+          direccion: clienteData.direccion,
+          fecha_nacimiento: clienteData.fecha_nacimiento,
+          ocupacion: clienteData.ocupacion,
+          modelo_vehiculo: clienteData.modelo_vehiculo,
+          concesionario: clienteData.concesionario,
+          analista: clienteData.analista,
+          total_financiamiento: parseFloat(clienteData.total_financiamiento.replace(/[^\d.-]/g, '')) || 0,
+          cuota_inicial: parseFloat(clienteData.cuota_inicial?.replace(/[^\d.-]/g, '') || '0') || 0,
+          numero_amortizaciones: parseInt(clienteData.numero_amortizaciones) || 12,
+          modalidad_pago: clienteData.modalidad_pago.toUpperCase(),
+          fecha_entrega: clienteData.fecha_entrega,
+          estado: clienteData.estado.toUpperCase(),
+          activo: clienteData.activo.toLowerCase() === 'true',
+          notas: clienteData.notas
+        }
+        
+        await clienteService.createCliente(clienteFormatted)
+      }
+      
+      console.log('✅ Todos los clientes guardados exitosamente')
+      if (onClienteCreated) {
+        onClienteCreated()
+      }
+      
+    } catch (error) {
+      console.error('❌ Error guardando datos del Excel:', error)
+      alert('Error al guardar algunos clientes. Revisa los logs.')
     }
   }
 
@@ -620,6 +665,16 @@ export function CrearClienteForm({
               <h2 className="text-xl font-bold">CREAR NUEVO CLIENTE</h2>
             </div>
             <div className="flex items-center space-x-2">
+              {/* Botón de carga masiva */}
+              <Button
+                onClick={() => setShowExcelUploader(true)}
+                variant="outline"
+                size="sm"
+                className="text-white border-white/30 hover:bg-white/20"
+              >
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                Carga Masiva
+              </Button>
               {/* Botón de descarga de template */}
               <Button
                 onClick={handleDownloadTemplate}
@@ -628,8 +683,8 @@ export function CrearClienteForm({
                 size="sm"
                 className="text-white border-white/30 hover:bg-white/20"
               >
-                <FileSpreadsheet className="mr-2 h-4 w-4" />
-                {downloadingTemplate ? 'Descargando...' : 'Template Excel'}
+                <Download className="mr-2 h-4 w-4" />
+                {downloadingTemplate ? 'Descargando...' : 'Template'}
               </Button>
               <Button
                 onClick={onClose}
@@ -653,8 +708,9 @@ export function CrearClienteForm({
               </div>
               <div className="text-sm text-blue-600 space-y-1">
                 <p>• <strong>Formulario web:</strong> Completa los campos individualmente</p>
-                <p>• <strong>Template Excel:</strong> Descarga el archivo, complétalo y súbelo en "Carga Masiva"</p>
-                <p>• <strong>Ambas opciones</strong> son compatibles y se guardan en la misma base de datos</p>
+                <p>• <strong>Carga Masiva:</strong> Sube archivo Excel con múltiples clientes</p>
+                <p>• <strong>Template:</strong> Descarga el archivo modelo para llenar</p>
+                <p>• <strong>Todas las opciones</strong> son compatibles y se guardan en la misma base de datos</p>
               </div>
             </CardContent>
           </Card>
@@ -1024,6 +1080,16 @@ export function CrearClienteForm({
           )}
         </form>
       </motion.div>
+
+      {/* Modal de carga masiva Excel */}
+      <AnimatePresence>
+        {showExcelUploader && (
+          <ExcelUploader
+            onClose={() => setShowExcelUploader(false)}
+            onDataProcessed={handleExcelDataProcessed}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }
