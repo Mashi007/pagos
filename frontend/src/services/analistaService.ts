@@ -72,7 +72,7 @@ class AnalistaService {
 
   // Crear un nuevo analista
   async crearAnalista(data: AnalistaCreate): Promise<Analista> {
-    return await apiClient.post<Analista>(this.baseUrl, data)
+    return await apiClient.post<Analista>(`${this.baseUrl}/crear`, data)
   }
 
   // Actualizar un analista existente

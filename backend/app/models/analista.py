@@ -8,7 +8,13 @@ class Analista(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(255), nullable=False, index=True)  # Nombre completo (incluye apellido)
+    apellido = Column(String(255), default='', nullable=False)
+    email = Column(String(255), unique=True, nullable=True)
+    telefono = Column(String(20), nullable=True)
+    especialidad = Column(String(255), nullable=True)
+    comision_porcentaje = Column(Integer, nullable=True)
     activo = Column(Boolean, default=True, nullable=False)
+    notas = Column(Text, nullable=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -47,9 +53,13 @@ class Analista(Base):
         return {
             "id": self.id,
             "nombre": self.nombre,
-            "primer_nombre": self.primer_nombre,
             "apellido": self.apellido,
+            "email": self.email,
+            "telefono": self.telefono,
+            "especialidad": self.especialidad,
+            "comision_porcentaje": self.comision_porcentaje,
             "activo": self.activo,
+            "notas": self.notas,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }

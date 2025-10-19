@@ -4,7 +4,13 @@ from datetime import datetime
 
 class AnalistaBase(BaseModel):
     nombre: str  # Nombre completo (incluye apellido)
+    apellido: Optional[str] = ''
+    email: Optional[str] = None
+    telefono: Optional[str] = None
+    especialidad: Optional[str] = None
+    comision_porcentaje: Optional[int] = None
     activo: bool = True
+    notas: Optional[str] = None
 
     @field_validator('nombre')
     @classmethod
@@ -18,7 +24,13 @@ class AnalistaCreate(AnalistaBase):
 
 class AnalistaUpdate(BaseModel):
     nombre: Optional[str] = None
+    apellido: Optional[str] = None
+    email: Optional[str] = None
+    telefono: Optional[str] = None
+    especialidad: Optional[str] = None
+    comision_porcentaje: Optional[int] = None
     activo: Optional[bool] = None
+    notas: Optional[str] = None
 
     @field_validator('nombre')
     @classmethod
@@ -31,9 +43,7 @@ class AnalistaResponse(AnalistaBase):
     id: int
     nombre_completo: str
     primer_nombre: str
-    apellido: str
     created_at: datetime
-    
     updated_at: Optional[datetime] = None
     
     model_config = ConfigDict(from_attributes=True)

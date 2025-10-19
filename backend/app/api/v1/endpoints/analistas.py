@@ -221,7 +221,7 @@ def obtener_asesor(
     
     return AnalistaResponse.model_validate(asesor)
 
-@router.post("", response_model=AnalistaResponse)
+@router.post("/crear", response_model=AnalistaResponse)
 def crear_asesor(
     asesor_data: AnalistaCreate,
     db: Session = Depends(get_db),
