@@ -8,6 +8,7 @@ import {
   Users, 
   Plus, 
   Search, 
+  Eye,
   Edit2, 
   Trash2, 
   UserCheck,
@@ -39,6 +40,7 @@ export default function UsuariosConfig() {
     apellido: '',
     is_admin: false,  // Cambio clave: rol → is_admin
     password: '',
+    cargo: 'Usuario', // Valor por defecto para evitar error de NOT NULL
     is_active: true
   })
 

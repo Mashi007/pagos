@@ -32,6 +32,7 @@ export const PasswordField = ({
   disabled = false
 }: PasswordFieldProps) => {
   const {
+    password: hookPassword,
     showPassword,
     generatePassword,
     copyPassword,
@@ -42,7 +43,9 @@ export const PasswordField = ({
     onPasswordChange: onChange
   })
 
-  const validation = validatePassword(value)
+  // Usar el valor del prop si está disponible, sino usar el del hook
+  const currentPassword = value || hookPassword
+  const validation = validatePassword(currentPassword)
 
   return (
     <div className={`space-y-2 ${className}`}>
@@ -50,7 +53,7 @@ export const PasswordField = ({
         <div className="relative flex-1">
           <Input
             type={showPassword ? "text" : "password"}
-            value={value}
+            value={currentPassword}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
             required={required}
@@ -92,7 +95,7 @@ export const PasswordField = ({
           </Button>
         )}
         
-        {showCopyButton && value && (
+        {showCopyButton && currentPassword && (
           <Button
             type="button"
             variant="outline"
@@ -107,7 +110,7 @@ export const PasswordField = ({
       </div>
       
       {/* Indicador de fortaleza de contraseña */}
-      {value && (
+      {currentPassword && (
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <div className="flex gap-1">

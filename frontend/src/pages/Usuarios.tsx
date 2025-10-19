@@ -25,6 +25,7 @@ export function Usuarios() {
     apellido: '',
     is_admin: false,  // Cambio clave: rol → is_admin
     password: '',
+    cargo: 'Usuario', // Valor por defecto para evitar error de NOT NULL
     is_active: true
   })
 
@@ -103,6 +104,7 @@ export function Usuarios() {
       apellido: usuario.apellido,
       is_admin: usuario.is_admin,  // Cambio clave: rol → is_admin
       password: '',
+      cargo: usuario.cargo || 'Usuario', // Valor por defecto si no existe
       is_active: usuario.is_active
     })
     setShowCreateForm(true)
