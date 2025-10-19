@@ -113,8 +113,7 @@ async def login(
 async def get_current_user_info(
     request: Request,
     response: Response,
-    # TEMPORALMENTE SIN AUTENTICACIÓN PARA DEBUGGING
-    # current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     👤 Obtener información del usuario actual
@@ -123,17 +122,7 @@ async def get_current_user_info(
         # Agregar headers CORS
         add_cors_headers(request, response)
         
-        # TEMPORALMENTE RETORNAR USUARIO ADMINISTRADOR POR DEFECTO
-        return UserMeResponse(
-            id=1,
-            email="itmaster@rapicreditca.com",
-            nombre="Administrador",
-            apellido="Sistema",
-            is_admin=True,
-            is_active=True,
-            created_at="2024-01-01T00:00:00Z",
-            updated_at="2024-01-01T00:00:00Z"
-        )
+        return UserMeResponse.model_validate(current_user)
         
     except Exception as e:
         logger.error(f"Error obteniendo usuario actual: {e}")

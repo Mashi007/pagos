@@ -53,45 +53,6 @@ def registrar_auditoria_cliente(
         db.rollback()
 
 # ============================================
-# ENDPOINT TEMPORAL DE DEBUGGING
-# ============================================
-
-@router.get("/debug", response_model=dict)
-def debug_clientes(db: Session = Depends(get_db)):
-    """
-    🔍 Endpoint temporal para debugging sin autenticación
-    """
-    try:
-        # Contar total de clientes
-        total_clientes = db.query(Cliente).count()
-        
-        # Obtener algunos clientes de ejemplo
-        clientes_ejemplo = db.query(Cliente).limit(5).all()
-        
-        return {
-            "status": "success",
-            "message": "Backend funcionando correctamente",
-            "total_clientes": total_clientes,
-            "clientes_ejemplo": [
-                {
-                    "id": c.id,
-                    "cedula": c.cedula,
-                    "nombres": c.nombres,
-                    "apellidos": c.apellidos,
-                    "estado": c.estado
-                } for c in clientes_ejemplo
-            ],
-            "timestamp": datetime.now().isoformat()
-        }
-    except Exception as e:
-        logger.error(f"Error en debug endpoint: {e}")
-        return {
-            "status": "error",
-            "message": f"Error: {str(e)}",
-            "timestamp": datetime.now().isoformat()
-        }
-
-# ============================================
 # ENDPOINTS DE CONSULTA
 # ============================================
 
@@ -107,9 +68,8 @@ def listar_clientes(
     # Filtros específicos
     estado: Optional[str] = Query(None, description="ACTIVO, INACTIVO, FINALIZADO"),
     
-    db: Session = Depends(get_db)
-    # TEMPORALMENTE SIN AUTENTICACIÓN PARA DEBUGGING
-    # current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     📋 Listar clientes con paginación y filtros
@@ -122,7 +82,7 @@ def listar_clientes(
     - Auditoría automática
     """
     try:
-        logger.info(f"Listar clientes - TEMPORALMENTE SIN AUTENTICACIÓN")
+        logger.info(f"Listar clientes - Usuario: {current_user.email}")
         
         # Query base
         query = db.query(Cliente)
