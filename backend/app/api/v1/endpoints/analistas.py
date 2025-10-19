@@ -432,7 +432,6 @@ def listar_analistas_no_auth(
         raise HTTPException(status_code=500, detail=f"Error al listar analistas: {str(e)}")
 
 @router.get("/", response_model=AnalistaListResponse)
-@cache_analistas(lambda skip, limit, activo, search, db, current_user: generate_cache_key(skip, limit, activo, search))
 def listar_asesores(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
@@ -445,7 +444,7 @@ def listar_asesores(
     Listar todos los asesores con paginación y filtros
     """
     try:
-        # Construir consulta SQL base
+        # Usar SQL directo para máxima compatibilidad
         base_query = "SELECT id, nombre, activo, created_at FROM analistas"
         count_query = "SELECT COUNT(*) FROM analistas"
         where_conditions = []
@@ -464,12 +463,12 @@ def listar_asesores(
             count_query += where_clause
         
         # Obtener total
-        total_result = db.execute(count_query)
+        total_result = db.execute(text(count_query))
         total = total_result.fetchone()[0]
         
         # Aplicar paginación
         paginated_query = f"{base_query} ORDER BY id OFFSET {skip} LIMIT {limit}"
-        result = db.execute(paginated_query)
+        result = db.execute(text(paginated_query))
         rows = result.fetchall()
         
         # Calcular páginas
@@ -504,6 +503,7 @@ def listar_asesores(
         )
         
     except Exception as e:
+        logger.error(f"Error en endpoint principal: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error al listar asesores: {str(e)}")
 
 @router.get("/test-activos")

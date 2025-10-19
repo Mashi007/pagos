@@ -77,7 +77,7 @@ class AnalistaService {
         lastError = error
         
         // Si es un error 503, esperar un poco antes del siguiente intento
-        if (error?.response?.status === 503) {
+        if ((error as any)?.response?.status === 503) {
           console.log('Esperando 2 segundos antes del siguiente intento...')
           await new Promise(resolve => setTimeout(resolve, 2000))
         }
