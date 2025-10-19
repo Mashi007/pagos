@@ -1,42 +1,28 @@
-import { useState, useEffect } from 'react'
+// frontend/src/components/configuracion/AnalistasConfig.tsx
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   Users,
   Plus,
+  Search,
   Edit,
   Trash2,
-  Search,
-  Filter,
-  CheckCircle,
-  XCircle,
-  Save,
-  X,
-  Mail,
-  Phone,
-  Eye,
+  UserCheck,
+  UserX,
+  Loader2,
   RefreshCw,
+  Eye
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { LoadingSpinner } from '@/components/ui/loading-spinner'
-import { analistaService, type Analista, type AnalistaCreate } from '@/services/analistaService'
-
-const ESPECIALIDADES = [
-  'Vehículos Nuevos',
-  'Vehículos Usados',
-  'Vehículos Comerciales',
-  'Motocicletas',
-  'Camiones',
-  'Otros'
-]
+import { Analista, AnalistaCreate, AnalistaUpdate } from '@/services/analistaService'
+import { useAnalistasActivos, useCreateAnalista, useUpdateAnalista, useDeleteAnalista } from '@/hooks/useAnalistas'
+import toast from 'react-hot-toast'
 
 export function AnalistasConfig() {
-  const [analistaes, setAnalistaes] = useState<Analista[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingAnalista, setEditingAnalista] = useState<Analista | null>(null)
@@ -48,51 +34,34 @@ export function AnalistasConfig() {
     activo: true
   })
 
-  useEffect(() => {
-    loadAnalistaes()
-  }, [])
-
-  const loadAnalistaes = async () => {
-    try {
-      setLoading(true)
-      const data = await analistaService.listarAnalistasActivos()
-      setAnalistaes(data)
-    } catch (err: any) {
-      console.error('Error al cargar analistaes:', err)
-      if (err.response?.status === 503) {
-        setError('Servicio temporalmente no disponible. Intenta nuevamente.')
-      } else if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
-        setError('Error de conexión. Verifica que el servidor esté funcionando.')
-      } else {
-        setError('No se pudieron cargar los analistaes.')
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Usar hooks de React Query
+  const { 
+    data: analistas, 
+    isLoading: loading, 
+    error,
+    refetch
+  } = useAnalistasActivos()
+  
+  const createAnalistaMutation = useCreateAnalista()
+  const updateAnalistaMutation = useUpdateAnalista()
+  const deleteAnalistaMutation = useDeleteAnalista()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      setError(null) // Limpiar errores previos
-      
       if (editingAnalista) {
-        await analistaService.actualizarAnalista(editingAnalista.id, formData)
+        await updateAnalistaMutation.mutateAsync({
+          id: editingAnalista.id,
+          data: formData
+        })
       } else {
-        await analistaService.crearAnalista(formData)
+        await createAnalistaMutation.mutateAsync(formData)
       }
       
-      // Recargar la lista de analistaes para actualizar la tabla
-      await loadAnalistaes()
       resetForm()
     } catch (err) {
       console.error('Error al guardar analista:', err)
-      setError('Error al guardar el analista.')
     }
-  }
-
-  const handleView = (analista: Analista) => {
-    setViewingAnalista(analista)
   }
 
   const handleEdit = (analista: Analista) => {
@@ -104,17 +73,24 @@ export function AnalistasConfig() {
     setShowForm(true)
   }
 
+  const handleView = (analista: Analista) => {
+    setViewingAnalista(analista)
+  }
+
   const handleDelete = async (id: number) => {
-    if (!confirm('¿Estás seguro de que deseas eliminar este analista?')) {
-      return
-    }
-    
     try {
-      await analistaService.eliminarAnalista(id)
-      await loadAnalistaes()
+      const confirmar = window.confirm(
+        '⚠️ ¿Estás seguro de que quieres ELIMINAR este analista?\n\n' +
+        'Esta acción NO se puede deshacer.'
+      )
+      
+      if (!confirmar) {
+        return
+      }
+      
+      await deleteAnalistaMutation.mutateAsync(id)
     } catch (err) {
       console.error('Error al eliminar analista:', err)
-      setError('Error al eliminar el analista.')
     }
   }
 
@@ -124,44 +100,128 @@ export function AnalistasConfig() {
       activo: true
     })
     setEditingAnalista(null)
-    setViewingAnalista(null)
     setShowForm(false)
   }
 
-  const filteredAnalistaes = analistaes.filter(analista =>
-    (analista.nombre_completo && analista.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (analista.nombre && analista.nombre.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  const handleRefresh = () => {
+    refetch()
+  }
+
+  // Filtrar analistas por término de búsqueda
+  const filteredAnalistas = analistas?.filter(analista =>
+    analista.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+  ) || []
 
   if (loading) {
-    return <div className="text-center py-8"><LoadingSpinner size="lg" /></div>
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Cargando analistas...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">Error al cargar analistas</p>
+          <Button onClick={handleRefresh} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Reintentar
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="space-y-6"
-    >
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-2xl font-bold flex items-center">
-            <Users className="mr-2 h-6 w-6" />
-            Gestión de Analistaes
-          </h3>
-          <p className="text-gray-600 mt-1">
-            Administra los analistaes comerciales del sistema
+          <h2 className="text-2xl font-bold tracking-tight">Configuración de Analistas</h2>
+          <p className="text-muted-foreground">
+            Gestiona los analistas del sistema
           </p>
         </div>
-        <Button onClick={() => setShowForm(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo Analista
-        </Button>
+        <div className="flex items-center space-x-2">
+          <Button onClick={handleRefresh} variant="outline" size="sm">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Actualizar
+          </Button>
+          <Button onClick={() => setShowForm(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nuevo Analista
+          </Button>
+        </div>
       </div>
 
-      {/* Formulario */}
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Analistas</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{analistas?.length || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Activos</CardTitle>
+            <UserCheck className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              {analistas?.filter(a => a.activo).length || 0}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Inactivos</CardTitle>
+            <UserX className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {analistas?.filter(a => !a.activo).length || 0}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Mostrados</CardTitle>
+            <Search className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{filteredAnalistas.length}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Buscar Analistas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center space-x-2">
+            <Search className="h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nombre..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="max-w-sm"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Form */}
       {showForm && (
         <Card>
           <CardHeader>
@@ -171,17 +231,18 @@ export function AnalistasConfig() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="text-sm font-medium">Nombre del Analista *</label>
-                  <Input
-                    value={formData.nombre}
-                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                    placeholder="Nombre del analista"
-                    required
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Nombre Completo
+                </label>
+                <Input
+                  value={formData.nombre}
+                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                  placeholder="Ingrese el nombre completo del analista"
+                  required
+                />
               </div>
+              
               <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
@@ -191,17 +252,16 @@ export function AnalistasConfig() {
                   className="rounded"
                 />
                 <label htmlFor="activo" className="text-sm font-medium">
-                  Activo
+                  Analista activo
                 </label>
               </div>
-              <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={resetForm}>
-                  <X className="mr-2 h-4 w-4" />
-                  Cancelar
+              
+              <div className="flex items-center space-x-2">
+                <Button type="submit" disabled={createAnalistaMutation.isPending || updateAnalistaMutation.isPending}>
+                  {editingAnalista ? 'Actualizar' : 'Crear'} Analista
                 </Button>
-                <Button type="submit">
-                  <Save className="mr-2 h-4 w-4" />
-                  {editingAnalista ? 'Actualizar' : 'Crear'}
+                <Button type="button" variant="outline" onClick={resetForm}>
+                  Cancelar
                 </Button>
               </div>
             </form>
@@ -209,164 +269,73 @@ export function AnalistasConfig() {
         </Card>
       )}
 
-      {/* Modal de Visualización */}
-      {viewingAnalista && (
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle className="flex items-center">
-                <Eye className="mr-2 h-5 w-5 text-blue-600" />
-                Detalles del Analista
-              </CardTitle>
-              <Button variant="outline" size="sm" onClick={() => setViewingAnalista(null)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-500">Nombre del Analista</label>
-                <p className="text-lg font-semibold">{viewingAnalista.nombre_completo}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Estado</label>
-                <div className="mt-1">
-                  <Badge variant={viewingAnalista.activo ? 'default' : 'destructive'}>
-                    {viewingAnalista.activo ? (
-                      <>
-                        <CheckCircle className="mr-1 h-3 w-3" />
-                        Activo
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="mr-1 h-3 w-3" />
-                        Inactivo
-                      </>
-                    )}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end space-x-2 mt-6">
-              <Button variant="outline" onClick={() => setViewingAnalista(null)}>
-                Cerrar
-              </Button>
-              <Button onClick={() => {
-                handleEdit(viewingAnalista)
-                setViewingAnalista(null)
-              }}>
-                <Edit className="mr-2 h-4 w-4" />
-                Editar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Búsqueda */}
+      {/* Analistas Table */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center space-x-2">
-            <Search className="h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Buscar analistaes..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Lista de Analistaes */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nombre del Analista</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+        <CardHeader>
+          <CardTitle>Lista de Analistas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID</TableHead>
+                <TableHead>Nombre</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead>Fecha Creación</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredAnalistas.map((analista) => (
+                <TableRow key={analista.id}>
+                  <TableCell className="font-medium">{analista.id}</TableCell>
+                  <TableCell>{analista.nombre}</TableCell>
+                  <TableCell>
+                    <Badge variant={analista.activo ? "default" : "secondary"}>
+                      {analista.activo ? "Activo" : "Inactivo"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {analista.created_at ? new Date(analista.created_at).toLocaleDateString() : 'N/A'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleView(analista)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEdit(analista)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDelete(analista.id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredAnalistaes.map((analista) => (
-                  <TableRow key={analista.id}>
-                    <TableCell>
-                      <div className="font-medium">{analista.nombre_completo}</div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={analista.activo ? 'default' : 'destructive'}>
-                        {analista.activo ? (
-                          <>
-                            <CheckCircle className="mr-1 h-3 w-3" />
-                            Activo
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="mr-1 h-3 w-3" />
-                            Inactivo
-                          </>
-                        )}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end space-x-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleView(analista)}
-                          title="Ver detalles"
-                          className="text-blue-600 hover:text-blue-700"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(analista)}
-                          title="Editar analista"
-                          className="text-green-600 hover:text-green-700"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(analista.id)}
-                          title="Eliminar analista"
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+              ))}
+            </TableBody>
+          </Table>
+          
+          {filteredAnalistas.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              {searchTerm ? 'No se encontraron analistas con ese nombre' : 'No hay analistas disponibles'}
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          <div className="flex items-center justify-between">
-            <span>{error}</span>
-            <Button 
-              onClick={loadAnalistaes}
-              variant="outline" 
-              size="sm"
-              className="ml-4"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Reintentar
-            </Button>
-          </div>
-        </div>
-      )}
-    </motion.div>
+    </div>
   )
 }

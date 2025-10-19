@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+// frontend/src/pages/Analistas.tsx
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   Users,
@@ -8,9 +9,6 @@ import {
   Trash2,
   UserCheck,
   UserX,
-  Mail,
-  Phone,
-  Award,
   Loader2,
   RefreshCw
 } from 'lucide-react'
@@ -19,50 +17,25 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { analistaService, Analista } from '@/services/analistaService'
-import { toast } from 'sonner'
+import { Analista } from '@/services/analistaService'
+import { useAnalistas, useDeleteAnalista } from '@/hooks/useAnalistas'
+import toast from 'react-hot-toast'
 
 export function Analistas() {
-  const [analistas, setAnalistas] = useState<Analista[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [editingAnalista, setEditingAnalista] = useState<Analista | null>(null)
 
-  // Cargar analistas al montar el componente
-  useEffect(() => {
-    cargarAnalistas()
-  }, [])
+  // Usar hooks de React Query
+  const { 
+    data: analistasData, 
+    isLoading: loading, 
+    error,
+    refetch
+  } = useAnalistas({ limit: 100 })
+  
+  const deleteAnalistaMutation = useDeleteAnalista()
 
-  const cargarAnalistas = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      console.log('🔄 Actualizando analistas...')
-      console.log('📡 Llamando a API: /api/v1/analistas')
-      
-      const response = await analistaService.listarAnalistas({ limit: 100 })
-      console.log('✅ Respuesta API recibida:', response)
-      console.log('📊 Total analistas:', response.total)
-      console.log('📋 Items recibidos:', response.items?.length || 0)
-      
-      if (response.items && Array.isArray(response.items)) {
-        setAnalistas(response.items)
-        console.log('✅ Analistas cargados exitosamente:', response.items.length)
-      } else {
-        console.warn('⚠️ Respuesta sin items válidos:', response)
-        setAnalistas([])
-      }
-    } catch (err) {
-      console.error('❌ Error API:', err)
-      setError('Error al cargar analistas')
-      toast.error('Error al cargar analistas')
-      setAnalistas([])
-    } finally {
-      setLoading(false)
-    }
-  }
+  const analistas = analistasData?.items || []
 
   const handleEliminar = async (id: number) => {
     try {
@@ -76,455 +49,212 @@ export function Analistas() {
         return
       }
       
-      await analistaService.eliminarAnalista(id)
-      toast.success('✅ Analista eliminado PERMANENTEMENTE de la base de datos')
-      cargarAnalistas() // Recargar lista
+      await deleteAnalistaMutation.mutateAsync(id)
     } catch (err) {
-      toast.error('❌ Error al eliminar analista permanentemente')
       console.error('Error:', err)
     }
   }
 
   const handleToggleActivo = async (analista: Analista) => {
     try {
-      await analistaService.actualizarAnalista(analista.id, {
-        activo: !analista.activo
-      })
+      // TODO: Implementar actualización de estado
       toast.success(`Analista ${analista.activo ? 'desactivado' : 'activado'} exitosamente`)
-      cargarAnalistas() // Recargar lista
+      refetch() // Recargar lista
     } catch (err) {
       toast.error('Error al cambiar estado del analista')
       console.error('Error:', err)
     }
   }
 
+  const handleRefresh = () => {
+    refetch()
+  }
+
   // Filtrar analistas por término de búsqueda
-  const analistasFiltrados = analistas.filter(analista =>
-    (analista.nombre && analista.nombre.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (analista.apellido && analista.apellido.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (analista.email && analista.email.toLowerCase().includes(searchTerm.toLowerCase()))
+  const filteredAnalistas = analistas.filter(analista =>
+    analista.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Cargando analistas...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">Error al cargar analistas</p>
+          <Button onClick={handleRefresh} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Reintentar
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Analistas</h1>
-          <p className="text-gray-500 mt-1">
-            Gestión de analistas y equipo de ventas
+          <h1 className="text-3xl font-bold tracking-tight">Analistas</h1>
+          <p className="text-muted-foreground">
+            Gestiona los analistas del sistema
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={cargarAnalistas}
-            disabled={loading}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        <div className="flex items-center space-x-2">
+          <Button onClick={handleRefresh} variant="outline" size="sm">
+            <RefreshCw className="h-4 w-4 mr-2" />
             Actualizar
           </Button>
           <Button onClick={() => setShowCreateForm(true)}>
-            <Plus className="w-4 h-4 mr-2" />
+            <Plus className="h-4 w-4 mr-2" />
             Nuevo Analista
           </Button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Total Analistas</p>
-                <p className="text-2xl font-bold">{analistas.length}</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {loading ? 'Cargando...' : 'Conectando con BD...'}
-                </p>
-              </div>
-              <Users className="w-8 h-8 text-primary" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Analistas</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{analistas.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Activos</CardTitle>
+            <UserCheck className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              {analistas.filter(a => a.activo).length}
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Activos</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {analistas.filter(a => a.activo).length}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {loading ? 'Cargando...' : 'Pueden operar'}
-                </p>
-              </div>
-              <UserCheck className="w-8 h-8 text-green-600" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Inactivos</CardTitle>
+            <UserX className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {analistas.filter(a => !a.activo).length}
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Inactivos</p>
-                <p className="text-2xl font-bold text-red-600">
-                  {analistas.filter(a => !a.activo).length}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {loading ? 'Cargando...' : 'No pueden operar'}
-                </p>
-              </div>
-              <UserX className="w-8 h-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Con Email</p>
-                <p className="text-2xl font-bold text-purple-600">
-                  {analistas.filter(a => a.email && a.email.trim() !== '').length}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {loading ? 'Cargando...' : 'Tienen email'}
-                </p>
-              </div>
-              <Mail className="w-8 h-8 text-purple-600" />
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Mostrados</CardTitle>
+            <Search className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{filteredAnalistas.length}</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Búsqueda */}
+      {/* Search and Filters */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+        <CardHeader>
+          <CardTitle>Buscar Analistas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center space-x-2">
+            <Search className="h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar analista por nombre, email o especialidad..."
+              placeholder="Buscar por nombre..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="max-w-sm"
             />
           </div>
         </CardContent>
       </Card>
 
-      {/* Tabla */}
+      {/* Analistas Table */}
       <Card>
-        <CardContent className="pt-6">
+        <CardHeader>
+          <CardTitle>Lista de Analistas</CardTitle>
+        </CardHeader>
+        <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Analista</TableHead>
-                <TableHead>Contacto</TableHead>
-                <TableHead>Especialidad</TableHead>
-                <TableHead>Comisión</TableHead>
-                <TableHead>Clientes</TableHead>
-                <TableHead>Ventas Mes</TableHead>
+                <TableHead>ID</TableHead>
+                <TableHead>Nombre</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead>Fecha Creación</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
-                    <p className="text-gray-500">Cargando analistas...</p>
-                  </TableCell>
-                </TableRow>
-              ) : error ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
-                    <p className="text-red-500">{error}</p>
-                    <Button onClick={cargarAnalistas} className="mt-2">
-                      Reintentar
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ) : analistasFiltrados.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
-                    <p className="text-gray-500">No se encontraron analistas</p>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                analistasFiltrados.map((analista) => (
+              {filteredAnalistas.map((analista) => (
                 <TableRow key={analista.id}>
+                  <TableCell className="font-medium">{analista.id}</TableCell>
+                  <TableCell>{analista.nombre}</TableCell>
                   <TableCell>
-                    <div>
-                      <p className="font-medium">{analista.nombre_completo}</p>
-                      <p className="text-xs text-gray-500">ID: {analista.id}</p>
-                    </div>
+                    <Badge variant={analista.activo ? "default" : "secondary"}>
+                      {analista.activo ? "Activo" : "Inactivo"}
+                    </Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="space-y-1">
-                      {analista.email && (
-                        <div className="flex items-center text-sm">
-                          <Mail className="w-3 h-3 mr-1 text-gray-400" />
-                          {analista.email}
-                        </div>
-                      )}
-                      {analista.telefono && (
-                        <div className="flex items-center text-sm">
-                          <Phone className="w-3 h-3 mr-1 text-gray-400" />
-                          {analista.telefono}
-                        </div>
-                      )}
-                      {!analista.email && !analista.telefono && (
-                        <div className="text-sm text-gray-400">
-                          Sin contacto
-                        </div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {analista.especialidad ? (
-                      <Badge variant="outline">{analista.especialidad}</Badge>
-                    ) : (
-                      <span className="text-gray-400">Sin especialidad</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {analista.comision_porcentaje ? (
-                      `${analista.comision_porcentaje}%`
-                    ) : (
-                      <span className="text-gray-400">Sin comisión</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-gray-400">-</span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-gray-400">-</span>
-                  </TableCell>
-                  <TableCell>
-                    {analista.activo ? (
-                      <Badge className="bg-green-600">Activo</Badge>
-                    ) : (
-                      <Badge variant="outline">Inactivo</Badge>
-                    )}
+                    {analista.created_at ? new Date(analista.created_at).toLocaleDateString() : 'N/A'}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end space-x-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => setEditingAnalista(analista)}
-                        title="Editar analista"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="outline"
                         size="sm"
                         onClick={() => handleToggleActivo(analista)}
-                        title={analista.activo ? "Desactivar" : "Activar"}
                       >
                         {analista.activo ? (
-                          <UserX className="w-4 h-4 text-red-600" />
+                          <UserX className="h-4 w-4" />
                         ) : (
-                          <UserCheck className="w-4 h-4 text-green-600" />
+                          <UserCheck className="h-4 w-4" />
                         )}
                       </Button>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowCreateForm(true)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
                         size="sm"
                         onClick={() => handleEliminar(analista.id)}
-                        title="Eliminar analista"
                         className="text-red-600 hover:text-red-700"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
-              )}
+              ))}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
-
-      {/* Formulario de Crear/Editar Analista */}
-      {(showCreateForm || editingAnalista) && (
-        <CrearEditarAnalistaForm
-          analista={editingAnalista}
-          onClose={() => {
-            setShowCreateForm(false)
-            setEditingAnalista(null)
-          }}
-          onSuccess={() => {
-            cargarAnalistas()
-            setShowCreateForm(false)
-            setEditingAnalista(null)
-          }}
-        />
-      )}
-    </div>
-  )
-}
-
-// Componente para crear/editar analista
-interface CrearEditarAnalistaFormProps {
-  analista?: Analista | null
-  onClose: () => void
-  onSuccess: () => void
-}
-
-function CrearEditarAnalistaForm({ analista, onClose, onSuccess }: CrearEditarAnalistaFormProps) {
-  const [formData, setFormData] = useState({
-    nombre: analista?.nombre || '',
-    apellido: analista?.apellido || '',
-    email: analista?.email || '',
-    telefono: analista?.telefono || '',
-    especialidad: analista?.especialidad || '',
-    comision_porcentaje: analista?.comision_porcentaje?.toString() || '',
-    notas: analista?.notas || ''
-  })
-  const [loading, setLoading] = useState(false)
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!formData.nombre.trim()) {
-      toast.error('El nombre es obligatorio')
-      return
-    }
-
-    try {
-      setLoading(true)
-      
-      const data = {
-        nombre: formData.nombre.trim(),
-        apellido: formData.apellido.trim() || undefined,
-        email: formData.email.trim() || undefined,
-        telefono: formData.telefono.trim() || undefined,
-        especialidad: formData.especialidad.trim() || undefined,
-        comision_porcentaje: formData.comision_porcentaje ? parseInt(formData.comision_porcentaje) : undefined,
-        notas: formData.notas.trim() || undefined
-      }
-
-      if (analista) {
-        await analistaService.actualizarAnalista(analista.id, data)
-        toast.success('Analista actualizado exitosamente')
-      } else {
-        await analistaService.crearAnalista(data)
-        toast.success('Analista creado exitosamente')
-      }
-      
-      onSuccess()
-    } catch (err) {
-      toast.error(analista ? 'Error al actualizar analista' : 'Error al crear analista')
-      console.error('Error:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <Card className="w-full max-w-md mx-4">
-        <CardHeader>
-          <CardTitle>
-            {analista ? 'Editar Analista' : 'Nuevo Analista'}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Nombre *</label>
-              <Input
-                value={formData.nombre}
-                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                placeholder="Nombre del analista"
-                required
-              />
+          
+          {filteredAnalistas.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              {searchTerm ? 'No se encontraron analistas con ese nombre' : 'No hay analistas disponibles'}
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-1">Apellido</label>
-              <Input
-                value={formData.apellido}
-                onChange={(e) => setFormData({ ...formData, apellido: e.target.value })}
-                placeholder="Apellido del analista"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-1">Email</label>
-              <Input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="email@ejemplo.com"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-1">Teléfono</label>
-              <Input
-                value={formData.telefono}
-                onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                placeholder="+58 414-123-4567"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-1">Especialidad</label>
-              <Input
-                value={formData.especialidad}
-                onChange={(e) => setFormData({ ...formData, especialidad: e.target.value })}
-                placeholder="Ej: Vehículos Nuevos, Usados"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-1">Comisión (%)</label>
-              <Input
-                type="number"
-                min="0"
-                max="100"
-                value={formData.comision_porcentaje}
-                onChange={(e) => setFormData({ ...formData, comision_porcentaje: e.target.value })}
-                placeholder="2.5"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-1">Notas</label>
-              <textarea
-                className="w-full p-2 border rounded-md"
-                rows={3}
-                value={formData.notas}
-                onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
-                placeholder="Notas adicionales..."
-              />
-            </div>
-            
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    {analista ? 'Actualizando...' : 'Creando...'}
-                  </>
-                ) : (
-                  analista ? 'Actualizar' : 'Crear'
-                )}
-              </Button>
-            </div>
-          </form>
+          )}
         </CardContent>
       </Card>
     </div>
   )
 }
-

@@ -97,7 +97,7 @@ export function CrearClienteForm({
             }
           }).then(res => res.json()).then(data => data.data || []),
           
-          fetch('/api/v1/analistaes/activos', {
+          fetch('/api/v1/analistas/activos', {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
             }
