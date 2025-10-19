@@ -40,8 +40,54 @@ export function ClientesList() {
   const [currentPage, setCurrentPage] = useState(1)
   const [showFilters, setShowFilters] = useState(false)
   const [showCrearCliente, setShowCrearCliente] = useState(false)
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null)
+  const [showEditarCliente, setShowEditarCliente] = useState(false)
+  const [showEliminarCliente, setShowEliminarCliente] = useState(false)
 
   const debouncedSearch = useDebounce(searchTerm, 300)
+
+  // Funciones para manejar acciones
+  const handleVerCliente = (cliente: any) => {
+    setClienteSeleccionado(cliente)
+    // Aquí podrías abrir un modal o navegar a una página de detalles
+    console.log('Ver cliente:', cliente)
+  }
+
+  const handleEditarCliente = (cliente: any) => {
+    setClienteSeleccionado(cliente)
+    setShowEditarCliente(true)
+  }
+
+  const handleEliminarCliente = (cliente: any) => {
+    setClienteSeleccionado(cliente)
+    setShowEliminarCliente(true)
+  }
+
+  const confirmarEliminacion = async () => {
+    if (!clienteSeleccionado) return
+    
+    try {
+      // Aquí implementarías la llamada a la API para eliminar
+      console.log('Eliminando cliente:', clienteSeleccionado.id)
+      // await clienteService.eliminarCliente(clienteSeleccionado.id)
+      
+      // Refrescar la lista
+      queryClient.invalidateQueries({ queryKey: ['clientes'] })
+      
+      // Cerrar modal
+      setShowEliminarCliente(false)
+      setClienteSeleccionado(null)
+    } catch (error) {
+      console.error('Error eliminando cliente:', error)
+    }
+  }
+
+  const handleSuccess = () => {
+    setShowCrearCliente(false)
+    setShowEditarCliente(false)
+    setClienteSeleccionado(null)
+    queryClient.invalidateQueries({ queryKey: ['clientes'] })
+  }
   const { user } = useSimpleAuth()
   const canViewAllClients = true // Todos pueden ver todos los clientes
   const queryClient = useQueryClient()
@@ -296,6 +342,7 @@ export function ClientesList() {
                           size="sm"
                           title="Ver detalles del cliente"
                           className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          onClick={() => handleVerCliente(cliente)}
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
@@ -304,6 +351,7 @@ export function ClientesList() {
                           size="sm"
                           title="Editar cliente"
                           className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                          onClick={() => handleEditarCliente(cliente)}
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
@@ -312,6 +360,7 @@ export function ClientesList() {
                           size="sm"
                           title="Eliminar cliente"
                           className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => handleEliminarCliente(cliente)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -370,6 +419,83 @@ export function ClientesList() {
               queryClient.invalidateQueries({ queryKey: ['kpis'] })
             }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Modal Editar Cliente */}
+      <AnimatePresence>
+        {showEditarCliente && clienteSeleccionado && (
+          <CrearClienteForm 
+            cliente={clienteSeleccionado}
+            onClose={() => {
+              setShowEditarCliente(false)
+              setClienteSeleccionado(null)
+            }}
+            onSuccess={handleSuccess}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Modal Confirmar Eliminación */}
+      <AnimatePresence>
+        {showEliminarCliente && clienteSeleccionado && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-lg p-6 max-w-md w-full mx-4"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-red-100 rounded-full">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Eliminar Cliente
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Esta acción no se puede deshacer
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-gray-700">
+                  ¿Estás seguro de que quieres eliminar al cliente{' '}
+                  <span className="font-semibold">
+                    {clienteSeleccionado.nombres} {clienteSeleccionado.apellidos}
+                  </span>?
+                </p>
+                <p className="text-sm text-gray-500 mt-2">
+                  Cédula: {clienteSeleccionado.cedula}
+                </p>
+              </div>
+              
+              <div className="flex gap-3 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowEliminarCliente(false)
+                    setClienteSeleccionado(null)
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={confirmarEliminacion}
+                >
+                  Eliminar
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
