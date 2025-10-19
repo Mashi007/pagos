@@ -16,6 +16,55 @@ import logging
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+@router.get("/simple")
+def listar_clientes_simple(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Listar clientes - VERSIÓN ULTRA SIMPLE
+    """
+    try:
+        logger.info(f"Listar clientes simple - Usuario: {current_user.email}")
+        
+        # Query ultra simple - solo campos básicos
+        query = db.query(Cliente.id, Cliente.cedula, Cliente.nombres, Cliente.apellidos)
+        
+        # Ordenamiento
+        query = query.order_by(Cliente.id.desc())
+        
+        # Contar total
+        total = query.count()
+        
+        # Obtener todos los clientes
+        clientes = query.all()
+        
+        # Serialización ultra simple
+        clientes_dict = []
+        for cliente in clientes:
+            try:
+                cliente_data = {
+                    "id": cliente.id,
+                    "cedula": cliente.cedula,
+                    "nombres": cliente.nombres,
+                    "apellidos": cliente.apellidos
+                }
+                clientes_dict.append(cliente_data)
+            except Exception as e:
+                logger.error(f"Error serializando cliente {cliente.id}: {e}")
+                continue
+        
+        logger.info(f"Clientes encontrados: {len(clientes_dict)}")
+        
+        return {
+            "items": clientes_dict,
+            "total": total
+        }
+        
+    except Exception as e:
+        logger.error(f"Error en listar_clientes_simple: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+
 @router.get("/")
 def listar_clientes(
     # Paginación
@@ -56,12 +105,6 @@ def listar_clientes(
         if estado:
             query = query.filter(Cliente.estado == estado)
         
-        if estado_financiero:
-            query = query.filter(Cliente.estado_financiero == estado_financiero)
-        
-        if analista_id:
-            query = query.filter(Cliente.analista_id == analista_id)
-        
         # Ordenamiento
         query = query.order_by(Cliente.id.desc())
         
@@ -97,10 +140,10 @@ def listar_clientes(
         logger.info(f"✅ Clientes encontrados: {len(clientes_dict)}")
         
         return {
-            "clientes": clientes_dict,
+            "items": clientes_dict,
             "total": total,
             "page": page,
-            "limit": per_page,
+            "per_page": per_page,
             "total_pages": (total + per_page - 1) // per_page
         }
         
