@@ -32,6 +32,7 @@ import { formatCurrency, formatDate } from '@/utils'
 import { ClienteFilters } from '@/types'
 import { useClientes } from '@/hooks/useClientes'
 import { useQueryClient } from '@tanstack/react-query'
+import { clienteService } from '@/services/clienteService'
 
 export function ClientesList() {
   // Forzar nuevo build - versión actualizada
@@ -67,18 +68,28 @@ export function ClientesList() {
     if (!clienteSeleccionado) return
     
     try {
-      // Aquí implementarías la llamada a la API para eliminar
-      console.log('Eliminando cliente:', clienteSeleccionado.id)
-      // await clienteService.eliminarCliente(clienteSeleccionado.id)
+      console.log('🗑️ Eliminando cliente:', clienteSeleccionado.id)
+      
+      // ✅ ACTIVAR: Llamada real a la API para eliminar
+      await clienteService.deleteCliente(clienteSeleccionado.id)
+      
+      console.log('✅ Cliente eliminado exitosamente')
       
       // Refrescar la lista
       queryClient.invalidateQueries({ queryKey: ['clientes'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['kpis'] })
       
       // Cerrar modal
       setShowEliminarCliente(false)
       setClienteSeleccionado(null)
+      
+      // Mostrar mensaje de éxito
+      alert('✅ Cliente eliminado exitosamente')
+      
     } catch (error) {
-      console.error('Error eliminando cliente:', error)
+      console.error('❌ Error eliminando cliente:', error)
+      alert('❌ Error al eliminar el cliente. Intenta nuevamente.')
     }
   }
 
@@ -336,33 +347,29 @@ export function ClientesList() {
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
+                      <div className="flex items-center justify-end gap-2">
+                        {/* ✅ BOTÓN EDITAR - ACTIVO */}
                         <Button 
-                          variant="ghost" 
-                          size="sm"
-                          title="Ver detalles del cliente"
-                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                          onClick={() => handleVerCliente(cliente)}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
+                          variant="outline" 
                           size="sm"
                           title="Editar cliente"
-                          className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                          className="text-green-600 border-green-300 hover:text-green-700 hover:bg-green-50 hover:border-green-400"
                           onClick={() => handleEditarCliente(cliente)}
                         >
-                          <Edit className="w-4 h-4" />
+                          <Edit className="w-4 h-4 mr-1" />
+                          Editar
                         </Button>
+                        
+                        {/* ✅ BOTÓN ELIMINAR - ACTIVO */}
                         <Button 
-                          variant="ghost" 
+                          variant="outline" 
                           size="sm"
                           title="Eliminar cliente"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          className="text-red-600 border-red-300 hover:text-red-700 hover:bg-red-50 hover:border-red-400"
                           onClick={() => handleEliminarCliente(cliente)}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Eliminar
                         </Button>
                       </div>
                     </TableCell>
