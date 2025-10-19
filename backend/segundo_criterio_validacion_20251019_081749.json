@@ -1,0 +1,77 @@
+{
+  "timestamp": "2025-10-19T08:17:48.926411",
+  "criterios_validados": [
+    {
+      "nombre": "Validacion de Esquemas Pydantic",
+      "estado": "ERROR_IMPORT",
+      "detalles": [],
+      "errores": [
+        "ERROR ImportError: email-validator is not installed, run `pip install pydantic[email]`"
+      ]
+    },
+    {
+      "nombre": "Validacion de Flujo de Datos",
+      "estado": "ERROR_IMPORT",
+      "detalles": [],
+      "errores": [
+        "ERROR ImportError: No module named 'fastapi'"
+      ]
+    },
+    {
+      "nombre": "Validacion de Tipos de Datos",
+      "estado": "ERROR_GENERAL",
+      "detalles": [],
+      "errores": [
+        "ERROR Error inesperado: No module named 'jose'"
+      ]
+    },
+    {
+      "nombre": "Validacion de Dependencias",
+      "estado": "CON_ERRORES",
+      "detalles": [
+        "OK Logger: Configuracion correcta"
+      ],
+      "errores": [
+        "ERROR Import: app.schemas.auth.LoginResponse - email-validator is not installed, run `pip install pydantic[email]`",
+        "ERROR Import: app.schemas.auth.LoginRequest - email-validator is not installed, run `pip install pydantic[email]`",
+        "ERROR Import: app.schemas.user.UserMeResponse - email-validator is not installed, run `pip install pydantic[email]`",
+        "ERROR Import: app.core.security.create_access_token - No module named 'jose'",
+        "ERROR Import: app.core.security.create_refresh_token - No module named 'jose'",
+        "ERROR Import: app.services.auth_service.AuthService - No module named 'sqlalchemy'"
+      ]
+    },
+    {
+      "nombre": "Validacion de Configuracion",
+      "estado": "CON_ERRORES",
+      "detalles": [],
+      "errores": [
+        "ERROR Env Var: SECRET_KEY no configurada",
+        "ERROR Env Var: DATABASE_URL no configurada",
+        "ERROR Env Var: ENVIRONMENT no configurada",
+        "ERROR CORS: No module named 'fastapi'"
+      ]
+    }
+  ],
+  "errores_encontrados": [
+    "ERROR ImportError: email-validator is not installed, run `pip install pydantic[email]`",
+    "ERROR ImportError: No module named 'fastapi'",
+    "ERROR Error inesperado: No module named 'jose'",
+    "ERROR Import: app.schemas.auth.LoginResponse - email-validator is not installed, run `pip install pydantic[email]`",
+    "ERROR Import: app.schemas.auth.LoginRequest - email-validator is not installed, run `pip install pydantic[email]`",
+    "ERROR Import: app.schemas.user.UserMeResponse - email-validator is not installed, run `pip install pydantic[email]`",
+    "ERROR Import: app.core.security.create_access_token - No module named 'jose'",
+    "ERROR Import: app.core.security.create_refresh_token - No module named 'jose'",
+    "ERROR Import: app.services.auth_service.AuthService - No module named 'sqlalchemy'",
+    "ERROR Env Var: SECRET_KEY no configurada",
+    "ERROR Env Var: DATABASE_URL no configurada",
+    "ERROR Env Var: ENVIRONMENT no configurada",
+    "ERROR CORS: No module named 'fastapi'"
+  ],
+  "recomendaciones": [
+    "Revisar esquema LoginResponse - posible problema de validacion Pydantic",
+    "Verificar funcion create_refresh_token - posible problema de generacion",
+    "Verificar imports - posible problema de dependencias",
+    "Revisar configuracion CORS - posible problema de comunicacion"
+  ],
+  "estado_general": "CRITICO"
+}
