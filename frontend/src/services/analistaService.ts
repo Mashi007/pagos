@@ -56,7 +56,14 @@ class AnalistaService {
     search?: string
     especialidad?: string
   }): Promise<AnalistaListResponse> {
-    return await apiClient.get<AnalistaListResponse>(this.baseUrl, { params })
+    try {
+      // Intentar endpoint principal primero
+      return await apiClient.get<AnalistaListResponse>(this.baseUrl, { params })
+    } catch (error) {
+      console.warn('Endpoint principal falló, usando endpoint de emergencia:', error)
+      // Si falla, usar endpoint de emergencia
+      return await apiClient.get<AnalistaListResponse>(`${this.baseUrl}/emergency`, { params })
+    }
   }
 
   // Listar solo analistas activos (para formularios)

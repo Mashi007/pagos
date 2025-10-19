@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import logging
+from datetime import datetime
 from app.db.session import get_db
 from app.models.analista import Analista
 from app.models.user import User
@@ -57,44 +58,121 @@ def test_analistas_no_auth(
             "message": "Error en test endpoint analistas no auth"
         }
 
-@router.get("/test-sql-puro")
-def test_analistas_sql_puro(
+@router.get("/health")
+def health_check_analistas(db: Session = Depends(get_db)):
+    """
+    Health check específico para el módulo de analistas
+    """
+    try:
+        # Verificar conexión a base de datos
+        result = db.execute(text("SELECT COUNT(*) FROM analistas"))
+        total = result.fetchone()[0]
+        
+        return {
+            "status": "healthy",
+            "module": "analistas",
+            "total_records": total,
+            "timestamp": datetime.now().isoformat(),
+            "message": "Módulo de analistas funcionando correctamente"
+        }
+    except Exception as e:
+        logger.error(f"Error en health check de analistas: {str(e)}")
+        return {
+            "status": "unhealthy",
+            "module": "analistas",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat(),
+            "message": "Error en módulo de analistas"
+        }
+
+@router.get("/emergency")
+def analistas_emergency(
+    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
+    limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
+    activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
+    search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db)
 ):
     """
-    Test endpoint usando SQL puro sin SQLAlchemy ORM
+    Endpoint de emergencia para analistas SIN autenticación
+    Usar solo cuando el endpoint principal falle
     """
     try:
-        # Usar SQL puro para evitar problemas con el modelo
-        result = db.execute(text("SELECT id, nombre, activo, created_at FROM analistas LIMIT 5"))
-        analistas_rows = result.fetchall()
+        # Usar SQL directo para máxima compatibilidad
+        base_query = "SELECT id, nombre, activo, created_at FROM analistas"
+        count_query = "SELECT COUNT(*) FROM analistas"
+        where_conditions = []
         
-        total_result = db.execute(text("SELECT COUNT(*) FROM analistas"))
-        total_analistas = total_result.fetchone()[0]
+        # Aplicar filtros
+        if activo is not None:
+            where_conditions.append(f"activo = {activo}")
         
-        analistas_data = []
-        for row in analistas_rows:
-            analistas_data.append({
+        if search:
+            where_conditions.append(f"nombre ILIKE '%{search}%'")
+        
+        # Agregar WHERE si hay condiciones
+        if where_conditions:
+            where_clause = " WHERE " + " AND ".join(where_conditions)
+            base_query += where_clause
+            count_query += where_clause
+        
+        # Obtener total
+        total_result = db.execute(text(count_query))
+        total = total_result.fetchone()[0]
+        
+        # Aplicar paginación
+        paginated_query = f"{base_query} ORDER BY id OFFSET {skip} LIMIT {limit}"
+        result = db.execute(text(paginated_query))
+        rows = result.fetchall()
+        
+        # Calcular páginas
+        pages = (total + limit - 1) // limit
+        
+        # Convertir filas a formato de respuesta
+        items = []
+        for row in rows:
+            nombre_completo = row[1] if row[1] else ""
+            partes_nombre = nombre_completo.split()
+            primer_nombre = partes_nombre[0] if partes_nombre else ""
+            apellido = " ".join(partes_nombre[1:]) if len(partes_nombre) > 1 else ""
+            
+            items.append({
                 "id": row[0],
-                "nombre": row[1],
-                "primer_nombre": row[1].split()[0] if row[1] else "",
-                "apellido": " ".join(row[1].split()[1:]) if row[1] and len(row[1].split()) > 1 else "",
+                "nombre": nombre_completo,
+                "apellido": apellido,
+                "email": "",
+                "telefono": "",
+                "especialidad": "",
+                "comision_porcentaje": 0,
                 "activo": row[2],
-                "created_at": row[3].isoformat() if row[3] else None
+                "notas": "",
+                "nombre_completo": nombre_completo,
+                "primer_nombre": primer_nombre,
+                "created_at": row[3].isoformat() if row[3] else None,
+                "updated_at": None
             })
         
         return {
-            "success": True,
-            "total_analistas": total_analistas,
-            "analistas": analistas_data,
-            "message": "Test endpoint SQL puro funcionando"
+            "items": items,
+            "total": total,
+            "page": (skip // limit) + 1,
+            "size": limit,
+            "pages": pages,
+            "emergency_mode": True,
+            "message": "Endpoint de emergencia funcionando"
         }
+        
     except Exception as e:
-        logger.error(f"Error en test endpoint SQL puro: {str(e)}")
+        logger.error(f"Error en endpoint de emergencia: {str(e)}")
         return {
-            "success": False,
+            "items": [],
+            "total": 0,
+            "page": 1,
+            "size": limit,
+            "pages": 0,
+            "emergency_mode": True,
             "error": str(e),
-            "message": "Error en test endpoint SQL puro"
+            "message": "Error en endpoint de emergencia"
         }
 
 @router.get("/list-no-auth")
