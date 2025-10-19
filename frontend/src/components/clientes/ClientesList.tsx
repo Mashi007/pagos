@@ -43,6 +43,7 @@ export function ClientesList() {
   const [showCrearCliente, setShowCrearCliente] = useState(false)
   const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null)
   const [showEditarCliente, setShowEditarCliente] = useState(false)
+  const [showEliminarCliente, setShowEliminarCliente] = useState(false)
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null)
 
   const showNotification = (type: 'success' | 'error', message: string) => {
