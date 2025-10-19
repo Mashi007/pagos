@@ -39,10 +39,8 @@ class Cliente(Base):
     # ============================================
     # RELACIONES CON OTROS MODELOS
     # ============================================
-    # Relación con analistas (tabla analistas SÍ tiene datos)
-    asesor_config_rel = relationship("Analista", back_populates="clientes")
-    
-    # NOTA: Otras relaciones comentadas porque las tablas relacionadas no tienen datos
+    # NOTA: Todas las relaciones comentadas porque las tablas son solo plantillas vacías
+    # asesor_config_rel = relationship("Analista", back_populates="clientes")
     # prestamos = relationship("Prestamo", back_populates="cliente", cascade="all, delete-orphan")
     
     def __repr__(self):

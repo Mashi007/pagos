@@ -15,7 +15,7 @@ class Analista(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relaciones
-    clientes = relationship("Cliente", back_populates="asesor_config_rel")
+    # clientes = relationship("Cliente", back_populates="asesor_config_rel")  # COMENTADO: Solo plantilla vacía
 
     def __repr__(self):
         return f"<Analista(id={self.id}, nombre='{self.nombre}', activo={self.activo})>"

@@ -68,7 +68,7 @@ class Cuota(Base):
     actualizado_en = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relaciones
-    prestamo = relationship("Prestamo", back_populates="cuotas")
+    # prestamo = relationship("Prestamo", back_populates="cuotas")  # COMENTADO: Solo plantilla vacía
     pagos = relationship(
         "Pago",
         secondary="pago_cuotas",
