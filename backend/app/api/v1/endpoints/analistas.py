@@ -5,6 +5,7 @@ CRUD completo para analistas
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 import logging
 from app.db.session import get_db
 from app.models.analista import Analista
@@ -29,10 +30,10 @@ def test_analistas_no_auth(
     """
     try:
         # Usar consulta SQL directa para evitar problemas con columnas faltantes
-        result = db.execute("SELECT id, nombre, activo, created_at FROM analistas LIMIT 5")
+        result = db.execute(text("SELECT id, nombre, activo, created_at FROM analistas LIMIT 5"))
         analistas_rows = result.fetchall()
         
-        total_result = db.execute("SELECT COUNT(*) as total FROM analistas")
+        total_result = db.execute(text("SELECT COUNT(*) as total FROM analistas"))
         total_analistas = total_result.fetchone()[0]
         
         analistas_data = []
@@ -69,10 +70,10 @@ def test_analistas_sql_puro(
     """
     try:
         # Usar SQL puro para evitar problemas con el modelo
-        result = db.execute("SELECT id, nombre, activo, created_at FROM analistas LIMIT 5")
+        result = db.execute(text("SELECT id, nombre, activo, created_at FROM analistas LIMIT 5"))
         analistas_rows = result.fetchall()
         
-        total_result = db.execute("SELECT COUNT(*) FROM analistas")
+        total_result = db.execute(text("SELECT COUNT(*) FROM analistas"))
         total_analistas = total_result.fetchone()[0]
         
         analistas_data = []
