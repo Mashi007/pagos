@@ -106,7 +106,6 @@ function App() {
           <Route path="clientes/nuevo" element={<Clientes />} />
           <Route path="clientes/:id" element={<Clientes />} />
 
-          {/* Carga Masiva */}
           {/* Préstamos */}
           <Route
             path="prestamos"
