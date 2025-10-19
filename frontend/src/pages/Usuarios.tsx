@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Users, Plus, Search, Edit, Trash2, Shield, Mail, UserCheck, UserX, Loader2, RefreshCw, X, Save, Key, Copy, Eye, EyeOff } from 'lucide-react'
+import { Users, Plus, Search, Edit, Trash2, Shield, Mail, UserCheck, UserX, Loader2, RefreshCw, X, Save } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { PasswordField } from '@/components/ui/PasswordField'
 import { usuarioService, Usuario, UsuarioCreate } from '@/services/usuarioService'
 import { toast } from 'sonner'
 
@@ -17,7 +18,6 @@ export function Usuarios() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingUsuario, setEditingUsuario] = useState<Usuario | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
   
   const [formData, setFormData] = useState<UsuarioCreate>({
     email: '',
@@ -94,31 +94,6 @@ export function Usuarios() {
     }
   }
 
-  // Función para generar contraseña automática
-  const generatePassword = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
-    let password = ''
-    for (let i = 0; i < 12; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length))
-    }
-    setFormData({ ...formData, password })
-    toast.success('Contraseña generada automáticamente')
-  }
-
-  // Función para copiar contraseña al portapapeles
-  const copyPassword = async () => {
-    try {
-      await navigator.clipboard.writeText(formData.password)
-      toast.success('Contraseña copiada al portapapeles')
-    } catch (err) {
-      toast.error('No se pudo copiar la contraseña')
-    }
-  }
-
-  // Función para mostrar/ocultar contraseña
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword)
-  }
 
   const handleEdit = (usuario: Usuario) => {
     setEditingUsuario(usuario)
@@ -505,60 +480,15 @@ export function Usuarios() {
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                   Contraseña {editingUsuario && '(dejar vacío para mantener la actual)'}
                 </label>
-                <div className="flex gap-2 mt-1">
-                  <div className="relative flex-1">
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      required={!editingUsuario}
-                      placeholder={editingUsuario ? 'Nueva contraseña (opcional)' : 'Mínimo 8 caracteres'}
-                      minLength={8}
-                      className="pr-10"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={togglePasswordVisibility}
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4 text-gray-400" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-gray-400" />
-                      )}
-                    </Button>
-                  </div>
-                  {!editingUsuario && (
-                    <>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={generatePassword}
-                        className="px-3"
-                        title="Generar contraseña automática"
-                      >
-                        <Key className="h-4 w-4" />
-                      </Button>
-                      {formData.password && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={copyPassword}
-                          className="px-3"
-                          title="Copiar contraseña"
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Mínimo 8 caracteres, incluye mayúsculas, minúsculas y números
-                </p>
+                <PasswordField
+                  value={formData.password}
+                  onChange={(password) => setFormData({ ...formData, password })}
+                  placeholder={editingUsuario ? 'Nueva contraseña (opcional)' : 'Mínimo 8 caracteres'}
+                  required={!editingUsuario}
+                  showGenerateButton={!editingUsuario}
+                  showCopyButton={!editingUsuario}
+                  className="mt-1"
+                />
               </div>
 
               <div className="flex items-center space-x-2">

@@ -3,11 +3,11 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { PasswordField } from '@/components/ui/PasswordField'
 import { 
   Users, 
   Plus, 
   Search, 
-  Eye, 
   Edit2, 
   Trash2, 
   UserCheck,
@@ -16,9 +16,7 @@ import {
   RefreshCw,
   Save,
   X,
-  AlertCircle,
-  Key,
-  Copy
+  AlertCircle
 } from 'lucide-react'
 import { userService, type UserCreate, type UserUpdate } from '@/services/userService'
 import { User } from '@/types'
@@ -44,26 +42,6 @@ export default function UsuariosConfig() {
     is_active: true
   })
 
-  // Función para generar contraseña automática
-  const generatePassword = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
-    let password = ''
-    for (let i = 0; i < 12; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length))
-    }
-    setFormData({ ...formData, password })
-    toast.success('Contraseña generada automáticamente')
-  }
-
-  // Función para copiar contraseña al portapapeles
-  const copyPassword = async () => {
-    try {
-      await navigator.clipboard.writeText(formData.password)
-      toast.success('Contraseña copiada al portapapeles')
-    } catch (err) {
-      toast.error('No se pudo copiar la contraseña')
-    }
-  }
 
   useEffect(() => {
     loadUsuarios()
@@ -520,44 +498,14 @@ export default function UsuariosConfig() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Contraseña {editingUser ? '(dejar en blanco para no cambiar)' : '*'}
                   </label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="password"
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      required={!editingUser}
-                      placeholder={editingUser ? 'Nueva contraseña (opcional)' : 'Mínimo 8 caracteres'}
-                      minLength={8}
-                      className="flex-1"
-                    />
-                    {!editingUser && (
-                      <>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={generatePassword}
-                          className="px-3"
-                          title="Generar contraseña automática"
-                        >
-                          <Key className="h-4 w-4" />
-                        </Button>
-                        {formData.password && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={copyPassword}
-                            className="px-3"
-                            title="Copiar contraseña"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Mínimo 8 caracteres, incluye mayúsculas, minúsculas y números
-                  </p>
+                  <PasswordField
+                    value={formData.password}
+                    onChange={(password) => setFormData({ ...formData, password })}
+                    placeholder={editingUser ? 'Nueva contraseña (opcional)' : 'Mínimo 8 caracteres'}
+                    required={!editingUser}
+                    showGenerateButton={!editingUser}
+                    showCopyButton={!editingUser}
+                  />
                 </div>
 
                 {/* Estado */}
