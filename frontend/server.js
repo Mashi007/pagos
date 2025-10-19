@@ -65,8 +65,18 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Manejar SPA routing - todas las rutas sirven index.html
+// Manejar SPA routing - todas las rutas sirven index.html EXCEPTO /api/*
 app.get('*', (req, res) => {
+  // ✅ CORRECCIÓN: No interceptar rutas de API
+  if (req.path.startsWith('/api/')) {
+    console.log(`🚫 Ruta de API interceptada por frontend: ${req.path} - Debería ir al backend`);
+    return res.status(404).json({ 
+      error: 'API endpoint not found on frontend server',
+      message: 'Esta ruta debe ser manejada por el backend',
+      path: req.path
+    });
+  }
+  
   console.log(`📄 Sirviendo index.html para ruta: ${req.path}`);
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
