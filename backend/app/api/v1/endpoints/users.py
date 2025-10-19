@@ -457,3 +457,29 @@ def activate_user(
     db.refresh(user)
     
     return user
+
+
+@router.post("/{user_id}/deactivate", response_model=UserResponse, summary="Desactivar usuario")
+def deactivate_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_admin_user)
+):
+    """
+    Desactivar un usuario (solo ADMIN)
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado"
+        )
+    
+    user.is_active = False
+    user.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(user)
+    
+    return user

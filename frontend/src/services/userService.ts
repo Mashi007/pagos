@@ -62,6 +62,15 @@ export const userService = {
   // Verificar administradores
   verificarAdmin: async (): Promise<any> => {
     return await api.get('/api/v1/users/verificar-admin')
+  },
+
+  // Activar/Desactivar usuario
+  toggleActivo: async (userId: number, isActive: boolean): Promise<User> => {
+    if (isActive) {
+      return await api.post<User>(`/api/v1/users/${userId}/activate`)
+    } else {
+      return await api.post<User>(`/api/v1/users/${userId}/deactivate`)
+    }
   }
 }
 
