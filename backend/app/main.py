@@ -19,7 +19,6 @@ from slowapi.errors import RateLimitExceeded
 # Routers
 from app.api.v1.endpoints import (
     health,
-    health_check,
     auth,
     users,
     clientes,
@@ -171,7 +170,6 @@ app.add_middleware(
 
 # Registrar routers
 app.include_router(health.router, prefix=f"{settings.API_V1_PREFIX}", tags=["Health"])
-app.include_router(health_check.router, prefix=f"{settings.API_V1_PREFIX}", tags=["Health Check"])
 app.include_router(auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["Auth"])
 app.include_router(users.router, prefix=f"{settings.API_V1_PREFIX}/usuarios", tags=["Usuarios"])
 app.include_router(clientes.router, prefix=f"{settings.API_V1_PREFIX}/clientes", tags=["Clientes"])
