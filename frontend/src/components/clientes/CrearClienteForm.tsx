@@ -666,7 +666,7 @@ export function CrearClienteForm({ onClose, onSuccess, onClienteCreated }: Crear
                 </label>
                 <Select
                   value={formData.estado}
-                  onChange={(value: 'ACTIVO' | 'INACTIVO' | 'FINALIZADO') => handleInputChange('estado', value)}
+                  onValueChange={(value: 'ACTIVO' | 'INACTIVO' | 'FINALIZADO') => handleInputChange('estado', value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar estado" />
