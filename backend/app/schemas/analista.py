@@ -43,8 +43,8 @@ class AnalistaResponse(AnalistaBase):
     id: int
     nombre_completo: str
     primer_nombre: str
-    created_at: datetime
     updated_at: Optional[datetime] = None
+    fecha_eliminacion: Optional[datetime] = None
     
     model_config = ConfigDict(from_attributes=True)
 

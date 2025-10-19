@@ -142,9 +142,11 @@ async def generar_plantilla_clientes_dinamica(
         
         # Validación para modelo_vehiculo (columna I)
         if modelos_nombres:
+            # Limpiar nombres para evitar caracteres problemáticos
+            modelos_limpios = [str(nombre).replace('"', '""') for nombre in modelos_nombres]
             dv_modelo = DataValidation(
                 type="list",
-                formula1=f'"{",".join(modelos_nombres)}"',
+                formula1=f'"{",".join(modelos_limpios)}"',
                 showDropDown=True
             )
             dv_modelo.error = "Seleccione un modelo válido de la lista"
@@ -154,9 +156,11 @@ async def generar_plantilla_clientes_dinamica(
         
         # Validación para concesionario (columna J)
         if concesionarios_nombres:
+            # Limpiar nombres para evitar caracteres problemáticos
+            concesionarios_limpios = [str(nombre).replace('"', '""') for nombre in concesionarios_nombres]
             dv_concesionario = DataValidation(
                 type="list",
-                formula1=f'"{",".join(concesionarios_nombres)}"',
+                formula1=f'"{",".join(concesionarios_limpios)}"',
                 showDropDown=True
             )
             dv_concesionario.error = "Seleccione un concesionario válido de la lista"
@@ -166,9 +170,11 @@ async def generar_plantilla_clientes_dinamica(
         
         # Validación para analista (columna K)
         if analistas_nombres:
+            # Limpiar nombres para evitar caracteres problemáticos
+            analistas_limpios = [str(nombre).replace('"', '""') for nombre in analistas_nombres]
             dv_analista = DataValidation(
                 type="list",
-                formula1=f'"{",".join(analistas_nombres)}"',
+                formula1=f'"{",".join(analistas_limpios)}"',
                 showDropDown=True
             )
             dv_analista.error = "Seleccione un analista válido de la lista"

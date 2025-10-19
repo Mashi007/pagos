@@ -365,16 +365,16 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                 onClick={handleDownloadTemplate}
                 variant="outline"
                 size="sm"
-                className="text-white border-white/30 hover:bg-white/20"
+                className="bg-white text-green-700 border-green-300 hover:bg-green-50 hover:border-green-400 font-medium px-4 py-2 shadow-sm"
               >
                 <Download className="mr-2 h-4 w-4" />
-                Template
+                Descargar Template
               </Button>
               <Button
                 onClick={onClose}
                 variant="ghost"
                 size="sm"
-                className="text-white hover:bg-white/20"
+                className="text-white hover:bg-white/20 p-2"
               >
                 <X className="h-5 w-5" />
               </Button>
