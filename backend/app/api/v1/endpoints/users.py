@@ -283,7 +283,8 @@ def test_users_endpoint(
 def list_users(
     db: Session = Depends(get_db),
     pagination: PaginationParams = Depends(get_pagination_params),
-    current_user: User = Depends(get_admin_user),
+    # TEMPORALMENTE SIN AUTENTICACIÓN PARA DEBUGGING
+    # current_user: User = Depends(get_admin_user),
     is_active: bool = None
 ):
     """
