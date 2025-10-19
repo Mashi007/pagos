@@ -373,7 +373,7 @@ export function Usuarios() {
                         <Button 
                           variant="ghost" 
                           size="sm"
-                          onClick={() => setEditingUsuario(usuario)}
+                          onClick={() => handleEdit(usuario)}
                           title="Editar usuario"
                         >
                           <Edit className="w-4 h-4" />
