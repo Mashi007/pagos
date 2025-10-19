@@ -38,7 +38,12 @@ from . import (
     dashboard_diagnostico,
     auth_flow_analyzer,
     predictive_analyzer,
-    intelligent_alerts
+    intelligent_alerts,
+    real_time_monitor,
+    predictive_token_analyzer,
+    cross_validation_auth,
+    intelligent_alerts_system,
+    network_diagnostic
 )
 
 __all__ = [
@@ -75,5 +80,10 @@ __all__ = [
     "dashboard_diagnostico",
     "auth_flow_analyzer",
     "predictive_analyzer",
-    "intelligent_alerts"
+    "intelligent_alerts",
+    "real_time_monitor",
+    "predictive_token_analyzer",
+    "cross_validation_auth",
+    "intelligent_alerts_system",
+    "network_diagnostic"
 ]

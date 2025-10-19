@@ -51,7 +51,12 @@ from app.api.v1.endpoints import (
     dashboard_diagnostico,
     auth_flow_analyzer,
     predictive_analyzer,
-    intelligent_alerts
+    intelligent_alerts,
+    real_time_monitor,
+    predictive_token_analyzer,
+    cross_validation_auth,
+    intelligent_alerts_system,
+    network_diagnostic
 )
 
 # Configurar logging robusto
@@ -199,6 +204,11 @@ app.include_router(dashboard_diagnostico.router, prefix=f"{settings.API_V1_PREFI
 app.include_router(auth_flow_analyzer.router, prefix=f"{settings.API_V1_PREFIX}/flow", tags=["Análisis Flujo Auth"])
 app.include_router(predictive_analyzer.router, prefix=f"{settings.API_V1_PREFIX}/predictive", tags=["Análisis Predictivo"])
 app.include_router(intelligent_alerts.router, prefix=f"{settings.API_V1_PREFIX}/alerts", tags=["Alertas Inteligentes"])
+app.include_router(real_time_monitor.router, prefix=f"{settings.API_V1_PREFIX}/monitor", tags=["Monitor Tiempo Real"])
+app.include_router(predictive_token_analyzer.router, prefix=f"{settings.API_V1_PREFIX}/predictive-tokens", tags=["Análisis Predictivo Tokens"])
+app.include_router(cross_validation_auth.router, prefix=f"{settings.API_V1_PREFIX}/cross-validation", tags=["Validación Cruzada"])
+app.include_router(intelligent_alerts_system.router, prefix=f"{settings.API_V1_PREFIX}/intelligent-alerts", tags=["Sistema Alertas Inteligentes"])
+app.include_router(network_diagnostic.router, prefix=f"{settings.API_V1_PREFIX}/network", tags=["Diagnóstico Red"])
 # app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])  # Removido - se usarán datos reales
 
 
