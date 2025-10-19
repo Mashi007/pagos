@@ -28,18 +28,22 @@ def test_analistas_no_auth(
     Test endpoint sin autenticación para verificar analistas
     """
     try:
-        total_analistas = db.query(Analista).count()
-        analistas = db.query(Analista).limit(5).all()
+        # Usar consulta SQL directa para evitar problemas con columnas faltantes
+        result = db.execute("SELECT id, nombre, activo, created_at FROM analistas LIMIT 5")
+        analistas_rows = result.fetchall()
+        
+        total_result = db.execute("SELECT COUNT(*) as total FROM analistas")
+        total_analistas = total_result.fetchone()[0]
         
         analistas_data = []
-        for analista in analistas:
+        for row in analistas_rows:
             analistas_data.append({
-                "id": analista.id,
-                "nombre": analista.nombre,
-                "primer_nombre": analista.primer_nombre,
-                "apellido": analista.apellido,
-                "activo": analista.activo,
-                "created_at": analista.created_at.isoformat() if analista.created_at else None
+                "id": row[0],
+                "nombre": row[1],
+                "primer_nombre": row[1].split()[0] if row[1] else "",
+                "apellido": " ".join(row[1].split()[1:]) if row[1] and len(row[1].split()) > 1 else "",
+                "activo": row[2],
+                "created_at": row[3].isoformat() if row[3] else None
             })
         
         return {
@@ -149,29 +153,58 @@ def listar_asesores(
     Listar todos los asesores con paginación y filtros
     """
     try:
-        query = db.query(Analista)
+        # Construir consulta SQL base
+        base_query = "SELECT id, nombre, activo, created_at FROM analistas"
+        count_query = "SELECT COUNT(*) FROM analistas"
+        where_conditions = []
         
         # Aplicar filtros
         if activo is not None:
-            query = query.filter(Analista.activo == activo)
+            where_conditions.append(f"activo = {activo}")
         
         if search:
-            query = query.filter(
-                Analista.nombre.ilike(f"%{search}%") | 
-                Analista.apellido.ilike(f"%{search}%")
-            )
+            where_conditions.append(f"nombre ILIKE '%{search}%'")
+        
+        # Agregar WHERE si hay condiciones
+        if where_conditions:
+            where_clause = " WHERE " + " AND ".join(where_conditions)
+            base_query += where_clause
+            count_query += where_clause
         
         # Obtener total
-        total = query.count()
+        total_result = db.execute(count_query)
+        total = total_result.fetchone()[0]
         
         # Aplicar paginación
-        asesores = query.offset(skip).limit(limit).all()
+        paginated_query = f"{base_query} ORDER BY id OFFSET {skip} LIMIT {limit}"
+        result = db.execute(paginated_query)
+        rows = result.fetchall()
         
         # Calcular páginas
         pages = (total + limit - 1) // limit
         
+        # Convertir filas a objetos AnalistaResponse
+        items = []
+        for row in rows:
+            analista_data = {
+                "id": row[0],
+                "nombre": row[1],
+                "apellido": " ".join(row[1].split()[1:]) if row[1] and len(row[1].split()) > 1 else "",
+                "email": "",
+                "telefono": "",
+                "especialidad": "",
+                "comision_porcentaje": 0,
+                "activo": row[2],
+                "notas": "",
+                "nombre_completo": row[1],
+                "primer_nombre": row[1].split()[0] if row[1] else "",
+                "created_at": row[3],
+                "updated_at": None
+            }
+            items.append(AnalistaResponse.model_validate(analista_data))
+        
         return AnalistaListResponse(
-            items=[AnalistaResponse.model_validate(a) for a in asesores],
+            items=items,
             total=total,
             page=(skip // limit) + 1,
             size=limit,
