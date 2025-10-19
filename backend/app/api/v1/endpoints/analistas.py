@@ -272,7 +272,7 @@ def actualizar_asesor(
     current_user: User = Depends(get_current_user)
 ):
     """
-    ✏️ Actualizar un asesor existente
+    Actualizar un asesor existente
     """
     try:
         asesor = db.query(Analista).filter(Analista.id == asesor_id).first()
@@ -290,7 +290,7 @@ def actualizar_asesor(
                 raise HTTPException(status_code=400, detail="Ya existe un asesor con este email")
         
         # Actualizar campos
-        update_data = asesor_data.dict(exclude_unset=True)
+        update_data = asesor_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(asesor, field, value)
         
@@ -312,7 +312,7 @@ def eliminar_asesor(
     current_user: User = Depends(get_current_user)
 ):
     """
-    🗑️ Eliminar un analista (HARD DELETE - borrado completo de BD)
+    Eliminar un analista (HARD DELETE - borrado completo de BD)
     """
     try:
         asesor = db.query(Analista).filter(Analista.id == asesor_id).first()
