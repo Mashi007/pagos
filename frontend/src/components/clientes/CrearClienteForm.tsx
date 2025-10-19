@@ -294,7 +294,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       if (cliente) {
         // Editar cliente existente
         console.log('✏️ Editando cliente existente:', cliente.id)
-        await clienteService.actualizarCliente(cliente.id, clienteData)
+        await clienteService.updateCliente(cliente.id, clienteData)
         console.log('✅ Cliente actualizado exitosamente')
       } else {
         // Crear nuevo cliente
@@ -624,7 +624,11 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                   placeholder="Buscar modelo de vehículo..."
                   className={getFieldValidation('modeloVehiculo')?.isValid === false ? 'border-red-500' : ''}
                 />
-                {console.log('🔍 Modelos disponibles para SearchableSelect:', modelosVehiculos.map(m => m.nombre))}
+                {/* Debug: Modelos disponibles */}
+                {(() => {
+                  console.log('🔍 Modelos disponibles para SearchableSelect:', modelosVehiculos.map(m => m.nombre))
+                  return null
+                })()}
                 {getFieldValidation('modeloVehiculo') && (
                   <div className={`text-xs flex items-center gap-1 ${
                     getFieldValidation('modeloVehiculo')?.isValid ? 'text-green-600' : 'text-red-600'
