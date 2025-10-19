@@ -26,7 +26,8 @@ class Cliente(Base):
     # ============================================
     # Solo campos que EXISTEN en la base de datos actual
     modelo_vehiculo = Column(String(100), nullable=True, index=True)
-    concesionario = Column(String(100), nullable=True, index=True)
+    # concesionario se obtiene desde configuración (/api/v1/concesionarios)
+    # analista se obtiene desde configuración (/api/v1/analistas)
     
     # Estado y control
     estado = Column(String(20), nullable=True, default="ACTIVO", index=True)
