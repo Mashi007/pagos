@@ -25,6 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { concesionarioService, type Concesionario } from '@/services/concesionarioService'
@@ -568,21 +569,16 @@ export function CrearClienteForm({ onClose, onSuccess, onClienteCreated }: Crear
                 <label className="text-sm font-medium text-gray-700">
                   Modelo de Vehículo <span className="text-red-500">*</span>
                 </label>
-                <Select
+                <SearchableSelect
+                  options={modelosVehiculos.map(modelo => ({
+                    value: modelo.nombre,
+                    label: modelo.nombre
+                  }))}
                   value={formData.modeloVehiculo}
                   onValueChange={(value) => handleInputChange('modeloVehiculo', value)}
-                >
-                  <SelectTrigger className={getFieldValidation('modeloVehiculo')?.isValid === false ? 'border-red-500' : ''}>
-                    <SelectValue placeholder="Seleccionar modelo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {modelosVehiculos.map((modelo) => (
-                      <SelectItem key={modelo.id} value={modelo.nombre}>
-                        {modelo.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Buscar modelo de vehículo..."
+                  className={getFieldValidation('modeloVehiculo')?.isValid === false ? 'border-red-500' : ''}
+                />
                 {getFieldValidation('modeloVehiculo') && (
                   <div className={`text-xs flex items-center gap-1 ${
                     getFieldValidation('modeloVehiculo')?.isValid ? 'text-green-600' : 'text-red-600'
@@ -601,21 +597,16 @@ export function CrearClienteForm({ onClose, onSuccess, onClienteCreated }: Crear
                 <label className="text-sm font-medium text-gray-700">
                   Concesionario <span className="text-red-500">*</span>
                 </label>
-                <Select
+                <SearchableSelect
+                  options={concesionarios.map(concesionario => ({
+                    value: concesionario.nombre,
+                    label: concesionario.nombre
+                  }))}
                   value={formData.concesionario}
                   onValueChange={(value) => handleInputChange('concesionario', value)}
-                >
-                  <SelectTrigger className={getFieldValidation('concesionario')?.isValid === false ? 'border-red-500' : ''}>
-                    <SelectValue placeholder="Seleccionar concesionario" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {concesionarios.map((concesionario) => (
-                      <SelectItem key={concesionario.id} value={concesionario.nombre}>
-                        {concesionario.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Buscar concesionario..."
+                  className={getFieldValidation('concesionario')?.isValid === false ? 'border-red-500' : ''}
+                />
                 {getFieldValidation('concesionario') && (
                   <div className={`text-xs flex items-center gap-1 ${
                     getFieldValidation('concesionario')?.isValid ? 'text-green-600' : 'text-red-600'
@@ -634,21 +625,16 @@ export function CrearClienteForm({ onClose, onSuccess, onClienteCreated }: Crear
                 <label className="text-sm font-medium text-gray-700">
                   Analista <span className="text-red-500">*</span>
                 </label>
-                <Select
+                <SearchableSelect
+                  options={analistas.map(analista => ({
+                    value: analista.nombre,
+                    label: analista.nombre
+                  }))}
                   value={formData.analista}
                   onValueChange={(value) => handleInputChange('analista', value)}
-                >
-                  <SelectTrigger className={getFieldValidation('analista')?.isValid === false ? 'border-red-500' : ''}>
-                    <SelectValue placeholder="Seleccionar analista" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {analistas.map((analista) => (
-                      <SelectItem key={analista.id} value={analista.nombre}>
-                        {analista.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Buscar analista..."
+                  className={getFieldValidation('analista')?.isValid === false ? 'border-red-500' : ''}
+                />
                 {getFieldValidation('analista') && (
                   <div className={`text-xs flex items-center gap-1 ${
                     getFieldValidation('analista')?.isValid ? 'text-green-600' : 'text-red-600'
