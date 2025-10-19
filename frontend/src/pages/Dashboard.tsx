@@ -170,10 +170,18 @@ export function Dashboard() {
         } else {
           setUsuarios([])
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error cargando usuarios:', error)
-        setUsuariosError('Error al cargar usuarios')
-        setUsuarios([])
+        
+        // Manejar error 403 (Forbidden) - Usuario normal sin permisos
+        if (error.response?.status === 403) {
+          console.log('ℹ️ Usuario normal - Sin permisos para ver lista de usuarios')
+          setUsuarios([])
+          setUsuariosError(null) // No mostrar error para usuarios normales
+        } else {
+          setUsuariosError('Error al cargar usuarios')
+          setUsuarios([])
+        }
       } finally {
         setUsuariosLoading(false)
       }
@@ -511,6 +519,13 @@ export function Dashboard() {
             <div className="flex items-center justify-center py-8">
               <AlertTriangle className="h-6 w-6 text-red-600 mr-2" />
               <span className="text-red-600">{usuariosError}</span>
+            </div>
+          ) : usuarios.length === 0 ? (
+            <div className="flex items-center justify-center py-8">
+              <Users className="h-6 w-6 text-gray-400 mr-2" />
+              <span className="text-gray-500">
+                {isAdmin ? 'No hay usuarios registrados' : 'Solo administradores pueden ver la lista de usuarios'}
+              </span>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
