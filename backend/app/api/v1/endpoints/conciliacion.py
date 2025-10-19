@@ -8,6 +8,7 @@ from decimal import Decimal
 import csv
 import io
 import pandas as pd
+import logging
 
 from app.db.session import get_db, SessionLocal
 from app.models.pago import Pago
@@ -31,6 +32,7 @@ from app.schemas.conciliacion import (
 )
 from app.api.deps import get_current_user
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 

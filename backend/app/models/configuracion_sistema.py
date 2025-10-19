@@ -9,8 +9,11 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from typing import Dict, Any, Optional
 import json
+import logging
 
 from app.db.session import Base
+
+logger = logging.getLogger(__name__)
 
 
 class ConfiguracionSistema(Base):

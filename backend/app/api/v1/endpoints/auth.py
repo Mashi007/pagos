@@ -5,6 +5,7 @@ Login, logout, refresh token, cambio de contraseña
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.orm import Session
+import logging
 
 from app.db.session import get_db
 from app.api.deps import get_current_user
@@ -27,6 +28,8 @@ from slowapi.util import get_remote_address
 # Security Audit Logging
 from app.core.security_audit import log_login_attempt, log_password_change
 
+logger = logging.getLogger(__name__)
+
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 
@@ -39,8 +42,6 @@ def add_cors_headers(request: Request, response: Response) -> None:
         response: Response object donde agregar headers
     """
     from app.core.config import settings
-    import logging
-    logger = logging.getLogger(__name__)
     
     origin = request.headers.get("origin")
     logger.info(f"🌐 CORS Debug - Origin recibido: {origin}")
