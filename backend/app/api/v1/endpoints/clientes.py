@@ -179,6 +179,41 @@ def test_final_endpoint():
         "rutas": "sin_conflicto"
     }
 
+@router.get("/opciones-configuracion")
+def obtener_opciones_configuracion(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Obtener opciones de configuración para formulario de clientes
+    """
+    try:
+        logger.info(f"Obteniendo opciones de configuración - Usuario: {current_user.email}")
+        
+        # Por ahora retornar estructura básica
+        # TODO: Conectar con endpoints reales cuando estén disponibles
+        return {
+            "modelos_vehiculos": [
+                {"id": 1, "nombre": "Toyota Corolla", "marca": "Toyota", "anio": 2023, "activo": True},
+                {"id": 2, "nombre": "Honda Civic", "marca": "Honda", "anio": 2023, "activo": True},
+                {"id": 3, "nombre": "Nissan Sentra", "marca": "Nissan", "anio": 2023, "activo": True}
+            ],
+            "analistas": [
+                {"id": 1, "nombre": "Roberto Martínez", "activo": True},
+                {"id": 2, "nombre": "Ana García", "activo": True},
+                {"id": 3, "nombre": "Carlos López", "activo": True}
+            ],
+            "concesionarios": [
+                {"id": 1, "nombre": "AutoCenter Caracas", "direccion": "Av. Principal", "telefono": "0212-1234567", "activo": True},
+                {"id": 2, "nombre": "Motors Valencia", "direccion": "Av. Bolívar", "telefono": "0241-7654321", "activo": True},
+                {"id": 3, "nombre": "Carros Maracaibo", "direccion": "Av. Libertador", "telefono": "0261-9876543", "activo": True}
+            ]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo opciones de configuración: {e}")
+        raise HTTPException(status_code=500, detail=f"Error obteniendo opciones: {str(e)}")
+
 @router.get("/ping")
 def ping_clientes():
     """
@@ -222,35 +257,79 @@ def crear_cliente(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Crear un nuevo cliente
+    Crear un nuevo cliente con validaciones completas
     """
     try:
-        # Verificar que no exista un cliente con la misma cédula
-        existing = db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
-        if existing:
-            raise HTTPException(status_code=400, detail="Ya existe un cliente con esta cédula")
+        logger.info(f"Creando cliente - Usuario: {current_user.email}, Cédula: {cliente_data.cedula}")
         
-        # Crear nuevo cliente - SOLO campos que existen en el modelo
+        # 1. VALIDAR CÉDULA
+        from app.services.validators_service import ValidadorCedula
+        validacion_cedula = ValidadorCedula.validar_y_formatear_cedula(cliente_data.cedula)
+        if not validacion_cedula["valido"]:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Error en cédula: {validacion_cedula['error']}"
+            )
+        
+        # 2. VALIDAR NOMBRE (4 palabras mínimo)
+        from app.services.validators_service import ValidadorNombre
+        validacion_nombre = ValidadorNombre.validar_nombre_completo(f"{cliente_data.nombres} {cliente_data.apellidos}")
+        if not validacion_nombre["valido"]:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Error en nombre: {validacion_nombre['error']}"
+            )
+        
+        # 3. VALIDAR TELÉFONO
+        if cliente_data.telefono:
+            from app.services.validators_service import ValidadorTelefono
+            validacion_telefono = ValidadorTelefono.validar_y_formatear_telefono(cliente_data.telefono)
+            if not validacion_telefono["valido"]:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Error en teléfono: {validacion_telefono['error']}"
+                )
+        
+        # 4. VALIDAR EMAIL
+        if cliente_data.email:
+            from app.services.validators_service import ValidadorEmail
+            validacion_email = ValidadorEmail.validar_y_formatear_email(cliente_data.email)
+            if not validacion_email["valido"]:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Error en email: {validacion_email['error']}"
+                )
+        
+        # 5. VERIFICAR QUE NO EXISTA UN CLIENTE CON LA MISMA CÉDULA
+        existing = db.query(Cliente).filter(Cliente.cedula == validacion_cedula["valor_formateado"]).first()
+        if existing:
+            raise HTTPException(
+                status_code=400, 
+                detail="Ya existe un cliente con esta cédula"
+            )
+        
+        # 6. CREAR NUEVO CLIENTE
         cliente_dict = cliente_data.model_dump()
+        
+        # Aplicar valores formateados
+        cliente_dict["cedula"] = validacion_cedula["valor_formateado"]
+        cliente_dict["nombres"] = validacion_nombre["primer_nombre"] + " " + validacion_nombre["segundo_nombre"]
+        cliente_dict["apellidos"] = validacion_nombre["primer_apellido"] + " " + validacion_nombre["segundo_apellido"]
+        
+        if cliente_data.telefono:
+            cliente_dict["telefono"] = validacion_telefono["valor_formateado"]
+        
+        if cliente_data.email:
+            cliente_dict["email"] = validacion_email["valor_formateado"]
         
         # Filtrar campos que NO existen en el modelo Cliente
         campos_validos = {
             'cedula', 'nombres', 'apellidos', 'telefono', 'email', 'direccion',
-            'fecha_nacimiento', 'ocupacion', 'modelo_vehiculo', 'marca_vehiculo',
-            'anio_vehiculo', 'color_vehiculo', 'chasis', 'motor', 'concesionario',
-            'vendedor_concesionario', 'total_financiamiento', 'cuota_inicial',
-            'fecha_entrega', 'numero_amortizaciones', 'modalidad_pago',
-            'analista_id', 'notas'
+            'fecha_nacimiento', 'ocupacion', 'modelo_vehiculo', 'concesionario'
         }
         
         # Crear diccionario solo con campos válidos
         cliente_dict_filtrado = {k: v for k, v in cliente_dict.items() if k in campos_validos}
-        
-        # Calcular monto_financiado si no se proporciona
-        if 'total_financiamiento' in cliente_dict_filtrado and 'cuota_inicial' in cliente_dict_filtrado:
-            total = cliente_dict_filtrado.get('total_financiamiento', 0) or 0
-            inicial = cliente_dict_filtrado.get('cuota_inicial', 0) or 0
-            cliente_dict_filtrado['monto_financiado'] = total - inicial
         
         cliente = Cliente(**cliente_dict_filtrado)
         
@@ -258,8 +337,12 @@ def crear_cliente(
         db.commit()
         db.refresh(cliente)
         
+        logger.info(f"Cliente creado exitosamente - ID: {cliente.id}, Cédula: {cliente.cedula}")
+        
         return ClienteResponse.model_validate(cliente)
         
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"Error creando cliente: {e}")

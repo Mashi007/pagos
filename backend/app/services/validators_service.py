@@ -499,6 +499,76 @@ class ValidadorCedula:
         }
 
 
+class ValidadorNombre:
+    """
+    👤 Validador de nombres completos (4 palabras mínimo)
+    """
+    
+    @staticmethod
+    def validar_nombre_completo(nombre: str) -> Dict[str, Any]:
+        """
+        Validar que el nombre tenga al menos 4 palabras
+        
+        Ejemplos:
+        - "Juan Pérez" → Error (solo 2 palabras)
+        - "Juan Carlos Pérez González" → Válido (4 palabras)
+        - "María José de la Cruz" → Válido (5 palabras)
+        """
+        try:
+            if not nombre:
+                return {
+                    "valido": False,
+                    "error": "Nombre requerido",
+                    "valor_original": nombre,
+                    "palabras_encontradas": 0,
+                    "palabras_requeridas": 4
+                }
+            
+            # Limpiar y dividir en palabras
+            palabras = [p.strip() for p in nombre.split() if p.strip()]
+            
+            if len(palabras) < 4:
+                return {
+                    "valido": False,
+                    "error": f"Nombre debe tener al menos 4 palabras. Encontradas: {len(palabras)}",
+                    "valor_original": nombre,
+                    "palabras_encontradas": len(palabras),
+                    "palabras_requeridas": 4,
+                    "palabras": palabras
+                }
+            
+            # Validar que cada palabra tenga al menos 2 caracteres
+            palabras_invalidas = [p for p in palabras if len(p) < 2]
+            if palabras_invalidas:
+                return {
+                    "valido": False,
+                    "error": f"Palabras muy cortas: {palabras_invalidas}",
+                    "valor_original": nombre,
+                    "palabras_encontradas": len(palabras),
+                    "palabras_invalidas": palabras_invalidas
+                }
+            
+            return {
+                "valido": True,
+                "valor_original": nombre,
+                "valor_formateado": " ".join(palabras),
+                "palabras_encontradas": len(palabras),
+                "palabras": palabras,
+                "primer_nombre": palabras[0],
+                "segundo_nombre": palabras[1] if len(palabras) > 1 else "",
+                "primer_apellido": palabras[-2] if len(palabras) > 2 else palabras[-1],
+                "segundo_apellido": palabras[-1] if len(palabras) > 3 else ""
+            }
+            
+        except Exception as e:
+            logger.error(f"Error validando nombre: {e}")
+            return {
+                "valido": False,
+                "error": f"Error de validación: {str(e)}",
+                "valor_original": nombre
+            }
+
+
 class ValidadorFecha:
     """
     📅 Validador y formateador de fechas con reglas de negocio
