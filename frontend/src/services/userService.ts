@@ -2,6 +2,9 @@
 import { apiClient as api } from './api'
 import { User } from '@/types'  // IMPORTAR desde types centralizado
 
+// Re-exportar User para compatibilidad
+export { User } from '@/types'
+
 export interface UserCreate {
   email: string
   nombre: string
