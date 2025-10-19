@@ -13,7 +13,13 @@ import statistics
 from collections import defaultdict, deque
 import threading
 import asyncio
-import psutil
+# Import condicional de psutil
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    psutil = None
 import os
 
 from app.db.session import get_db
@@ -489,9 +495,9 @@ class ArchitecturalAnalysisSystem:
     def _extract_component_metrics(self, component_id: str) -> Dict[str, Any]:
         """Extraer métricas específicas del componente"""
         metrics = {
-            'cpu_usage': psutil.cpu_percent(),
-            'memory_usage': psutil.virtual_memory().percent,
-            'disk_usage': psutil.disk_usage('/').percent,
+            'cpu_usage': psutil.cpu_percent() if PSUTIL_AVAILABLE else 0,
+            'memory_usage': psutil.virtual_memory().percent if PSUTIL_AVAILABLE else 0,
+            'disk_usage': psutil.disk_usage('/').percent if PSUTIL_AVAILABLE else 0,
             'timestamp': datetime.now().isoformat()
         }
         
@@ -566,9 +572,9 @@ class ArchitecturalAnalysisSystem:
                 'component_health': self.component_health,
                 'dependency_analysis': dependency_analysis,
                 'system_metrics': {
-                    'cpu_usage': psutil.cpu_percent(),
-                    'memory_usage': psutil.virtual_memory().percent,
-                    'disk_usage': psutil.disk_usage('/').percent
+                    'cpu_usage': psutil.cpu_percent() if PSUTIL_AVAILABLE else 0,
+                    'memory_usage': psutil.virtual_memory().percent if PSUTIL_AVAILABLE else 0,
+                    'disk_usage': psutil.disk_usage('/').percent if PSUTIL_AVAILABLE else 0
                 }
             }
 
