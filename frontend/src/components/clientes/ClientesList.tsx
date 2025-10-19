@@ -231,8 +231,8 @@ export function ClientesList() {
                   <TableHead>Cliente</TableHead>
                   <TableHead>Contacto</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead>Saldo Pendiente</TableHead>
-                  <TableHead>Último Pago</TableHead>
+                  <TableHead>Vehículo & Analista</TableHead>
+                  <TableHead>Concesionario & Registro</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -242,10 +242,10 @@ export function ClientesList() {
                     <TableCell>
                       <div>
                         <div className="font-medium text-gray-900">
-                          {cliente.nombre}
+                          {cliente.nombres} {cliente.apellidos}
                         </div>
                         <div className="text-sm text-gray-500">
-                          ID: {cliente.id}
+                          Cédula: {cliente.cedula} | ID: {cliente.id}
                         </div>
                       </div>
                     </TableCell>
@@ -269,14 +269,25 @@ export function ClientesList() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <span className="font-medium">
-                        {formatCurrency(cliente.saldo_pendiente)}
-                      </span>
+                      <div className="space-y-1">
+                        <div className="text-sm text-gray-600">
+                          <Car className="w-3 h-3 inline mr-1" />
+                          {cliente.modelo_vehiculo || 'Sin asignar'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Analista: {cliente.analista || 'Sin asignar'}
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm text-gray-600">
-                        {formatDate(cliente.fecha_ultimo_pago)}
-                      </span>
+                      <div className="space-y-1">
+                        <div className="text-sm text-gray-600">
+                          {cliente.concesionario || 'Sin asignar'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Registro: {formatDate(cliente.fecha_registro)}
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
