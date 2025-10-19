@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 import logging
 from datetime import datetime
+from app.utils.analistas_cache import analistas_cache, cache_analistas, generate_cache_key
 from app.db.session import get_db
 from app.models.analista import Analista
 from app.models.user import User
@@ -58,6 +59,45 @@ def test_analistas_no_auth(
             "message": "Error en test endpoint analistas no auth"
         }
 
+@router.get("/cache-stats")
+def cache_stats():
+    """
+    Obtener estadísticas del cache de analistas
+    """
+    try:
+        stats = analistas_cache.get_stats()
+        return {
+            "cache_stats": stats,
+            "timestamp": datetime.now().isoformat(),
+            "message": "Estadísticas del cache obtenidas"
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo estadísticas del cache: {str(e)}")
+        return {
+            "error": str(e),
+            "timestamp": datetime.now().isoformat(),
+            "message": "Error obteniendo estadísticas del cache"
+        }
+
+@router.post("/cache-clear")
+def clear_cache():
+    """
+    Limpiar el cache de analistas
+    """
+    try:
+        analistas_cache.clear()
+        return {
+            "message": "Cache limpiado exitosamente",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error limpiando cache: {str(e)}")
+        return {
+            "error": str(e),
+            "timestamp": datetime.now().isoformat(),
+            "message": "Error limpiando cache"
+        }
+
 @router.get("/health")
 def health_check_analistas(db: Session = Depends(get_db)):
     """
@@ -83,6 +123,178 @@ def health_check_analistas(db: Session = Depends(get_db)):
             "error": str(e),
             "timestamp": datetime.now().isoformat(),
             "message": "Error en módulo de analistas"
+        }
+
+@router.get("/backup1")
+def analistas_backup1(
+    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
+    limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
+    activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
+    search: Optional[str] = Query(None, description="Buscar por nombre"),
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint de respaldo 1 - Sin autenticación, con cache
+    """
+    try:
+        cache_key = f"backup1_{generate_cache_key(skip, limit, activo, search)}"
+        cached_result = analistas_cache.get(cache_key)
+        if cached_result:
+            return cached_result
+        
+        # Usar SQL directo para máxima compatibilidad
+        base_query = "SELECT id, nombre, activo, created_at FROM analistas"
+        count_query = "SELECT COUNT(*) FROM analistas"
+        where_conditions = []
+        
+        # Aplicar filtros
+        if activo is not None:
+            where_conditions.append(f"activo = {activo}")
+        
+        if search:
+            where_conditions.append(f"nombre ILIKE '%{search}%'")
+        
+        # Agregar WHERE si hay condiciones
+        if where_conditions:
+            where_clause = " WHERE " + " AND ".join(where_conditions)
+            base_query += where_clause
+            count_query += where_clause
+        
+        # Obtener total
+        total_result = db.execute(text(count_query))
+        total = total_result.fetchone()[0]
+        
+        # Aplicar paginación
+        paginated_query = f"{base_query} ORDER BY id OFFSET {skip} LIMIT {limit}"
+        result = db.execute(text(paginated_query))
+        rows = result.fetchall()
+        
+        # Calcular páginas
+        pages = (total + limit - 1) // limit
+        
+        # Convertir filas a formato de respuesta
+        items = []
+        for row in rows:
+            nombre_completo = row[1] if row[1] else ""
+            partes_nombre = nombre_completo.split()
+            primer_nombre = partes_nombre[0] if partes_nombre else ""
+            apellido = " ".join(partes_nombre[1:]) if len(partes_nombre) > 1 else ""
+            
+            items.append({
+                "id": row[0],
+                "nombre": nombre_completo,
+                "apellido": apellido,
+                "email": "",
+                "telefono": "",
+                "especialidad": "",
+                "comision_porcentaje": 0,
+                "activo": row[2],
+                "notas": "",
+                "nombre_completo": nombre_completo,
+                "primer_nombre": primer_nombre,
+                "created_at": row[3].isoformat() if row[3] else None,
+                "updated_at": None
+            })
+        
+        result_data = {
+            "items": items,
+            "total": total,
+            "page": (skip // limit) + 1,
+            "size": limit,
+            "pages": pages,
+            "backup_mode": "backup1",
+            "message": "Endpoint de respaldo 1 funcionando"
+        }
+        
+        # Guardar en cache
+        analistas_cache.set(cache_key, result_data)
+        return result_data
+        
+    except Exception as e:
+        logger.error(f"Error en endpoint backup1: {str(e)}")
+        return {
+            "items": [],
+            "total": 0,
+            "page": 1,
+            "size": limit,
+            "pages": 0,
+            "backup_mode": "backup1",
+            "error": str(e),
+            "message": "Error en endpoint backup1"
+        }
+
+@router.get("/backup2")
+def analistas_backup2(
+    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
+    limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
+    activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
+    search: Optional[str] = Query(None, description="Buscar por nombre"),
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint de respaldo 2 - Sin autenticación, consulta simple
+    """
+    try:
+        # Consulta más simple para evitar problemas
+        query = "SELECT id, nombre, activo FROM analistas ORDER BY id OFFSET %s LIMIT %s"
+        count_query = "SELECT COUNT(*) FROM analistas"
+        
+        # Obtener total
+        total_result = db.execute(text(count_query))
+        total = total_result.fetchone()[0]
+        
+        # Obtener datos
+        result = db.execute(text(query), (skip, limit))
+        rows = result.fetchall()
+        
+        # Calcular páginas
+        pages = (total + limit - 1) // limit
+        
+        # Convertir filas a formato de respuesta
+        items = []
+        for row in rows:
+            nombre_completo = row[1] if row[1] else ""
+            partes_nombre = nombre_completo.split()
+            primer_nombre = partes_nombre[0] if partes_nombre else ""
+            apellido = " ".join(partes_nombre[1:]) if len(partes_nombre) > 1 else ""
+            
+            items.append({
+                "id": row[0],
+                "nombre": nombre_completo,
+                "apellido": apellido,
+                "email": "",
+                "telefono": "",
+                "especialidad": "",
+                "comision_porcentaje": 0,
+                "activo": row[2],
+                "notas": "",
+                "nombre_completo": nombre_completo,
+                "primer_nombre": primer_nombre,
+                "created_at": None,
+                "updated_at": None
+            })
+        
+        return {
+            "items": items,
+            "total": total,
+            "page": (skip // limit) + 1,
+            "size": limit,
+            "pages": pages,
+            "backup_mode": "backup2",
+            "message": "Endpoint de respaldo 2 funcionando"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error en endpoint backup2: {str(e)}")
+        return {
+            "items": [],
+            "total": 0,
+            "page": 1,
+            "size": limit,
+            "pages": 0,
+            "backup_mode": "backup2",
+            "error": str(e),
+            "message": "Error en endpoint backup2"
         }
 
 @router.get("/emergency")
@@ -220,6 +432,7 @@ def listar_analistas_no_auth(
         raise HTTPException(status_code=500, detail=f"Error al listar analistas: {str(e)}")
 
 @router.get("/", response_model=AnalistaListResponse)
+@cache_analistas(lambda skip, limit, activo, search, db, current_user: generate_cache_key(skip, limit, activo, search))
 def listar_asesores(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),

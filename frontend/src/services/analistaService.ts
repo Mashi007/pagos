@@ -56,14 +56,36 @@ class AnalistaService {
     search?: string
     especialidad?: string
   }): Promise<AnalistaListResponse> {
-    try {
-      // Intentar endpoint principal primero
-      return await apiClient.get<AnalistaListResponse>(this.baseUrl, { params })
-    } catch (error) {
-      console.warn('Endpoint principal falló, usando endpoint de emergencia:', error)
-      // Si falla, usar endpoint de emergencia
-      return await apiClient.get<AnalistaListResponse>(`${this.baseUrl}/emergency`, { params })
+    const endpoints = [
+      this.baseUrl,                    // Endpoint principal
+      `${this.baseUrl}/backup1`,       // Respaldo 1 con cache
+      `${this.baseUrl}/backup2`,       // Respaldo 2 simple
+      `${this.baseUrl}/emergency`,     // Emergencia
+      `${this.baseUrl}/test-no-auth`   // Test sin auth
+    ]
+    
+    let lastError: any = null
+    
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Intentando endpoint: ${endpoint}`)
+        const result = await apiClient.get<AnalistaListResponse>(endpoint, { params })
+        console.log(`✅ Éxito con endpoint: ${endpoint}`)
+        return result
+      } catch (error) {
+        console.warn(`❌ Falló endpoint ${endpoint}:`, error)
+        lastError = error
+        
+        // Si es un error 503, esperar un poco antes del siguiente intento
+        if (error?.response?.status === 503) {
+          console.log('Esperando 2 segundos antes del siguiente intento...')
+          await new Promise(resolve => setTimeout(resolve, 2000))
+        }
+      }
     }
+    
+    // Si todos los endpoints fallan, lanzar el último error
+    throw lastError || new Error('Todos los endpoints de analistas fallaron')
   }
 
   // Listar solo analistas activos (para formularios)
