@@ -2,19 +2,19 @@ import { apiClient, ApiResponse } from './api'
 
 export interface ModeloVehiculo {
   id: number
-  nombre: string
+  modelo: string  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
   activo: boolean
   created_at: string
   updated_at?: string
 }
 
 export interface ModeloVehiculoCreate {
-  nombre: string
+  modelo: string  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
   activo?: boolean
 }
 
 export interface ModeloVehiculoUpdate {
-  nombre?: string
+  modelo?: string  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
   activo?: boolean
 }
 

@@ -51,7 +51,7 @@ async def generar_plantilla_clientes_dinamica(
         
         # Modelos de vehículos
         modelos_db = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo == True).all()
-        modelos_nombres = [m.nombre for m in modelos_db]
+        modelos_nombres = [m.modelo for m in modelos_db]  # ✅ CORREGIDO: campo 'modelo', no 'nombre'
         logger.info(f"Modelos encontrados: {len(modelos_nombres)}")
         
         # Concesionarios

@@ -616,10 +616,10 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                 </label>
                 <SearchableSelect
                   options={modelosVehiculos
-                    .filter(modelo => modelo.nombre) // Filtrar modelos sin nombre
+                    .filter(modelo => modelo.modelo) // ✅ CORREGIDO: campo 'modelo', no 'nombre'
                     .map(modelo => ({
-                      value: modelo.nombre,
-                      label: modelo.nombre
+                      value: modelo.modelo,          // ✅ CORREGIDO: campo 'modelo', no 'nombre'
+                      label: modelo.modelo           // ✅ CORREGIDO: campo 'modelo', no 'nombre'
                     }))}
                   value={formData.modeloVehiculo || ''}
                   onChange={(value) => handleInputChange('modeloVehiculo', value)}
@@ -628,7 +628,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                 />
                 {/* Debug: Modelos disponibles */}
                 {(() => {
-                  console.log('🔍 Modelos disponibles para SearchableSelect:', modelosVehiculos.map(m => m.nombre))
+                  console.log('🔍 Modelos disponibles para SearchableSelect:', modelosVehiculos.map(m => m.modelo)) // ✅ CORREGIDO: campo 'modelo'
                   return null
                 })()}
                 {getFieldValidation('modeloVehiculo') && (

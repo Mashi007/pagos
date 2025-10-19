@@ -32,7 +32,7 @@ export function ModelosVehiculosConfig() {
 
   // Form state
   const [formData, setFormData] = useState<ModeloVehiculoCreate>({
-    nombre: '',
+    modelo: '',  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
     activo: true
   })
 
@@ -162,8 +162,8 @@ export function ModelosVehiculosConfig() {
                 <div>
                   <label className="text-sm font-medium">Modelo del Vehículo *</label>
                   <Input
-                    value={formData.nombre}
-                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                    value={formData.modelo}  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
+                    onChange={(e) => setFormData({ ...formData, modelo: e.target.value })}  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
                     placeholder="Nombre del modelo"
                     required
                   />
@@ -282,7 +282,7 @@ export function ModelosVehiculosConfig() {
                 {filteredModelos.map((modelo) => (
                   <TableRow key={modelo.id}>
                     <TableCell>
-                      <div className="font-medium">{modelo.nombre}</div>
+                      <div className="font-medium">{modelo.modelo}</div>  {/* ✅ CORREGIDO: campo 'modelo', no 'nombre' */}
                     </TableCell>
                     <TableCell>
                       <Badge variant={modelo.activo ? 'default' : 'destructive'}>
