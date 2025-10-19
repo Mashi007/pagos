@@ -69,12 +69,12 @@ class Cuota(Base):
     
     # Relaciones
     # prestamo = relationship("Prestamo", back_populates="cuotas")  # COMENTADO: Solo plantilla vacía
-    pagos = relationship(
-        "Pago",
-        secondary="pago_cuotas",
-        back_populates="cuotas",
-        overlaps="cuotas,pago"
-    )
+    # pagos = relationship(
+    #     "Pago",
+    #     secondary="pago_cuotas",
+    #     back_populates="cuotas",
+    #     overlaps="cuotas,pago"
+    # )  # COMENTADO: Temporalmente hasta implementar módulo préstamos
     
     def __repr__(self):
         return f"<Cuota {self.numero_cuota} - Préstamo {self.prestamo_id} - {self.estado}>"
