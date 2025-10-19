@@ -39,7 +39,7 @@ export function Usuarios() {
       setLoading(true)
       setError(null)
       console.log('🔄 Actualizando usuarios...')
-      console.log('📡 Llamando a API: /api/v1/users')
+      console.log('📡 Llamando a API: /api/v1/usuarios')
       
       const response = await userService.listarUsuarios(1, 100)
       console.log('✅ Respuesta API recibida:', response)
