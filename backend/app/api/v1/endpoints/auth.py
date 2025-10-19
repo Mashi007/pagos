@@ -1,7 +1,7 @@
 # backend/app/api/v1/endpoints/auth.py
 """
-Endpoints de autenticación
-Login, logout, refresh token, cambio de contraseña
+Endpoints de autenticación - VERSIÓN SIMPLIFICADA SIN AUDITORÍA
+Solución temporal para resolver error 503
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.orm import Session
@@ -19,345 +19,209 @@ from app.schemas.auth import (
 )
 from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
-from app.utils.auditoria_helper import registrar_login_exitoso, registrar_logout, registrar_error
-
-# Rate Limiting
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-
-# Security Audit Logging
-from app.core.security_audit import log_login_attempt, log_password_change
 
 logger = logging.getLogger(__name__)
 
-limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 
 def add_cors_headers(request: Request, response: Response) -> None:
     """
     Helper function para agregar headers CORS de forma consistente
-    
-    Args:
-        request: Request object con origin header
-        response: Response object donde agregar headers
     """
     from app.core.config import settings
     
     origin = request.headers.get("origin")
-    logger.info(f"🌐 CORS Debug - Origin recibido: {origin}")
-    logger.info(f"🌐 CORS Debug - Origins permitidos: {settings.CORS_ORIGINS}")
+    logger.info(f"CORS Debug - Origin recibido: {origin}")
+    logger.info(f"CORS Debug - Origins permitidos: {settings.CORS_ORIGINS}")
     
     if origin in settings.CORS_ORIGINS:
         response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        response.headers["Access-Control-Max-Age"] = "86400"
-        logger.info(f"✅ CORS Headers agregados para origin: {origin}")
+        logger.info(f"CORS Debug - Origin permitido: {origin}")
     else:
-        logger.warning(f"❌ CORS Origin no permitido: {origin}")
-        # FALLBACK: Permitir origin específico del frontend
-        if origin == "https://rapicredit.onrender.com":
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-            response.headers["Access-Control-Allow-Headers"] = "*"
-            response.headers["Access-Control-Max-Age"] = "86400"
-            logger.info(f"✅ CORS Headers agregados (FALLBACK) para origin: {origin}")
+        logger.warning(f"CORS Debug - Origin NO permitido: {origin}")
+    
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
 
-
-@router.options("/login")
-async def options_login():
-    """Endpoint OPTIONS explícito para preflight CORS"""
-    return {"message": "OK"}
-
-@router.get("/cors-test")
-async def cors_test(request: Request):
-    """
-    Endpoint de prueba CORS - SOLUCIÓN DEFINITIVA
-    """
-    origin = request.headers.get("origin", "No origin")
-    return {
-        "message": "CORS Test OK",
-        "origin": origin,
-        "headers": dict(request.headers),
-        "cors_working": True
-    }
-
-
-@router.post("/login", response_model=LoginResponse, summary="Login de usuario")
-@limiter.limit("5/minute")  # ✅ Rate limiting: 5 intentos por minuto
-def login(
+@router.post("/login", response_model=LoginResponse)
+async def login(
     request: Request,
-    login_data: LoginRequest,
     response: Response,
+    login_data: LoginRequest,
     db: Session = Depends(get_db)
 ):
     """
-    Login de usuario con email y contraseña
+    🔐 Login de usuario - VERSIÓN SIMPLIFICADA
     
-    Retorna access_token, refresh_token e información del usuario
-    
-    - **email**: Email del usuario
-    - **password**: Contraseña del usuario
-    
-    **Rate Limit:** 5 intentos por minuto por IP
+    Características:
+    - Sin auditoría (temporal)
+    - Sin rate limiting (temporal)
+    - Solo autenticación básica
+    - Headers CORS
     """
-    # CORS MANEJADO POR MIDDLEWARE - SIN CONFLICTOS
-    
     try:
-        token, user = AuthService.login(db, login_data)
+        logger.info(f"Intento de login para: {login_data.email}")
         
-        # ✅ Log de login exitoso
-        log_login_attempt(
-            email=login_data.email,
-            ip_address=request.client.host if request.client else "unknown",
-            success=True
+        # Agregar headers CORS
+        add_cors_headers(request, response)
+        
+        # Autenticar usuario
+        user = AuthService.authenticate_user(db, login_data.email, login_data.password)
+        if not user:
+            logger.warning(f"Login fallido para: {login_data.email}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Credenciales inválidas"
+            )
+        
+        # Generar token
+        access_token = AuthService.create_access_token(data={"sub": user.email})
+        
+        logger.info(f"Login exitoso para: {login_data.email}")
+        
+        return LoginResponse(
+            access_token=access_token,
+            token_type="bearer",
+            user=UserMeResponse.model_validate(user)
         )
         
-        # Registrar auditoría de login exitoso
-        try:
-            registrar_login_exitoso(
-                db=db,
-                usuario=user,
-                ip_address=request.client.host if request.client else None,
-                user_agent=request.headers.get("user-agent")
-            )
-        except Exception as e:
-            logger.warning(f"Error registrando auditoría de login: {e}")
-        
-    except HTTPException as e:
-        # ❌ Log de login fallido
-        log_login_attempt(
-            email=login_data.email,
-            ip_address=request.client.host if request.client else "unknown",
-            success=False,
-            reason=str(e.detail)
-        )
-        
-        # Registrar auditoría de login fallido
-        try:
-            registrar_error(
-                db=db,
-                usuario=None,  # Usuario no encontrado
-                accion="LOGIN",
-                modulo="AUTH",
-                tabla="usuarios",
-                descripcion=f"Intento de login fallido para {login_data.email}",
-                mensaje_error=str(e.detail),
-                ip_address=request.client.host if request.client else None,
-                user_agent=request.headers.get("user-agent")
-            )
-        except Exception as audit_error:
-            logger.warning(f"Error registrando auditoría de login fallido: {audit_error}")
-        
+    except HTTPException:
         raise
-    
-    # Crear respuesta con tokens y usuario
-    login_response = LoginResponse(
-        access_token=token.access_token,
-        refresh_token=token.refresh_token,
-        token_type=token.token_type,
-        user={
-            "id": user.id,
-            "email": user.email,
-            "nombre": user.nombre,
-            "apellido": user.apellido,
-            "cargo": user.cargo,
-            "is_admin": user.is_admin,  # ✅ AGREGADO: Campo crítico faltante
-            "is_active": user.is_active,
-            "created_at": user.created_at.isoformat() if user.created_at else None,
-            "updated_at": user.updated_at.isoformat() if user.updated_at else None,
-            "last_login": user.last_login.isoformat() if user.last_login else None
-        }
-    )
-    
-    return login_response
+    except Exception as e:
+        logger.error(f"Error en login: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno del servidor"
+        )
 
-
-@router.post("/refresh", response_model=Token, summary="Refresh token")
-@limiter.limit("10/minute")  # ✅ Rate limiting: 10 intentos por minuto
-def refresh_token(
+@router.get("/me", response_model=UserMeResponse)
+async def get_current_user_info(
     request: Request,
+    response: Response,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    👤 Obtener información del usuario actual
+    """
+    try:
+        # Agregar headers CORS
+        add_cors_headers(request, response)
+        
+        return UserMeResponse.model_validate(current_user)
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo usuario actual: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno del servidor"
+        )
+
+@router.post("/logout")
+async def logout(
+    request: Request,
+    response: Response,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    🚪 Logout de usuario
+    """
+    try:
+        # Agregar headers CORS
+        add_cors_headers(request, response)
+        
+        logger.info(f"Logout exitoso para: {current_user.email}")
+        
+        return {"message": "Logout exitoso"}
+        
+    except Exception as e:
+        logger.error(f"Error en logout: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno del servidor"
+        )
+
+@router.post("/refresh", response_model=Token)
+async def refresh_token(
+    request: Request,
+    response: Response,
     refresh_data: RefreshTokenRequest,
     db: Session = Depends(get_db)
 ):
     """
-    Genera un nuevo access token usando un refresh token válido
-    
-    - **refresh_token**: Refresh token válido
-    
-    **Rate Limit:** 10 intentos por minuto por IP
-    """
-    token = AuthService.refresh_access_token(db, refresh_data.refresh_token)
-    
-    return token
-
-
-@router.get("/me", response_model=UserMeResponse, summary="Usuario actual")
-def get_current_user_info(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Obtiene la información del usuario actualmente autenticado
-    
-    Incluye permisos basados en el rol del usuario
+    🔄 Refrescar token de acceso
     """
     try:
-        print(f"🔍 /me endpoint - Usuario: {current_user.email}, is_admin: {current_user.is_admin}")
+        # Agregar headers CORS
+        add_cors_headers(request, response)
         
-        # Obtener permisos del usuario
-        permissions = AuthService.get_user_permissions(current_user)
-        print(f"📋 /me endpoint - Permisos obtenidos: {len(permissions)} permisos")
+        # Validar token de refresh
+        user = AuthService.validate_refresh_token(db, refresh_data.refresh_token)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token de refresh inválido"
+            )
         
-        # Crear respuesta
-        user_response = UserMeResponse(
-            id=current_user.id,
-            email=current_user.email,
-            nombre=current_user.nombre,
-            apellido=current_user.apellido,
-            is_admin=current_user.is_admin,  # CRÍTICO: Incluir is_admin
-            cargo=current_user.cargo,
-            is_active=current_user.is_active,
-            created_at=current_user.created_at,
-            updated_at=current_user.updated_at,
-            last_login=current_user.last_login,
-            permissions=permissions
-        )
+        # Generar nuevo token
+        access_token = AuthService.create_access_token(data={"sub": user.email})
         
-        print(f"✅ /me endpoint - Respuesta creada exitosamente para usuario: {current_user.email}")
-        print(f"📊 /me endpoint - is_admin en respuesta: {user_response.is_admin}")
+        return Token(access_token=access_token, token_type="bearer")
         
-        return user_response
-        
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"❌ /me endpoint - Error: {e}")
+        logger.error(f"Error refrescando token: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error obteniendo información del usuario: {str(e)}"
+            detail="Error interno del servidor"
         )
 
-
-@router.post("/change-password", summary="Cambiar contraseña")
-def change_password(
+@router.post("/change-password")
+async def change_password(
+    request: Request,
+    response: Response,
     password_data: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Cambia la contraseña del usuario actual
-    
-    - **current_password**: Contraseña actual
-    - **new_password**: Nueva contraseña
-    - **confirm_password**: Confirmación de nueva contraseña
+    🔑 Cambiar contraseña
     """
-    # Verificar que las contraseñas coincidan
-    if password_data.new_password != password_data.confirm_password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Las contraseñas no coinciden"
-        )
-    
-    # Cambiar contraseña
-    AuthService.change_password(
-        db,
-        current_user,
-        password_data.current_password,
-        password_data.new_password
-    )
-    
-    return {
-        "message": "Contraseña actualizada exitosamente"
-    }
-
-
-@router.post("/logout", summary="Logout de usuario")
-def logout(
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Logout de usuario
-    
-    Nota: En esta implementación, el logout es del lado del cliente
-    (eliminar tokens del almacenamiento local).
-    
-    Para invalidar tokens del lado del servidor, se requeriría
-    implementar una blacklist de tokens en Redis o similar.
-    """
-    return {
-        "message": f"Usuario {current_user.email} cerró sesión exitosamente"
-    }
-
-
-@router.get("/verify", summary="Verificar token")
-def verify_token(
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Verifica si el token actual es válido
-    
-    Útil para verificar la sesión desde el frontend
-    """
-    return {
-        "valid": True,
-        "user_id": current_user.id,
-        "email": current_user.email,
-        "rol": "ADMIN" if current_user.is_admin else "USER"
-    }
-
-
-@router.post("/create-test-user", summary="Crear usuario de prueba")
-def create_test_user(db: Session = Depends(get_db)):
-    """
-    ENDPOINT TEMPORAL PARA CREAR USUARIO CON CONTRASEÑA CONOCIDA
-    
-    CREDENCIALES:
-    - Email: admin@rapicredit.com
-    - Password: admin123
-    - Rol: ADMIN
-    """
-    import bcrypt
-    
     try:
-        # Eliminar usuario existente si existe
-        existing_user = db.query(User).filter(User.email == "admin@rapicredit.com").first()
-        if existing_user:
-            db.delete(existing_user)
-            db.commit()
+        # Agregar headers CORS
+        add_cors_headers(request, response)
         
-        # Crear hash de contraseña desde settings
-        from app.core.config import settings
-        password_hash = get_password_hash(settings.ADMIN_PASSWORD)
+        # Verificar contraseña actual
+        if not AuthService.verify_password(password_data.current_password, current_user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Contraseña actual incorrecta"
+            )
         
-        # Crear usuario nuevo
-        new_user = User(
-            email="admin@rapicredit.com",
-            hashed_password=password_hash,
-            nombre="Admin",
-            apellido="Sistema",
-            is_admin=True,
-            is_active=True
-        )
+        # Actualizar contraseña
+        new_hashed_password = AuthService.get_password_hash(password_data.new_password)
+        current_user.hashed_password = new_hashed_password
         
-        db.add(new_user)
         db.commit()
-        db.refresh(new_user)
         
-        return {
-            "success": True,
-            "message": "Usuario de prueba creado exitosamente",
-            "credentials": {
-                "email": "admin@rapicredit.com",
-                "password": "admin123",
-                "is_admin": True
-            },
-            "user_id": new_user.id
-        }
+        logger.info(f"Contraseña cambiada para: {current_user.email}")
         
+        return {"message": "Contraseña cambiada exitosamente"}
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        db.rollback()
+        logger.error(f"Error cambiando contraseña: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creando usuario de prueba: {str(e)}"
+            detail="Error interno del servidor"
         )
+
+@router.options("/{path:path}")
+async def options_handler(request: Request, response: Response, path: str):
+    """
+    Manejar requests OPTIONS para CORS
+    """
+    add_cors_headers(request, response)
+    return {"message": "OK"}
