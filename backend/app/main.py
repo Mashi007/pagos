@@ -173,7 +173,7 @@ app.add_middleware(
 app.include_router(health.router, prefix=f"{settings.API_V1_PREFIX}", tags=["Health"])
 app.include_router(health_check.router, prefix=f"{settings.API_V1_PREFIX}", tags=["Health Check"])
 app.include_router(auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["Auth"])
-app.include_router(users.router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["Users"])
+app.include_router(users.router, prefix=f"{settings.API_V1_PREFIX}/usuarios", tags=["Usuarios"])
 app.include_router(clientes.router, prefix=f"{settings.API_V1_PREFIX}/clientes", tags=["Clientes"])
 app.include_router(prestamos.router, prefix=f"{settings.API_V1_PREFIX}/prestamos", tags=["Prestamos"])
 app.include_router(pagos.router, prefix=f"{settings.API_V1_PREFIX}/pagos", tags=["Pagos"])
