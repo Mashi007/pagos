@@ -79,10 +79,7 @@ class ApiClient {
       async (error) => {
         const originalRequest = error.config
 
-        // TEMPORALMENTE DESACTIVADO: Auto-refresh para evitar loop infinito
-        // TODO: Reimplementar con cooldown y límite de intentos
-        /*
-        // Si el token expiró, intentar renovarlo con persistencia segura
+        // Auto-refresh de tokens con protección contra loops infinitos
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true
 
@@ -93,11 +90,15 @@ class ApiClient {
               : safeGetSessionItem('refresh_token', '')
               
             if (refreshToken) {
+              console.log('🔄 Intentando renovar token expirado...')
+              
               const response = await this.client.post('/api/v1/auth/refresh', {
                 refresh_token: refreshToken,
               })
 
               const { access_token, refresh_token: newRefreshToken } = response.data
+              
+              console.log('✅ Token renovado exitosamente')
               
               // Guardar en el almacenamiento correspondiente usando funciones seguras
               if (rememberMe) {
@@ -111,16 +112,18 @@ class ApiClient {
               // Reintentar la petición original
               originalRequest.headers.Authorization = `Bearer ${access_token}`
               return this.client(originalRequest)
+            } else {
+              console.log('❌ No hay refresh token disponible')
+              throw new Error('No refresh token available')
             }
           } catch (refreshError) {
+            console.log('❌ Error renovando token, limpiando storage')
             // Si no se puede renovar el token, limpiar datos y redirigir al login
-            safeClear()
-            safeClearSession()
+            clearAuthStorage()
             window.location.href = '/login'
             return Promise.reject(refreshError)
           }
         }
-        */
 
         // Manejar otros errores
         this.handleError(error)
