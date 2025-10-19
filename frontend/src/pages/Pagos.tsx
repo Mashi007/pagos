@@ -1,267 +1,415 @@
-import { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { 
-  CreditCard, 
-  Search, 
-  Filter, 
-  Plus, 
-  Download,
-  Calendar,
+import {
+  CreditCard,
   DollarSign,
   CheckCircle,
+  Clock,
+  TrendingUp,
+  Users,
+  FileText,
+  Download,
+  Upload,
+  Plus,
+  Search,
+  Filter,
+  RefreshCw,
   AlertCircle,
-  Clock
+  Eye,
+  Edit,
+  Trash2,
+  Calendar,
+  Building2,
+  BarChart3,
 } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+import { AlertWithIcon } from '@/components/ui/alert'
+import { pagoService, type Pago, type KPIsPagos, type PagoListResponse } from '@/services/pagoService'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
+import { useNavigate } from 'react-router-dom'
 
-// Mock data para pagos
-const mockPagos = [
-  {
-    id: 1,
-    cliente: 'Juan Carlos Pérez González',
-    cedula: '12345678',
-    monto: 850.00,
-    fecha: '2024-01-15',
-    metodo: 'Transferencia',
-    estado: 'confirmado',
-    referencia: 'TXN-001234',
-    prestamo_id: 1
-  },
-  {
-    id: 2,
-    cliente: 'María Elena Rodríguez López',
-    cedula: '87654321',
-    monto: 1200.00,
-    fecha: '2024-01-15',
-    metodo: 'Efectivo',
-    estado: 'confirmado',
-    referencia: 'EFE-001235',
-    prestamo_id: 2
-  },
-  {
-    id: 3,
-    cliente: 'Carlos Alberto Martínez Silva',
-    cedula: '11223344',
-    monto: 950.00,
-    fecha: '2024-01-14',
-    metodo: 'Cheque',
-    estado: 'pendiente',
-    referencia: 'CHK-001236',
-    prestamo_id: 3
+export function PagosPage() {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [filtros, setFiltros] = useState({
+    cedula: '',
+    conciliado: undefined as boolean | undefined,
+    pagina: 1,
+    por_pagina: 20
+  })
+
+  // ============================================
+  // QUERIES
+  // ============================================
+
+  const { data: kpis, isLoading: kpisLoading, error: kpisError } = useQuery({
+    queryKey: ['pagos-kpis'],
+    queryFn: () => pagoService.obtenerKPIs(),
+    refetchInterval: 30000, // Refrescar cada 30 segundos
+  })
+
+  const { data: pagosData, isLoading: pagosLoading, error: pagosError } = useQuery({
+    queryKey: ['pagos-list', filtros],
+    queryFn: () => pagoService.listarPagos(filtros),
+    refetchInterval: 30000,
+  })
+
+  // ============================================
+  // HANDLERS
+  // ============================================
+
+  const handleNuevoPago = () => {
+    navigate('/pagos/nuevo')
   }
-]
 
-export function Pagos() {
-  const [searchTerm, setSearchTerm] = useState('')
-  const [filterEstado, setFilterEstado] = useState('')
+  const handleConciliacion = () => {
+    navigate('/pagos/conciliacion')
+  }
 
-  const getEstadoBadge = (estado: string) => {
-    switch (estado) {
-      case 'confirmado':
-        return <Badge className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" />Confirmado</Badge>
-      case 'pendiente':
-        return <Badge className="bg-yellow-100 text-yellow-800"><Clock className="w-3 h-3 mr-1" />Pendiente</Badge>
-      case 'rechazado':
-        return <Badge className="bg-red-100 text-red-800"><AlertCircle className="w-3 h-3 mr-1" />Rechazado</Badge>
-      default:
-        return <Badge variant="secondary">{estado}</Badge>
+  const handleDescargarTemplate = async () => {
+    try {
+      await pagoService.descargarTemplateConciliacion()
+      toast.success('✅ Template descargado exitosamente')
+    } catch (error) {
+      toast.error('❌ Error al descargar el template')
     }
   }
 
-  const filteredPagos = mockPagos.filter(pago => {
-    const matchesSearch = pago.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         pago.cedula.includes(searchTerm) ||
-                         pago.referencia.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesEstado = !filterEstado || pago.estado === filterEstado
-    return matchesSearch && matchesEstado
-  })
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['pagos-kpis'] })
+    queryClient.invalidateQueries({ queryKey: ['pagos-list'] })
+    toast.success('🔄 Datos actualizados')
+  }
 
-  const totalConfirmado = mockPagos
-    .filter(p => p.estado === 'confirmado')
-    .reduce((sum, p) => sum + p.monto, 0)
+  const handleFiltroChange = (key: string, value: any) => {
+    setFiltros(prev => ({
+      ...prev,
+      [key]: value,
+      pagina: 1 // Reset página al cambiar filtros
+    }))
+  }
 
-  const totalPendiente = mockPagos
-    .filter(p => p.estado === 'pendiente')
-    .reduce((sum, p) => sum + p.monto, 0)
+  const handleVerPago = (pago: Pago) => {
+    navigate(`/pagos/${pago.id}`)
+  }
+
+  const handleEditarPago = (pago: Pago) => {
+    navigate(`/pagos/${pago.id}/editar`)
+  }
+
+  // ============================================
+  // RENDER
+  // ============================================
+
+  if (kpisError || pagosError) {
+    return (
+      <div className="p-6">
+        <AlertWithIcon
+          variant="destructive"
+          title="Error cargando datos"
+          description="No se pudieron cargar los datos de pagos. Intenta nuevamente."
+        />
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <CreditCard className="h-8 w-8 text-blue-600" />
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Gestión de Pagos</h1>
-            <p className="text-gray-600 mt-1">Administra y monitorea todos los pagos del sistema</p>
+            <h1 className="text-2xl font-bold text-gray-900">Módulo de Pagos</h1>
+            <p className="text-gray-600">Gestión de pagos y conciliación bancaria</p>
           </div>
-          <Button className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="w-4 h-4 mr-2" />
+        </div>
+        <div className="flex items-center space-x-2">
+          <Button
+            onClick={handleRefresh}
+            variant="outline"
+            size="sm"
+            disabled={kpisLoading || pagosLoading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${(kpisLoading || pagosLoading) ? 'animate-spin' : ''}`} />
+            Actualizar
+          </Button>
+          <Button
+            onClick={handleDescargarTemplate}
+            variant="outline"
+            size="sm"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Template
+          </Button>
+          <Button
+            onClick={handleConciliacion}
+            variant="outline"
+            size="sm"
+          >
+            <Building2 className="h-4 w-4 mr-2" />
+            Conciliación
+          </Button>
+          <Button
+            onClick={handleNuevoPago}
+            size="sm"
+          >
+            <Plus className="h-4 w-4 mr-2" />
             Nuevo Pago
           </Button>
         </div>
-      </motion.div>
+      </div>
 
-      {/* Stats Cards */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.5 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-6"
-      >
+      {/* KPIs Dashboard */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Confirmado</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Pagos</CardTitle>
+            <CreditCard className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {kpisLoading ? '...' : kpis?.total_pagos || 0}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Registros totales
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Dólares</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ${kpisLoading ? '...' : (kpis?.total_dolares || 0).toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Monto total
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Conciliados</CardTitle>
             <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              ${totalConfirmado.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+              {kpisLoading ? '...' : kpis?.cantidad_conciliada || 0}
             </div>
-            <p className="text-xs text-gray-600">Pagos confirmados hoy</p>
+            <p className="text-xs text-muted-foreground">
+              Pagos conciliados
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-600" />
+            <Clock className="h-4 w-4 text-orange-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">
-              ${totalPendiente.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+            <div className="text-2xl font-bold text-orange-600">
+              {kpisLoading ? '...' : kpis?.cantidad_no_conciliada || 0}
             </div>
-            <p className="text-xs text-gray-600">Esperando confirmación</p>
+            <p className="text-xs text-muted-foreground">
+              Por conciliar
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Pagos</CardTitle>
-            <DollarSign className="h-4 w-4 text-blue-600" />
+            <CardTitle className="text-sm font-medium">% Conciliación</CardTitle>
+            <TrendingUp className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              {mockPagos.length}
+              {kpisLoading ? '...' : 
+                kpis?.total_pagos ? 
+                  Math.round((kpis.cantidad_conciliada / kpis.total_pagos) * 100) : 0
+              }%
             </div>
-            <p className="text-xs text-gray-600">Registros en el sistema</p>
+            <p className="text-xs text-muted-foreground">
+              Eficiencia
+            </p>
           </CardContent>
         </Card>
-      </motion.div>
+      </div>
 
-      {/* Filters */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2, duration: 0.5 }}
-      >
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Filter className="w-5 h-5 mr-2" />
-              Filtros y Búsqueda
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Buscar por cliente, cédula o referencia..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+      {/* Filtros */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Filter className="h-5 w-5" />
+            <span>Filtros</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700">Cédula</label>
+              <Input
+                placeholder="Buscar por cédula..."
+                value={filtros.cedula}
+                onChange={(e) => handleFiltroChange('cedula', e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">Estado Conciliación</label>
               <select
-                value={filterEstado}
-                onChange={(e) => setFilterEstado(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded-md"
+                value={filtros.conciliado === undefined ? '' : filtros.conciliado.toString()}
+                onChange={(e) => handleFiltroChange('conciliado', 
+                  e.target.value === '' ? undefined : e.target.value === 'true'
+                )}
               >
-                <option value="">Todos los estados</option>
-                <option value="confirmado">Confirmado</option>
-                <option value="pendiente">Pendiente</option>
-                <option value="rechazado">Rechazado</option>
+                <option value="">Todos</option>
+                <option value="true">Conciliados</option>
+                <option value="false">Pendientes</option>
               </select>
-              <Button variant="outline" className="flex items-center">
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">Por página</label>
+              <select
+                className="w-full p-2 border border-gray-300 rounded-md"
+                value={filtros.por_pagina}
+                onChange={(e) => handleFiltroChange('por_pagina', parseInt(e.target.value))}
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Lista de Pagos */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <FileText className="h-5 w-5" />
+              <span>Lista de Pagos</span>
+            </div>
+            <Badge variant="outline">
+              {pagosData?.total || 0} registros
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {pagosLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+              <span>Cargando pagos...</span>
+            </div>
+          ) : pagosData?.pagos.length === 0 ? (
+            <div className="text-center py-8">
+              <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay pagos</h3>
+              <p className="text-gray-600 mb-4">No se encontraron pagos con los filtros aplicados.</p>
+              <Button onClick={handleNuevoPago}>
+                <Plus className="h-4 w-4 mr-2" />
+                Crear Primer Pago
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Pagos List */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3, duration: 0.5 }}
-      >
-        <Card>
-          <CardHeader>
-            <CardTitle>Registro de Pagos</CardTitle>
-            <CardDescription>
-              Lista de todos los pagos registrados en el sistema
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+          ) : (
             <div className="space-y-4">
-              {filteredPagos.map((pago) => (
-                <div key={pago.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3">
-                        <CreditCard className="w-5 h-5 text-blue-600" />
-                        <div>
-                          <h3 className="font-semibold text-gray-900">{pago.cliente}</h3>
-                          <p className="text-sm text-gray-600">Cédula: {pago.cedula}</p>
-                        </div>
+              {pagosData?.pagos.map((pago) => (
+                <motion.div
+                  key={pago.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="flex-shrink-0">
+                        <div className={`w-3 h-3 rounded-full ${
+                          pago.conciliado ? 'bg-green-500' : 'bg-orange-500'
+                        }`} />
                       </div>
-                      <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <span className="text-gray-500">Monto:</span>
-                          <p className="font-medium">${pago.monto.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-500">Método:</span>
-                          <p className="font-medium">{pago.metodo}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-500">Fecha:</span>
-                          <p className="font-medium">{new Date(pago.fecha).toLocaleDateString('es-ES')}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-500">Referencia:</span>
-                          <p className="font-medium">{pago.referencia}</p>
-                        </div>
+                      <div>
+                        <h3 className="font-medium text-gray-900">
+                          Cédula: {pago.cedula_cliente}
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          Documento: {pago.numero_documento}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {new Date(pago.fecha_pago).toLocaleDateString()} - 
+                          ${pago.monto_pagado.toLocaleString()}
+                        </p>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-3">
-                      {getEstadoBadge(pago.estado)}
-                      <Button variant="outline" size="sm">
-                        Ver Detalles
-                      </Button>
+                    <div className="flex items-center space-x-2">
+                      <Badge variant={pago.conciliado ? "success" : "warning"}>
+                        {pago.conciliado ? 'Conciliado' : 'Pendiente'}
+                      </Badge>
+                      <div className="flex space-x-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleVerPago(pago)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditarPago(pago)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               ))}
-              
-              {filteredPagos.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <CreditCard className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                  <p>No se encontraron pagos con los filtros aplicados</p>
-                </div>
-              )}
             </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+          )}
+
+          {/* Paginación */}
+          {pagosData && pagosData.total_paginas > 1 && (
+            <div className="flex items-center justify-between mt-6">
+              <div className="text-sm text-gray-700">
+                Mostrando {((filtros.pagina - 1) * filtros.por_pagina) + 1} a{' '}
+                {Math.min(filtros.pagina * filtros.por_pagina, pagosData.total)} de{' '}
+                {pagosData.total} registros
+              </div>
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleFiltroChange('pagina', filtros.pagina - 1)}
+                  disabled={filtros.pagina === 1}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleFiltroChange('pagina', filtros.pagina + 1)}
+                  disabled={filtros.pagina === pagosData.total_paginas}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

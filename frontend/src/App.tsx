@@ -15,6 +15,8 @@ import { Dashboard } from '@/pages/Dashboard'
 import { Clientes } from '@/pages/Clientes'
 import { Prestamos } from '@/pages/Prestamos'
 import { Pagos } from '@/pages/Pagos'
+import { NuevoPago } from '@/pages/NuevoPago'
+import { ConciliacionBancaria } from '@/pages/ConciliacionBancaria'
 import { Amortizacion } from '@/pages/Amortizacion'
 import { Conciliacion } from '@/pages/Conciliacion'
 import { Reportes } from '@/pages/Reportes'
@@ -113,8 +115,11 @@ function App() {
           />
 
           {/* Pagos */}
-          <Route path="pagos" element={<PagosPage />} />
-          <Route path="pagos/nuevo" element={<PagosPage />} />
+          <Route path="pagos" element={<Pagos />} />
+          <Route path="pagos/nuevo" element={<NuevoPago />} />
+          <Route path="pagos/conciliacion" element={<ConciliacionBancaria />} />
+          <Route path="pagos/:id" element={<Pagos />} />
+          <Route path="pagos/:id/editar" element={<NuevoPago />} />
 
           {/* Amortización */}
           <Route path="amortizacion" element={<AmortizacionPage />} />
