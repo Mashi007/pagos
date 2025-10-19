@@ -293,7 +293,7 @@ def crear_cliente(
         # 4. VALIDAR EMAIL
         if cliente_data.email:
             from app.services.validators_service import ValidadorEmail
-            validacion_email = ValidadorEmail.validar_y_formatear_email(cliente_data.email)
+            validacion_email = ValidadorEmail.validar_email(cliente_data.email)
             if not validacion_email["valido"]:
                 raise HTTPException(
                     status_code=400, 
