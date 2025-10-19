@@ -33,7 +33,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
 
-export function PagosPage() {
+export function Pagos() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [filtros, setFiltros] = useState({

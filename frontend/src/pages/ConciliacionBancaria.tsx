@@ -50,7 +50,7 @@ interface DesconciliacionForm {
   nota: string
 }
 
-export function ConciliacionBancariaPage() {
+export function ConciliacionBancaria() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)

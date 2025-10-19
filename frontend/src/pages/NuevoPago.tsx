@@ -36,6 +36,7 @@ interface ExcelRow {
   monto_pagado: string
   numero_documento: string
   notas?: string
+  [key: string]: any // Agregar index signature
 }
 
 interface ValidatedRow extends ExcelRow {
@@ -44,7 +45,7 @@ interface ValidatedRow extends ExcelRow {
   originalIndex: number
 }
 
-export function NuevoPagoPage() {
+export function NuevoPago() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)

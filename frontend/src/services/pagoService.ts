@@ -1,4 +1,4 @@
-import { api } from './api'
+import { apiClient } from './api'
 
 export interface Pago {
   id: number
@@ -125,7 +125,7 @@ class PagoService {
   // ============================================
 
   async crearPago(pago: PagoCreate): Promise<Pago> {
-    const response = await api.post(`${this.baseUrl}/crear`, pago)
+    const response = await apiClient.post(`${this.baseUrl}/crear`, pago)
     return response.data
   }
 
@@ -135,22 +135,22 @@ class PagoService {
     cedula?: string
     conciliado?: boolean
   }): Promise<PagoListResponse> {
-    const response = await api.get(this.baseUrl + '/listar', { params })
+    const response = await apiClient.get(this.baseUrl + '/listar', { params })
     return response.data
   }
 
   async obtenerPago(id: number): Promise<Pago> {
-    const response = await api.get(`${this.baseUrl}/${id}`)
+    const response = await apiClient.get(`${this.baseUrl}/${id}`)
     return response.data
   }
 
   async actualizarPago(id: number, pago: PagoUpdate): Promise<Pago> {
-    const response = await api.put(`${this.baseUrl}/${id}`, pago)
+    const response = await apiClient.put(`${this.baseUrl}/${id}`, pago)
     return response.data
   }
 
   async eliminarPago(id: number): Promise<void> {
-    await api.delete(`${this.baseUrl}/${id}`)
+    await apiClient.delete(`${this.baseUrl}/${id}`)
   }
 
   // ============================================
@@ -158,12 +158,12 @@ class PagoService {
   // ============================================
 
   async obtenerKPIs(): Promise<KPIsPagos> {
-    const response = await api.get(`${this.baseUrl}/kpis`)
+    const response = await apiClient.get(`${this.baseUrl}/kpis`)
     return response.data
   }
 
   async obtenerResumenCliente(cedula: string): Promise<ResumenCliente> {
-    const response = await api.get(`${this.baseUrl}/resumen-cliente/${cedula}`)
+    const response = await apiClient.get(`${this.baseUrl}/resumen-cliente/${cedula}`)
     return response.data
   }
 
@@ -182,7 +182,7 @@ class PagoService {
     const formData = new FormData()
     formData.append('file', file)
 
-    const response = await api.post(`${this.baseUrl}/subir-documento`, formData, {
+    const response = await apiClient.post(`${this.baseUrl}/subir-documento`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -196,7 +196,7 @@ class PagoService {
     content_type: string
     download_url: string
   }> {
-    const response = await api.get(`${this.baseUrl}/descargar-documento/${filename}`)
+    const response = await apiClient.get(`${this.baseUrl}/descargar-documento/${filename}`)
     return response.data
   }
 
@@ -210,7 +210,7 @@ class PagoService {
     filename: string
     content: ArrayBuffer
   }> {
-    const response = await api.get(`${this.conciliacionUrl}/template-conciliacion`)
+    const response = await apiClient.get(`${this.conciliacionUrl}/template-conciliacion`)
     return response.data
   }
 
@@ -218,7 +218,7 @@ class PagoService {
     const formData = new FormData()
     formData.append('file', file)
 
-    const response = await api.post(`${this.conciliacionUrl}/procesar-conciliacion`, formData, {
+    const response = await apiClient.post(`${this.conciliacionUrl}/procesar-conciliacion`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -227,12 +227,12 @@ class PagoService {
   }
 
   async desconciliarPago(conciliacion: ConciliacionCreate): Promise<ConciliacionResponse> {
-    const response = await api.post(`${this.conciliacionUrl}/desconciliar-pago`, conciliacion)
+    const response = await apiClient.post(`${this.conciliacionUrl}/desconciliar-pago`, conciliacion)
     return response.data
   }
 
   async obtenerEstadoConciliacion(): Promise<EstadoConciliacion> {
-    const response = await api.get(`${this.conciliacionUrl}/estado-conciliacion`)
+    const response = await apiClient.get(`${this.conciliacionUrl}/estado-conciliacion`)
     return response.data
   }
 
@@ -242,7 +242,7 @@ class PagoService {
 
   async validarCedula(cedula: string): Promise<{ valido: boolean; mensaje?: string }> {
     try {
-      const response = await api.get(`/api/v1/validadores/cedula/${cedula}`)
+      const response = await apiClient.get(`/api/v1/validadores/cedula/${cedula}`)
       return response.data
     } catch (error) {
       return { valido: false, mensaje: 'Error validando cédula' }
@@ -251,7 +251,7 @@ class PagoService {
 
   async validarMonto(monto: number): Promise<{ valido: boolean; mensaje?: string }> {
     try {
-      const response = await api.get(`/api/v1/validadores/monto/${monto}`)
+      const response = await apiClient.get(`/api/v1/validadores/monto/${monto}`)
       return response.data
     } catch (error) {
       return { valido: false, mensaje: 'Error validando monto' }
@@ -260,7 +260,7 @@ class PagoService {
 
   async validarFecha(fecha: string): Promise<{ valido: boolean; mensaje?: string }> {
     try {
-      const response = await api.get(`/api/v1/validadores/fecha/${fecha}`)
+      const response = await apiClient.get(`/api/v1/validadores/fecha/${fecha}`)
       return response.data
     } catch (error) {
       return { valido: false, mensaje: 'Error validando fecha' }
@@ -273,7 +273,7 @@ class PagoService {
 
   async descargarTemplateConciliacion(): Promise<void> {
     try {
-      const response = await api.get(`${this.conciliacionUrl}/template-conciliacion`, {
+      const response = await apiClient.get(`${this.conciliacionUrl}/template-conciliacion`, {
         responseType: 'blob'
       })
       
