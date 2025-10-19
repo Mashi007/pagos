@@ -574,8 +574,8 @@ export function CrearClienteForm({ onClose, onSuccess, onClienteCreated }: Crear
                     value: modelo.nombre,
                     label: modelo.nombre
                   }))}
-                  value={formData.modeloVehiculo}
-                  onValueChange={(value) => handleInputChange('modeloVehiculo', value)}
+                  value={formData.modeloVehiculo || ''}
+                  onChange={(value) => handleInputChange('modeloVehiculo', value)}
                   placeholder="Buscar modelo de vehículo..."
                   className={getFieldValidation('modeloVehiculo')?.isValid === false ? 'border-red-500' : ''}
                 />

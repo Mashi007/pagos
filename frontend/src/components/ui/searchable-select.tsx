@@ -9,7 +9,7 @@ const cn = (...classes: (string | undefined | null | false)[]): string => {
 interface SearchableSelectProps {
   options: Array<{ value: string; label: string }>
   value: string
-  onValueChange: (value: string) => void
+  onChange: (value: string) => void
   placeholder?: string
   className?: string
   disabled?: boolean
@@ -18,7 +18,7 @@ interface SearchableSelectProps {
 export function SearchableSelect({
   options,
   value,
-  onValueChange,
+  onChange,
   placeholder = "Buscar...",
   className,
   disabled = false
@@ -60,7 +60,7 @@ export function SearchableSelect({
 
   // Manejar selección de opción
   const handleSelect = (option: { value: string; label: string }) => {
-    onValueChange(option.value)
+    onChange(option.value)
     setIsOpen(false)
     setSearchTerm('')
   }
