@@ -10,14 +10,6 @@ class Analista(Base):
     nombre = Column(String(255), nullable=False, index=True)  # Nombre completo (incluye apellido)
     activo = Column(Boolean, default=True, nullable=False)
     
-    # Columnas adicionales (se agregarán con migración)
-    apellido = Column(String(255), default='', nullable=True)
-    email = Column(String(255), unique=True, nullable=True)
-    telefono = Column(String(20), nullable=True)
-    especialidad = Column(String(255), nullable=True)
-    comision_porcentaje = Column(Integer, nullable=True)
-    notas = Column(Text, nullable=True)
-    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -55,13 +47,13 @@ class Analista(Base):
         return {
             "id": self.id,
             "nombre": self.nombre,
-            "apellido": getattr(self, 'apellido', ''),
-            "email": getattr(self, 'email', ''),
-            "telefono": getattr(self, 'telefono', ''),
-            "especialidad": getattr(self, 'especialidad', ''),
-            "comision_porcentaje": getattr(self, 'comision_porcentaje', 0),
+            "apellido": self.apellido,
+            "email": "",
+            "telefono": "",
+            "especialidad": "",
+            "comision_porcentaje": 0,
             "activo": self.activo,
-            "notas": getattr(self, 'notas', ''),
+            "notas": "",
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }

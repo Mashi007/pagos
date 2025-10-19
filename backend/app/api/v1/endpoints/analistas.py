@@ -29,22 +29,18 @@ def test_analistas_no_auth(
     Test endpoint sin autenticación para verificar analistas
     """
     try:
-        # Usar consulta SQL directa para evitar problemas con columnas faltantes
-        result = db.execute(text("SELECT id, nombre, activo, created_at FROM analistas LIMIT 5"))
-        analistas_rows = result.fetchall()
-        
-        total_result = db.execute(text("SELECT COUNT(*) as total FROM analistas"))
-        total_analistas = total_result.fetchone()[0]
+        total_analistas = db.query(Analista).count()
+        analistas = db.query(Analista).limit(5).all()
         
         analistas_data = []
-        for row in analistas_rows:
+        for analista in analistas:
             analistas_data.append({
-                "id": row[0],
-                "nombre": row[1],
-                "primer_nombre": row[1].split()[0] if row[1] else "",
-                "apellido": " ".join(row[1].split()[1:]) if row[1] and len(row[1].split()) > 1 else "",
-                "activo": row[2],
-                "created_at": row[3].isoformat() if row[3] else None
+                "id": analista.id,
+                "nombre": analista.nombre,
+                "primer_nombre": analista.primer_nombre,
+                "apellido": analista.apellido,
+                "activo": analista.activo,
+                "created_at": analista.created_at.isoformat() if analista.created_at else None
             })
         
         return {
