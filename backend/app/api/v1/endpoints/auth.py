@@ -19,6 +19,7 @@ from app.schemas.auth import (
 )
 from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
+from app.core.security import create_access_token, verify_password, get_password_hash
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,13 @@ async def login(
             )
         
         # Generar token
-        access_token = AuthService.create_access_token(data={"sub": user.email})
+        access_token = create_access_token(
+            subject=user.id,
+            additional_claims={
+                "is_admin": user.is_admin,
+                "email": user.email
+            }
+        )
         
         logger.info(f"Login exitoso para: {login_data.email}")
         
@@ -164,7 +171,13 @@ async def refresh_token(
             )
         
         # Generar nuevo token
-        access_token = AuthService.create_access_token(data={"sub": user.email})
+        access_token = create_access_token(
+            subject=user.id,
+            additional_claims={
+                "is_admin": user.is_admin,
+                "email": user.email
+            }
+        )
         
         return Token(access_token=access_token, token_type="bearer")
         
@@ -193,14 +206,14 @@ async def change_password(
         add_cors_headers(request, response)
         
         # Verificar contraseña actual
-        if not AuthService.verify_password(password_data.current_password, current_user.hashed_password):
+        if not verify_password(password_data.current_password, current_user.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Contraseña actual incorrecta"
             )
         
         # Actualizar contraseña
-        new_hashed_password = AuthService.get_password_hash(password_data.new_password)
+        new_hashed_password = get_password_hash(password_data.new_password)
         current_user.hashed_password = new_hashed_password
         
         db.commit()
