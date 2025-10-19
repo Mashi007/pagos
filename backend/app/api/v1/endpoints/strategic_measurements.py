@@ -12,7 +12,13 @@ import time
 import asyncio
 from collections import defaultdict, deque
 import threading
-import psutil
+# Import condicional de psutil
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    psutil = None
 import os
 
 from app.db.session import get_db
@@ -129,10 +135,10 @@ class StrategicMeasurements:
                 'timestamp': datetime.now(),
                 'category': 'system_performance',
                 'metrics': {
-                    'memory_usage': psutil.virtual_memory().percent,
-                    'cpu_usage': psutil.cpu_percent(),
-                    'disk_usage': psutil.disk_usage('/').percent,
-                    'process_count': len(psutil.pids()),
+                    'memory_usage': psutil.virtual_memory().percent if PSUTIL_AVAILABLE else 0,
+                    'cpu_usage': psutil.cpu_percent() if PSUTIL_AVAILABLE else 0,
+                    'disk_usage': psutil.disk_usage('/').percent if PSUTIL_AVAILABLE else 0,
+                    'process_count': len(psutil.pids()) if PSUTIL_AVAILABLE else 0,
                     'load_average': os.getloadavg() if hasattr(os, 'getloadavg') else [0, 0, 0]
                 }
             }
