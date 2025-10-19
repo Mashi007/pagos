@@ -20,7 +20,6 @@ from app.models.analista import Analista
 from app.models.cliente import Cliente
 import logging
 from openpyxl import Workbook
-from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.styles import Font
 from datetime import datetime
 import io
@@ -141,30 +140,8 @@ async def generar_plantilla_clientes_dinamica(
         ]
         ws_template.append(headers)
         
-        # VALIDACIONES SIMPLES - SOLO ESTADO Y ACTIVO
-        # Removemos validaciones complejas que pueden corromper el archivo
-        
-        # Validación simple para estado (columna L)
-        dv_estado = DataValidation(
-            type="list",
-            formula1='"ACTIVO,INACTIVO,FINALIZADO"',
-            showDropDown=True
-        )
-        dv_estado.error = "Seleccione: ACTIVO, INACTIVO o FINALIZADO"
-        dv_estado.errorTitle = "Estado inválido"
-        dv_estado.add('L2:L101')
-        ws_template.add_data_validation(dv_estado)
-        
-        # Validación simple para activo (columna M)
-        dv_activo = DataValidation(
-            type="list",
-            formula1='"TRUE,FALSE"',
-            showDropDown=True
-        )
-        dv_activo.error = "Seleccione: TRUE o FALSE"
-        dv_activo.errorTitle = "Valor inválido"
-        dv_activo.add('M2:M101')
-        ws_template.add_data_validation(dv_activo)
+        # SIN VALIDACIONES COMPLEJAS PARA EVITAR PROBLEMAS DE COMPATIBILIDAD
+        # Las validaciones se harán en el backend al procesar el archivo
         
         # HOJA 3: REFERENCIAS - LISTAS PARA COPIAR Y PEGAR
         ws_referencias = wb.create_sheet("Referencias")
@@ -211,19 +188,39 @@ async def generar_plantilla_clientes_dinamica(
         ws_referencias.column_dimensions['C'].width = 25
         ws_referencias.column_dimensions['D'].width = 15
         
-        # GUARDAR EN BUFFER
+        # GUARDAR EN BUFFER CON CONFIGURACIÓN MEJORADA
         excel_buffer = io.BytesIO()
-        wb.save(excel_buffer)
-        excel_buffer.seek(0)
         
-        # CONFIGURAR RESPUESTA
-        response.headers["Content-Disposition"] = "attachment; filename=plantilla_clientes_dinamica.xlsx"
+        try:
+            # Guardar con configuración específica para compatibilidad
+            wb.save(excel_buffer)
+            excel_buffer.seek(0)
+            
+            # Obtener contenido del buffer
+            excel_content = excel_buffer.getvalue()
+            
+            # Verificar que el contenido no esté vacío
+            if len(excel_content) == 0:
+                raise Exception("El archivo Excel generado está vacío")
+            
+            logger.info(f"Archivo Excel generado - Tamaño: {len(excel_content)} bytes")
+            
+        except Exception as save_error:
+            logger.error(f"Error guardando Excel: {save_error}")
+            raise Exception(f"Error al generar archivo Excel: {save_error}")
+        
+        # CONFIGURAR RESPUESTA CON HEADERS CORRECTOS
+        filename = f"Plantilla_Clientes_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+        
+        response.headers["Content-Disposition"] = f"attachment; filename=\"{filename}\""
         response.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        response.headers["Content-Length"] = str(len(excel_content))
+        response.headers["Cache-Control"] = "no-cache"
         
-        logger.info(f"Plantilla generada exitosamente - Modelos: {len(modelos_nombres)}, Concesionarios: {len(concesionarios_nombres)}, Analistas: {len(analistas_nombres)}")
+        logger.info(f"Plantilla generada exitosamente - Archivo: {filename}, Tamaño: {len(excel_content)} bytes")
         
         return Response(
-            content=excel_buffer.getvalue(),
+            content=excel_content,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
         
