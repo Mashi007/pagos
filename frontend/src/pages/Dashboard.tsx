@@ -31,7 +31,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { formatCurrency, formatPercentage } from '@/utils'
 import { apiClient } from '@/services/api'
-import { usuarioService, Usuario } from '@/services/usuarioService'
+import { userService, User } from '@/services/userService'
 
 // Tipos para Dashboard
 interface DashboardData {
@@ -152,7 +152,7 @@ export function Dashboard() {
   const canViewAllClients = true // Todos pueden ver todos los clientes
 
   // Estados para datos reales
-  const [usuarios, setUsuarios] = useState<Usuario[]>([])
+  const [usuarios, setUsuarios] = useState<User[]>([])
   const [usuariosLoading, setUsuariosLoading] = useState(true)
   const [usuariosError, setUsuariosError] = useState<string | null>(null)
   const [periodo, setPeriodo] = useState('mes')
@@ -164,7 +164,7 @@ export function Dashboard() {
       try {
         setUsuariosLoading(true)
         setUsuariosError(null)
-        const response = await usuarioService.listarUsuarios({ limit: 100 })
+        const response = await userService.listarUsuarios(1, 100)
         if (response.items && Array.isArray(response.items)) {
           setUsuarios(response.items)
         } else {
