@@ -61,7 +61,9 @@ from app.api.v1.endpoints import (
     experimental_tests,
     comparative_analysis,
     temporal_analysis,
-    architectural_analysis
+    architectural_analysis,
+    intermittent_failure_analyzer,
+    realtime_specific_monitor
 )
 
 # Configurar logging robusto
@@ -219,6 +221,8 @@ app.include_router(experimental_tests.router, prefix=f"{settings.API_V1_PREFIX}/
 app.include_router(comparative_analysis.router, prefix=f"{settings.API_V1_PREFIX}/comparative", tags=["Análisis Comparativo"])
 app.include_router(temporal_analysis.router, prefix=f"{settings.API_V1_PREFIX}/temporal", tags=["Análisis Temporal"])
 app.include_router(architectural_analysis.router, prefix=f"{settings.API_V1_PREFIX}/architectural", tags=["Análisis Arquitectural"])
+app.include_router(intermittent_failure_analyzer.router, prefix=f"{settings.API_V1_PREFIX}/intermittent", tags=["Análisis Intermitente"])
+app.include_router(realtime_specific_monitor.router, prefix=f"{settings.API_V1_PREFIX}/realtime", tags=["Monitor Tiempo Real Específico"])
 # app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])  # Removido - se usarán datos reales
 
 

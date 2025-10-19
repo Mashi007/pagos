@@ -48,7 +48,9 @@ from . import (
     experimental_tests,
     comparative_analysis,
     temporal_analysis,
-    architectural_analysis
+    architectural_analysis,
+    intermittent_failure_analyzer,
+    realtime_specific_monitor
 )
 
 __all__ = [
@@ -95,5 +97,7 @@ __all__ = [
     "experimental_tests",
     "comparative_analysis",
     "temporal_analysis",
-    "architectural_analysis"
+    "architectural_analysis",
+    "intermittent_failure_analyzer",
+    "realtime_specific_monitor"
 ]
