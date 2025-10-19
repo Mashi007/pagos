@@ -138,7 +138,7 @@ class Notificacion(Base):
     
     # Relaciones
     user = relationship("User", back_populates="notificaciones")
-    cliente = relationship("Cliente", back_populates="notificaciones")
+    # cliente = relationship("Cliente", back_populates="notificaciones")  # COMENTADO: Tabla notificaciones vacía
     
     def __repr__(self):
         return f"<Notificacion {self.tipo.value} - {self.categoria.value} - {self.estado.value}>"

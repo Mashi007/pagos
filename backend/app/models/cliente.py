@@ -36,5 +36,14 @@ class Cliente(Base):
     fecha_registro = Column(TIMESTAMP, nullable=True, default=func.now())
     fecha_actualizacion = Column(TIMESTAMP, nullable=True, default=func.now(), onupdate=func.now())
     
+    # ============================================
+    # RELACIONES CON OTROS MODELOS
+    # ============================================
+    # Relación con analistas (tabla analistas SÍ tiene datos)
+    asesor_config_rel = relationship("Analista", back_populates="clientes")
+    
+    # NOTA: Otras relaciones comentadas porque las tablas relacionadas no tienen datos
+    # prestamos = relationship("Prestamo", back_populates="cliente", cascade="all, delete-orphan")
+    
     def __repr__(self):
         return f"<Cliente(id={self.id}, cedula='{self.cedula}', nombres='{self.nombres}', apellidos='{self.apellidos}')>"

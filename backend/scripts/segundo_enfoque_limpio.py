@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+"""
+Segundo enfoque de diagnóstico - Sin emojis para evitar errores de encoding
+"""
+import requests
+import json
+import sys
+import os
+import time
+
+# Agregar el directorio del proyecto al path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+BASE_URL = "https://pagos-f2qf.onrender.com"
+
+def segundo_enfoque_limpio():
+    """Segundo enfoque: Análisis profundo sin emojis"""
+    print("=== SEGUNDO ENFOQUE DE DIAGNOSTICO - CAUSA RAIZ ===")
+    
+    try:
+        # 1. Verificar estado de todos los endpoints críticos
+        print("\n1. VERIFICACION COMPLETA DE ENDPOINTS:")
+        endpoints_criticos = [
+            ("GET", "/", "Conectividad basica"),
+            ("GET", "/api/v1/clientes/ping", "Clientes funcionando"),
+            ("GET", "/api/v1/auth/login", "Auth GET (deberia ser 405)"),
+            ("POST", "/api/v1/auth/login", "Auth POST (problema principal)"),
+            ("GET", "/api/v1/auth/me", "Auth me (requiere token)"),
+            ("GET", "/api/v1/usuarios/", "Usuarios (requiere auth)"),
+            ("GET", "/api/v1/validadores/ping", "Validadores"),
+            ("GET", "/api/v1/carga-masiva/dashboard", "Carga masiva")
+        ]
+        
+        for metodo, endpoint, descripcion in endpoints_criticos:
+            try:
+                if metodo == "GET":
+                    response = requests.get(f"{BASE_URL}{endpoint}", timeout=10)
+                elif metodo == "POST":
+                    response = requests.post(f"{BASE_URL}{endpoint}", json={}, timeout=10)
+                
+                print(f"   {metodo} {endpoint}: {response.status_code} - {descripcion}")
+                
+                if response.status_code == 503:
+                    print(f"      ERROR 503: {response.text}")
+                elif response.status_code == 200:
+                    print(f"      OK")
+                elif response.status_code == 405:
+                    print(f"      Method Not Allowed (esperado)")
+                elif response.status_code == 403:
+                    print(f"      Forbidden (requiere auth)")
+                elif response.status_code == 404:
+                    print(f"      Not Found")
+                    
+            except Exception as e:
+                print(f"   {metodo} {endpoint}: ERROR - {e}")
+        
+        # 2. Análisis específico del error 503 en auth
+        print("\n2. ANALISIS ESPECIFICO DEL ERROR 503 EN AUTH:")
+        
+        # Probar diferentes variaciones del endpoint de auth
+        variaciones_auth = [
+            ("POST", "/api/v1/auth/login", "{}", "JSON vacio"),
+            ("POST", "/api/v1/auth/login", '{"email": "test"}', "Solo email"),
+            ("POST", "/api/v1/auth/login", '{"password": "test"}', "Solo password"),
+            ("POST", "/api/v1/auth/login", '{"email": "test@test.com", "password": "test"}', "Credenciales de prueba"),
+            ("POST", "/api/v1/auth/login", '{"email": "itmaster@rapicreditca.com", "password": "R@pi_2025**"}', "Credenciales reales")
+        ]
+        
+        for metodo, endpoint, data, descripcion in variaciones_auth:
+            try:
+                response = requests.post(f"{BASE_URL}{endpoint}", json=json.loads(data), timeout=10)
+                print(f"   {descripcion}: {response.status_code}")
+                if response.status_code == 503:
+                    print(f"      Error: {response.text}")
+                elif response.status_code == 401:
+                    print(f"      Unauthorized (esperado para credenciales incorrectas)")
+                elif response.status_code == 422:
+                    print(f"      Validation Error (esperado para datos incompletos)")
+                elif response.status_code == 200:
+                    print(f"      LOGIN EXITOSO!")
+                    
+            except Exception as e:
+                print(f"   {descripcion}: ERROR - {e}")
+        
+        # 3. Verificar si el problema es específico del módulo auth
+        print("\n3. VERIFICACION DE MODULOS ESPECIFICOS:")
+        
+        # Probar endpoints que NO requieren auth
+        endpoints_sin_auth = [
+            "/api/v1/clientes/ping",
+            "/api/v1/validadores/ping",
+            "/api/v1/carga-masiva/ping"
+        ]
+        
+        for endpoint in endpoints_sin_auth:
+            try:
+                response = requests.get(f"{BASE_URL}{endpoint}", timeout=10)
+                print(f"   {endpoint}: {response.status_code}")
+                if response.status_code == 200:
+                    print(f"      Funcionando")
+                elif response.status_code == 404:
+                    print(f"      No existe")
+                else:
+                    print(f"      Status inesperado")
+                    
+            except Exception as e:
+                print(f"   {endpoint}: ERROR - {e}")
+        
+        # 4. Verificar si el problema es de base de datos
+        print("\n4. VERIFICACION DE BASE DE DATOS:")
+        
+        # Probar endpoints que requieren DB pero no auth
+        try:
+            response = requests.get(f"{BASE_URL}/api/v1/clientes/count", timeout=10)
+            print(f"   /api/v1/clientes/count: {response.status_code}")
+            if response.status_code == 403:
+                print(f"      Requiere autenticacion (esperado)")
+            elif response.status_code == 200:
+                print(f"      Base de datos funcionando")
+            elif response.status_code == 503:
+                print(f"      Error de base de datos: {response.text}")
+                
+        except Exception as e:
+            print(f"   Error verificando DB: {e}")
+        
+        # 5. Análisis de timing
+        print("\n5. ANALISIS DE TIMING:")
+        
+        tiempos = []
+        for i in range(3):
+            try:
+                start_time = time.time()
+                response = requests.post(f"{BASE_URL}/api/v1/auth/login", json={}, timeout=15)
+                end_time = time.time()
+                tiempo = end_time - start_time
+                tiempos.append(tiempo)
+                print(f"   Intento {i+1}: {response.status_code} en {tiempo:.2f}s")
+            except Exception as e:
+                print(f"   Intento {i+1}: ERROR - {e}")
+        
+        if tiempos:
+            tiempo_promedio = sum(tiempos) / len(tiempos)
+            print(f"   Tiempo promedio: {tiempo_promedio:.2f}s")
+            
+            if tiempo_promedio > 10:
+                print(f"   TIMEOUT: El servidor esta tardando mucho en responder")
+            elif tiempo_promedio > 5:
+                print(f"   LENTO: El servidor esta respondiendo lentamente")
+            else:
+                print(f"   RAPIDO: El servidor responde rapidamente")
+        
+        # 6. Verificar si el problema persiste después del despliegue
+        print("\n6. VERIFICACION POST-DESPLIEGUE:")
+        
+        # Esperar un poco y probar de nuevo
+        print("   Esperando 30 segundos para verificar si el despliegue se completo...")
+        time.sleep(30)
+        
+        try:
+            response = requests.post(f"{BASE_URL}/api/v1/auth/login", json={'email': 'itmaster@rapicreditca.com', 'password': 'R@pi_2025**'}, timeout=10)
+            print(f"   Auth POST despues de espera: {response.status_code}")
+            if response.status_code == 200:
+                print(f"      LOGIN FUNCIONANDO!")
+            elif response.status_code == 503:
+                print(f"      ERROR 503 PERSISTE: {response.text}")
+            else:
+                print(f"      Status inesperado: {response.text}")
+                
+        except Exception as e:
+            print(f"   Error en verificacion post-despliegue: {e}")
+        
+        # 7. Conclusiones
+        print("\n=== CONCLUSIONES DEL SEGUNDO ENFOQUE ===")
+        print("Si TODOS los endpoints dan 503, el problema es del servidor completo.")
+        print("Si SOLO auth da 503, el problema es especifico del modulo de autenticacion.")
+        print("Si auth da 503 pero otros endpoints funcionan, el problema es de dependencias.")
+        print("Si el tiempo de respuesta es >10s, el problema es de recursos del servidor.")
+        print("Si el error persiste despues de 30s, el despliegue no se completo o hay otro problema.")
+        
+    except Exception as e:
+        print(f"Error en segundo enfoque: {e}")
+
+if __name__ == "__main__":
+    segundo_enfoque_limpio()
