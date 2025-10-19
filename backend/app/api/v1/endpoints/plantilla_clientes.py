@@ -47,11 +47,21 @@ async def generar_plantilla_clientes_dinamica(
         
         # Modelos de vehículos
         modelos_db = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo == True).all()
-        modelos_vehiculos = [modelo.nombre for modelo in modelos_db if modelo.nombre]
+        modelos_vehiculos = [modelo.modelo for modelo in modelos_db if modelo.modelo]
         
-        # Concesionarios
-        concesionarios_db = db.query(Concesionario).filter(Concesionario.activo == True).all()
-        concesionarios = [concesionario.nombre for concesionario in concesionarios_db if concesionario.nombre]
+        # Concesionarios - TABLA VACÍA, usar valores por defecto
+        concesionarios_db = db.query(Concesionario).all()
+        if concesionarios_db:
+            concesionarios = [f"Concesionario {c.id}" for c in concesionarios_db]
+        else:
+            # Valores por defecto ya que la tabla está vacía
+            concesionarios = [
+                "AutoMax Quito Norte",
+                "AutoCenter Guayaquil Centro", 
+                "CarDealer Cuenca Sur",
+                "AutoShop Ambato Centro",
+                "MotorCity Manta Puerto"
+            ]
         
         # Analistas
         analistas_db = db.query(Analista).filter(Analista.activo == True).all()
