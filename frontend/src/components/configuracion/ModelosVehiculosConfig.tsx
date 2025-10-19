@@ -86,7 +86,7 @@ export function ModelosVehiculosConfig() {
   const handleEdit = (modelo: ModeloVehiculo) => {
     setEditingModelo(modelo)
     setFormData({
-      nombre: modelo.nombre,
+      modelo: modelo.modelo,  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
       activo: modelo.activo
     })
     setShowForm(true)
@@ -108,7 +108,7 @@ export function ModelosVehiculosConfig() {
 
   const resetForm = () => {
     setFormData({
-      nombre: '',
+      modelo: '',  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
       activo: true
     })
     setEditingModelo(null)
@@ -117,7 +117,7 @@ export function ModelosVehiculosConfig() {
   }
 
   const filteredModelos = modelos.filter(modelo =>
-    (modelo.nombre && modelo.nombre.toLowerCase().includes(searchTerm.toLowerCase()))
+    (modelo.modelo && modelo.modelo.toLowerCase().includes(searchTerm.toLowerCase()))  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
   )
 
   if (loading) {

@@ -94,7 +94,7 @@ export function ModelosVehiculos() {
 
   // Filtrar modelos por término de búsqueda
   const modelosFiltrados = modelos.filter(modelo =>
-    modelo.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+    modelo.modelo.toLowerCase().includes(searchTerm.toLowerCase())  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
   )
 
   return (
@@ -407,14 +407,14 @@ interface CrearEditarModeloFormProps {
 
 function CrearEditarModeloForm({ modelo, onClose, onSuccess }: CrearEditarModeloFormProps) {
   const [formData, setFormData] = useState({
-    nombre: modelo?.nombre || ''
+    modelo: modelo?.modelo || ''  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
   })
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!formData.nombre.trim()) {
+    if (!formData.modelo.trim()) {  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
       toast.error('El modelo es obligatorio')
       return
     }
@@ -423,7 +423,7 @@ function CrearEditarModeloForm({ modelo, onClose, onSuccess }: CrearEditarModelo
       setLoading(true)
       
       const data = {
-        nombre: formData.nombre.trim()
+        modelo: formData.modelo.trim()  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
       }
 
       if (modelo) {
@@ -456,8 +456,8 @@ function CrearEditarModeloForm({ modelo, onClose, onSuccess }: CrearEditarModelo
             <div>
               <label className="block text-sm font-medium mb-1">Modelo *</label>
               <Input
-                value={formData.nombre}
-                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                value={formData.modelo}  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
+                onChange={(e) => setFormData({ ...formData, modelo: e.target.value })}  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
                 placeholder="Nombre del modelo de vehículo"
                 required
               />
