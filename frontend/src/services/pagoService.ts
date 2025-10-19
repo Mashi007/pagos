@@ -126,7 +126,7 @@ class PagoService {
 
   async crearPago(pago: PagoCreate): Promise<Pago> {
     const response = await apiClient.post(`${this.baseUrl}/crear`, pago)
-    return response.data
+    return (response as any).data
   }
 
   async listarPagos(params?: {
@@ -136,17 +136,17 @@ class PagoService {
     conciliado?: boolean
   }): Promise<PagoListResponse> {
     const response = await apiClient.get(this.baseUrl + '/listar', { params })
-    return response.data
+    return (response as any).data
   }
 
   async obtenerPago(id: number): Promise<Pago> {
     const response = await apiClient.get(`${this.baseUrl}/${id}`)
-    return response.data
+    return (response as any).data
   }
 
   async actualizarPago(id: number, pago: PagoUpdate): Promise<Pago> {
     const response = await apiClient.put(`${this.baseUrl}/${id}`, pago)
-    return response.data
+    return (response as any).data
   }
 
   async eliminarPago(id: number): Promise<void> {
@@ -159,12 +159,12 @@ class PagoService {
 
   async obtenerKPIs(): Promise<KPIsPagos> {
     const response = await apiClient.get(`${this.baseUrl}/kpis`)
-    return response.data
+    return (response as any).data
   }
 
   async obtenerResumenCliente(cedula: string): Promise<ResumenCliente> {
     const response = await apiClient.get(`${this.baseUrl}/resumen-cliente/${cedula}`)
-    return response.data
+    return (response as any).data
   }
 
   // ============================================
@@ -187,7 +187,7 @@ class PagoService {
         'Content-Type': 'multipart/form-data',
       },
     })
-    return response.data
+    return (response as any).data
   }
 
   async descargarDocumento(filename: string): Promise<{
@@ -197,7 +197,7 @@ class PagoService {
     download_url: string
   }> {
     const response = await apiClient.get(`${this.baseUrl}/descargar-documento/${filename}`)
-    return response.data
+    return (response as any).data
   }
 
   // ============================================
@@ -211,7 +211,7 @@ class PagoService {
     content: ArrayBuffer
   }> {
     const response = await apiClient.get(`${this.conciliacionUrl}/template-conciliacion`)
-    return response.data
+    return (response as any).data
   }
 
   async procesarConciliacion(file: File): Promise<ResultadoConciliacion> {
@@ -223,17 +223,17 @@ class PagoService {
         'Content-Type': 'multipart/form-data',
       },
     })
-    return response.data
+    return (response as any).data
   }
 
   async desconciliarPago(conciliacion: ConciliacionCreate): Promise<ConciliacionResponse> {
     const response = await apiClient.post(`${this.conciliacionUrl}/desconciliar-pago`, conciliacion)
-    return response.data
+    return (response as any).data
   }
 
   async obtenerEstadoConciliacion(): Promise<EstadoConciliacion> {
     const response = await apiClient.get(`${this.conciliacionUrl}/estado-conciliacion`)
-    return response.data
+    return (response as any).data
   }
 
   // ============================================
@@ -243,7 +243,7 @@ class PagoService {
   async validarCedula(cedula: string): Promise<{ valido: boolean; mensaje?: string }> {
     try {
       const response = await apiClient.get(`/api/v1/validadores/cedula/${cedula}`)
-      return response.data
+      return (response as any).data
     } catch (error) {
       return { valido: false, mensaje: 'Error validando cédula' }
     }
@@ -252,7 +252,7 @@ class PagoService {
   async validarMonto(monto: number): Promise<{ valido: boolean; mensaje?: string }> {
     try {
       const response = await apiClient.get(`/api/v1/validadores/monto/${monto}`)
-      return response.data
+      return (response as any).data
     } catch (error) {
       return { valido: false, mensaje: 'Error validando monto' }
     }
@@ -261,7 +261,7 @@ class PagoService {
   async validarFecha(fecha: string): Promise<{ valido: boolean; mensaje?: string }> {
     try {
       const response = await apiClient.get(`/api/v1/validadores/fecha/${fecha}`)
-      return response.data
+      return (response as any).data
     } catch (error) {
       return { valido: false, mensaje: 'Error validando fecha' }
     }
@@ -277,7 +277,7 @@ class PagoService {
         responseType: 'blob'
       })
       
-      const blob = new Blob([response.data], {
+      const blob = new Blob([(response as any).data], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       })
       
