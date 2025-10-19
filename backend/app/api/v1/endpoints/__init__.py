@@ -53,7 +53,8 @@ from . import (
     realtime_specific_monitor,
     schema_analyzer,
     critical_error_monitor,
-    strategic_measurements
+    strategic_measurements,
+    verificar_concesionarios
 )
 
 __all__ = [
@@ -105,5 +106,6 @@ __all__ = [
     "realtime_specific_monitor",
     "schema_analyzer",
     "critical_error_monitor",
-    "strategic_measurements"
+    "strategic_measurements",
+    "verificar_concesionarios"
 ]
