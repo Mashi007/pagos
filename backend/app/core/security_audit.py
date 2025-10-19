@@ -8,6 +8,9 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from enum import Enum
 
+# Configurar logger específico para auditoría de seguridad
+security_audit_logger = logging.getLogger("security_audit")
+
 
 class SecurityEventType(str, Enum):
     """Tipos de eventos de seguridad"""
