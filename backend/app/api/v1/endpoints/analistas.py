@@ -192,8 +192,7 @@ def analistas_backup1(
                 "notas": "",
                 "nombre_completo": nombre_completo,
                 "primer_nombre": primer_nombre,
-                "updated_at": row[3].isoformat() if row[3] else None  # ✅ CORREGIDO: updated_at,
-                "updated_at": None
+                "updated_at": row[3].isoformat() if row[3] else None  # ✅ CORREGIDO: updated_at
             })
         
         result_data = {
@@ -360,8 +359,7 @@ def analistas_emergency(
                 "notas": "",
                 "nombre_completo": nombre_completo,
                 "primer_nombre": primer_nombre,
-                "updated_at": row[3].isoformat() if row[3] else None  # ✅ CORREGIDO: updated_at,
-                "updated_at": None
+                "updated_at": row[3].isoformat() if row[3] else None  # ✅ CORREGIDO: updated_at
             })
         
         return {
