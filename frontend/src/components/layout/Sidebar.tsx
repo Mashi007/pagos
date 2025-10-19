@@ -102,11 +102,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       badge: '3',
     },
     {
-      title: 'Carga Masiva',
-      href: '/carga-masiva',
-      icon: Upload,
-    },
-    {
       title: 'Herramientas',
       icon: Wrench,
       isSubmenu: true,

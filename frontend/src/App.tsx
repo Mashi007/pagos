@@ -23,7 +23,6 @@ import { Auditoria } from '@/pages/Auditoria'
 import { Notificaciones } from '@/pages/Notificaciones'
 import { Programador } from '@/pages/Programador'
 import { Configuracion } from '@/pages/Configuracion'
-import { CargaMasiva } from '@/pages/CargaMasiva'
 import { PrestamosPage } from '@/pages/PrestamosPage'
 import { Analistas } from '@/pages/Analistas'
 import { PagosPage } from '@/pages/PagosPage'
@@ -108,11 +107,6 @@ function App() {
           <Route path="clientes/:id" element={<Clientes />} />
 
           {/* Carga Masiva */}
-          <Route
-            path="carga-masiva"
-            element={<CargaMasiva />}
-          />
-
           {/* Préstamos */}
           <Route
             path="prestamos"
