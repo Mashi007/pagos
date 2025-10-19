@@ -16,6 +16,7 @@ from app.api.deps import get_current_user
 from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.concesionario import Concesionario
 from app.models.analista import Analista
+from app.models.cliente import Cliente
 import logging
 from openpyxl import Workbook
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -68,6 +69,11 @@ async def generar_plantilla_clientes_dinamica(
         analistas = [analista.nombre for analista in analistas_db if analista.nombre]
         
         logger.info(f"Datos obtenidos - Modelos: {len(modelos_vehiculos)}, Concesionarios: {len(concesionarios)}, Analistas: {len(analistas)}")
+        
+        # KPIS DE ACTUALIZACIÓN AUTOMÁTICA
+        total_clientes = db.query(Cliente).count()
+        clientes_activos = db.query(Cliente).filter(Cliente.activo == True).count()
+        logger.info(f"KPIs - Total clientes: {total_clientes}, Activos: {clientes_activos}")
         
         # CREAR WORKBOOK
         wb = Workbook()
@@ -161,17 +167,17 @@ async def generar_plantilla_clientes_dinamica(
         # HOJA 2: PLANTILLA CON LISTAS DESPLEGABLES
         ws_plantilla = wb.create_sheet("Plantilla_Clientes")
         
-        # Encabezados
+        # Encabezados completos según modelo Cliente
         encabezados = [
             "cedula", "nombres", "apellidos", "telefono", "email",
             "direccion", "fecha_nacimiento", "ocupacion", "modelo_vehiculo",
-            "concesionario", "analista", "estado", "notas"
+            "concesionario", "analista", "estado", "activo", "notas"
         ]
         
         for i, encabezado in enumerate(encabezados, 1):
             ws_plantilla.cell(row=1, column=i, value=encabezado)
         
-        # Ejemplo de datos (usando primer valor de cada lista si existe)
+        # Ejemplo de datos completos (usando primer valor de cada lista si existe)
         ejemplo = [
             "1234567890", "Juan Carlos", "Perez Garcia", "0987654321",
             "juan.perez@email.com", "Av. Principal 123, Quito", "1990-05-15",
@@ -179,7 +185,7 @@ async def generar_plantilla_clientes_dinamica(
             modelos_vehiculos[0] if modelos_vehiculos else "Toyota Corolla 2023",
             concesionarios[0] if concesionarios else "AutoMax Quito",
             analistas[0] if analistas else "Maria Gonzalez",
-            "ACTIVO", "Cliente preferencial"
+            "ACTIVO", "true", "Cliente preferencial"
         ]
         
         for i, valor in enumerate(ejemplo, 1):
@@ -208,10 +214,15 @@ async def generar_plantilla_clientes_dinamica(
             dv_analistas.add(f'K2:K1000')
             ws_plantilla.add_data_validation(dv_analistas)
         
-        # Lista desplegable para estado (columna L)
+        # Lista desplegable para estado (columna M)
         dv_estado = DataValidation(type="list", formula1='"ACTIVO,INACTIVO"', allow_blank=True)
-        dv_estado.add(f'L2:L1000')
+        dv_estado.add(f'M2:M1000')
         ws_plantilla.add_data_validation(dv_estado)
+        
+        # Lista desplegable para activo (columna N)
+        dv_activo = DataValidation(type="list", formula1='"true,false"', allow_blank=True)
+        dv_activo.add(f'N2:N1000')
+        ws_plantilla.add_data_validation(dv_activo)
         
         # GUARDAR EN MEMORIA
         output = io.BytesIO()
