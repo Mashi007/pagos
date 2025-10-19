@@ -60,40 +60,44 @@ def test_analistas_no_auth(
             "message": "Error en test endpoint analistas no auth"
         }
 
-@router.get("/test-simple")
-def test_analistas_simple(
+@router.get("/test-sql-puro")
+def test_analistas_sql_puro(
     db: Session = Depends(get_db)
 ):
     """
-    Test endpoint simple para verificar analistas (sin autenticación)
+    Test endpoint usando SQL puro sin SQLAlchemy ORM
     """
     try:
-        total_analistas = db.query(Analista).count()
-        analistas = db.query(Analista).limit(5).all()
+        # Usar SQL puro para evitar problemas con el modelo
+        result = db.execute("SELECT id, nombre, activo, created_at FROM analistas LIMIT 5")
+        analistas_rows = result.fetchall()
+        
+        total_result = db.execute("SELECT COUNT(*) FROM analistas")
+        total_analistas = total_result.fetchone()[0]
         
         analistas_data = []
-        for analista in analistas:
+        for row in analistas_rows:
             analistas_data.append({
-                "id": analista.id,
-                "nombre": analista.nombre,
-                "primer_nombre": analista.primer_nombre,
-                "apellido": analista.apellido,
-                "activo": analista.activo,
-                "created_at": analista.created_at.isoformat() if analista.created_at else None
+                "id": row[0],
+                "nombre": row[1],
+                "primer_nombre": row[1].split()[0] if row[1] else "",
+                "apellido": " ".join(row[1].split()[1:]) if row[1] and len(row[1].split()) > 1 else "",
+                "activo": row[2],
+                "created_at": row[3].isoformat() if row[3] else None
             })
         
         return {
             "success": True,
             "total_analistas": total_analistas,
             "analistas": analistas_data,
-            "message": "Test endpoint analistas funcionando"
+            "message": "Test endpoint SQL puro funcionando"
         }
     except Exception as e:
-        logger.error(f"Error en test endpoint analistas: {str(e)}")
+        logger.error(f"Error en test endpoint SQL puro: {str(e)}")
         return {
             "success": False,
             "error": str(e),
-            "message": "Error en test endpoint analistas"
+            "message": "Error en test endpoint SQL puro"
         }
 
 @router.get("/list-no-auth")
