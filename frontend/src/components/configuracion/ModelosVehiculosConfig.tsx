@@ -214,7 +214,7 @@ export function ModelosVehiculosConfig() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-500">Modelo del Vehículo</label>
-                <p className="text-lg font-semibold">{viewingModelo.nombre}</p>
+                <p className="text-lg font-semibold">{viewingModelo.modelo}</p>  {/* ✅ CORREGIDO: campo 'modelo', no 'nombre' */}
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-500">Estado</label>
