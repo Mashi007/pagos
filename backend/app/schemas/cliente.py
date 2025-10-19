@@ -31,8 +31,11 @@ class ClienteBase(BaseModel):
     @field_validator('nombres', 'apellidos', mode='after')
     @classmethod
     def validate_name_words(cls, v):
-        """Validar que nombres/apellidos tengan máximo 2 palabras"""
+        """Validar que nombres/apellidos tengan exactamente 2 palabras"""
         words = v.strip().split()
+        words = [word for word in words if word]  # Filtrar palabras vacías
+        if len(words) < 2:
+            raise ValueError('Mínimo 2 palabras requeridas')
         if len(words) > 2:
             raise ValueError('Máximo 2 palabras permitidas')
         return v
@@ -87,9 +90,12 @@ class ClienteUpdate(BaseModel):
     @field_validator('nombres', 'apellidos', mode='after')
     @classmethod
     def validate_name_words(cls, v):
-        """Validar que nombres/apellidos tengan máximo 2 palabras"""
+        """Validar que nombres/apellidos tengan exactamente 2 palabras"""
         if v:
             words = v.strip().split()
+            words = [word for word in words if word]  # Filtrar palabras vacías
+            if len(words) < 2:
+                raise ValueError('Mínimo 2 palabras requeridas')
             if len(words) > 2:
                 raise ValueError('Máximo 2 palabras permitidas')
         return v
