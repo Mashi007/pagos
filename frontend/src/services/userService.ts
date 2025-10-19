@@ -39,40 +39,40 @@ export const userService = {
     if (is_active !== undefined) {
       params.is_active = is_active
     }
-    return await api.get<UserListResponse>('/api/v1/users/', { params })
+    return await api.get<UserListResponse>('/api/v1/usuarios/', { params })
   },
 
   // Obtener usuario por ID
   obtenerUsuario: async (userId: number): Promise<User> => {
-    return await api.get<User>(`/api/v1/users/${userId}`)
+    return await api.get<User>(`/api/v1/usuarios/${userId}`)
   },
 
   // Crear usuario
   crearUsuario: async (userData: UserCreate): Promise<User> => {
-    return await api.post<User>('/api/v1/users/', userData)
+    return await api.post<User>('/api/v1/usuarios/', userData)
   },
 
   // Actualizar usuario
   actualizarUsuario: async (userId: number, userData: UserUpdate): Promise<User> => {
-    return await api.put<User>(`/api/v1/users/${userId}`, userData)
+    return await api.put<User>(`/api/v1/usuarios/${userId}`, userData)
   },
 
   // Eliminar usuario
   eliminarUsuario: async (userId: number): Promise<void> => {
-    await api.delete(`/api/v1/users/${userId}`)
+    await api.delete(`/api/v1/usuarios/${userId}`)
   },
 
   // Verificar administradores
   verificarAdmin: async (): Promise<any> => {
-    return await api.get('/api/v1/users/verificar-admin')
+    return await api.get('/api/v1/usuarios/verificar-admin')
   },
 
   // Activar/Desactivar usuario
   toggleActivo: async (userId: number, isActive: boolean): Promise<User> => {
     if (isActive) {
-      return await api.post<User>(`/api/v1/users/${userId}/activate`)
+      return await api.post<User>(`/api/v1/usuarios/${userId}/activate`)
     } else {
-      return await api.post<User>(`/api/v1/users/${userId}/deactivate`)
+      return await api.post<User>(`/api/v1/usuarios/${userId}/deactivate`)
     }
   }
 }
