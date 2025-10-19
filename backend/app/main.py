@@ -36,26 +36,12 @@ from app.api.v1.endpoints import (
     solicitudes,
     carga_masiva,
     inteligencia_artificial,
-    setup_inicial,
     notificaciones_multicanal,
-    monitoreo_auditoria,
     scheduler_notificaciones,
     validadores,
     concesionarios,
     analistas,
-    modelos_vehiculos,
-    fix_database,
-    test_auth,
-    debug_auth,
-    debug_refresh_user,
-    debug_logging,
-    force_refresh_user,
-    verificar_permisos,
-    log_test,
-    simple_debug,
-    fix_refresh_user,
-    test_auditoria,
-    fix_admin_definitive,
+    modelos_vehiculos
 )
 
 # Configurar logging robusto
@@ -187,26 +173,12 @@ app.include_router(dashboard.router, prefix=f"{settings.API_V1_PREFIX}/dashboard
 app.include_router(solicitudes.router, prefix=f"{settings.API_V1_PREFIX}/solicitudes", tags=["Solicitudes"])
 app.include_router(carga_masiva.router, prefix=f"{settings.API_V1_PREFIX}/carga-masiva", tags=["Carga Masiva"])
 app.include_router(inteligencia_artificial.router, prefix=f"{settings.API_V1_PREFIX}/ia", tags=["Inteligencia Artificial"])
-app.include_router(setup_inicial.router, prefix=f"{settings.API_V1_PREFIX}/setup", tags=["Setup Inicial"])
 app.include_router(notificaciones_multicanal.router, prefix=f"{settings.API_V1_PREFIX}/notificaciones-multicanal", tags=["Notificaciones Multicanal"])
 app.include_router(scheduler_notificaciones.router, prefix=f"{settings.API_V1_PREFIX}/scheduler", tags=["Scheduler"])
 app.include_router(validadores.router, prefix=f"{settings.API_V1_PREFIX}/validadores", tags=["Validadores"])
 app.include_router(concesionarios.router, prefix=f"{settings.API_V1_PREFIX}/concesionarios", tags=["Concesionarios"])
 app.include_router(analistas.router, prefix=f"{settings.API_V1_PREFIX}/analistas", tags=["Analistas"])
 app.include_router(modelos_vehiculos.router, prefix=f"{settings.API_V1_PREFIX}/modelos-vehiculos", tags=["Modelos Vehiculos"])
-app.include_router(fix_database.router, prefix=f"{settings.API_V1_PREFIX}/fix-db", tags=["Database Fix"])
-app.include_router(test_auth.router, prefix=f"{settings.API_V1_PREFIX}/test", tags=["Test Auth"])
-app.include_router(debug_auth.router, prefix=f"{settings.API_V1_PREFIX}/debug", tags=["Debug Auth"])
-app.include_router(debug_refresh_user.router, prefix=f"{settings.API_V1_PREFIX}/debug-refresh", tags=["Debug Refresh User"])
-app.include_router(debug_logging.router, prefix=f"{settings.API_V1_PREFIX}/debug-logging", tags=["Debug Logging"])
-app.include_router(force_refresh_user.router, prefix=f"{settings.API_V1_PREFIX}/force-refresh", tags=["Force Refresh User"])
-app.include_router(verificar_permisos.router, prefix=f"{settings.API_V1_PREFIX}/verificar-permisos", tags=["Verificar Permisos"])
-app.include_router(log_test.router, prefix=f"{settings.API_V1_PREFIX}/log-test", tags=["Log Test"])
-app.include_router(simple_debug.router, prefix=f"{settings.API_V1_PREFIX}/simple-debug", tags=["Simple Debug"])
-app.include_router(fix_refresh_user.router, prefix=f"{settings.API_V1_PREFIX}/fix-refresh", tags=["Fix Refresh User"])
-app.include_router(test_auditoria.router, prefix=f"{settings.API_V1_PREFIX}/test-auditoria", tags=["Test Auditoria"])
-app.include_router(monitoreo_auditoria.router, prefix=f"{settings.API_V1_PREFIX}/monitoreo-auditoria", tags=["Monitoreo Auditoría"])
-app.include_router(fix_admin_definitive.router, prefix=f"{settings.API_V1_PREFIX}/fix-definitive", tags=["Fix Admin Definitive"])
 # app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])  # Removido - se usarán datos reales
 
 
