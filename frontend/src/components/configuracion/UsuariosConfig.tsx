@@ -127,7 +127,7 @@ export default function UsuariosConfig() {
   const handleEdit = (usuario: User) => {
     setEditingUser(usuario)
     setFormData({
-      email: usuario.email,
+      email: usuario.email.toLowerCase(), // Normalizar a minúsculas
       nombre: usuario.nombre,
       apellido: usuario.apellido,
       is_admin: usuario.is_admin,  // Cambio clave: rol → is_admin
@@ -431,7 +431,7 @@ export default function UsuariosConfig() {
                   <Input
                     type="email"
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value.toLowerCase() })}
                     required
                     placeholder="usuario@ejemplo.com"
                   />

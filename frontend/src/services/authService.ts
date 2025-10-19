@@ -39,7 +39,13 @@ export class AuthService {
     try {
       console.log('AuthService: Enviando credenciales a:', '/api/v1/auth/login')
       
-      const response = await apiClient.post<LoginResponse>('/api/v1/auth/login', credentials)
+      // Normalizar email a minúsculas
+      const normalizedCredentials = {
+        ...credentials,
+        email: credentials.email.toLowerCase().trim()
+      }
+      
+      const response = await apiClient.post<LoginResponse>('/api/v1/auth/login', normalizedCredentials)
       
       console.log('AuthService: Respuesta del servidor recibida')
       

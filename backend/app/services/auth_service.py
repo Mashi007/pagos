@@ -6,6 +6,7 @@ Lógica de negocio para login, logout, refresh tokens
 from typing import Optional, Tuple
 from datetime import datetime
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from fastapi import HTTPException, status
 
 from app.models.user import User
@@ -38,8 +39,11 @@ class AuthService:
             Usuario si la autenticación es exitosa, None si no
         """
         # Consulta específica solo con columnas necesarias para autenticación
+        # CASE INSENSITIVE: Normalizar email a minúsculas para búsqueda
+        email_normalized = email.lower().strip()
+        
         user = db.query(User).filter(
-            User.email == email,
+            func.lower(User.email) == email_normalized,
             User.is_active == True
         ).first()
         
