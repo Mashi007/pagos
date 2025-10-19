@@ -505,8 +505,8 @@ export default function UsuariosConfig() {
                     onChange={(password) => setFormData({ ...formData, password })}
                     placeholder={editingUser ? 'Nueva contraseña (opcional)' : 'Mínimo 8 caracteres'}
                     required={!editingUser}
-                    showGenerateButton={!editingUser}
-                    showCopyButton={!editingUser}
+                    showGenerateButton={true}  // ✅ SIEMPRE mostrar botón de generar
+                    showCopyButton={true}      // ✅ SIEMPRE mostrar botón de copiar
                   />
                 </div>
 

@@ -487,8 +487,8 @@ export function Usuarios() {
                   onChange={(password) => setFormData({ ...formData, password })}
                   placeholder={editingUsuario ? 'Nueva contraseña (opcional)' : 'Mínimo 8 caracteres'}
                   required={!editingUsuario}
-                  showGenerateButton={!editingUsuario}
-                  showCopyButton={!editingUsuario}
+                  showGenerateButton={true}  // ✅ SIEMPRE mostrar botón de generar
+                  showCopyButton={true}      // ✅ SIEMPRE mostrar botón de copiar
                   className="mt-1"
                 />
               </div>
