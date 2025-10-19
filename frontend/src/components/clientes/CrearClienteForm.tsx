@@ -15,6 +15,8 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
+  Download,
+  FileSpreadsheet,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -81,6 +83,7 @@ export function CrearClienteForm({
   const [analistaes, setAnalistaes] = useState<Analista[]>([])
   const [modelosVehiculos, setModelosVehiculos] = useState<ModeloVehiculo[]>([])
   const [loadingData, setLoadingData] = useState(true)
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false)
 
   // 🔄 CARGAR DATOS DINÁMICOS: Analistaes y Concesionarios desde configuración
   useEffect(() => {
@@ -172,6 +175,41 @@ export function CrearClienteForm({
 
     loadData()
   }, [])
+
+  // 📥 DESCARGAR TEMPLATE EXCEL
+  const handleDownloadTemplate = async () => {
+    try {
+      setDownloadingTemplate(true)
+      console.log('📥 Descargando template Excel...')
+      
+      const response = await fetch('/api/v1/plantilla/plantilla-clientes', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`)
+      }
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Plantilla_Clientes_${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      console.log('✅ Template descargado exitosamente')
+    } catch (error) {
+      console.error('❌ Error descargando template:', error)
+      alert('Error al descargar el template. Intenta nuevamente.')
+    } finally {
+      setDownloadingTemplate(false)
+    }
+  }
 
   // 🔍 VALIDACIONES CON BACKEND: Usar validadores del sistema
   const validateField = async (field: string, value: string): Promise<ValidationResult> => {
@@ -581,18 +619,46 @@ export function CrearClienteForm({
               <User className="h-6 w-6" />
               <h2 className="text-xl font-bold">CREAR NUEVO CLIENTE</h2>
             </div>
-            <Button
-              onClick={onClose}
-              variant="ghost"
-              size="sm"
-              className="text-white hover:bg-white/20"
-            >
-              <X className="h-5 w-5" />
-            </Button>
+            <div className="flex items-center space-x-2">
+              {/* Botón de descarga de template */}
+              <Button
+                onClick={handleDownloadTemplate}
+                disabled={downloadingTemplate}
+                variant="outline"
+                size="sm"
+                className="text-white border-white/30 hover:bg-white/20"
+              >
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                {downloadingTemplate ? 'Descargando...' : 'Template Excel'}
+              </Button>
+              <Button
+                onClick={onClose}
+                variant="ghost"
+                size="sm"
+                className="text-white hover:bg-white/20"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Información sobre opciones */}
+          <Card className="border-blue-200 bg-blue-50">
+            <CardContent className="pt-4">
+              <div className="flex items-center space-x-2 mb-2">
+                <FileSpreadsheet className="h-5 w-5 text-blue-600" />
+                <h3 className="font-semibold text-blue-700">OPCIONES DE CREACIÓN</h3>
+              </div>
+              <div className="text-sm text-blue-600 space-y-1">
+                <p>• <strong>Formulario web:</strong> Completa los campos individualmente</p>
+                <p>• <strong>Template Excel:</strong> Descarga el archivo, complétalo y súbelo en "Carga Masiva"</p>
+                <p>• <strong>Ambas opciones</strong> son compatibles y se guardan en la misma base de datos</p>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Datos Personales */}
           <Card>
             <CardHeader>

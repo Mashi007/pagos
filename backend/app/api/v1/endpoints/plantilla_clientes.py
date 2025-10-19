@@ -91,22 +91,26 @@ async def generar_plantilla_clientes_dinamica(
             ["   - Datos desde la segunda fila"],
             [""],
             ["2. CAMPOS REQUERIDOS:"],
-            ["   - cedula: Cedula unica (maximo 20 caracteres)"],
-            ["   - nombres: Nombres completos (maximo 100 caracteres)"],
-            ["   - apellidos: Apellidos completos (maximo 100 caracteres)"],
+            ["   - cedula: Cedula unica (V/E/J + 7-10 digitos)"],
+            ["   - nombres: Nombres completos"],
+            ["   - apellidos: Apellidos completos"],
+            ["   - modelo_vehiculo: Modelo del vehiculo (lista desplegable)"],
+            ["   - concesionario: Concesionario (lista desplegable)"],
+            ["   - analista: Analista asignado (lista desplegable)"],
+            ["   - total_financiamiento: Monto total del financiamiento"],
+            ["   - numero_amortizaciones: Numero de cuotas (1-60)"],
+            ["   - modalidad_pago: SEMANAL/QUINCENAL/MENSUAL"],
+            ["   - fecha_entrega: Fecha de entrega del vehiculo"],
             [""],
-            ["3. CAMPOS CON LISTAS DESPLEGABLES (DATOS REALES DE BD):"],
-            ["   - modelo_vehiculo: Seleccionar de lista desplegable"],
-            ["   - concesionario: Seleccionar de lista desplegable"],
-            ["   - analista: Seleccionar de lista desplegable"],
-            ["   - estado: ACTIVO o INACTIVO"],
-            [""],
-            ["4. CAMPOS OPCIONALES:"],
-            ["   - telefono: Numero de telefono (maximo 15 caracteres)"],
+            ["3. CAMPOS OPCIONALES:"],
+            ["   - telefono: Numero de telefono"],
             ["   - email: Correo electronico valido"],
             ["   - direccion: Direccion completa"],
             ["   - fecha_nacimiento: Formato YYYY-MM-DD"],
             ["   - ocupacion: Ocupacion del cliente"],
+            ["   - cuota_inicial: Cuota inicial"],
+            ["   - estado: ACTIVO o INACTIVO"],
+            ["   - activo: true o false"],
             ["   - notas: Observaciones adicionales"],
             [""],
             ["5. VALIDACIONES:"],
@@ -116,14 +120,25 @@ async def generar_plantilla_clientes_dinamica(
             ["   - Estado debe ser ACTIVO o INACTIVO"],
             ["   - Usar solo valores de las listas desplegables"],
             [""],
-            ["6. EJEMPLOS DE DATOS VALIDOS:"],
-            ["   - cedula: '1234567890'"],
+            ["4. EJEMPLOS DE DATOS VALIDOS:"],
+            ["   - cedula: 'V12345678'"],
             ["   - nombres: 'Juan Carlos'"],
             ["   - apellidos: 'Perez Garcia'"],
             ["   - telefono: '0987654321'"],
             ["   - email: 'juan.perez@email.com'"],
+            ["   - direccion: 'Av. Principal 123, Quito'"],
             ["   - fecha_nacimiento: '1990-05-15'"],
+            ["   - ocupacion: 'Ingeniero'"],
+            ["   - modelo_vehiculo: 'Toyota Corolla 2023'"],
+            ["   - concesionario: 'AutoMax Quito'"],
+            ["   - analista: 'Maria Gonzalez'"],
+            ["   - total_financiamiento: '25000'"],
+            ["   - cuota_inicial: '5000'"],
+            ["   - numero_amortizaciones: '12'"],
+            ["   - modalidad_pago: 'QUINCENAL'"],
+            ["   - fecha_entrega: '2024-12-31'"],
             ["   - estado: 'ACTIVO'"],
+            ["   - activo: 'true'"],
             [""],
             ["7. NOTAS IMPORTANTES:"],
             ["   - No eliminar las columnas"],
@@ -167,31 +182,48 @@ async def generar_plantilla_clientes_dinamica(
         # HOJA 2: PLANTILLA CON LISTAS DESPLEGABLES
         ws_plantilla = wb.create_sheet("Plantilla_Clientes")
         
-        # Encabezados completos según modelo Cliente
+        # Encabezados completos - COMPATIBLES CON FORMULARIO WEB
         encabezados = [
+            # Datos personales (coincide con formulario)
             "cedula", "nombres", "apellidos", "telefono", "email",
-            "direccion", "fecha_nacimiento", "ocupacion", "modelo_vehiculo",
-            "concesionario", "analista", "estado", "activo", "notas"
+            "direccion", "fecha_nacimiento", "ocupacion",
+            
+            # Datos del vehículo (coincide con formulario)
+            "modelo_vehiculo", "concesionario", "analista",
+            
+            # Datos del financiamiento (coincide con formulario)
+            "total_financiamiento", "cuota_inicial", "numero_amortizaciones",
+            "modalidad_pago", "fecha_entrega",
+            
+            # Estado y control (coincide con BD)
+            "estado", "activo", "notas"
         ]
         
         for i, encabezado in enumerate(encabezados, 1):
             ws_plantilla.cell(row=1, column=i, value=encabezado)
         
-        # Ejemplo de datos completos (usando primer valor de cada lista si existe)
+        # Ejemplo de datos completos - COMPATIBLES CON FORMULARIO WEB
         ejemplo = [
-            "1234567890", "Juan Carlos", "Perez Garcia", "0987654321",
-            "juan.perez@email.com", "Av. Principal 123, Quito", "1990-05-15",
-            "Ingeniero", 
+            # Datos personales
+            "V12345678", "Juan Carlos", "Perez Garcia", "0987654321",
+            "juan.perez@email.com", "Av. Principal 123, Quito", "1990-05-15", "Ingeniero",
+            
+            # Datos del vehículo
             modelos_vehiculos[0] if modelos_vehiculos else "Toyota Corolla 2023",
             concesionarios[0] if concesionarios else "AutoMax Quito",
             analistas[0] if analistas else "Maria Gonzalez",
+            
+            # Datos del financiamiento
+            "25000", "5000", "12", "QUINCENAL", "2024-12-31",
+            
+            # Estado y control
             "ACTIVO", "true", "Cliente preferencial"
         ]
         
         for i, valor in enumerate(ejemplo, 1):
             ws_plantilla.cell(row=2, column=i, value=valor)
         
-        # CONFIGURAR LISTAS DESPLEGABLES CON DATOS REALES
+        # CONFIGURAR LISTAS DESPLEGABLES CON DATOS REALES - COMPATIBLES CON FORMULARIO
         
         # Lista desplegable para modelo_vehiculo (columna I)
         if modelos_vehiculos:
@@ -214,14 +246,19 @@ async def generar_plantilla_clientes_dinamica(
             dv_analistas.add(f'K2:K1000')
             ws_plantilla.add_data_validation(dv_analistas)
         
-        # Lista desplegable para estado (columna M)
+        # Lista desplegable para modalidad_pago (columna N)
+        dv_modalidad = DataValidation(type="list", formula1='"SEMANAL,QUINCENAL,MENSUAL"', allow_blank=True)
+        dv_modalidad.add(f'N2:N1000')
+        ws_plantilla.add_data_validation(dv_modalidad)
+        
+        # Lista desplegable para estado (columna P)
         dv_estado = DataValidation(type="list", formula1='"ACTIVO,INACTIVO"', allow_blank=True)
-        dv_estado.add(f'M2:M1000')
+        dv_estado.add(f'P2:P1000')
         ws_plantilla.add_data_validation(dv_estado)
         
-        # Lista desplegable para activo (columna N)
+        # Lista desplegable para activo (columna Q)
         dv_activo = DataValidation(type="list", formula1='"true,false"', allow_blank=True)
-        dv_activo.add(f'N2:N1000')
+        dv_activo.add(f'Q2:Q1000')
         ws_plantilla.add_data_validation(dv_activo)
         
         # GUARDAR EN MEMORIA
