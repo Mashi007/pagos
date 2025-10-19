@@ -126,7 +126,10 @@ export function CrearClienteForm({ onClose, onSuccess }: CrearClienteFormProps) 
       
       case 'nombres':
         if (!value) return { field, isValid: false, message: 'Nombres son obligatorios' }
-        const nombresWords = value.trim().split(' ')
+        const nombresWords = value.trim().split(' ').filter(word => word.length > 0)
+        if (nombresWords.length < 2) {
+          return { field, isValid: false, message: 'Mínimo 2 palabras: nombre y apellido' }
+        }
         if (nombresWords.length > 2) {
           return { field, isValid: false, message: 'Máximo 2 palabras en nombres' }
         }
@@ -134,7 +137,10 @@ export function CrearClienteForm({ onClose, onSuccess }: CrearClienteFormProps) 
       
       case 'apellidos':
         if (!value) return { field, isValid: false, message: 'Apellidos son obligatorios' }
-        const apellidosWords = value.trim().split(' ')
+        const apellidosWords = value.trim().split(' ').filter(word => word.length > 0)
+        if (apellidosWords.length < 2) {
+          return { field, isValid: false, message: 'Mínimo 2 palabras: apellido paterno y materno' }
+        }
         if (apellidosWords.length > 2) {
           return { field, isValid: false, message: 'Máximo 2 palabras en apellidos' }
         }
@@ -142,8 +148,16 @@ export function CrearClienteForm({ onClose, onSuccess }: CrearClienteFormProps) 
       
       case 'telefono':
         if (!value) return { field, isValid: false, message: 'Teléfono es obligatorio' }
-        if (value.length < 8 || value.length > 15) {
-          return { field, isValid: false, message: 'Teléfono debe tener entre 8 y 15 caracteres' }
+        // Validar formato venezolano: +58 XXXXXXXXXX (10 dígitos, primer dígito no puede ser 0)
+        const telefonoLimpio = value.replace(/\s+/g, '').replace(/\+58/g, '')
+        if (telefonoLimpio.length !== 10) {
+          return { field, isValid: false, message: 'Formato: +58 XXXXXXXXXX (10 dígitos, primer dígito no puede ser 0)' }
+        }
+        if (telefonoLimpio[0] === '0') {
+          return { field, isValid: false, message: 'Primer dígito no puede ser 0' }
+        }
+        if (!/^\d{10}$/.test(telefonoLimpio)) {
+          return { field, isValid: false, message: 'Solo se permiten números' }
         }
         return { field, isValid: true, message: 'Teléfono válido' }
       
