@@ -1,2 +1,4 @@
-Trigger deploy para ModelosVehiculos - 2025-10-17 17:00:00
-Debug logs agregados para diagnosticar conexión API
+Trigger deploy para ModelosVehiculos - 2025-10-19 11:15:00
+Modelo Cliente corregido - Solo campos que existen en BD
+Endpoint clientes funcional - Sin errores UndefinedColumn
+Listo para enlaces con Configuracion: Modelos, Analistas, Concesionarios
