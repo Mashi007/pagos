@@ -1,16 +1,10 @@
-from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
+from pydantic import BaseModel, field_validator, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
 class AnalistaBase(BaseModel):
-    nombre: str
-    apellido: Optional[str] = ""
-    email: Optional[str] = ""
-    telefono: Optional[str] = None
-    especialidad: Optional[str] = None
-    comision_porcentaje: Optional[int] = None
+    nombre: str  # Nombre completo (incluye apellido)
     activo: bool = True
-    notas: Optional[str] = None
 
     @field_validator('nombre')
     @classmethod
@@ -19,25 +13,12 @@ class AnalistaBase(BaseModel):
             raise ValueError('El nombre no puede estar vacío')
         return v.strip()
 
-    @field_validator('comision_porcentaje')
-    @classmethod
-    def comision_must_be_valid(cls, v):
-        if v is not None and (v < 0 or v > 100):
-            raise ValueError('La comisión debe estar entre 0 y 100')
-        return v
-
 class AnalistaCreate(AnalistaBase):
     pass
 
 class AnalistaUpdate(BaseModel):
     nombre: Optional[str] = None
-    apellido: Optional[str] = None
-    email: Optional[str] = None
-    telefono: Optional[str] = None
-    especialidad: Optional[str] = None
-    comision_porcentaje: Optional[int] = None
     activo: Optional[bool] = None
-    notas: Optional[str] = None
 
     @field_validator('nombre')
     @classmethod
@@ -46,16 +27,11 @@ class AnalistaUpdate(BaseModel):
             raise ValueError('El nombre no puede estar vacío')
         return v.strip() if v else v
 
-    @field_validator('comision_porcentaje')
-    @classmethod
-    def comision_must_be_valid(cls, v):
-        if v is not None and (v < 0 or v > 100):
-            raise ValueError('La comisión debe estar entre 0 y 100')
-        return v
-
 class AnalistaResponse(AnalistaBase):
     id: int
     nombre_completo: str
+    primer_nombre: str
+    apellido: str
     created_at: datetime
     
     updated_at: Optional[datetime] = None

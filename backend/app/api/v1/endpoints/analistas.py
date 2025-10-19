@@ -36,9 +36,8 @@ def test_analistas_no_auth(
             analistas_data.append({
                 "id": analista.id,
                 "nombre": analista.nombre,
+                "primer_nombre": analista.primer_nombre,
                 "apellido": analista.apellido,
-                "email": analista.email,
-                "telefono": analista.telefono,
                 "activo": analista.activo,
                 "created_at": analista.created_at.isoformat() if analista.created_at else None
             })
@@ -73,9 +72,8 @@ def test_analistas_simple(
             analistas_data.append({
                 "id": analista.id,
                 "nombre": analista.nombre,
+                "primer_nombre": analista.primer_nombre,
                 "apellido": analista.apellido,
-                "email": analista.email,
-                "telefono": analista.telefono,
                 "activo": analista.activo,
                 "created_at": analista.created_at.isoformat() if analista.created_at else None
             })
