@@ -101,7 +101,7 @@ def listar_analistas_no_auth(
     db: Session = Depends(get_db)
 ):
     """
-    📋 Listar analistas SIN autenticación (para testing)
+    Listar analistas SIN autenticación (para testing)
     """
     try:
         query = db.query(Analista)
@@ -160,7 +160,6 @@ def listar_asesores(
                 Analista.nombre.ilike(f"%{search}%") | 
                 Analista.apellido.ilike(f"%{search}%")
             )
-        
         
         # Obtener total
         total = query.count()
