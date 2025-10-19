@@ -67,7 +67,8 @@ from app.api.v1.endpoints import (
     schema_analyzer,
     critical_error_monitor,
         strategic_measurements,
-        verificar_concesionarios
+        verificar_concesionarios,
+        diagnostico_refresh_token
 )
 
 # Configurar logging robusto
@@ -231,6 +232,7 @@ app.include_router(schema_analyzer.router, prefix=f"{settings.API_V1_PREFIX}/sch
 app.include_router(critical_error_monitor.router, prefix=f"{settings.API_V1_PREFIX}/critical-errors", tags=["Monitor Errores Críticos"])
 app.include_router(strategic_measurements.router, prefix=f"{settings.API_V1_PREFIX}/measurements", tags=["Mediciones Estratégicas"])
 app.include_router(verificar_concesionarios.router, prefix=f"{settings.API_V1_PREFIX}/verificar", tags=["Verificación Datos"])
+app.include_router(diagnostico_refresh_token.router, prefix=f"{settings.API_V1_PREFIX}/refresh-diagnostic", tags=["Diagnóstico Refresh Token"])
 # app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])  # Removido - se usarán datos reales
 
 
