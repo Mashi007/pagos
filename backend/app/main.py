@@ -48,7 +48,10 @@ from app.api.v1.endpoints import (
     diagnostico,
     diagnostico_auth,
     token_verification,
-    dashboard_diagnostico
+    dashboard_diagnostico,
+    auth_flow_analyzer,
+    predictive_analyzer,
+    intelligent_alerts
 )
 
 # Configurar logging robusto
@@ -193,6 +196,9 @@ app.include_router(diagnostico.router, prefix=f"{settings.API_V1_PREFIX}/diagnos
 app.include_router(diagnostico_auth.router, prefix=f"{settings.API_V1_PREFIX}/auth-debug", tags=["Diagnóstico Auth"])
 app.include_router(token_verification.router, prefix=f"{settings.API_V1_PREFIX}/token", tags=["Verificación Tokens"])
 app.include_router(dashboard_diagnostico.router, prefix=f"{settings.API_V1_PREFIX}/monitor", tags=["Monitor Diagnóstico"])
+app.include_router(auth_flow_analyzer.router, prefix=f"{settings.API_V1_PREFIX}/flow", tags=["Análisis Flujo Auth"])
+app.include_router(predictive_analyzer.router, prefix=f"{settings.API_V1_PREFIX}/predictive", tags=["Análisis Predictivo"])
+app.include_router(intelligent_alerts.router, prefix=f"{settings.API_V1_PREFIX}/alerts", tags=["Alertas Inteligentes"])
 # app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])  # Removido - se usarán datos reales
 
 

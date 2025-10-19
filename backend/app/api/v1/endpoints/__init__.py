@@ -35,7 +35,10 @@ from . import (
     diagnostico,
     diagnostico_auth,
     token_verification,
-    dashboard_diagnostico
+    dashboard_diagnostico,
+    auth_flow_analyzer,
+    predictive_analyzer,
+    intelligent_alerts
 )
 
 __all__ = [
@@ -69,5 +72,8 @@ __all__ = [
     "diagnostico",
     "diagnostico_auth",
     "token_verification",
-    "dashboard_diagnostico"
+    "dashboard_diagnostico",
+    "auth_flow_analyzer",
+    "predictive_analyzer",
+    "intelligent_alerts"
 ]
