@@ -82,19 +82,140 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   // Estado para tracking de errores en dropdowns
   const [dropdownErrors, setDropdownErrors] = useState<{[key: string]: boolean}>({})
 
-  // Estado para notificaciones toast
+  // Estado para notificaciones toast con tracking de violaciones
   const [toasts, setToasts] = useState<Array<{
     id: string
     type: 'error' | 'warning' | 'success'
     message: string
     suggestion?: string
+    field: string
+    rowIndex: number
   }>>([])
+
+  // Estado para tracking de violaciones por fila completa
+  const [violationTracker, setViolationTracker] = useState<{[key: string]: {
+    violationCount: number
+    lastRowData: string
+  }}>({})
 
   // Estado para sistema de guardado híbrido
   const [savedClients, setSavedClients] = useState<Set<number>>(new Set())
   const [isSavingIndividual, setIsSavingIndividual] = useState(false)
   const [savingProgress, setSavingProgress] = useState<{[key: number]: boolean}>({})
   const [showOnlyPending, setShowOnlyPending] = useState(false)
+
+  // Función para manejar notificaciones de validación por fila completa
+  const handleRowValidationNotification = (rowIndex: number, rowData: ExcelRow) => {
+    const trackerKey = `row-${rowIndex}`
+    const currentTracker = violationTracker[trackerKey] || {
+      violationCount: 0,
+      lastRowData: ''
+    }
+
+    // Crear hash de los datos de la fila para detectar cambios
+    const rowDataHash = JSON.stringify({
+      cedula: rowData.cedula,
+      nombres: rowData.nombres,
+      apellidos: rowData.apellidos,
+      telefono: rowData.telefono,
+      email: rowData.email,
+      direccion: rowData.direccion,
+      fecha_nacimiento: rowData.fecha_nacimiento,
+      ocupacion: rowData.ocupacion,
+      modelo_vehiculo: rowData.modelo_vehiculo,
+      concesionario: rowData.concesionario,
+      analista: rowData.analista
+    })
+
+    // Si los datos de la fila cambiaron, resetear el contador
+    if (currentTracker.lastRowData !== rowDataHash) {
+      setViolationTracker(prev => ({
+        ...prev,
+        [trackerKey]: {
+          violationCount: 0,
+          lastRowData: rowDataHash
+        }
+      }))
+      return
+    }
+
+    // Verificar si la fila tiene errores
+    const hasErrors = rowData._hasErrors
+    const errorFields = Object.entries(rowData._validation)
+      .filter(([_, validation]) => !validation.isValid)
+      .map(([field, _]) => field)
+
+    if (!hasErrors) {
+      // Fila válida - mostrar notificación de éxito
+      const successToast = {
+        id: `success-row-${rowIndex}-${Date.now()}`,
+        type: 'success' as const,
+        message: `Fila ${rowIndex + 1} es válida`,
+        field: 'fila_completa',
+        rowIndex
+      }
+      
+      setToasts(prev => [...prev, successToast])
+      
+      // Limpiar tracker
+      setViolationTracker(prev => ({
+        ...prev,
+        [trackerKey]: {
+          violationCount: 0,
+          lastRowData: rowDataHash
+        }
+      }))
+      
+      // Auto-remover notificación después de 3 segundos
+      setTimeout(() => {
+        setToasts(prev => prev.filter(toast => toast.id !== successToast.id))
+      }, 3000)
+      
+    } else {
+      // Fila con errores - incrementar contador
+      const newViolationCount = currentTracker.violationCount + 1
+      
+      // Mostrar notificación solo en violaciones específicas: 1ra, 3ra, 6ta, 9na, 12va...
+      const shouldShowNotification = newViolationCount === 1 || 
+                                   newViolationCount === 3 || 
+                                   newViolationCount === 6 || 
+                                   newViolationCount === 9 || 
+                                   newViolationCount === 12 ||
+                                   (newViolationCount > 12 && newViolationCount % 3 === 0)
+      
+      if (shouldShowNotification) {
+        const errorToast = {
+          id: `error-row-${rowIndex}-${Date.now()}`,
+          type: 'error' as const,
+          message: `Fila ${rowIndex + 1}: Campos con errores: ${errorFields.join(', ')}`,
+          suggestion: `Corrija los campos marcados en rojo para continuar`,
+          field: 'fila_completa',
+          rowIndex
+        }
+        
+        setToasts(prev => [...prev, errorToast])
+        
+        // Auto-remover notificación después de 5 segundos
+        setTimeout(() => {
+          setToasts(prev => prev.filter(toast => toast.id !== errorToast.id))
+        }, 5000)
+      }
+      
+      // Actualizar contador de violaciones
+      setViolationTracker(prev => ({
+        ...prev,
+        [trackerKey]: {
+          violationCount: newViolationCount,
+          lastRowData: rowDataHash
+        }
+      }))
+    }
+  }
+
+  // Función para remover notificación manualmente
+  const removeToast = (toastId: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== toastId))
+  }
 
   // Cargar datos de configuración
   useEffect(() => {
@@ -151,12 +272,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
   // 🔄 FUNCIONES PARA SISTEMA DE GUARDADO HÍBRIDO
   const isClientValid = (row: ExcelRow): boolean => {
-    const hasNoErrors = !row._hasErrors
-    const hasConcesionario = Boolean(row.concesionario && row.concesionario.trim() !== '')
-    const hasAnalista = Boolean(row.analista && row.analista.trim() !== '')
-    const hasModelo = Boolean(row.modelo_vehiculo && row.modelo_vehiculo.trim() !== '')
-    
-    return hasNoErrors && hasConcesionario && hasAnalista && hasModelo
+    // Usar el mismo sistema de validación que los campos visuales
+    return !row._hasErrors
   }
 
   const getValidClients = (): ExcelRow[] => {
@@ -612,15 +729,18 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       
       setExcelData(newData)
       
-      // Actualizar estado de errores en dropdowns
-      updateDropdownErrors(newData)
+      // Manejar notificaciones por fila completa según el comportamiento requerido
+      handleRowValidationNotification(index, row)
       
-      // Mostrar notificación toast
-      if (!validation.isValid) {
-        addToast('error', `Campo "${field}": ${validation.message}`, getSuggestion(field, value))
-      } else {
-        addToast('success', `Campo "${field}" es válido`)
-      }
+      // Actualizar estado de errores en dropdowns (ya no necesario - usando validación unificada)
+      // updateDropdownErrors(newData)
+      
+      // Sistema de notificaciones anterior (comentado para usar el nuevo)
+      // if (!validation.isValid) {
+      //   addToast('error', `Campo "${field}": ${validation.message}`, getSuggestion(field, value))
+      // } else {
+      //   addToast('success', `Campo "${field}" es válido`)
+      // }
     }
   }
 
@@ -1215,7 +1335,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 onChange={(value) => updateCellValue(index, 'modelo_vehiculo', value)}
                                 placeholder="Seleccionar modelo..."
                                 className={`w-full text-sm min-w-[120px] ${
-                                  dropdownErrors[`modelo_${index}`] ? 'border-red-800 bg-red-800 text-white' : 'border-gray-300 bg-white text-black'
+                                  row._validation.modelo_vehiculo?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
                             </td>
@@ -1231,7 +1351,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 onChange={(value) => updateCellValue(index, 'concesionario', value)}
                                 placeholder="Seleccionar concesionario..."
                                 className={`w-full text-sm min-w-[120px] ${
-                                  dropdownErrors[`concesionario_${index}`] ? 'border-red-800 bg-red-800 text-white' : 'border-gray-300 bg-white text-black'
+                                  row._validation.concesionario?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
                             </td>
@@ -1247,7 +1367,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 onChange={(value) => updateCellValue(index, 'analista', value)}
                                 placeholder="Seleccionar analista..."
                                 className={`w-full text-sm min-w-[120px] ${
-                                  dropdownErrors[`analista_${index}`] ? 'border-red-800 bg-red-800 text-white' : 'border-gray-300 bg-white text-black'
+                                  row._validation.analista?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
                             </td>
