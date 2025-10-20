@@ -122,10 +122,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       case 'fecha_entrega':
         if (!value.trim()) return { isValid: false, message: 'Fecha requerida' }
-        const fecha = new Date(value)
-        const hoy = new Date()
-        hoy.setHours(0, 0, 0, 0)
-        if (isNaN(fecha.getTime()) || fecha < hoy) {
+        const fechaEntrega = new Date(value)
+        const hoyEntrega = new Date()
+        hoyEntrega.setHours(0, 0, 0, 0)
+        if (isNaN(fechaEntrega.getTime()) || fechaEntrega < hoyEntrega) {
           return { isValid: false, message: 'Debe ser una fecha futura válida' }
         }
         return { isValid: true }
@@ -154,11 +154,11 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       case 'fecha_nacimiento':
         if (!value.trim()) return { isValid: false, message: 'Fecha requerida' }
         const fechaNac = new Date(value)
-        const hoy = new Date()
+        const hoyNac = new Date()
         if (isNaN(fechaNac.getTime())) {
           return { isValid: false, message: 'Formato de fecha inválido' }
         }
-        if (fechaNac >= hoy) {
+        if (fechaNac >= hoyNac) {
           return { isValid: false, message: 'Debe ser una fecha pasada' }
         }
         return { isValid: true }
