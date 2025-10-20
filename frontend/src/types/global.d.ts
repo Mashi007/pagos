@@ -42,6 +42,17 @@ declare global {
     type ComponentPropsWithoutRef<T> = any
     type KeyboardEvent<T = Element> = any
     
+    // Declaraciones para ErrorBoundary
+    class Component<P = {}, S = {}> {
+      props: P
+      state: S
+      setState(state: Partial<S> | ((prevState: S) => Partial<S>)): void
+      forceUpdate(): void
+    }
+    interface ErrorInfo {
+      componentStack: string
+    }
+    
     function forwardRef<T, P = {}>(component: (props: P, ref: React.Ref<T>) => any): any
     function useId(): string
     const StrictMode: any
@@ -99,6 +110,17 @@ declare module 'react' {
   export type ElementRef<T> = any
   export type ComponentPropsWithoutRef<T> = any
   export type KeyboardEvent<T = Element> = any
+  
+  // Declaraciones para ErrorBoundary
+  export class Component<P = {}, S = {}> {
+    props: P
+    state: S
+    setState(state: Partial<S> | ((prevState: S) => Partial<S>)): void
+    forceUpdate(): void
+  }
+  export interface ErrorInfo {
+    componentStack: string
+  }
   
   export function forwardRef<T, P = {}>(component: (props: P, ref: React.Ref<T>) => any): any
   export function useId(): string
