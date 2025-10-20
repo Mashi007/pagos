@@ -81,11 +81,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       icon: CreditCard,
     },
     {
-      title: 'Amortización',
-      href: '/amortizacion',
-      icon: Calculator,
-    },
-    {
       title: 'Reportes',
       href: '/reportes',
       icon: FileText,
