@@ -135,6 +135,18 @@ declare global {
   const useCallback: <T extends (...args: any[]) => any>(callback: T, deps: any[]) => T
   const useMemo: <T>(factory: () => T, deps: any[]) => T
   
+  // Declaraciones específicas para resolver errores de parámetros implícitos
+  const prestamo: any
+  const updatedAnalista: any
+  const newCliente: any
+  const updatedCliente: any
+  const deletedId: any
+  const result: any
+  const analista: any
+  const pago: any
+  const a: any
+  const _: any
+  
   // Tipos específicos del proyecto
   interface Cliente {
     id: number
@@ -355,6 +367,18 @@ declare module 'react' {
   export function find<T>(array: T[], callback: (item: T, index: number) => boolean): T | undefined
   export function some<T>(array: T[], callback: (item: T, index: number) => boolean): boolean
   export function every<T>(array: T[], callback: (item: T, index: number) => boolean): boolean
+  
+  // Declaraciones específicas para resolver errores de parámetros implícitos
+  export const prestamo: any
+  export const updatedAnalista: any
+  export const newCliente: any
+  export const updatedCliente: any
+  export const deletedId: any
+  export const result: any
+  export const analista: any
+  export const pago: any
+  export const a: any
+  export const _: any
 }
 
 // Declaraciones para componentes UI - Solo si no existen los archivos reales
