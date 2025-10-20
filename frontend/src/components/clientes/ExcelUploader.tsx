@@ -303,7 +303,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           modalidad_pago: row[14]?.toString() || '',
           fecha_entrega: row[15]?.toString() || '',
           estado: row[16]?.toString() || '',
-          activo: row[17]?.toString() || '',
+          activo: row[17]?.toString() || 'TRUE', // ✅ Por defecto siempre TRUE
           notas: row[18]?.toString() || ''
         }
         
@@ -420,7 +420,15 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
   // 💾 GUARDAR DATOS VALIDADOS
   const handleSaveData = async () => {
-    const validData = excelData.filter(row => !row._hasErrors)
+    // Filtrar solo registros completamente válidos
+    const validData = excelData.filter(row => {
+      const hasNoErrors = !row._hasErrors
+      const hasConcesionario = row.concesionario && row.concesionario.trim() !== ''
+      const hasAnalista = row.analista && row.analista.trim() !== ''
+      const hasModelo = row.modelo_vehiculo && row.modelo_vehiculo.trim() !== ''
+      
+      return hasNoErrors && hasConcesionario && hasAnalista && hasModelo
+    })
     
     if (validData.length === 0) {
       setShowValidationModal(true) // Abre modal de advertencias
@@ -501,7 +509,16 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     }
   }
 
-  const validRows = excelData.filter(row => !row._hasErrors).length
+  // 🎯 CONTAR REGISTROS VÁLIDOS (sin errores + dropdowns seleccionados)
+  const validRows = excelData.filter(row => {
+    const hasNoErrors = !row._hasErrors
+    const hasConcesionario = row.concesionario && row.concesionario.trim() !== ''
+    const hasAnalista = row.analista && row.analista.trim() !== ''
+    const hasModelo = row.modelo_vehiculo && row.modelo_vehiculo.trim() !== ''
+    
+    return hasNoErrors && hasConcesionario && hasAnalista && hasModelo
+  }).length
+  
   const totalRows = excelData.length
 
   return (
@@ -674,19 +691,32 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
                         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                           <p className="text-sm text-red-700">
-                            <strong>No se puede guardar:</strong> Se encontraron {totalRows - validRows} errores que deben corregirse antes de continuar.
+                            <strong>No se puede guardar:</strong> Se encontraron {totalRows - validRows} registros con errores que deben corregirse antes de continuar.
+                          </p>
+                          <p className="text-sm text-red-600 mt-1">
+                            <strong>Errores incluyen:</strong> Campos de validación inválidos y/o dropdowns sin seleccionar (Concesionario, Analista, Modelo Vehículo).
                           </p>
                         </div>
 
                         <div className="space-y-4 max-h-[50vh] overflow-y-auto">
-                          {excelData.filter(row => row._hasErrors).map((row, index) => (
+                          {excelData.filter(row => {
+                            // Incluir filas con errores de validación O con dropdowns sin seleccionar
+                            const hasValidationErrors = row._hasErrors
+                            const hasDropdownErrors = !row.concesionario || !row.analista || !row.modelo_vehiculo ||
+                              row.concesionario.trim() === '' || row.analista.trim() === '' || row.modelo_vehiculo.trim() === ''
+                            
+                            return hasValidationErrors || hasDropdownErrors
+                          }).map((row, index) => (
                             <div key={index} className="border border-red-200 rounded-lg p-4 bg-red-50">
                               <div className="flex items-center justify-between mb-3">
                                 <h3 className="font-semibold text-red-800">
                                   Fila {row._rowIndex}: {row.nombres} {row.apellidos}
                                 </h3>
                                 <Badge variant="outline" className="text-red-600 border-red-300">
-                                  {Object.keys(row._validation).filter(field => !row._validation[field]?.isValid).length} errores
+                                  {Object.keys(row._validation).filter(field => !row._validation[field]?.isValid).length + 
+                                   (dropdownErrors[`concesionario_${index}`] ? 1 : 0) +
+                                   (dropdownErrors[`analista_${index}`] ? 1 : 0) +
+                                   (dropdownErrors[`modelo_${index}`] ? 1 : 0)} errores
                                 </Badge>
                               </div>
 
@@ -703,6 +733,37 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                     </div>
                                   );
                                 })}
+                                
+                                {/* Mostrar errores de dropdowns */}
+                                {dropdownErrors[`concesionario_${index}`] && (
+                                  <div className="flex items-start space-x-2">
+                                    <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
+                                    <div className="flex-1">
+                                      <span className="text-sm font-medium text-gray-700">Concesionario:</span>
+                                      <div className="text-sm text-red-600 mt-1">Debe seleccionar un concesionario</div>
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {dropdownErrors[`analista_${index}`] && (
+                                  <div className="flex items-start space-x-2">
+                                    <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
+                                    <div className="flex-1">
+                                      <span className="text-sm font-medium text-gray-700">Analista:</span>
+                                      <div className="text-sm text-red-600 mt-1">Debe seleccionar un analista</div>
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {dropdownErrors[`modelo_${index}`] && (
+                                  <div className="flex items-start space-x-2">
+                                    <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
+                                    <div className="flex-1">
+                                      <span className="text-sm font-medium text-gray-700">Modelo Vehículo:</span>
+                                      <div className="text-sm text-red-600 mt-1">Debe seleccionar un modelo de vehículo</div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           ))}
