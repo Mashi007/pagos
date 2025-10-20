@@ -198,10 +198,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         
         setToasts(prev => [...prev, errorToast])
         
-        // Auto-remover notificación después de 5 segundos
+        // Auto-remover notificación después de 3 segundos
         setTimeout(() => {
           setToasts(prev => prev.filter(toast => toast.id !== errorToast.id))
-        }, 5000)
+        }, 3000)
       }
       
       // Actualizar contador de violaciones
@@ -263,10 +263,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     const id = Date.now().toString()
     setToasts(prev => [...prev, { id, type, message, suggestion, field, rowIndex }])
     
-    // Auto-remover después de 5 segundos
+    // Auto-remover después de 3 segundos
     setTimeout(() => {
       setToasts(prev => prev.filter(toast => toast.id !== id))
-    }, 5000)
+    }, 3000)
   }
 
   // 🔄 FUNCIONES PARA SISTEMA DE GUARDADO HÍBRIDO
