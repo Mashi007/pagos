@@ -11,7 +11,7 @@ class ClienteBase(BaseModel):
     cedula: str = Field(..., min_length=8, max_length=20, description="Cédula validada por validadores")
     nombres: str = Field(..., min_length=2, max_length=100, description="1-2 palabras máximo")
     apellidos: str = Field(..., min_length=2, max_length=100, description="1-2 palabras máximo")
-    telefono: str = Field(..., min_length=13, max_length=13, regex=r"^\+58[1-9]\d{9}$", description="Teléfono venezolano: +58 + 10 dígitos")
+    telefono: str = Field(..., min_length=13, max_length=13, pattern=r"^\+58[1-9]\d{9}$", description="Teléfono venezolano: +58 + 10 dígitos")
     email: EmailStr = Field(..., description="Validado por validadores")
     direccion: str = Field(..., min_length=5, max_length=500, description="Dirección libre")
     fecha_nacimiento: date = Field(..., description="Validado por validadores")
@@ -69,7 +69,7 @@ class ClienteUpdate(BaseModel):
     cedula: Optional[str] = Field(None, min_length=8, max_length=20)
     nombres: Optional[str] = Field(None, min_length=2, max_length=100)
     apellidos: Optional[str] = Field(None, min_length=2, max_length=100)
-    telefono: Optional[str] = Field(None, min_length=13, max_length=13, regex=r"^\+58[1-9]\d{9}$")
+    telefono: Optional[str] = Field(None, min_length=13, max_length=13, pattern=r"^\+58[1-9]\d{9}$")
     email: Optional[EmailStr] = None
     direccion: Optional[str] = Field(None, min_length=5, max_length=500)
     fecha_nacimiento: Optional[date] = None
