@@ -91,6 +91,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const [savedClients, setSavedClients] = useState<Set<number>>(new Set())
   const [isSavingIndividual, setIsSavingIndividual] = useState(false)
   const [savingProgress, setSavingProgress] = useState<{[key: number]: boolean}>({})
+  const [showOnlyPending, setShowOnlyPending] = useState(false)
 
   // Cargar datos de configuración
   useEffect(() => {
@@ -159,6 +160,22 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     return excelData.filter(row => isClientValid(row) && !savedClients.has(row._rowIndex))
   }
 
+  // 📊 FUNCIONES PARA FILTRAR DATOS MOSTRADOS
+  const getDisplayData = (): ExcelRow[] => {
+    if (showOnlyPending) {
+      return excelData.filter(row => !savedClients.has(row._rowIndex))
+    }
+    return excelData
+  }
+
+  const getPendingClients = (): ExcelRow[] => {
+    return excelData.filter(row => !savedClients.has(row._rowIndex))
+  }
+
+  const getSavedClientsCount = (): number => {
+    return savedClients.size
+  }
+
   const saveIndividualClient = async (row: ExcelRow): Promise<boolean> => {
     try {
       setSavingProgress(prev => ({ ...prev, [row._rowIndex]: true }))
@@ -191,6 +208,12 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       setSavedClients(prev => new Set([...prev, row._rowIndex]))
       
       addToast('success', `Cliente ${row.nombres} ${row.apellidos} guardado exitosamente`)
+      
+      // Verificar si todos los clientes están guardados
+      const remainingClients = excelData.filter(r => !savedClients.has(r._rowIndex) && r !== row)
+      if (remainingClients.length === 0) {
+        addToast('success', '🎉 ¡Todos los clientes han sido guardados exitosamente!')
+      }
       
       return true
     } catch (error: any) {
@@ -806,11 +829,23 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                         Válidos: {getValidClients().length}
                       </Badge>
                       <Badge variant="outline" className="text-blue-700">
-                        Guardados: {savedClients.size}
+                        Guardados: {getSavedClientsCount()}
                       </Badge>
                       <Badge variant="outline" className="text-red-700">
-                        Con errores: {totalRows - getValidClients().length - savedClients.size}
+                        Con errores: {totalRows - getValidClients().length - getSavedClientsCount()}
                       </Badge>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="showOnlyPending"
+                          checked={showOnlyPending}
+                          onChange={(e) => setShowOnlyPending(e.target.checked)}
+                          className="rounded"
+                        />
+                        <label htmlFor="showOnlyPending" className="text-sm text-gray-600">
+                          Solo pendientes
+                        </label>
+                      </div>
                     </div>
                     <div className="flex space-x-2">
                       <Button
@@ -1020,7 +1055,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                         </tr>
                       </thead>
                       <tbody>
-                        {excelData.map((row, index) => (
+                        {getDisplayData().map((row, index) => (
                           <tr key={index} className={row._hasErrors ? 'bg-red-50' : 'bg-green-50'}>
                             <td className="border p-2 text-xs">{row._rowIndex}</td>
                             
