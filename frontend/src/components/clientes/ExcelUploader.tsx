@@ -146,6 +146,44 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         }
         return { isValid: true }
 
+      case 'direccion':
+        if (!value.trim()) return { isValid: false, message: 'Dirección requerida' }
+        if (value.trim().length < 5) return { isValid: false, message: 'Mínimo 5 caracteres' }
+        return { isValid: true }
+
+      case 'fecha_nacimiento':
+        if (!value.trim()) return { isValid: false, message: 'Fecha requerida' }
+        const fechaNac = new Date(value)
+        const hoy = new Date()
+        if (isNaN(fechaNac.getTime())) {
+          return { isValid: false, message: 'Formato de fecha inválido' }
+        }
+        if (fechaNac >= hoy) {
+          return { isValid: false, message: 'Debe ser una fecha pasada' }
+        }
+        return { isValid: true }
+
+      case 'ocupacion':
+        if (!value.trim()) return { isValid: false, message: 'Ocupación requerida' }
+        if (value.trim().length < 2) return { isValid: false, message: 'Mínimo 2 caracteres' }
+        return { isValid: true }
+
+      case 'modelo_vehiculo':
+        if (!value.trim()) return { isValid: false, message: 'Modelo requerido' }
+        return { isValid: true }
+
+      case 'concesionario':
+        if (!value.trim()) return { isValid: false, message: 'Concesionario requerido' }
+        return { isValid: true }
+
+      case 'analista':
+        if (!value.trim()) return { isValid: false, message: 'Analista requerido' }
+        return { isValid: true }
+
+      case 'notas':
+        // Notas es opcional, siempre válido
+        return { isValid: true }
+
       default:
         return { isValid: true }
     }
@@ -207,8 +245,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         
         // Validar campos requeridos
         const requiredFields = ['cedula', 'nombres', 'apellidos', 'telefono', 'email', 
-                              'total_financiamiento', 'numero_amortizaciones', 'modalidad_pago', 
-                              'fecha_entrega', 'estado', 'activo']
+                              'direccion', 'fecha_nacimiento', 'ocupacion', 'modelo_vehiculo', 
+                              'concesionario', 'analista', 'estado', 'activo']
         
         let hasErrors = false
         for (const field of requiredFields) {
@@ -460,14 +498,23 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                           <th className="border p-2 text-left text-xs font-medium text-gray-500">Apellidos</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500">Teléfono</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500">Email</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Total Fin.</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Dirección</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Fecha Nac.</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Ocupación</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Modelo Veh.</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Concesionario</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Analista</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500">Estado</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Activo</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Notas</th>
                         </tr>
                       </thead>
                       <tbody>
                         {excelData.map((row, index) => (
                           <tr key={index} className={row._hasErrors ? 'bg-red-50' : 'bg-green-50'}>
                             <td className="border p-2 text-xs">{row._rowIndex}</td>
+                            
+                            {/* Cédula */}
                             <td className="border p-2">
                               <input
                                 type="text"
@@ -481,6 +528,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 <p className="text-xs text-red-600 mt-1">{row._validation.cedula.message}</p>
                               )}
                             </td>
+                            
+                            {/* Nombres */}
                             <td className="border p-2">
                               <input
                                 type="text"
@@ -490,7 +539,12 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                   row._validation.nombres?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
                                 }`}
                               />
+                              {row._validation.nombres?.message && (
+                                <p className="text-xs text-red-600 mt-1">{row._validation.nombres.message}</p>
+                              )}
                             </td>
+                            
+                            {/* Apellidos */}
                             <td className="border p-2">
                               <input
                                 type="text"
@@ -500,7 +554,12 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                   row._validation.apellidos?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
                                 }`}
                               />
+                              {row._validation.apellidos?.message && (
+                                <p className="text-xs text-red-600 mt-1">{row._validation.apellidos.message}</p>
+                              )}
                             </td>
+                            
+                            {/* Teléfono */}
                             <td className="border p-2">
                               <input
                                 type="text"
@@ -510,7 +569,12 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                   row._validation.telefono?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
                                 }`}
                               />
+                              {row._validation.telefono?.message && (
+                                <p className="text-xs text-red-600 mt-1">{row._validation.telefono.message}</p>
+                              )}
                             </td>
+                            
+                            {/* Email */}
                             <td className="border p-2">
                               <input
                                 type="email"
@@ -520,17 +584,102 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                   row._validation.email?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
                                 }`}
                               />
+                              {row._validation.email?.message && (
+                                <p className="text-xs text-red-600 mt-1">{row._validation.email.message}</p>
+                              )}
                             </td>
+                            
+                            {/* Dirección */}
                             <td className="border p-2">
                               <input
                                 type="text"
-                                value={row.total_financiamiento}
-                                onChange={(e) => updateCellValue(index, 'total_financiamiento', e.target.value)}
+                                value={row.direccion}
+                                onChange={(e) => updateCellValue(index, 'direccion', e.target.value)}
                                 className={`w-full text-xs p-1 border rounded ${
-                                  row._validation.total_financiamiento?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                  row._validation.direccion?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
                                 }`}
                               />
+                              {row._validation.direccion?.message && (
+                                <p className="text-xs text-red-600 mt-1">{row._validation.direccion.message}</p>
+                              )}
                             </td>
+                            
+                            {/* Fecha Nacimiento */}
+                            <td className="border p-2">
+                              <input
+                                type="date"
+                                value={row.fecha_nacimiento}
+                                onChange={(e) => updateCellValue(index, 'fecha_nacimiento', e.target.value)}
+                                className={`w-full text-xs p-1 border rounded ${
+                                  row._validation.fecha_nacimiento?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                }`}
+                              />
+                              {row._validation.fecha_nacimiento?.message && (
+                                <p className="text-xs text-red-600 mt-1">{row._validation.fecha_nacimiento.message}</p>
+                              )}
+                            </td>
+                            
+                            {/* Ocupación */}
+                            <td className="border p-2">
+                              <input
+                                type="text"
+                                value={row.ocupacion}
+                                onChange={(e) => updateCellValue(index, 'ocupacion', e.target.value)}
+                                className={`w-full text-xs p-1 border rounded ${
+                                  row._validation.ocupacion?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                }`}
+                              />
+                              {row._validation.ocupacion?.message && (
+                                <p className="text-xs text-red-600 mt-1">{row._validation.ocupacion.message}</p>
+                              )}
+                            </td>
+                            
+                            {/* Modelo Vehículo */}
+                            <td className="border p-2">
+                              <input
+                                type="text"
+                                value={row.modelo_vehiculo}
+                                onChange={(e) => updateCellValue(index, 'modelo_vehiculo', e.target.value)}
+                                className={`w-full text-xs p-1 border rounded ${
+                                  row._validation.modelo_vehiculo?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                }`}
+                              />
+                              {row._validation.modelo_vehiculo?.message && (
+                                <p className="text-xs text-red-600 mt-1">{row._validation.modelo_vehiculo.message}</p>
+                              )}
+                            </td>
+                            
+                            {/* Concesionario */}
+                            <td className="border p-2">
+                              <input
+                                type="text"
+                                value={row.concesionario}
+                                onChange={(e) => updateCellValue(index, 'concesionario', e.target.value)}
+                                className={`w-full text-xs p-1 border rounded ${
+                                  row._validation.concesionario?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                }`}
+                              />
+                              {row._validation.concesionario?.message && (
+                                <p className="text-xs text-red-600 mt-1">{row._validation.concesionario.message}</p>
+                              )}
+                            </td>
+                            
+                            {/* Analista */}
+                            <td className="border p-2">
+                              <input
+                                type="text"
+                                value={row.analista}
+                                onChange={(e) => updateCellValue(index, 'analista', e.target.value)}
+                                className={`w-full text-xs p-1 border rounded ${
+                                  row._validation.analista?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                }`}
+                              />
+                              {row._validation.analista?.message && (
+                                <p className="text-xs text-red-600 mt-1">{row._validation.analista.message}</p>
+                              )}
+                            </td>
+                            
+                            {/* Estado */}
                             <td className="border p-2">
                               <input
                                 type="text"
@@ -540,6 +689,39 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                   row._validation.estado?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
                                 }`}
                               />
+                              {row._validation.estado?.message && (
+                                <p className="text-xs text-red-600 mt-1">{row._validation.estado.message}</p>
+                              )}
+                            </td>
+                            
+                            {/* Activo */}
+                            <td className="border p-2">
+                              <input
+                                type="text"
+                                value={row.activo}
+                                onChange={(e) => updateCellValue(index, 'activo', e.target.value)}
+                                className={`w-full text-xs p-1 border rounded ${
+                                  row._validation.activo?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                }`}
+                              />
+                              {row._validation.activo?.message && (
+                                <p className="text-xs text-red-600 mt-1">{row._validation.activo.message}</p>
+                              )}
+                            </td>
+                            
+                            {/* Notas */}
+                            <td className="border p-2">
+                              <input
+                                type="text"
+                                value={row.notas}
+                                onChange={(e) => updateCellValue(index, 'notas', e.target.value)}
+                                className={`w-full text-xs p-1 border rounded ${
+                                  row._validation.notas?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                }`}
+                              />
+                              {row._validation.notas?.message && (
+                                <p className="text-xs text-red-600 mt-1">{row._validation.notas.message}</p>
+                              )}
                             </td>
                           </tr>
                         ))}
