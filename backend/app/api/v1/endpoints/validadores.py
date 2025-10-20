@@ -732,7 +732,7 @@ def obtener_configuracion_validadores(
                 "fecha_entrega": "No puede ser futura",
                 "fecha_pago": "Máximo 1 día en el futuro",
                 "monto_pago": "No puede exceder saldo pendiente",
-                "total_financiamiento": "Entre $100 y $50,000,000",
+                "total_financiamiento": "Entre $1 y $50,000,000",
                 "amortizaciones": "Entre 1 y 84 meses",
                 "cedula_venezuela": "Prefijos V/E/J + 7-10 dígitos del 0-9",
                 "telefono_venezuela": "+58 + 10 dígitos (primer dígito no puede ser 0)",

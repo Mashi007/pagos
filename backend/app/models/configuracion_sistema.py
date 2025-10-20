@@ -343,7 +343,7 @@ class ConfiguracionPorDefecto:
                 "valor": "5000000",
                 "descripcion": "Monto máximo de financiamiento",
                 "tipo_dato": "INTEGER",
-                "valor_minimo": "100000",
+                "valor_minimo": "1",
                 "valor_maximo": "50000000",
                 "requerido": True
             },

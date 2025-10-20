@@ -842,8 +842,8 @@ class ValidadorMonto:
     def _validar_limites_por_tipo(monto: Decimal, tipo: str, saldo_maximo: Optional[Decimal]) -> Optional[str]:
         """Validar límites específicos por tipo de monto"""
         if tipo == "TOTAL_FINANCIAMIENTO":
-            if monto < Decimal("100"):
-                return "Monto mínimo de financiamiento: $100"
+            if monto < Decimal("1"):
+                return "Monto mínimo de financiamiento: $1"
             if monto > Decimal("50000000"):  # 50M
                 return "Monto máximo de financiamiento: $50,000,000"
         
