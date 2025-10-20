@@ -3,7 +3,6 @@ import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { 
   Calculator, 
@@ -267,7 +266,7 @@ export function TablaAmortizacion({ onClose }: TablaAmortizacionProps) {
             <CardContent>
               <div className="flex items-center space-x-4">
                 <div className="flex-1">
-                  <Label htmlFor="cedula">Cédula del Cliente</Label>
+                  <label htmlFor="cedula" className="block text-sm font-medium text-gray-700 mb-1">Cédula del Cliente</label>
                   <div className="relative">
                     <Input
                       id="cedula"

@@ -3,7 +3,6 @@ import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
@@ -261,7 +260,7 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="cedula">Cédula del Cliente</Label>
+                  <label htmlFor="cedula" className="block text-sm font-medium text-gray-700 mb-1">Cédula del Cliente</label>
                   <div className="flex items-center space-x-2">
                     <div className="flex-1 relative">
                       <Input
@@ -321,7 +320,7 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="monto_total">Monto Total</Label>
+                    <label htmlFor="monto_total" className="block text-sm font-medium text-gray-700 mb-1">Monto Total</label>
                     <Input
                       id="monto_total"
                       type="number"
@@ -336,7 +335,7 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
                     />
                   </div>
                   <div>
-                    <Label htmlFor="monto_financiado">Monto Financiado</Label>
+                    <label htmlFor="monto_financiado" className="block text-sm font-medium text-gray-700 mb-1">Monto Financiado</label>
                     <Input
                       id="monto_financiado"
                       type="number"
@@ -351,7 +350,7 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
                     />
                   </div>
                   <div>
-                    <Label htmlFor="monto_inicial">Cuota Inicial</Label>
+                    <label htmlFor="monto_inicial" className="block text-sm font-medium text-gray-700 mb-1">Cuota Inicial</label>
                     <Input
                       id="monto_inicial"
                       type="number"
@@ -365,7 +364,7 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
                     />
                   </div>
                   <div>
-                    <Label htmlFor="tasa_interes">Tasa de Interés (%)</Label>
+                    <label htmlFor="tasa_interes" className="block text-sm font-medium text-gray-700 mb-1">Tasa de Interés (%)</label>
                     <Input
                       id="tasa_interes"
                       type="number"
@@ -380,7 +379,7 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
                     />
                   </div>
                   <div>
-                    <Label htmlFor="numero_cuotas">Número de Cuotas</Label>
+                    <label htmlFor="numero_cuotas" className="block text-sm font-medium text-gray-700 mb-1">Número de Cuotas</label>
                     <Input
                       id="numero_cuotas"
                       type="number"
@@ -394,7 +393,7 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
                     />
                   </div>
                   <div>
-                    <Label htmlFor="monto_cuota">Monto por Cuota</Label>
+                    <label htmlFor="monto_cuota" className="block text-sm font-medium text-gray-700 mb-1">Monto por Cuota</label>
                     <Input
                       id="monto_cuota"
                       type="number"
@@ -412,7 +411,7 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="fecha_aprobacion">Fecha de Aprobación</Label>
+                    <label htmlFor="fecha_aprobacion" className="block text-sm font-medium text-gray-700 mb-1">Fecha de Aprobación</label>
                     <Input
                       id="fecha_aprobacion"
                       type="date"
@@ -425,7 +424,7 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
                     />
                   </div>
                   <div>
-                    <Label htmlFor="fecha_desembolso">Fecha de Desembolso</Label>
+                    <label htmlFor="fecha_desembolso" className="block text-sm font-medium text-gray-700 mb-1">Fecha de Desembolso</label>
                     <Input
                       id="fecha_desembolso"
                       type="date"
@@ -437,7 +436,7 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
                     />
                   </div>
                   <div>
-                    <Label htmlFor="fecha_primer_vencimiento">Primer Vencimiento</Label>
+                    <label htmlFor="fecha_primer_vencimiento" className="block text-sm font-medium text-gray-700 mb-1">Primer Vencimiento</label>
                     <Input
                       id="fecha_primer_vencimiento"
                       type="date"
@@ -450,7 +449,7 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
                     />
                   </div>
                   <div>
-                    <Label htmlFor="modalidad">Modalidad de Pago</Label>
+                    <label htmlFor="modalidad" className="block text-sm font-medium text-gray-700 mb-1">Modalidad de Pago</label>
                     <Select value={formData.modalidad} onValueChange={(value) => setFormData(prev => ({ ...prev, modalidad: value }))}>
                       <SelectTrigger>
                         <SelectValue />
@@ -466,7 +465,7 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
                 </div>
 
                 <div>
-                  <Label htmlFor="destino_credito">Destino del Crédito</Label>
+                  <label htmlFor="destino_credito" className="block text-sm font-medium text-gray-700 mb-1">Destino del Crédito</label>
                   <Input
                     id="destino_credito"
                     value={formData.destino_credito}
@@ -479,7 +478,7 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
                 </div>
 
                 <div>
-                  <Label htmlFor="observaciones">Observaciones</Label>
+                  <label htmlFor="observaciones" className="block text-sm font-medium text-gray-700 mb-1">Observaciones</label>
                   <Textarea
                     id="observaciones"
                     value={formData.observaciones}
