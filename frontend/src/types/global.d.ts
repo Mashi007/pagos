@@ -27,6 +27,25 @@ declare global {
       target: T & EventTarget
     }
   }
+  
+  // Declaraciones globales para React
+  namespace React {
+    type ReactNode = any
+    type ComponentType<P = {}> = (props: P) => any
+    type HTMLAttributes<T = Element> = any
+    type InputHTMLAttributes<T = Element> = any
+    type TextareaHTMLAttributes<T = Element> = any
+    type ButtonHTMLAttributes<T = Element> = any
+    type ThHTMLAttributes<T = Element> = any
+    type TdHTMLAttributes<T = Element> = any
+    type ElementRef<T> = any
+    type ComponentPropsWithoutRef<T> = any
+    type KeyboardEvent<T = Element> = any
+    
+    function forwardRef<T, P = {}>(component: (props: P, ref: React.Ref<T>) => any): any
+    function useId(): string
+    const StrictMode: any
+  }
 
   namespace JSX {
     interface IntrinsicElements {
@@ -67,6 +86,23 @@ declare module 'react' {
   export function map<T, U>(array: T[], callback: (item: T, index: number) => U): U[]
   export function filter<T>(array: T[], callback: (item: T, index: number) => boolean): T[]
   export function reduce<T, U>(array: T[], callback: (acc: U, item: T, index: number) => U, initial: U): U
+  
+  // Declaraciones adicionales para React
+  export type ReactNode = any
+  export type ComponentType<P = {}> = (props: P) => any
+  export type HTMLAttributes<T = Element> = any
+  export type InputHTMLAttributes<T = Element> = any
+  export type TextareaHTMLAttributes<T = Element> = any
+  export type ButtonHTMLAttributes<T = Element> = any
+  export type ThHTMLAttributes<T = Element> = any
+  export type TdHTMLAttributes<T = Element> = any
+  export type ElementRef<T> = any
+  export type ComponentPropsWithoutRef<T> = any
+  export type KeyboardEvent<T = Element> = any
+  
+  export function forwardRef<T, P = {}>(component: (props: P, ref: React.Ref<T>) => any): any
+  export function useId(): string
+  export const StrictMode: any
 }
 
 declare module 'framer-motion' {
