@@ -6,14 +6,10 @@ import {
   Edit,
   Trash2,
   Search,
-  CheckCircle,
-  XCircle,
   Save,
   X,
   RefreshCw,
   Loader2,
-  TrendingUp,
-  TrendingDown,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -198,10 +194,6 @@ export function ModelosVehiculosConfig() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{activosModelos}</div>
-            <p className="text-xs text-muted-foreground">
-              <TrendingUp className="inline h-3 w-3 mr-1" />
-              {totalModelos > 0 ? ((activosModelos / totalModelos) * 100).toFixed(1) : 0}% del total
-            </p>
           </CardContent>
         </Card>
         <Card>
@@ -211,10 +203,6 @@ export function ModelosVehiculosConfig() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">{inactivosModelos}</div>
-            <p className="text-xs text-muted-foreground">
-              <TrendingDown className="inline h-3 w-3 mr-1" />
-              {totalModelos > 0 ? ((inactivosModelos / totalModelos) * 100).toFixed(1) : 0}% del total
-            </p>
           </CardContent>
         </Card>
         <Card>
@@ -328,7 +316,7 @@ export function ModelosVehiculosConfig() {
       {/* Modelos Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Modelos de Vehículos</CardTitle>
+          <CardTitle>Lista de Modelos de Vehículos ({totalModelos})</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -336,7 +324,6 @@ export function ModelosVehiculosConfig() {
               <TableRow>
                 <TableHead>Modelo de Vehículo</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Fecha Creación</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -344,31 +331,15 @@ export function ModelosVehiculosConfig() {
               {filteredModelos.map((modelo) => (
                 <TableRow key={modelo.id}>
                   <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Car className="h-4 w-4 text-gray-400" />
-                      <div>
-                        <div className="font-medium">{modelo.modelo}</div>
-                        <div className="text-sm text-gray-500">ID: {modelo.id}</div>
-                      </div>
+                    <div>
+                      <div className="font-semibold">{modelo.modelo}</div>
+                      <div className="text-sm text-gray-500">ID: {modelo.id}</div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={modelo.activo ? "default" : "secondary"}>
-                      {modelo.activo ? (
-                        <>
-                          <CheckCircle className="mr-1 h-3 w-3" />
-                          Activo
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="mr-1 h-3 w-3" />
-                          Inactivo
-                        </>
-                      )}
+                    <Badge variant="default" className="bg-blue-600 text-white">
+                      {modelo.activo ? "Activo" : "Inactivo"}
                     </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {modelo.created_at ? new Date(modelo.created_at).toLocaleDateString() : 'N/A'}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end space-x-2">

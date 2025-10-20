@@ -313,31 +313,30 @@ export function AnalistasConfig() {
       {/* Analistas Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Analistas</CardTitle>
+          <CardTitle>Lista de Analistas ({analistas?.length || 0})</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Nombre</TableHead>
+                <TableHead>Analista</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Fecha Creación</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredAnalistas.map((analista: Analista) => (
                 <TableRow key={analista.id}>
-                  <TableCell className="font-medium">{analista.id}</TableCell>
-                  <TableCell>{analista.nombre}</TableCell>
                   <TableCell>
-                    <Badge variant={analista.activo ? "default" : "secondary"}>
-                      {analista.activo ? "Activo" : "Inactivo"}
-                    </Badge>
+                    <div>
+                      <div className="font-semibold">{analista.nombre}</div>
+                      <div className="text-sm text-gray-500">ID: {analista.id}</div>
+                    </div>
                   </TableCell>
                   <TableCell>
-                    {analista.created_at ? new Date(analista.created_at).toLocaleDateString() : 'N/A'}
+                    <Badge variant="default" className="bg-blue-600 text-white">
+                      {analista.activo ? "Activo" : "Inactivo"}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end space-x-2">
