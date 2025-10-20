@@ -325,9 +325,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         direccion: row.direccion,
         fecha_nacimiento: row.fecha_nacimiento,
         ocupacion: row.ocupacion,
-        modelo_vehiculo: row.modelo_vehiculo,
-        concesionario: row.concesionario,
-        analista: row.analista,
+        modelo_vehiculo: row.modelo_vehiculo || undefined,
+        concesionario: row.concesionario || undefined,
+        analista: row.analista || undefined,
         total_financiamiento: parseFloat(row.total_financiamiento) || 0,
         cuota_inicial: parseFloat(row.cuota_inicial) || 0,
         numero_amortizaciones: parseInt(row.numero_amortizaciones) || 0,
@@ -696,7 +696,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         
         let hasErrors = false
         for (const field of requiredFields) {
-          const validation = await validateField(field, rowData[field as keyof ExcelData])
+          const validation = await validateField(field, rowData[field as keyof ExcelData] || '')
           rowData._validation[field] = validation
           if (!validation.isValid) hasErrors = true
         }
@@ -860,9 +860,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
             direccion: row.direccion,
             fecha_nacimiento: row.fecha_nacimiento,
             ocupacion: row.ocupacion,
-            modelo_vehiculo: row.modelo_vehiculo,
-            concesionario: row.concesionario,
-            analista: row.analista,
+            modelo_vehiculo: row.modelo_vehiculo || undefined,
+            concesionario: row.concesionario || undefined,
+            analista: row.analista || undefined,
             estado: row.estado.toUpperCase().trim(), // ✅ Normalizar estado
             activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
             notas: row.notas || 'NA'
@@ -1389,7 +1389,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                   value: modelo.modelo,
                                   label: modelo.modelo
                                 }))}
-                                value={row.modelo_vehiculo}
+                                value={row.modelo_vehiculo || ''}
                                 onChange={(value) => updateCellValue(index, 'modelo_vehiculo', value)}
                                 placeholder="Seleccionar modelo..."
                                 className={`w-full text-sm min-w-[120px] ${
@@ -1405,7 +1405,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                   value: concesionario.nombre,
                                   label: concesionario.nombre
                                 }))}
-                                value={row.concesionario}
+                                value={row.concesionario || ''}
                                 onChange={(value) => updateCellValue(index, 'concesionario', value)}
                                 placeholder="Seleccionar concesionario..."
                                 className={`w-full text-sm min-w-[120px] ${
@@ -1421,7 +1421,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                   value: analista.nombre,
                                   label: analista.nombre
                                 }))}
-                                value={row.analista}
+                                value={row.analista || ''}
                                 onChange={(value) => updateCellValue(index, 'analista', value)}
                                 placeholder="Seleccionar analista..."
                                 className={`w-full text-sm min-w-[120px] ${
