@@ -90,21 +90,25 @@ export function SearchableSelect({
         onClick={handleToggle}
         disabled={disabled}
         className={cn(
-          "flex h-12 w-full items-center justify-between rounded-md border border-gray-300 bg-white px-4 py-3 text-base",
+          "flex h-12 w-full items-center justify-between rounded-md px-4 py-3 text-base",
           "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
           "disabled:cursor-not-allowed disabled:opacity-50",
           isOpen && "ring-2 ring-blue-500 border-blue-500",
+          // Aplicar clases de error si están presentes, sino usar estilos por defecto
+          className?.includes('border-red-800') ? className : "border border-gray-300 bg-white",
           className
         )}
       >
         <span className={cn(
-          "truncate text-black",
-          !displayValue && "text-gray-500"
+          "truncate",
+          className?.includes('text-white') ? "text-white" : "text-black",
+          !displayValue && !className?.includes('text-white') && "text-gray-500"
         )}>
           {displayValue || placeholder}
         </span>
         <ChevronDownIcon className={cn(
-          "h-5 w-5 opacity-50 transition-transform text-gray-600",
+          "h-5 w-5 opacity-50 transition-transform",
+          className?.includes('text-white') ? "text-white" : "text-gray-600",
           isOpen && "rotate-180"
         )} />
       </button>
