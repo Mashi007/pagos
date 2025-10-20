@@ -1,22 +1,28 @@
-from pydantic import BaseModel, ConfigDict
-from typing import List
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Optional
+from datetime import datetime
 
 class ConcesionarioBase(BaseModel):
-    pass
+    nombre: str = Field(..., min_length=2, max_length=255, description="Nombre del concesionario")
+    activo: bool = Field(True, description="Estado activo del concesionario")
 
 class ConcesionarioCreate(ConcesionarioBase):
     pass
 
 class ConcesionarioUpdate(BaseModel):
-    pass
+    nombre: Optional[str] = Field(None, min_length=2, max_length=255)
+    activo: Optional[bool] = None
 
 class ConcesionarioResponse(ConcesionarioBase):
     id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    fecha_eliminacion: Optional[datetime] = None
     
     model_config = ConfigDict(from_attributes=True)
 
 class ConcesionarioListResponse(BaseModel):
-    items: List[ConcesionarioResponse]
+    items: list[ConcesionarioResponse]
     total: int
     page: int
     size: int
