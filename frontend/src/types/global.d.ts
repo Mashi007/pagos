@@ -153,24 +153,6 @@ declare global {
   const useCallback: <T extends (...args: any[]) => any>(callback: T, deps: any[]) => T
   const useMemo: <T>(factory: () => T, deps: any[]) => T
   
-  // Declaraciones específicas para resolver errores de parámetros implícitos
-  const prestamo: any
-  const updatedAnalista: any
-  const newCliente: any
-  const updatedCliente: any
-  const deletedId: any
-  const result: any
-  const analista: any
-  const pago: any
-  const a: any
-  const _: any
-  
-  // Declaraciones específicas para funciones que causan errores
-  const useQuery: <T = any>(queryKey: any[], queryFn: () => Promise<T>, options?: any) => any
-  const useMutation: <T = any>(mutationFn: (variables: any) => Promise<T>, options?: any) => any
-  const useCallback: <T extends (...args: any[]) => any>(callback: T, deps: any[]) => T
-  const useMemo: <T>(factory: () => T, deps: any[]) => T
-  
   // Tipos específicos del proyecto
   interface Cliente {
     id: number
@@ -391,24 +373,6 @@ declare module 'react' {
   export function find<T>(array: T[], callback: (item: T, index: number) => boolean): T | undefined
   export function some<T>(array: T[], callback: (item: T, index: number) => boolean): boolean
   export function every<T>(array: T[], callback: (item: T, index: number) => boolean): boolean
-  
-  // Declaraciones específicas para resolver errores de parámetros implícitos
-  export const prestamo: any
-  export const updatedAnalista: any
-  export const newCliente: any
-  export const updatedCliente: any
-  export const deletedId: any
-  export const result: any
-  export const analista: any
-  export const pago: any
-  export const a: any
-  export const _: any
-  
-  // Declaraciones específicas para funciones que causan errores
-  export const useQuery: <T = any>(queryKey: any[], queryFn: () => Promise<T>, options?: any) => any
-  export const useMutation: <T = any>(mutationFn: (variables: any) => Promise<T>, options?: any) => any
-  export const useCallback: <T extends (...args: any[]) => any>(callback: T, deps: any[]) => T
-  export const useMemo: <T>(factory: () => T, deps: any[]) => T
   
   // Declaraciones específicas para resolver errores de parámetros implícitos
   export const prestamo: any
