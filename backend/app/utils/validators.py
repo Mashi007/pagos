@@ -37,8 +37,9 @@ def validate_dni(dni: str) -> bool:
 
 def validate_phone(phone: str) -> bool:
     """
-    Valida formato de teléfono
-    Acepta formatos: +595981234567, 0981234567, 981234567
+    Valida formato de teléfono venezolano
+    Formato: +58 + 10 dígitos (no puede empezar por 0)
+    Ejemplo: +584121234567
     
     Args:
         phone: Número de teléfono
@@ -52,16 +53,10 @@ def validate_phone(phone: str) -> bool:
     # Remover espacios, guiones y paréntesis
     phone_clean = re.sub(r'[\s\-\(\)]', '', phone)
     
-    # Patrón para números paraguayos
-    # +595 XXXX XXXXXX o 0XXX XXXXXX o XXX XXXXXX
-    patterns = [
-        r'^\+595\d{9}$',      # +595981234567
-        r'^0\d{9}$',          # 0981234567
-        r'^\d{9}$',           # 981234567
-        r'^\d{6,10}$'         # Formato flexible
-    ]
+    # Patrón para números venezolanos: +58 + 10 dígitos (no puede empezar por 0)
+    pattern = r'^\+58[1-9]\d{9}$'
     
-    return any(re.match(pattern, phone_clean) for pattern in patterns)
+    return bool(re.match(pattern, phone_clean))
 
 
 def validate_email(email: str) -> bool:

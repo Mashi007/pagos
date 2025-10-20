@@ -123,8 +123,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       case 'telefono':
         if (!value.trim()) return { isValid: false, message: 'Teléfono requerido' }
-        const cleanPhone = value.replace(/\D/g, '')
-        if (cleanPhone.length !== 10) return { isValid: false, message: 'Debe tener 10 dígitos' }
+        const phonePattern = /^\+58[1-9]\d{9}$/
+        if (!phonePattern.test(value)) {
+          return { isValid: false, message: 'Formato: +58 + 10 dígitos (no puede empezar por 0)' }
+        }
         return { isValid: true }
 
       case 'email':
