@@ -772,6 +772,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           if (!validation.isValid) hasErrors = true
         }
         
+        // Validar notas por separado (siempre válido)
+        rowData._validation.notas = { isValid: true }
+        
         rowData._hasErrors = hasErrors
         processedData.push(rowData)
       }
@@ -840,8 +843,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       const validation = await validateField(field, value || '')
       row._validation[field] = validation
       
-      // Recalcular si tiene errores
-      const hasErrors = Object.values(row._validation).some(v => !v.isValid)
+      // Recalcular si tiene errores (excluyendo notas que es opcional)
+      const fieldsToCheck = Object.keys(row._validation).filter(field => field !== 'notas')
+      const hasErrors = fieldsToCheck.some(field => !row._validation[field]?.isValid)
       row._hasErrors = hasErrors
       
       setExcelData(newData)
@@ -1547,9 +1551,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 type="text"
                                 value={row.notas}
                                 onChange={(e) => updateCellValue(index, 'notas', e.target.value)}
-                                className={`w-full text-sm p-2 border rounded min-w-[80px] ${
-                                  row._validation.notas?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
-                                }`}
+                                className="w-full text-sm p-2 border border-gray-300 bg-white text-black rounded min-w-[80px]"
                               />
                             </td>
                             
