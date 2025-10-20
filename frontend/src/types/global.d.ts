@@ -4,6 +4,8 @@ declare global {
   const useState: <T>(initialState: T | (() => T)) => [T, (value: T | ((prev: T) => T)) => void]
   const useRef: <T>(initialValue: T | null) => { current: T | null }
   const useEffect: (effect: () => void | (() => void), deps?: any[]) => void
+  const useCallback: <T extends (...args: any[]) => any>(callback: T, deps: any[]) => T
+  const useMemo: <T>(factory: () => T, deps: any[]) => T
   
   // React namespace
   namespace React {
@@ -14,11 +16,37 @@ declare global {
     
     interface ChangeEvent<T = Element> {
       target: T
+      preventDefault(): void
+      stopPropagation(): void
+    }
+    
+    interface MouseEvent<T = Element> {
+      target: T
+      preventDefault(): void
+      stopPropagation(): void
+    }
+    
+    interface FormEvent<T = Element> {
+      target: T
+      preventDefault(): void
+      stopPropagation(): void
     }
     
     interface DragEvent<T = Element> {
       preventDefault(): void
       dataTransfer: DataTransfer
+    }
+    
+    interface KeyboardEvent<T = Element> {
+      key: string
+      preventDefault(): void
+      stopPropagation(): void
+    }
+    
+    interface FocusEvent<T = Element> {
+      target: T
+      preventDefault(): void
+      stopPropagation(): void
     }
   }
   
@@ -34,6 +62,72 @@ declare global {
     }
     interface ElementAttributesProperty { props: {} }
     interface ElementChildrenAttribute { children: {} }
+  }
+  
+  // Tipos para eventos comunes
+  interface EventTarget {
+    value: string
+    checked: boolean
+  }
+  
+  // Tipos para parámetros comunes
+  type EventHandler = (e: React.ChangeEvent<HTMLInputElement>) => void
+  type DragEventHandler = (e: React.DragEvent<HTMLDivElement>) => void
+  type ClickEventHandler = (e: React.MouseEvent<HTMLButtonElement>) => void
+  type FormEventHandler = (e: React.FormEvent<HTMLFormElement>) => void
+  type ChangeEventHandler = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void
+  
+  // Tipos para funciones de callback comunes
+  type SetStateFunction<T> = (value: T | ((prev: T) => T)) => void
+  type FilterFunction<T> = (item: T) => boolean
+  type MapFunction<T, U> = (item: T) => U
+  
+  // Tipos para parámetros de eventos implícitos
+  type EventParameter = React.ChangeEvent<HTMLInputElement> | React.MouseEvent<HTMLButtonElement> | React.FormEvent<HTMLFormElement>
+  
+  // Tipos específicos del proyecto
+  interface Cliente {
+    id: number
+    cedula: string
+    nombres: string
+    apellidos: string
+    telefono: string
+    email: string
+    direccion: string
+    fecha_nacimiento: string
+    ocupacion: string
+    modelo_vehiculo: string
+    concesionario: string
+    analista: string
+    total_financiamiento: number
+    cuota_inicial: number
+    numero_amortizaciones: number
+    modalidad_pago: string
+    fecha_entrega: string
+    estado: string
+    activo: boolean
+    notas: string
+  }
+  
+  interface Usuario {
+    id: number
+    email: string
+    nombre: string
+    apellido: string
+    cargo?: string
+    is_admin: boolean
+    is_active: boolean
+    created_at: string
+    updated_at?: string
+    last_login?: string
+  }
+  
+  interface Validator {
+    id: number
+    nombre: string
+    tipo: string
+    activo: boolean
+    configuracion: any
   }
 }
 
@@ -111,6 +205,8 @@ declare module 'react' {
   export function useState<T>(initialState: T | (() => T)): [T, (value: T | ((prev: T) => T)) => void]
   export function useRef<T>(initialValue: T | null): { current: T | null }
   export function useEffect(effect: () => void | (() => void), deps?: any[]): void
+  export function useCallback<T extends (...args: any[]) => any>(callback: T, deps: any[]): T
+  export function useMemo<T>(factory: () => T, deps: any[]): T
   
   export type ReactNode = any
   export type ReactElement = any
@@ -119,11 +215,37 @@ declare module 'react' {
   
   export interface ChangeEvent<T = Element> {
     target: T
+    preventDefault(): void
+    stopPropagation(): void
+  }
+  
+  export interface MouseEvent<T = Element> {
+    target: T
+    preventDefault(): void
+    stopPropagation(): void
+  }
+  
+  export interface FormEvent<T = Element> {
+    target: T
+    preventDefault(): void
+    stopPropagation(): void
   }
   
   export interface DragEvent<T = Element> {
     preventDefault(): void
     dataTransfer: DataTransfer
+  }
+  
+  export interface KeyboardEvent<T = Element> {
+    key: string
+    preventDefault(): void
+    stopPropagation(): void
+  }
+  
+  export interface FocusEvent<T = Element> {
+    target: T
+    preventDefault(): void
+    stopPropagation(): void
   }
 }
 
