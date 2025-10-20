@@ -8,6 +8,8 @@ import {
   AlertTriangle,
   Eye,
   Save,
+  Info,
+  CheckCircle2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -76,6 +78,14 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   // Estado para tracking de errores en dropdowns
   const [dropdownErrors, setDropdownErrors] = useState<{[key: string]: boolean}>({})
 
+  // Estado para notificaciones toast
+  const [toasts, setToasts] = useState<Array<{
+    id: string
+    type: 'error' | 'warning' | 'success'
+    message: string
+    suggestion?: string
+  }>>([])
+
   // Cargar datos de configuración
   useEffect(() => {
     const cargarDatosConfiguracion = async () => {
@@ -114,6 +124,56 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     }
   }, [excelData])
 
+  // 🔔 FUNCIONES PARA NOTIFICACIONES TOAST
+  const addToast = (type: 'error' | 'warning' | 'success', message: string, suggestion?: string) => {
+    const id = Date.now().toString()
+    setToasts(prev => [...prev, { id, type, message, suggestion }])
+    
+    // Auto-remover después de 5 segundos
+    setTimeout(() => {
+      setToasts(prev => prev.filter(toast => toast.id !== id))
+    }, 5000)
+  }
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id))
+  }
+
+  // 💡 FUNCIÓN PARA OBTENER SUGERENCIAS ESPECÍFICAS
+  const getSuggestion = (field: string, value: string): string => {
+    switch (field) {
+      case 'nombres':
+        if (value.trim().split(/\s+/).length < 2) {
+          return `Ejemplo: "Juan Carlos" en lugar de "${value}"`
+        }
+        break
+      case 'apellidos':
+        if (value.trim().split(/\s+/).length < 2) {
+          return `Ejemplo: "García López" en lugar de "${value}"`
+        }
+        break
+      case 'cedula':
+        return `Ejemplo: "V12345678" o "E87654321"`
+      case 'telefono':
+        return `Ejemplo: "+584121234567" (10 dígitos después de +58)`
+      case 'email':
+        return `Ejemplo: "usuario@dominio.com"`
+      case 'concesionario':
+        return `Selecciona un concesionario de la lista`
+      case 'analista':
+        return `Selecciona un analista de la lista`
+      case 'modelo_vehiculo':
+        return `Selecciona un modelo de vehículo de la lista`
+      case 'estado':
+        return `Ejemplo: "ACTIVO", "INACTIVO" o "FINALIZADO"`
+      case 'activo':
+        return `Ejemplo: "true" o "false"`
+      default:
+        return `Revisa el formato del campo`
+    }
+    return ''
+  }
+
   // 🔍 VALIDAR CAMPO INDIVIDUAL
   const validateField = async (field: string, value: string): Promise<ValidationResult> => {
     switch (field) {
@@ -127,12 +187,16 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       case 'nombres':
         if (!value.trim()) return { isValid: false, message: 'Nombres requeridos' }
-        if (value.trim().length < 2) return { isValid: false, message: 'Mínimo 2 caracteres' }
+        const nombresWords = value.trim().split(/\s+/).filter(word => word.length > 0)
+        if (nombresWords.length < 2) return { isValid: false, message: 'Mínimo 2 palabras requeridas' }
+        if (nombresWords.length > 2) return { isValid: false, message: 'Máximo 2 palabras permitidas' }
         return { isValid: true }
 
       case 'apellidos':
         if (!value.trim()) return { isValid: false, message: 'Apellidos requeridos' }
-        if (value.trim().length < 2) return { isValid: false, message: 'Mínimo 2 caracteres' }
+        const apellidosWords = value.trim().split(/\s+/).filter(word => word.length > 0)
+        if (apellidosWords.length < 2) return { isValid: false, message: 'Mínimo 2 palabras requeridas' }
+        if (apellidosWords.length > 2) return { isValid: false, message: 'Máximo 2 palabras permitidas' }
         return { isValid: true }
 
       case 'telefono':
@@ -403,6 +467,13 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       
       // Actualizar estado de errores en dropdowns
       updateDropdownErrors(newData)
+      
+      // Mostrar notificación toast
+      if (!validation.isValid) {
+        addToast('error', `Campo "${field}": ${validation.message}`, getSuggestion(field, value))
+      } else {
+        addToast('success', `Campo "${field}" es válido`)
+      }
     }
   }
 
@@ -1047,6 +1118,47 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           )}
         </div>
       </motion.div>
+
+      {/* 🔔 NOTIFICACIONES TOAST */}
+      <div className="fixed top-4 right-4 z-[60] space-y-2">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, x: 300, scale: 0.8 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 300, scale: 0.8 }}
+              className={`max-w-sm p-4 rounded-lg shadow-lg border-l-4 ${
+                toast.type === 'error' 
+                  ? 'bg-red-50 border-red-500 text-red-800' 
+                  : toast.type === 'warning'
+                  ? 'bg-yellow-50 border-yellow-500 text-yellow-800'
+                  : 'bg-green-50 border-green-500 text-green-800'
+              }`}
+            >
+              <div className="flex items-start space-x-3">
+                <div className="flex-shrink-0">
+                  {toast.type === 'error' && <AlertTriangle className="h-5 w-5 text-red-500" />}
+                  {toast.type === 'warning' && <Info className="h-5 w-5 text-yellow-500" />}
+                  {toast.type === 'success' && <CheckCircle2 className="h-5 w-5 text-green-500" />}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">{toast.message}</p>
+                  {toast.suggestion && (
+                    <p className="text-xs mt-1 opacity-80">{toast.suggestion}</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => removeToast(toast.id)}
+                  className="flex-shrink-0 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
     </motion.div>
   )
 }
