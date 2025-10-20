@@ -63,7 +63,7 @@ def registrar_auditoria_cliente(
 def listar_clientes(
     # Paginación
     page: int = Query(1, ge=1, description="Número de página"),
-    per_page: int = Query(20, ge=1, le=100, description="Tamaño de página"),
+    per_page: int = Query(20, ge=1, le=1000, description="Tamaño de página"),
     
     # Búsqueda de texto
     search: Optional[str] = Query(None, description="Buscar en nombre, cédula o móvil"),

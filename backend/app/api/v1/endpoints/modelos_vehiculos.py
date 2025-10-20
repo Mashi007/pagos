@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 def listar_modelos_vehiculos(
     # Paginación
     page: int = Query(1, ge=1, description="Número de página"),
-    limit: int = Query(20, ge=1, le=100, description="Tamaño de página"),
+    limit: int = Query(20, ge=1, le=1000, description="Tamaño de página"),
     
     # Búsqueda
     search: Optional[str] = Query(None, description="Buscar en modelo"),

@@ -55,7 +55,7 @@ def crear_prestamo(prestamo: PrestamoCreate, db: Session = Depends(get_db)):
 @router.get("/", response_model=List[PrestamoResponse])
 def listar_prestamos(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=1000),
     cliente_id: int = Query(None),
     estado: str = Query(None),
     db: Session = Depends(get_db)

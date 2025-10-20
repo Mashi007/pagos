@@ -119,7 +119,7 @@ async def subir_documento(
 @router.get("/listar", response_model=PagoListResponse)
 async def listar_pagos(
     pagina: int = Query(1, ge=1, description="Número de página"),
-    por_pagina: int = Query(20, ge=1, le=100, description="Elementos por página"),
+    por_pagina: int = Query(20, ge=1, le=1000, description="Elementos por página"),
     cedula: Optional[str] = Query(None, description="Filtrar por cédula"),
     conciliado: Optional[bool] = Query(None, description="Filtrar por estado de conciliación"),
     db: Session = Depends(get_db),
