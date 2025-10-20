@@ -92,7 +92,7 @@ declare global {
   type FilterParameter<T = any> = T
   type ReduceParameter<T = any> = T
   
-  // Tipos específicos para el proyecto
+  // Tipos específicos para parámetros implícitos del proyecto
   type PrestamoParameter = any
   type ClienteParameter = any
   type AnalistaParameter = any
@@ -104,6 +104,22 @@ declare global {
   type DeletedIdParameter = any
   type UnderscoreParameter = any
   
+  // Tipos para parámetros de funciones específicas
+  type CallbackParameter<T = any> = T
+  type MapCallbackParameter<T = any> = T
+  type FilterCallbackParameter<T = any> = T
+  type ReduceCallbackParameter<T = any> = T
+  type ForEachCallbackParameter<T = any> = T
+  type FindCallbackParameter<T = any> = T
+  type SomeCallbackParameter<T = any> = T
+  type EveryCallbackParameter<T = any> = T
+  
+  // Tipos para funciones genéricas que pueden causar errores
+  type GenericFunction<T = any> = (...args: any[]) => T
+  type AsyncFunction<T = any> = (...args: any[]) => Promise<T>
+  type EventHandlerFunction<T = any> = (event: T) => void
+  type StateUpdaterFunction<T = any> = (value: T | ((prev: T) => T)) => void
+  
   // Declaraciones globales para funciones comunes
   const map: <T, U>(array: T[], callback: (item: T, index: number) => U) => U[]
   const filter: <T>(array: T[], callback: (item: T, index: number) => boolean) => T[]
@@ -112,6 +128,12 @@ declare global {
   const find: <T>(array: T[], callback: (item: T, index: number) => boolean) => T | undefined
   const some: <T>(array: T[], callback: (item: T, index: number) => boolean) => boolean
   const every: <T>(array: T[], callback: (item: T, index: number) => boolean) => boolean
+  
+  // Declaraciones globales para funciones específicas del proyecto
+  const useQuery: <T = any>(queryKey: any[], queryFn: () => Promise<T>, options?: any) => any
+  const useMutation: <T = any>(mutationFn: (variables: any) => Promise<T>, options?: any) => any
+  const useCallback: <T extends (...args: any[]) => any>(callback: T, deps: any[]) => T
+  const useMemo: <T>(factory: () => T, deps: any[]) => T
   
   // Tipos específicos del proyecto
   interface Cliente {
@@ -321,6 +343,18 @@ declare module 'react' {
   export function map<T, U>(array: T[], callback: (item: T, index: number) => U): U[]
   export function filter<T>(array: T[], callback: (item: T, index: number) => boolean): T[]
   export function reduce<T, U>(array: T[], callback: (acc: U, item: T, index: number) => U, initial: U): U
+  
+  // Declaraciones específicas para funciones que causan errores
+  export function useQuery<T = any>(queryKey: any[], queryFn: () => Promise<T>, options?: any): any
+  export function useMutation<T = any>(mutationFn: (variables: any) => Promise<T>, options?: any): any
+  export function useCallback<T extends (...args: any[]) => any>(callback: T, deps: any[]): T
+  export function useMemo<T>(factory: () => T, deps: any[]): T
+  
+  // Declaraciones para funciones de array que pueden causar errores
+  export function forEach<T>(array: T[], callback: (item: T, index: number) => void): void
+  export function find<T>(array: T[], callback: (item: T, index: number) => boolean): T | undefined
+  export function some<T>(array: T[], callback: (item: T, index: number) => boolean): boolean
+  export function every<T>(array: T[], callback: (item: T, index: number) => boolean): boolean
 }
 
 // Declaraciones para componentes UI - Solo si no existen los archivos reales
