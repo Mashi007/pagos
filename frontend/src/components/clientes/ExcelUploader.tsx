@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Upload,
@@ -65,6 +66,7 @@ interface ExcelUploaderProps {
 
 export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUploaderProps) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
@@ -354,7 +356,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         
         // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
         setTimeout(() => {
-          window.location.href = '/clientes'
+          navigate('/clientes')
         }, 2000)
         
         // Mostrar mensaje informativo sobre navegación automática
@@ -397,7 +399,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         
         // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
         setTimeout(() => {
-          window.location.href = '/clientes'
+          navigate('/clientes')
         }, 2000)
         
         // Mostrar mensaje informativo sobre navegación automática
@@ -1060,7 +1062,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                       </Button>
                       {getSavedClientsCount() > 0 && (
                         <Button
-                          onClick={() => window.location.href = '/clientes'}
+                          onClick={() => navigate('/clientes')}
                           variant="outline"
                           size="sm"
                           className="bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100 font-semibold"
