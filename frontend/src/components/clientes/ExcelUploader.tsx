@@ -354,6 +354,14 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       if (remainingClients.length === 0) {
         addToast('success', '🎉 ¡Todos los clientes han sido guardados exitosamente!')
         notifyDashboardUpdate(getSavedClientsCount())
+        
+        // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
+        setTimeout(() => {
+          window.location.href = '/clientes'
+        }, 2000)
+        
+        // Mostrar mensaje informativo sobre navegación automática
+        addToast('info', '🔄 Redirigiendo al Dashboard de Clientes en 2 segundos...')
       }
       
       return true
@@ -389,6 +397,14 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         // Refrescar Dashboard de Clientes
         refreshDashboardClients()
         notifyDashboardUpdate(successful)
+        
+        // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
+        setTimeout(() => {
+          window.location.href = '/clientes'
+        }, 2000)
+        
+        // Mostrar mensaje informativo sobre navegación automática
+        addToast('info', '🔄 Redirigiendo al Dashboard de Clientes en 2 segundos...')
       }
       
       if (failed > 0) {
@@ -1019,10 +1035,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                           onClick={() => window.location.href = '/clientes'}
                           variant="outline"
                           size="sm"
-                          className="bg-green-50 border-green-300 text-green-700 hover:bg-green-100"
+                          className="bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100 font-semibold"
                         >
                           <Eye className="mr-2 h-4 w-4" />
-                          Ver en Dashboard
+                          📊 Ir al Dashboard de Clientes
                         </Button>
                       )}
                       <Button
