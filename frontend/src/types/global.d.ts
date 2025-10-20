@@ -172,22 +172,22 @@ declare module '@tanstack/react-query' {
 }
 
 // Declaraciones para componentes UI - Solo si no existen los archivos reales
-// declare module '@/components/ui/badge' {
-//   interface BadgeProps {
-//     variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'success' | 'warning'
-//     children?: React.ReactNode
-//     className?: string
-//   }
-//   export const Badge: React.FC<BadgeProps>
-// }
+declare module '@/components/ui/badge' {
+  interface BadgeProps {
+    variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'success' | 'warning'
+    children?: React.ReactNode
+    className?: string
+  }
+  export const Badge: React.FC<BadgeProps>
+}
 
-// declare module '@/components/ui/searchable-select' {
-//   interface SearchableSelectProps {
-//     options: Array<{ value: string; label: string }>
-//     value: string
-//     onChange: (value: string) => void
-//     placeholder?: string
-//     className?: string
-//   }
-//   export const SearchableSelect: React.FC<SearchableSelectProps>
-// }
+declare module '@/components/ui/searchable-select' {
+  interface SearchableSelectProps {
+    options: Array<{ value: string; label: string }>
+    value: string
+    onChange: (value: string) => void
+    placeholder?: string
+    className?: string
+  }
+  export const SearchableSelect: React.FC<SearchableSelectProps>
+}
