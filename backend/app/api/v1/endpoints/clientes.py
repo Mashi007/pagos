@@ -432,3 +432,40 @@ def eliminar_cliente(
             status_code=500,
             detail="Error interno del servidor"
         )
+
+
+@router.get("/buscar-cedula/{cedula}", response_model=ClienteResponse)
+def buscar_cliente_por_cedula(
+    cedula: str = Path(..., description="Cédula del cliente"),
+    db: Session = Depends(get_db)
+):
+    """
+    🔍 Buscar cliente por cédula
+    
+    Características:
+    - Búsqueda exacta por cédula
+    - Retorna datos completos del cliente
+    - Usado para auto-relleno en formularios
+    """
+    try:
+        logger.info(f"Buscando cliente por cédula: {cedula}")
+        
+        cliente = db.query(Cliente).filter(Cliente.cedula == cedula.upper().strip()).first()
+        
+        if not cliente:
+            raise HTTPException(
+                status_code=404,
+                detail="Cliente no encontrado"
+            )
+        
+        logger.info(f"Cliente encontrado: {cliente.nombres} {cliente.apellidos}")
+        return cliente
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error en buscar_cliente_por_cedula: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno del servidor: {str(e)}"
+        )
