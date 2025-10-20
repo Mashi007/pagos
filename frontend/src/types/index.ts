@@ -49,7 +49,7 @@ export interface Cliente {
   fecha_asignacion?: string;
   
   // Estados (coincide con backend)
-  estado: 'ACTIVO' | 'INACTIVO' | 'MORA';
+  estado: 'ACTIVO' | 'INACTIVO' | 'MORA' | 'FINALIZADO';
   activo: boolean;
   estado_financiero?: string;
   dias_mora: number;
@@ -132,7 +132,7 @@ export interface AuthTokens {
 // Tipos para filtros y búsquedas
 export interface ClienteFilters {
   search?: string;
-  estado?: Cliente['estado'];
+  estado?: 'ACTIVO' | 'INACTIVO' | 'MORA' | 'FINALIZADO';
   estado_financiero?: string;
   analista_config_id?: number;
   fecha_desde?: string;
