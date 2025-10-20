@@ -431,7 +431,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       case 'cedula':
         return `Ejemplo: "V12345678" o "E87654321"`
       case 'telefono':
-        return `Ejemplo: "+584121234567" (10 dígitos después de +58)`
+        return `Ejemplo: "+584121234567" (10 dígitos después de +58, sin 0 inicial)`
       case 'email':
         return `Ejemplo: "usuario@dominio.com"`
       case 'concesionario':
@@ -476,12 +476,34 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         return { isValid: true }
 
       case 'telefono':
-        if (!value.trim()) return { isValid: false, message: 'Teléfono requerido' }
-        const phonePattern = /^\+58[1-9]\d{9}$/
-        if (!phonePattern.test(value)) {
-          return { isValid: false, message: 'Formato: +58 + 10 dígitos (no puede empezar por 0)' }
+        if (!value || !value.trim()) return { isValid: false, message: 'Teléfono requerido' }
+        
+        // Normalizar: agregar +58 si no lo tiene
+        let normalizedPhone = value.trim()
+        if (!normalizedPhone.startsWith('+58')) {
+          // Si empieza con 58, agregar +
+          if (normalizedPhone.startsWith('58')) {
+            normalizedPhone = '+' + normalizedPhone
+          } else {
+            // Si no tiene prefijo, agregar +58
+            normalizedPhone = '+58' + normalizedPhone
+          }
         }
-        return { isValid: true }
+        
+        // Validar formato: +58 + 10 dígitos (sin 0 al inicio)
+        const phonePattern = /^\+58[1-9]\d{9}$/
+        if (!phonePattern.test(normalizedPhone)) {
+          return { 
+            isValid: false, 
+            message: 'Formato: +58 + 10 dígitos (sin 0 inicial)',
+            normalizedValue: normalizedPhone // Incluir valor normalizado
+          }
+        }
+        
+        return { 
+          isValid: true,
+          normalizedValue: normalizedPhone // Incluir valor normalizado
+        }
 
       case 'email':
         if (!value.trim()) return { isValid: false, message: 'Email requerido' }
@@ -581,15 +603,24 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         return { isValid: true }
 
       case 'modelo_vehiculo':
-        if (!value.trim()) return { isValid: false, message: 'Modelo requerido' }
+        if (!value || value === null || !value.trim()) return { isValid: false, message: 'Modelo requerido' }
+        // Verificar si el valor existe en la lista de modelos disponibles
+        const modeloExists = modelosVehiculos.some(modelo => modelo.modelo === value.trim())
+        if (!modeloExists) return { isValid: false, message: 'Modelo no válido' }
         return { isValid: true }
 
       case 'concesionario':
-        if (!value.trim()) return { isValid: false, message: 'Concesionario requerido' }
+        if (!value || value === null || !value.trim()) return { isValid: false, message: 'Concesionario requerido' }
+        // Verificar si el valor existe en la lista de concesionarios disponibles
+        const concesionarioExists = concesionarios.some(concesionario => concesionario.nombre === value.trim())
+        if (!concesionarioExists) return { isValid: false, message: 'Concesionario no válido' }
         return { isValid: true }
 
       case 'analista':
-        if (!value.trim()) return { isValid: false, message: 'Analista requerido' }
+        if (!value || value === null || !value.trim()) return { isValid: false, message: 'Analista requerido' }
+        // Verificar si el valor existe en la lista de analistas disponibles
+        const analistaExists = analistas.some(analista => analista.nombre === value.trim())
+        if (!analistaExists) return { isValid: false, message: 'Analista no válido' }
         return { isValid: true }
 
       case 'notas':
@@ -642,9 +673,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           direccion: row[5]?.toString() || '',
           fecha_nacimiento: row[6]?.toString() || '',
           ocupacion: row[7]?.toString() || '',
-          modelo_vehiculo: row[8]?.toString() || '',
-          concesionario: row[9]?.toString() || '',
-          analista: row[10]?.toString() || '',
+          modelo_vehiculo: row[8]?.toString() || null,
+          concesionario: row[9]?.toString() || null,
+          analista: row[10]?.toString() || null,
           total_financiamiento: row[11]?.toString() || '',
           cuota_inicial: row[12]?.toString() || '',
           numero_amortizaciones: row[13]?.toString() || '',
@@ -724,7 +755,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   }
 
   // 🔄 ACTUALIZAR VALOR EN PREVISUALIZACIÓN
-  const updateCellValue = async (rowIndex: number, field: string, value: string) => {
+  const updateCellValue = async (rowIndex: number, field: string, value: string | null) => {
     const newData = [...excelData]
     const row = newData[rowIndex]
     
@@ -732,7 +763,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       row[field as keyof ExcelData] = value
       
       // Re-validar el campo
-      const validation = await validateField(field, value)
+      const validation = await validateField(field, value || '')
       row._validation[field] = validation
       
       // Recalcular si tiene errores
@@ -1279,9 +1310,21 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                             {/* Teléfono */}
                             <td className="border p-2">
                               <input
-                                type="text"
+                                type="tel"
                                 value={row.telefono}
-                                onChange={(e) => updateCellValue(index, 'telefono', e.target.value)}
+                                onChange={(e) => {
+                                  let value = e.target.value
+                                  // Auto-agregar +58 si el usuario no lo pone
+                                  if (/^\d/.test(value)) {
+                                    value = '+58' + value
+                                  }
+                                  // Si empieza con 58, agregar +
+                                  if (/^58/.test(value)) {
+                                    value = '+' + value
+                                  }
+                                  updateCellValue(index, 'telefono', value)
+                                }}
+                                placeholder="+58XXXXXXXXXX"
                                 className={`w-full text-sm p-2 border rounded min-w-[80px] ${
                                   row._validation.telefono?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
