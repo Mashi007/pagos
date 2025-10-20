@@ -1,4 +1,4 @@
-import React, { useState, useRef, ChangeEvent } from 'react'
+import React, { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   CreditCard,
@@ -283,7 +283,7 @@ export function NuevoPago() {
     reader.readAsBinaryString(file)
   }
 
-  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInputChange = (event: any) => {
     const file = event.target.files?.[0]
     if (file) {
       processExcelFile(file)

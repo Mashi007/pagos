@@ -32,11 +32,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log del error
     console.error('Error capturado por ErrorBoundary:', error, errorInfo);
-    
-    // Aquí podrías enviar el error a un servicio de logging
-    // ej: Sentry, LogRocket, etc.
     this.setState({
       error,
       errorInfo,
