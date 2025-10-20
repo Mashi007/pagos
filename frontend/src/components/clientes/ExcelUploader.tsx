@@ -652,8 +652,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                             <td className="border p-2">
                               <SearchableSelect
                                 options={modelosVehiculos.map(modelo => ({
-                                  value: modelo.nombre,
-                                  label: modelo.nombre
+                                  value: modelo.modelo,
+                                  label: modelo.modelo
                                 }))}
                                 value={row.modelo_vehiculo}
                                 onChange={(value) => updateCellValue(index, 'modelo_vehiculo', value)}
@@ -684,8 +684,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                             <td className="border p-2">
                               <SearchableSelect
                                 options={analistas.map(analista => ({
-                                  value: analista.nombres + ' ' + analista.apellidos,
-                                  label: analista.nombres + ' ' + analista.apellidos
+                                  value: analista.nombre,
+                                  label: analista.nombre
                                 }))}
                                 value={row.analista}
                                 onChange={(value) => updateCellValue(index, 'analista', value)}
