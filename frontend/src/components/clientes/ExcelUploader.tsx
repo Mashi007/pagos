@@ -256,18 +256,14 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   }, [excelData])
 
   // 🔔 FUNCIONES PARA NOTIFICACIONES TOAST
-  const addToast = (type: 'error' | 'warning' | 'success', message: string, suggestion?: string) => {
+  const addToast = (type: 'error' | 'warning' | 'success', message: string, suggestion?: string, field: string = 'general', rowIndex: number = -1) => {
     const id = Date.now().toString()
-    setToasts(prev => [...prev, { id, type, message, suggestion }])
+    setToasts(prev => [...prev, { id, type, message, suggestion, field, rowIndex }])
     
     // Auto-remover después de 5 segundos
     setTimeout(() => {
       setToasts(prev => prev.filter(toast => toast.id !== id))
     }, 5000)
-  }
-
-  const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(toast => toast.id !== id))
   }
 
   // 🔄 FUNCIONES PARA SISTEMA DE GUARDADO HÍBRIDO
@@ -746,7 +742,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       setExcelData(newData)
       
       // Manejar notificaciones por fila completa según el comportamiento requerido
-      handleRowValidationNotification(index, row)
+      handleRowValidationNotification(rowIndex, row)
       
       // Actualizar estado de errores en dropdowns (ya no necesario - usando validación unificada)
       // updateDropdownErrors(newData)
