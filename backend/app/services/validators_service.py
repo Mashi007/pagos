@@ -580,7 +580,7 @@ class ValidadorFecha:
         📅 Validar fecha de entrega del vehículo
         
         Reglas:
-        - No puede ser fecha futura
+        - Puede ser desde hace 2 años hasta 4 años en el futuro
         - Debe ser fecha válida
         - Formato: DD/MM/YYYY o YYYY-MM-DD
         """
@@ -607,28 +607,31 @@ class ValidadorFecha:
                     "requiere_calendario": True
                 }
             
-            # Validar reglas de negocio
+            # Validar reglas de negocio: desde hace 2 años hasta 4 años adelante
             hoy = date.today()
             
-            if fecha_parseada > hoy:
-                return {
-                    "valido": False,
-                    "error": "La fecha de entrega no puede ser futura",
-                    "valor_original": fecha_str,
-                    "valor_formateado": fecha_parseada.strftime("%d/%m/%Y"),
-                    "fecha_maxima": hoy.strftime("%d/%m/%Y"),
-                    "requiere_calendario": True
-                }
+            # Calcular límites
+            fecha_minima = hoy - timedelta(days=730)  # 2 años atrás
+            fecha_maxima = hoy + timedelta(days=1460)  # 4 años adelante
             
-            # Validar que no sea muy antigua (más de 10 años)
-            fecha_minima = hoy - timedelta(days=3650)  # 10 años
             if fecha_parseada < fecha_minima:
                 return {
                     "valido": False,
-                    "error": "Fecha de entrega muy antigua",
+                    "error": "La fecha no puede ser anterior a hace 2 años",
                     "valor_original": fecha_str,
                     "valor_formateado": fecha_parseada.strftime("%d/%m/%Y"),
-                    "fecha_minima": fecha_minima.strftime("%d/%m/%Y")
+                    "fecha_minima": fecha_minima.strftime("%d/%m/%Y"),
+                    "requiere_calendario": True
+                }
+            
+            if fecha_parseada > fecha_maxima:
+                return {
+                    "valido": False,
+                    "error": "La fecha no puede ser posterior a 4 años en el futuro",
+                    "valor_original": fecha_str,
+                    "valor_formateado": fecha_parseada.strftime("%d/%m/%Y"),
+                    "fecha_maxima": fecha_maxima.strftime("%d/%m/%Y"),
+                    "requiere_calendario": True
                 }
             
             return {

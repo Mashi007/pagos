@@ -729,7 +729,7 @@ def obtener_configuracion_validadores(
             },
             
             "reglas_negocio": {
-                "fecha_entrega": "No puede ser futura",
+                "fecha_entrega": "Desde hace 2 años hasta 4 años en el futuro",
                 "fecha_pago": "Máximo 1 día en el futuro",
                 "monto_pago": "No puede exceder saldo pendiente",
                 "total_financiamiento": "Entre $1 y $50,000,000",
