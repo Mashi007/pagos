@@ -65,6 +65,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const [isProcessing, setIsProcessing] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [showValidationModal, setShowValidationModal] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Estados para listas desplegables
@@ -393,7 +394,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     const validData = excelData.filter(row => !row._hasErrors)
     
     if (validData.length === 0) {
-      alert('No hay datos válidos para guardar')
+      setShowValidationModal(true) // Abre modal de advertencias
       return
     }
     
@@ -616,6 +617,107 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                 </CardContent>
               </Card>
 
+              {/* Modal de Advertencias de Validación */}
+              <AnimatePresence>
+                {showValidationModal && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                  >
+                    <motion.div
+                      initial={{ scale: 0.9, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.9, opacity: 0 }}
+                      className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-y-auto"
+                    >
+                      <div className="p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <h2 className="text-2xl font-bold text-red-600 flex items-center">
+                            <AlertTriangle className="mr-2 h-6 w-6" />
+                            Errores de Validación Encontrados
+                          </h2>
+                          <Button variant="ghost" size="sm" onClick={() => setShowValidationModal(false)}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+
+                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <p className="text-sm text-red-700">
+                            <strong>No se puede guardar:</strong> Se encontraron {totalRows - validRows} errores que deben corregirse antes de continuar.
+                          </p>
+                        </div>
+
+                        <div className="space-y-4 max-h-[50vh] overflow-y-auto">
+                          {excelData.filter(row => row._hasErrors).map((row, index) => (
+                            <div key={index} className="border border-red-200 rounded-lg p-4 bg-red-50">
+                              <div className="flex items-center justify-between mb-3">
+                                <h3 className="font-semibold text-red-800">
+                                  Fila {row._rowIndex}: {row.nombres} {row.apellidos}
+                                </h3>
+                                <Badge variant="outline" className="text-red-600 border-red-300">
+                                  {Object.keys(row._validation).filter(field => !row._validation[field]?.isValid).length} errores
+                                </Badge>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {Object.entries(row._validation).map(([field, validation]) => {
+                                  if (validation?.isValid) return null;
+                                  return (
+                                    <div key={field} className="flex items-start space-x-2">
+                                      <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
+                                      <div className="flex-1">
+                                        <span className="text-sm font-medium text-gray-700 capitalize">{field}:</span>
+                                        <div className="text-sm text-red-600 mt-1">{validation?.message}</div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-start space-x-2">
+                            <AlertTriangle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                            <div className="text-sm text-blue-800">
+                              <strong>Instrucciones para corregir:</strong>
+                              <ul className="mt-2 ml-4 list-disc space-y-1">
+                                <li>Los campos con fondo rojo en la tabla tienen errores de validación</li>
+                                <li>Haz clic en cualquier campo para editarlo directamente</li>
+                                <li>Los errores se corrigen automáticamente al escribir valores válidos</li>
+                                <li>Una vez corregidos todos los errores, podrás guardar los datos</li>
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-6 flex justify-end space-x-3">
+                          <Button variant="outline" onClick={() => setShowValidationModal(false)}>
+                            Cerrar
+                          </Button>
+                          <Button 
+                            onClick={() => {
+                              setShowValidationModal(false);
+                              // Scroll a la tabla para que el usuario corrija
+                              const tableElement = document.querySelector('.overflow-x-auto');
+                              if (tableElement) {
+                                tableElement.scrollIntoView({ behavior: 'smooth' });
+                              }
+                            }} 
+                            className="bg-blue-600 hover:bg-blue-700"
+                          >
+                            Ir a Corregir Errores
+                          </Button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Tabla de previsualización */}
               <Card>
                 <CardHeader>
@@ -625,7 +727,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="overflow-x-auto min-w-full">
+                  <div className="overflow-x-auto min-w-full relative" style={{ resize: 'both', minWidth: '800px', minHeight: '400px' }}>
                     <table className="w-full border-collapse min-w-[1400px]">
                       <thead>
                         <tr className="bg-gray-50">
@@ -834,6 +936,11 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                         ))}
                       </tbody>
                     </table>
+                    
+                    {/* Handle de redimensionamiento */}
+                    <div className="absolute bottom-0 right-0 w-4 h-4 bg-gray-400 cursor-se-resize opacity-50 hover:opacity-100 transition-opacity">
+                      <div className="w-full h-full bg-gradient-to-br from-transparent via-gray-600 to-gray-800"></div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
