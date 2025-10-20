@@ -52,7 +52,10 @@ export function Concesionarios() {
 
   const handleCreateConcesionario = async () => {
     try {
-      await concesionarioService.crearConcesionario({})
+      await concesionarioService.crearConcesionario({
+        nombre: `Concesionario ${Date.now()}`,
+        activo: true
+      })
       toast.success('Concesionario creado exitosamente')
       cargarConcesionarios()
       setShowCreateForm(false)
@@ -79,6 +82,7 @@ export function Concesionarios() {
 
   // Filtrar concesionarios por término de búsqueda
   const concesionariosFiltrados = concesionarios.filter(concesionario =>
+    concesionario.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
     concesionario.id.toString().includes(searchTerm)
   )
 
@@ -132,7 +136,9 @@ export function Concesionarios() {
               <UserCheck className="h-8 w-8 text-green-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Activos</p>
-                <p className="text-2xl font-bold text-gray-900">{concesionarios.length}</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {concesionarios.filter(c => c.activo).length}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -144,7 +150,9 @@ export function Concesionarios() {
               <UserX className="h-8 w-8 text-red-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Inactivos</p>
-                <p className="text-2xl font-bold text-gray-900">0</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {concesionarios.filter(c => !c.activo).length}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -157,7 +165,7 @@ export function Concesionarios() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
-              placeholder="Buscar por ID..."
+              placeholder="Buscar por nombre o ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -202,7 +210,7 @@ export function Concesionarios() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
+                  <TableHead>Concesionario</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Acciones</TableHead>
                 </TableRow>
@@ -211,11 +219,14 @@ export function Concesionarios() {
                 {concesionariosFiltrados.map((concesionario) => (
                   <TableRow key={concesionario.id}>
                     <TableCell className="font-medium">
-                      Concesionario #{concesionario.id}
+                      <div>
+                        <div>{concesionario.nombre}</div>
+                        <div className="text-sm text-gray-500">ID: {concesionario.id}</div>
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="default" className="bg-green-100 text-green-800">
-                        Activo
+                      <Badge variant={concesionario.activo ? "default" : "secondary"}>
+                        {concesionario.activo ? "Activo" : "Inactivo"}
                       </Badge>
                     </TableCell>
                     <TableCell>
