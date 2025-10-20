@@ -143,7 +143,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         if (!value.trim()) return { isValid: false, message: 'Total requerido' }
         const total = parseFloat(value.replace(/[^\d.-]/g, ''))
         if (isNaN(total) || total <= 0) return { isValid: false, message: 'Debe ser un número positivo' }
-        if (total < 1000 || total > 50000000) return { isValid: false, message: 'Entre $1,000 y $50,000,000' }
+        if (total < 1 || total > 50000000) return { isValid: false, message: 'Entre $1 y $50,000,000' }
         return { isValid: true }
 
       case 'numero_amortizaciones':
