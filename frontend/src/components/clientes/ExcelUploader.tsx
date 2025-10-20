@@ -17,6 +17,7 @@ import * as XLSX from 'xlsx'
 import { concesionarioService, type Concesionario } from '@/services/concesionarioService'
 import { analistaService, type Analista } from '@/services/analistaService'
 import { modeloVehiculoService, type ModeloVehiculo } from '@/services/modeloVehiculoService'
+import { clienteService } from '@/services/clienteService'
 
 interface ExcelData {
   cedula: string
@@ -63,6 +64,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const [excelData, setExcelData] = useState<ExcelRow[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Estados para listas desplegables
@@ -377,10 +379,68 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       return
     }
     
-    console.log('💾 Guardando datos:', validData.length, 'clientes')
-    onDataProcessed?.(validData)
-    onSuccess?.()
-    onClose()
+    setIsSaving(true)
+    
+    try {
+      console.log('💾 Guardando datos:', validData.length, 'clientes')
+      
+      // Guardar cada cliente individualmente
+      const resultados = []
+      for (const row of validData) {
+        try {
+          const clienteData = {
+            cedula: row.cedula,
+            nombres: row.nombres,
+            apellidos: row.apellidos,
+            telefono: row.telefono,
+            email: row.email,
+            direccion: row.direccion,
+            fecha_nacimiento: row.fecha_nacimiento,
+            ocupacion: row.ocupacion,
+            modelo_vehiculo: row.modelo_vehiculo,
+            concesionario: row.concesionario,
+            analista: row.analista,
+            estado: row.estado,
+            activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
+            notas: row.notas || 'NA'
+          }
+          
+          const clienteCreado = await clienteService.createCliente(clienteData)
+          resultados.push({ success: true, cliente: clienteCreado, fila: row._rowIndex })
+          console.log(`✅ Cliente creado exitosamente: ${clienteData.nombres} ${clienteData.apellidos}`)
+          
+        } catch (error) {
+          console.error(`❌ Error creando cliente en fila ${row._rowIndex}:`, error)
+          resultados.push({ 
+            success: false, 
+            error: error.message || 'Error desconocido', 
+            fila: row._rowIndex,
+            cedula: row.cedula
+          })
+        }
+      }
+      
+      // Mostrar resumen de resultados
+      const exitosos = resultados.filter(r => r.success).length
+      const fallidos = resultados.filter(r => !r.success).length
+      
+      console.log(`📊 Resumen: ${exitosos} exitosos, ${fallidos} fallidos`)
+      
+      if (exitosos > 0) {
+        // Notificar éxito y cerrar
+        onDataProcessed?.(validData)
+        onSuccess?.()
+        onClose()
+      } else {
+        alert('No se pudo guardar ningún cliente. Revisa los errores.')
+      }
+      
+    } catch (error) {
+      console.error('❌ Error en proceso de guardado:', error)
+      alert('Error al guardar los datos. Intenta nuevamente.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const validRows = excelData.filter(row => !row._hasErrors).length
@@ -508,11 +568,20 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                       </Button>
                       <Button
                         onClick={handleSaveData}
-                        disabled={validRows === 0}
-                        className="bg-green-600 hover:bg-green-700"
+                        disabled={validRows === 0 || isSaving}
+                        className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
                       >
-                        <Save className="mr-2 h-4 w-4" />
-                        Guardar ({validRows})
+                        {isSaving ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Guardando...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="mr-2 h-4 w-4" />
+                            Guardar ({validRows})
+                          </>
+                        )}
                       </Button>
                     </div>
                   </div>
