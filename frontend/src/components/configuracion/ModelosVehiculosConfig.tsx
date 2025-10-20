@@ -143,7 +143,14 @@ export function ModelosVehiculosConfig() {
   const inactivosModelos = modelos.filter(m => !m.activo).length
 
   if (loading) {
-    return <div className="text-center py-8"><LoadingSpinner size="lg" /></div>
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Cargando modelos...</span>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -318,76 +325,6 @@ export function ModelosVehiculosConfig() {
         </Card>
       )}
 
-      {/* Modal de Visualización */}
-      {viewingModelo && (
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle className="flex items-center">
-                <Eye className="mr-2 h-5 w-5 text-blue-600" />
-                Detalles del Modelo
-              </CardTitle>
-              <Button variant="outline" size="sm" onClick={() => setViewingModelo(null)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-500">Modelo del Vehículo</label>
-                <p className="text-lg font-semibold">{viewingModelo.modelo}</p>  {/* ✅ CORREGIDO: campo 'modelo', no 'nombre' */}
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Estado</label>
-                <div className="mt-1">
-                  <Badge variant={viewingModelo.activo ? 'default' : 'destructive'}>
-                    {viewingModelo.activo ? (
-                      <>
-                        <CheckCircle className="mr-1 h-3 w-3" />
-                        Activo
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="mr-1 h-3 w-3" />
-                        Inactivo
-                      </>
-                    )}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end space-x-2 mt-6">
-              <Button variant="outline" onClick={() => setViewingModelo(null)}>
-                Cerrar
-              </Button>
-              <Button onClick={() => {
-                handleEdit(viewingModelo)
-                setViewingModelo(null)
-              }}>
-                <Edit className="mr-2 h-4 w-4" />
-                Editar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Búsqueda */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center space-x-2">
-            <Search className="h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Buscar modelos..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Modelos Table */}
       <Card>
         <CardHeader>
@@ -472,7 +409,7 @@ export function ModelosVehiculosConfig() {
           <div className="flex items-center justify-between">
             <span>{error}</span>
             <Button 
-              onClick={loadModelos}
+              onClick={handleRefresh}
               variant="outline" 
               size="sm"
               className="ml-4"
