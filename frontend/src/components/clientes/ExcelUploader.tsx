@@ -521,12 +521,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.cedula}
                                 onChange={(e) => updateCellValue(index, 'cedula', e.target.value)}
                                 className={`w-full text-xs p-1 border rounded ${
-                                  row._validation.cedula?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                  row._validation.cedula?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
-                              {row._validation.cedula?.message && (
-                                <p className="text-xs text-red-600 mt-1">{row._validation.cedula.message}</p>
-                              )}
                             </td>
                             
                             {/* Nombres */}
@@ -536,12 +533,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.nombres}
                                 onChange={(e) => updateCellValue(index, 'nombres', e.target.value)}
                                 className={`w-full text-xs p-1 border rounded ${
-                                  row._validation.nombres?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                  row._validation.nombres?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
-                              {row._validation.nombres?.message && (
-                                <p className="text-xs text-red-600 mt-1">{row._validation.nombres.message}</p>
-                              )}
                             </td>
                             
                             {/* Apellidos */}
@@ -551,12 +545,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.apellidos}
                                 onChange={(e) => updateCellValue(index, 'apellidos', e.target.value)}
                                 className={`w-full text-xs p-1 border rounded ${
-                                  row._validation.apellidos?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                  row._validation.apellidos?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
-                              {row._validation.apellidos?.message && (
-                                <p className="text-xs text-red-600 mt-1">{row._validation.apellidos.message}</p>
-                              )}
                             </td>
                             
                             {/* Teléfono */}
@@ -566,12 +557,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.telefono}
                                 onChange={(e) => updateCellValue(index, 'telefono', e.target.value)}
                                 className={`w-full text-xs p-1 border rounded ${
-                                  row._validation.telefono?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                  row._validation.telefono?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
-                              {row._validation.telefono?.message && (
-                                <p className="text-xs text-red-600 mt-1">{row._validation.telefono.message}</p>
-                              )}
                             </td>
                             
                             {/* Email */}
@@ -581,12 +569,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.email}
                                 onChange={(e) => updateCellValue(index, 'email', e.target.value)}
                                 className={`w-full text-xs p-1 border rounded ${
-                                  row._validation.email?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                  row._validation.email?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
-                              {row._validation.email?.message && (
-                                <p className="text-xs text-red-600 mt-1">{row._validation.email.message}</p>
-                              )}
                             </td>
                             
                             {/* Dirección */}
@@ -596,12 +581,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.direccion}
                                 onChange={(e) => updateCellValue(index, 'direccion', e.target.value)}
                                 className={`w-full text-xs p-1 border rounded ${
-                                  row._validation.direccion?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                  row._validation.direccion?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
-                              {row._validation.direccion?.message && (
-                                <p className="text-xs text-red-600 mt-1">{row._validation.direccion.message}</p>
-                              )}
                             </td>
                             
                             {/* Fecha Nacimiento */}
@@ -611,12 +593,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.fecha_nacimiento}
                                 onChange={(e) => updateCellValue(index, 'fecha_nacimiento', e.target.value)}
                                 className={`w-full text-xs p-1 border rounded ${
-                                  row._validation.fecha_nacimiento?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                  row._validation.fecha_nacimiento?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
-                              {row._validation.fecha_nacimiento?.message && (
-                                <p className="text-xs text-red-600 mt-1">{row._validation.fecha_nacimiento.message}</p>
-                              )}
                             </td>
                             
                             {/* Ocupación */}
@@ -626,12 +605,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.ocupacion}
                                 onChange={(e) => updateCellValue(index, 'ocupacion', e.target.value)}
                                 className={`w-full text-xs p-1 border rounded ${
-                                  row._validation.ocupacion?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                  row._validation.ocupacion?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
-                              {row._validation.ocupacion?.message && (
-                                <p className="text-xs text-red-600 mt-1">{row._validation.ocupacion.message}</p>
-                              )}
                             </td>
                             
                             {/* Modelo Vehículo */}
@@ -641,12 +617,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.modelo_vehiculo}
                                 onChange={(e) => updateCellValue(index, 'modelo_vehiculo', e.target.value)}
                                 className={`w-full text-xs p-1 border rounded ${
-                                  row._validation.modelo_vehiculo?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                  row._validation.modelo_vehiculo?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
-                              {row._validation.modelo_vehiculo?.message && (
-                                <p className="text-xs text-red-600 mt-1">{row._validation.modelo_vehiculo.message}</p>
-                              )}
                             </td>
                             
                             {/* Concesionario */}
@@ -656,12 +629,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.concesionario}
                                 onChange={(e) => updateCellValue(index, 'concesionario', e.target.value)}
                                 className={`w-full text-xs p-1 border rounded ${
-                                  row._validation.concesionario?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                  row._validation.concesionario?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
-                              {row._validation.concesionario?.message && (
-                                <p className="text-xs text-red-600 mt-1">{row._validation.concesionario.message}</p>
-                              )}
                             </td>
                             
                             {/* Analista */}
@@ -671,12 +641,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.analista}
                                 onChange={(e) => updateCellValue(index, 'analista', e.target.value)}
                                 className={`w-full text-xs p-1 border rounded ${
-                                  row._validation.analista?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                  row._validation.analista?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
-                              {row._validation.analista?.message && (
-                                <p className="text-xs text-red-600 mt-1">{row._validation.analista.message}</p>
-                              )}
                             </td>
                             
                             {/* Estado */}
@@ -686,12 +653,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.estado}
                                 onChange={(e) => updateCellValue(index, 'estado', e.target.value)}
                                 className={`w-full text-xs p-1 border rounded ${
-                                  row._validation.estado?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                  row._validation.estado?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
-                              {row._validation.estado?.message && (
-                                <p className="text-xs text-red-600 mt-1">{row._validation.estado.message}</p>
-                              )}
                             </td>
                             
                             {/* Activo */}
@@ -701,12 +665,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.activo}
                                 onChange={(e) => updateCellValue(index, 'activo', e.target.value)}
                                 className={`w-full text-xs p-1 border rounded ${
-                                  row._validation.activo?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                  row._validation.activo?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
-                              {row._validation.activo?.message && (
-                                <p className="text-xs text-red-600 mt-1">{row._validation.activo.message}</p>
-                              )}
                             </td>
                             
                             {/* Notas */}
@@ -716,12 +677,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.notas}
                                 onChange={(e) => updateCellValue(index, 'notas', e.target.value)}
                                 className={`w-full text-xs p-1 border rounded ${
-                                  row._validation.notas?.isValid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
+                                  row._validation.notas?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
-                              {row._validation.notas?.message && (
-                                <p className="text-xs text-red-600 mt-1">{row._validation.notas.message}</p>
-                              )}
                             </td>
                           </tr>
                         ))}
