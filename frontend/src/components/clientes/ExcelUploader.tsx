@@ -167,9 +167,26 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         const fechaEntrega = new Date(value)
         const hoyEntrega = new Date()
         hoyEntrega.setHours(0, 0, 0, 0)
-        if (isNaN(fechaEntrega.getTime()) || fechaEntrega < hoyEntrega) {
-          return { isValid: false, message: 'Debe ser una fecha futura válida' }
+        
+        // Calcular límites: 2 años atrás y 4 años adelante
+        const fechaLimiteAtras = new Date(hoyEntrega)
+        fechaLimiteAtras.setFullYear(hoyEntrega.getFullYear() - 2)
+        
+        const fechaLimiteAdelante = new Date(hoyEntrega)
+        fechaLimiteAdelante.setFullYear(hoyEntrega.getFullYear() + 4)
+        
+        if (isNaN(fechaEntrega.getTime())) {
+          return { isValid: false, message: 'Formato de fecha inválido' }
         }
+        
+        if (fechaEntrega < fechaLimiteAtras) {
+          return { isValid: false, message: 'La fecha no puede ser anterior a hace 2 años' }
+        }
+        
+        if (fechaEntrega > fechaLimiteAdelante) {
+          return { isValid: false, message: 'La fecha no puede ser posterior a 4 años en el futuro' }
+        }
+        
         return { isValid: true }
 
       case 'estado':
