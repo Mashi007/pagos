@@ -10,8 +10,7 @@ import {
   UserCheck,
   UserX,
   Loader2,
-  RefreshCw,
-  Eye
+  RefreshCw
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -26,7 +25,6 @@ export function AnalistasConfig() {
   const [searchTerm, setSearchTerm] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingAnalista, setEditingAnalista] = useState<Analista | null>(null)
-  const [viewingAnalista, setViewingAnalista] = useState<Analista | null>(null)
 
   // Form state
   const [formData, setFormData] = useState<AnalistaCreate>({
@@ -84,9 +82,6 @@ export function AnalistasConfig() {
     setShowForm(true)
   }
 
-  const handleView = (analista: Analista) => {
-    setViewingAnalista(analista)
-  }
 
   const handleDelete = async (id: number) => {
     try {
