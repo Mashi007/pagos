@@ -32,9 +32,9 @@ interface ExcelData {
   direccion: string
   fecha_nacimiento: string
   ocupacion: string
-  modelo_vehiculo: string
-  concesionario: string
-  analista: string
+  modelo_vehiculo: string | null
+  concesionario: string | null
+  analista: string | null
   total_financiamiento: string
   cuota_inicial: string
   numero_amortizaciones: string
@@ -48,6 +48,7 @@ interface ExcelData {
 interface ValidationResult {
   isValid: boolean
   message?: string
+  normalizedValue?: string
 }
 
 interface ExcelRow extends ExcelData {
@@ -760,7 +761,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     const row = newData[rowIndex]
     
     if (row) {
-      row[field as keyof ExcelData] = value
+      row[field as keyof ExcelData] = value || ''
       
       // Re-validar el campo
       const validation = await validateField(field, value || '')
