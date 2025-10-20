@@ -348,9 +348,12 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       
       addToast('success', `Cliente ${row.nombres} ${row.apellidos} guardado exitosamente`)
       
-      // Verificar si todos los clientes están guardados
-      const remainingClients = excelData.filter(r => !savedClients.has(r._rowIndex) && r !== row)
-      if (remainingClients.length === 0) {
+      // Eliminar la fila de la lista después de guardar exitosamente
+      setExcelData(prev => prev.filter(r => r._rowIndex !== row._rowIndex))
+      
+      // Verificar si quedan filas pendientes
+      const remainingRows = excelData.filter(r => r._rowIndex !== row._rowIndex)
+      if (remainingRows.length === 0) {
         addToast('success', '🎉 ¡Todos los clientes han sido guardados exitosamente!')
         notifyDashboardUpdate(getSavedClientsCount())
         
@@ -366,7 +369,18 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       return true
     } catch (error: any) {
       console.error('Error guardando cliente individual:', error)
-      addToast('error', `Error guardando cliente: ${error.response?.data?.detail || error.message}`)
+      
+      // Manejar diferentes tipos de errores
+      if (error.response?.status === 503) {
+        addToast('error', 'Servicio temporalmente no disponible. Intenta nuevamente.')
+      } else if (error.response?.status === 400) {
+        addToast('error', `Error de validación: ${error.response?.data?.detail || error.message}`)
+      } else if (error.response?.status >= 500) {
+        addToast('error', 'Error del servidor. Contacta al administrador.')
+      } else {
+        addToast('error', `Error guardando cliente: ${error.response?.data?.detail || error.message}`)
+      }
+      
       return false
     } finally {
       setSavingProgress(prev => ({ ...prev, [row._rowIndex]: false }))
@@ -397,6 +411,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         refreshDashboardClients()
         notifyDashboardUpdate(successful)
         
+        // Eliminar las filas guardadas de la lista
+        const successfulRows = resultados.filter(r => r.success).map(r => r.fila)
+        setExcelData(prev => prev.filter(r => !successfulRows.includes(r._rowIndex)))
+        
         // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
         setTimeout(() => {
           navigate('/clientes')
@@ -412,7 +430,17 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       
     } catch (error) {
       console.error('Error en guardado masivo:', error)
-      addToast('error', 'Error en el guardado masivo')
+      
+      // Manejar diferentes tipos de errores
+      if (error.response?.status === 503) {
+        addToast('error', 'Servicio temporalmente no disponible. Intenta nuevamente.')
+      } else if (error.response?.status === 400) {
+        addToast('error', `Error de validación: ${error.response?.data?.detail || error.message}`)
+      } else if (error.response?.status >= 500) {
+        addToast('error', 'Error del servidor. Contacta al administrador.')
+      } else {
+        addToast('error', 'Error en el guardado masivo')
+      }
     } finally {
       setIsSavingIndividual(false)
     }
