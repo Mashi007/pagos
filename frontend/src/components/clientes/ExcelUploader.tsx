@@ -413,7 +413,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           console.error(`❌ Error creando cliente en fila ${row._rowIndex}:`, error)
           resultados.push({ 
             success: false, 
-            error: error.message || 'Error desconocido', 
+            error: error instanceof Error ? error.message : 'Error desconocido', 
             fila: row._rowIndex,
             cedula: row.cedula
           })
