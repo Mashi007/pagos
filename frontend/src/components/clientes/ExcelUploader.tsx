@@ -374,7 +374,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           numero_amortizaciones: row[13]?.toString() || '',
           modalidad_pago: row[14]?.toString() || '',
           fecha_entrega: row[15]?.toString() || '',
-          estado: row[16]?.toString() || '',
+          estado: row[16]?.toString() || 'ACTIVO', // ✅ Por defecto siempre ACTIVO
           activo: row[17]?.toString() || 'TRUE', // ✅ Por defecto siempre TRUE
           notas: row[18]?.toString() || ''
         }
@@ -1069,14 +1069,17 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                             
                             {/* Estado */}
                             <td className="border p-2">
-                              <input
-                                type="text"
-                                value={row.estado}
+                              <select
+                                value={row.estado || 'ACTIVO'}
                                 onChange={(e) => updateCellValue(index, 'estado', e.target.value)}
                                 className={`w-full text-sm p-2 border rounded min-w-[80px] ${
                                   row._validation.estado?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
-                              />
+                              >
+                                <option value="ACTIVO">ACTIVO</option>
+                                <option value="INACTIVO">INACTIVO</option>
+                                <option value="FINALIZADO">FINALIZADO</option>
+                              </select>
                             </td>
                             
                             {/* Activo */}
