@@ -434,7 +434,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       case 'cedula':
         return `Ejemplo: "V12345678" o "E87654321"`
       case 'telefono':
-        return `Ejemplo: "+584121234567" (10 dígitos después de +58, sin 0 inicial)`
+        return `Ejemplo: "8741236589" (10 dígitos sin 0 inicial)`
       case 'email':
         return `Ejemplo: "usuario@dominio.com"`
       case 'concesionario':
@@ -481,32 +481,23 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       case 'telefono':
         if (!value || !value.trim()) return { isValid: false, message: 'Teléfono requerido' }
         
-        // Normalizar: agregar +58 si no lo tiene
-        let normalizedPhone = value.trim()
-        if (!normalizedPhone.startsWith('+58')) {
-          // Si empieza con 58, agregar +
-          if (normalizedPhone.startsWith('58')) {
-            normalizedPhone = '+' + normalizedPhone
-          } else {
-            // Si no tiene prefijo, agregar +58
-            normalizedPhone = '+58' + normalizedPhone
-          }
+        // El valor ya viene con +58, solo validar los 10 dígitos
+        if (!value.startsWith('+58')) {
+          return { isValid: false, message: 'Formato: +58 + 10 dígitos' }
         }
         
-        // Validar formato: +58 + 10 dígitos (sin 0 al inicio)
-        const phonePattern = /^\+58[1-9]\d{9}$/
-        if (!phonePattern.test(normalizedPhone)) {
+        const phoneDigits = value.replace('+58', '')
+        
+        // Validar que sean exactamente 10 dígitos y no empiece por 0
+        const phonePattern = /^[1-9]\d{9}$/
+        if (!phonePattern.test(phoneDigits)) {
           return { 
             isValid: false, 
-            message: 'Formato: +58 + 10 dígitos (sin 0 inicial)',
-            normalizedValue: normalizedPhone // Incluir valor normalizado
+            message: 'Formato: 10 dígitos (sin 0 inicial)' 
           }
         }
         
-        return { 
-          isValid: true,
-          normalizedValue: normalizedPhone // Incluir valor normalizado
-        }
+        return { isValid: true }
 
       case 'email':
         if (!value.trim()) return { isValid: false, message: 'Email requerido' }
@@ -1312,26 +1303,25 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                             
                             {/* Teléfono */}
                             <td className="border p-2">
-                              <input
-                                type="tel"
-                                value={row.telefono}
-                                onChange={(e) => {
-                                  let value = e.target.value
-                                  // Auto-agregar +58 si el usuario no lo pone
-                                  if (/^\d/.test(value)) {
-                                    value = '+58' + value
-                                  }
-                                  // Si empieza con 58, agregar +
-                                  if (/^58/.test(value)) {
-                                    value = '+' + value
-                                  }
-                                  updateCellValue(index, 'telefono', value)
-                                }}
-                                placeholder="+58XXXXXXXXXX"
-                                className={`w-full text-sm p-2 border rounded min-w-[80px] ${
-                                  row._validation.telefono?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
-                                }`}
-                              />
+                              <div className="flex items-center">
+                                <span className="bg-gray-100 border border-gray-300 rounded-l px-3 py-2 text-sm font-medium text-gray-700">
+                                  +58
+                                </span>
+                                <input
+                                  type="tel"
+                                  value={row.telefono.replace('+58', '')}
+                                  onChange={(e) => {
+                                    const value = e.target.value
+                                    // Solo permitir números y máximo 10 dígitos
+                                    const cleanValue = value.replace(/\D/g, '').slice(0, 10)
+                                    updateCellValue(index, 'telefono', '+58' + cleanValue)
+                                  }}
+                                  placeholder="XXXXXXXXXX"
+                                  className={`flex-1 text-sm p-2 border border-l-0 rounded-r min-w-[80px] ${
+                                    row._validation.telefono?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
+                                  }`}
+                                />
+                              </div>
                             </td>
                             
                             {/* Email */}
