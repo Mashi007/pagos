@@ -86,6 +86,11 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     suggestion?: string
   }>>([])
 
+  // Estado para sistema de guardado híbrido
+  const [savedClients, setSavedClients] = useState<Set<number>>(new Set())
+  const [isSavingIndividual, setIsSavingIndividual] = useState(false)
+  const [savingProgress, setSavingProgress] = useState<{[key: number]: boolean}>({})
+
   // Cargar datos de configuración
   useEffect(() => {
     const cargarDatosConfiguracion = async () => {
@@ -137,6 +142,97 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
   const removeToast = (id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id))
+  }
+
+  // 🔄 FUNCIONES PARA SISTEMA DE GUARDADO HÍBRIDO
+  const isClientValid = (row: ExcelRow): boolean => {
+    const hasNoErrors = !row._hasErrors
+    const hasConcesionario = row.concesionario && row.concesionario.trim() !== ''
+    const hasAnalista = row.analista && row.analista.trim() !== ''
+    const hasModelo = row.modelo_vehiculo && row.modelo_vehiculo.trim() !== ''
+    
+    return hasNoErrors && hasConcesionario && hasAnalista && hasModelo
+  }
+
+  const getValidClients = (): ExcelRow[] => {
+    return excelData.filter(row => isClientValid(row) && !savedClients.has(row._rowIndex))
+  }
+
+  const saveIndividualClient = async (row: ExcelRow): Promise<boolean> => {
+    try {
+      setSavingProgress(prev => ({ ...prev, [row._rowIndex]: true }))
+      
+      const clienteData = {
+        cedula: row.cedula,
+        nombres: row.nombres,
+        apellidos: row.apellidos,
+        telefono: row.telefono,
+        email: row.email,
+        direccion: row.direccion,
+        fecha_nacimiento: row.fecha_nacimiento,
+        ocupacion: row.ocupacion,
+        modelo_vehiculo: row.modelo_vehiculo,
+        concesionario: row.concesionario,
+        analista: row.analista,
+        total_financiamiento: parseFloat(row.total_financiamiento) || 0,
+        cuota_inicial: parseFloat(row.cuota_inicial) || 0,
+        numero_amortizaciones: parseInt(row.numero_amortizaciones) || 0,
+        modalidad_pago: row.modalidad_pago,
+        fecha_entrega: row.fecha_entrega,
+        estado: row.estado,
+        activo: row.activo === 'TRUE',
+        notas: row.notas
+      }
+
+      await clienteService.crearCliente(clienteData)
+      
+      // Marcar como guardado
+      setSavedClients(prev => new Set([...prev, row._rowIndex]))
+      
+      addToast('success', `Cliente ${row.nombres} ${row.apellidos} guardado exitosamente`)
+      
+      return true
+    } catch (error: any) {
+      console.error('Error guardando cliente individual:', error)
+      addToast('error', `Error guardando cliente: ${error.response?.data?.detail || error.message}`)
+      return false
+    } finally {
+      setSavingProgress(prev => ({ ...prev, [row._rowIndex]: false }))
+    }
+  }
+
+  const saveAllValidClients = async (): Promise<void> => {
+    const validClients = getValidClients()
+    
+    if (validClients.length === 0) {
+      addToast('warning', 'No hay clientes válidos para guardar')
+      return
+    }
+
+    setIsSavingIndividual(true)
+    
+    try {
+      // Guardar todos los clientes válidos
+      const savePromises = validClients.map(client => saveIndividualClient(client))
+      const results = await Promise.allSettled(savePromises)
+      
+      const successful = results.filter(result => result.status === 'fulfilled').length
+      const failed = results.filter(result => result.status === 'rejected').length
+      
+      if (successful > 0) {
+        addToast('success', `${successful} clientes guardados exitosamente`)
+      }
+      
+      if (failed > 0) {
+        addToast('error', `${failed} clientes fallaron al guardar`)
+      }
+      
+    } catch (error) {
+      console.error('Error en guardado masivo:', error)
+      addToast('error', 'Error en el guardado masivo')
+    } finally {
+      setIsSavingIndividual(false)
+    }
   }
 
   // 💡 FUNCIÓN PARA OBTENER SUGERENCIAS ESPECÍFICAS
@@ -706,10 +802,13 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                         Total: {totalRows} filas
                       </Badge>
                       <Badge variant="outline" className="text-green-700">
-                        Válidas: {validRows}
+                        Válidos: {getValidClients().length}
+                      </Badge>
+                      <Badge variant="outline" className="text-blue-700">
+                        Guardados: {savedClients.size}
                       </Badge>
                       <Badge variant="outline" className="text-red-700">
-                        Con errores: {totalRows - validRows}
+                        Con errores: {totalRows - getValidClients().length - savedClients.size}
                       </Badge>
                     </div>
                     <div className="flex space-x-2">
@@ -722,11 +821,11 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                         Cambiar archivo
                       </Button>
                       <Button
-                        onClick={handleSaveData}
-                        disabled={validRows === 0 || isSaving}
+                        onClick={saveAllValidClients}
+                        disabled={getValidClients().length === 0 || isSavingIndividual}
                         className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
                       >
-                        {isSaving ? (
+                        {isSavingIndividual ? (
                           <>
                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                             Guardando...
@@ -734,7 +833,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                         ) : (
                           <>
                             <Save className="mr-2 h-4 w-4" />
-                            Guardar ({validRows})
+                            Guardar Todos ({getValidClients().length})
                           </>
                         )}
                       </Button>
@@ -916,6 +1015,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">Estado</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-20">Activo</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-48">Notas</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1104,6 +1204,42 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                   row._validation.notas?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
+                            </td>
+                            
+                            {/* Acciones */}
+                            <td className="border p-2">
+                              <div className="flex items-center justify-center space-x-1">
+                                {savedClients.has(row._rowIndex) ? (
+                                  <div className="flex items-center text-green-600">
+                                    <CheckCircle className="h-4 w-4 mr-1" />
+                                    <span className="text-xs">Guardado</span>
+                                  </div>
+                                ) : isClientValid(row) ? (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => saveIndividualClient(row)}
+                                    disabled={savingProgress[row._rowIndex]}
+                                    className="bg-green-600 hover:bg-green-700 text-white text-xs px-2 py-1"
+                                  >
+                                    {savingProgress[row._rowIndex] ? (
+                                      <>
+                                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                        Guardando...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Save className="h-3 w-3 mr-1" />
+                                        Guardar
+                                      </>
+                                    )}
+                                  </Button>
+                                ) : (
+                                  <div className="flex items-center text-gray-400">
+                                    <AlertTriangle className="h-4 w-4 mr-1" />
+                                    <span className="text-xs">Incompleto</span>
+                                  </div>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
