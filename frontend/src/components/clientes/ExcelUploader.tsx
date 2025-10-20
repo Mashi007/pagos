@@ -269,6 +269,15 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     }, 3000)
   }
 
+  // Limpiar notificaciones contradictorias
+  const clearContradictoryToasts = () => {
+    setToasts(prev => prev.filter(toast => 
+      !toast.message.includes('guardado exitosamente') && 
+      !toast.message.includes('agregado al Dashboard') &&
+      !toast.message.includes('Redirigiendo')
+    ))
+  }
+
   // 🔄 FUNCIONES PARA SISTEMA DE GUARDADO HÍBRIDO
   const isClientValid = (row: ExcelRow): boolean => {
     // Usar el mismo sistema de validación que los campos visuales
@@ -370,6 +379,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     } catch (error: any) {
       console.error('Error guardando cliente individual:', error)
       
+      // Limpiar notificaciones anteriores para evitar contradicciones
+      clearContradictoryToasts()
+      
       // Manejar diferentes tipos de errores
       if (error.response?.status === 503) {
         addToast('error', 'Servicio temporalmente no disponible. Intenta nuevamente.')
@@ -406,7 +418,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       const failed = results.filter(result => result.status === 'rejected').length
       
       if (successful > 0) {
+        // Solo mostrar notificación de éxito si realmente se guardaron
         addToast('success', `${successful} clientes guardados exitosamente`)
+        
         // Refrescar Dashboard de Clientes
         refreshDashboardClients()
         notifyDashboardUpdate(successful)
@@ -415,13 +429,16 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         const successfulRows = resultados.filter(r => r.success).map(r => r.fila)
         setExcelData(prev => prev.filter(r => !successfulRows.includes(r._rowIndex)))
         
-        // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
-        setTimeout(() => {
-          navigate('/clientes')
-        }, 2000)
-        
-        // Mostrar mensaje informativo sobre navegación automática
-        addToast('success', '🔄 Redirigiendo al Dashboard de Clientes en 2 segundos...')
+        // Solo navegar si realmente se guardaron clientes
+        if (successful > 0) {
+          // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
+          setTimeout(() => {
+            navigate('/clientes')
+          }, 2000)
+          
+          // Mostrar mensaje informativo sobre navegación automática
+          addToast('success', '🔄 Redirigiendo al Dashboard de Clientes en 2 segundos...')
+        }
       }
       
       if (failed > 0) {
@@ -430,6 +447,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       
     } catch (error) {
       console.error('Error en guardado masivo:', error)
+      
+      // Limpiar notificaciones anteriores para evitar contradicciones
+      clearContradictoryToasts()
       
       // Manejar diferentes tipos de errores
       if (error.response?.status === 503) {
@@ -441,6 +461,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       } else {
         addToast('error', 'Error en el guardado masivo')
       }
+      
+      // NO navegar si hay errores
+      console.log('No se navegará al Dashboard debido a errores en el guardado')
     } finally {
       setIsSavingIndividual(false)
     }
