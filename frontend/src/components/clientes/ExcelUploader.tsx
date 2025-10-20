@@ -426,7 +426,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         notifyDashboardUpdate(successful)
         
         // Eliminar las filas guardadas de la lista
-        const successfulRows = resultados.filter(r => r.success).map(r => r.fila)
+        const successfulRows = results
+          .filter(result => result.status === 'fulfilled')
+          .map(result => (result as PromiseFulfilledResult<boolean>).value ? validClients[results.indexOf(result)]?._rowIndex : null)
+          .filter(rowIndex => rowIndex !== null)
         setExcelData(prev => prev.filter(r => !successfulRows.includes(r._rowIndex)))
         
         // Solo navegar si realmente se guardaron clientes
@@ -445,7 +448,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         addToast('error', `${failed} clientes fallaron al guardar`)
       }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error en guardado masivo:', error)
       
       // Limpiar notificaciones anteriores para evitar contradicciones
