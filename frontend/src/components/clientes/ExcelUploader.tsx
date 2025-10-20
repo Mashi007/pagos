@@ -357,7 +357,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         }, 2000)
         
         // Mostrar mensaje informativo sobre navegación automática
-        addToast('info', '🔄 Redirigiendo al Dashboard de Clientes en 2 segundos...')
+        addToast('success', '🔄 Redirigiendo al Dashboard de Clientes en 2 segundos...')
       }
       
       return true
@@ -400,7 +400,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         }, 2000)
         
         // Mostrar mensaje informativo sobre navegación automática
-        addToast('info', '🔄 Redirigiendo al Dashboard de Clientes en 2 segundos...')
+        addToast('success', '🔄 Redirigiendo al Dashboard de Clientes en 2 segundos...')
       }
       
       if (failed > 0) {
