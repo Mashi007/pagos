@@ -10,6 +10,7 @@ import {
   Save,
   Info,
   CheckCircle2,
+  Loader2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -147,9 +148,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   // 🔄 FUNCIONES PARA SISTEMA DE GUARDADO HÍBRIDO
   const isClientValid = (row: ExcelRow): boolean => {
     const hasNoErrors = !row._hasErrors
-    const hasConcesionario = row.concesionario && row.concesionario.trim() !== ''
-    const hasAnalista = row.analista && row.analista.trim() !== ''
-    const hasModelo = row.modelo_vehiculo && row.modelo_vehiculo.trim() !== ''
+    const hasConcesionario = Boolean(row.concesionario && row.concesionario.trim() !== '')
+    const hasAnalista = Boolean(row.analista && row.analista.trim() !== '')
+    const hasModelo = Boolean(row.modelo_vehiculo && row.modelo_vehiculo.trim() !== '')
     
     return hasNoErrors && hasConcesionario && hasAnalista && hasModelo
   }
@@ -184,7 +185,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         notas: row.notas
       }
 
-      await clienteService.crearCliente(clienteData)
+      await clienteService.createCliente(clienteData)
       
       // Marcar como guardado
       setSavedClients(prev => new Set([...prev, row._rowIndex]))
