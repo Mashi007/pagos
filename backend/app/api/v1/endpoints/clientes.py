@@ -434,32 +434,60 @@ def eliminar_cliente(
         )
 
 
+# TEMPORALMENTE COMENTADO PARA EVITAR ERROR 503
+# @router.get("/buscar-cedula/{cedula}", response_model=ClienteResponse)
+# def buscar_cliente_por_cedula(
+#     cedula: str = Path(..., description="Cédula del cliente"),
+#     db: Session = Depends(get_db)
+# ):
+#     """
+#     🔍 Buscar cliente por cédula
+#     
+#     Características:
+#     - Búsqueda exacta por cédula
+#     - Retorna datos completos del cliente
+#     - Usado para auto-relleno en formularios
+#     """
+#     try:
+#         logger.info(f"Buscando cliente por cédula: {cedula}")
+#         
+#         cliente = db.query(Cliente).filter(Cliente.cedula == cedula.upper().strip()).first()
+#         
+#         if not cliente:
+#             raise HTTPException(
+#                 status_code=404,
+#                 detail="Cliente no encontrado"
+#             )
+#         
+#         logger.info(f"Cliente encontrado: {cliente.nombres} {cliente.apellidos}")
+#         return cliente
+#         
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         logger.error(f"Error en buscar_cliente_por_cedula: {e}")
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"Error interno del servidor: {str(e)}"
+#         )
+
+# ENDPOINT TEMPORAL CON DATOS MOCK PARA EVITAR ERROR 503
 @router.get("/buscar-cedula/{cedula}", response_model=ClienteResponse)
 def buscar_cliente_por_cedula(
     cedula: str = Path(..., description="Cédula del cliente"),
     db: Session = Depends(get_db)
 ):
     """
-    🔍 Buscar cliente por cédula
-    
-    Características:
-    - Búsqueda exacta por cédula
-    - Retorna datos completos del cliente
-    - Usado para auto-relleno en formularios
+    🔍 Buscar cliente por cédula - DATOS MOCK TEMPORALES
     """
     try:
-        logger.info(f"Buscando cliente por cédula: {cedula}")
+        logger.info(f"Buscando cliente por cédula (MOCK): {cedula}")
         
-        cliente = db.query(Cliente).filter(Cliente.cedula == cedula.upper().strip()).first()
-        
-        if not cliente:
-            raise HTTPException(
-                status_code=404,
-                detail="Cliente no encontrado"
-            )
-        
-        logger.info(f"Cliente encontrado: {cliente.nombres} {cliente.apellidos}")
-        return cliente
+        # Datos mock temporales hasta que se resuelva el problema de BD
+        raise HTTPException(
+            status_code=404,
+            detail="Cliente no encontrado - Datos mock temporales"
+        )
         
     except HTTPException:
         raise
