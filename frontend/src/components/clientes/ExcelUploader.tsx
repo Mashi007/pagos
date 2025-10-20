@@ -73,6 +73,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const [analistas, setAnalistas] = useState<Analista[]>([])
   const [modelosVehiculos, setModelosVehiculos] = useState<ModeloVehiculo[]>([])
 
+  // Estado para tracking de errores en dropdowns
+  const [dropdownErrors, setDropdownErrors] = useState<{[key: string]: boolean}>({})
+
   // Cargar datos de configuración
   useEffect(() => {
     const cargarDatosConfiguracion = async () => {
@@ -324,6 +327,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       setExcelData(processedData)
       setShowPreview(true)
       
+      // Validar dropdowns después de procesar
+      updateDropdownErrors(processedData)
+      
     } catch (error) {
       console.error('❌ Error procesando Excel:', error)
       alert(`Error procesando el archivo: ${error instanceof Error ? error.message : 'Error desconocido'}`)
@@ -386,7 +392,30 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       row._hasErrors = hasErrors
       
       setExcelData(newData)
+      
+      // Actualizar estado de errores en dropdowns
+      updateDropdownErrors(newData)
     }
+  }
+
+  // 🎯 VALIDAR DROPDOWNS Y ACTUALIZAR ESTADO DE ERRORES
+  const updateDropdownErrors = (data: ExcelRow[]) => {
+    const errors: {[key: string]: boolean} = {}
+    
+    data.forEach((row, index) => {
+      // Validar dropdowns específicos
+      if (!row.concesionario || row.concesionario.trim() === '') {
+        errors[`concesionario_${index}`] = true
+      }
+      if (!row.analista || row.analista.trim() === '') {
+        errors[`analista_${index}`] = true
+      }
+      if (!row.modelo_vehiculo || row.modelo_vehiculo.trim() === '') {
+        errors[`modelo_${index}`] = true
+      }
+    })
+    
+    setDropdownErrors(errors)
   }
 
   // 💾 GUARDAR DATOS VALIDADOS
@@ -860,7 +889,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 onChange={(value) => updateCellValue(index, 'modelo_vehiculo', value)}
                                 placeholder="Seleccionar modelo..."
                                 className={`w-full text-sm min-w-[120px] ${
-                                  row._validation.modelo_vehiculo?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
+                                  dropdownErrors[`modelo_${index}`] ? 'border-red-800 bg-red-800 text-white' : 'border-gray-300 bg-white text-black'
                                 }`}
                               />
                             </td>
@@ -876,7 +905,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 onChange={(value) => updateCellValue(index, 'concesionario', value)}
                                 placeholder="Seleccionar concesionario..."
                                 className={`w-full text-sm min-w-[120px] ${
-                                  row._validation.concesionario?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
+                                  dropdownErrors[`concesionario_${index}`] ? 'border-red-800 bg-red-800 text-white' : 'border-gray-300 bg-white text-black'
                                 }`}
                               />
                             </td>
@@ -892,7 +921,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 onChange={(value) => updateCellValue(index, 'analista', value)}
                                 placeholder="Seleccionar analista..."
                                 className={`w-full text-sm min-w-[120px] ${
-                                  row._validation.analista?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
+                                  dropdownErrors[`analista_${index}`] ? 'border-red-800 bg-red-800 text-white' : 'border-gray-300 bg-white text-black'
                                 }`}
                               />
                             </td>
