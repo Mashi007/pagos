@@ -1,56 +1,33 @@
-// Declaraciones globales para resolver errores de TypeScript
+/// <reference types="vite/client" />
+
+// Declaraciones globales simplificadas para React y JSX
 declare global {
-  // React hooks
-  const useState: <T>(initialState: T | (() => T)) => [T, (value: T | ((prev: T) => T)) => void]
-  const useRef: <T>(initialValue: T | null) => { current: T | null }
-  const useEffect: (effect: () => void | (() => void), deps?: any[]) => void
-  const useCallback: <T extends (...args: any[]) => any>(callback: T, deps: any[]) => T
-  const useMemo: <T>(factory: () => T, deps: any[]) => T
-  
-  // React namespace
   namespace React {
-    type ReactNode = any
-    type ReactElement = any
-    type ComponentType<P = {}> = (props: P) => ReactElement | null
-    type FC<P = {}> = ComponentType<P>
-    
     interface ChangeEvent<T = Element> {
-      target: T
-      preventDefault(): void
-      stopPropagation(): void
+      target: T & EventTarget
     }
     
     interface MouseEvent<T = Element> {
-      target: T
-      preventDefault(): void
-      stopPropagation(): void
+      target: T & EventTarget
     }
     
     interface FormEvent<T = Element> {
-      target: T
-      preventDefault(): void
-      stopPropagation(): void
+      target: T & EventTarget
     }
     
     interface DragEvent<T = Element> {
-      preventDefault(): void
-      dataTransfer: DataTransfer
+      target: T & EventTarget
     }
     
     interface KeyboardEvent<T = Element> {
-      key: string
-      preventDefault(): void
-      stopPropagation(): void
+      target: T & EventTarget
     }
     
     interface FocusEvent<T = Element> {
-      target: T
-      preventDefault(): void
-      stopPropagation(): void
+      target: T & EventTarget
     }
   }
-  
-  // JSX namespace
+
   namespace JSX {
     interface IntrinsicElements {
       [elemName: string]: any
@@ -63,143 +40,35 @@ declare global {
     interface ElementAttributesProperty { props: {} }
     interface ElementChildrenAttribute { children: {} }
   }
-  
-  // Tipos para eventos comunes
+
+  // Declaraciones globales para hooks de React
+  function useState<T>(initialState: T | (() => T)): [T, (value: T | ((prev: T) => T)) => void]
+  function useRef<T>(initialValue: T | null): { current: T | null }
+  function useEffect(effect: () => void | (() => void), deps?: any[]): void
+  function useCallback<T extends (...args: any[]) => any>(callback: T, deps: any[]): T
+  function useMemo<T>(factory: () => T, deps: any[]): T
+
+  // Declaraciones globales para eventos
   interface EventTarget {
     value: string
     checked: boolean
   }
-  
-  // Tipos para parámetros comunes
-  type EventHandler = (e: React.ChangeEvent<HTMLInputElement>) => void
-  type DragEventHandler = (e: React.DragEvent<HTMLDivElement>) => void
-  type ClickEventHandler = (e: React.MouseEvent<HTMLButtonElement>) => void
-  type FormEventHandler = (e: React.FormEvent<HTMLFormElement>) => void
-  type ChangeEventHandler = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void
-  
-  // Tipos para funciones de callback comunes
-  type SetStateFunction<T> = (value: T | ((prev: T) => T)) => void
-  type FilterFunction<T> = (item: T) => boolean
-  type MapFunction<T, U> = (item: T) => U
-  
-  // Tipos para parámetros de eventos implícitos
-  type EventParameter = React.ChangeEvent<HTMLInputElement> | React.MouseEvent<HTMLButtonElement> | React.FormEvent<HTMLFormElement>
-  
-  // Tipos para parámetros de funciones comunes
-  type FunctionParameter<T = any> = T
-  type CallbackParameter<T = any> = T
-  type MapParameter<T = any> = T
-  type FilterParameter<T = any> = T
-  type ReduceParameter<T = any> = T
-  
-  // Tipos específicos para parámetros implícitos del proyecto
-  type PrestamoParameter = any
-  type ClienteParameter = any
-  type AnalistaParameter = any
-  type PagoParameter = any
-  type ResultParameter = any
-  type UpdatedClienteParameter = any
-  type NewClienteParameter = any
-  type UpdatedAnalistaParameter = any
-  type DeletedIdParameter = any
-  type UnderscoreParameter = any
-  
-  // Tipos para parámetros de funciones específicas
-  type CallbackParameter<T = any> = T
-  type MapCallbackParameter<T = any> = T
-  type FilterCallbackParameter<T = any> = T
-  type ReduceCallbackParameter<T = any> = T
-  type ForEachCallbackParameter<T = any> = T
-  type FindCallbackParameter<T = any> = T
-  type SomeCallbackParameter<T = any> = T
-  type EveryCallbackParameter<T = any> = T
-  
-  // Tipos para funciones genéricas que pueden causar errores
-  type GenericFunction<T = any> = (...args: any[]) => T
-  type AsyncFunction<T = any> = (...args: any[]) => Promise<T>
-  type EventHandlerFunction<T = any> = (event: T) => void
-  type StateUpdaterFunction<T = any> = (value: T | ((prev: T) => T)) => void
-  
-  // Declaraciones globales para funciones comunes
-  const map: <T, U>(array: T[], callback: (item: T, index: number) => U) => U[]
-  const filter: <T>(array: T[], callback: (item: T, index: number) => boolean) => T[]
-  const reduce: <T, U>(array: T[], callback: (acc: U, item: T, index: number) => U, initial: U) => U
-  const forEach: <T>(array: T[], callback: (item: T, index: number) => void) => void
-  const find: <T>(array: T[], callback: (item: T, index: number) => boolean) => T | undefined
-  const some: <T>(array: T[], callback: (item: T, index: number) => boolean) => boolean
-  const every: <T>(array: T[], callback: (item: T, index: number) => boolean) => boolean
-  
-  // Declaraciones globales para funciones específicas del proyecto
-  const useQuery: <T = any>(queryKey: any[], queryFn: () => Promise<T>, options?: any) => any
-  const useMutation: <T = any>(mutationFn: (variables: any) => Promise<T>, options?: any) => any
-  const useCallback: <T extends (...args: any[]) => any>(callback: T, deps: any[]) => T
-  const useMemo: <T>(factory: () => T, deps: any[]) => T
-  
-  // Declaraciones específicas para resolver errores de parámetros implícitos
-  const prestamo: any
-  const updatedAnalista: any
-  const newCliente: any
-  const updatedCliente: any
-  const deletedId: any
-  const result: any
-  const analista: any
-  const pago: any
-  const a: any
-  const _: any
-  
-  // Declaraciones específicas para funciones que causan errores
-  const useQuery: <T = any>(queryKey: any[], queryFn: () => Promise<T>, options?: any) => any
-  const useMutation: <T = any>(mutationFn: (variables: any) => Promise<T>, options?: any) => any
-  const useCallback: <T extends (...args: any[]) => any>(callback: T, deps: any[]) => T
-  const useMemo: <T>(factory: () => T, deps: any[]) => T
-  
-  // Tipos específicos del proyecto
-  interface Cliente {
-    id: number
-    cedula: string
-    nombres: string
-    apellidos: string
-    telefono: string
-    email: string
-    direccion: string
-    fecha_nacimiento: string
-    ocupacion: string
-    modelo_vehiculo: string
-    concesionario: string
-    analista: string
-    total_financiamiento: number
-    cuota_inicial: number
-    numero_amortizaciones: number
-    modalidad_pago: string
-    fecha_entrega: string
-    estado: string
-    activo: boolean
-    notas: string
-  }
-  
-  interface Usuario {
-    id: number
-    email: string
-    nombre: string
-    apellido: string
-    cargo?: string
-    is_admin: boolean
-    is_active: boolean
-    created_at: string
-    updated_at?: string
-    last_login?: string
-  }
-  
-  interface Validator {
-    id: number
-    nombre: string
-    tipo: string
-    activo: boolean
-    configuracion: any
-  }
 }
 
-// Declaraciones de módulos externos
+// Declaraciones para módulos externos
+declare module 'react' {
+  export function useState<T>(initialState: T | (() => T)): [T, (value: T | ((prev: T) => T)) => void]
+  export function useRef<T>(initialValue: T | null): { current: T | null }
+  export function useEffect(effect: () => void | (() => void), deps?: any[]): void
+  export function useCallback<T extends (...args: any[]) => any>(callback: T, deps: any[]): T
+  export function useMemo<T>(factory: () => T, deps: any[]): T
+  export function useQuery<T = any>(queryKey: any[], queryFn: () => Promise<T>, options?: any): any
+  export function useMutation<T = any>(mutationFn: (variables: any) => Promise<T>, options?: any): any
+  export function map<T, U>(array: T[], callback: (item: T, index: number) => U): U[]
+  export function filter<T>(array: T[], callback: (item: T, index: number) => boolean): T[]
+  export function reduce<T, U>(array: T[], callback: (acc: U, item: T, index: number) => U, initial: U): U
+}
+
 declare module 'framer-motion' {
   export const motion: any
   export const AnimatePresence: any
@@ -302,102 +171,11 @@ declare module '@tanstack/react-query' {
   export const QueryClientProvider: any
 }
 
-declare module 'react' {
-  export function useState<T>(initialState: T | (() => T)): [T, (value: T | ((prev: T) => T)) => void]
-  export function useRef<T>(initialValue: T | null): { current: T | null }
-  export function useEffect(effect: () => void | (() => void), deps?: any[]): void
-  export function useCallback<T extends (...args: any[]) => any>(callback: T, deps: any[]): T
-  export function useMemo<T>(factory: () => T, deps: any[]): T
-  
-  export type ReactNode = any
-  export type ReactElement = any
-  export type ComponentType<P = {}> = (props: P) => ReactElement | null
-  export type FC<P = {}> = ComponentType<P>
-  
-  export interface ChangeEvent<T = Element> {
-    target: T
-    preventDefault(): void
-    stopPropagation(): void
-  }
-  
-  export interface MouseEvent<T = Element> {
-    target: T
-    preventDefault(): void
-    stopPropagation(): void
-  }
-  
-  export interface FormEvent<T = Element> {
-    target: T
-    preventDefault(): void
-    stopPropagation(): void
-  }
-  
-  export interface DragEvent<T = Element> {
-    preventDefault(): void
-    dataTransfer: DataTransfer
-  }
-  
-  export interface KeyboardEvent<T = Element> {
-    key: string
-    preventDefault(): void
-    stopPropagation(): void
-  }
-  
-  export interface FocusEvent<T = Element> {
-    target: T
-    preventDefault(): void
-    stopPropagation(): void
-  }
-  
-  // Declaraciones para funciones genéricas que pueden causar errores
-  export function useQuery<T = any>(queryKey: any[], queryFn: () => Promise<T>, options?: any): any
-  export function useMutation<T = any>(mutationFn: (variables: any) => Promise<T>, options?: any): any
-  
-  // Declaraciones para funciones que pueden causar errores de tipos
-  export function useCallback<T extends (...args: any[]) => any>(callback: T, deps: any[]): T
-  export function useMemo<T>(factory: () => T, deps: any[]): T
-  
-  // Declaraciones para funciones genéricas comunes
-  export function map<T, U>(array: T[], callback: (item: T, index: number) => U): U[]
-  export function filter<T>(array: T[], callback: (item: T, index: number) => boolean): T[]
-  export function reduce<T, U>(array: T[], callback: (acc: U, item: T, index: number) => U, initial: U): U
-  
-  // Declaraciones específicas para funciones que causan errores
-  export function useQuery<T = any>(queryKey: any[], queryFn: () => Promise<T>, options?: any): any
-  export function useMutation<T = any>(mutationFn: (variables: any) => Promise<T>, options?: any): any
-  export function useCallback<T extends (...args: any[]) => any>(callback: T, deps: any[]): T
-  export function useMemo<T>(factory: () => T, deps: any[]): T
-  
-  // Declaraciones para funciones de array que pueden causar errores
-  export function forEach<T>(array: T[], callback: (item: T, index: number) => void): void
-  export function find<T>(array: T[], callback: (item: T, index: number) => boolean): T | undefined
-  export function some<T>(array: T[], callback: (item: T, index: number) => boolean): boolean
-  export function every<T>(array: T[], callback: (item: T, index: number) => boolean): boolean
-  
-  // Declaraciones específicas para resolver errores de parámetros implícitos
-  export const prestamo: any
-  export const updatedAnalista: any
-  export const newCliente: any
-  export const updatedCliente: any
-  export const deletedId: any
-  export const result: any
-  export const analista: any
-  export const pago: any
-  export const a: any
-  export const _: any
-  
-  // Declaraciones específicas para funciones que causan errores
-  export const useQuery: <T = any>(queryKey: any[], queryFn: () => Promise<T>, options?: any) => any
-  export const useMutation: <T = any>(mutationFn: (variables: any) => Promise<T>, options?: any) => any
-  export const useCallback: <T extends (...args: any[]) => any>(callback: T, deps: any[]) => T
-  export const useMemo: <T>(factory: () => T, deps: any[]) => T
-}
-
 // Declaraciones para componentes UI - Solo si no existen los archivos reales
 // declare module '@/components/ui/badge' {
 //   interface BadgeProps {
+//     variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'success' | 'warning'
 //     children?: React.ReactNode
-//     variant?: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning'
 //     className?: string
 //   }
 //   export const Badge: React.FC<BadgeProps>
@@ -410,9 +188,6 @@ declare module 'react' {
 //     onChange: (value: string) => void
 //     placeholder?: string
 //     className?: string
-//     disabled?: boolean
 //   }
 //   export const SearchableSelect: React.FC<SearchableSelectProps>
 // }
-
-export {}
