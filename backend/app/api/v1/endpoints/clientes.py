@@ -224,6 +224,7 @@ def crear_cliente(
     """
     try:
         logger.info(f"Crear cliente - Usuario: {current_user.email}")
+        logger.info(f"Datos recibidos: {cliente_data}")
         
         # Verificar si ya existe cliente con la misma cédula
         cliente_existente = db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
@@ -274,10 +275,12 @@ def crear_cliente(
         raise
     except Exception as e:
         logger.error(f"Error en crear_cliente: {e}")
+        logger.error(f"Tipo de error: {type(e).__name__}")
+        logger.error(f"Detalles del error: {str(e)}")
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail="Error interno del servidor"
+            detail=f"Error interno del servidor: {str(e)}"
         )
 
 # ============================================

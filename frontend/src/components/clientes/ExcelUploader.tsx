@@ -485,7 +485,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-lg shadow-xl max-w-[95vw] w-full max-h-[90vh] overflow-y-auto"
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-6 rounded-t-lg">
@@ -625,25 +625,25 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
+                  <div className="overflow-x-auto min-w-full">
+                    <table className="w-full border-collapse min-w-[1400px]">
                       <thead>
                         <tr className="bg-gray-50">
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Fila</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Cédula</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Nombres</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Apellidos</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Teléfono</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Email</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Dirección</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Fecha Nac.</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Ocupación</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Modelo Veh.</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Concesionario</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Analista</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Estado</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Activo</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500">Notas</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-16">Fila</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">Cédula</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-32">Nombres</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-32">Apellidos</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-28">Teléfono</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-40">Email</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-48">Dirección</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">Fecha Nac.</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-32">Ocupación</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-40">Modelo Veh.</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-40">Concesionario</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-32">Analista</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">Estado</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-20">Activo</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-48">Notas</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -657,7 +657,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 type="text"
                                 value={row.cedula}
                                 onChange={(e) => updateCellValue(index, 'cedula', e.target.value)}
-                                className={`w-full text-xs p-1 border rounded ${
+                                className={`w-full text-sm p-2 border rounded min-w-[80px] ${
                                   row._validation.cedula?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
@@ -669,7 +669,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 type="text"
                                 value={row.nombres}
                                 onChange={(e) => updateCellValue(index, 'nombres', e.target.value)}
-                                className={`w-full text-xs p-1 border rounded ${
+                                className={`w-full text-sm p-2 border rounded min-w-[80px] ${
                                   row._validation.nombres?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
@@ -681,7 +681,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 type="text"
                                 value={row.apellidos}
                                 onChange={(e) => updateCellValue(index, 'apellidos', e.target.value)}
-                                className={`w-full text-xs p-1 border rounded ${
+                                className={`w-full text-sm p-2 border rounded min-w-[80px] ${
                                   row._validation.apellidos?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
@@ -693,7 +693,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 type="text"
                                 value={row.telefono}
                                 onChange={(e) => updateCellValue(index, 'telefono', e.target.value)}
-                                className={`w-full text-xs p-1 border rounded ${
+                                className={`w-full text-sm p-2 border rounded min-w-[80px] ${
                                   row._validation.telefono?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
@@ -705,7 +705,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 type="email"
                                 value={row.email}
                                 onChange={(e) => updateCellValue(index, 'email', e.target.value)}
-                                className={`w-full text-xs p-1 border rounded ${
+                                className={`w-full text-sm p-2 border rounded min-w-[80px] ${
                                   row._validation.email?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
@@ -717,7 +717,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 type="text"
                                 value={row.direccion}
                                 onChange={(e) => updateCellValue(index, 'direccion', e.target.value)}
-                                className={`w-full text-xs p-1 border rounded ${
+                                className={`w-full text-sm p-2 border rounded min-w-[80px] ${
                                   row._validation.direccion?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
@@ -729,7 +729,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 type="date"
                                 value={row.fecha_nacimiento}
                                 onChange={(e) => updateCellValue(index, 'fecha_nacimiento', e.target.value)}
-                                className={`w-full text-xs p-1 border rounded ${
+                                className={`w-full text-sm p-2 border rounded min-w-[80px] ${
                                   row._validation.fecha_nacimiento?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
@@ -741,7 +741,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 type="text"
                                 value={row.ocupacion}
                                 onChange={(e) => updateCellValue(index, 'ocupacion', e.target.value)}
-                                className={`w-full text-xs p-1 border rounded ${
+                                className={`w-full text-sm p-2 border rounded min-w-[80px] ${
                                   row._validation.ocupacion?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
@@ -757,7 +757,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.modelo_vehiculo}
                                 onChange={(value) => updateCellValue(index, 'modelo_vehiculo', value)}
                                 placeholder="Seleccionar modelo..."
-                                className={`w-full text-xs ${
+                                className={`w-full text-sm min-w-[120px] ${
                                   row._validation.modelo_vehiculo?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
@@ -773,7 +773,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.concesionario}
                                 onChange={(value) => updateCellValue(index, 'concesionario', value)}
                                 placeholder="Seleccionar concesionario..."
-                                className={`w-full text-xs ${
+                                className={`w-full text-sm min-w-[120px] ${
                                   row._validation.concesionario?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
@@ -789,7 +789,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.analista}
                                 onChange={(value) => updateCellValue(index, 'analista', value)}
                                 placeholder="Seleccionar analista..."
-                                className={`w-full text-xs ${
+                                className={`w-full text-sm min-w-[120px] ${
                                   row._validation.analista?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
@@ -801,7 +801,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 type="text"
                                 value={row.estado}
                                 onChange={(e) => updateCellValue(index, 'estado', e.target.value)}
-                                className={`w-full text-xs p-1 border rounded ${
+                                className={`w-full text-sm p-2 border rounded min-w-[80px] ${
                                   row._validation.estado?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
@@ -813,7 +813,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 type="text"
                                 value={row.activo}
                                 onChange={(e) => updateCellValue(index, 'activo', e.target.value)}
-                                className={`w-full text-xs p-1 border rounded ${
+                                className={`w-full text-sm p-2 border rounded min-w-[80px] ${
                                   row._validation.activo?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
@@ -825,7 +825,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 type="text"
                                 value={row.notas}
                                 onChange={(e) => updateCellValue(index, 'notas', e.target.value)}
-                                className={`w-full text-xs p-1 border rounded ${
+                                className={`w-full text-sm p-2 border rounded min-w-[80px] ${
                                   row._validation.notas?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
