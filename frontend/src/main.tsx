@@ -9,9 +9,6 @@ import './index.css'
 // Validación de variables de entorno
 import './config/env'
 
-// Error Boundary
-import { ErrorBoundary } from './components/ErrorBoundary'
-
 // Configuración del cliente de React Query
 // Versión: 2025-10-16 - Build v1.0.3 - Mejoras de seguridad implementadas
 const queryClient = new QueryClient({
@@ -29,35 +26,33 @@ const queryClient = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <App />
-          <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 4000,
-            style: {
-              background: 'hsl(var(--card))',
-              color: 'hsl(var(--card-foreground))',
-              border: '1px solid hsl(var(--border))',
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <App />
+        <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: 'hsl(var(--card))',
+            color: 'hsl(var(--card-foreground))',
+            border: '1px solid hsl(var(--border))',
+          },
+          success: {
+            iconTheme: {
+              primary: 'hsl(142 76% 36%)',
+              secondary: 'white',
             },
-            success: {
-              iconTheme: {
-                primary: 'hsl(142 76% 36%)',
-                secondary: 'white',
-              },
+          },
+          error: {
+            iconTheme: {
+              primary: 'hsl(0 84% 60%)',
+              secondary: 'white',
             },
-            error: {
-              iconTheme: {
-                primary: 'hsl(0 84% 60%)',
-                secondary: 'white',
-              },
-            },
-          }}
-        />
-        </BrowserRouter>
-      </QueryClientProvider>
-    </ErrorBoundary>
+          },
+        }}
+      />
+      </BrowserRouter>
+    </QueryClientProvider>
   </React.StrictMode>,
 )
