@@ -23,8 +23,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { AlertWithIcon } from '@/components/ui/alert'
 import { CrearClienteForm } from './CrearClienteForm'
+import { ClientesKPIs } from './ClientesKPIs'
 
 import { useDebounce } from '@/hooks/useDebounce'
+import { useClientesStats } from '@/hooks/useClientesStats'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { formatCurrency, formatDate } from '@/utils'
 import { ClienteFilters } from '@/types'
@@ -81,6 +83,7 @@ export function ClientesList() {
       
       // Refrescar la lista
       queryClient.invalidateQueries({ queryKey: ['clientes'] })
+      queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ✅ Actualizar estadísticas
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['kpis'] })
       
@@ -102,6 +105,7 @@ export function ClientesList() {
     setShowEditarCliente(false)
     setClienteSeleccionado(null)
     queryClient.invalidateQueries({ queryKey: ['clientes'] })
+    queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ✅ Actualizar estadísticas
   }
   const { user } = useSimpleAuth()
   const canViewAllClients = true // Todos pueden ver todos los clientes
@@ -117,6 +121,12 @@ export function ClientesList() {
     currentPage,
     20
   )
+
+  // Estadísticas de clientes
+  const {
+    data: statsData,
+    isLoading: statsLoading
+  } = useClientesStats()
 
   // Datos mockeados para desarrollo
   const mockClientes = [
@@ -197,6 +207,17 @@ export function ClientesList() {
           </Button>
         </div>
       </div>
+
+      {/* KPIs de Clientes */}
+      {statsData && (
+        <ClientesKPIs
+          activos={statsData.activos}
+          inactivos={statsData.inactivos}
+          finalizados={statsData.finalizados}
+          total={statsData.total}
+          isLoading={statsLoading}
+        />
+      )}
 
       {/* Filtros y búsqueda */}
       <Card>
