@@ -83,35 +83,45 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
     }
   }, [prestamo])
 
+  // TEMPORALMENTE COMENTADO PARA EVITAR ERRORES 503
   // Función para buscar cliente por cédula
+  // const buscarCliente = async (cedula: string) => {
+  //   if (!cedula || cedula.length < 8) {
+  //     setCedulaError('')
+  //     setClienteEncontrado(null)
+  //     return
+  //   }
+
+  //   setIsSearchingClient(true)
+  //   setCedulaError('')
+
+  //   try {
+  //     const cliente = await prestamoService.buscarClientePorCedula(cedula)
+  //     setClienteEncontrado(cliente)
+  //     setFormData(prev => ({
+  //       ...prev,
+  //       cliente_id: cliente.id
+  //     }))
+  //     toast.success(`✅ Cliente encontrado: ${cliente.nombres} ${cliente.apellidos}`)
+  //   } catch (error) {
+  //     setCedulaError('Cliente no encontrado')
+  //     setClienteEncontrado(null)
+  //     setFormData(prev => ({
+  //       ...prev,
+  //       cliente_id: 0
+  //     }))
+  //   } finally {
+  //     setIsSearchingClient(false)
+  //   }
+  // }
+
+  // FUNCIÓN TEMPORAL DESHABILITADA PARA EVITAR ERRORES 503
   const buscarCliente = async (cedula: string) => {
-    if (!cedula || cedula.length < 8) {
-      setCedulaError('')
-      setClienteEncontrado(null)
-      return
-    }
-
-    setIsSearchingClient(true)
-    setCedulaError('')
-
-    try {
-      const cliente = await prestamoService.buscarClientePorCedula(cedula)
-      setClienteEncontrado(cliente)
-      setFormData(prev => ({
-        ...prev,
-        cliente_id: cliente.id
-      }))
-      toast.success(`✅ Cliente encontrado: ${cliente.nombres} ${cliente.apellidos}`)
-    } catch (error) {
-      setCedulaError('Cliente no encontrado')
-      setClienteEncontrado(null)
-      setFormData(prev => ({
-        ...prev,
-        cliente_id: 0
-      }))
-    } finally {
-      setIsSearchingClient(false)
-    }
+    // Funcionalidad temporalmente deshabilitada
+    console.log('Búsqueda de cliente deshabilitada temporalmente:', cedula)
+    setCedulaError('Funcionalidad temporalmente deshabilitada')
+    setClienteEncontrado(null)
+    setIsSearchingClient(false)
   }
 
   // Calcular cuota automáticamente
@@ -261,14 +271,18 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <label htmlFor="cedula" className="block text-sm font-medium text-gray-700 mb-1">Cédula del Cliente</label>
+                  <label htmlFor="cedula" className="block text-sm font-medium text-gray-700 mb-1">
+                    Cédula del Cliente 
+                    <span className="text-orange-600 text-xs ml-2">(Temporalmente deshabilitado)</span>
+                  </label>
                   <div className="flex items-center space-x-2">
                     <div className="flex-1 relative">
                       <Input
                         id="cedula"
                         placeholder="Ej: V-12345678"
                         onChange={(e) => buscarCliente(e.target.value)}
-                        className={cedulaError ? 'border-red-500' : ''}
+                        className={`${cedulaError ? 'border-red-500' : ''} bg-gray-100`}
+                        disabled={true}
                       />
                       {isSearchingClient && (
                         <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-blue-600" />
@@ -276,12 +290,15 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
                     </div>
                   </div>
                   {cedulaError && (
-                    <p className="text-sm text-red-600 mt-1">{cedulaError}</p>
+                    <p className="text-sm text-orange-600 mt-1">{cedulaError}</p>
                   )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    ⚠️ La búsqueda automática de clientes está temporalmente deshabilitada
+                  </p>
                 </div>
 
-                {/* Datos del Cliente Encontrado */}
-                {clienteEncontrado && (
+                {/* TEMPORALMENTE COMENTADO - Datos del Cliente Encontrado */}
+                {/* {clienteEncontrado && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -306,7 +323,7 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
                       </div>
                     </div>
                   </motion.div>
-                )}
+                )} */}
               </CardContent>
             </Card>
 
