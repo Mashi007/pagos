@@ -28,11 +28,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import toast from 'react-hot-toast'
 
-export function PrestamosList() {
+interface PrestamosListProps {
+  onShowAmortizacion?: () => void
+}
+
+export function PrestamosList({ onShowAmortizacion }: PrestamosListProps) {
   const queryClient = useQueryClient()
   const [searchTerm, setSearchTerm] = useState('')
   const [estadoFilter, setEstadoFilter] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [showAmortizacion, setShowAmortizacion] = useState(false)
   const [editingPrestamo, setEditingPrestamo] = useState<Prestamo | null>(null)
 
   // Queries
@@ -132,6 +137,10 @@ export function PrestamosList() {
             <Button onClick={handleRefresh} variant="outline" size="sm">
               <RefreshCw className="h-4 w-4 mr-2" />
               Actualizar
+            </Button>
+            <Button onClick={() => onShowAmortizacion?.()} variant="outline">
+              <Calculator className="h-4 w-4 mr-2" />
+              Tabla de Amortización
             </Button>
             <Button onClick={() => setShowForm(true)}>
               <Plus className="h-4 w-4 mr-2" />

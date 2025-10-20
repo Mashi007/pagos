@@ -4,9 +4,11 @@ import { DollarSign } from 'lucide-react'
 import { PrestamosKPIs } from '@/components/prestamos/PrestamosKPIs'
 import { PrestamosList } from '@/components/prestamos/PrestamosList'
 import { CrearPrestamoForm } from '@/components/prestamos/CrearPrestamoForm'
+import { TablaAmortizacion } from '@/components/prestamos/TablaAmortizacion'
 
 export function PrestamosPage() {
   const [showForm, setShowForm] = useState(false)
+  const [showAmortizacion, setShowAmortizacion] = useState(false)
   const [editingPrestamo, setEditingPrestamo] = useState<any>(null)
 
   const handleSuccess = () => {
@@ -17,6 +19,10 @@ export function PrestamosPage() {
   const handleCancel = () => {
     setShowForm(false)
     setEditingPrestamo(null)
+  }
+
+  const handleAmortizacionClose = () => {
+    setShowAmortizacion(false)
   }
 
   return (
@@ -43,7 +49,7 @@ export function PrestamosPage() {
       <PrestamosKPIs />
 
       {/* Lista de Préstamos */}
-      <PrestamosList />
+      <PrestamosList onShowAmortizacion={() => setShowAmortizacion(true)} />
 
       {/* Formulario Modal */}
       {showForm && (
@@ -52,6 +58,11 @@ export function PrestamosPage() {
           onSuccess={handleSuccess}
           onCancel={handleCancel}
         />
+      )}
+
+      {/* Tabla de Amortización Modal */}
+      {showAmortizacion && (
+        <TablaAmortizacion onClose={handleAmortizacionClose} />
       )}
     </motion.div>
   )
