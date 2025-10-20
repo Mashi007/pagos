@@ -21,6 +21,7 @@ import { concesionarioService, type Concesionario } from '@/services/concesionar
 import { analistaService, type Analista } from '@/services/analistaService'
 import { modeloVehiculoService, type ModeloVehiculo } from '@/services/modeloVehiculoService'
 import { clienteService } from '@/services/clienteService'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface ExcelData {
   cedula: string
@@ -62,6 +63,8 @@ interface ExcelUploaderProps {
 }
 
 export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUploaderProps) {
+  const queryClient = useQueryClient()
+  
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [excelData, setExcelData] = useState<ExcelRow[]>([])
@@ -176,6 +179,23 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     return savedClients.size
   }
 
+  // 🔄 FUNCIONES PARA CONEXIÓN CON DASHBOARD
+  const refreshDashboardClients = () => {
+    // Invalidar cache de clientes para refrescar Dashboard
+    queryClient.invalidateQueries({ queryKey: ['clientes'] })
+    queryClient.invalidateQueries({ queryKey: ['clientes-list'] })
+    queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
+    
+    console.log('🔄 Cache de Dashboard de Clientes invalidado')
+  }
+
+  const notifyDashboardUpdate = (clientCount: number) => {
+    addToast('success', 
+      `${clientCount} cliente${clientCount > 1 ? 's' : ''} agregado${clientCount > 1 ? 's' : ''} al Dashboard de Clientes`,
+      'Los clientes ya están disponibles en la lista principal'
+    )
+  }
+
   const saveIndividualClient = async (row: ExcelRow): Promise<boolean> => {
     try {
       setSavingProgress(prev => ({ ...prev, [row._rowIndex]: true }))
@@ -207,12 +227,16 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       // Marcar como guardado
       setSavedClients(prev => new Set([...prev, row._rowIndex]))
       
+      // Refrescar Dashboard de Clientes
+      refreshDashboardClients()
+      
       addToast('success', `Cliente ${row.nombres} ${row.apellidos} guardado exitosamente`)
       
       // Verificar si todos los clientes están guardados
       const remainingClients = excelData.filter(r => !savedClients.has(r._rowIndex) && r !== row)
       if (remainingClients.length === 0) {
         addToast('success', '🎉 ¡Todos los clientes han sido guardados exitosamente!')
+        notifyDashboardUpdate(getSavedClientsCount())
       }
       
       return true
@@ -245,6 +269,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       
       if (successful > 0) {
         addToast('success', `${successful} clientes guardados exitosamente`)
+        // Refrescar Dashboard de Clientes
+        refreshDashboardClients()
+        notifyDashboardUpdate(successful)
       }
       
       if (failed > 0) {
@@ -834,6 +861,11 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                       <Badge variant="outline" className="text-red-700">
                         Con errores: {totalRows - getValidClients().length - getSavedClientsCount()}
                       </Badge>
+                      {getSavedClientsCount() > 0 && (
+                        <Badge variant="outline" className="text-green-700 bg-green-50">
+                          ✅ {getSavedClientsCount()} en Dashboard
+                        </Badge>
+                      )}
                       <div className="flex items-center space-x-2">
                         <input
                           type="checkbox"
@@ -856,6 +888,17 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                         <X className="mr-2 h-4 w-4" />
                         Cambiar archivo
                       </Button>
+                      {getSavedClientsCount() > 0 && (
+                        <Button
+                          onClick={() => window.location.href = '/clientes'}
+                          variant="outline"
+                          size="sm"
+                          className="bg-green-50 border-green-300 text-green-700 hover:bg-green-100"
+                        >
+                          <Eye className="mr-2 h-4 w-4" />
+                          Ver en Dashboard
+                        </Button>
+                      )}
                       <Button
                         onClick={saveAllValidClients}
                         disabled={getValidClients().length === 0 || isSavingIndividual}
