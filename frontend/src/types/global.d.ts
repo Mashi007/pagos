@@ -85,6 +85,20 @@ declare global {
   // Tipos para parámetros de eventos implícitos
   type EventParameter = React.ChangeEvent<HTMLInputElement> | React.MouseEvent<HTMLButtonElement> | React.FormEvent<HTMLFormElement>
   
+  // Tipos para parámetros de funciones comunes
+  type FunctionParameter<T = any> = T
+  type CallbackParameter<T = any> = T
+  type MapParameter<T = any> = T
+  type FilterParameter<T = any> = T
+  type ReduceParameter<T = any> = T
+  
+  // Tipos específicos para el proyecto
+  type PrestamoParameter = any
+  type ClienteParameter = any
+  type AnalistaParameter = any
+  type PagoParameter = any
+  type ResultParameter = any
+  
   // Tipos específicos del proyecto
   interface Cliente {
     id: number
@@ -185,6 +199,27 @@ declare module 'lucide-react' {
   export const Square: any
   export const MessageSquare: any
   export const Link: any
+  export const TrendingDown: any
+  export const Calculator: any
+  export const Key: any
+  export const Copy: any
+  export const EyeOff: any
+  export const ChevronDown: any
+  export const ChevronUp: any
+  export const RotateCcw: any
+  export const Activity: any
+  export const Building: any
+  export const MapPin: any
+  export const Phone: any
+  export const Globe: any
+  export const CheckSquare: any
+  export const Brain: any
+  export const Wrench: any
+  export const ChevronRight: any
+  export const Target: any
+  export const LineChart: any
+  export const Zap: any
+  export const Award: any
 }
 
 declare module 'xlsx' {
@@ -247,28 +282,32 @@ declare module 'react' {
     preventDefault(): void
     stopPropagation(): void
   }
+  
+  // Declaraciones para funciones genéricas que pueden causar errores
+  export function useQuery<T = any>(queryKey: any[], queryFn: () => Promise<T>, options?: any): any
+  export function useMutation<T = any>(mutationFn: (variables: any) => Promise<T>, options?: any): any
 }
 
-// Declaraciones para componentes UI
-declare module '@/components/ui/badge' {
-  interface BadgeProps {
-    children?: React.ReactNode
-    variant?: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning'
-    className?: string
-  }
-  export const Badge: React.FC<BadgeProps>
-}
+// Declaraciones para componentes UI - Solo si no existen los archivos reales
+// declare module '@/components/ui/badge' {
+//   interface BadgeProps {
+//     children?: React.ReactNode
+//     variant?: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning'
+//     className?: string
+//   }
+//   export const Badge: React.FC<BadgeProps>
+// }
 
-declare module '@/components/ui/searchable-select' {
-  interface SearchableSelectProps {
-    options: Array<{ value: string; label: string }>
-    value: string
-    onChange: (value: string) => void
-    placeholder?: string
-    className?: string
-    disabled?: boolean
-  }
-  export const SearchableSelect: React.FC<SearchableSelectProps>
-}
+// declare module '@/components/ui/searchable-select' {
+//   interface SearchableSelectProps {
+//     options: Array<{ value: string; label: string }>
+//     value: string
+//     onChange: (value: string) => void
+//     placeholder?: string
+//     className?: string
+//     disabled?: boolean
+//   }
+//   export const SearchableSelect: React.FC<SearchableSelectProps>
+// }
 
 export {}
