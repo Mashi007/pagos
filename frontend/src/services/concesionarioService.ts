@@ -9,11 +9,13 @@ export interface Concesionario {
 }
 
 export interface ConcesionarioCreate {
-  // Solo id se genera automáticamente
+  nombre: string
+  activo: boolean
 }
 
 export interface ConcesionarioUpdate {
-  // Solo id se puede actualizar
+  nombre?: string
+  activo?: boolean
 }
 
 export interface ConcesionarioListResponse {
