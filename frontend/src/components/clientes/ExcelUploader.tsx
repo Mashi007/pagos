@@ -174,9 +174,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       case 'estado':
         if (!value.trim()) return { isValid: false, message: 'Estado requerido' }
-        const estados = ['ACTIVO', 'INACTIVO']
-        if (!estados.includes(value.toUpperCase())) {
-          return { isValid: false, message: 'Debe ser ACTIVO o INACTIVO' }
+        const estados = ['ACTIVO', 'INACTIVO', 'FINALIZADO']
+        const estadoNormalizado = value.toUpperCase().trim()
+        if (!estados.includes(estadoNormalizado)) {
+          return { isValid: false, message: 'Debe ser ACTIVO, INACTIVO o FINALIZADO' }
         }
         return { isValid: true }
 
@@ -383,6 +384,14 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     
     try {
       console.log('💾 Guardando datos:', validData.length, 'clientes')
+      console.log('📋 Datos a guardar:', validData.map(row => ({
+        fila: row._rowIndex,
+        cedula: row.cedula,
+        nombres: row.nombres,
+        estado: row.estado,
+        activo: row.activo,
+        errores: row._hasErrors
+      })))
       
       // Guardar cada cliente individualmente
       const resultados = []
@@ -400,10 +409,12 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
             modelo_vehiculo: row.modelo_vehiculo,
             concesionario: row.concesionario,
             analista: row.analista,
-            estado: row.estado,
+            estado: row.estado.toUpperCase().trim(), // ✅ Normalizar estado
             activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
             notas: row.notas || 'NA'
           }
+          
+          console.log(`🔄 Procesando fila ${row._rowIndex}:`, clienteData)
           
           const clienteCreado = await clienteService.createCliente(clienteData)
           resultados.push({ success: true, cliente: clienteCreado, fila: row._rowIndex })

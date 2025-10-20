@@ -146,7 +146,7 @@ export function SearchableSelect({
                   type="button"
                   onClick={() => handleSelect(option)}
                   className={cn(
-                    "w-full px-3 py-2 text-left text-sm hover:bg-gray-100",
+                    "w-full px-3 py-2 text-left text-sm text-black hover:bg-gray-100",
                     "focus:bg-gray-100 focus:outline-none",
                     value === option.value && "bg-blue-50 text-blue-600"
                   )}
