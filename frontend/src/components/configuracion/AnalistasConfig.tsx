@@ -34,6 +34,12 @@ export function AnalistasConfig() {
     activo: true
   })
 
+  // Función para obtener fecha de hoy
+  const getTodayDate = () => {
+    const today = new Date()
+    return today.toISOString().split('T')[0]
+  }
+
   // Usar hooks de React Query
   const { 
     data: analistas, 
@@ -54,13 +60,18 @@ export function AnalistasConfig() {
           id: editingAnalista.id,
           data: formData
         })
+        toast.success('✅ Analista actualizado exitosamente')
       } else {
         await createAnalistaMutation.mutateAsync(formData)
+        toast.success('✅ Analista creado exitosamente')
       }
       
       resetForm()
+      // Refrescar la lista automáticamente
+      refetch()
     } catch (err) {
       console.error('Error al guardar analista:', err)
+      toast.error('❌ Error al guardar analista')
     }
   }
 
@@ -89,8 +100,12 @@ export function AnalistasConfig() {
       }
       
       await deleteAnalistaMutation.mutateAsync(id)
+      toast.success('✅ Analista eliminado exitosamente')
+      // Refrescar la lista automáticamente
+      refetch()
     } catch (err) {
       console.error('Error al eliminar analista:', err)
+      toast.error('❌ Error al eliminar analista')
     }
   }
 
@@ -233,7 +248,7 @@ export function AnalistasConfig() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2">
-                  Nombre Completo
+                  Nombre Completo *
                 </label>
                 <Input
                   value={formData.nombre}
@@ -243,22 +258,53 @@ export function AnalistasConfig() {
                 />
               </div>
               
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="activo"
-                  checked={formData.activo}
-                  onChange={(e) => setFormData({ ...formData, activo: e.target.checked })}
-                  className="rounded"
-                />
-                <label htmlFor="activo" className="text-sm font-medium">
-                  Analista activo
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Estado *
                 </label>
+                <select
+                  value={formData.activo ? 'ACTIVO' : 'INACTIVO'}
+                  onChange={(e) => setFormData({ ...formData, activo: e.target.value === 'ACTIVO' })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  <option value="ACTIVO">Activo</option>
+                  <option value="INACTIVO">Inactivo</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Fecha de Registro
+                </label>
+                <Input
+                  type="date"
+                  value={getTodayDate()}
+                  disabled
+                  className="bg-gray-100 text-gray-600"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  La fecha se establece automáticamente al día de hoy
+                </p>
               </div>
               
-              <div className="flex items-center space-x-2">
-                <Button type="submit" disabled={createAnalistaMutation.isPending || updateAnalistaMutation.isPending}>
-                  {editingAnalista ? 'Actualizar' : 'Crear'} Analista
+              <div className="flex items-center space-x-2 pt-4">
+                <Button 
+                  type="submit" 
+                  disabled={createAnalistaMutation.isPending || updateAnalistaMutation.isPending}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {createAnalistaMutation.isPending || updateAnalistaMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    <>
+                      <Edit className="h-4 w-4 mr-2" />
+                      {editingAnalista ? 'Actualizar' : 'Crear'} Analista
+                    </>
+                  )}
                 </Button>
                 <Button type="button" variant="outline" onClick={resetForm}>
                   Cancelar
@@ -303,14 +349,8 @@ export function AnalistasConfig() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleView(analista)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
                         onClick={() => handleEdit(analista)}
+                        title="Editar analista"
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -319,6 +359,7 @@ export function AnalistasConfig() {
                         size="sm"
                         onClick={() => handleDelete(analista.id)}
                         className="text-red-600 hover:text-red-700"
+                        title="Eliminar analista"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
