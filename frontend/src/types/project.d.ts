@@ -10,11 +10,16 @@ declare global {
   type EventHandler = (e: React.ChangeEvent<HTMLInputElement>) => void
   type DragEventHandler = (e: React.DragEvent<HTMLDivElement>) => void
   type ClickEventHandler = (e: React.MouseEvent<HTMLButtonElement>) => void
+  type FormEventHandler = (e: React.FormEvent<HTMLFormElement>) => void
+  type ChangeEventHandler = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void
   
   // Tipos para funciones de callback comunes
   type SetStateFunction<T> = (value: T | ((prev: T) => T)) => void
   type FilterFunction<T> = (item: T) => boolean
   type MapFunction<T, U> = (item: T) => U
+  
+  // Tipos para parámetros de eventos implícitos
+  type EventParameter = React.ChangeEvent<HTMLInputElement> | React.MouseEvent<HTMLButtonElement> | React.FormEvent<HTMLFormElement>
 }
 
 // Declaraciones para tipos específicos del proyecto

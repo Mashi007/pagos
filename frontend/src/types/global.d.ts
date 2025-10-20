@@ -54,6 +54,29 @@ declare module 'lucide-react' {
   export const Info: any
   export const CheckCircle2: any
   export const Loader2: any
+  export const FileText: any
+  export const Download: any
+  export const Calendar: any
+  export const Filter: any
+  export const BarChart3: any
+  export const PieChart: any
+  export const TrendingUp: any
+  export const Users: any
+  export const DollarSign: any
+  export const Clock: any
+  export const Search: any
+  export const RefreshCw: any
+  export const XCircle: any
+  export const Plus: any
+  export const Edit: any
+  export const Trash2: any
+  export const Shield: any
+  export const Mail: any
+  export const UserCheck: any
+  export const UserX: any
+  export const Settings: any
+  export const PlayCircle: any
+  export const Database: any
 }
 
 declare module 'xlsx' {
@@ -89,7 +112,7 @@ declare module 'react' {
 declare module '@/components/ui/badge' {
   interface BadgeProps {
     children?: React.ReactNode
-    variant?: 'default' | 'secondary' | 'destructive' | 'outline' | 'success'
+    variant?: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning'
     className?: string
   }
   export const Badge: React.FC<BadgeProps>
