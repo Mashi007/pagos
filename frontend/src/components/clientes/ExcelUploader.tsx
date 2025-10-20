@@ -388,13 +388,16 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         addToast('success', '🎉 ¡Todos los clientes han sido guardados exitosamente!')
         notifyDashboardUpdate(getSavedClientsCount())
         
-        // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
-        setTimeout(() => {
-          navigate('/clientes')
-        }, 2000)
-        
         // Mostrar mensaje informativo sobre navegación automática
         addToast('success', '🔄 Redirigiendo al Dashboard de Clientes en 2 segundos...')
+        
+        // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
+        setTimeout(() => {
+          // Cerrar el modal de Carga Masiva
+          onClose()
+          // Navegar directamente al Dashboard de Clientes
+          navigate('/clientes')
+        }, 2000)
       }
       
       return true
@@ -458,13 +461,16 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         
         // Solo navegar si realmente se guardaron clientes
         if (successful > 0) {
-          // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
-          setTimeout(() => {
-            navigate('/clientes')
-          }, 2000)
-          
           // Mostrar mensaje informativo sobre navegación automática
           addToast('success', '🔄 Redirigiendo al Dashboard de Clientes en 2 segundos...')
+          
+          // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
+          setTimeout(() => {
+            // Cerrar el modal de Carga Masiva
+            onClose()
+            // Navegar directamente al Dashboard de Clientes
+            navigate('/clientes')
+          }, 2000)
         }
       }
       

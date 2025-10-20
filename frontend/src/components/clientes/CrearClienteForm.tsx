@@ -325,9 +325,15 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   if (showExcelUploader) {
     return (
       <ExcelUploader 
-        onClose={() => setShowExcelUploader(false)}
+        onClose={() => {
+          setShowExcelUploader(false)
+          // Cerrar también el formulario Nuevo Cliente al cerrar ExcelUploader
+          onClose()
+        }}
         onSuccess={() => {
           setShowExcelUploader(false)
+          // Cerrar el formulario Nuevo Cliente al guardar exitosamente
+          onClose()
           onSuccess()
           onClienteCreated?.()
         }}
