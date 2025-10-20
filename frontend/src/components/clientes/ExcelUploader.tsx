@@ -106,6 +106,14 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     cargarDatosConfiguracion()
   }, [])
 
+  // Validar dropdowns cuando cambien los datos de Excel
+  useEffect(() => {
+    if (excelData.length > 0) {
+      console.log('🔄 Validando dropdowns al cambiar datos de Excel...')
+      updateDropdownErrors(excelData)
+    }
+  }, [excelData])
+
   // 🔍 VALIDAR CAMPO INDIVIDUAL
   const validateField = async (field: string, value: string): Promise<ValidationResult> => {
     switch (field) {
@@ -403,7 +411,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     const errors: {[key: string]: boolean} = {}
     
     data.forEach((row, index) => {
-      // Validar dropdowns específicos
+      // Validar dropdowns específicos - SIEMPRE mostrar error si está vacío
       if (!row.concesionario || row.concesionario.trim() === '') {
         errors[`concesionario_${index}`] = true
       }
@@ -415,6 +423,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       }
     })
     
+    console.log('🔍 Actualizando errores de dropdowns:', errors)
     setDropdownErrors(errors)
   }
 
