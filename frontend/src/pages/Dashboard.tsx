@@ -191,9 +191,9 @@ export function Dashboard() {
   }, [])
 
   // ✅ CORRECCIÓN: Conectar a endpoints reales del backend con tipos explícitos
-  const { data: dashboardData, isLoading: loadingDashboard, refetch: refetchDashboard } = useQuery<DashboardData>({
+  const { data: dashboardData, isLoading: loadingDashboard, refetch: refetchDashboard } = useQuery({
     queryKey: ['dashboard', periodo],
-    queryFn: async () => {
+    queryFn: async (): Promise<DashboardData> => {
       try {
         const response = await apiClient.get(`/api/v1/dashboard/admin?periodo=${periodo}`)
         return response as DashboardData
@@ -207,9 +207,9 @@ export function Dashboard() {
     initialData: mockData, // Datos iniciales mientras carga
   })
 
-  const { data: kpisData, isLoading: loadingKpis } = useQuery<DashboardData>({
+  const { data: kpisData, isLoading: loadingKpis } = useQuery({
     queryKey: ['kpis'],
-    queryFn: async () => {
+    queryFn: async (): Promise<DashboardData> => {
       try {
         const response = await apiClient.get('/api/v1/kpis/dashboard')
         return response as DashboardData

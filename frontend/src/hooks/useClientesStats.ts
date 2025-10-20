@@ -9,9 +9,9 @@ interface ClientesStats {
 }
 
 export function useClientesStats() {
-  return useQuery<ClientesStats>({
+  return useQuery({
     queryKey: ['clientes-stats'],
-    queryFn: async () => {
+    queryFn: async (): Promise<ClientesStats> => {
       console.log('📊 Obteniendo estadísticas de clientes...')
       
       // Obtener todos los clientes para calcular estadísticas

@@ -676,7 +676,13 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       })))
       
       // Guardar cada cliente individualmente
-      const resultados = []
+      const resultados: Array<{
+        success: boolean;
+        cliente?: any;
+        fila: number;
+        error?: string;
+        cedula?: string;
+      }> = []
       for (const row of validData) {
         try {
           const clienteData = {
