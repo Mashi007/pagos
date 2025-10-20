@@ -105,6 +105,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const [savedClients, setSavedClients] = useState<Set<number>>(new Set())
   const [isSavingIndividual, setIsSavingIndividual] = useState(false)
   const [savingProgress, setSavingProgress] = useState<{[key: number]: boolean}>({})
+  const [serviceStatus, setServiceStatus] = useState<'unknown' | 'online' | 'offline'>('unknown')
   const [showOnlyPending, setShowOnlyPending] = useState(false)
 
   // Función para manejar notificaciones de validación por fila completa
@@ -258,6 +259,14 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     }
   }, [excelData])
 
+  // Efecto para verificar estado del servicio al cargar
+  useEffect(() => {
+    checkServiceStatus()
+    // Verificar cada 30 segundos
+    const interval = setInterval(checkServiceStatus, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
   // 🔔 FUNCIONES PARA NOTIFICACIONES TOAST
   const addToast = (type: 'error' | 'warning' | 'success', message: string, suggestion?: string, field: string = 'general', rowIndex: number = -1) => {
     const id = Date.now().toString()
@@ -276,6 +285,19 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       !toast.message.includes('agregado al Dashboard') &&
       !toast.message.includes('Redirigiendo')
     ))
+  }
+
+  // Verificar estado del servicio
+  const checkServiceStatus = async () => {
+    try {
+      const response = await fetch('/api/v1/health/render', { 
+        method: 'HEAD',
+        timeout: 5000 
+      })
+      setServiceStatus(response.ok ? 'online' : 'offline')
+    } catch (error) {
+      setServiceStatus('offline')
+    }
   }
 
   // 🔄 FUNCIONES PARA SISTEMA DE GUARDADO HÍBRIDO
@@ -384,7 +406,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       
       // Manejar diferentes tipos de errores
       if (error.response?.status === 503) {
-        addToast('error', 'Servicio temporalmente no disponible. Intenta nuevamente.')
+        addToast('error', '🚨 SERVICIO NO DISPONIBLE: El backend está caído. Contacta al administrador.')
+      } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
+        addToast('error', '🚨 ERROR DE RED: No se puede conectar al servidor. Verifica tu conexión.')
       } else if (error.response?.status === 400) {
         addToast('error', `Error de validación: ${error.response?.data?.detail || error.message}`)
       } else if (error.response?.status >= 500) {
@@ -456,7 +480,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       
       // Manejar diferentes tipos de errores
       if (error.response?.status === 503) {
-        addToast('error', 'Servicio temporalmente no disponible. Intenta nuevamente.')
+        addToast('error', '🚨 SERVICIO NO DISPONIBLE: El backend está caído. Contacta al administrador.')
+      } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
+        addToast('error', '🚨 ERROR DE RED: No se puede conectar al servidor. Verifica tu conexión.')
       } else if (error.response?.status === 400) {
         addToast('error', `Error de validación: ${error.response?.data?.detail || error.message}`)
       } else if (error.response?.status >= 500) {
@@ -984,6 +1010,20 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
             <div className="flex items-center space-x-3">
               <FileSpreadsheet className="h-6 w-6" />
               <h2 className="text-xl font-bold">CARGA MASIVA DE CLIENTES</h2>
+              <div className={`px-2 py-1 text-xs rounded-full flex items-center gap-1 ${
+                serviceStatus === 'online' ? 'bg-green-100 text-green-800' :
+                serviceStatus === 'offline' ? 'bg-red-100 text-red-800' :
+                'bg-yellow-100 text-yellow-800'
+              }`}>
+                <div className={`w-2 h-2 rounded-full ${
+                  serviceStatus === 'online' ? 'bg-green-500' :
+                  serviceStatus === 'offline' ? 'bg-red-500' :
+                  'bg-yellow-500'
+                }`}></div>
+                {serviceStatus === 'online' ? 'Online' :
+                 serviceStatus === 'offline' ? 'Offline' :
+                 'Verificando...'}
+              </div>
             </div>
             <div className="flex items-center space-x-2">
               <Button
@@ -1118,7 +1158,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                       )}
                       <Button
                         onClick={saveAllValidClients}
-                        disabled={getValidClients().length === 0 || isSavingIndividual}
+                        disabled={getValidClients().length === 0 || isSavingIndividual || serviceStatus === 'offline'}
                         className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
                       >
                         {isSavingIndividual ? (
@@ -1525,7 +1565,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                   <Button
                                     size="sm"
                                     onClick={() => saveIndividualClient(row)}
-                                    disabled={savingProgress[row._rowIndex]}
+                                    disabled={savingProgress[row._rowIndex] || serviceStatus === 'offline'}
                                     className="bg-green-600 hover:bg-green-700 text-white text-xs px-2 py-1"
                                   >
                                     {savingProgress[row._rowIndex] ? (
