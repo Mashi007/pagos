@@ -12,7 +12,7 @@ from app.models.cliente import Cliente
 from app.models.user import User
 from app.models.auditoria import Auditoria, TipoAccion
 from app.api.deps import get_current_user
-from app.schemas.cliente import ClienteResponse, ClienteCreate, ClienteUpdate
+from app.schemas.cliente import ClienteResponse, ClienteCreate, ClienteUpdate, ClienteCreateWithConfirmation
 import logging
 
 router = APIRouter()
@@ -229,10 +229,38 @@ def crear_cliente(
         # Verificar si ya existe cliente con la misma cédula
         cliente_existente = db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
         if cliente_existente:
-            raise HTTPException(
-                status_code=400,
-                detail="Ya existe un cliente con esta cédula"
+            # Validación inteligente: Verificar si es realmente el mismo cliente
+            mismo_cliente = (
+                cliente_existente.nombres.upper().strip() == cliente_data.nombres.upper().strip() and
+                cliente_existente.apellidos.upper().strip() == cliente_data.apellidos.upper().strip() and
+                cliente_existente.telefono == cliente_data.telefono
             )
+            
+            if mismo_cliente:
+                # Es el mismo cliente, retornar información para confirmación
+                raise HTTPException(
+                    status_code=409,  # Conflict - requiere confirmación
+                    detail={
+                        "message": f"Cliente {cliente_existente.nombres} {cliente_existente.apellidos} con cédula {cliente_data.cedula} ya existe",
+                        "cliente_existente": {
+                            "id": cliente_existente.id,
+                            "nombres": cliente_existente.nombres,
+                            "apellidos": cliente_existente.apellidos,
+                            "cedula": cliente_existente.cedula,
+                            "telefono": cliente_existente.telefono,
+                            "email": cliente_existente.email,
+                            "fecha_registro": cliente_existente.fecha_registro.isoformat() if cliente_existente.fecha_registro else None
+                        },
+                        "requires_confirmation": True,
+                        "suggestion": "¿Desea crear otro perfil de cliente con los mismos datos personales?"
+                    }
+                )
+            else:
+                # Datos diferentes, posible error humano
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Ya existe un cliente con cédula {cliente_data.cedula} pero con datos diferentes. Verifique los datos."
+                )
         
         # Crear nuevo cliente
         nuevo_cliente = Cliente(
@@ -281,6 +309,81 @@ def crear_cliente(
         raise HTTPException(
             status_code=500,
             detail=f"Error interno del servidor: {str(e)}"
+        )
+
+
+@router.post("/confirmar-duplicado", response_model=ClienteResponse, status_code=201)
+def crear_cliente_con_confirmacion(
+    request_data: ClienteCreateWithConfirmation,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    ➕ Crear cliente con confirmación de duplicado
+    
+    Características:
+    - Permite crear cliente duplicado con confirmación del operador
+    - Registra auditoría de la confirmación
+    - Incluye comentarios del operador
+    """
+    try:
+        logger.info(f"Crear cliente con confirmación - Usuario: {current_user.email}")
+        logger.info(f"Datos recibidos: {request_data}")
+        logger.info(f"Confirmación: {request_data.confirmacion}, Comentarios: {request_data.comentarios}")
+        
+        if not request_data.confirmacion:
+            raise HTTPException(
+                status_code=400,
+                detail="Confirmación requerida para crear cliente duplicado"
+            )
+        
+        cliente_data = request_data.cliente_data
+        
+        # Crear nuevo cliente (sin validación de duplicados)
+        nuevo_cliente = Cliente(
+            cedula=cliente_data.cedula,
+            nombres=cliente_data.nombres,
+            apellidos=cliente_data.apellidos,
+            telefono=cliente_data.telefono,
+            email=cliente_data.email,
+            direccion=cliente_data.direccion,
+            fecha_nacimiento=cliente_data.fecha_nacimiento,
+            ocupacion=cliente_data.ocupacion,
+            modelo_vehiculo=cliente_data.modelo_vehiculo,
+            concesionario=cliente_data.concesionario,
+            analista=cliente_data.analista,
+            estado=cliente_data.estado,
+            notas=f"{cliente_data.notas or 'NA'} | CONFIRMADO POR OPERADOR: {request_data.comentarios}",
+            usuario_registro=current_user.email,
+            fecha_registro=datetime.now(),
+            fecha_actualizacion=datetime.now()
+        )
+        
+        db.add(nuevo_cliente)
+        db.commit()
+        db.refresh(nuevo_cliente)
+        
+        # Registrar auditoría especial para confirmación
+        registrar_auditoria_cliente(
+            db=db,
+            usuario_email=current_user.email,
+            accion=TipoAccion.CREAR.value,
+            cliente_id=nuevo_cliente.id,
+            datos_nuevos=cliente_data.model_dump(),
+            descripcion=f"Cliente creado con confirmación de duplicado: {cliente_data.nombres} {cliente_data.apellidos} | Comentarios: {request_data.comentarios}"
+        )
+        
+        logger.info(f"Cliente creado con confirmación exitosamente: {nuevo_cliente.id}")
+        return ClienteResponse.model_validate(nuevo_cliente)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error en crear_cliente_con_confirmacion: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Error interno del servidor al crear cliente con confirmación"
         )
 
 # ============================================

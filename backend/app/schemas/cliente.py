@@ -63,6 +63,13 @@ class ClienteCreate(ClienteBase):
     pass
 
 
+class ClienteCreateWithConfirmation(BaseModel):
+    """Schema para crear cliente con confirmación de duplicado"""
+    cliente_data: ClienteCreate
+    confirmacion: bool = Field(True, description="Confirmación del operador")
+    comentarios: str = Field("", max_length=500, description="Comentarios del operador sobre la confirmación")
+
+
 class ClienteUpdate(BaseModel):
     """Schema para actualizar cliente - campos opcionales para actualización parcial"""
     # Datos personales

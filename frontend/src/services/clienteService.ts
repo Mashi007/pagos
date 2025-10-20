@@ -39,6 +39,17 @@ class ClienteService {
     return response.data
   }
 
+  // Crear cliente con confirmación de duplicado
+  async createClienteWithConfirmation(data: ClienteForm, comentarios: string): Promise<Cliente> {
+    const requestData = {
+      cliente_data: data,
+      confirmacion: true,
+      comentarios: comentarios
+    }
+    const response = await apiClient.post<ApiResponse<Cliente>>(`${this.baseUrl}/confirmar-duplicado`, requestData)
+    return response.data
+  }
+
   // Actualizar cliente
   async updateCliente(id: string, data: Partial<ClienteForm>): Promise<Cliente> {
     const response = await apiClient.put<ApiResponse<Cliente>>(`${this.baseUrl}/${id}`, data)

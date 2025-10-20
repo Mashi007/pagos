@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { SearchableSelect } from '@/components/ui/searchable-select'
+import { ConfirmacionDuplicadoModal } from './ConfirmacionDuplicadoModal'
 import * as XLSX from 'xlsx'
 import { concesionarioService, type Concesionario } from '@/services/concesionarioService'
 import { analistaService, type Analista } from '@/services/analistaService'
@@ -107,6 +108,14 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const [savingProgress, setSavingProgress] = useState<{[key: number]: boolean}>({})
   const [serviceStatus, setServiceStatus] = useState<'unknown' | 'online' | 'offline'>('unknown')
   const [showOnlyPending, setShowOnlyPending] = useState(false)
+
+  // Estado para modal de confirmación de duplicados
+  const [showConfirmacionModal, setShowConfirmacionModal] = useState(false)
+  const [clienteDuplicado, setClienteDuplicado] = useState<{
+    existente: any
+    nuevo: any
+    rowIndex: number
+  } | null>(null)
 
   // Función para manejar notificaciones de validación por fila completa
   const handleRowValidationNotification = (rowIndex: number, rowData: ExcelRow) => {
@@ -287,6 +296,92 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     ))
   }
 
+  // Manejar confirmación de cliente duplicado
+  const handleConfirmarDuplicado = async (comentarios: string) => {
+    if (!clienteDuplicado) return
+
+    try {
+      const row = excelData[clienteDuplicado.rowIndex]
+      const clienteData = {
+        cedula: row.cedula,
+        nombres: row.nombres,
+        apellidos: row.apellidos,
+        telefono: row.telefono,
+        email: row.email,
+        direccion: row.direccion,
+        fecha_nacimiento: row.fecha_nacimiento,
+        ocupacion: row.ocupacion,
+        modelo_vehiculo: row.modelo_vehiculo || undefined,
+        concesionario: row.concesionario || undefined,
+        analista: row.analista || undefined,
+        total_financiamiento: parseFloat(row.total_financiamiento) || 0,
+        cuota_inicial: parseFloat(row.cuota_inicial) || 0,
+        numero_amortizaciones: parseInt(row.numero_amortizaciones) || 0,
+        modalidad_pago: row.modalidad_pago,
+        fecha_entrega: row.fecha_entrega,
+        estado: row.estado,
+        activo: row.activo === 'TRUE',
+        notas: row.notas
+      }
+
+      await clienteService.createClienteWithConfirmation(clienteData, comentarios)
+      
+      // Marcar como guardado
+      setSavedClients(prev => new Set([...prev, row._rowIndex]))
+      
+      // Refrescar Dashboard de Clientes
+      refreshDashboardClients()
+      
+      addToast('success', `Cliente ${row.nombres} ${row.apellidos} creado con confirmación exitosamente`)
+      
+      // Eliminar la fila de la lista después de guardar exitosamente
+      setExcelData(prev => prev.filter(r => r._rowIndex !== row._rowIndex))
+      
+      // Verificar si quedan filas pendientes
+      const remainingRows = excelData.filter(r => r._rowIndex !== row._rowIndex)
+      if (remainingRows.length === 0) {
+        addToast('success', '🎉 ¡Todos los clientes han sido guardados exitosamente!')
+        notifyDashboardUpdate(getSavedClientsCount())
+        
+        // Mostrar mensaje informativo sobre navegación automática
+        addToast('success', '🔄 Redirigiendo al Dashboard de Clientes en 2 segundos...')
+        
+        // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
+        setTimeout(() => {
+          // Cerrar el modal de Carga Masiva
+          onClose()
+          // Navegar directamente al Dashboard de Clientes
+          navigate('/clientes')
+        }, 2000)
+      }
+      
+      // Limpiar estado del modal
+      setClienteDuplicado(null)
+      setShowConfirmacionModal(false)
+      
+    } catch (error: any) {
+      console.error('Error confirmando cliente duplicado:', error)
+      
+      // Limpiar notificaciones anteriores para evitar contradicciones
+      clearContradictoryToasts()
+      
+      // Manejar diferentes tipos de errores
+      if (error.response?.status === 503) {
+        addToast('error', '🚨 SERVICIO NO DISPONIBLE: El backend está caído. Contacta al administrador.')
+      } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
+        addToast('error', '🚨 ERROR DE RED: No se puede conectar al servidor. Verifica tu conexión.')
+      } else if (error.response?.status === 400) {
+        addToast('error', `Error de validación: ${error.response?.data?.detail || error.message}`)
+      } else if (error.response?.status >= 500) {
+        addToast('error', 'Error del servidor. Contacta al administrador.')
+      } else {
+        addToast('error', `Error confirmando cliente: ${error.response?.data?.detail || error.message}`)
+      }
+    } finally {
+      setSavingProgress(prev => ({ ...prev, [clienteDuplicado?.rowIndex || -1]: false }))
+    }
+  }
+
   // Verificar estado del servicio
   const checkServiceStatus = async () => {
     try {
@@ -374,7 +469,28 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         notas: row.notas
       }
 
-      await clienteService.createCliente(clienteData)
+      try {
+        await clienteService.createCliente(clienteData)
+      } catch (error: any) {
+        // Manejar error de cliente duplicado
+        if (error.response?.status === 409 && error.response?.data?.requires_confirmation) {
+          const clienteExistente = error.response.data.cliente_existente
+          setClienteDuplicado({
+            existente: clienteExistente,
+            nuevo: {
+              nombres: row.nombres,
+              apellidos: row.apellidos,
+              cedula: row.cedula,
+              telefono: row.telefono,
+              email: row.email
+            },
+            rowIndex: row._rowIndex
+          })
+          setShowConfirmacionModal(true)
+          return false
+        }
+        throw error
+      }
       
       // Marcar como guardado
       setSavedClients(prev => new Set([...prev, row._rowIndex]))
@@ -1658,6 +1774,20 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           ))}
         </AnimatePresence>
       </div>
+
+      {/* Modal de confirmación de duplicados */}
+      {showConfirmacionModal && clienteDuplicado && (
+        <ConfirmacionDuplicadoModal
+          isOpen={showConfirmacionModal}
+          onClose={() => {
+            setShowConfirmacionModal(false)
+            setClienteDuplicado(null)
+          }}
+          onConfirm={handleConfirmarDuplicado}
+          clienteExistente={clienteDuplicado.existente}
+          clienteNuevo={clienteDuplicado.nuevo}
+        />
+      )}
     </motion.div>
   )
 }
