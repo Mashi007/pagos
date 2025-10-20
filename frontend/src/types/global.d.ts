@@ -98,6 +98,20 @@ declare global {
   type AnalistaParameter = any
   type PagoParameter = any
   type ResultParameter = any
+  type UpdatedClienteParameter = any
+  type NewClienteParameter = any
+  type UpdatedAnalistaParameter = any
+  type DeletedIdParameter = any
+  type UnderscoreParameter = any
+  
+  // Declaraciones globales para funciones comunes
+  const map: <T, U>(array: T[], callback: (item: T, index: number) => U) => U[]
+  const filter: <T>(array: T[], callback: (item: T, index: number) => boolean) => T[]
+  const reduce: <T, U>(array: T[], callback: (acc: U, item: T, index: number) => U, initial: U) => U
+  const forEach: <T>(array: T[], callback: (item: T, index: number) => void) => void
+  const find: <T>(array: T[], callback: (item: T, index: number) => boolean) => T | undefined
+  const some: <T>(array: T[], callback: (item: T, index: number) => boolean) => boolean
+  const every: <T>(array: T[], callback: (item: T, index: number) => boolean) => boolean
   
   // Tipos específicos del proyecto
   interface Cliente {
@@ -220,6 +234,18 @@ declare module 'lucide-react' {
   export const LineChart: any
   export const Zap: any
   export const Award: any
+  export const Lock: any
+  export const UserMinus: any
+  export const Minus: any
+  export const MoreHorizontal: any
+  export const Briefcase: any
+  export const Edit2: any
+  export const TestTube: any
+  export const XSquare: any
+  export const Heart: any
+  export const Menu: any
+  export const LogOut: any
+  export const LayoutDashboard: any
 }
 
 declare module 'xlsx' {
@@ -286,6 +312,15 @@ declare module 'react' {
   // Declaraciones para funciones genéricas que pueden causar errores
   export function useQuery<T = any>(queryKey: any[], queryFn: () => Promise<T>, options?: any): any
   export function useMutation<T = any>(mutationFn: (variables: any) => Promise<T>, options?: any): any
+  
+  // Declaraciones para funciones que pueden causar errores de tipos
+  export function useCallback<T extends (...args: any[]) => any>(callback: T, deps: any[]): T
+  export function useMemo<T>(factory: () => T, deps: any[]): T
+  
+  // Declaraciones para funciones genéricas comunes
+  export function map<T, U>(array: T[], callback: (item: T, index: number) => U): U[]
+  export function filter<T>(array: T[], callback: (item: T, index: number) => boolean): T[]
+  export function reduce<T, U>(array: T[], callback: (acc: U, item: T, index: number) => U, initial: U): U
 }
 
 // Declaraciones para componentes UI - Solo si no existen los archivos reales
