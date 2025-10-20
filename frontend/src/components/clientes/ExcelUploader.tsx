@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Upload,
@@ -12,7 +12,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import * as XLSX from 'xlsx'
+import { concesionarioService, type Concesionario } from '@/services/concesionarioService'
+import { analistaService, type Analista } from '@/services/analistaService'
+import { modeloVehiculoService, type ModeloVehiculo } from '@/services/modeloVehiculoService'
 
 interface ExcelData {
   cedula: string
@@ -61,6 +65,40 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const [showPreview, setShowPreview] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Estados para listas desplegables
+  const [concesionarios, setConcesionarios] = useState<Concesionario[]>([])
+  const [analistas, setAnalistas] = useState<Analista[]>([])
+  const [modelosVehiculos, setModelosVehiculos] = useState<ModeloVehiculo[]>([])
+
+  // Cargar datos de configuración
+  useEffect(() => {
+    const cargarDatosConfiguracion = async () => {
+      try {
+        console.log('🔄 Cargando datos de configuración para ExcelUploader...')
+        
+        const [concesionariosData, analistasData, modelosData] = await Promise.all([
+          concesionarioService.getConcesionarios(),
+          analistaService.getAnalistas(),
+          modeloVehiculoService.getModelosVehiculos()
+        ])
+        
+        console.log('📊 Datos cargados para ExcelUploader:')
+        console.log('  - Concesionarios:', concesionariosData.length)
+        console.log('  - Analistas:', analistasData.length)
+        console.log('  - Modelos:', modelosData.length)
+        
+        setConcesionarios(concesionariosData)
+        setAnalistas(analistasData)
+        setModelosVehiculos(modelosData)
+        
+        console.log('✅ Estados actualizados correctamente en ExcelUploader')
+      } catch (error) {
+        console.error('❌ Error cargando datos de configuración en ExcelUploader:', error)
+      }
+    }
+
+    cargarDatosConfiguracion()
+  }, [])
 
   // 🔍 VALIDAR CAMPO INDIVIDUAL
   const validateField = async (field: string, value: string): Promise<ValidationResult> => {
@@ -612,11 +650,15 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                             
                             {/* Modelo Vehículo */}
                             <td className="border p-2">
-                              <input
-                                type="text"
+                              <SearchableSelect
+                                options={modelosVehiculos.map(modelo => ({
+                                  value: modelo.nombre,
+                                  label: modelo.nombre
+                                }))}
                                 value={row.modelo_vehiculo}
-                                onChange={(e) => updateCellValue(index, 'modelo_vehiculo', e.target.value)}
-                                className={`w-full text-xs p-1 border rounded ${
+                                onChange={(value) => updateCellValue(index, 'modelo_vehiculo', value)}
+                                placeholder="Seleccionar modelo..."
+                                className={`w-full text-xs ${
                                   row._validation.modelo_vehiculo?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
@@ -624,11 +666,15 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                             
                             {/* Concesionario */}
                             <td className="border p-2">
-                              <input
-                                type="text"
+                              <SearchableSelect
+                                options={concesionarios.map(concesionario => ({
+                                  value: concesionario.nombre,
+                                  label: concesionario.nombre
+                                }))}
                                 value={row.concesionario}
-                                onChange={(e) => updateCellValue(index, 'concesionario', e.target.value)}
-                                className={`w-full text-xs p-1 border rounded ${
+                                onChange={(value) => updateCellValue(index, 'concesionario', value)}
+                                placeholder="Seleccionar concesionario..."
+                                className={`w-full text-xs ${
                                   row._validation.concesionario?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
@@ -636,11 +682,15 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                             
                             {/* Analista */}
                             <td className="border p-2">
-                              <input
-                                type="text"
+                              <SearchableSelect
+                                options={analistas.map(analista => ({
+                                  value: analista.nombres + ' ' + analista.apellidos,
+                                  label: analista.nombres + ' ' + analista.apellidos
+                                }))}
                                 value={row.analista}
-                                onChange={(e) => updateCellValue(index, 'analista', e.target.value)}
-                                className={`w-full text-xs p-1 border rounded ${
+                                onChange={(value) => updateCellValue(index, 'analista', value)}
+                                placeholder="Seleccionar analista..."
+                                className={`w-full text-xs ${
                                   row._validation.analista?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
