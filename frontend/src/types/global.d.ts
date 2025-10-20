@@ -2,7 +2,7 @@
 declare global {
   // React hooks
   const useState: <T>(initialState: T | (() => T)) => [T, (value: T | ((prev: T) => T)) => void]
-  const useRef: <T>(initialValue: T) => { current: T }
+  const useRef: <T>(initialValue: T | null) => { current: T | null }
   const useEffect: (effect: () => void | (() => void), deps?: any[]) => void
   
   // React namespace
@@ -77,6 +77,20 @@ declare module 'lucide-react' {
   export const Settings: any
   export const PlayCircle: any
   export const Database: any
+  export const Building2: any
+  export const Car: any
+  export const Bell: any
+  export const Check: any
+  export const User: any
+  export const CreditCard: any
+  export const AlertCircle: any
+  export const ArrowDownToLine: any
+  export const PlusCircle: any
+  export const Play: any
+  export const Pause: any
+  export const Square: any
+  export const MessageSquare: any
+  export const Link: any
 }
 
 declare module 'xlsx' {
@@ -86,11 +100,16 @@ declare module 'xlsx' {
 
 declare module '@tanstack/react-query' {
   export const useQueryClient: any
+  export const useQuery: any
+  export const useMutation: any
+  export const useInfiniteQuery: any
+  export const QueryClient: any
+  export const QueryClientProvider: any
 }
 
 declare module 'react' {
   export function useState<T>(initialState: T | (() => T)): [T, (value: T | ((prev: T) => T)) => void]
-  export function useRef<T>(initialValue: T): { current: T }
+  export function useRef<T>(initialValue: T | null): { current: T | null }
   export function useEffect(effect: () => void | (() => void), deps?: any[]): void
   
   export type ReactNode = any
