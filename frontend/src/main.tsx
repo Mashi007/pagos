@@ -10,7 +10,7 @@ import './index.css'
 import './config/env'
 
 // Configuración del cliente de React Query
-// Versión: 2025-10-21 - Build v1.0.4 - Corrección popup duplicados
+// Versión: 2025-10-21 - Build v1.0.5 - Debugging popup duplicados activo
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
