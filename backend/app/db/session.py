@@ -7,7 +7,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import logging
 
-# ✅ CORRECTO: Importar desde app.core.config
+# CORRECTO: Importar desde app.core.config
 from app.core.config import settings
 
 # Configurar logger
@@ -16,16 +16,16 @@ logger = logging.getLogger(__name__)
 # Crear engine de SQLAlchemy con configuración optimizada para producción
 engine = create_engine(
     settings.DATABASE_URL,
-    pool_pre_ping=True,  # ✅ Verifica conexión antes de usar
-    pool_size=5,  # ✅ 5 conexiones permanentes (aumentado)
-    max_overflow=10,  # ✅ 10 conexiones adicionales si es necesario
-    pool_timeout=30,  # ✅ 30 segundos timeout (aumentado)
-    pool_recycle=3600,  # ✅ Reciclar cada hora (más estable)
+    pool_pre_ping=True,  # Verifica conexión antes de usar
+    pool_size=5,  # 5 conexiones permanentes (aumentado)
+    max_overflow=10,  # 10 conexiones adicionales si es necesario
+    pool_timeout=30,  # 30 segundos timeout (aumentado)
+    pool_recycle=3600,  # Reciclar cada hora (más estable)
     echo=settings.DB_ECHO,
     connect_args={
-        "connect_timeout": 30,  # ✅ 30 segundos para conectar
+        "connect_timeout": 30,  # 30 segundos para conectar
         "application_name": "rapicredit_backend",
-        "options": "-c statement_timeout=30000"  # ✅ 30 segundos para queries
+        "options": "-c statement_timeout=30000"  # 30 segundos para queries
     }
 )
 
@@ -67,7 +67,7 @@ def get_db():
             # Re-lanzar errores de autenticación sin modificar
             raise e
         
-        # ✅ CORRECCIÓN CRÍTICA: NO sobrescribir HTTPException que ya tienen mensajes específicos
+        # CORRECCIÓN CRÍTICA: NO sobrescribir HTTPException que ya tienen mensajes específicos
         from fastapi import HTTPException
         if isinstance(e, HTTPException):
             # Re-lanzar HTTPException sin modificar (preservar mensaje específico)

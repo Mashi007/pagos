@@ -141,37 +141,37 @@ def create_admin_user():
 def init_db() -> bool:
     """Inicializa la base de datos creando las tablas si no existen"""
     try:
-        logger.info("🔄 Inicializando base de datos...")
+        logger.info("Inicializando base de datos...")
         
         if not check_database_connection():
-            logger.error("❌ No se pudo conectar a la base de datos")
+            logger.error("No se pudo conectar a la base de datos")
             return False
         
         # NO ejecutar migraciones automáticamente para evitar conflictos con enum
         # Las migraciones deben ejecutarse manualmente vía endpoint de emergencia
-        logger.info("ℹ️  Saltando migraciones automáticas (usar endpoint de emergencia si es necesario)")
+        logger.info("Saltando migraciones automáticas (usar endpoint de emergencia si es necesario)")
         
         main_tables = ["usuarios", "clientes", "prestamos", "pagos"]
         tables_exist = all(table_exists(table) for table in main_tables)
         
         if not tables_exist:
-            logger.info("📝 Tablas no encontradas, creando...")
+            logger.info("Tablas no encontradas, creando...")
             if create_tables():
-                logger.info("✅ Base de datos inicializada correctamente")
+                logger.info("Base de datos inicializada correctamente")
                 # Crear usuario admin después de crear tablas
                 create_admin_user()
                 return True
             else:
-                logger.error("❌ Error al crear tablas")
+                logger.error("Error al crear tablas")
                 return False
         else:
-            logger.info("✅ Base de datos ya inicializada, tablas existentes")
+            logger.info("Base de datos ya inicializada, tablas existentes")
             # Intentar crear usuario admin si no existe (puede fallar con enum error)
             create_admin_user()
             return True
             
     except Exception as e:
-        logger.error(f"❌ Error inicializando base de datos: {e}")
+        logger.error(f"Error inicializando base de datos: {e}")
         return False
 
 
@@ -182,37 +182,37 @@ def init_db_startup():
     """Función que se llama al inicio de la aplicación"""
     try:
         logger.info("\n" + "="*50)
-        logger.info(f"🚀 Sistema de Préstamos y Cobranza v{settings.APP_VERSION}")
+        logger.info(f"Sistema de Préstamos y Cobranza v{settings.APP_VERSION}")
         logger.info("="*50)
-        logger.info(f"🗄️  Base de datos: {settings.get_database_url(hide_password=True)}")
+        logger.info(f"Base de datos: {settings.get_database_url(hide_password=True)}")
         
         # Intentar inicializar la base de datos pero no fallar si no se puede conectar
         db_initialized = False
         try:
             if init_db():
                 if check_database_connection():
-                    logger.info("✅ Conexión a base de datos verificada")
+                    logger.info("Conexión a base de datos verificada")
                     db_initialized = True
                 else:
-                    logger.warning("⚠️  Advertencia: Problema de conexión a base de datos")
+                    logger.warning("Advertencia: Problema de conexión a base de datos")
             else:
-                logger.warning("⚠️  Advertencia: Error inicializando tablas")
+                logger.warning("Advertencia: Error inicializando tablas")
         except Exception as db_error:
-            logger.error(f"❌ Error de base de datos (la aplicación continuará): {db_error}")
+            logger.error(f"Error de base de datos (la aplicación continuará): {db_error}")
         
         if not db_initialized:
-            logger.warning("🔧 La aplicación iniciará en modo de funcionalidad limitada")
-            logger.warning("🔧 Algunas funciones pueden no estar disponibles")
+            logger.warning("La aplicación iniciará en modo de funcionalidad limitada")
+            logger.warning("Algunas funciones pueden no estar disponibles")
         
-        logger.info(f"🌍 Entorno: {settings.ENVIRONMENT}")
-        logger.info("📝 Documentación: /docs")
-        logger.info(f"🔧 Debug mode: {'ON' if settings.DEBUG else 'OFF'}")
+        logger.info(f"Entorno: {settings.ENVIRONMENT}")
+        logger.info("Documentación: /docs")
+        logger.info(f"Debug mode: {'ON' if settings.DEBUG else 'OFF'}")
         logger.info("="*50)
         logger.info("")
         
     except Exception as e:
-        logger.error(f"❌ Error en startup de DB: {e}")
-        logger.warning("🔧 Continuando sin conexión a base de datos")
+        logger.error(f"Error en startup de DB: {e}")
+        logger.warning("Continuando sin conexión a base de datos")
 
 
 def init_db_shutdown():
@@ -221,6 +221,6 @@ def init_db_shutdown():
         from app.db.session import close_db_connections
         close_db_connections()
         logger.info("")
-        logger.info("🛑 Sistema de Préstamos y Cobranza detenido")
+        logger.info("Sistema de Préstamos y Cobranza detenido")
     except Exception as e:
-        logger.error(f"❌ Error en shutdown de DB: {e}")
+        logger.error(f"Error en shutdown de DB: {e}")
