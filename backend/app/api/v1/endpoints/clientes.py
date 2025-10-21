@@ -226,41 +226,10 @@ def crear_cliente(
         logger.info(f"Crear cliente - Usuario: {current_user.email}")
         logger.info(f"Datos recibidos: {cliente_data}")
         
-        # Verificar si ya existe cliente con la misma cédula
+        # CORREGIDO: Permitir cédulas duplicadas - solo verificar para logging
         cliente_existente = db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
         if cliente_existente:
-            # Validación inteligente: Verificar si es realmente el mismo cliente
-            mismo_cliente = (
-                cliente_existente.nombres.upper().strip() == cliente_data.nombres.upper().strip() and
-                cliente_existente.apellidos.upper().strip() == cliente_data.apellidos.upper().strip() and
-                cliente_existente.telefono == cliente_data.telefono
-            )
-            
-            if mismo_cliente:
-                # Es el mismo cliente, retornar información para confirmación
-                raise HTTPException(
-                    status_code=409,  # Conflict - requiere confirmación
-                    detail={
-                        "message": f"Cliente {cliente_existente.nombres} {cliente_existente.apellidos} con cédula {cliente_data.cedula} ya existe",
-                        "cliente_existente": {
-                            "id": cliente_existente.id,
-                            "nombres": cliente_existente.nombres,
-                            "apellidos": cliente_existente.apellidos,
-                            "cedula": cliente_existente.cedula,
-                            "telefono": cliente_existente.telefono,
-                            "email": cliente_existente.email,
-                            "fecha_registro": cliente_existente.fecha_registro.isoformat() if cliente_existente.fecha_registro else None
-                        },
-                        "requires_confirmation": True,
-                        "suggestion": "¿Desea crear otro perfil de cliente con los mismos datos personales?"
-                    }
-                )
-            else:
-                # Datos diferentes, posible error humano
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Ya existe un cliente con cédula {cliente_data.cedula} pero con datos diferentes. Verifique los datos."
-                )
+            logger.warning(f"⚠️ Cliente con cédula {cliente_data.cedula} ya existe, pero se permite crear duplicado")
         
         # Crear nuevo cliente
         nuevo_cliente = Cliente(

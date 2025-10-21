@@ -10,7 +10,8 @@ class Cliente(Base):
     id = Column(Integer, primary_key=True, index=True)
     
     # Documento - OBLIGATORIO
-    cedula = Column(String(20), unique=True, nullable=False, index=True)
+    # CORREGIDO: Removido unique=True para permitir múltiples clientes con misma cédula
+    cedula = Column(String(20), nullable=False, index=True)
     
     # Datos personales - OBLIGATORIOS
     nombres = Column(String(100), nullable=False)  # 1-2 palabras máximo
