@@ -1,6 +1,6 @@
 # backend/app/services/validators_service.py
 """
-🔍 Servicio de Validadores y Auto-Formateo
+Servicio de Validadores y Auto-Formateo
 Sistema completo para validar y corregir formatos incorrectos de datos
 """
 import re
@@ -724,7 +724,7 @@ class ValidadorFecha:
         """
         fecha_limpia = fecha_str.strip()
         
-        # ✅ NUEVO: Detectar números de serie de Excel
+        # NUEVO: Detectar números de serie de Excel
         if fecha_limpia.isdigit() and len(fecha_limpia) >= 4:
             try:
                 numero_serie = int(fecha_limpia)
@@ -1071,7 +1071,7 @@ class ValidadorEmail:
 
 class ServicioCorreccionDatos:
     """
-    🔧 Servicio principal para corrección de datos incorrectos
+    Servicio principal para corrección de datos incorrectos
     """
     
     @staticmethod
@@ -1081,7 +1081,7 @@ class ServicioCorreccionDatos:
         pais: str = "VENEZUELA"
     ) -> Dict[str, Any]:
         """
-        🔧 Corregir múltiples datos de un cliente
+        Corregir múltiples datos de un cliente
         """
         try:
             resultados_correccion = {
@@ -1168,7 +1168,7 @@ class ServicioCorreccionDatos:
     @staticmethod
     def detectar_datos_incorrectos_masivo(db, limite: int = 100) -> Dict[str, Any]:
         """
-        🔍 Detectar datos incorrectos en la base de datos masivamente
+        Detectar datos incorrectos en la base de datos masivamente
         """
         try:
             from app.models.cliente import Cliente
@@ -1238,7 +1238,7 @@ class ServicioCorreccionDatos:
                     tipos_errores["monto_error"] += 1
             
             return {
-                "titulo": "🔍 DETECCIÓN MASIVA DE DATOS INCORRECTOS",
+                "titulo": "DETECCIÓN MASIVA DE DATOS INCORRECTOS",
                 "fecha_analisis": datetime.now().isoformat(),
                 "clientes_analizados": len(clientes),
                 "clientes_con_errores": len(clientes_con_errores),
@@ -1602,7 +1602,7 @@ class ValidadorCoherenciaFinanciera:
 
 class ValidadorDuplicados:
     """
-    🔍 Validador de duplicados en base de datos
+    Validador de duplicados en base de datos
     Previene fraude y errores de captura
     """
     
