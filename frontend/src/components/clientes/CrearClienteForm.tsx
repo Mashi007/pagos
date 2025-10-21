@@ -331,10 +331,10 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       console.log('🔍 DEBUG - Error detail:', error.response?.data?.detail)
       console.log('🔍 DEBUG - Error message:', error.response?.data?.message)
       console.log('🔍 DEBUG - Error data keys:', Object.keys(error.response?.data || {}))
-      console.log('🔍 DEBUG - Verificando si contiene duplicate key:', error.response?.data?.detail?.includes('duplicate key'))
-      console.log('🔍 DEBUG - Verificando si contiene already exists:', error.response?.data?.detail?.includes('already exists'))
-      console.log('🔍 DEBUG - Verificando si contiene violates unique constraint:', error.response?.data?.detail?.includes('violates unique constraint'))
-      console.log('🔍 DEBUG - Verificando si contiene cédula:', error.response?.data?.detail?.includes('cédula'))
+      console.log('🔍 DEBUG - Verificando si contiene duplicate key:', typeof error.response?.data?.detail === 'string' ? error.response?.data?.detail?.includes('duplicate key') : 'N/A (no es string)')
+      console.log('🔍 DEBUG - Verificando si contiene already exists:', typeof error.response?.data?.detail === 'string' ? error.response?.data?.detail?.includes('already exists') : 'N/A (no es string)')
+      console.log('🔍 DEBUG - Verificando si contiene violates unique constraint:', typeof error.response?.data?.detail === 'string' ? error.response?.data?.detail?.includes('violates unique constraint') : 'N/A (no es string)')
+      console.log('🔍 DEBUG - Verificando si contiene cédula:', typeof error.response?.data?.detail === 'string' ? error.response?.data?.detail?.includes('cédula') : 'N/A (no es string)')
       
       // Verificar si es error de cédula duplicada (CORREGIDO: ahora es 409)
       if (error.response?.status === 409 && 
@@ -353,6 +353,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       
       // Fallback para el formato anterior (503) por compatibilidad
       if (error.response?.status === 503 && 
+          typeof error.response?.data?.detail === 'string' &&
           (error.response?.data?.detail?.includes('duplicate key') ||
            error.response?.data?.detail?.includes('already exists') ||
            error.response?.data?.message?.includes('duplicate key') ||
