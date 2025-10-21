@@ -164,6 +164,7 @@ class ApiClient {
           toast.error('Error interno del servidor')
           break
         case 409:
+          // ✅ CORRECCIÓN CRÍTICA: Manejo de errores 409 para duplicados
           // NO mostrar toast genérico para errores 409 de duplicados
           // Permitir que el componente maneje el error específico
           console.log('🔍 INTERCEPTOR - Error 409 recibido, data:', data)
