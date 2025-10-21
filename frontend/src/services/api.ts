@@ -168,10 +168,13 @@ class ApiClient {
           // Permitir que el componente maneje el error específico
           console.log('🔍 INTERCEPTOR - Error 503 recibido, data:', data)
           console.log('🔍 INTERCEPTOR - data.detail:', data?.detail)
+          console.log('🔍 INTERCEPTOR - data.message:', data?.message)
+          console.log('🔍 INTERCEPTOR - data keys:', Object.keys(data || {}))
           console.log('🔍 INTERCEPTOR - Verificando si contiene duplicate key:', data?.detail?.includes('duplicate key'))
           console.log('🔍 INTERCEPTOR - Verificando si contiene already exists:', data?.detail?.includes('already exists'))
           
-          if (data?.detail?.includes('duplicate key') || data?.detail?.includes('already exists')) {
+          if (data?.detail?.includes('duplicate key') || data?.detail?.includes('already exists') ||
+              data?.message?.includes('duplicate key') || data?.message?.includes('already exists')) {
             // No mostrar toast, dejar que el componente maneje el popup
             console.log('🔍 INTERCEPTOR - Detectado error 503 de duplicado, NO mostrando toast')
             return Promise.reject(error) // ✅ CORRECCIÓN: Asegurar que se propague el error

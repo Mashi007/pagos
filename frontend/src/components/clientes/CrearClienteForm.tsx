@@ -327,11 +327,15 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       console.log('🔍 DEBUG - Error response:', error.response)
       console.log('🔍 DEBUG - Error status:', error.response?.status)
       console.log('🔍 DEBUG - Error detail:', error.response?.data?.detail)
+      console.log('🔍 DEBUG - Error message:', error.response?.data?.message)
+      console.log('🔍 DEBUG - Error data keys:', Object.keys(error.response?.data || {}))
       
       // Verificar si es error de cédula duplicada
       if (error.response?.status === 503 && 
           (error.response?.data?.detail?.includes('duplicate key') ||
-           error.response?.data?.detail?.includes('already exists'))) {
+           error.response?.data?.detail?.includes('already exists') ||
+           error.response?.data?.message?.includes('duplicate key') ||
+           error.response?.data?.message?.includes('already exists'))) {
         
         console.log('✅ DEBUG - Activando popup de duplicados')
         // Mostrar popup de advertencia
