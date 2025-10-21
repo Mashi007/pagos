@@ -329,6 +329,10 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       console.log('🔍 DEBUG - Error detail:', error.response?.data?.detail)
       console.log('🔍 DEBUG - Error message:', error.response?.data?.message)
       console.log('🔍 DEBUG - Error data keys:', Object.keys(error.response?.data || {}))
+      console.log('🔍 DEBUG - Verificando si contiene duplicate key:', error.response?.data?.detail?.includes('duplicate key'))
+      console.log('🔍 DEBUG - Verificando si contiene already exists:', error.response?.data?.detail?.includes('already exists'))
+      console.log('🔍 DEBUG - Verificando si contiene violates unique constraint:', error.response?.data?.detail?.includes('violates unique constraint'))
+      console.log('🔍 DEBUG - Verificando si contiene cédula:', error.response?.data?.detail?.includes('cédula'))
       
       // Verificar si es error de cédula duplicada
       if (error.response?.status === 503 && 

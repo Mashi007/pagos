@@ -172,8 +172,11 @@ class ApiClient {
           console.log('🔍 INTERCEPTOR - data keys:', Object.keys(data || {}))
           console.log('🔍 INTERCEPTOR - Verificando si contiene duplicate key:', data?.detail?.includes('duplicate key'))
           console.log('🔍 INTERCEPTOR - Verificando si contiene already exists:', data?.detail?.includes('already exists'))
+          console.log('🔍 INTERCEPTOR - Verificando si contiene violates unique constraint:', data?.detail?.includes('violates unique constraint'))
+          console.log('🔍 INTERCEPTOR - Verificando si contiene cédula:', data?.detail?.includes('cédula'))
           
           if (data?.detail?.includes('duplicate key') || data?.detail?.includes('already exists') ||
+              data?.detail?.includes('violates unique constraint') || data?.detail?.includes('cédula') ||
               data?.message?.includes('duplicate key') || data?.message?.includes('already exists')) {
             // No mostrar toast, dejar que el componente maneje el popup
             console.log('🔍 INTERCEPTOR - Detectado error 503 de duplicado, NO mostrando toast')
