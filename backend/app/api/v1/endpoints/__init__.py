@@ -44,7 +44,6 @@ from . import (
     intelligent_alerts_system,
     network_diagnostic,
     forensic_analysis,
-    experimental_tests,
     comparative_analysis,
     temporal_analysis,
     architectural_analysis,
@@ -55,7 +54,6 @@ from . import (
     strategic_measurements,
     verificar_concesionarios,
     diagnostico_refresh_token,
-    test_excel_processing
 )
 
 __all__ = [
@@ -98,7 +96,6 @@ __all__ = [
     "intelligent_alerts_system",
     "network_diagnostic",
     "forensic_analysis",
-    "experimental_tests",
     "comparative_analysis",
     "temporal_analysis",
     "architectural_analysis",
@@ -109,5 +106,4 @@ __all__ = [
     "strategic_measurements",
     "verificar_concesionarios",
     "diagnostico_refresh_token",
-    "test_excel_processing"
 ]

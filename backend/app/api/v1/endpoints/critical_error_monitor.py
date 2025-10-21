@@ -197,7 +197,7 @@ class CriticalErrorMonitor:
                     'type': 'import_fix',
                     'priority': 'critical',
                     'description': 'Corregir imports faltantes que causan fallos de despliegue',
-                    'action': 'Verificar y corregir imports en experimental_tests.py y otros archivos',
+                    'action': 'Verificar y corregir imports en otros archivos',
                     'impact': 'Resuelve fallos de despliegue'
                 })
             

@@ -57,7 +57,6 @@ from app.api.v1.endpoints import (
     intelligent_alerts_system,
     network_diagnostic,
     forensic_analysis,
-    experimental_tests,
     comparative_analysis,
     temporal_analysis,
     architectural_analysis,
@@ -68,7 +67,6 @@ from app.api.v1.endpoints import (
         strategic_measurements,
         verificar_concesionarios,
         diagnostico_refresh_token,
-        test_excel_processing
 )
 
 # Configurar logging robusto
@@ -221,7 +219,6 @@ app.include_router(cross_validation_auth.router, prefix=f"{settings.API_V1_PREFI
 app.include_router(intelligent_alerts_system.router, prefix=f"{settings.API_V1_PREFIX}/intelligent-alerts", tags=["Sistema Alertas Inteligentes"])
 app.include_router(network_diagnostic.router, prefix=f"{settings.API_V1_PREFIX}/network", tags=["Diagnóstico Red"])
 app.include_router(forensic_analysis.router, prefix=f"{settings.API_V1_PREFIX}/forensic", tags=["Análisis Forense"])
-app.include_router(experimental_tests.router, prefix=f"{settings.API_V1_PREFIX}/experimental", tags=["Tests Experimentales"])
 app.include_router(comparative_analysis.router, prefix=f"{settings.API_V1_PREFIX}/comparative", tags=["Análisis Comparativo"])
 app.include_router(temporal_analysis.router, prefix=f"{settings.API_V1_PREFIX}/temporal", tags=["Análisis Temporal"])
 app.include_router(architectural_analysis.router, prefix=f"{settings.API_V1_PREFIX}/architectural", tags=["Análisis Arquitectural"])
@@ -232,7 +229,6 @@ app.include_router(critical_error_monitor.router, prefix=f"{settings.API_V1_PREF
 app.include_router(strategic_measurements.router, prefix=f"{settings.API_V1_PREFIX}/measurements", tags=["Mediciones Estratégicas"])
 app.include_router(verificar_concesionarios.router, prefix=f"{settings.API_V1_PREFIX}/verificar", tags=["Verificación Datos"])
 app.include_router(diagnostico_refresh_token.router, prefix=f"{settings.API_V1_PREFIX}/refresh-diagnostic", tags=["Diagnóstico Refresh Token"])
-app.include_router(test_excel_processing.router, prefix=f"{settings.API_V1_PREFIX}/test-excel", tags=["Prueba Excel"])
 # app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])  # Removido - se usarán datos reales
 
 
