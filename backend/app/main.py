@@ -97,8 +97,8 @@ logger.info(f"📊 Configuración: Environment={settings.ENVIRONMENT}, Log Level
 logger.info(f"🌐 CORS Origins: {settings.CORS_ORIGINS}")
 logger.info(f"🔗 Database URL configurada: {bool(settings.DATABASE_URL)}")
 
-# Configurar rate limiter
-limiter = Limiter(key_func=get_remote_address)
+# Configurar rate limiter - TEMPORALMENTE DESACTIVADO
+# limiter = Limiter(key_func=get_remote_address)
 
 
 # ============================================
@@ -155,9 +155,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Configurar rate limiter en app state
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# Configurar rate limiter en app state - TEMPORALMENTE DESACTIVADO
+# app.state.limiter = limiter
+# app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ============================================
 # MIDDLEWARES DE SEGURIDAD
