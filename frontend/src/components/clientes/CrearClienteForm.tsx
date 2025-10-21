@@ -96,6 +96,8 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   const [validations, setValidations] = useState<ValidationResult[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showExcelUploader, setShowExcelUploader] = useState(false)
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false)
+  const [duplicateCedula, setDuplicateCedula] = useState('')
   
   // Pre-cargar datos del cliente si se está editando
   useEffect(() => {
@@ -233,7 +235,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       case 'modeloVehiculo':
         if (!value) return { field, isValid: false, message: 'Modelo de vehículo es obligatorio' }
         return { field, isValid: true, message: 'Modelo válido' }
-      
+
       case 'concesionario':
         if (!value) return { field, isValid: false, message: 'Concesionario es obligatorio' }
         return { field, isValid: true, message: 'Concesionario válido' }
@@ -241,7 +243,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       case 'analista':
         if (!value) return { field, isValid: false, message: 'Analista es obligatorio' }
         return { field, isValid: true, message: 'Analista válido' }
-      
+
       default:
         return { field, isValid: true, message: '' }
     }
@@ -311,8 +313,60 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       onSuccess()
       onClienteCreated?.()
       onClose()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creando cliente:', error)
+      
+      // Verificar si es error de cédula duplicada
+      if (error.response?.status === 503 && 
+          error.response?.data?.message?.includes('duplicate key') ||
+          error.response?.data?.message?.includes('already exists')) {
+        
+        // Mostrar popup de advertencia
+        setDuplicateCedula(formData.cedula)
+        setShowDuplicateWarning(true)
+        return
+      }
+      
+      // Otros errores
+      console.error('Error no manejado:', error)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleConfirmDuplicate = async () => {
+    setIsSubmitting(true)
+    setShowDuplicateWarning(false)
+    
+    try {
+      const clienteData = {
+        cedula: formData.cedula,
+        nombres: formData.nombres,
+        apellidos: formData.apellidos,
+        telefono: formData.telefono,
+        email: formData.email,
+        direccion: formData.direccion,
+        fecha_nacimiento: formData.fechaNacimiento,
+        ocupacion: formData.ocupacion,
+        modelo_vehiculo: formData.modeloVehiculo,
+        concesionario: formData.concesionario,
+        analista: formData.analista,
+        estado: formData.estado,
+        notas: formData.notas || 'NA'
+      }
+
+      console.log('➕ Creando cliente con cédula duplicada (confirmado por usuario)')
+      await clienteService.createClienteWithConfirmation(
+        clienteData, 
+        `Usuario confirmó crear cliente con cédula duplicada: ${formData.cedula}`
+      )
+      console.log('✅ Cliente creado exitosamente (duplicado permitido)')
+      
+      onSuccess()
+      onClienteCreated?.()
+      onClose()
+    } catch (error) {
+      console.error('Error creando cliente duplicado:', error)
     } finally {
       setIsSubmitting(false)
     }
@@ -391,10 +445,10 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
               </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
+                <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
                   Cédula <span className="text-red-500">*</span>
-                </label>
+                  </label>
                 <div className="relative">
                   <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
@@ -417,12 +471,12 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     {getFieldValidation('cedula')?.message}
                   </div>
                 )}
-              </div>
+                </div>
 
-              <div className="space-y-2">
+                <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
                   Nombres <span className="text-red-500">*</span>
-                </label>
+                  </label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
@@ -443,8 +497,8 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                       <XCircle className="w-3 h-3" />
                     )}
                     {getFieldValidation('nombres')?.message}
-                  </div>
-                )}
+                    </div>
+                  )}
               </div>
 
               <div className="space-y-2">
@@ -473,12 +527,12 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     {getFieldValidation('apellidos')?.message}
                   </div>
                 )}
-              </div>
+                </div>
 
-              <div className="space-y-2">
+                <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
                   Teléfono <span className="text-red-500">*</span>
-                </label>
+                  </label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
@@ -499,14 +553,14 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                       <XCircle className="w-3 h-3" />
                     )}
                     {getFieldValidation('telefono')?.message}
-                  </div>
-                )}
-              </div>
+                    </div>
+                  )}
+                </div>
 
-              <div className="space-y-2">
+                <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
                   Email <span className="text-red-500">*</span>
-                </label>
+                  </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
@@ -625,10 +679,10 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
               </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
+                <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
                   Modelo de Vehículo <span className="text-red-500">*</span>
-                </label>
+                  </label>
                 <SearchableSelect
                   options={modelosVehiculos
                     .filter(modelo => modelo.modelo) // ✅ CORREGIDO: campo 'modelo', no 'nombre'
@@ -656,14 +710,14 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                       <XCircle className="w-3 h-3" />
                     )}
                     {getFieldValidation('modeloVehiculo')?.message}
-                  </div>
-                )}
-              </div>
+                </div>
+                  )}
+                </div>
 
-              <div className="space-y-2">
+                <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
                   Concesionario <span className="text-red-500">*</span>
-                </label>
+                  </label>
                 <SearchableSelect
                   options={concesionarios.map(concesionario => ({
                     value: concesionario.nombre,
@@ -684,14 +738,14 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                       <XCircle className="w-3 h-3" />
                     )}
                     {getFieldValidation('concesionario')?.message}
-                  </div>
-                )}
-              </div>
+                </div>
+                  )}
+                </div>
 
-              <div className="space-y-2">
+                <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
                   Analista <span className="text-red-500">*</span>
-                </label>
+                  </label>
                 <SearchableSelect
                   options={analistas.map(analista => ({
                     value: analista.nombre,
@@ -713,8 +767,8 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     )}
                     {getFieldValidation('analista')?.message}
                   </div>
-                )}
-              </div>
+                  )}
+                </div>
             </CardContent>
           </Card>
 
@@ -727,29 +781,29 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
               </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
+                <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
                   Estado <span className="text-red-500">*</span>
-                </label>
+                  </label>
                 <Select
                   value={formData.estado}
                   onValueChange={(value: 'ACTIVO' | 'INACTIVO' | 'FINALIZADO') => handleInputChange('estado', value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar estado" />
-                  </SelectTrigger>
-                  <SelectContent>
+                    </SelectTrigger>
+                    <SelectContent>
                     <SelectItem value="ACTIVO">Activo</SelectItem>
                     <SelectItem value="INACTIVO">Inactivo</SelectItem>
                     <SelectItem value="FINALIZADO">Finalizado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-2">
+                <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
                   Notas (Opcional)
-                </label>
+                  </label>
                 <Textarea
                   value={formData.notas}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleInputChange('notas', e.target.value)}
@@ -780,6 +834,62 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
             </Button>
           </div>
         </form>
+        
+        {/* Popup de advertencia para cédulas duplicadas */}
+        <AnimatePresence>
+          {showDuplicateWarning && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-white rounded-lg p-6 max-w-md mx-4"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <AlertTriangle className="w-6 h-6 text-yellow-500" />
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Cédula Duplicada Detectada
+                  </h3>
+                </div>
+                
+                <div className="space-y-3">
+                  <p className="text-gray-600">
+                    Ya existe un cliente con la cédula <strong>{duplicateCedula}</strong> en el sistema.
+                  </p>
+                  
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-sm text-blue-800">
+                      <strong>💡 En sistemas de préstamos es normal</strong> que una persona tenga múltiples préstamos. 
+                      ¿Desea continuar y crear este cliente de todas formas?
+                    </p>
+                  </div>
+                  
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowDuplicateWarning(false)}
+                      className="flex-1"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={handleConfirmDuplicate}
+                      disabled={isSubmitting}
+                      className="flex-1 bg-yellow-600 hover:bg-yellow-700"
+                    >
+                      {isSubmitting ? 'Guardando...' : 'Sí, Continuar'}
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </motion.div>
   )
