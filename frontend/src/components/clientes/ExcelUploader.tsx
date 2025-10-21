@@ -966,7 +966,15 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     if (row) {
       row[field as keyof ExcelData] = value || ''
       
-      // Re-validar el campo
+      // Para el campo notas, no hacer validación ni notificaciones
+      if (field === 'notas') {
+        // Solo actualizar el valor sin validación ni notificaciones
+        row._validation[field] = { isValid: true }
+        setExcelData(newData)
+        return
+      }
+      
+      // Re-validar el campo (solo para campos que no son notas)
       const validation = await validateField(field, value || '')
       row._validation[field] = validation
       
