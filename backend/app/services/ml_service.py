@@ -1,6 +1,6 @@
 # backend/app/services/ml_service.py
 """
-🤖 Servicio de Inteligencia Artificial y Machine Learning
+Servicio de Inteligencia Artificial y Machine Learning
 Sistema avanzado de predicción, scoring y recomendaciones para financiamiento automotriz
 """
 import numpy as np
@@ -60,7 +60,7 @@ class MLConfig:
 
 class ScoringCrediticio:
     """
-    🧠 Sistema inteligente de scoring crediticio
+    Sistema inteligente de scoring crediticio
     Calcula score 0-1000 basado en múltiples variables
     """
     
@@ -71,7 +71,7 @@ class ScoringCrediticio:
         db: Session
     ) -> Dict[str, Any]:
         """
-        🎯 Calcular score crediticio completo (0-1000)
+        Calcular score crediticio completo (0-1000)
         """
         try:
             scores_componentes = {}
@@ -340,7 +340,6 @@ class ScoringCrediticio:
         if score >= MLConfig.SCORE_THRESHOLDS["APROBACION_AUTOMATICA"]:
             return {
                 "decision": "APROBAR_AUTOMATICAMENTE",
-                "emoji": "✅",
                 "color": "#28a745",
                 "mensaje": "Cliente de bajo riesgo - Aprobación automática recomendada",
                 "condiciones_especiales": [],
@@ -350,7 +349,6 @@ class ScoringCrediticio:
         elif score >= MLConfig.SCORE_THRESHOLDS["REVISION_MANUAL"]:
             return {
                 "decision": "REVISAR_MANUALMENTE",
-                "emoji": "⚠️",
                 "color": "#ffc107",
                 "mensaje": "Cliente de riesgo medio - Revisión manual recomendada",
                 "condiciones_especiales": ["Verificar ingresos", "Solicitar referencias"],
@@ -360,7 +358,6 @@ class ScoringCrediticio:
         elif score >= MLConfig.SCORE_THRESHOLDS["ANALISIS_DETALLADO"]:
             return {
                 "decision": "ANALIZAR_DETALLADAMENTE",
-                "emoji": "🔍",
                 "color": "#17a2b8",
                 "mensaje": "Cliente de riesgo alto - Análisis detallado requerido",
                 "condiciones_especiales": [
@@ -375,7 +372,6 @@ class ScoringCrediticio:
         else:
             return {
                 "decision": "RECHAZAR_AUTOMATICAMENTE",
-                "emoji": "❌",
                 "color": "#dc3545",
                 "mensaje": "Cliente de muy alto riesgo - Rechazo recomendado",
                 "condiciones_especiales": ["No aprobar sin garantías extraordinarias"],
@@ -446,7 +442,7 @@ class ScoringCrediticio:
 
 class PrediccionMora:
     """
-    🔮 Sistema de predicción de mora usando Machine Learning
+    Sistema de predicción de mora usando Machine Learning
     """
     
     @staticmethod
@@ -456,7 +452,7 @@ class PrediccionMora:
         db: Session
     ) -> Dict[str, Any]:
         """
-        🎯 Predecir probabilidad de mora en los próximos N días
+        Predecir probabilidad de mora en los próximos N días
         """
         try:
             # Obtener datos del cliente
@@ -550,7 +546,7 @@ class PrediccionMora:
     @staticmethod
     def _aplicar_modelo_mora(features: Dict) -> float:
         """
-        🤖 Aplicar modelo de ML para predicción de mora
+        Aplicar modelo de ML para predicción de mora
         (En producción sería un modelo entrenado con scikit-learn/TensorFlow)
         """
         try:
@@ -592,35 +588,30 @@ class PrediccionMora:
         if probabilidad >= 0.70:
             return {
                 "nivel": "MUY_ALTO",
-                "emoji": "🚨",
                 "color": "#dc3545",
                 "descripcion": "Riesgo crítico - Acción inmediata requerida"
             }
         elif probabilidad >= 0.50:
             return {
                 "nivel": "ALTO", 
-                "emoji": "⚠️",
                 "color": "#fd7e14",
                 "descripcion": "Riesgo alto - Monitoreo cercano requerido"
             }
         elif probabilidad >= 0.30:
             return {
                 "nivel": "MEDIO",
-                "emoji": "🔶",
                 "color": "#ffc107",
                 "descripcion": "Riesgo medio - Seguimiento recomendado"
             }
         elif probabilidad >= 0.15:
             return {
                 "nivel": "BAJO",
-                "emoji": "🟡",
                 "color": "#20c997",
                 "descripcion": "Riesgo bajo - Cliente estable"
             }
         else:
             return {
                 "nivel": "MUY_BAJO",
-                "emoji": "✅",
                 "color": "#28a745",
                 "descripcion": "Riesgo muy bajo - Cliente excelente"
             }
@@ -692,7 +683,7 @@ class PrediccionMora:
 
 class SistemaRecomendaciones:
     """
-    💡 Sistema de recomendaciones inteligentes para optimización
+    Sistema de recomendaciones inteligentes para optimización
     """
     
     @staticmethod
@@ -701,7 +692,7 @@ class SistemaRecomendaciones:
         db: Session
     ) -> Dict[str, Any]:
         """
-        🎯 Recomendar mejor estrategia de cobranza para cliente específico
+        Recomendar mejor estrategia de cobranza para cliente específico
         """
         try:
             cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
@@ -837,7 +828,7 @@ class SistemaRecomendaciones:
 
 class AnalisisPredictivoCartera:
     """
-    📈 Análisis predictivo avanzado de la cartera
+    Análisis predictivo avanzado de la cartera
     """
     
     @staticmethod
@@ -846,7 +837,7 @@ class AnalisisPredictivoCartera:
         db: Session
     ) -> Dict[str, Any]:
         """
-        📊 Análisis predictivo de tendencias de la cartera
+        Análisis predictivo de tendencias de la cartera
         """
         try:
             # Datos históricos de los últimos 24 meses
@@ -991,7 +982,7 @@ class AnalisisPredictivoCartera:
 
 class OptimizadorTasas:
     """
-    🎯 Optimizador inteligente de tasas y condiciones
+    Optimizador inteligente de tasas y condiciones
     """
     
     @staticmethod
@@ -1001,7 +992,7 @@ class OptimizadorTasas:
         db: Session
     ) -> Dict[str, Any]:
         """
-        💡 Optimizar tasas y condiciones basado en perfil del cliente
+        Optimizar tasas y condiciones basado en perfil del cliente
         """
         try:
             # Calcular scoring del cliente
@@ -1112,7 +1103,7 @@ class OptimizadorTasas:
 
 class ChatbotCobranza:
     """
-    🤖 Chatbot inteligente para automatización de cobranza
+    Chatbot inteligente para automatización de cobranza
     """
     
     @staticmethod
@@ -1122,7 +1113,7 @@ class ChatbotCobranza:
         db: Session
     ) -> Dict[str, Any]:
         """
-        💬 Generar mensaje personalizado para cliente
+        Generar mensaje personalizado para cliente
         """
         try:
             cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
@@ -1293,13 +1284,13 @@ Como cliente puntual, tienes beneficios especiales:
 
 class DetectorPatrones:
     """
-    🔍 Detector de patrones y anomalías en comportamiento de pago
+    Detector de patrones y anomalías en comportamiento de pago
     """
     
     @staticmethod
     def detectar_anomalias_cartera(db: Session) -> Dict[str, Any]:
         """
-        🚨 Detectar anomalías en la cartera que requieren atención
+        Detectar anomalías en la cartera que requieren atención
         """
         try:
             anomalias = []
@@ -1449,13 +1440,13 @@ class DetectorPatrones:
 
 class AlertasInteligentes:
     """
-    🚨 Sistema de alertas inteligentes basado en ML
+    Sistema de alertas inteligentes basado en ML
     """
     
     @staticmethod
     def generar_alertas_predictivas(db: Session) -> Dict[str, Any]:
         """
-        ⚡ Generar alertas predictivas basadas en análisis ML
+        Generar alertas predictivas basadas en análisis ML
         """
         try:
             alertas = []
@@ -1466,7 +1457,6 @@ class AlertasInteligentes:
                 alertas.append({
                     "tipo": "RIESGO_MORA",
                     "prioridad": "ALTA",
-                    "emoji": "🚨",
                     "titulo": f"{len(clientes_riesgo)} clientes en riesgo de mora",
                     "descripcion": "Clientes con alta probabilidad de entrar en mora en los próximos 7 días",
                     "clientes": clientes_riesgo[:10],
@@ -1479,7 +1469,6 @@ class AlertasInteligentes:
                 alertas.append({
                     "tipo": "DETERIORO_CARTERA",
                     "prioridad": "MEDIA",
-                    "emoji": "📉",
                     "titulo": "Deterioro detectado en calidad de cartera",
                     "descripcion": f"Incremento de {deterioro['incremento']}% en mora este mes",
                     "datos": deterioro,
@@ -1492,7 +1481,6 @@ class AlertasInteligentes:
                 alertas.append({
                     "tipo": "OPORTUNIDADES",
                     "prioridad": "BAJA",
-                    "emoji": "💡",
                     "titulo": f"{len(oportunidades)} oportunidades de negocio",
                     "descripcion": "Clientes elegibles para productos adicionales",
                     "oportunidades": oportunidades,

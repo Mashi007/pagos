@@ -1,6 +1,6 @@
 # backend/app/services/notification_multicanal_service.py
 """
-🔔 Servicio de Notificaciones Multicanal
+Servicio de Notificaciones Multicanal
 Sistema 100% automático de notificaciones por Email + WhatsApp
 Sin IA - Basado en templates y reglas de negocio
 """

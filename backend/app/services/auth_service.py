@@ -3,6 +3,7 @@
 Servicio de autenticación
 Lógica de negocio para login, logout, refresh tokens
 """
+import logging
 from typing import Optional, Tuple
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -20,6 +21,8 @@ from app.core.security import (
     validate_password_strength
 )
 from app.core.permissions_simple import get_user_permissions
+
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -42,17 +45,22 @@ class AuthService:
         # CASE INSENSITIVE: Normalizar email a minúsculas para búsqueda
         email_normalized = email.lower().strip()
         
+        logger.info(f"AuthService.authenticate_user - Intentando autenticar usuario: {email_normalized}")
+        
         user = db.query(User).filter(
             func.lower(User.email) == email_normalized,
             User.is_active == True
         ).first()
         
         if not user:
+            logger.warning(f"AuthService.authenticate_user - Usuario no encontrado: {email_normalized}")
             return None
         
         if not verify_password(password, user.hashed_password):
+            logger.warning(f"AuthService.authenticate_user - Contraseña incorrecta para: {email_normalized}")
             return None
         
+        logger.info(f"AuthService.authenticate_user - Autenticación exitosa para: {email_normalized}")
         return user
     
     @staticmethod
@@ -71,6 +79,8 @@ class AuthService:
             HTTPException: Si las credenciales son inválidas o el usuario está inactivo
         """
         # Autenticar usuario
+        logger.info(f"AuthService.login - Iniciando proceso de login para: {login_data.email}")
+        
         user = AuthService.authenticate_user(
             db,
             login_data.email,
@@ -78,6 +88,7 @@ class AuthService:
         )
         
         if not user:
+            logger.warning(f"AuthService.login - Fallo en autenticación para: {login_data.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Email o contraseña incorrectos",
@@ -86,6 +97,7 @@ class AuthService:
         
         # Verificar que el usuario esté activo
         if not user.is_active:
+            logger.warning(f"AuthService.login - Usuario inactivo: {login_data.email}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Usuario inactivo. Contacte al administrador."
@@ -94,6 +106,8 @@ class AuthService:
         # Actualizar last_login
         user.last_login = datetime.utcnow()
         db.commit()
+        
+        logger.info(f"AuthService.login - Login exitoso para: {login_data.email}")
         
         # Crear tokens
         access_token = create_access_token(
@@ -239,18 +253,12 @@ class AuthService:
             Lista de permisos (strings)
         """
         try:
-            print(f"🔐 AuthService.get_user_permissions - Usuario: {user.email}, is_admin: {user.is_admin}")
-            
             # Usar is_admin directamente - evitar conflicto de nombres
             from app.core.permissions_simple import get_user_permissions as get_permissions
             permissions = get_permissions(user.is_admin)
             permission_strings = [perm.value for perm in permissions]
             
-            print(f"AuthService.get_user_permissions - Permisos obtenidos: {len(permission_strings)} permisos")
-            print(f"AuthService.get_user_permissions - Permisos: {permission_strings}")
-            
             return permission_strings
         except Exception as e:
             # Si hay error, retornar permisos vacíos
-            print(f"AuthService.get_user_permissions - Error: {e}")
             return []
