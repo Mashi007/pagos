@@ -164,6 +164,12 @@ class ApiClient {
           toast.error('Error interno del servidor')
           break
         case 503:
+          // NO mostrar toast genérico para errores 503 de duplicados
+          // Permitir que el componente maneje el error específico
+          if (data?.detail?.includes('duplicate key') || data?.detail?.includes('already exists')) {
+            // No mostrar toast, dejar que el componente maneje el popup
+            break
+          }
           toast.error('Servicio temporalmente no disponible. Intenta nuevamente.')
           break
         default:
