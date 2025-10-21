@@ -22,6 +22,22 @@ logger = logging.getLogger(__name__)
 # FUNCIONES DE AUDITORÍA
 # ============================================
 
+def serializar_datos_auditoria(datos: dict) -> dict:
+    """Serializar datos para auditoría, convirtiendo fechas a strings"""
+    if not datos:
+        return datos
+    
+    datos_serializados = {}
+    for key, value in datos.items():
+        if hasattr(value, 'isoformat'):  # datetime.date o datetime.datetime
+            datos_serializados[key] = value.isoformat()
+        elif isinstance(value, dict):
+            datos_serializados[key] = serializar_datos_auditoria(value)
+        else:
+            datos_serializados[key] = value
+    
+    return datos_serializados
+
 def registrar_auditoria_cliente(
     db: Session,
     usuario_email: str,
@@ -33,6 +49,10 @@ def registrar_auditoria_cliente(
 ):
     """Registrar auditoría para operaciones de cliente"""
     try:
+        # Serializar datos para evitar errores de JSON
+        datos_anteriores_serializados = serializar_datos_auditoria(datos_anteriores)
+        datos_nuevos_serializados = serializar_datos_auditoria(datos_nuevos)
+        
         auditoria = Auditoria(
             usuario_id=None,  # Se puede obtener del usuario si es necesario
             usuario_email=usuario_email,
@@ -41,8 +61,8 @@ def registrar_auditoria_cliente(
             tabla="clientes",
             registro_id=cliente_id,
             descripcion=descripcion or f"{accion} cliente ID {cliente_id}",
-            datos_anteriores=datos_anteriores,
-            datos_nuevos=datos_nuevos,
+            datos_anteriores=datos_anteriores_serializados,
+            datos_nuevos=datos_nuevos_serializados,
             ip_address="127.0.0.1",  # Se puede obtener del request
             user_agent="Sistema Interno"
             # ✅ CORREGIDO: Eliminado created_at, el modelo usa fecha con server_default
