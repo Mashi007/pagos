@@ -33,6 +33,7 @@ import { analistaService, type Analista } from '@/services/analistaService'
 import { modeloVehiculoService, type ModeloVehiculo } from '@/services/modeloVehiculoService'
 import { clienteService } from '@/services/clienteService'
 import { ExcelUploader } from './ExcelUploader'
+import { ConfirmacionDuplicadoModal } from './ConfirmacionDuplicadoModal'
 
 interface FormData {
   // Datos personales - OBLIGATORIOS
@@ -98,6 +99,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   const [showExcelUploader, setShowExcelUploader] = useState(false)
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false)
   const [duplicateCedula, setDuplicateCedula] = useState('')
+  const [clienteExistente, setClienteExistente] = useState<any>(null)
   
   // DEBUG: Log de cambios de estado
   useEffect(() => {
@@ -334,18 +336,32 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       console.log('🔍 DEBUG - Verificando si contiene violates unique constraint:', error.response?.data?.detail?.includes('violates unique constraint'))
       console.log('🔍 DEBUG - Verificando si contiene cédula:', error.response?.data?.detail?.includes('cédula'))
       
-      // Verificar si es error de cédula duplicada
+      // Verificar si es error de cédula duplicada (CORREGIDO: ahora es 409)
+      if (error.response?.status === 409 && 
+          error.response?.data?.detail?.error === 'CLIENTE_DUPLICADO') {
+        
+        console.log('✅ DEBUG - Activando popup de duplicados (status 409)')
+        console.log('✅ DEBUG - Datos del cliente existente:', error.response?.data?.detail?.cliente_existente)
+        
+        // Mostrar popup de advertencia con datos del cliente existente
+        setDuplicateCedula(formData.cedula)
+        setClienteExistente(error.response?.data?.detail?.cliente_existente)
+        setShowDuplicateWarning(true)
+        setIsSubmitting(false) // ✅ CORRECCIÓN: Mover aquí antes del return
+        return
+      }
+      
+      // Fallback para el formato anterior (503) por compatibilidad
       if (error.response?.status === 503 && 
           (error.response?.data?.detail?.includes('duplicate key') ||
            error.response?.data?.detail?.includes('already exists') ||
            error.response?.data?.message?.includes('duplicate key') ||
            error.response?.data?.message?.includes('already exists'))) {
         
-        console.log('✅ DEBUG - Activando popup de duplicados')
-        // Mostrar popup de advertencia
+        console.log('✅ DEBUG - Activando popup de duplicados (fallback 503)')
         setDuplicateCedula(formData.cedula)
         setShowDuplicateWarning(true)
-        setIsSubmitting(false) // ✅ CORRECCIÓN: Mover aquí antes del return
+        setIsSubmitting(false)
         return
       }
       
@@ -360,7 +376,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     }
   }
 
-  const handleConfirmDuplicate = async () => {
+  const handleConfirmDuplicate = async (comentarios: string) => {
     setIsSubmitting(true)
     setShowDuplicateWarning(false)
     
@@ -384,7 +400,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       console.log('➕ Creando cliente con cédula duplicada (confirmado por usuario)')
       await clienteService.createClienteWithConfirmation(
         clienteData, 
-        `Usuario confirmó crear cliente con cédula duplicada: ${formData.cedula}`
+        comentarios || `Usuario confirmó crear cliente con cédula duplicada: ${formData.cedula}`
       )
       console.log('✅ Cliente creado exitosamente (duplicado permitido)')
       
@@ -860,61 +876,30 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
           </div>
         </form>
         
-        {/* Popup de advertencia para cédulas duplicadas */}
-        <AnimatePresence>
-          {showDuplicateWarning && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
-            >
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-white rounded-lg p-6 max-w-md mx-4"
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <AlertTriangle className="w-6 h-6 text-yellow-500" />
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    Cédula Duplicada Detectada
-                  </h3>
-                </div>
-                
-                <div className="space-y-3">
-                  <p className="text-gray-600">
-                    Ya existe un cliente con la cédula <strong>{duplicateCedula}</strong> en el sistema.
-                  </p>
-                  
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    <p className="text-sm text-blue-800">
-                      <strong>💡 En sistemas de préstamos es normal</strong> que una persona tenga múltiples préstamos. 
-                      ¿Desea continuar y crear este cliente de todas formas?
-                    </p>
-                  </div>
-                  
-                  <div className="flex gap-3 pt-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowDuplicateWarning(false)}
-                      className="flex-1"
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      onClick={handleConfirmDuplicate}
-                      disabled={isSubmitting}
-                      className="flex-1 bg-yellow-600 hover:bg-yellow-700"
-                    >
-                      {isSubmitting ? 'Guardando...' : 'Sí, Continuar'}
-                    </Button>
-                  </div>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Popup de confirmación para cédulas duplicadas */}
+        {showDuplicateWarning && clienteExistente && (
+          <ConfirmacionDuplicadoModal
+            isOpen={showDuplicateWarning}
+            onClose={() => setShowDuplicateWarning(false)}
+            onConfirm={handleConfirmDuplicate}
+            clienteExistente={{
+              id: clienteExistente.id,
+              nombres: clienteExistente.nombres,
+              apellidos: clienteExistente.apellidos,
+              cedula: duplicateCedula,
+              telefono: clienteExistente.telefono,
+              email: clienteExistente.email,
+              fecha_registro: new Date().toISOString() // Usar fecha actual como fallback
+            }}
+            clienteNuevo={{
+              nombres: formData.nombres,
+              apellidos: formData.apellidos,
+              cedula: formData.cedula,
+              telefono: formData.telefono,
+              email: formData.email
+            }}
+          />
+        )}
       </motion.div>
     </motion.div>
   )
