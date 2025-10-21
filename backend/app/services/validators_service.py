@@ -713,14 +713,27 @@ class ValidadorFecha:
     def _parsear_fecha_flexible(fecha_str: str) -> Optional[date]:
         """
         Parsear fecha con validación estricta de formato DD/MM/YYYY
+        También soporta números de serie de Excel
         
         Requisitos:
         - Día: 2 dígitos (01-31)
         - Mes: 2 dígitos (01-12)  
         - Año: 4 dígitos
         - Separador: / (barra)
+        - Números de serie de Excel (ej: 45940)
         """
         fecha_limpia = fecha_str.strip()
+        
+        # ✅ NUEVO: Detectar números de serie de Excel
+        if fecha_limpia.isdigit() and len(fecha_limpia) >= 4:
+            try:
+                numero_serie = int(fecha_limpia)
+                # Excel cuenta desde 1900-01-01, pero tiene un bug del año bisiesto
+                # Fórmula: fecha = datetime(1900, 1, 1) + timedelta(days=numero_serie-2)
+                fecha_excel = datetime(1900, 1, 1) + timedelta(days=numero_serie - 2)
+                return fecha_excel.date()
+            except (ValueError, OverflowError):
+                pass
         
         # Validar formato básico con regex
         if not re.match(r'^\d{2}/\d{2}/\d{4}$', fecha_limpia):

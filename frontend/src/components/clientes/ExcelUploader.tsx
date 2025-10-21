@@ -779,6 +779,41 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       case 'fecha_entrega':
         if (!value.trim()) return { isValid: false, message: 'Fecha requerida' }
+        
+        // ✅ NUEVO: Detectar números de serie de Excel
+        if (/^\d{4,}$/.test(value.trim())) {
+          try {
+            const numeroSerie = parseInt(value.trim())
+            // Excel cuenta desde 1900-01-01, pero tiene un bug del año bisiesto
+            // Fórmula: fecha = new Date(1900, 0, 1) + (numeroSerie - 2) días
+            const fechaExcel = new Date(1900, 0, 1)
+            fechaExcel.setDate(fechaExcel.getDate() + numeroSerie - 2)
+            
+            const hoyEntrega = new Date()
+            hoyEntrega.setHours(0, 0, 0, 0)
+            
+            // Calcular límites: 2 años atrás y 4 años adelante
+            const fechaLimiteAtras = new Date(hoyEntrega)
+            fechaLimiteAtras.setFullYear(hoyEntrega.getFullYear() - 2)
+            
+            const fechaLimiteAdelante = new Date(hoyEntrega)
+            fechaLimiteAdelante.setFullYear(hoyEntrega.getFullYear() + 4)
+            
+            if (fechaExcel < fechaLimiteAtras) {
+              return { isValid: false, message: 'La fecha no puede ser anterior a hace 2 años' }
+            }
+            
+            if (fechaExcel > fechaLimiteAdelante) {
+              return { isValid: false, message: 'La fecha no puede ser posterior a 4 años en el futuro' }
+            }
+            
+            return { isValid: true }
+          } catch (error) {
+            return { isValid: false, message: 'Número de serie de Excel inválido' }
+          }
+        }
+        
+        // Validación normal para fechas en formato string
         const fechaEntrega = new Date(value)
         const hoyEntrega = new Date()
         hoyEntrega.setHours(0, 0, 0, 0)
