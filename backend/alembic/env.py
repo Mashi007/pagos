@@ -26,7 +26,7 @@ def get_url() -> str:
             if database_url.startswith("postgres://"):
                 database_url = database_url.replace("postgres://", "postgresql://", 1)
             
-            print(f"✅ DATABASE_URL encontrada (intento {attempt}/{max_attempts})")
+            print(f"DATABASE_URL encontrada (intento {attempt}/{max_attempts})")
             return database_url
         
         if attempt < max_attempts:
@@ -38,9 +38,9 @@ def get_url() -> str:
     
     # Si llegamos aquí, no se encontró DATABASE_URL
     print("\n" + "=" * 70)
-    print("❌ DATABASE_URL no está configurada")
+    print("DATABASE_URL no está configurada")
     print("=" * 70)
-    print("\n📋 Variables de entorno relacionadas encontradas:")
+    print("\nVariables de entorno relacionadas encontradas:")
     
     found_vars = False
     for key in sorted(os.environ.keys()):
@@ -52,19 +52,19 @@ def get_url() -> str:
             found_vars = True
     
     if not found_vars:
-        print("  ⚠️  Ninguna variable relacionada encontrada")
+        print("  Ninguna variable relacionada encontrada")
     
     print("=" * 70 + "\n")
     
     raise ValueError(
         "DATABASE_URL no está configurada después de múltiples reintentos.\n\n"
-        "🔧 SOLUCIÓN EN RAILWAY:\n"
+        "SOLUCIÓN EN RAILWAY:\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "1. Verifica que el servicio PostgreSQL esté vinculado al proyecto\n"
         "2. Ve a: Settings → Variables\n"
         "3. DATABASE_URL debe aparecer automáticamente al vincular PostgreSQL\n"
         "4. Si falta, regenera la vinculación desde el panel de PostgreSQL\n\n"
-        "🔍 DESARROLLO LOCAL:\n"
+        "DESARROLLO LOCAL:\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "1. Crea archivo .env con:\n"
         "   DATABASE_URL=postgresql://user:password@localhost:5432/dbname\n"

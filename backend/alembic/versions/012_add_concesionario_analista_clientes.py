@@ -27,17 +27,17 @@ def upgrade():
     if 'concesionario' not in columns:
         op.add_column('clientes', sa.Column('concesionario', sa.String(100), nullable=True))
         op.create_index('idx_clientes_concesionario', 'clientes', ['concesionario'])
-        print("✅ Columna 'concesionario' agregada a la tabla 'clientes'")
+        print("Columna 'concesionario' agregada a la tabla 'clientes'")
     else:
-        print("✅ Columna 'concesionario' ya existe en la tabla 'clientes'")
+        print("Columna 'concesionario' ya existe en la tabla 'clientes'")
     
     # Agregar analista si no existe
     if 'analista' not in columns:
         op.add_column('clientes', sa.Column('analista', sa.String(100), nullable=True))
         op.create_index('idx_clientes_analista', 'clientes', ['analista'])
-        print("✅ Columna 'analista' agregada a la tabla 'clientes'")
+        print("Columna 'analista' agregada a la tabla 'clientes'")
     else:
-        print("✅ Columna 'analista' ya existe en la tabla 'clientes'")
+        print("Columna 'analista' ya existe en la tabla 'clientes'")
 
 
 def downgrade():
@@ -51,10 +51,10 @@ def downgrade():
     if 'analista' in columns:
         op.drop_index('idx_clientes_analista', 'clientes')
         op.drop_column('clientes', 'analista')
-        print("✅ Columna 'analista' eliminada de la tabla 'clientes'")
+        print("Columna 'analista' eliminada de la tabla 'clientes'")
     
     # Eliminar concesionario si existe
     if 'concesionario' in columns:
         op.drop_index('idx_clientes_concesionario', 'clientes')
         op.drop_column('clientes', 'concesionario')
-        print("✅ Columna 'concesionario' eliminada de la tabla 'clientes'")
+        print("Columna 'concesionario' eliminada de la tabla 'clientes'")

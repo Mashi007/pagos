@@ -31,9 +31,9 @@ def upgrade():
     if not result.fetchone():
         # La columna no existe, agregarla
         op.add_column('usuarios', sa.Column('cargo', sa.String(length=100), nullable=True))
-        print("✅ Columna 'cargo' agregada a tabla 'usuarios'")
+        print("Columna 'cargo' agregada a tabla 'usuarios'")
     else:
-        print("ℹ️ Columna 'cargo' ya existe en tabla 'usuarios'")
+        print("Columna 'cargo' ya existe en tabla 'usuarios'")
 
 
 def downgrade():
@@ -51,6 +51,6 @@ def downgrade():
     if result.fetchone():
         # La columna existe, eliminarla
         op.drop_column('usuarios', 'cargo')
-        print("✅ Columna 'cargo' eliminada de tabla 'usuarios'")
+        print("Columna 'cargo' eliminada de tabla 'usuarios'")
     else:
-        print("ℹ️ Columna 'cargo' no existe en tabla 'usuarios'")
+        print("Columna 'cargo' no existe en tabla 'usuarios'")

@@ -23,7 +23,7 @@ def upgrade() -> None:
     
     # Verificar si la tabla ya existe
     if 'pagos' in inspector.get_table_names():
-        print("ℹ️ Tabla 'pagos' ya existe")
+        print("Tabla 'pagos' ya existe")
         return
     
     # Crear tabla pagos
@@ -53,11 +53,11 @@ def upgrade() -> None:
     op.create_index('idx_pagos_conciliado', 'pagos', ['conciliado'])
     op.create_index('idx_pagos_activo', 'pagos', ['activo'])
     
-    print("✅ Tabla 'pagos' creada exitosamente")
-    print("✅ Índices creados para optimización de consultas")
+    print("Tabla 'pagos' creada exitosamente")
+    print("Índices creados para optimización de consultas")
 
 
 def downgrade() -> None:
     """Eliminar tabla pagos"""
     op.drop_table('pagos')
-    print("✅ Tabla 'pagos' eliminada")
+    print("Tabla 'pagos' eliminada")

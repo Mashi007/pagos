@@ -42,16 +42,16 @@ def upgrade() -> None:
         """))
         
         if result.rowcount > 0:
-            print(f"✅ Usuario {email} marcado como administrador")
+            print(f"Usuario {email} marcado como administrador")
         else:
-            print(f"⚠️ Usuario {email} no encontrado o inactivo")
+            print(f"Usuario {email} no encontrado o inactivo")
     
     # Verificar que al menos un usuario sea administrador
     admin_count = connection.execute(sa.text("SELECT COUNT(*) FROM usuarios WHERE is_admin = TRUE")).scalar()
     
     if admin_count == 0:
-        print("🚨 CRÍTICO: No hay administradores en el sistema")
-        print("🔧 Creando usuario administrador por defecto...")
+        print("CRÍTICO: No hay administradores en el sistema")
+        print("Creando usuario administrador por defecto...")
         
         # Crear usuario administrador por defecto
         connection.execute(sa.text("""
@@ -72,11 +72,11 @@ def upgrade() -> None:
                 is_active = TRUE,
                 updated_at = NOW()
         """))
-        print("✅ Usuario administrador por defecto creado/actualizado")
+        print("Usuario administrador por defecto creado/actualizado")
     
     # Verificación final
     final_admin_count = connection.execute(sa.text("SELECT COUNT(*) FROM usuarios WHERE is_admin = TRUE")).scalar()
-    print(f"✅ Total de administradores en el sistema: {final_admin_count}")
+    print(f"Total de administradores en el sistema: {final_admin_count}")
     
     # Mostrar lista de administradores
     admins = connection.execute(sa.text("""
@@ -86,7 +86,7 @@ def upgrade() -> None:
         ORDER BY email
     """)).fetchall()
     
-    print("📋 Lista de administradores:")
+    print("Lista de administradores:")
     for admin in admins:
         status = "ACTIVO" if admin.is_active else "INACTIVO"
         print(f"   - {admin.email} ({admin.nombre} {admin.apellido}) - {status}")
