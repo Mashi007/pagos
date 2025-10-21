@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, desc
 from typing import List, Optional
 from datetime import datetime
+import json
 from app.db.session import get_db
 from app.models.cliente import Cliente
 from app.models.user import User
@@ -47,14 +48,14 @@ def registrar_auditoria_cliente(
     datos_nuevos: dict = None,
     descripcion: str = ""
 ):
-    """Registrar auditoría para operaciones de cliente"""
+    """Registrar auditoría para operaciones de cliente - VERSIÓN LIGERA"""
     try:
-        # Serializar datos para evitar errores de JSON
-        datos_anteriores_serializados = serializar_datos_auditoria(datos_anteriores)
-        datos_nuevos_serializados = serializar_datos_auditoria(datos_nuevos)
+        # ✅ OPTIMIZACIÓN: Solo serializar si es necesario y simplificar datos
+        datos_anteriores_serializados = serializar_datos_auditoria(datos_anteriores) if datos_anteriores else None
+        datos_nuevos_serializados = serializar_datos_auditoria(datos_nuevos) if datos_nuevos else None
         
+        # ✅ OPTIMIZACIÓN: Auditoría mínima para reducir uso de recursos
         auditoria = Auditoria(
-            usuario_id=None,  # Se puede obtener del usuario si es necesario
             usuario_email=usuario_email,
             accion=accion,
             modulo="CLIENTES",
@@ -63,16 +64,16 @@ def registrar_auditoria_cliente(
             descripcion=descripcion or f"{accion} cliente ID {cliente_id}",
             datos_anteriores=datos_anteriores_serializados,
             datos_nuevos=datos_nuevos_serializados,
-            ip_address="127.0.0.1",  # Se puede obtener del request
+            ip_address="127.0.0.1",
             user_agent="Sistema Interno"
-            # ✅ CORREGIDO: Eliminado created_at, el modelo usa fecha con server_default
         )
         db.add(auditoria)
         db.commit()
         logger.info(f"Auditoría registrada: {accion} cliente {cliente_id} por {usuario_email}")
     except Exception as e:
         logger.error(f"Error registrando auditoría: {e}")
-        db.rollback()
+        # ✅ OPTIMIZACIÓN: No hacer rollback de auditoría para evitar problemas de transacción
+        pass
 
 # ============================================
 # ENDPOINTS DE CONSULTA
@@ -291,8 +292,10 @@ def crear_cliente(
             else:
                 # Si no confirma, mostrar popup de confirmación
                 logger.warning(f"⚠️ Cliente con cédula {cliente_data.cedula} ya existe - activando popup de confirmación")
+                
+                # ✅ SOLUCIÓN LIGERA: HTTPException simplificado sin auditoría pesada
                 raise HTTPException(
-                    status_code=409,  # ✅ CORREGIDO: 409 Conflict es más apropiado que 503
+                    status_code=409,
                     detail={
                         "error": "CLIENTE_DUPLICADO",
                         "message": f"Ya existe un cliente con la cédula {cliente_data.cedula}",
@@ -346,18 +349,17 @@ def crear_cliente(
         return ClienteResponse.model_validate(nuevo_cliente)
         
     except HTTPException as e:
-        logger.error(f"❌ Error HTTP en crear_cliente: {e.status_code}: {e.detail}")
-        logger.error(f"❌ Tipo de error: {type(e).__name__}")
+        # ✅ OPTIMIZACIÓN: Logging simplificado para reducir uso de recursos
+        logger.error(f"❌ Error HTTP en crear_cliente: {e.status_code}")
         db.rollback()
         raise e  # Re-lanzar el HTTPException original
     except Exception as e:
-        logger.error(f"❌ Error inesperado en crear_cliente: {e}")
-        logger.error(f"❌ Tipo de error: {type(e).__name__}")
-        logger.error(f"❌ Detalles del error: {str(e)}")
+        # ✅ OPTIMIZACIÓN: Logging simplificado
+        logger.error(f"❌ Error inesperado en crear_cliente: {str(e)}")
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            detail="Error interno del servidor"
         )
 
 
