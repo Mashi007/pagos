@@ -348,7 +348,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         setClienteExistente(error.response?.data?.detail?.cliente_existente)
         setShowDuplicateWarning(true)
         setIsSubmitting(false) // ✅ CORRECCIÓN: Mover aquí antes del return
-        return
+        return // ✅ CORRECCIÓN CRÍTICA: Prevenir propagación de la promesa rechazada
       }
       
       // Fallback para el formato anterior (503) por compatibilidad
@@ -363,7 +363,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         setDuplicateCedula(formData.cedula)
         setShowDuplicateWarning(true)
         setIsSubmitting(false)
-        return
+        return // ✅ CORRECCIÓN CRÍTICA: Prevenir propagación de la promesa rechazada
       }
       
       console.log('❌ DEBUG - Error no es de duplicado, status:', error.response?.status)
