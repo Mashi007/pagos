@@ -337,6 +337,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         // Mostrar popup de advertencia
         setDuplicateCedula(formData.cedula)
         setShowDuplicateWarning(true)
+        setIsSubmitting(false) // ✅ CORRECCIÓN: Mover aquí antes del return
         return
       }
       
@@ -345,7 +346,12 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       // Otros errores
       console.error('Error no manejado:', error)
     } finally {
-      setIsSubmitting(false)
+      // ✅ CORRECCIÓN: Solo ejecutar si no es error de duplicado
+      if (!(error?.response?.status === 503 && 
+            (error?.response?.data?.detail?.includes('duplicate key') ||
+             error?.response?.data?.detail?.includes('already exists')))) {
+        setIsSubmitting(false)
+      }
     }
   }
 
