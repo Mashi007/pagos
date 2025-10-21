@@ -625,7 +625,15 @@ def obtener_ejemplos_correccion(
 # ENDPOINTS DE PRUEBA
 # ============================================
 
+@router.get("/test")
+def test_validadores():
+    """
+    🧪 Endpoint de prueba simple
+    """
+    return {"message": "Validadores endpoint funcionando", "status": "ok"}
+
 @router.get("/")
+@router.get("/info")
 def obtener_validadores_info():
     """
     📋 Información general de validadores disponibles
