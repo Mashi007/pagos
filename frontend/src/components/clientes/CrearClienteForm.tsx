@@ -99,6 +99,15 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false)
   const [duplicateCedula, setDuplicateCedula] = useState('')
   
+  // DEBUG: Log de cambios de estado
+  useEffect(() => {
+    console.log('🔍 DEBUG - showDuplicateWarning cambió a:', showDuplicateWarning)
+  }, [showDuplicateWarning])
+  
+  useEffect(() => {
+    console.log('🔍 DEBUG - duplicateCedula cambió a:', duplicateCedula)
+  }, [duplicateCedula])
+  
   // Pre-cargar datos del cliente si se está editando
   useEffect(() => {
     if (cliente) {
@@ -315,17 +324,23 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       onClose()
     } catch (error: any) {
       console.error('Error creando cliente:', error)
+      console.log('🔍 DEBUG - Error response:', error.response)
+      console.log('🔍 DEBUG - Error status:', error.response?.status)
+      console.log('🔍 DEBUG - Error detail:', error.response?.data?.detail)
       
       // Verificar si es error de cédula duplicada
       if (error.response?.status === 503 && 
           (error.response?.data?.detail?.includes('duplicate key') ||
            error.response?.data?.detail?.includes('already exists'))) {
         
+        console.log('✅ DEBUG - Activando popup de duplicados')
         // Mostrar popup de advertencia
         setDuplicateCedula(formData.cedula)
         setShowDuplicateWarning(true)
         return
       }
+      
+      console.log('❌ DEBUG - Error no es de duplicado, status:', error.response?.status)
       
       // Otros errores
       console.error('Error no manejado:', error)
