@@ -246,26 +246,67 @@ def crear_cliente(
         logger.info(f"Crear cliente - Usuario: {current_user.email}")
         logger.info(f"Datos recibidos: {cliente_data}")
         
-        # CORREGIDO: Detectar cédulas duplicadas y devolver respuesta adecuada para popup
+        # CORREGIDO: Detectar cédulas duplicadas y manejar confirmación
         cliente_existente = db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
         if cliente_existente:
-            logger.warning(f"⚠️ Cliente con cédula {cliente_data.cedula} ya existe - activando popup de confirmación")
-            raise HTTPException(
-                status_code=409,  # ✅ CORREGIDO: 409 Conflict es más apropiado que 503
-                detail={
-                    "error": "CLIENTE_DUPLICADO",
-                    "message": f"Ya existe un cliente con la cédula {cliente_data.cedula}",
-                    "cedula": cliente_data.cedula,
-                    "cliente_existente": {
-                        "id": cliente_existente.id,
-                        "nombres": cliente_existente.nombres,
-                        "apellidos": cliente_existente.apellidos,
-                        "telefono": cliente_existente.telefono,
-                        "email": cliente_existente.email
+            # ✅ NUEVO: Si el usuario confirma el duplicado, actualizar el cliente existente
+            if cliente_data.confirm_duplicate:
+                logger.info(f"✅ Cliente con cédula {cliente_data.cedula} confirmado como duplicado - actualizando datos")
+                
+                # Actualizar datos del cliente existente
+                cliente_existente.nombres = cliente_data.nombres
+                cliente_existente.apellidos = cliente_data.apellidos
+                cliente_existente.telefono = cliente_data.telefono
+                cliente_existente.email = cliente_data.email
+                cliente_existente.direccion = cliente_data.direccion
+                cliente_existente.fecha_nacimiento = cliente_data.fecha_nacimiento
+                cliente_existente.ocupacion = cliente_data.ocupacion
+                cliente_existente.modelo_vehiculo = cliente_data.modelo_vehiculo
+                cliente_existente.concesionario = cliente_data.concesionario
+                cliente_existente.analista = cliente_data.analista
+                cliente_existente.estado = cliente_data.estado
+                cliente_existente.notas = cliente_data.notas or "NA"
+                cliente_existente.fecha_actualizacion = datetime.now()
+                
+                db.commit()
+                db.refresh(cliente_existente)
+                
+                # Registrar auditoría
+                registrar_auditoria_cliente(
+                    db=db,
+                    usuario_email=current_user.email,
+                    accion=TipoAccion.ACTUALIZAR.value,
+                    cliente_id=cliente_existente.id,
+                    datos_anteriores={
+                        "cedula": cliente_data.cedula,
+                        "nombres": "Cliente existente",
+                        "apellidos": "Datos anteriores"
                     },
-                    "action": "SHOW_DUPLICATE_POPUP"
-                }
-            )
+                    datos_nuevos=cliente_data.model_dump(),
+                    descripcion=f"Cliente actualizado por confirmación de duplicado: {cliente_data.nombres} {cliente_data.apellidos}"
+                )
+                
+                logger.info(f"Cliente actualizado exitosamente por confirmación: {cliente_existente.id}")
+                return ClienteResponse.model_validate(cliente_existente)
+            else:
+                # Si no confirma, mostrar popup de confirmación
+                logger.warning(f"⚠️ Cliente con cédula {cliente_data.cedula} ya existe - activando popup de confirmación")
+                raise HTTPException(
+                    status_code=409,  # ✅ CORREGIDO: 409 Conflict es más apropiado que 503
+                    detail={
+                        "error": "CLIENTE_DUPLICADO",
+                        "message": f"Ya existe un cliente con la cédula {cliente_data.cedula}",
+                        "cedula": cliente_data.cedula,
+                        "cliente_existente": {
+                            "id": cliente_existente.id,
+                            "nombres": cliente_existente.nombres,
+                            "apellidos": cliente_existente.apellidos,
+                            "telefono": cliente_existente.telefono,
+                            "email": cliente_existente.email
+                        },
+                        "action": "SHOW_DUPLICATE_POPUP"
+                    }
+                )
         
         # Crear nuevo cliente
         nuevo_cliente = Cliente(

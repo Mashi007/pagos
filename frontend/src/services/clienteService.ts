@@ -41,12 +41,13 @@ class ClienteService {
 
   // Crear cliente con confirmación de duplicado
   async createClienteWithConfirmation(data: ClienteForm, comentarios: string): Promise<Cliente> {
-    // ✅ CORRECCIÓN: Usar el endpoint estándar de creación con comentarios en notas
-    const clienteDataWithComments = {
+    // ✅ CORRECCIÓN: Usar el endpoint estándar con confirm_duplicate: true
+    const clienteDataWithConfirmation = {
       ...data,
+      confirm_duplicate: true,
       notas: `${data.notas || ''}\n\n--- CONFIRMACIÓN DE DUPLICADO ---\nComentarios: ${comentarios}\nFecha: ${new Date().toISOString()}`
     }
-    const response = await apiClient.post<ApiResponse<Cliente>>(this.baseUrl, clienteDataWithComments)
+    const response = await apiClient.post<ApiResponse<Cliente>>(this.baseUrl, clienteDataWithConfirmation)
     return response.data
   }
 

@@ -60,7 +60,8 @@ class ClienteBase(BaseModel):
 
 class ClienteCreate(ClienteBase):
     """Schema para crear cliente - todos los campos son obligatorios"""
-    pass
+    # Campo para confirmación de duplicados
+    confirm_duplicate: bool = Field(False, description="Indica si el usuario confirma crear un duplicado")
 
 
 class ClienteCreateWithConfirmation(BaseModel):
