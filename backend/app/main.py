@@ -172,13 +172,13 @@ from fastapi.middleware.cors import CORSMiddleware
 logger.info(f"🌐 CORS Origins configurados: {settings.CORS_ORIGINS}")
 logger.info("✅ CORS: Middleware simple para OPTIONS + Headers directos en POST")
 
-# MIDDLEWARE CORS CENTRALIZADO - USANDO CONFIGURACIÓN PERMISIVA
+# MIDDLEWARE CORS CENTRALIZADO - USANDO CONFIGURACIÓN DE SETTINGS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # ✅ Temporalmente permisivo para testing
+    allow_origins=settings.CORS_ORIGINS,  # ✅ Usar configuración de settings
     allow_credentials=True,
-    allow_methods=["*"],  # ✅ Todos los métodos
-    allow_headers=["*"],  # ✅ Todos los headers
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
 )
 
 # Registrar routers

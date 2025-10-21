@@ -29,7 +29,9 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",  # ✅ Desarrollo local
         "https://rapicredit.onrender.com",  # ✅ Frontend en Render
-        "https://pagos-f2qf.onrender.com"  # ✅ Backend en Render (para referencias)
+        "https://pagos-f2qf.onrender.com",  # ✅ Backend en Render (para referencias)
+        "null",  # ✅ Para requests sin origin (scripts, herramientas)
+        "*"  # ✅ Temporalmente permisivo para debugging
     ]
     
     # ============================================

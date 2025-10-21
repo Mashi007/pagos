@@ -35,11 +35,21 @@ def add_cors_headers(request: Request, response: Response) -> None:
     logger.info(f"CORS Debug - Origin recibido: {origin}")
     logger.info(f"CORS Debug - Origins permitidos: {settings.CORS_ORIGINS}")
     
-    if origin in settings.CORS_ORIGINS:
+    # Manejar casos especiales de origin
+    if origin is None or origin == "null":
+        # Para requests sin origin (como desde scripts o herramientas)
+        origin = "null"
+        logger.info("CORS Debug - Origin es None/null, usando 'null'")
+    
+    if origin in settings.CORS_ORIGINS or origin == "null":
         response.headers["Access-Control-Allow-Origin"] = origin
         logger.info(f"CORS Debug - Origin permitido: {origin}")
     else:
         logger.warning(f"CORS Debug - Origin NO permitido: {origin}")
+        # En caso de origin no permitido, usar el primer origin válido como fallback
+        if settings.CORS_ORIGINS:
+            response.headers["Access-Control-Allow-Origin"] = settings.CORS_ORIGINS[0]
+            logger.info(f"CORS Debug - Usando fallback: {settings.CORS_ORIGINS[0]}")
     
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
