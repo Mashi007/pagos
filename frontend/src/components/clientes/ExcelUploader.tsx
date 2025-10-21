@@ -475,9 +475,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       } catch (error: any) {
         console.error('Error guardando cliente individual:', error)
         
-        // Manejar error de cliente duplicado
-        if (error.response?.status === 409 && error.response?.data?.requires_confirmation) {
-          const clienteExistente = error.response.data.cliente_existente
+        // Manejar error de cliente duplicado (CORREGIDO: usar la nueva estructura)
+        if (error.response?.status === 409 && 
+            error.response?.data?.detail?.error === 'CLIENTE_DUPLICADO') {
+          const clienteExistente = error.response?.data?.detail?.cliente_existente
           setClienteDuplicado({
             existente: clienteExistente,
             nuevo: {
@@ -1159,14 +1160,27 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           resultados.push({ success: true, cliente: clienteCreado, fila: row._rowIndex })
           console.log(`✅ Cliente creado exitosamente: ${clienteData.nombres} ${clienteData.apellidos}`)
           
-        } catch (error) {
+        } catch (error: any) {
           console.error(`❌ Error creando cliente en fila ${row._rowIndex}:`, error)
-          resultados.push({ 
-            success: false, 
-            error: error instanceof Error ? error.message : 'Error desconocido', 
-            fila: row._rowIndex,
-            cedula: row.cedula
-          })
+          
+          // Manejar error de cliente duplicado (CORREGIDO: usar la nueva estructura)
+          if (error.response?.status === 409 && 
+              error.response?.data?.detail?.error === 'CLIENTE_DUPLICADO') {
+            console.log(`⚠️ Cliente duplicado detectado en fila ${row._rowIndex}: ${row.cedula}`)
+            resultados.push({ 
+              success: false, 
+              error: `Cliente duplicado: ${error.response?.data?.detail?.message || 'Cédula ya existe'}`, 
+              fila: row._rowIndex,
+              cedula: row.cedula
+            })
+          } else {
+            resultados.push({ 
+              success: false, 
+              error: error instanceof Error ? error.message : 'Error desconocido', 
+              fila: row._rowIndex,
+              cedula: row.cedula
+            })
+          }
         }
       }
       
