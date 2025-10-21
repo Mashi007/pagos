@@ -166,13 +166,19 @@ class ApiClient {
         case 503:
           // NO mostrar toast genérico para errores 503 de duplicados
           // Permitir que el componente maneje el error específico
+          console.log('🔍 INTERCEPTOR - Error 503 recibido, data:', data)
+          console.log('🔍 INTERCEPTOR - data.detail:', data?.detail)
+          console.log('🔍 INTERCEPTOR - Verificando si contiene duplicate key:', data?.detail?.includes('duplicate key'))
+          console.log('🔍 INTERCEPTOR - Verificando si contiene already exists:', data?.detail?.includes('already exists'))
+          
           if (data?.detail?.includes('duplicate key') || data?.detail?.includes('already exists')) {
             // No mostrar toast, dejar que el componente maneje el popup
             console.log('🔍 INTERCEPTOR - Detectado error 503 de duplicado, NO mostrando toast')
             return Promise.reject(error) // ✅ CORRECCIÓN: Asegurar que se propague el error
+          } else {
+            console.log('🔍 INTERCEPTOR - Error 503 genérico, mostrando toast')
+            toast.error('Servicio temporalmente no disponible. Intenta nuevamente.')
           }
-          console.log('🔍 INTERCEPTOR - Error 503 genérico, mostrando toast')
-          toast.error('Servicio temporalmente no disponible. Intenta nuevamente.')
           break
         default:
           if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
