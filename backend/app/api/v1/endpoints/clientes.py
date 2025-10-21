@@ -226,10 +226,14 @@ def crear_cliente(
         logger.info(f"Crear cliente - Usuario: {current_user.email}")
         logger.info(f"Datos recibidos: {cliente_data}")
         
-        # CORREGIDO: Permitir cédulas duplicadas - solo verificar para logging
+        # CORREGIDO: Detectar cédulas duplicadas y devolver error para activar popup
         cliente_existente = db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
         if cliente_existente:
-            logger.warning(f"⚠️ Cliente con cédula {cliente_data.cedula} ya existe, pero se permite crear duplicado")
+            logger.warning(f"⚠️ Cliente con cédula {cliente_data.cedula} ya existe - activando popup de confirmación")
+            raise HTTPException(
+                status_code=503,
+                detail=f"duplicate key value violates unique constraint - cédula {cliente_data.cedula} already exists"
+            )
         
         # Crear nuevo cliente
         nuevo_cliente = Cliente(
