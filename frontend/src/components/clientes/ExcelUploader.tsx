@@ -480,7 +480,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
             error.response?.data?.detail?.error === 'CLIENTE_DUPLICADO') {
           const clienteExistente = error.response?.data?.detail?.cliente_existente
           setClienteDuplicado({
-            existente: clienteExistente,
+            existente: {
+              ...clienteExistente,
+              cedula: error.response?.data?.detail?.cedula || row.cedula
+            },
             nuevo: {
               nombres: row.nombres,
               apellidos: row.apellidos,
