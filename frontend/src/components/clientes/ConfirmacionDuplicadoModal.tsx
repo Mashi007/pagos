@@ -37,6 +37,12 @@ export function ConfirmacionDuplicadoModal({
   const [comentarios, setComentarios] = useState('')
   const [isConfirming, setIsConfirming] = useState(false)
 
+  // ✅ VALIDACIÓN ADICIONAL: Verificar que clienteExistente tiene los datos necesarios
+  if (!clienteExistente || !clienteExistente.cedula) {
+    console.error('❌ ERROR: ConfirmacionDuplicadoModal recibió clienteExistente inválido:', clienteExistente)
+    return null
+  }
+
   const handleConfirm = async () => {
     setIsConfirming(true)
     try {

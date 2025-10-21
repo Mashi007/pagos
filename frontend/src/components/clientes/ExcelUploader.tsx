@@ -501,6 +501,26 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
             },
             rowIndex: row._rowIndex
           })
+          
+          // ✅ LOGS ADICIONALES: Verificar estructura de datos antes de mostrar modal
+          console.log('🔍 DEBUG - clienteExistente del backend:', clienteExistente)
+          console.log('🔍 DEBUG - cedula del backend:', error.response?.data?.detail?.cedula)
+          console.log('🔍 DEBUG - cedula de la fila:', row.cedula)
+          console.log('🔍 DEBUG - clienteDuplicado establecido:', {
+            existente: {
+              ...clienteExistente,
+              cedula: error.response?.data?.detail?.cedula || row.cedula
+            },
+            nuevo: {
+              nombres: row.nombres,
+              apellidos: row.apellidos,
+              cedula: row.cedula,
+              telefono: row.telefono,
+              email: row.email
+            },
+            rowIndex: row._rowIndex
+          })
+          
           setShowConfirmacionModal(true)
           return false
         }
@@ -1884,7 +1904,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       </div>
 
       {/* Modal de confirmación de duplicados */}
-      {showConfirmacionModal && clienteDuplicado && clienteDuplicado.existente && (
+      {showConfirmacionModal && clienteDuplicado && clienteDuplicado.existente && clienteDuplicado.existente.cedula && (
         <ConfirmacionDuplicadoModal
           isOpen={showConfirmacionModal}
           onClose={() => {
