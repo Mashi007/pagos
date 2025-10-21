@@ -372,8 +372,11 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
               variant="outline"
               size="sm"
               onClick={onClose}
+              className="flex items-center gap-2"
+              title="Cerrar formulario"
             >
               <X className="w-4 h-4" />
+              <span className="sr-only">Cerrar</span>
             </Button>
           </div>
         </div>
