@@ -133,9 +133,18 @@ class ApiClient {
   }
 
   private handleError(error: any) {
+    // ✅ FORTALECER: Logs específicos para debug
+    console.log('🚨 INTERCEPTOR - Error recibido:', error)
+    console.log('🚨 INTERCEPTOR - error.response:', error.response)
+    console.log('🚨 INTERCEPTOR - error.response?.status:', error.response?.status)
+    console.log('🚨 INTERCEPTOR - error.response?.data:', error.response?.data)
+    
     if (error.response) {
       // Error del servidor
       const { status, data } = error.response
+      
+      console.log('🚨 INTERCEPTOR - Status:', status)
+      console.log('🚨 INTERCEPTOR - Data:', data)
       
       switch (status) {
         case 400:
@@ -164,21 +173,24 @@ class ApiClient {
           toast.error('Error interno del servidor')
           break
         case 409:
-          // ✅ CORRECCIÓN CRÍTICA: Manejo de errores 409 para duplicados
-          // NO mostrar toast genérico para errores 409 de duplicados
-          // Permitir que el componente maneje el error específico
-          console.log('🔍 INTERCEPTOR - Error 409 recibido, data:', data)
-          console.log('🔍 INTERCEPTOR - data.detail:', data?.detail)
-          console.log('🔍 INTERCEPTOR - data.message:', data?.message)
-          console.log('🔍 INTERCEPTOR - data keys:', Object.keys(data || {}))
+          // ✅ FORTALECER: Logs específicos para 409
+          console.log('🚨 INTERCEPTOR - Error 409 recibido, data:', data)
+          console.log('🚨 INTERCEPTOR - data.detail:', data?.detail)
+          console.log('🚨 INTERCEPTOR - data.message:', data?.message)
+          console.log('🚨 INTERCEPTOR - data keys:', Object.keys(data || {}))
+          console.log('🚨 INTERCEPTOR - Error completo:', error)
+          console.log('🚨 INTERCEPTOR - Verificando CLIENTE_DUPLICADO:', data?.detail?.error === 'CLIENTE_DUPLICADO')
+          console.log('🚨 INTERCEPTOR - Verificando SHOW_DUPLICATE_POPUP:', data?.detail?.action === 'SHOW_DUPLICATE_POPUP')
+          console.log('🚨 INTERCEPTOR - data.detail?.error:', data?.detail?.error)
+          console.log('🚨 INTERCEPTOR - data.detail?.action:', data?.detail?.action)
           
           if (data?.detail?.error === 'CLIENTE_DUPLICADO' || 
               data?.detail?.action === 'SHOW_DUPLICATE_POPUP') {
             // No mostrar toast, dejar que el componente maneje el popup
-            console.log('🔍 INTERCEPTOR - Detectado error 409 de duplicado, NO mostrando toast')
+            console.log('🚨 INTERCEPTOR - Detectado error 409 de duplicado, NO mostrando toast')
             return Promise.reject(error) // ✅ CORRECCIÓN: Asegurar que se propague el error
           } else {
-            console.log('🔍 INTERCEPTOR - Error 409 genérico, mostrando toast')
+            console.log('🚨 INTERCEPTOR - Error 409 genérico, mostrando toast')
             toast.error(data?.message || 'Conflicto de datos. Verifica la información.')
           }
           break
