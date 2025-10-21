@@ -1884,7 +1884,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       </div>
 
       {/* Modal de confirmación de duplicados */}
-      {showConfirmacionModal && clienteDuplicado && (
+      {showConfirmacionModal && clienteDuplicado && clienteDuplicado.existente && (
         <ConfirmacionDuplicadoModal
           isOpen={showConfirmacionModal}
           onClose={() => {
