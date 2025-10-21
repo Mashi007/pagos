@@ -64,6 +64,25 @@ async def cors_debug():
         "message": "CORS Debug Info"
     }
 
+@router.get("/health/render")
+@router.head("/health/render")
+async def render_health_check():
+    """
+    Health check optimizado para Render
+    
+    - Respuesta ultra rápida
+    - Acepta tanto GET como HEAD
+    - Sin verificaciones de DB para evitar timeouts
+    - Ideal para health checks frecuentes de Render
+    """
+    return {
+        "status": "ok",
+        "service": "pagos-backend",
+        "timestamp": datetime.utcnow().isoformat(),
+        "render_optimized": True
+    }
+
+
 @router.get("/health", status_code=status.HTTP_200_OK)
 async def health_check(response: Response):
     """
