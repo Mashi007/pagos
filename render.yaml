@@ -7,7 +7,8 @@ services:
     branch: main
     autoDeploy: true
     buildCommand: cd backend && pip install -r requirements.txt
-    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 30
+    healthCheckPath: /api/v1/health/render
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -15,6 +16,12 @@ services:
         fromDatabase:
           name: pagos-db
           property: connectionString
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DEBUG
+        value: "false"
+      - key: ENVIRONMENT
+        value: production
 
   - type: web
     name: rapicredit-frontend
