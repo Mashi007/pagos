@@ -402,6 +402,18 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
   // 🔄 FUNCIONES PARA SISTEMA DE GUARDADO HÍBRIDO
   const isClientValid = (row: ExcelRow): boolean => {
+    // Debug: Ver qué campos tienen errores
+    const fieldsWithErrors = Object.keys(row._validation).filter(field => 
+      field !== 'notas' && !row._validation[field]?.isValid
+    )
+    
+    if (fieldsWithErrors.length > 0) {
+      console.log(`🔍 Cliente ${row._rowIndex} tiene errores en:`, fieldsWithErrors)
+      fieldsWithErrors.forEach(field => {
+        console.log(`  - ${field}:`, row._validation[field])
+      })
+    }
+    
     // Usar el mismo sistema de validación que los campos visuales
     return !row._hasErrors
   }
