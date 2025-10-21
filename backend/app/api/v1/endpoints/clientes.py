@@ -226,13 +226,25 @@ def crear_cliente(
         logger.info(f"Crear cliente - Usuario: {current_user.email}")
         logger.info(f"Datos recibidos: {cliente_data}")
         
-        # CORREGIDO: Detectar cédulas duplicadas y devolver error para activar popup
+        # CORREGIDO: Detectar cédulas duplicadas y devolver respuesta adecuada para popup
         cliente_existente = db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
         if cliente_existente:
             logger.warning(f"⚠️ Cliente con cédula {cliente_data.cedula} ya existe - activando popup de confirmación")
             raise HTTPException(
-                status_code=503,
-                detail=f"duplicate key value violates unique constraint - cédula {cliente_data.cedula} already exists"
+                status_code=409,  # ✅ CORREGIDO: 409 Conflict es más apropiado que 503
+                detail={
+                    "error": "CLIENTE_DUPLICADO",
+                    "message": f"Ya existe un cliente con la cédula {cliente_data.cedula}",
+                    "cedula": cliente_data.cedula,
+                    "cliente_existente": {
+                        "id": cliente_existente.id,
+                        "nombres": cliente_existente.nombres,
+                        "apellidos": cliente_existente.apellidos,
+                        "telefono": cliente_existente.telefono,
+                        "email": cliente_existente.email
+                    },
+                    "action": "SHOW_DUPLICATE_POPUP"
+                }
             )
         
         # Crear nuevo cliente
@@ -273,7 +285,7 @@ def crear_cliente(
         return ClienteResponse.model_validate(nuevo_cliente)
         
     except HTTPException as e:
-        logger.error(f"❌ Error real de base de datos: {e.status_code}: {e.detail}")
+        logger.error(f"❌ Error HTTP en crear_cliente: {e.status_code}: {e.detail}")
         logger.error(f"❌ Tipo de error: {type(e).__name__}")
         db.rollback()
         raise e  # Re-lanzar el HTTPException original
