@@ -300,8 +300,11 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const handleConfirmarDuplicado = async (comentarios: string) => {
     if (!clienteDuplicado) return
 
+    // ✅ CORRECCIÓN DEFINITIVA: Guardar rowIndex antes de limpiar clienteDuplicado
+    const currentRowIndex = clienteDuplicado.rowIndex
+
     try {
-      const row = excelData[clienteDuplicado.rowIndex]
+      const row = excelData[currentRowIndex]
       const clienteData = {
         cedula: row.cedula,
         nombres: row.nombres,
@@ -327,7 +330,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       await clienteService.createClienteWithConfirmation(clienteData, comentarios)
       
       // Marcar como guardado
-      setSavedClients(prev => new Set([...prev, row._rowIndex]))
+      setSavedClients(prev => new Set([...prev, currentRowIndex]))
       
       // Refrescar Dashboard de Clientes
       refreshDashboardClients()
@@ -335,10 +338,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       addToast('success', `Cliente ${row.nombres} ${row.apellidos} creado con confirmación exitosamente`)
       
       // Eliminar la fila de la lista después de guardar exitosamente
-      setExcelData(prev => prev.filter(r => r._rowIndex !== row._rowIndex))
+      setExcelData(prev => prev.filter(r => r._rowIndex !== currentRowIndex))
       
       // Verificar si quedan filas pendientes
-      const remainingRows = excelData.filter(r => r._rowIndex !== row._rowIndex)
+      const remainingRows = excelData.filter(r => r._rowIndex !== currentRowIndex)
       if (remainingRows.length === 0) {
         addToast('success', '🎉 ¡Todos los clientes han sido guardados exitosamente!')
         notifyDashboardUpdate(getSavedClientsCount())
@@ -378,7 +381,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         addToast('error', `Error confirmando cliente: ${error.response?.data?.detail || error.message}`)
       }
     } finally {
-      setSavingProgress(prev => ({ ...prev, [clienteDuplicado?.rowIndex || -1]: false }))
+      // ✅ CORRECCIÓN DEFINITIVA: Usar currentRowIndex en lugar de clienteDuplicado?.rowIndex
+      setSavingProgress(prev => ({ ...prev, [currentRowIndex]: false }))
     }
   }
 
