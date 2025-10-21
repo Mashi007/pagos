@@ -8,7 +8,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from decimal import Decimal
 
-from app.db.session import Base  # ✅ CAMBIAR ESTA LÍNEA
+from app.db.session import Base
 
 
 class Cuota(Base):

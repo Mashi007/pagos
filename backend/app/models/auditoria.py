@@ -9,7 +9,7 @@ from sqlalchemy.sql import func
 from datetime import datetime
 from enum import Enum
 
-from app.db.session import Base  # ✅ CORRECTO
+from app.db.session import Base
 
 
 class TipoAccion(str, Enum):

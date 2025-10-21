@@ -9,7 +9,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
 
-from app.db.session import Base  # ✅ CORRECTO
+from app.db.session import Base
 
 
 # Enums para mejor validación y tipado

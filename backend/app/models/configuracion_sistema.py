@@ -628,7 +628,7 @@ class ConfiguracionPorDefecto:
             
             db.commit()
             logger = logging.getLogger(__name__)
-            logger.info("✅ Configuraciones por defecto creadas exitosamente")
+            logger.info("Configuraciones por defecto creadas exitosamente")
             
         except Exception as e:
             db.rollback()
