@@ -473,6 +473,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       try {
         await clienteService.createCliente(clienteData)
       } catch (error: any) {
+        console.error('Error guardando cliente individual:', error)
+        
         // Manejar error de cliente duplicado
         if (error.response?.status === 409 && error.response?.data?.requires_confirmation) {
           const clienteExistente = error.response.data.cliente_existente
@@ -490,7 +492,34 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           setShowConfirmacionModal(true)
           return false
         }
-        throw error
+        
+        // Manejar error 503 - Servicio no disponible
+        if (error.response?.status === 503) {
+          addToast('error', '🚨 SERVICIO NO DISPONIBLE: El backend está caído. Contacta al administrador.')
+          return false
+        }
+        
+        // Manejar otros errores de red
+        if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
+          addToast('error', '🚨 ERROR DE RED: No se puede conectar al servidor. Verifica tu conexión.')
+          return false
+        }
+        
+        // Manejar errores de validación
+        if (error.response?.status === 400) {
+          addToast('error', `Error de validación: ${error.response?.data?.detail || error.message}`)
+          return false
+        }
+        
+        // Manejar otros errores del servidor
+        if (error.response?.status >= 500) {
+          addToast('error', 'Error del servidor. Contacta al administrador.')
+          return false
+        }
+        
+        // Error genérico
+        addToast('error', `Error guardando cliente: ${error.response?.data?.detail || error.message}`)
+        return false
       }
       
       // Marcar como guardado
@@ -523,6 +552,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       }
       
       return true
+      
     } catch (error: any) {
       console.error('Error guardando cliente individual:', error)
       
@@ -559,12 +589,25 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     setIsSavingIndividual(true)
     
     try {
-      // Guardar todos los clientes válidos
-      const savePromises = validClients.map(client => saveIndividualClient(client))
-      const results = await Promise.allSettled(savePromises)
+      // Guardar todos los clientes válidos uno por uno
+      let successful = 0
+      let failed = 0
+      const successfulRowIndexes: number[] = []
       
-      const successful = results.filter(result => result.status === 'fulfilled').length
-      const failed = results.filter(result => result.status === 'rejected').length
+      for (const client of validClients) {
+        try {
+          const result = await saveIndividualClient(client)
+          if (result === true) {
+            successful++
+            successfulRowIndexes.push(client._rowIndex)
+          } else {
+            failed++
+          }
+        } catch (error) {
+          failed++
+          console.error('Error guardando cliente:', error)
+        }
+      }
       
       if (successful > 0) {
         // Solo mostrar notificación de éxito si realmente se guardaron
@@ -575,11 +618,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         notifyDashboardUpdate(successful)
         
         // Eliminar las filas guardadas de la lista
-        const successfulRows = results
-          .filter(result => result.status === 'fulfilled')
-          .map(result => (result as PromiseFulfilledResult<boolean>).value ? validClients[results.indexOf(result)]?._rowIndex : null)
-          .filter(rowIndex => rowIndex !== null)
-        setExcelData(prev => prev.filter(r => !successfulRows.includes(r._rowIndex)))
+        setExcelData(prev => prev.filter(r => !successfulRowIndexes.includes(r._rowIndex)))
         
         // Solo navegar si realmente se guardaron clientes
         if (successful > 0) {
