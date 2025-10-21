@@ -625,6 +625,37 @@ def obtener_ejemplos_correccion(
 # ENDPOINTS DE PRUEBA
 # ============================================
 
+@router.get("/")
+def obtener_validadores_info():
+    """
+    📋 Información general de validadores disponibles
+    """
+    return {
+        "validadores_disponibles": [
+            "ValidadorTelefono",
+            "ValidadorCedula", 
+            "ValidadorFecha",
+            "ValidadorMonto",
+            "ValidadorAmortizaciones",
+            "ValidadorEmail",
+            "ValidadorEdad",
+            "ValidadorCoherenciaFinanciera",
+            "ValidadorDuplicados"
+        ],
+        "endpoints": {
+            "validar_campo": "POST /api/v1/validadores/validar-campo",
+            "formatear_tiempo_real": "POST /api/v1/validadores/formatear-tiempo-real",
+            "configuracion": "GET /api/v1/validadores/configuracion",
+            "ejemplos_correccion": "GET /api/v1/validadores/ejemplos-correccion",
+            "detectar_errores_masivo": "GET /api/v1/validadores/detectar-errores-masivo",
+            "test_cedula": "GET /api/v1/validadores/test-cedula/{cedula}",
+            "test_simple": "GET /api/v1/validadores/test-simple",
+            "ping": "GET /api/v1/validadores/ping"
+        },
+        "status": "active",
+        "version": "1.0.0"
+    }
+
 @router.get("/ping")
 def ping_validadores():
     """
