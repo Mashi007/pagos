@@ -318,8 +318,8 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       
       // Verificar si es error de cédula duplicada
       if (error.response?.status === 503 && 
-          error.response?.data?.message?.includes('duplicate key') ||
-          error.response?.data?.message?.includes('already exists')) {
+          (error.response?.data?.detail?.includes('duplicate key') ||
+           error.response?.data?.detail?.includes('already exists'))) {
         
         // Mostrar popup de advertencia
         setDuplicateCedula(formData.cedula)
