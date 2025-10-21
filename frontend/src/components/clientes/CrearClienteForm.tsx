@@ -346,12 +346,9 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       // Otros errores
       console.error('Error no manejado:', error)
     } finally {
-      // ✅ CORRECCIÓN: Solo ejecutar si no es error de duplicado
-      if (!(error?.response?.status === 503 && 
-            (error?.response?.data?.detail?.includes('duplicate key') ||
-             error?.response?.data?.detail?.includes('already exists')))) {
-        setIsSubmitting(false)
-      }
+      // ✅ CORRECCIÓN: Siempre ejecutar setIsSubmitting(false) en finally
+      // El manejo específico de duplicados ya se hizo en el catch block
+      setIsSubmitting(false)
     }
   }
 
