@@ -246,11 +246,11 @@ class AuthService:
             permissions = get_permissions(user.is_admin)
             permission_strings = [perm.value for perm in permissions]
             
-            print(f"✅ AuthService.get_user_permissions - Permisos obtenidos: {len(permission_strings)} permisos")
-            print(f"📋 AuthService.get_user_permissions - Permisos: {permission_strings}")
+            print(f"AuthService.get_user_permissions - Permisos obtenidos: {len(permission_strings)} permisos")
+            print(f"AuthService.get_user_permissions - Permisos: {permission_strings}")
             
             return permission_strings
         except Exception as e:
             # Si hay error, retornar permisos vacíos
-            print(f"❌ AuthService.get_user_permissions - Error: {e}")
+            print(f"AuthService.get_user_permissions - Error: {e}")
             return []
