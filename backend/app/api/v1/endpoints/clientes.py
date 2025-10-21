@@ -302,6 +302,7 @@ def crear_cliente(
                         "cedula": cliente_data.cedula,
                         "cliente_existente": {
                             "id": cliente_existente.id,
+                            "cedula": cliente_existente.cedula,  # ✅ CORRECCIÓN CRÍTICA: Agregar cedula
                             "nombres": cliente_existente.nombres,
                             "apellidos": cliente_existente.apellidos,
                             "telefono": cliente_existente.telefono,
