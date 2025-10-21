@@ -479,6 +479,14 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         if (error.response?.status === 409 && 
             error.response?.data?.detail?.error === 'CLIENTE_DUPLICADO') {
           const clienteExistente = error.response?.data?.detail?.cliente_existente
+          
+          // ✅ CORRECCIÓN CRÍTICA: Validar que clienteExistente existe antes del spread
+          if (!clienteExistente) {
+            console.error('❌ ERROR: clienteExistente es undefined en respuesta 409')
+            console.error('❌ Respuesta completa:', error.response?.data)
+            return false
+          }
+          
           setClienteDuplicado({
             existente: {
               ...clienteExistente,
