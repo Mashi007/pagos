@@ -46,7 +46,7 @@ def configure_sentry(app: FastAPI) -> None:
         max_breadcrumbs=50,
     )
     
-    logging.info(f"✅ Sentry configurado - Environment: {settings.ENVIRONMENT}")
+    logging.info(f"Sentry configurado - Environment: {settings.ENVIRONMENT}")
 
 
 def before_send_sentry(event, hint):
@@ -110,7 +110,7 @@ def configure_prometheus(app: FastAPI) -> Optional[Instrumentator]:
     # Exponer endpoint /metrics
     instrumentator.expose(app, endpoint="/metrics", include_in_schema=False)
     
-    logging.info("✅ Prometheus configurado - Métricas en /metrics")
+    logging.info("Prometheus configurado - Métricas en /metrics")
     
     return instrumentator
 
@@ -156,7 +156,7 @@ def configure_structured_logging() -> None:
         logger.addHandler(log_handler)
         logger.propagate = False
     
-    logging.info(f"✅ Logging estructurado configurado - Level: {log_level}")
+    logging.info(f"Logging estructurado configurado - Level: {log_level}")
 
 
 def setup_monitoring(app: FastAPI) -> dict:
@@ -191,11 +191,11 @@ def setup_monitoring(app: FastAPI) -> dict:
             if instrumentator:
                 config_applied["prometheus"] = True
         
-        logging.info("✅ Sistema de monitoreo configurado exitosamente")
+        logging.info("Sistema de monitoreo configurado exitosamente")
         logging.info(f"Configuración aplicada: {config_applied}")
         
     except Exception as e:
-        logging.error(f"❌ Error configurando monitoreo: {str(e)}")
+        logging.error(f"Error configurando monitoreo: {str(e)}")
         # No fallar si el monitoreo falla
         pass
     

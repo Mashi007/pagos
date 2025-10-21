@@ -14,7 +14,7 @@ def check_database_connection() -> bool:
             connection.execute(text("SELECT 1"))
         return True
     except Exception as e:
-        logger.error(f"❌ Error conectando a base de datos: {e}")
+        logger.error(f"Error conectando a base de datos: {e}")
         return False
 
 
@@ -24,7 +24,7 @@ def table_exists(table_name: str) -> bool:
         inspector = inspect(engine)
         return table_name in inspector.get_table_names()
     except Exception as e:
-        logger.error(f"❌ Error verificando tabla {table_name}: {e}")
+        logger.error(f"Error verificando tabla {table_name}: {e}")
         return False
 
 
@@ -36,10 +36,10 @@ def create_tables():
         
         # Crear tablas
         Base.metadata.create_all(bind=engine)
-        logger.info("✅ Tablas creadas exitosamente")
+        logger.info("Tablas creadas exitosamente")
         return True
     except Exception as e:
-        logger.error(f"❌ Error creando tablas: {e}")
+        logger.error(f"Error creando tablas: {e}")
         return False
 
 
@@ -64,14 +64,14 @@ def run_migrations():
         )
         
         if result.returncode == 0:
-            logger.info("✅ Migraciones aplicadas exitosamente")
+            logger.info("Migraciones aplicadas exitosamente")
             return True
         else:
-            logger.error(f"❌ Error ejecutando migraciones: {result.stderr}")
+            logger.error(f"Error ejecutando migraciones: {result.stderr}")
             return False
             
     except Exception as e:
-        logger.error(f"❌ Error ejecutando migraciones: {e}")
+        logger.error(f"Error ejecutando migraciones: {e}")
         return False
 
 
@@ -90,18 +90,18 @@ def create_admin_user():
         existing_admin = db.query(User).filter(User.email == "itmaster@rapicreditca.com").first()
         
         if existing_admin:
-            logger.info(f"✅ Usuario itmaster@rapicreditca.com ya existe: {existing_admin.email}")
+            logger.info(f"Usuario itmaster@rapicreditca.com ya existe: {existing_admin.email}")
             db.close()
             return True
         
         # Eliminar admin@financiamiento.com si existe
         wrong_admin = db.query(User).filter(User.email == "admin@financiamiento.com").first()
         if wrong_admin:
-            logger.info(f"🗑️ Eliminando usuario incorrecto: {wrong_admin.email}")
+            logger.info(f"Eliminando usuario incorrecto: {wrong_admin.email}")
             db.delete(wrong_admin)
             db.commit()
         
-        logger.info("📝 Creando usuario administrador...")
+        logger.info("Creando usuario administrador...")
         
         # Crear admin con las credenciales desde settings
         from app.core.config import settings
@@ -119,22 +119,22 @@ def create_admin_user():
         db.commit()
         db.refresh(admin)
         
-        logger.info("✅ Usuario ADMIN creado exitosamente")
-        logger.info(f"📧 Email: {admin.email}")
-        logger.info("🔒 Password: (ver settings.ADMIN_PASSWORD)")
+        logger.info("Usuario ADMIN creado exitosamente")
+        logger.info(f"Email: {admin.email}")
+        logger.info("Password: (ver settings.ADMIN_PASSWORD)")
         
         db.close()
         return True
         
     except LookupError as e:
         # Error de enum - esto es esperado si la DB tiene roles antiguos
-        logger.warning(f"⚠️  Error de enum detectado (esperado): {e}")
-        logger.warning(f"⚠️  Esto se resolverá ejecutando /api/v1/emergency/migrate-roles")
+        logger.warning(f"Error de enum detectado (esperado): {e}")
+        logger.warning(f"Esto se resolverá ejecutando /api/v1/emergency/migrate-roles")
         return False
     except Exception as e:
-        logger.error(f"❌ Error creando usuario admin: {e}")
+        logger.error(f"Error creando usuario admin: {e}")
         import traceback
-        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return False
 
 

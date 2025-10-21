@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 class ConfiguracionSistema(Base):
     """
-    🔧 Configuración centralizada del sistema
+    Configuración centralizada del sistema
     Permite configurar desde el frontend todos los aspectos del sistema
     """
     __tablename__ = "configuracion_sistema"
@@ -125,7 +125,7 @@ class ConfiguracionSistema(Base):
 
 class ConfiguracionPorDefecto:
     """
-    🔧 Configuraciones por defecto del sistema
+    Configuraciones por defecto del sistema
     Se crean automáticamente al inicializar el sistema
     """
     
@@ -642,7 +642,7 @@ class ConfiguracionPorDefecto:
 
 class ConfigHelper:
     """
-    🔧 Helper para acceso rápido a configuraciones
+    Helper para acceso rápido a configuraciones
     """
     
     @staticmethod

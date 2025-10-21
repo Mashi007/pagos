@@ -1,7 +1,7 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, Boolean, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from app.db.base import Base
+from app.db.session import Base
 
 class Pago(Base):
     """Modelo para gestionar pagos de clientes"""
@@ -14,7 +14,7 @@ class Pago(Base):
     
     # DATOS DEL PAGO
     fecha_pago = Column(DateTime, nullable=False)
-    monto_pagado = Column(Float, nullable=False)
+    monto_pagado = Column(Numeric(12, 2), nullable=False)
     numero_documento = Column(String(100), nullable=False, index=True)
     
     # DOCUMENTO ADJUNTO

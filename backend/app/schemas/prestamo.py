@@ -4,7 +4,7 @@ from typing import Optional, Annotated
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
 
-# ✅ Definir constraints personalizados para Decimal
+# Definir constraints personalizados para Decimal
 DecimalAmount = Annotated[
     Decimal, 
     Field(ge=0, description="Monto en formato decimal con 2 decimales")

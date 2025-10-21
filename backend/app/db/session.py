@@ -74,8 +74,8 @@ def get_db():
             raise e
         
         # Solo manejar errores reales de DB - usar print para evitar problemas de logger
-        print(f"❌ Error real de base de datos: {e}")
-        print(f"❌ Tipo de error: {type(e).__name__}")
+        print(f"Error real de base de datos: {e}")
+        print(f"Tipo de error: {type(e).__name__}")
         
         # Solo para errores que NO son HTTPException
         raise HTTPException(
