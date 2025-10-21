@@ -67,12 +67,17 @@ def get_db():
             # Re-lanzar errores de autenticación sin modificar
             raise e
         
+        # ✅ CORRECCIÓN CRÍTICA: NO sobrescribir HTTPException que ya tienen mensajes específicos
+        from fastapi import HTTPException
+        if isinstance(e, HTTPException):
+            # Re-lanzar HTTPException sin modificar (preservar mensaje específico)
+            raise e
+        
         # Solo manejar errores reales de DB - usar print para evitar problemas de logger
         print(f"❌ Error real de base de datos: {e}")
         print(f"❌ Tipo de error: {type(e).__name__}")
         
-        # Importar HTTPException dentro de la función para evitar imports circulares
-        from fastapi import HTTPException
+        # Solo para errores que NO son HTTPException
         raise HTTPException(
             status_code=503, 
             detail="Servicio de base de datos temporalmente no disponible"
