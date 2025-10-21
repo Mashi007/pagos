@@ -299,12 +299,15 @@ def crear_cliente(
         logger.info(f"Cliente creado exitosamente: {nuevo_cliente.id}")
         return ClienteResponse.model_validate(nuevo_cliente)
         
-    except HTTPException:
-        raise
+    except HTTPException as e:
+        logger.error(f"❌ Error real de base de datos: {e.status_code}: {e.detail}")
+        logger.error(f"❌ Tipo de error: {type(e).__name__}")
+        db.rollback()
+        raise e  # Re-lanzar el HTTPException original
     except Exception as e:
-        logger.error(f"Error en crear_cliente: {e}")
-        logger.error(f"Tipo de error: {type(e).__name__}")
-        logger.error(f"Detalles del error: {str(e)}")
+        logger.error(f"❌ Error inesperado en crear_cliente: {e}")
+        logger.error(f"❌ Tipo de error: {type(e).__name__}")
+        logger.error(f"❌ Detalles del error: {str(e)}")
         db.rollback()
         raise HTTPException(
             status_code=500,
