@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Popup Duplicados</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Test de Popup de Duplicados</h1>
+    
+    <div class="test-section info">
+        <h3>📋 Instrucciones:</h3>
+        <ol>
+            <li>Esperar 5-7 minutos para que se complete el deploy</li>
+            <li>Abrir DevTools (F12) y ir a la pestaña Console</li>
+            <li>Ir a <a href="https://rapicredit.onrender.com/clientes" target="_blank">https://rapicredit.onrender.com/clientes</a></li>
+            <li>Hacer clic en "Nuevo Cliente"</li>
+            <li>Llenar formulario con cédula <strong>V31566283</strong></li>
+            <li>Hacer clic en "Guardar Cliente"</li>
+            <li>Revisar logs en Console</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h3>🔍 Logs Esperados:</h3>
+        <pre>🔍 DEBUG - Error response: {status: 503, data: {...}}
+🔍 DEBUG - Error status: 503
+🔍 DEBUG - Error detail: duplicate key value violates unique constraint - cédula V31566283 already exists
+✅ DEBUG - Activando popup de duplicados
+🔍 DEBUG - showDuplicateWarning cambió a: true
+🔍 DEBUG - duplicateCedula cambió a: V31566283</pre>
+    </div>
+
+    <div class="test-section">
+        <h3>🎯 Resultado Esperado:</h3>
+        <ul>
+            <li>✅ Popup aparece con mensaje de cédula duplicada</li>
+            <li>✅ Explicación sobre sistemas de préstamos</li>
+            <li>✅ Botones "Cancelar" y "Sí, Continuar"</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h3>📊 Datos de Prueba:</h3>
+        <pre>Cédula: V31566283
+Nombres: AARON JUAN
+Apellidos: CRESPO ALVAREZ
+Teléfono: +582135648795
+Email: aaroncrespo@gmail.com
+Dirección: sssssss</pre>
+    </div>
+
+    <script>
+        console.log('🔍 Test de Popup Duplicados - Página cargada');
+        console.log('📅 Timestamp:', new Date().toISOString());
+        console.log('🌐 URL:', window.location.href);
+    </script>
+</body>
+</html>
