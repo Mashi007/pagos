@@ -163,6 +163,24 @@ class ApiClient {
         case 500:
           toast.error('Error interno del servidor')
           break
+        case 409:
+          // NO mostrar toast genérico para errores 409 de duplicados
+          // Permitir que el componente maneje el error específico
+          console.log('🔍 INTERCEPTOR - Error 409 recibido, data:', data)
+          console.log('🔍 INTERCEPTOR - data.detail:', data?.detail)
+          console.log('🔍 INTERCEPTOR - data.message:', data?.message)
+          console.log('🔍 INTERCEPTOR - data keys:', Object.keys(data || {}))
+          
+          if (data?.detail?.error === 'CLIENTE_DUPLICADO' || 
+              data?.detail?.action === 'SHOW_DUPLICATE_POPUP') {
+            // No mostrar toast, dejar que el componente maneje el popup
+            console.log('🔍 INTERCEPTOR - Detectado error 409 de duplicado, NO mostrando toast')
+            return Promise.reject(error) // ✅ CORRECCIÓN: Asegurar que se propague el error
+          } else {
+            console.log('🔍 INTERCEPTOR - Error 409 genérico, mostrando toast')
+            toast.error(data?.message || 'Conflicto de datos. Verifica la información.')
+          }
+          break
         case 503:
           // NO mostrar toast genérico para errores 503 de duplicados
           // Permitir que el componente maneje el error específico
