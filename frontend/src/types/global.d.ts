@@ -77,6 +77,10 @@ declare global {
   function useEffect(effect: () => void | (() => void), deps?: any[]): void
   function useCallback<T extends (...args: any[]) => any>(callback: T, deps: any[]): T
   function useMemo<T>(factory: () => T, deps: any[]): T
+  
+  // Declaraciones para lazy loading y Suspense
+  function lazy<T>(importFn: () => Promise<{ default: T }>): T
+  const Suspense: any
 
   // Declaraciones globales para eventos
   interface EventTarget {
@@ -92,6 +96,10 @@ declare module 'react' {
   export function map<T, U>(array: T[], callback: (item: T, index: number) => U): U[]
   export function filter<T>(array: T[], callback: (item: T, index: number) => boolean): T[]
   export function reduce<T, U>(array: T[], callback: (acc: U, item: T, index: number) => U, initial: U): U
+  
+  // Declaraciones para lazy loading y Suspense
+  export function lazy<T>(importFn: () => Promise<{ default: T }>): T
+  export const Suspense: any
 }
 
 declare module 'framer-motion' {
