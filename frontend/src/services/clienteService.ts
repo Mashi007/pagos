@@ -1,6 +1,9 @@
 import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
 import { Cliente, ClienteForm, ClienteFilters } from '@/types'
 
+// Constantes de configuración
+const DEFAULT_PER_PAGE = 20
+
 class ClienteService {
   private baseUrl = '/api/v1/clientes'
 
@@ -8,14 +11,12 @@ class ClienteService {
   async getClientes(
     filters?: ClienteFilters,
     page: number = 1,
-    perPage: number = 20
+    perPage: number = DEFAULT_PER_PAGE
   ): Promise<PaginatedResponse<Cliente>> {
-    console.log('🔄 Obteniendo clientes desde endpoint real...')
     const params = { ...filters, page, per_page: perPage }
     const url = buildUrl(this.baseUrl, params)
     
     const response = await apiClient.get<any>(url)
-    console.log('✅ Clientes obtenidos correctamente:', response)
     
     // Adaptar respuesta del backend al formato esperado
     return {

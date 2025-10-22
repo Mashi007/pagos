@@ -29,6 +29,9 @@ const safeClearSession = () => {
   }
 }
 
+// Constantes de configuración
+const DEFAULT_TIMEOUT_MS = 30000
+
 // Configuración base de Axios
 const API_BASE_URL = env.API_URL
 
@@ -38,7 +41,7 @@ class ApiClient {
   constructor() {
     this.client = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 30000,
+      timeout: DEFAULT_TIMEOUT_MS,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -90,15 +93,11 @@ class ApiClient {
               : safeGetSessionItem('refresh_token', '')
               
             if (refreshToken) {
-              console.log('🔄 Intentando renovar token expirado...')
-              
               const response = await this.client.post('/api/v1/auth/refresh', {
                 refresh_token: refreshToken,
               })
-
-              const { access_token, refresh_token: newRefreshToken } = response.data
               
-              console.log('✅ Token renovado exitosamente')
+              const { access_token, refresh_token: newRefreshToken } = response.data
               
               // Guardar en el almacenamiento correspondiente usando funciones seguras
               if (rememberMe) {
@@ -113,11 +112,9 @@ class ApiClient {
               originalRequest.headers.Authorization = `Bearer ${access_token}`
               return this.client(originalRequest)
             } else {
-              console.log('❌ No hay refresh token disponible')
               throw new Error('No refresh token available')
             }
           } catch (refreshError) {
-            console.log('❌ Error renovando token, limpiando storage')
             // Si no se puede renovar el token, limpiar datos y redirigir al login
             clearAuthStorage()
             window.location.href = '/login'
@@ -133,18 +130,9 @@ class ApiClient {
   }
 
   private handleError(error: any) {
-    // ✅ FORTALECER: Logs específicos para debug
-    console.log('🚨 INTERCEPTOR - Error recibido:', error)
-    console.log('🚨 INTERCEPTOR - error.response:', error.response)
-    console.log('🚨 INTERCEPTOR - error.response?.status:', error.response?.status)
-    console.log('🚨 INTERCEPTOR - error.response?.data:', error.response?.data)
-    
     if (error.response) {
       // Error del servidor
       const { status, data } = error.response
-      
-      console.log('🚨 INTERCEPTOR - Status:', status)
-      console.log('🚨 INTERCEPTOR - Data:', data)
       
       switch (status) {
         case 400:
@@ -173,47 +161,23 @@ class ApiClient {
           toast.error('Error interno del servidor')
           break
         case 409:
-          // ✅ FORTALECER: Logs específicos para 409
-          console.log('🚨 INTERCEPTOR - Error 409 recibido, data:', data)
-          console.log('🚨 INTERCEPTOR - data.detail:', data?.detail)
-          console.log('🚨 INTERCEPTOR - data.message:', data?.message)
-          console.log('🚨 INTERCEPTOR - data keys:', Object.keys(data || {}))
-          console.log('🚨 INTERCEPTOR - Error completo:', error)
-          console.log('🚨 INTERCEPTOR - Verificando CLIENTE_DUPLICADO:', data?.detail?.error === 'CLIENTE_DUPLICADO')
-          console.log('🚨 INTERCEPTOR - Verificando SHOW_DUPLICATE_POPUP:', data?.detail?.action === 'SHOW_DUPLICATE_POPUP')
-          console.log('🚨 INTERCEPTOR - data.detail?.error:', data?.detail?.error)
-          console.log('🚨 INTERCEPTOR - data.detail?.action:', data?.detail?.action)
-          
           if (data?.detail?.error === 'CLIENTE_DUPLICADO' || 
               data?.detail?.action === 'SHOW_DUPLICATE_POPUP') {
             // No mostrar toast, dejar que el componente maneje el popup
-            console.log('🚨 INTERCEPTOR - Detectado error 409 de duplicado, NO mostrando toast')
             return Promise.reject(error) // ✅ CORRECCIÓN: Asegurar que se propague el error
           } else {
-            console.log('🚨 INTERCEPTOR - Error 409 genérico, mostrando toast')
             toast.error(data?.message || 'Conflicto de datos. Verifica la información.')
           }
           break
         case 503:
           // NO mostrar toast genérico para errores 503 de duplicados
           // Permitir que el componente maneje el error específico
-          console.log('🔍 INTERCEPTOR - Error 503 recibido, data:', data)
-          console.log('🔍 INTERCEPTOR - data.detail:', data?.detail)
-          console.log('🔍 INTERCEPTOR - data.message:', data?.message)
-          console.log('🔍 INTERCEPTOR - data keys:', Object.keys(data || {}))
-          console.log('🔍 INTERCEPTOR - Verificando si contiene duplicate key:', data?.detail?.includes('duplicate key'))
-          console.log('🔍 INTERCEPTOR - Verificando si contiene already exists:', data?.detail?.includes('already exists'))
-          console.log('🔍 INTERCEPTOR - Verificando si contiene violates unique constraint:', data?.detail?.includes('violates unique constraint'))
-          console.log('🔍 INTERCEPTOR - Verificando si contiene cédula:', data?.detail?.includes('cédula'))
-          
           if (data?.detail?.includes('duplicate key') || data?.detail?.includes('already exists') ||
               data?.detail?.includes('violates unique constraint') || data?.detail?.includes('cédula') ||
               data?.message?.includes('duplicate key') || data?.message?.includes('already exists')) {
             // No mostrar toast, dejar que el componente maneje el popup
-            console.log('🔍 INTERCEPTOR - Detectado error 503 de duplicado, NO mostrando toast')
             return Promise.reject(error) // ✅ CORRECCIÓN: Asegurar que se propague el error
           } else {
-            console.log('🔍 INTERCEPTOR - Error 503 genérico, mostrando toast')
             toast.error('Servicio temporalmente no disponible. Intenta nuevamente.')
           }
           break
@@ -304,7 +268,6 @@ class ApiClient {
 
   // FUNCIÓN DE EMERGENCIA: Limpiar completamente el storage
   emergencyClearStorage(): void {
-    console.log('🚨 EMERGENCY: Limpiando storage completamente')
     try {
       // Limpiar localStorage
       safeClear()
@@ -312,9 +275,8 @@ class ApiClient {
       safeClearSession()
       // Limpiar específicamente tokens de auth
       clearAuthStorage()
-      console.log('✅ Storage limpiado exitosamente')
     } catch (error) {
-      console.error('❌ Error limpiando storage:', error)
+      // Error silencioso para evitar loops de logging
     }
   }
 }

@@ -37,8 +37,6 @@ export class AuthService {
   // Login de usuario - CON PERSISTENCIA SEGURA
   async login(credentials: LoginForm): Promise<LoginResponse> {
     try {
-      console.log('AuthService: Enviando credenciales a:', '/api/v1/auth/login')
-      
       // Normalizar email a minúsculas
       const normalizedCredentials = {
         ...credentials,
@@ -46,8 +44,6 @@ export class AuthService {
       }
       
       const response = await apiClient.post<LoginResponse>('/api/v1/auth/login', normalizedCredentials)
-      
-      console.log('AuthService: Respuesta del servidor recibida')
       
       // Guardar tokens de forma segura
       if (response.access_token) {
@@ -65,8 +61,6 @@ export class AuthService {
       
       return response
     } catch (error: any) {
-      console.error('AuthService: Error en login:', error)
-      
       if (error.code === 'NETWORK_ERROR' || !error.response) {
         const networkError = new Error('Error de conexión con el servidor') as any
         networkError.code = 'NETWORK_ERROR'
@@ -82,7 +76,7 @@ export class AuthService {
     try {
       await apiClient.post('/api/v1/auth/logout')
     } catch (error) {
-      console.error('AuthService: Error en logout:', error)
+      // Error silencioso para evitar loops de logging
     } finally {
       // Limpiar todo el almacenamiento de autenticación
       clearAuthStorage()
@@ -114,8 +108,6 @@ export class AuthService {
 
       return response
     } catch (error: any) {
-      console.error('AuthService: Error refrescando token:', error)
-      
       // Si hay error, limpiar almacenamiento
       clearAuthStorage()
       throw error
@@ -125,11 +117,7 @@ export class AuthService {
   // Obtener información del usuario actual - CON PERSISTENCIA SEGURA
   async getCurrentUser(): Promise<User> {
     try {
-      console.log('AuthService: Obteniendo usuario actual desde /api/v1/auth/me')
-      
       const response = await apiClient.get<User>('/api/v1/auth/me')
-      
-      console.log('AuthService: Respuesta recibida:', response)
       
       // El backend retorna directamente el objeto User, no envuelto en ApiResponse
       const user = response
@@ -137,8 +125,6 @@ export class AuthService {
       if (!user) {
         throw new Error('Usuario no encontrado en la respuesta')
       }
-      
-      console.log('AuthService: Usuario obtenido:', user)
       
       // Actualizar usuario en el almacenamiento correspondiente
       const rememberMe = safeGetItem('remember_me', false)
@@ -150,7 +136,6 @@ export class AuthService {
       
       return user
     } catch (error: any) {
-      console.error('AuthService: Error obteniendo usuario actual:', error)
       throw error
     }
   }
