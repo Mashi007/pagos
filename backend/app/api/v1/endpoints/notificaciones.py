@@ -16,7 +16,7 @@ from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.pago import Pago
 from app.models.amortizacion import Cuota
-from app.models.asesor import Asesor
+from app.models.analista import Analista
 from app.core.config import settings
 from decimal import Decimal
 import logging
@@ -822,7 +822,7 @@ async def enviar_reporte_semanal_usuarios(
         User.full_name,
         func.count(Cliente.id).label('nuevos_clientes')
     ).outerjoin(Cliente, and_(
-        Asesor.id == Cliente.analista_id,
+        Analista.id == Cliente.analista_id,
         func.date(Cliente.fecha_registro) >= inicio_semana,
         func.date(Cliente.fecha_registro) <= fin_semana
     )).filter(

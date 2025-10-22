@@ -19,7 +19,7 @@ from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.pago import Pago
 from app.models.amortizacion import Cuota
-from app.models.asesor import Asesor
+from app.models.analista import Analista
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -1386,7 +1386,7 @@ class DetectorPatrones:
             func.count(Cliente.id).label('total_clientes'),
             func.sum(func.case([(Cliente.dias_mora > 0, 1)], else_=0)).label('clientes_mora'),
             func.avg(Cliente.dias_mora).label('promedio_mora')
-        ).join(Cliente, Asesor.id == Cliente.analista_id).filter(
+        ).join(Cliente, Analista.id == Cliente.analista_id).filter(
             Cliente.activo == True
         ).group_by(User.id, User.full_name).all()
 
