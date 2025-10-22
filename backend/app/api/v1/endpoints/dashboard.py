@@ -621,7 +621,7 @@ def dashboard_analista(
     
     return {
         "tipo_dashboard": "USER",
-        "analista": analista.full_name,
+        "analista": current_user.full_name,
         "fecha_actualizacion": datetime.now(),
         
         "mis_estadisticas": {

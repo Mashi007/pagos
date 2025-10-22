@@ -15,6 +15,7 @@ from datetime import datetime
 from app.db.session import get_db
 from app.models.user import User
 from app.models.cliente import Cliente
+from app.models.configuracion_sistema import ConfiguracionSistema
 from app.api.deps import get_current_user
 
 logger = logging.getLogger(__name__)
