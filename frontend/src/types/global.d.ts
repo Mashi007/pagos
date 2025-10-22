@@ -80,7 +80,7 @@ declare global {
   function useId(): string
   
   // Declaraciones para lazy loading y Suspense
-  function lazy<T extends React.ComponentType<any>>(importFn: () => Promise<{ default: T }>): T
+  function lazy<T extends React.ComponentType<any>>(importFn: () => Promise<{ default?: T } & Record<string, T>>): T
   const Suspense: React.ComponentType<{ children: React.ReactNode; fallback?: React.ReactNode }>
 
   // Declaraciones globales para eventos
@@ -101,7 +101,7 @@ declare module 'react' {
   export function useId(): string
   
   // Lazy loading y Suspense
-  export function lazy<T extends React.ComponentType<any>>(importFn: () => Promise<{ default: T }>): T
+  export function lazy<T extends React.ComponentType<any>>(importFn: () => Promise<{ default?: T } & Record<string, T>>): T
   export const Suspense: React.ComponentType<{ children: React.ReactNode; fallback?: React.ReactNode }>
   
   // Componentes y utilidades
