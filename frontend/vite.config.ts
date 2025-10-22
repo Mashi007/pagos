@@ -34,13 +34,7 @@ export default defineConfig({
     },
     chunkSizeWarningLimit: 1000,
     target: 'esnext',
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true,
-      },
-    },
+    minify: 'esbuild',
   },
   base: '/',
   preview: {
