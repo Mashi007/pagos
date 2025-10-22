@@ -5,7 +5,15 @@ Script para generar migración de Alembic para agregar columna modelo_vehiculo
 
 import os
 import sys
+import logging
 from datetime import datetime
+
+# Constantes de configuración
+MODELO_VEHICULO_LENGTH = 100
+
+# Configurar logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Agregar el directorio del proyecto al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -40,10 +48,10 @@ def upgrade():
     columns = [col['name'] for col in inspector.get_columns('clientes')]
     
     if 'modelo_vehiculo' not in columns:
-        op.add_column('clientes', sa.Column('modelo_vehiculo', sa.String(100), nullable=True))
-        print("✅ Columna modelo_vehiculo agregada a la tabla clientes")
+        op.add_column('clientes', sa.Column('modelo_vehiculo', sa.String(MODELO_VEHICULO_LENGTH), nullable=True))
+        logger.info("Columna modelo_vehiculo agregada a la tabla clientes")
     else:
-        print("ℹ️ Columna modelo_vehiculo ya existe en la tabla clientes")
+        logger.info("Columna modelo_vehiculo ya existe en la tabla clientes")
 
 def downgrade():
     """Eliminar columna modelo_vehiculo de la tabla clientes"""
@@ -54,22 +62,22 @@ def downgrade():
     
     if 'modelo_vehiculo' in columns:
         op.drop_column('clientes', 'modelo_vehiculo')
-        print("✅ Columna modelo_vehiculo eliminada de la tabla clientes")
+        logger.info("Columna modelo_vehiculo eliminada de la tabla clientes")
     else:
-        print("ℹ️ Columna modelo_vehiculo no existe en la tabla clientes")
+        logger.info("Columna modelo_vehiculo no existe en la tabla clientes")
 '''
     
     try:
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(migracion_content)
         
-        print(f"✅ Migración generada: {filename}")
-        print("📋 Próximos pasos:")
-        print("1. Ejecutar: alembic upgrade head")
-        print("2. Verificar que la columna se agregó correctamente")
+        logger.info(f"Migración generada: {filename}")
+        logger.info("Próximos pasos:")
+        logger.info("1. Ejecutar: alembic upgrade head")
+        logger.info("2. Verificar que la columna se agregó correctamente")
         
     except Exception as e:
-        print(f"❌ Error generando migración: {e}")
+        logger.error(f"Error generando migración: {e}")
 
 if __name__ == "__main__":
     generar_migracion()

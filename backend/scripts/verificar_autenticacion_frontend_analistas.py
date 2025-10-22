@@ -12,6 +12,10 @@ import time
 from datetime import datetime
 from typing import Dict, Any
 
+# Constantes de configuración
+REQUEST_TIMEOUT = 15
+SEPARATOR_LENGTH = 50
+
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -28,15 +32,15 @@ class VerificarAutenticacionFrontendAnalistas:
         
     def hacer_login(self) -> Dict[str, Any]:
         """Hacer login y obtener token"""
-        logger.info("🔐 REALIZANDO LOGIN")
-        logger.info("-" * 50)
+        logger.info("REALIZANDO LOGIN")
+        logger.info("-" * SEPARATOR_LENGTH)
         
         try:
             response = requests.post(
                 f"{self.backend_url}/api/v1/auth/login",
                 json=self.credentials,
                 headers={'Content-Type': 'application/json'},
-                timeout=15
+                timeout=REQUEST_TIMEOUT
             )
             
             if response.status_code == 200:

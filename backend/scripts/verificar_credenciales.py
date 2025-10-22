@@ -8,6 +8,11 @@ import os
 import logging
 from dotenv import load_dotenv
 
+# Constantes de configuración
+REQUEST_TIMEOUT = 10
+SEPARATOR_LENGTH = 60
+TOKEN_PREFIX_LENGTH = 20
+
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -17,8 +22,8 @@ BASE_URL = os.getenv("FRONTEND_URL", "https://pagos-f2qf.onrender.com")
 
 def probar_credenciales_admin():
     """Probar diferentes credenciales de administrador"""
-    logger.info("🔑 PROBANDO CREDENCIALES DE ADMINISTRADOR")
-    logger.info("=" * 60)
+    logger.info("PROBANDO CREDENCIALES DE ADMINISTRADOR")
+    logger.info("=" * SEPARATOR_LENGTH)
     
     # Diferentes combinaciones de credenciales
     credenciales_posibles = [
@@ -37,7 +42,7 @@ def probar_credenciales_admin():
         try:
             response = requests.post(f"{BASE_URL}/api/v1/auth/login", 
                                    json={**creds, "remember": True}, 
-                                   timeout=10)
+                                   timeout=REQUEST_TIMEOUT)
             logger.info(f"   📊 Status Code: {response.status_code}")
             
             if response.status_code == 200:
@@ -76,7 +81,7 @@ def probar_login_usuario_prueba():
         try:
             response = requests.post(f"{BASE_URL}/api/v1/auth/login", 
                                    json={**creds, "remember": True}, 
-                                   timeout=10)
+                                   timeout=REQUEST_TIMEOUT)
             logger.info(f"   📊 Status Code: {response.status_code}")
             
             if response.status_code == 200:
