@@ -35,6 +35,11 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     target: 'esnext',
     minify: 'esbuild',
+    // Configuración de source maps para producción
+    sourcemap: process.env.NODE_ENV === 'development' ? true : false,
+    // Configuración adicional para producción
+    reportCompressedSize: true,
+    cssCodeSplit: true,
   },
   base: '/',
   preview: {

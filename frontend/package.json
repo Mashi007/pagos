@@ -17,6 +17,11 @@
     "test:integration": "vitest run tests/integration/",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest --watch",
+    "analyze": "npm run build && npx vite-bundle-analyzer dist",
+    "analyze:size": "npm run build && npx vite-bundle-analyzer dist --mode size",
+    "analyze:gzip": "npm run build && npx vite-bundle-analyzer dist --mode gzip",
+    "accessibility": "npm run build && npx @axe-core/cli https://rapicredit.onrender.com",
+    "accessibility:local": "npm run build && npm run preview & sleep 5 && npx @axe-core/cli http://localhost:4173",
     "preview": "vite preview --host 0.0.0.0 --port $PORT",
     "start": "npm run setup && npm run dev",
     "serve": "serve -s dist -l $PORT",
@@ -70,6 +75,8 @@
     "jsdom": "^23.0.0",
     "prettier": "^3.0.0",
     "prettier-plugin-tailwindcss": "^0.5.0",
+    "vite-bundle-analyzer": "^0.7.0",
+    "@axe-core/cli": "^4.8.0",
     "@vitest/coverage-v8": "^1.0.0"
   }
 }
