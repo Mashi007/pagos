@@ -1,6 +1,10 @@
 # backend/app/schemas/cliente.py
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
+from typing import Optional, List
+from datetime import date, datetime
+from decimal import Decimal
+
 # Constantes de validación
-MIN_CEDULA_LENGTH = 8
 MAX_CEDULA_LENGTH = 20
 MIN_NAME_LENGTH = 2
 MAX_NAME_LENGTH = 100
