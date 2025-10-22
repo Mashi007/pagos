@@ -77,10 +77,11 @@ declare global {
   function useEffect(effect: () => void | (() => void), deps?: any[]): void
   function useCallback<T extends (...args: any[]) => any>(callback: T, deps: any[]): T
   function useMemo<T>(factory: () => T, deps: any[]): T
+  function useId(): string
   
   // Declaraciones para lazy loading y Suspense
-  function lazy<T>(importFn: () => Promise<{ default: T }>): T
-  const Suspense: any
+  function lazy<T extends React.ComponentType<any>>(importFn: () => Promise<{ default: T }>): T
+  const Suspense: React.ComponentType<{ children: React.ReactNode; fallback?: React.ReactNode }>
 
   // Declaraciones globales para eventos
   interface EventTarget {
@@ -97,10 +98,11 @@ declare module 'react' {
   export function useEffect(effect: () => void | (() => void), deps?: any[]): void
   export function useCallback<T extends (...args: any[]) => any>(callback: T, deps: any[]): T
   export function useMemo<T>(factory: () => T, deps: any[]): T
+  export function useId(): string
   
   // Lazy loading y Suspense
-  export function lazy<T>(importFn: () => Promise<{ default: T }>): T
-  export const Suspense: any
+  export function lazy<T extends React.ComponentType<any>>(importFn: () => Promise<{ default: T }>): T
+  export const Suspense: React.ComponentType<{ children: React.ReactNode; fallback?: React.ReactNode }>
   
   // Componentes y utilidades
   export function forwardRef<T, P = {}>(component: (props: P, ref: React.Ref<T>) => any): any
