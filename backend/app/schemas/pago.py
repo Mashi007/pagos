@@ -1,33 +1,46 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
 
+# Constantes de validación
+MIN_CEDULA_LENGTH = 8
+MAX_CEDULA_LENGTH = 20
+MIN_DOCUMENTO_LENGTH = 1
+MAX_DOCUMENTO_LENGTH = 100
+MAX_DOCUMENTO_NOMBRE_LENGTH = 255
+MAX_DOCUMENTO_TIPO_LENGTH = 10
+MAX_DOCUMENTO_RUTA_LENGTH = 500
+MAX_NOTA_LENGTH = 1000
+
 class PagoBase(BaseModel):
     """Schema base para pagos"""
-    cedula_cliente: str = Field(..., min_length=8, max_length=20, description="Cédula del cliente")
+    cedula_cliente: str = Field(..., min_length=MIN_CEDULA_LENGTH, max_length=MAX_CEDULA_LENGTH, description="Cédula del cliente")
     fecha_pago: datetime = Field(..., description="Fecha del pago")
     monto_pagado: float = Field(..., gt=0, description="Monto pagado")
-    numero_documento: str = Field(..., min_length=1, max_length=100, description="Número de documento")
-    documento_nombre: Optional[str] = Field(None, max_length=255, description="Nombre del documento")
-    documento_tipo: Optional[str] = Field(None, max_length=10, description="Tipo de documento")
+    numero_documento: str = Field(..., min_length=MIN_DOCUMENTO_LENGTH, max_length=MAX_DOCUMENTO_LENGTH, description="Número de documento")
+    documento_nombre: Optional[str] = Field(None, max_length=MAX_DOCUMENTO_NOMBRE_LENGTH, description="Nombre del documento")
+    documento_tipo: Optional[str] = Field(None, max_length=MAX_DOCUMENTO_TIPO_LENGTH, description="Tipo de documento")
     documento_tamaño: Optional[int] = Field(None, ge=0, description="Tamaño del documento en bytes")
-    documento_ruta: Optional[str] = Field(None, max_length=500, description="Ruta del documento")
+    documento_ruta: Optional[str] = Field(None, max_length=MAX_DOCUMENTO_RUTA_LENGTH, description="Ruta del documento")
     notas: Optional[str] = Field(None, description="Notas adicionales")
 
-    @validator('cedula_cliente')
+    @field_validator('cedula_cliente')
+    @classmethod
     def validate_cedula(cls, v):
-        if not v or len(v.strip()) < 8:
-            raise ValueError('Cédula debe tener al menos 8 caracteres')
+        if not v or len(v.strip()) < MIN_CEDULA_LENGTH:
+            raise ValueError(f'Cédula debe tener al menos {MIN_CEDULA_LENGTH} caracteres')
         return v.strip().upper()
 
-    @validator('numero_documento')
+    @field_validator('numero_documento')
+    @classmethod
     def validate_numero_documento(cls, v):
-        if not v or len(v.strip()) < 1:
+        if not v or len(v.strip()) < MIN_DOCUMENTO_LENGTH:
             raise ValueError('Número de documento es requerido')
         return v.strip()
 
-    @validator('documento_tipo')
+    @field_validator('documento_tipo')
+    @classmethod
     def validate_documento_tipo(cls, v):
         if v and v.upper() not in ['PNG', 'JPG', 'PDF']:
             raise ValueError('Tipo de documento debe ser PNG, JPG o PDF')
@@ -58,8 +71,7 @@ class PagoResponse(PagoBase):
     fecha_registro: datetime
     fecha_actualizacion: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PagoListResponse(BaseModel):
     """Schema para lista de pagos"""
@@ -88,8 +100,7 @@ class ConciliacionResponse(ConciliacionBase):
     responsable: str
     pago_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class KPIsPagos(BaseModel):
     """Schema para KPIs de pagos"""
