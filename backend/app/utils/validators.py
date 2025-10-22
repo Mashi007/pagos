@@ -99,7 +99,7 @@ def validate_ruc(ruc: str) -> bool:
     if not re.match(pattern, ruc_clean):
         return False
     
-    # TODO: Implementar algoritmo de validación de dígito verificador
+    # NOTA: Implementar algoritmo de validación de dígito verificador
     # Por ahora solo validamos formato
     
     return True
