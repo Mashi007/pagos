@@ -10,6 +10,14 @@ import logging
 # CORRECTO: Importar desde app.core.config
 from app.core.config import settings
 
+# Constantes de configuración de pool
+DEFAULT_POOL_SIZE = 5
+DEFAULT_MAX_OVERFLOW = 10
+DEFAULT_POOL_TIMEOUT = 30
+DEFAULT_POOL_RECYCLE = 3600
+DEFAULT_CONNECT_TIMEOUT = 30
+DEFAULT_STATEMENT_TIMEOUT = 30000
+
 # Configurar logger
 logger = logging.getLogger(__name__)
 
@@ -17,15 +25,15 @@ logger = logging.getLogger(__name__)
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,  # Verifica conexión antes de usar
-    pool_size=5,  # 5 conexiones permanentes (aumentado)
-    max_overflow=10,  # 10 conexiones adicionales si es necesario
-    pool_timeout=30,  # 30 segundos timeout (aumentado)
-    pool_recycle=3600,  # Reciclar cada hora (más estable)
+    pool_size=DEFAULT_POOL_SIZE,  # Conexiones permanentes
+    max_overflow=DEFAULT_MAX_OVERFLOW,  # Conexiones adicionales
+    pool_timeout=DEFAULT_POOL_TIMEOUT,  # Timeout de pool
+    pool_recycle=DEFAULT_POOL_RECYCLE,  # Reciclar conexiones
     echo=settings.DB_ECHO,
     connect_args={
-        "connect_timeout": 30,  # 30 segundos para conectar
+        "connect_timeout": DEFAULT_CONNECT_TIMEOUT,  # Timeout de conexión
         "application_name": "rapicredit_backend",
-        "options": "-c statement_timeout=30000"  # 30 segundos para queries
+        "options": f"-c statement_timeout={DEFAULT_STATEMENT_TIMEOUT}"  # Timeout de queries
     }
 )
 
@@ -63,7 +71,8 @@ def get_db():
         
         # Verificar si es un error de autenticación HTTP
         error_str = str(e)
-        if "401" in error_str or "Not authenticated" in error_str or "Email o contraseña incorrectos" in error_str:
+        auth_errors = ["401", "Not authenticated", "Email o contraseña incorrectos"]
+        if any(auth_error in error_str for auth_error in auth_errors):
             # Re-lanzar errores de autenticación sin modificar
             raise e
         
@@ -73,9 +82,9 @@ def get_db():
             # Re-lanzar HTTPException sin modificar (preservar mensaje específico)
             raise e
         
-        # Solo manejar errores reales de DB - usar print para evitar problemas de logger
-        print(f"Error real de base de datos: {e}")
-        print(f"Tipo de error: {type(e).__name__}")
+        # Solo manejar errores reales de DB - usar logger estructurado
+        logger.error(f"Error real de base de datos: {e}")
+        logger.error(f"Tipo de error: {type(e).__name__}")
         
         # Solo para errores que NO son HTTPException
         raise HTTPException(

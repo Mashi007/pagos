@@ -4,6 +4,11 @@ from app.db.session import engine, Base, SessionLocal
 from app.core.config import settings
 import logging
 
+# Constantes de configuración
+DEFAULT_TIMEOUT_SECONDS = 60
+DEFAULT_SEPARATOR_LENGTH = 50
+MAIN_TABLES = ["usuarios", "clientes", "prestamos", "pagos"]
+
 logger = logging.getLogger(__name__)
 
 
@@ -60,7 +65,7 @@ def run_migrations():
             ["alembic", "upgrade", "head"],
             capture_output=True,
             text=True,
-            timeout=60
+            timeout=DEFAULT_TIMEOUT_SECONDS
         )
         
         if result.returncode == 0:
@@ -104,7 +109,6 @@ def create_admin_user():
         logger.info("Creando usuario administrador...")
         
         # Crear admin con las credenciales desde settings
-        from app.core.config import settings
         admin = User(
             email=settings.ADMIN_EMAIL,
             nombre="IT Master",
@@ -151,8 +155,7 @@ def init_db() -> bool:
         # Las migraciones deben ejecutarse manualmente vía endpoint de emergencia
         logger.info("Saltando migraciones automáticas (usar endpoint de emergencia si es necesario)")
         
-        main_tables = ["usuarios", "clientes", "prestamos", "pagos"]
-        tables_exist = all(table_exists(table) for table in main_tables)
+        tables_exist = all(table_exists(table) for table in MAIN_TABLES)
         
         if not tables_exist:
             logger.info("Tablas no encontradas, creando...")
@@ -181,9 +184,9 @@ init_database = init_db
 def init_db_startup():
     """Función que se llama al inicio de la aplicación"""
     try:
-        logger.info("\n" + "="*50)
+        logger.info("\n" + "="*DEFAULT_SEPARATOR_LENGTH)
         logger.info(f"Sistema de Préstamos y Cobranza v{settings.APP_VERSION}")
-        logger.info("="*50)
+        logger.info("="*DEFAULT_SEPARATOR_LENGTH)
         logger.info(f"Base de datos: {settings.get_database_url(hide_password=True)}")
         
         # Intentar inicializar la base de datos pero no fallar si no se puede conectar
@@ -207,7 +210,7 @@ def init_db_startup():
         logger.info(f"Entorno: {settings.ENVIRONMENT}")
         logger.info("Documentación: /docs")
         logger.info(f"Debug mode: {'ON' if settings.DEBUG else 'OFF'}")
-        logger.info("="*50)
+        logger.info("="*DEFAULT_SEPARATOR_LENGTH)
         logger.info("")
         
     except Exception as e:
