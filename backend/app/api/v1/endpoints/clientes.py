@@ -1,22 +1,23 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoint de clientes - VERSIÓN CON AUDITORÍA AUTOMÁTICA
 Sistema completo de gestión de clientes con validaciones y auditoría
 """
-from fastapi import APIRouter, Path
+import logging
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Path
+from sqlalchemy.orm import Session
 
- TipoAccion
-
+from app.api.deps import get_db, get_current_user, require_permission, Permission
+from app.models.cliente import Cliente
+from app.models.user import User
 from app.schemas.cliente import (
     ClienteResponse, 
     ClienteCreate, 
     ClienteUpdate, 
     ClienteCreateWithConfirmation
+)
 
 
 router = APIRouter()

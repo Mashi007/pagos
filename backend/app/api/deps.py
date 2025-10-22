@@ -3,7 +3,18 @@
 Dependencias comunes para los endpoints
 Incluye autenticación, permisos, y paginación
 """
+import logging
+from typing import Optional
+
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import JWTError
+
+from app.core.security import decode_token
+from app.core.permissions_simple import Permission, get_user_permissions
+from app.db.session import get_db
+from app.models.user import User
+from sqlalchemy.orm import Session
 
 # Security scheme para JWT
 security = HTTPBearer()
@@ -11,7 +22,7 @@ security = HTTPBearer()
 def get_current_user(
     db: Session = Depends(get_db),
     credentials: HTTPAuthorizationCredentials = Depends(security)
- -> User:
+) -> User:
     """
     Obtiene el usuario actual desde el token JWT
 
@@ -77,9 +88,10 @@ def get_current_user(
     logger.info(f"✅ Usuario autenticado exitosamente - Email: {user.email}")
     return user
 
+
 def get_current_active_user(
     current_user: User = Depends(get_current_user),
- -> User:
+) -> User:
     """
     Obtiene el usuario actual y verifica que esté activo
 
@@ -98,6 +110,7 @@ def get_current_active_user(
             detail="Usuario inactivo"
         )
     return current_user
+
 
 def require_role(require_admin: bool = True):
     """
@@ -120,6 +133,7 @@ def require_role(require_admin: bool = True):
             )
         return current_user
     return role_checker
+
 
 def require_permission(*required_permissions: Permission):
     """
@@ -149,9 +163,10 @@ def require_permission(*required_permissions: Permission):
         return current_user
     return permission_checker
 
+
 def get_admin_user(
     current_user: User = Depends(get_current_user)
- -> User:
+) -> User:
     """
     Dependency para endpoints que requieren usuario administrador
 
@@ -164,6 +179,7 @@ def get_admin_user(
             detail="Solo los administradores pueden acceder a este recurso"
         )
     return current_user
+
 
 # Dependency para paginación
 class PaginationParams:
@@ -189,10 +205,11 @@ class PaginationParams:
         self.skip = skip if skip is not None else (page - 1) * page_size
         self.limit = limit if limit is not None else page_size
 
+
 def get_pagination_params(
     page: int = 1,
     page_size: int = 10
- -> PaginationParams:
+) -> PaginationParams:
     """
     Dependency para obtener parámetros de paginación
 

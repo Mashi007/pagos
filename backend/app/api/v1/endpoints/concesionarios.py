@@ -1,30 +1,33 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoints de gestión de concesionarios
 CRUD completo para concesionarios
 """
+import logging
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_db, get_current_user
 from app.models.concesionario import Concesionario
-
+from app.models.user import User
 from app.schemas.concesionario import (
     ConcesionarioCreate, 
     ConcesionarioUpdate, 
     ConcesionarioResponse,
     ConcesionarioListResponse
+)
 
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-router.get("/test-no-auth")
+@router.get("/test-no-auth")
 def test_concesionarios_no_auth(
     db: Session = Depends(get_db)
-:
+):
     """
     Test endpoint sin autenticación para verificar concesionarios
     """

@@ -1,26 +1,28 @@
 # backend/app/api/v1/endpoints/auth.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoints de autenticación - VERSIÓN SIMPLIFICADA SIN AUDITORÍA
 Solución temporal para resolver error 503
 """
-from fastapi import APIRouter, status, Request, Response
+import logging
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request, Response
+from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.core.security import verify_password, get_password_hash, create_refresh_token
 from app.schemas.auth import (
     LoginRequest,
     Token,
     LoginResponse,
     RefreshTokenRequest,
     ChangePasswordRequest
-
+)
 from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
- verify_password, get_password_hash, validate_password_strength, create_refresh_token
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 

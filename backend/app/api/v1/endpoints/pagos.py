@@ -1,18 +1,24 @@
+"""
+Endpoints de gestión de pagos
+Sistema completo de pagos con validaciones y auditoría
+"""
+import logging
+import uuid
 from datetime import datetime, date, timedelta
+from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi import APIRouter, status, Query, UploadFile, File
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
 from sqlalchemy import func, desc, and_
+from sqlalchemy.orm import Session
 
+from app.api.deps import get_db, get_current_user
+from app.models.pago import Pago
+from app.models.user import User
 from app.schemas.pago import (
     PagoCreate, PagoResponse, PagoListResponse,
     KPIsPagos, ResumenCliente
-
-import uuid
-from pathlib import Path
+)
 
 # Constantes de configuración de archivos
 UPLOAD_DIR = Path("uploads/pagos")
@@ -24,12 +30,12 @@ MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-router.post("/crear", response_model=PagoResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/crear", response_model=PagoResponse, status_code=status.HTTP_201_CREATED)
 async def crear_pago(
     pago_data: PagoCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """Crear un nuevo pago"""
     try:
         logger.info(f"Usuario {current_user.email} creando pago para cédula {pago_data.cedula_cliente}")

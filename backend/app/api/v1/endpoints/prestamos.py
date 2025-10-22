@@ -1,11 +1,18 @@
 # app/api/v1/endpoints/prestamos.py
+"""
+Endpoints de gestión de préstamos
+Sistema completo de préstamos con cálculos automáticos
+"""
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
 
-
+from app.api.deps import get_db, get_current_user
+from app.models.cliente import Cliente
+from app.models.prestamo import Prestamo
+from app.models.user import User
 from app.schemas.prestamo import PrestamoCreate, PrestamoUpdate, PrestamoResponse
 
 # Constantes de cálculo de fechas
@@ -24,8 +31,12 @@ def calcular_proxima_fecha_pago(fecha_inicio: datetime, modalidad: str, cuotas_p
     else:  # MENSUAL
         return fecha_inicio + timedelta(days=DAYS_PER_MONTH * (cuotas_pagadas + 1))
 
-router.post("/", response_model=PrestamoResponse, status_code=201)
-def crear_prestamo(prestamo: PrestamoCreate, db: Session = Depends(get_db)):
+@router.post("/", response_model=PrestamoResponse, status_code=201)
+def crear_prestamo(
+    prestamo: PrestamoCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Crear un nuevo préstamo"""
 
     # Verificar que el cliente existe

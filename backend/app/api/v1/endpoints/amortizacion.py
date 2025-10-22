@@ -1,17 +1,17 @@
 # backend/app/api/v1/endpoints/amortizacion.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoints para gestión de amortización y cuotas
 """
-from fastapi import APIRouter, status, Query
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_active_user
-
 from app.models.amortizacion import Cuota
+from app.models.prestamo import Prestamo
+from app.models.user import User
 from app.schemas.amortizacion import (
     TablaAmortizacionRequest,
     TablaAmortizacionResponse,
@@ -21,17 +21,17 @@ from app.schemas.amortizacion import (
     EstadoCuentaResponse,
     ProyeccionPagoRequest,
     ProyeccionPagoResponse
-
+)
 from app.services.amortizacion_service import AmortizacionService
 
 router = APIRouter()
 
-router.post("/generar", response_model=TablaAmortizacionResponse)
+@router.post("/generar", response_model=TablaAmortizacionResponse)
 def generar_tabla_amortizacion(
     request: TablaAmortizacionRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-:
+):
     """
     Genera una tabla de amortización (simulación)
     No crea registros en BD, solo devuelve el cálculo
@@ -45,13 +45,13 @@ def generar_tabla_amortizacion(
             detail=str(e)
         )
 
-router.post("/prestamo/{prestamo_id}/crear-cuotas", response_model=List[CuotaResponse])
+@router.post("/prestamo/{prestamo_id}/crear-cuotas", response_model=List[CuotaResponse])
 def crear_cuotas_prestamo(
     prestamo_id: int,
     request: TablaAmortizacionRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-:
+):
     """
     Crea las cuotas en BD para un préstamo específico
     """
@@ -85,13 +85,16 @@ def crear_cuotas_prestamo(
             detail=str(e)
         )
 
-router.get("/prestamo/{prestamo_id}/cuotas", response_model=List[CuotaResponse])
+@router.get("/prestamo/{prestamo_id}/cuotas", response_model=List[CuotaResponse])
 def obtener_cuotas_prestamo(
     prestamo_id: int,
-    estado: Optional[str] = Query(None, description="Filtrar por estado: PENDIENTE, PAGADA, VENCIDA, PARCIAL"),
+    estado: Optional[str] = Query(
+        None, 
+        description="Filtrar por estado: PENDIENTE, PAGADA, VENCIDA, PARCIAL"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-:
+):
     """
     Obtiene las cuotas de un préstamo
     """
@@ -113,12 +116,12 @@ def obtener_cuotas_prestamo(
 
     return cuotas
 
-router.get("/cuota/{cuota_id}", response_model=CuotaResponse)
+@router.get("/cuota/{cuota_id}", response_model=CuotaResponse)
 def obtener_cuota(
     cuota_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-:
+):
     """
     Obtiene el detalle de una cuota específica
     """
