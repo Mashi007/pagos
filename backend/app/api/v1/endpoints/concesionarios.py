@@ -238,13 +238,13 @@ def crear_concesionario(
         db.commit()
         db.refresh(concesionario)
         
-        print(f"Concesionario creado: ID={concesionario.id}")
+        logger.info(f"Concesionario creado: ID={concesionario.id}")
         return ConcesionarioResponse.model_validate(concesionario)
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error creando concesionario: {e}")
+        logger.error(f"Error creando concesionario: {e}")
         import traceback
         traceback.print_exc()
         db.rollback()

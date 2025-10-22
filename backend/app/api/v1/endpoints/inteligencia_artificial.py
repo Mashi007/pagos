@@ -620,12 +620,12 @@ async def _procesar_scoring_masivo(cliente_ids: List[int], user_id: int):
                 })
         
         # Guardar resultados (en producción se guardarían en BD)
-        print(f"📊 Scoring masivo completado: {len(resultados)} clientes procesados")
+        logger.info(f"Scoring masivo completado: {len(resultados)} clientes procesados")
         
         db.close()
         
     except Exception as e:
-        print(f"Error en scoring masivo: {e}")
+        logger.error(f"Error en scoring masivo: {e}")
 
 
 def _interpretar_prediccion_mora(probabilidad: float) -> str:

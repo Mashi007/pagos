@@ -1191,7 +1191,7 @@ async def _notificar_nueva_solicitud_admin(solicitud: Aprobacion, db: Session):
         db.commit()
         
     except Exception as e:
-        print(f"Error enviando notificaciones: {e}")
+        logger.error(f"Error enviando notificaciones: {e}")
 
 
 async def _enviar_email_nueva_solicitud(solicitud: Aprobacion, admins: List[User]):
@@ -1287,7 +1287,7 @@ async def _enviar_email_nueva_solicitud(solicitud: Aprobacion, admins: List[User
                 )
                 
     except Exception as e:
-        print(f"Error enviando emails: {e}")
+        logger.error(f"Error enviando emails: {e}")
 
 
 async def _notificar_resultado_solicitud(solicitud: Aprobacion, db: Session):
@@ -1342,7 +1342,7 @@ async def _notificar_resultado_solicitud(solicitud: Aprobacion, db: Session):
         db.commit()
         
     except Exception as e:
-        print(f"Error enviando notificación de resultado: {e}")
+        logger.error(f"Error enviando notificación de resultado: {e}")
 
 
 async def _enviar_email_resultado_solicitud(solicitud: Aprobacion):
@@ -1432,4 +1432,4 @@ async def _enviar_email_resultado_solicitud(solicitud: Aprobacion):
             )
             
     except Exception as e:
-        print(f"Error enviando email de resultado: {e}")
+        logger.error(f"Error enviando email de resultado: {e}")

@@ -1191,14 +1191,14 @@ async def _guardar_cliente_desde_carga(
                     setattr(cliente_existente, key, value)
             cliente_existente.fecha_actualizacion = datetime.utcnow()
             
-            print(f"✅ Cliente actualizado: {datos['cedula']}")
+            logger.info(f"Cliente actualizado: {datos['cedula']}")
         else:
             # Crear nuevo cliente
             nuevo_cliente = Cliente(**cliente_data)
             db.add(nuevo_cliente)
             db.flush()
             
-            print(f"✅ Cliente creado: {datos['cedula']} (ID: {nuevo_cliente.id})")
+            logger.info(f"Cliente creado: {datos['cedula']} (ID: {nuevo_cliente.id})")
         
         # Registrar en auditoría
         auditoria = Auditoria.registrar(
@@ -1265,7 +1265,7 @@ async def _guardar_pago_desde_carga(
         db.add(nuevo_pago)
         db.flush()
         
-        print(f"✅ Pago creado para cliente {datos['cedula']}: ${datos['monto_pagado']}")
+        logger.info(f"Pago creado para cliente {datos['cedula']}: ${datos['monto_pagado']}")
         
         # Registrar en auditoría
         auditoria = Auditoria.registrar(

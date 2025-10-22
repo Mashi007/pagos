@@ -688,7 +688,7 @@ def obtener_configuracion_validadores(
     ⚙️ Obtener configuración de validadores para el frontend
     """
     try:
-        print(f"🔧 Obteniendo configuración de validadores para usuario: {current_user.email}")
+        logger.info(f"Obteniendo configuración de validadores para usuario: {current_user.email}")
         return {
             "titulo": "⚙️ CONFIGURACIÓN DE VALIDADORES",
             
