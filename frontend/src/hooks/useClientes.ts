@@ -3,6 +3,12 @@ import { clienteService } from '@/services/clienteService'
 import { Cliente, ClienteForm, ClienteFilters } from '@/types'
 import toast from 'react-hot-toast'
 
+// Constantes de configuración
+const DEFAULT_PER_PAGE = 20
+const STALE_TIME_SHORT = 2 * 60 * 1000 // 2 minutos
+const STALE_TIME_MEDIUM = 5 * 60 * 1000 // 5 minutos
+const STALE_TIME_LONG = 10 * 60 * 1000 // 10 minutos
+
 // Keys para React Query
 export const clienteKeys = {
   all: ['clientes'] as const,
@@ -19,12 +25,12 @@ export const clienteKeys = {
 export function useClientes(
   filters?: ClienteFilters,
   page: number = 1,
-  perPage: number = 20
+  perPage: number = DEFAULT_PER_PAGE
 ) {
   return useQuery({
     queryKey: clienteKeys.list({ ...filters, per_page: perPage }),
     queryFn: () => clienteService.getClientes(filters, page, perPage),
-    staleTime: 5 * 60 * 1000, // 5 minutos
+    staleTime: STALE_TIME_MEDIUM,
   })
 }
 
@@ -34,7 +40,7 @@ export function useCliente(id: string) {
     queryKey: clienteKeys.detail(id),
     queryFn: () => clienteService.getCliente(id),
     enabled: !!id,
-    staleTime: 10 * 60 * 1000, // 10 minutos
+    staleTime: STALE_TIME_LONG,
   })
 }
 
@@ -44,7 +50,7 @@ export function useSearchClientes(query: string) {
     queryKey: clienteKeys.search(query),
     queryFn: () => clienteService.searchClientes(query),
     enabled: query.length >= 2,
-    staleTime: 2 * 60 * 1000, // 2 minutos
+    staleTime: STALE_TIME_SHORT,
   })
 }
 
@@ -53,7 +59,7 @@ export function useClientesEnMora() {
   return useQuery({
     queryKey: clienteKeys.mora(),
     queryFn: () => clienteService.getClientesEnMora(),
-    staleTime: 5 * 60 * 1000, // 5 minutos
+    staleTime: STALE_TIME_MEDIUM,
   })
 }
 
@@ -63,7 +69,7 @@ export function useClientesByAsesor(analistaId: string) {
     queryKey: clienteKeys.byAsesor(analistaId),
     queryFn: () => clienteService.getClientesByAnalista(analistaId),
     enabled: !!analistaId,
-    staleTime: 10 * 60 * 1000, // 10 minutos
+    staleTime: STALE_TIME_LONG,
   })
 }
 

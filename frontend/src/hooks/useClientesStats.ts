@@ -1,6 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { clienteService } from '@/services/clienteService'
 
+// Constantes de configuración
+const MAX_CLIENTES_STATS = 1000
+const STALE_TIME_STATS = 5 * 60 * 1000 // 5 minutos
+
 interface ClientesStats {
   total: number
   activos: number
@@ -12,10 +16,8 @@ export function useClientesStats() {
   return useQuery({
     queryKey: ['clientes-stats'],
     queryFn: async (): Promise<ClientesStats> => {
-      console.log('📊 Obteniendo estadísticas de clientes...')
-      
       // Obtener todos los clientes para calcular estadísticas
-      const response = await clienteService.getClientes({}, 1, 1000) // Obtener hasta 1000 clientes
+      const response = await clienteService.getClientes({}, 1, MAX_CLIENTES_STATS)
       
       const clientes = response.data
       
@@ -27,10 +29,9 @@ export function useClientesStats() {
         finalizados: clientes.filter(c => c.estado === 'FINALIZADO').length
       }
       
-      console.log('📊 Estadísticas calculadas:', stats)
       return stats
     },
-    staleTime: 5 * 60 * 1000, // 5 minutos
+    staleTime: STALE_TIME_STATS,
     refetchOnWindowFocus: false
   })
 }

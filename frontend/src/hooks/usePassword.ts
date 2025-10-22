@@ -5,6 +5,11 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 
+// Constantes de configuración
+const PASSWORD_LENGTH = 12
+const MIN_REQUIRED_CHARS = 4
+const MIN_PASSWORD_LENGTH = 8
+
 interface UsePasswordOptions {
   initialPassword?: string
   onPasswordChange?: (password: string) => void
@@ -30,8 +35,8 @@ export const usePassword = (options: UsePasswordOptions = {}) => {
     newPassword += numberChars.charAt(Math.floor(Math.random() * numberChars.length))
     newPassword += symbolChars.charAt(Math.floor(Math.random() * symbolChars.length))
     
-    // Completar hasta 12 caracteres
-    for (let i = 4; i < 12; i++) {
+    // Completar hasta longitud deseada
+    for (let i = MIN_REQUIRED_CHARS; i < PASSWORD_LENGTH; i++) {
       newPassword += allChars.charAt(Math.floor(Math.random() * allChars.length))
     }
     
@@ -91,7 +96,7 @@ export const usePassword = (options: UsePasswordOptions = {}) => {
     const hasLowercase = /[a-z]/.test(pwd)
     const hasNumbers = /\d/.test(pwd)
     const hasSymbols = /[!@#$%^&*]/.test(pwd)
-    const hasMinLength = pwd.length >= 8
+    const hasMinLength = pwd.length >= MIN_PASSWORD_LENGTH
 
     return {
       isValid: hasUppercase && hasLowercase && hasNumbers && hasSymbols && hasMinLength,

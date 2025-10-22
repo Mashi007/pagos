@@ -3,6 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { analistaService, Analista, AnalistaCreate, AnalistaUpdate } from '@/services/analistaService'
 import toast from 'react-hot-toast'
 
+// Constantes de configuración
+const STALE_TIME_MEDIUM = 5 * 60 * 1000 // 5 minutos
+const STALE_TIME_LONG = 10 * 60 * 1000 // 10 minutos
+const RETRY_COUNT = 3
+const RETRY_DELAY = 1000 // 1 segundo
+
 // Keys para React Query
 export const analistaKeys = {
   all: ['analistas'] as const,
@@ -18,9 +24,9 @@ export function useAnalistas(filters?: any) {
   return useQuery({
     queryKey: analistaKeys.list(filters),
     queryFn: () => analistaService.listarAnalistas(filters),
-    staleTime: 5 * 60 * 1000, // 5 minutos
-    retry: 3,
-    retryDelay: 1000,
+    staleTime: STALE_TIME_MEDIUM,
+    retry: RETRY_COUNT,
+    retryDelay: RETRY_DELAY,
   })
 }
 
@@ -29,9 +35,9 @@ export function useAnalistasActivos() {
   return useQuery({
     queryKey: analistaKeys.activos(),
     queryFn: () => analistaService.listarAnalistasActivos(),
-    staleTime: 10 * 60 * 1000, // 10 minutos
-    retry: 3,
-    retryDelay: 1000,
+    staleTime: STALE_TIME_LONG,
+    retry: RETRY_COUNT,
+    retryDelay: RETRY_DELAY,
   })
 }
 
@@ -41,7 +47,7 @@ export function useAnalista(id: number) {
     queryKey: analistaKeys.detail(id),
     queryFn: () => analistaService.obtenerAnalista(id),
     enabled: !!id,
-    staleTime: 10 * 60 * 1000, // 10 minutos
+    staleTime: STALE_TIME_LONG,
   })
 }
 
