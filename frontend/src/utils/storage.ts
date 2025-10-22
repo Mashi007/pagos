@@ -4,11 +4,14 @@
  * Evita inconsistencias entre diferentes archivos
  */
 
-// Funciones de localStorage
-export const safeGetItem = (key: string, fallback: any = null) => {
+// Constantes de almacenamiento
+const INVALID_VALUES = ['', 'undefined', 'null']
+
+// Función helper para obtener item de storage
+const getStorageItem = (storage: Storage, key: string, fallback: any = null) => {
   try {
-    const item = localStorage.getItem(key)
-    if (item === null || item === '' || item === 'undefined' || item === 'null') {
+    const item = storage.getItem(key)
+    if (item === null || INVALID_VALUES.includes(item)) {
       return fallback
     }
     try {
@@ -21,63 +24,53 @@ export const safeGetItem = (key: string, fallback: any = null) => {
   }
 }
 
-export const safeSetItem = (key: string, value: any) => {
+// Función helper para establecer item en storage
+const setStorageItem = (storage: Storage, key: string, value: any) => {
   try {
     if (value === undefined) return false
     const stringValue = typeof value === 'string' ? value : JSON.stringify(value)
     if (stringValue === 'undefined') return false
-    localStorage.setItem(key, stringValue)
+    storage.setItem(key, stringValue)
     return true
   } catch {
     return false
   }
 }
 
-export const safeRemoveItem = (key: string) => {
+// Función helper para remover item de storage
+const removeStorageItem = (storage: Storage, key: string) => {
   try {
-    localStorage.removeItem(key)
+    storage.removeItem(key)
     return true
   } catch {
     return false
   }
+}
+
+// Funciones de localStorage
+export const safeGetItem = (key: string, fallback: any = null) => {
+  return getStorageItem(localStorage, key, fallback)
+}
+
+export const safeSetItem = (key: string, value: any) => {
+  return setStorageItem(localStorage, key, value)
+}
+
+export const safeRemoveItem = (key: string) => {
+  return removeStorageItem(localStorage, key)
 }
 
 // Funciones de sessionStorage
 export const safeGetSessionItem = (key: string, fallback: any = null) => {
-  try {
-    const item = sessionStorage.getItem(key)
-    if (item === null || item === '' || item === 'undefined' || item === 'null') {
-      return fallback
-    }
-    try {
-      return JSON.parse(item)
-    } catch {
-      return item
-    }
-  } catch {
-    return fallback
-  }
+  return getStorageItem(sessionStorage, key, fallback)
 }
 
 export const safeSetSessionItem = (key: string, value: any) => {
-  try {
-    if (value === undefined) return false
-    const stringValue = typeof value === 'string' ? value : JSON.stringify(value)
-    if (stringValue === 'undefined') return false
-    sessionStorage.setItem(key, stringValue)
-    return true
-  } catch {
-    return false
-  }
+  return setStorageItem(sessionStorage, key, value)
 }
 
 export const safeRemoveSessionItem = (key: string) => {
-  try {
-    sessionStorage.removeItem(key)
-    return true
-  } catch {
-    return false
-  }
+  return removeStorageItem(sessionStorage, key)
 }
 
 // Función para limpiar todo el almacenamiento de autenticación
