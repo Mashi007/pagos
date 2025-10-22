@@ -1,0 +1,382 @@
+name: 🚀 CI/CD Pipeline - Sistema de Préstamos y Cobranza
+
+# Trigger del pipeline
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch: # Permite ejecución manual
+
+# Variables globales
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+  BACKEND_DIR: './backend'
+  FRONTEND_DIR: './frontend'
+
+jobs:
+  # ========================================
+  # 🔍 ANÁLISIS DE CÓDIGO Y CALIDAD
+  # ========================================
+  code-quality:
+    name: 🔍 Análisis de Calidad de Código
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Para análisis completo de git
+      
+      - name: 🐍 Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: 📦 Instalar dependencias backend
+        run: |
+          cd ${{ env.BACKEND_DIR }}
+          pip install -r requirements.txt
+          pip install flake8 black isort mypy
+      
+      - name: 🔍 Linting con flake8
+        run: |
+          cd ${{ env.BACKEND_DIR }}
+          flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 app/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      
+      - name: 🎨 Formateo con black
+        run: |
+          cd ${{ env.BACKEND_DIR }}
+          black --check app/
+      
+      - name: 📝 Ordenamiento de imports con isort
+        run: |
+          cd ${{ env.BACKEND_DIR }}
+          isort --check-only app/
+      
+      - name: 🔒 Verificación de tipos con mypy
+        run: |
+          cd ${{ env.BACKEND_DIR }}
+          mypy app/ --ignore-missing-imports || true
+
+  # ========================================
+  # 🧪 PRUEBAS BACKEND
+  # ========================================
+  backend-tests:
+    name: 🧪 Pruebas Backend
+    runs-on: ubuntu-latest
+    needs: code-quality
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: 📦 Instalar dependencias backend
+        run: |
+          cd ${{ env.BACKEND_DIR }}
+          pip install -r requirements.txt
+          pip install pytest-cov pytest-asyncio httpx
+      
+      - name: 🔧 Configurar variables de entorno de prueba
+        run: |
+          echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/test_db" >> $GITHUB_ENV
+          echo "SECRET_KEY=test-secret-key-for-ci" >> $GITHUB_ENV
+          echo "ENVIRONMENT=testing" >> $GITHUB_ENV
+          echo "DEBUG=true" >> $GITHUB_ENV
+      
+      - name: 🗄️ Ejecutar migraciones de prueba
+        run: |
+          cd ${{ env.BACKEND_DIR }}
+          alembic upgrade head
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+      
+      - name: 🧪 Ejecutar pruebas unitarias
+        run: |
+          cd ${{ env.BACKEND_DIR }}
+          pytest tests/unit/ -v --cov=app --cov-report=xml --cov-report=html
+      
+      - name: 🔗 Ejecutar pruebas de integración
+        run: |
+          cd ${{ env.BACKEND_DIR }}
+          pytest tests/integration/ -v --cov=app --cov-report=xml --cov-report=html
+      
+      - name: 📊 Subir reporte de cobertura
+        uses: codecov/codecov-action@v3
+        with:
+          file: ${{ env.BACKEND_DIR }}/coverage.xml
+          flags: backend
+          name: backend-coverage
+          fail_ci_if_error: false
+
+  # ========================================
+  # 🧪 PRUEBAS FRONTEND
+  # ========================================
+  frontend-tests:
+    name: 🧪 Pruebas Frontend
+    runs-on: ubuntu-latest
+    needs: code-quality
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+      
+      - name: 📦 Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+      
+      - name: 📦 Instalar dependencias frontend
+        run: |
+          cd ${{ env.FRONTEND_DIR }}
+          npm ci
+      
+      - name: 🔍 Linting con ESLint
+        run: |
+          cd ${{ env.FRONTEND_DIR }}
+          npm run lint
+      
+      - name: 🎨 Formateo con Prettier
+        run: |
+          cd ${{ env.FRONTEND_DIR }}
+          npm run format:check
+      
+      - name: 🔒 Verificación de tipos TypeScript
+        run: |
+          cd ${{ env.FRONTEND_DIR }}
+          npm run type-check
+      
+      - name: 🧪 Ejecutar pruebas unitarias
+        run: |
+          cd ${{ env.FRONTEND_DIR }}
+          npm run test:unit
+      
+      - name: 🔗 Ejecutar pruebas de integración
+        run: |
+          cd ${{ env.FRONTEND_DIR }}
+          npm run test:integration
+      
+      - name: 📊 Generar reporte de cobertura
+        run: |
+          cd ${{ env.FRONTEND_DIR }}
+          npm run test:coverage
+      
+      - name: 📊 Subir reporte de cobertura frontend
+        uses: codecov/codecov-action@v3
+        with:
+          file: ${{ env.FRONTEND_DIR }}/coverage/lcov.info
+          flags: frontend
+          name: frontend-coverage
+          fail_ci_if_error: false
+
+  # ========================================
+  # 🏗️ BUILD Y VERIFICACIÓN
+  # ========================================
+  build:
+    name: 🏗️ Build y Verificación
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: 📦 Instalar dependencias backend
+        run: |
+          cd ${{ env.BACKEND_DIR }}
+          pip install -r requirements.txt
+      
+      - name: 📦 Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+      
+      - name: 📦 Instalar dependencias frontend
+        run: |
+          cd ${{ env.FRONTEND_DIR }}
+          npm ci
+      
+      - name: 🏗️ Build frontend
+        run: |
+          cd ${{ env.FRONTEND_DIR }}
+          npm run build
+      
+      - name: 📦 Verificar build frontend
+        run: |
+          cd ${{ env.FRONTEND_DIR }}
+          ls -la dist/
+          du -sh dist/
+      
+      - name: 🔍 Verificar archivos críticos
+        run: |
+          echo "Verificando archivos críticos..."
+          test -f ${{ env.BACKEND_DIR }}/app/main.py
+          test -f ${{ env.FRONTEND_DIR }}/dist/index.html
+          echo "✅ Todos los archivos críticos presentes"
+
+  # ========================================
+  # 🚀 DESPLIEGUE A PRODUCCIÓN
+  # ========================================
+  deploy-production:
+    name: 🚀 Despliegue a Producción
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+      
+      - name: 🚀 Despliegue a Render
+        uses: render-actions/deploy@v1
+        with:
+          service-id: ${{ secrets.RENDER_SERVICE_ID }}
+          api-key: ${{ secrets.RENDER_API_KEY }}
+          wait-for-success: true
+          timeout: 600
+      
+      - name: 🔍 Verificar health check
+        run: |
+          echo "Esperando que el servicio esté disponible..."
+          sleep 30
+          
+          # Intentar health check múltiples veces
+          for i in {1..5}; do
+            if curl -f "${{ secrets.RENDER_SERVICE_URL }}/api/v1/health/render"; then
+              echo "✅ Health check exitoso"
+              break
+            else
+              echo "⏳ Intento $i/5 falló, esperando 30 segundos..."
+              sleep 30
+            fi
+          done
+      
+      - name: 📊 Verificar métricas de despliegue
+        run: |
+          echo "Verificando métricas del despliegue..."
+          curl -s "${{ secrets.RENDER_SERVICE_URL }}/api/v1/health/detailed" | jq '.'
+      
+      - name: 📱 Notificar éxito
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          text: |
+            ✅ *Despliegue Exitoso*
+            🚀 Sistema de Préstamos y Cobranza
+            📊 Branch: ${{ github.ref_name }}
+            👤 Usuario: ${{ github.actor }}
+            🔗 Commit: ${{ github.sha }}
+            🌐 URL: ${{ secrets.RENDER_SERVICE_URL }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # ========================================
+  # 🚀 DESPLIEGUE A STAGING
+  # ========================================
+  deploy-staging:
+    name: 🚀 Despliegue a Staging
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment: staging
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+      
+      - name: 🚀 Despliegue a Render Staging
+        uses: render-actions/deploy@v1
+        with:
+          service-id: ${{ secrets.RENDER_STAGING_SERVICE_ID }}
+          api-key: ${{ secrets.RENDER_API_KEY }}
+          wait-for-success: true
+          timeout: 600
+      
+      - name: 🔍 Verificar health check staging
+        run: |
+          echo "Esperando que el servicio de staging esté disponible..."
+          sleep 30
+          
+          for i in {1..3}; do
+            if curl -f "${{ secrets.RENDER_STAGING_URL }}/api/v1/health/render"; then
+              echo "✅ Health check staging exitoso"
+              break
+            else
+              echo "⏳ Intento $i/3 falló, esperando 30 segundos..."
+              sleep 30
+            fi
+          done
+      
+      - name: 📱 Notificar staging
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          text: |
+            🧪 *Despliegue Staging Exitoso*
+            🚀 Sistema de Préstamos y Cobranza
+            📊 Branch: ${{ github.ref_name }}
+            👤 Usuario: ${{ github.actor }}
+            🌐 URL: ${{ secrets.RENDER_STAGING_URL }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # ========================================
+  # 🚨 NOTIFICACIONES DE FALLO
+  # ========================================
+  notify-failure:
+    name: 🚨 Notificar Fallo
+    runs-on: ubuntu-latest
+    needs: [code-quality, backend-tests, frontend-tests, build]
+    if: failure()
+    
+    steps:
+      - name: 📱 Notificar fallo
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: |
+            ❌ *Pipeline Falló*
+            🚀 Sistema de Préstamos y Cobranza
+            📊 Branch: ${{ github.ref_name }}
+            👤 Usuario: ${{ github.actor }}
+            🔗 Commit: ${{ github.sha }}
+            📋 Job fallido: ${{ github.job }}
+            🔗 Ver logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

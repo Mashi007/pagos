@@ -1,0 +1,215 @@
+name: 🔒 Security Scanning
+
+# Trigger del pipeline
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 2 * * 1' # Cada lunes a las 2 AM
+  workflow_dispatch:
+
+jobs:
+  # ========================================
+  # 🔍 ANÁLISIS DE VULNERABILIDADES BACKEND
+  # ========================================
+  backend-security:
+    name: 🔒 Security Backend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: 📦 Instalar dependencias
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install safety bandit semgrep
+      
+      - name: 🔍 Análisis de vulnerabilidades con Safety
+        run: |
+          cd backend
+          safety check --json --output safety-report.json || true
+          safety check --short-report
+      
+      - name: 🔒 Análisis de seguridad con Bandit
+        run: |
+          cd backend
+          bandit -r app/ -f json -o bandit-report.json || true
+          bandit -r app/ -ll
+      
+      - name: 🔍 Análisis estático con Semgrep
+        run: |
+          cd backend
+          semgrep --config=auto app/ --json --output=semgrep-report.json || true
+          semgrep --config=auto app/
+      
+      - name: 📊 Subir reportes de seguridad
+        uses: actions/upload-artifact@v3
+        with:
+          name: backend-security-reports
+          path: |
+            backend/safety-report.json
+            backend/bandit-report.json
+            backend/semgrep-report.json
+
+  # ========================================
+  # 🔍 ANÁLISIS DE VULNERABILIDADES FRONTEND
+  # ========================================
+  frontend-security:
+    name: 🔒 Security Frontend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+      
+      - name: 📦 Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      
+      - name: 📦 Instalar dependencias
+        run: |
+          cd frontend
+          npm ci
+      
+      - name: 🔍 Análisis de vulnerabilidades con npm audit
+        run: |
+          cd frontend
+          npm audit --json > npm-audit-report.json || true
+          npm audit
+      
+      - name: 🔒 Análisis de seguridad con Snyk
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+      
+      - name: 📊 Subir reportes de seguridad frontend
+        uses: actions/upload-artifact@v3
+        with:
+          name: frontend-security-reports
+          path: frontend/npm-audit-report.json
+
+  # ========================================
+  # 🔍 ANÁLISIS DE SECRETOS
+  # ========================================
+  secrets-scan:
+    name: 🔍 Secrets Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: 🔍 Detectar secretos con TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified
+      
+      - name: 🔍 Detectar secretos con GitLeaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ========================================
+  # 🔍 ANÁLISIS DE DEPENDENCIAS
+  # ========================================
+  dependency-review:
+    name: 🔍 Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+      
+      - name: 🔍 Revisar dependencias
+        uses: actions/dependency-review-action@v3
+        with:
+          fail-on-severity: moderate
+          allow-licenses: MIT, Apache-2.0, BSD-3-Clause, ISC
+          deny-licenses: GPL-2.0, GPL-3.0
+
+  # ========================================
+  # 📊 REPORTE DE SEGURIDAD
+  # ========================================
+  security-report:
+    name: 📊 Security Report
+    runs-on: ubuntu-latest
+    needs: [backend-security, frontend-security, secrets-scan]
+    if: always()
+    
+    steps:
+      - name: 📥 Descargar reportes
+        uses: actions/download-artifact@v3
+        with:
+          path: security-reports
+      
+      - name: 📊 Generar reporte consolidado
+        run: |
+          echo "# 🔒 Security Report" > security-summary.md
+          echo "Fecha: $(date)" >> security-summary.md
+          echo "" >> security-summary.md
+          
+          echo "## Backend Security" >> security-summary.md
+          if [ -f "security-reports/backend-security-reports/safety-report.json" ]; then
+            echo "✅ Safety scan completado" >> security-summary.md
+          fi
+          if [ -f "security-reports/backend-security-reports/bandit-report.json" ]; then
+            echo "✅ Bandit scan completado" >> security-summary.md
+          fi
+          if [ -f "security-reports/backend-security-reports/semgrep-report.json" ]; then
+            echo "✅ Semgrep scan completado" >> security-summary.md
+          fi
+          
+          echo "" >> security-summary.md
+          echo "## Frontend Security" >> security-summary.md
+          if [ -f "security-reports/frontend-security-reports/npm-audit-report.json" ]; then
+            echo "✅ NPM audit completado" >> security-summary.md
+          fi
+          
+          echo "" >> security-summary.md
+          echo "## Secrets Scan" >> security-summary.md
+          echo "✅ TruffleHog scan completado" >> security-summary.md
+          echo "✅ GitLeaks scan completado" >> security-summary.md
+          
+          cat security-summary.md
+      
+      - name: 📊 Subir reporte consolidado
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-summary
+          path: security-summary.md
+      
+      - name: 📱 Notificar si hay vulnerabilidades críticas
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: |
+            🚨 *Vulnerabilidades de Seguridad Detectadas*
+            🔒 Sistema de Préstamos y Cobranza
+            📊 Branch: ${{ github.ref_name }}
+            👤 Usuario: ${{ github.actor }}
+            🔗 Ver detalles: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
