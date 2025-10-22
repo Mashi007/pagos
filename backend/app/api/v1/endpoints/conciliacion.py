@@ -499,7 +499,7 @@ def procesar_revision_manual(
                     raise HTTPException(status_code=404, detail="Cuota no encontrada")
             
             # Crear pago
-            monto_final = revision.monto_ajustado or movimiento.monto
+            monto_final = revision.monto_ajustado or revision.monto
             
             # Obtener movimiento original (esto requeriría almacenamiento temporal)
             # Por simplicidad, crear pago directamente

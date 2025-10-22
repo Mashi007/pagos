@@ -276,6 +276,11 @@ def kpis_cobranza(
         Cliente.dias_mora > 0
     ).count()
     
+    clientes_al_dia = db.query(Cliente).filter(
+        Cliente.activo == True,
+        Cliente.dias_mora == 0
+    ).count()
+    
     tasa_morosidad_general = (clientes_mora / total_clientes * 100) if total_clientes > 0 else 0
     
     # Tasa de morosidad por analista

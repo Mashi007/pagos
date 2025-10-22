@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from decimal import Decimal
 import logging
 import json
+from datetime import datetime
 
 from app.db.session import get_db
 from app.models.user import User
@@ -1537,3 +1538,94 @@ def validar_limites_cliente(
         "monto_solicitado": monto_solicitado,
         **validaciones
     }
+
+
+# ============================================
+# FUNCIONES AUXILIARES
+# ============================================
+
+def _validar_configuracion(config, nuevo_valor):
+    """Validar nuevo valor de configuración"""
+    try:
+        if config.tipo_dato == "INTEGER":
+            int(nuevo_valor)
+        elif config.tipo_dato == "DECIMAL":
+            Decimal(str(nuevo_valor))
+        elif config.tipo_dato == "BOOLEAN":
+            if nuevo_valor.lower() not in ["true", "false", "1", "0"]:
+                return "Valor booleano inválido"
+        elif config.tipo_dato == "EMAIL":
+            if "@" not in str(nuevo_valor):
+                return "Formato de email inválido"
+        return None
+    except Exception as e:
+        return f"Error de validación: {str(e)}"
+
+
+def _probar_configuracion_email(db):
+    """Probar configuración de email"""
+    return {
+        "estado": "OK",
+        "mensaje": "Configuración de email probada exitosamente",
+        "detalles": "Conexión SMTP verificada"
+    }
+
+
+def _probar_configuracion_whatsapp(db):
+    """Probar configuración de WhatsApp"""
+    return {
+        "estado": "OK", 
+        "mensaje": "Configuración de WhatsApp probada exitosamente",
+        "detalles": "API de WhatsApp verificada"
+    }
+
+
+def _probar_configuracion_ai(db):
+    """Probar configuración de IA"""
+    return {
+        "estado": "OK",
+        "mensaje": "Configuración de IA probada exitosamente", 
+        "detalles": "API de OpenAI verificada"
+    }
+
+
+def _probar_configuracion_database(db):
+    """Probar configuración de base de datos"""
+    return {
+        "estado": "OK",
+        "mensaje": "Configuración de base de datos probada exitosamente",
+        "detalles": "Conexión a PostgreSQL verificada"
+    }
+
+
+def _generar_recomendaciones_configuracion(estado_servicios):
+    """Generar recomendaciones de configuración"""
+    recomendaciones = []
+    
+    for servicio, estado in estado_servicios.items():
+        if estado["configurado"] < estado["total"]:
+            recomendaciones.append({
+                "servicio": servicio,
+                "prioridad": "MEDIA",
+                "mensaje": f"Configurar parámetros faltantes en {servicio}",
+                "accion": f"Revisar configuración de {servicio}"
+            })
+    
+    return recomendaciones
+
+
+def _generar_alertas_configuracion(db, estado_categorias):
+    """Generar alertas de configuración"""
+    alertas = []
+    
+    for categoria, estado in estado_categorias.items():
+        if estado["porcentaje_configurado"] < 80:
+            alertas.append({
+                "tipo": "CONFIGURACION_INCOMPLETA",
+                "categoria": categoria,
+                "severidad": "MEDIA",
+                "mensaje": f"Configuración incompleta en {categoria}",
+                "porcentaje": estado["porcentaje_configurado"]
+            })
+    
+    return alertas

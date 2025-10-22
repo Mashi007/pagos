@@ -3,6 +3,7 @@
 🔄 Sistema de Carga Masiva de Clientes y Pagos
 Proceso completo con validación, corrección en línea y articulación por cédula
 """
+import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.orm import Session
@@ -31,6 +32,8 @@ from app.services.validators_service import (
     ValidadorFecha,
     ValidadorMonto
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

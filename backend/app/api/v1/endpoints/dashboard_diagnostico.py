@@ -284,8 +284,6 @@ async def limpiar_logs_auditoria():
     🧹 Limpiar logs de auditoría
     """
     try:
-        global audit_logs, error_patterns, request_stats
-        
         # Limpiar logs
         audit_logs.clear()
         error_patterns.clear()

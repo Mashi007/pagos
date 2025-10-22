@@ -15,7 +15,10 @@ from app.models.notificacion import Notificacion
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.pago import Pago
+from app.models.amortizacion import Cuota
+from app.models.asesor import Asesor
 from app.core.config import settings
+from decimal import Decimal
 import logging
 
 # Servicios de notificación

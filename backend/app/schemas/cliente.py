@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
+from app.utils.validators import sanitize_html
 
 # Constantes de validación
 MIN_CEDULA_LENGTH = 8

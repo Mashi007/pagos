@@ -84,8 +84,6 @@ def check_database_cached() -> Dict[str, Any]:
     Verifica la DB con cache para reducir carga y análisis de impacto
     Solo hace check real cada 30 segundos
     """
-    global _last_db_check
-    
     start_time = time.time()
     now = datetime.utcnow()
     
@@ -383,7 +381,6 @@ async def initialize_database(db: Session = Depends(get_db)):
         logger.info("✅ Tablas recreadas exitosamente")
         
         # Invalidar cache de DB check
-        global _last_db_check
         _last_db_check["timestamp"] = None
         
         return {

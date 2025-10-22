@@ -11,6 +11,7 @@ from datetime import datetime, date, timedelta
 from pydantic import BaseModel, Field
 import os
 import uuid
+import logging
 from pathlib import Path
 
 from app.db.session import get_db
