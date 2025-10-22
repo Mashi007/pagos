@@ -5,6 +5,7 @@ Maneja solicitudes para acciones que requieren autorización
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timedelta

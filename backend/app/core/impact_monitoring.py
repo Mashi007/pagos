@@ -4,6 +4,7 @@ Implementa monitoreo avanzado con métricas de impacto en recursos del sistema
 """
 import time
 import psutil
+import os
 import logging
 import json
 from datetime import datetime, timedelta

@@ -14,6 +14,7 @@ from app.models.pago import Pago
 from app.models.cliente import Cliente
 from app.models.amortizacion import Cuota
 from app.schemas.reportes import (
+    ReporteCartera,
     ReporteMorosidad,
     ReporteCobranza,
     FiltrosReporte
