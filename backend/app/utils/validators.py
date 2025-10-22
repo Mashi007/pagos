@@ -3,6 +3,11 @@
 Validadores personalizados para el sistema
 DNI, teléfonos, emails, montos, etc.
 """
+import re
+from typing import Optional
+from decimal import Decimal
+from datetime import date
+
 # Constantes de validación
 MIN_DNI_LENGTH = 7
 MAX_DNI_LENGTH = 11
