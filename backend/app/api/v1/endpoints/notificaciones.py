@@ -17,7 +17,7 @@ from app.models.prestamo import Prestamo
 from app.models.pago import Pago
 from app.models.amortizacion import Cuota
 from decimal import Decimal
-from app.models.analista import Analista
+from app.core.config import settings
 import logging
 
 # Servicios de notificación
