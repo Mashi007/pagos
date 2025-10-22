@@ -1,18 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
-from sqlalchemy.orm import Session
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, status, Query, UploadFile, File
+
 from sqlalchemy import func, desc, and_
-from app.db.session import get_db
-from app.models.user import User
-from app.models.pago import Pago
-from app.api.deps import get_current_user
+
 from app.schemas.pago import (
-    PagoCreate, PagoUpdate, PagoResponse, PagoListResponse,
-    ConciliacionCreate, ConciliacionResponse, KPIsPagos, ResumenCliente
-)
-from typing import List, Optional
-import logging
-from datetime import datetime, timedelta
-import os
+    PagoCreate, PagoResponse, PagoListResponse,
+    KPIsPagos, ResumenCliente
+
 import uuid
 from pathlib import Path
 
@@ -26,12 +24,12 @@ MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-@router.post("/crear", response_model=PagoResponse, status_code=status.HTTP_201_CREATED)
+router.post("/crear", response_model=PagoResponse, status_code=status.HTTP_201_CREATED)
 async def crear_pago(
     pago_data: PagoCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """Crear un nuevo pago"""
     try:
         logger.info(f"Usuario {current_user.email} creando pago para cédula {pago_data.cedula_cliente}")
@@ -65,12 +63,12 @@ async def crear_pago(
             detail=f"Error interno del servidor: {str(e)}"
         )
 
-@router.post("/subir-documento", status_code=status.HTTP_200_OK)
+router.post("/subir-documento", status_code=status.HTTP_200_OK)
 async def subir_documento(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """Subir documento de pago"""
     try:
         # Validar tipo de archivo
@@ -117,7 +115,7 @@ async def subir_documento(
             detail=f"Error interno del servidor: {str(e)}"
         )
 
-@router.get("/listar", response_model=PagoListResponse)
+router.get("/listar", response_model=PagoListResponse)
 async def listar_pagos(
     pagina: int = Query(1, ge=1, description="Número de página"),
     por_pagina: int = Query(20, ge=1, le=1000, description="Elementos por página"),
@@ -125,10 +123,10 @@ async def listar_pagos(
     conciliado: Optional[bool] = Query(None, description="Filtrar por estado de conciliación"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """Listar pagos con filtros"""
     try:
-        query = db.query(Pago).filter(Pago.activo == True)
+        query = db.query(Pago).filter(Pago.activo )
 
         # Aplicar filtros
         if cedula:
@@ -160,21 +158,21 @@ async def listar_pagos(
             detail=f"Error interno del servidor: {str(e)}"
         )
 
-@router.get("/kpis", response_model=KPIsPagos)
+router.get("/kpis", response_model=KPIsPagos)
 async def obtener_kpis_pagos(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """Obtener KPIs de pagos"""
     try:
         # KPIs básicos
-        total_pagos = db.query(Pago).filter(Pago.activo == True).count()
-        total_dolares = db.query(func.sum(Pago.monto_pagado)).filter(Pago.activo == True).scalar() or 0
+        total_pagos = db.query(Pago).filter(Pago.activo ).count()
+        total_dolares = db.query(func.sum(Pago.monto_pagado)).filter(Pago.activo ).scalar() or 0
         numero_pagos = total_pagos  # Mismo valor para consistencia
 
         # KPIs de conciliación
         cantidad_conciliada = db.query(Pago).filter(
-            and_(Pago.activo == True, Pago.conciliado == True)
+            and_(Pago.activo , Pago.conciliado )
         ).count()
         cantidad_no_conciliada = total_pagos - cantidad_conciliada
 
@@ -194,17 +192,17 @@ async def obtener_kpis_pagos(
             detail=f"Error interno del servidor: {str(e)}"
         )
 
-@router.get("/resumen-cliente/{cedula}", response_model=ResumenCliente)
+router.get("/resumen-cliente/{cedula}", response_model=ResumenCliente)
 async def obtener_resumen_cliente(
     cedula: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """Obtener resumen de pagos por cliente"""
     try:
         # Filtrar pagos del cliente
         pagos_cliente = db.query(Pago).filter(
-            and_(Pago.activo == True, Pago.cedula_cliente == cedula.upper())
+            and_(Pago.activo , Pago.cedula_cliente == cedula.upper())
         ).all()
 
         if not pagos_cliente:
@@ -249,11 +247,11 @@ async def obtener_resumen_cliente(
             detail=f"Error interno del servidor: {str(e)}"
         )
 
-@router.get("/descargar-documento/{filename}")
+router.get("/descargar-documento/{filename}")
 async def descargar_documento(
     filename: str,
     current_user: User = Depends(get_current_user)
-):
+:
     """Descargar documento de pago"""
     try:
         file_path = UPLOAD_DIR / filename

@@ -1,23 +1,24 @@
 # backend/app/services/amortizacion_service.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Servicio de Amortización
 Lógica de negocio para generación y gestión de tablas de amortización
-"""
-from typing import List, Optional, Tuple
-from datetime import date, datetime
-from decimal import Decimal, ROUND_HALF_UP
-from sqlalchemy.orm import Session
-from sqlalchemy import and_
+""
+ datetime
+ ROUND_HALF_UP
 
 from app.models.amortizacion import Cuota, pago_cuotas
-from app.models.prestamo import Prestamo
+
 from app.schemas.amortizacion import (
     TablaAmortizacionRequest,
     CuotaDetalle,
     TablaAmortizacionResponse
-)
-from app.utils.date_helpers import calculate_payment_dates
 
+from app.utils.date_helpers import calculate_payment_dates
 
 class AmortizacionService:
     """Servicio para gestión de amortización"""

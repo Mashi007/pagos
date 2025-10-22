@@ -1,13 +1,16 @@
 # backend/app/schemas/amortizacion.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Schemas de Amortización/Cuotas
 Validación y serialización de datos de cuotas
-"""
-from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import Optional, List
-from datetime import date, datetime
-from decimal import Decimal, ROUND_HALF_UP
-
+""
+from pydantic import BaseModel, field_validator, ConfigDict
+ datetime
+ ROUND_HALF_UP
 
 class CuotaBase(BaseModel):
     """Schema base para Cuota"""
@@ -30,11 +33,9 @@ class CuotaBase(BaseModel):
             v = Decimal(str(v))
         return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-
 class CuotaCreate(CuotaBase):
     """Schema para crear una cuota"""
     prestamo_id: int
-
 
 class CuotaUpdate(BaseModel):
     """Schema para actualizar una cuota"""
@@ -54,7 +55,6 @@ class CuotaUpdate(BaseModel):
         if not isinstance(v, Decimal):
             v = Decimal(str(v))
         return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
 
 class CuotaResponse(CuotaBase):
     """Schema para respuesta de cuota"""
@@ -82,7 +82,6 @@ class CuotaResponse(CuotaBase):
     porcentaje_pagado: Decimal = Decimal("0.00")
 
     model_config = ConfigDict(from_attributes=True)
-
 
 class TablaAmortizacionRequest(BaseModel):
     """Schema para solicitar generación de tabla de amortización"""
@@ -121,7 +120,6 @@ class TablaAmortizacionRequest(BaseModel):
             raise ValueError(f'Sistema debe ser uno de: {", ".join(sistemas_validos)}')
         return v
 
-
 class CuotaDetalle(BaseModel):
     """Detalle de una cuota en la tabla de amortización"""
     numero_cuota: int
@@ -142,7 +140,6 @@ class CuotaDetalle(BaseModel):
             v = Decimal(str(v))
         return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-
 class TablaAmortizacionResponse(BaseModel):
     """Schema para respuesta de tabla de amortización"""
     cuotas: List[CuotaDetalle]
@@ -154,7 +151,6 @@ class TablaAmortizacionResponse(BaseModel):
         default_factory=dict,
         description="Parámetros usados para generar la tabla"
     )
-
 
 class AplicarPagoRequest(BaseModel):
     """Schema para aplicar un pago a cuotas"""
@@ -175,7 +171,6 @@ class AplicarPagoRequest(BaseModel):
             v = Decimal(str(v))
         return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-
 class AplicarPagoResponse(BaseModel):
     """Schema para respuesta de aplicación de pago"""
     cuotas_afectadas: List[int]
@@ -183,7 +178,6 @@ class AplicarPagoResponse(BaseModel):
     monto_aplicado: Decimal
     monto_sobrante: Decimal
     mensaje: str
-
 
 class EstadoCuentaResponse(BaseModel):
     """Schema para estado de cuenta de un préstamo"""
@@ -201,7 +195,6 @@ class EstadoCuentaResponse(BaseModel):
     historial_pagos: List[dict]
 
     model_config = ConfigDict(from_attributes=True)
-
 
 class ProyeccionPagoRequest(BaseModel):
     """Schema para solicitar proyección de pagos"""
@@ -222,7 +215,6 @@ class ProyeccionPagoRequest(BaseModel):
             v = Decimal(str(v))
         return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-
 class ProyeccionPagoResponse(BaseModel):
     """Schema para respuesta de proyección de pagos"""
     cuotas_que_se_pagarian: List[CuotaResponse]
@@ -233,7 +225,6 @@ class ProyeccionPagoResponse(BaseModel):
     nuevo_saldo_pendiente: Decimal
     cuotas_restantes: int
     mensaje: str
-
 
 class RecalcularMoraRequest(BaseModel):
     """Schema para solicitar recálculo de mora"""
@@ -258,7 +249,6 @@ class RecalcularMoraRequest(BaseModel):
         if not isinstance(v, Decimal):
             v = Decimal(str(v))
         return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
 
 class RecalcularMoraResponse(BaseModel):
     """Schema para respuesta de recálculo de mora"""

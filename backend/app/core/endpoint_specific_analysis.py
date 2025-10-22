@@ -1,19 +1,19 @@
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Decorator Específico para Análisis de Impacto por Endpoint
 Implementa análisis específico para endpoints críticos
-"""
-import time
-import logging
+""
 from functools import wraps
-from typing import Dict, Any, Optional, Callable
-from datetime import datetime
-import psutil
+
 
 from app.core.impact_monitoring import record_endpoint_performance
 from app.core.error_impact_analysis import record_error, record_success
 
 logger = logging.getLogger(__name__)
-
 
 class EndpointSpecificAnalyzer:
     """
@@ -58,10 +58,8 @@ class EndpointSpecificAnalyzer:
 
         return analysis
 
-
 # Instancia global
 endpoint_analyzer = EndpointSpecificAnalyzer()
-
 
 def endpoint_impact_analysis(endpoint_name: str, business_metrics: Optional[Dict[str, str]] = None):
     """
@@ -108,7 +106,6 @@ def endpoint_impact_analysis(endpoint_name: str, business_metrics: Optional[Dict
         return wrapper
     return decorator
 
-
 def _extract_metric_value(data: Any, path: str) -> Any:
     """Extraer valor de métrica usando path (ej: 'data.total', 'count', etc.)"""
     try:
@@ -133,7 +130,6 @@ def _extract_metric_value(data: Any, path: str) -> Any:
             return None
     except Exception:
         return None
-
 
 # Decorators específicos para endpoints críticos
 
@@ -167,7 +163,6 @@ def auth_endpoint_analysis(func: Callable):
             raise e
 
     return wrapper
-
 
 def carga_masiva_endpoint_analysis(func: Callable):
     """Decorator específico para endpoints de carga masiva"""
@@ -204,7 +199,6 @@ def carga_masiva_endpoint_analysis(func: Callable):
 
     return wrapper
 
-
 def clientes_endpoint_analysis(func: Callable):
     """Decorator específico para endpoints de clientes"""
     @wraps(func)
@@ -237,7 +231,6 @@ def clientes_endpoint_analysis(func: Callable):
             raise e
 
     return wrapper
-
 
 def pagos_endpoint_analysis(func: Callable):
     """Decorator específico para endpoints de pagos"""
@@ -272,11 +265,9 @@ def pagos_endpoint_analysis(func: Callable):
 
     return wrapper
 
-
 def get_endpoint_analyzer() -> EndpointSpecificAnalyzer:
     """Obtener instancia del analizador específico"""
     return endpoint_analyzer
-
 
 if __name__ == "__main__":
     # Ejemplo de uso

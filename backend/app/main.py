@@ -1,20 +1,20 @@
 # backend/app/main.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Aplicación principal FastAPI - Sistema de Préstamos y Cobranza.
-"""
+""
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
-import logging
 
-from app.core.config import settings
 from app.db.init_db import init_db_startup, init_db_shutdown
 
 # Rate Limiting
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 
 # Routers
 from app.api.v1.endpoints import (
@@ -45,7 +45,6 @@ from app.api.v1.endpoints import (
     modelos_vehiculos,
     migracion_emergencia,
     impact_analysis
-)
 
 # Configurar logging robusto
 import sys
@@ -58,7 +57,7 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout),  # Asegurar que vaya a stdout
     ],
     force=True  # Forzar reconfiguración
-)
+
 logger = logging.getLogger(__name__)
 
 # Configurar loggers específicos para asegurar que funcionen
@@ -75,7 +74,6 @@ logger.info(f"🔗 Database URL configurada: {bool(settings.DATABASE_URL)}")
 
 # Configurar rate limiter - TEMPORALMENTE DESACTIVADO
 # limiter = Limiter(key_func=get_remote_address)
-
 
 # ============================================
 # SECURITY HEADERS MIDDLEWARE - TEMPORALMENTE PERMISIVO
@@ -113,14 +111,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         return response
 
-
-@asynccontextmanager
+asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gestión del ciclo de vida"""
     init_db_startup()
     yield
     init_db_shutdown()
-
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -129,7 +125,6 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
-)
 
 # Configurar rate limiter en app state - TEMPORALMENTE DESACTIVADO
 # app.state.limiter = limiter
@@ -143,7 +138,6 @@ app = FastAPI(
 app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS - MIDDLEWARE SIMPLE PARA OPTIONS
-from fastapi.middleware.cors import CORSMiddleware
 
 logger.info(f"🌐 CORS Origins configurados: {settings.CORS_ORIGINS}")
 logger.info("✅ CORS: Middleware simple para OPTIONS + Headers directos en POST")
@@ -155,7 +149,6 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
-)
 
 # Registrar routers
 app.include_router(health.router, prefix=f"{settings.API_V1_PREFIX}", tags=["Health"])
@@ -187,8 +180,7 @@ app.include_router(migracion_emergencia.router, prefix=f"{settings.API_V1_PREFIX
 app.include_router(impact_analysis.router, prefix=f"{settings.API_V1_PREFIX}/impact", tags=["Análisis de Impacto"])
 # app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])  # Removido - se usarán datos reales
 
-
-@app.get("/", include_in_schema=False)
+app.get("/", include_in_schema=False)
 async def root():
     return {
         "message": "Sistema de Préstamos y Cobranza API v1.0.0", 

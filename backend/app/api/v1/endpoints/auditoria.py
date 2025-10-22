@@ -1,22 +1,17 @@
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy.orm import Session
-from sqlalchemy import desc, asc, func
-from datetime import datetime, timedelta
-import logging
-import io
-import pandas as pd
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Response
 
-from app.db.session import get_db
-from app.models.auditoria import Auditoria
-from app.models.user import User
+ asc, func
+import io
+
 from app.schemas.auditoria import (
     AuditoriaResponse,
     AuditoriaListResponse,
     AuditoriaStatsResponse
-)
-from app.api.deps import get_current_user
-from app.core.permissions_simple import Permission, get_user_permissions
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -25,7 +20,7 @@ logger = logging.getLogger(__name__)
 # CRUD DE AUDITORÍA
 # ============================================
 
-@router.get("/", response_model=AuditoriaListResponse, summary="Listar auditoría")
+router.get("/", response_model=AuditoriaListResponse, summary="Listar auditoría")
 def listar_auditoria(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(50, ge=1, le=1000, description="Número de registros a retornar"),
@@ -38,7 +33,7 @@ def listar_auditoria(
     orden: str = Query("desc", description="Orden: asc o desc"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 Listar registros de auditoría con filtros y paginación
 
@@ -101,11 +96,11 @@ def listar_auditoria(
         logger.error(f"Error listando auditoría: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
-@router.get("/stats", response_model=AuditoriaStatsResponse, summary="Estadísticas de auditoría")
+router.get("/stats", response_model=AuditoriaStatsResponse, summary="Estadísticas de auditoría")
 def obtener_estadisticas_auditoria(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Obtener estadísticas de auditoría
 
@@ -150,7 +145,7 @@ def obtener_estadisticas_auditoria(
         logger.error(f"Error obteniendo estadísticas: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
-@router.get("/export/excel", summary="Exportar auditoría a Excel")
+router.get("/export/excel", summary="Exportar auditoría a Excel")
 def exportar_auditoria_excel(
     usuario_email: Optional[str] = Query(None, description="Filtrar por email de usuario"),
     modulo: Optional[str] = Query(None, description="Filtrar por módulo"),
@@ -159,7 +154,7 @@ def exportar_auditoria_excel(
     fecha_hasta: Optional[datetime] = Query(None, description="Fecha hasta"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Exportar auditoría a Excel (SOLO ADMIN)
 
@@ -240,12 +235,12 @@ def exportar_auditoria_excel(
         logger.error(f"Error exportando auditoría: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
-@router.get("/{auditoria_id}", response_model=AuditoriaResponse, summary="Obtener auditoría")
+router.get("/{auditoria_id}", response_model=AuditoriaResponse, summary="Obtener auditoría")
 def obtener_auditoria(
     auditoria_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔍 Obtener un registro de auditoría por ID
 

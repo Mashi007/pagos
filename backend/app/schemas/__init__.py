@@ -1,15 +1,15 @@
 # backend/app/schemas/__init__.py
-"""
+""
 Schemas centralizados para la API.
 Incluye todos los modelos de datos para validación y serialización.
 Schemas organizados por módulo:
-- Cliente: Gestión de clientes
-- Préstamo: Gestión de préstamos
-- Pago: Gestión de pagos
-- User: Gestión de usuarios y autenticación (SIMPLIFICADO - solo is_admin boolean)
-- Conciliación: Conciliación bancaria
-- KPIs: Métricas e indicadores
-"""
+ Cliente: Gestión de clientes
+ Préstamo: Gestión de préstamos
+ Pago: Gestión de pagos
+ User: Gestión de usuarios y autenticación (SIMPLIFICADO - solo is_admin boolean)
+ Conciliación: Conciliación bancaria
+ KPIs: Métricas e indicadores
+""
 # ============================================
 # SCHEMAS DE CLIENTE
 # ============================================
@@ -17,7 +17,7 @@ from app.schemas.cliente import (
     ClienteCreate,
     ClienteUpdate,
     ClienteResponse,
-)
+
 # ============================================
 # SCHEMAS DE PRÉSTAMO
 # ============================================
@@ -25,7 +25,7 @@ from app.schemas.prestamo import (
     PrestamoCreate,
     PrestamoUpdate,
     PrestamoResponse,
-)
+
 # ============================================
 # SCHEMAS DE PAGO
 # ============================================
@@ -38,7 +38,7 @@ from app.schemas.pago import (
     ConciliacionResponse,
     KPIsPagos,
     ResumenCliente,
-)
+
 # ============================================
 # SCHEMAS DE USUARIO Y AUTENTICACIÓN
 # ============================================
@@ -65,7 +65,7 @@ from app.schemas.conciliacion import (
     ExtractoBancarioUpload,
     ValidacionExtracto,
     EstadisticasConciliacion,
-)
+
 # ============================================
 # SCHEMAS DE KPIs
 # ============================================
@@ -82,7 +82,7 @@ from app.schemas.kpis import (
     KPIConValores,
     KPIEstadisticas,
     DashboardKPIs,
-)
+
 # ============================================
 # EXPORTS PÚBLICOS
 # ============================================
@@ -141,7 +141,7 @@ __all__ = [
     "KPIConValores",
     "KPIEstadisticas",
     "DashboardKPIs",
-]
+
 # ============================================
 # INFORMACIÓN DEL MÓDULO
 # ============================================

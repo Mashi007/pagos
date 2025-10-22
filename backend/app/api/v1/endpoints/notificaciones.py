@@ -1,31 +1,23 @@
 # backend/app/api/v1/endpoints/notificaciones.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoint para gestión de notificaciones del sistema.
 Soporta Email y WhatsApp (Twilio).
-"""
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
-from typing import List, Optional
-from datetime import datetime, timedelta, date
-from pydantic import BaseModel, EmailStr
+""
 
-from app.db.session import get_db
-from app.models.notificacion import Notificacion
-from app.models.cliente import Cliente
-from app.models.prestamo import Prestamo
-from app.models.pago import Pago
+from pydantic import BaseModel
+
 from app.models.amortizacion import Cuota
-from decimal import Decimal
-from app.core.config import settings
+
 from app.models.analista import Analista
-import logging
 
 # Servicios de notificación
 from app.services.email_service import EmailService
 from app.services.whatsapp_service import WhatsAppService
-from app.api.deps import get_current_user
-from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -62,13 +54,12 @@ class EnvioMasivoRequest(BaseModel):
 email_service = EmailService()
 whatsapp_service = WhatsAppService()
 
-
-@router.post("/enviar", response_model=NotificacionResponse)
+router.post("/enviar", response_model=NotificacionResponse)
 async def enviar_notificacion(
     notificacion: NotificacionCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
-):
+:
     """
     Enviar notificación individual.
     """
@@ -112,13 +103,12 @@ async def enviar_notificacion(
     logger.info(f"Notificación {nueva_notif.id} programada para envío por {notificacion.canal}")
     return nueva_notif
 
-
-@router.post("/envio-masivo")
+router.post("/envio-masivo")
 async def envio_masivo_notificaciones(
     request: EnvioMasivoRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
-):
+:
     """
     Envío masivo de notificaciones según filtros.
     """
@@ -185,12 +175,11 @@ async def envio_masivo_notificaciones(
         "ids": [n.id for n in notificaciones_creadas]
     }
 
-
-@router.get("/historial/{cliente_id}")
+router.get("/historial/{cliente_id}")
 def historial_notificaciones(
     cliente_id: int,
     db: Session = Depends(get_db)
-):
+:
     """
     Obtener historial de notificaciones de un cliente.
     """
@@ -215,11 +204,10 @@ def historial_notificaciones(
         ]
     }
 
-
-@router.get("/pendientes")
+router.get("/pendientes")
 def notificaciones_pendientes(
     db: Session = Depends(get_db)
-):
+:
     """
     Obtener notificaciones pendientes de envío.
     """
@@ -242,16 +230,15 @@ def notificaciones_pendientes(
         ]
     }
 
-
-@router.post("/recordatorios-automaticos")
+router.post("/recordatorios-automaticos")
 async def programar_recordatorios_automaticos(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
-):
+:
     """
     Programar recordatorios automáticos para cuotas próximas a vencer.
     """
-    from datetime import date
+    
 
     # Préstamos con cuotas que vencen en los próximos 3 días
     fecha_limite = date.today() + timedelta(days=3)
@@ -269,9 +256,9 @@ async def programar_recordatorios_automaticos(
 Estimado/a {prestamo.cliente.nombres},
 
 Le recordamos que tiene una cuota próxima a vencer:
-- Monto: ${prestamo.monto_cuota:,.2f}
-- Fecha de vencimiento: {prestamo.fecha_vencimiento.strftime('%d/%m/%Y')}
-- Días restantes: {(prestamo.fecha_vencimiento - date.today()).days}
+ Monto: ${prestamo.monto_cuota:,.2f}
+ Fecha de vencimiento: {prestamo.fecha_vencimiento.strftime('%d/%m/%Y')}
+ Días restantes: {(prestamo.fecha_vencimiento - date.today()).days}
 
 Por favor, realice su pago a tiempo para evitar recargos.
 
@@ -310,7 +297,6 @@ Gracias.
         "prestamos_notificados": [p.id for p in prestamos_proximos]
     }
 
-
 # Función helper para generar mensajes desde templates
 def _generar_mensaje_template(template: str, cliente: Cliente, db: Session) -> str:
     """
@@ -345,21 +331,20 @@ Por favor, comuníquese con nosotros para regularizar su situación.
 
     return "Mensaje genérico de notificación."
 
-
 # ============================================
 # NOTIFICACIONES AUTOMÁTICAS PROGRAMADAS
 # ============================================
 
-@router.post("/programar-automaticas")
+router.post("/programar-automaticas")
 async def programar_notificaciones_automaticas(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
-):
+:
     """
     Programar todas las notificaciones automáticas del sistema
     Debe ejecutarse diariamente via cron job
     """
-    from datetime import date
+    
 
     notificaciones_programadas = []
 
@@ -370,7 +355,7 @@ async def programar_notificaciones_automaticas(
         Cuota.fecha_vencimiento == fecha_recordatorio,
         Cuota.estado.in_(["PENDIENTE", "PARCIAL"]),
         Cliente.email.isnot(None),
-        Cliente.activo == True
+        Cliente.activo 
     ).all()
 
     for cuota in cuotas_proximas:
@@ -389,17 +374,17 @@ Estimado/a {cliente.nombre_completo},
 
 Le recordamos que tiene una cuota próxima a vencer:
 
-• Cuota #: {cuota.numero_cuota}
-• Monto: ${float(cuota.monto_cuota):,.2f}
-• Fecha de vencimiento: {cuota.fecha_vencimiento.strftime('%d/%m/%Y')}
-• Días restantes: 3
+ Cuota #: {cuota.numero_cuota}
+ Monto: ${float(cuota.monto_cuota):,.2f}
+ Fecha de vencimiento: {cuota.fecha_vencimiento.strftime('%d/%m/%Y')}
+ Días restantes: 3
 
 Por favor, realice su pago a tiempo para evitar recargos por mora.
 
 Instrucciones de pago:
-- Transferencia bancaria: Cuenta 123456789
-- Efectivo: En nuestras oficinas
-- Referencia: CUOTA-{cuota.id}
+ Transferencia bancaria: Cuenta 123456789
+ Efectivo: En nuestras oficinas
+ Referencia: CUOTA-{cuota.id}
 
 Datos de contacto:
 Teléfono: (021) 123-456
@@ -427,7 +412,7 @@ Gracias por su puntualidad.
         Cuota.fecha_vencimiento == date.today() - timedelta(days=1),
         Cuota.estado.in_(["VENCIDA", "PARCIAL"]),
         Cliente.email.isnot(None),
-        Cliente.activo == True
+        Cliente.activo 
     ).all()
 
     for cuota in cuotas_vencidas_ayer:
@@ -441,15 +426,15 @@ Estimado/a {cliente.nombre_completo},
 
 ALERTA: Su cuota #{cuota.numero_cuota} está VENCIDA.
 
-• Fecha de vencimiento: {cuota.fecha_vencimiento.strftime('%d/%m/%Y')}
-• Días de mora: {(date.today() - cuota.fecha_vencimiento).days}
-• Monto adeudado: ${float(cuota.monto_pendiente_total):,.2f}
-• Recargo por mora: ${float(mora_calculada):,.2f}
+ Fecha de vencimiento: {cuota.fecha_vencimiento.strftime('%d/%m/%Y')}
+ Días de mora: {(date.today() - cuota.fecha_vencimiento).days}
+ Monto adeudado: ${float(cuota.monto_pendiente_total):,.2f}
+ Recargo por mora: ${float(mora_calculada):,.2f}
 
 URGENTE: Regularice su pago inmediatamente para evitar:
-- Incremento de mora diaria
-- Reporte en centrales de riesgo
-- Acciones legales
+ Incremento de mora diaria
+ Reporte en centrales de riesgo
+ Acciones legales
 
 Contacto inmediato: (021) 123-456
         """
@@ -494,13 +479,12 @@ Contacto inmediato: (021) 123-456
         "avisos_vencidas": len([n for n in notificaciones_programadas if n.categoria == "CUOTA_VENCIDA"])
     }
 
-
-@router.post("/confirmar-pago-recibido/{pago_id}")
+router.post("/confirmar-pago-recibido/{pago_id}")
 async def enviar_confirmacion_pago(
     pago_id: int,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
-):
+:
     """
     3. Confirmación de pago recibido (automática al registrar pago)
     """
@@ -528,23 +512,23 @@ async def enviar_confirmacion_pago(
     mensaje = f"""
 Estimado/a {cliente.nombre_completo},
 
-¡Gracias por su pago!
+Gracias por su pago!
 
 CONFIRMACIÓN DE PAGO RECIBIDO:
-• Fecha: {pago.fecha_pago.strftime('%d/%m/%Y')}
-• Monto: ${float(pago.monto_pagado):,.2f}
-• Cuota(s) pagada(s): #{pago.numero_cuota}
-• Método: {pago.metodo_pago}
-• Referencia: {pago.numero_operacion or pago.comprobante or 'N/A'}
+ Fecha: {pago.fecha_pago.strftime('%d/%m/%Y')}
+ Monto: ${float(pago.monto_pagado):,.2f}
+ Cuota(s) pagada(s): #{pago.numero_cuota}
+ Método: {pago.metodo_pago}
+ Referencia: {pago.numero_operacion or pago.comprobante or 'N/A'}
 
 DETALLE DE APLICACIÓN:
-• Capital: ${float(pago.monto_capital):,.2f}
-• Interés: ${float(pago.monto_interes):,.2f}
-• Mora: ${float(pago.monto_mora):,.2f}
+ Capital: ${float(pago.monto_capital):,.2f}
+ Interés: ${float(pago.monto_interes):,.2f}
+ Mora: ${float(pago.monto_mora):,.2f}
 
 ESTADO ACTUAL:
-• Saldo pendiente: ${float(pago.prestamo.saldo_pendiente):,.2f}
-• Próximo vencimiento: {proximo_vencimiento}
+ Saldo pendiente: ${float(pago.prestamo.saldo_pendiente):,.2f}
+ Próximo vencimiento: {proximo_vencimiento}
 
 Agradecemos su puntualidad y confianza.
     """
@@ -581,18 +565,17 @@ Agradecemos su puntualidad y confianza.
         "cliente": cliente.nombre_completo
     }
 
-
-@router.post("/estado-cuenta-mensual")
+router.post("/estado-cuenta-mensual")
 async def enviar_estados_cuenta_mensual(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
-):
+:
     """
     4. Estado de cuenta mensual (primer día de cada mes)
     """
     # Obtener todos los clientes activos con email
     clientes = db.query(Cliente).filter(
-        Cliente.activo == True,
+        Cliente.activo ,
         Cliente.email.isnot(None)
     ).all()
 
@@ -630,18 +613,18 @@ Estimado/a {cliente.nombre_completo},
 ESTADO DE CUENTA - {mes_anterior.strftime('%B %Y').upper()}
 
 RESUMEN DEL MES ANTERIOR:
-• Pagos realizados: {len(pagos_mes)}
-• Total pagado: ${sum(float(p.monto_pagado) for p in pagos_mes):,.2f}
+ Pagos realizados: {len(pagos_mes)}
+ Total pagado: ${sum(float(p.monto_pagado) for p in pagos_mes):,.2f}
 
 ESTADO ACTUAL:
-• Total financiado: ${float(resumen['total_financiado']):,.2f}
-• Total pagado: ${float(resumen['total_pagado']):,.2f}
-• Saldo pendiente: ${float(resumen['saldo_pendiente']):,.2f}
-• Cuotas pagadas: {resumen['cuotas_pagadas']} / {resumen['cuotas_totales']}
-• % Avance: {resumen['porcentaje_avance']}%
+ Total financiado: ${float(resumen['total_financiado']):,.2f}
+ Total pagado: ${float(resumen['total_pagado']):,.2f}
+ Saldo pendiente: ${float(resumen['saldo_pendiente']):,.2f}
+ Cuotas pagadas: {resumen['cuotas_pagadas']} / {resumen['cuotas_totales']}
+ % Avance: {resumen['porcentaje_avance']}%
 
 PRÓXIMOS VENCIMIENTOS:
-"""
+""
 
         for cuota in cuotas_pendientes:
             mensaje += f"• Cuota #{cuota.numero_cuota}: ${float(cuota.monto_cuota):,.2f} - {cuota.fecha_vencimiento.strftime('%d/%m/%Y')}\n"
@@ -681,16 +664,15 @@ PRÓXIMOS VENCIMIENTOS:
         "clientes_notificados": [c.id for c in clientes]
     }
 
-
 # ============================================
 # NOTIFICACIONES A USUARIOS DEL SISTEMA
 # ============================================
 
-@router.post("/usuarios/resumen-diario")
+router.post("/usuarios/resumen-diario")
 async def enviar_resumen_diario_usuarios(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
-):
+:
     """
     🔔 Notificaciones diarias a usuarios (8:00 AM):
     - Resumen de vencimientos del día
@@ -718,19 +700,19 @@ async def enviar_resumen_diario_usuarios(
     nuevos_morosos = db.query(Cliente).join(Prestamo).join(Cuota).filter(
         Cuota.fecha_vencimiento == ayer,
         Cuota.estado == "VENCIDA",
-        Cliente.activo == True
+        Cliente.activo 
     ).distinct().all()
 
     # Clientes críticos (>30 días mora)
     clientes_criticos = db.query(Cliente).filter(
-        Cliente.activo == True,
+        Cliente.activo ,
         Cliente.dias_mora > 30
     ).count()
 
     # Obtener usuarios para notificar
     usuarios_notificar = db.query(User).filter(
-        User.is_admin == True,
-        User.is_active == True,
+        User.is_admin ,
+        User.is_active ,
         User.email.isnot(None)
     ).all()
 
@@ -740,15 +722,15 @@ Buenos días {usuario.full_name},
 
 RESUMEN DIARIO - {hoy.strftime('%d/%m/%Y')}
 
-📅 VENCIMIENTOS HOY: {vencimientos_hoy} cuotas
-💰 COBRADO AYER: ${total_cobrado_ayer:,.2f} ({len(pagos_ayer)} pagos)
-⚠️ NUEVOS MOROSOS: {len(nuevos_morosos)} clientes
-🚨 CLIENTES CRÍTICOS: {clientes_criticos} (>30 días mora)
+ VENCIMIENTOS HOY: {vencimientos_hoy} cuotas
+ COBRADO AYER: ${total_cobrado_ayer:,.2f} ({len(pagos_ayer)} pagos)
+️ NUEVOS MOROSOS: {len(nuevos_morosos)} clientes
+ CLIENTES CRÍTICOS: {clientes_criticos} (>30 días mora)
 
 ACCIONES RECOMENDADAS:
-• Contactar clientes con vencimientos hoy
-• Seguimiento a nuevos morosos
-• Atención prioritaria a clientes críticos
+ Contactar clientes con vencimientos hoy
+ Seguimiento a nuevos morosos
+ Atención prioritaria a clientes críticos
 
 Acceder al sistema: https://pagos-f2qf.onrender.com
 
@@ -787,12 +769,11 @@ Saludos.
         "clientes_criticos": clientes_criticos
     }
 
-
-@router.post("/usuarios/reporte-semanal")
+router.post("/usuarios/reporte-semanal")
 async def enviar_reporte_semanal_usuarios(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
-):
+:
     """
     🔔 Notificaciones semanales (Lunes 9:00 AM):
     - Reporte semanal de cobranza
@@ -826,15 +807,15 @@ async def enviar_reporte_semanal_usuarios(
         func.date(Cliente.fecha_registro) >= inicio_semana,
         func.date(Cliente.fecha_registro) <= fin_semana
     )).filter(
-        User.is_admin == False,
+        User.is_admin ,
     ).group_by(User.id, User.full_name).order_by(
         func.count(Cliente.id).desc()
     ).first()
 
     # Enviar a usuarios gerenciales
     usuarios_gerenciales = db.query(User).filter(
-        User.is_admin == True,
-        User.is_active == True,
+        User.is_admin ,
+        User.is_active ,
         User.email.isnot(None)
     ).all()
 
@@ -844,18 +825,18 @@ Buenos días {usuario.full_name},
 
 REPORTE SEMANAL - {inicio_semana.strftime('%d/%m')} al {fin_semana.strftime('%d/%m/%Y')}
 
-📊 COBRANZA:
-• Total cobrado: ${sum(float(p.monto_pagado) for p in pagos_semana):,.2f}
-• Número de pagos: {len(pagos_semana)}
-• Promedio por pago: ${(sum(float(p.monto_pagado) for p in pagos_semana) / len(pagos_semana)):,.2f if pagos_semana else 0}
+ COBRANZA:
+ Total cobrado: ${sum(float(p.monto_pagado) for p in pagos_semana):,.2f}
+ Número de pagos: {len(pagos_semana)}
+ Promedio por pago: ${(sum(float(p.monto_pagado) for p in pagos_semana) / len(pagos_semana)):,.2f if pagos_semana else 0}
 
-👥 NUEVOS CLIENTES: {len(nuevos_clientes)}
+ NUEVOS CLIENTES: {len(nuevos_clientes)}
 
-🏆 TOP PERFORMER: {top_analista[0] if top_analista else 'N/A'} ({top_analista[1] if top_analista else 0} nuevos clientes)
+ TOP PERFORMER: {top_analista[0] if top_analista else 'N/A'} ({top_analista[1] if top_analista else 0} nuevos clientes)
 
-📈 EVOLUCIÓN DE CARTERA:
-• Clientes activos: {db.query(Cliente).filter(Cliente.activo == True).count()}
-• Tasa de morosidad: {db.query(Cliente).filter(Cliente.dias_mora > 0).count() / db.query(Cliente).filter(Cliente.activo == True).count() * 100:.2f}%
+ EVOLUCIÓN DE CARTERA:
+ Clientes activos: {db.query(Cliente).filter(Cliente.activo ).count()}
+ Tasa de morosidad: {db.query(Cliente).filter(Cliente.dias_mora > 0).count() / db.query(Cliente).filter(Cliente.activo ).count() * 100:.2f}%
 
 Revisar dashboard completo: https://pagos-f2qf.onrender.com
 
@@ -891,16 +872,15 @@ Saludos.
         "total_cobrado_semana": sum(float(p.monto_pagado) for p in pagos_semana)
     }
 
-
 # ============================================
 # CONFIGURACIÓN DE NOTIFICACIONES
 # ============================================
 
-@router.get("/configuracion")
+router.get("/configuracion")
 def obtener_configuracion_notificaciones(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ⚙️ Obtener configuración de notificaciones
     """
@@ -941,8 +921,7 @@ def obtener_configuracion_notificaciones(
         }
     }
 
-
-@router.get("/historial-completo")
+router.get("/historial-completo")
 def historial_completo_notificaciones(
     fecha_desde: Optional[date] = Query(None),
     fecha_hasta: Optional[date] = Query(None),
@@ -953,7 +932,7 @@ def historial_completo_notificaciones(
     page_size: int = Query(20, ge=1, le=1000),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 Historial completo de notificaciones
     - Log completo de emails enviados
@@ -1011,14 +990,13 @@ def historial_completo_notificaciones(
         }
     }
 
-
-@router.post("/reenviar/{notificacion_id}")
+router.post("/reenviar/{notificacion_id}")
 async def reenviar_notificacion(
     notificacion_id: int,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Reenvío manual de notificación fallida
     """

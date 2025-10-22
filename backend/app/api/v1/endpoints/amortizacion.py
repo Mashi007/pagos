@@ -1,16 +1,16 @@
 # backend/app/api/v1/endpoints/amortizacion.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoints para gestión de amortización y cuotas
-"""
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
-from datetime import date
-from decimal import Decimal
+""
+from fastapi import APIRouter, status, Query
 
 from app.api.deps import get_db, get_current_active_user
-from app.models.user import User
-from app.models.prestamo import Prestamo
+
 from app.models.amortizacion import Cuota
 from app.schemas.amortizacion import (
     TablaAmortizacionRequest,
@@ -21,18 +21,17 @@ from app.schemas.amortizacion import (
     EstadoCuentaResponse,
     ProyeccionPagoRequest,
     ProyeccionPagoResponse
-)
+
 from app.services.amortizacion_service import AmortizacionService
 
 router = APIRouter()
 
-
-@router.post("/generar", response_model=TablaAmortizacionResponse)
+router.post("/generar", response_model=TablaAmortizacionResponse)
 def generar_tabla_amortizacion(
     request: TablaAmortizacionRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-):
+:
     """
     Genera una tabla de amortización (simulación)
     No crea registros en BD, solo devuelve el cálculo
@@ -46,14 +45,13 @@ def generar_tabla_amortizacion(
             detail=str(e)
         )
 
-
-@router.post("/prestamo/{prestamo_id}/crear-cuotas", response_model=List[CuotaResponse])
+router.post("/prestamo/{prestamo_id}/crear-cuotas", response_model=List[CuotaResponse])
 def crear_cuotas_prestamo(
     prestamo_id: int,
     request: TablaAmortizacionRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-):
+:
     """
     Crea las cuotas en BD para un préstamo específico
     """
@@ -87,14 +85,13 @@ def crear_cuotas_prestamo(
             detail=str(e)
         )
 
-
-@router.get("/prestamo/{prestamo_id}/cuotas", response_model=List[CuotaResponse])
+router.get("/prestamo/{prestamo_id}/cuotas", response_model=List[CuotaResponse])
 def obtener_cuotas_prestamo(
     prestamo_id: int,
     estado: Optional[str] = Query(None, description="Filtrar por estado: PENDIENTE, PAGADA, VENCIDA, PARCIAL"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-):
+:
     """
     Obtiene las cuotas de un préstamo
     """
@@ -116,13 +113,12 @@ def obtener_cuotas_prestamo(
 
     return cuotas
 
-
-@router.get("/cuota/{cuota_id}", response_model=CuotaResponse)
+router.get("/cuota/{cuota_id}", response_model=CuotaResponse)
 def obtener_cuota(
     cuota_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-):
+:
     """
     Obtiene el detalle de una cuota específica
     """
@@ -140,14 +136,13 @@ def obtener_cuota(
 
     return cuota
 
-
-@router.post("/prestamo/{prestamo_id}/recalcular-mora", response_model=RecalcularMoraResponse)
+router.post("/prestamo/{prestamo_id}/recalcular-mora", response_model=RecalcularMoraResponse)
 def recalcular_mora(
     prestamo_id: int,
     request: RecalcularMoraRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-):
+:
     """
     Recalcula la mora de todas las cuotas vencidas de un préstamo
     """
@@ -203,13 +198,12 @@ def recalcular_mora(
             detail=f"Error al recalcular mora: {str(e)}"
         )
 
-
-@router.get("/prestamo/{prestamo_id}/estado-cuenta", response_model=EstadoCuentaResponse)
+router.get("/prestamo/{prestamo_id}/estado-cuenta", response_model=EstadoCuentaResponse)
 def obtener_estado_cuenta(
     prestamo_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-):
+:
     """
     Obtiene el estado de cuenta completo de un préstamo
     Incluye resumen, cuotas pagadas, pendientes, vencidas y próximas
@@ -278,14 +272,13 @@ def obtener_estado_cuenta(
         historial_pagos=[]  # TODO: Implementar cuando tengamos endpoint de pagos
     )
 
-
-@router.post("/prestamo/{prestamo_id}/proyeccion-pago", response_model=ProyeccionPagoResponse)
+router.post("/prestamo/{prestamo_id}/proyeccion-pago", response_model=ProyeccionPagoResponse)
 def proyectar_pago(
     prestamo_id: int,
     request: ProyeccionPagoRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-):
+:
     """
     Proyecta cómo se aplicaría un pago sobre las cuotas pendientes
     No realiza el pago, solo muestra la simulación
@@ -356,13 +349,12 @@ def proyectar_pago(
         mensaje=f"El pago de {request.monto_pago} afectaría {len(cuotas_afectadas)} cuota(s)"
     )
 
-
-@router.get("/prestamo/{prestamo_id}/informacion-adicional")
+router.get("/prestamo/{prestamo_id}/informacion-adicional")
 def obtener_informacion_adicional(
     prestamo_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-):
+:
     """
     Obtener información adicional de la tabla de amortización
     - Cuotas pagadas / Total
@@ -451,13 +443,12 @@ def obtener_informacion_adicional(
         "estados_detalle": estados_cuotas
     }
 
-
-@router.get("/prestamo/{prestamo_id}/tabla-visual")
+router.get("/prestamo/{prestamo_id}/tabla-visual")
 def obtener_tabla_visual(
     prestamo_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-):
+:
     """
     Obtener tabla de amortización en formato visual como el diagrama
     """

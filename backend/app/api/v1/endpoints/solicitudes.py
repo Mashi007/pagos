@@ -1,31 +1,24 @@
 # backend/app/api/v1/endpoints/solicitudes.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Sistema de Solicitudes de Aprobación
 Maneja solicitudes para acciones que requieren autorización
-"""
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-import logging
-from typing import List, Optional, Dict, Any
-from datetime import datetime, date, timedelta
-from pydantic import BaseModel, Field
-import os
+""
+from fastapi import APIRouter, UploadFile, File
+
+from typing import Dict, Any
+time, timedelta
+from pydantic import BaseModel
 import uuid
 from pathlib import Path
 
-from app.db.session import get_db
-from app.models.aprobacion import Aprobacion
-from app.models.user import User
-from app.models.cliente import Cliente
-from app.models.pago import Pago
-from app.api.deps import get_current_user
-from app.core.permissions_simple import Permission, get_user_permissions
-import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
 
 # ============================================
 # SCHEMAS PARA SOLICITUDES
@@ -58,7 +51,6 @@ class SolicitudAprobacionCompleta(BaseModel):
             }
         }
 
-
 class FormularioModificarPago(BaseModel):
     """Formulario específico para modificar pago"""
     pago_id: int = Field(..., description="ID del pago a modificar")
@@ -75,7 +67,6 @@ class FormularioModificarPago(BaseModel):
 
     prioridad: str = Field(default="NORMAL", description="BAJA, NORMAL, ALTA, URGENTE")
 
-
 class FormularioAnularPago(BaseModel):
     """Formulario específico para anular pago"""
     pago_id: int = Field(..., description="ID del pago a anular")
@@ -84,7 +75,6 @@ class FormularioAnularPago(BaseModel):
     revertir_amortizacion: bool = Field(True, description="Si revertir cambios en tabla de amortización")
     notificar_cliente: bool = Field(True, description="Si notificar al cliente sobre la anulación")
     prioridad: str = Field(default="NORMAL", description="BAJA, NORMAL, ALTA, URGENTE")
-
 
 class FormularioEditarCliente(BaseModel):
     """Formulario específico para editar cliente"""
@@ -99,7 +89,6 @@ class FormularioEditarCliente(BaseModel):
 
     prioridad: str = Field(default="NORMAL", description="BAJA, NORMAL, ALTA, URGENTE")
 
-
 class FormularioModificarAmortizacion(BaseModel):
     """Formulario específico para modificar amortización"""
     prestamo_id: int = Field(..., description="ID del préstamo")
@@ -113,7 +102,6 @@ class FormularioModificarAmortizacion(BaseModel):
     nueva_fecha_inicio: Optional[date] = Field(None, description="Nueva fecha de inicio")
 
     prioridad: str = Field(default="ALTA", description="BAJA, NORMAL, ALTA, URGENTE")
-
 
 class SolicitudResponse(BaseModel):
     """Schema de respuesta para solicitud"""
@@ -132,7 +120,6 @@ class SolicitudResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
 
 # ============================================
 # FUNCIONES AUXILIARES PARA ARCHIVOS
@@ -171,18 +158,17 @@ async def guardar_archivo_evidencia(archivo: UploadFile) -> tuple[str, str, int]
 
     return str(ruta_archivo), extension[1:].upper(), len(contenido)
 
-
 # ============================================
 # SOLICITUDES DE COBRANZAS CON FORMULARIOS COMPLETOS
 # ============================================
 
-@router.post("/cobranzas/modificar-pago-completo")
+router.post("/cobranzas/modificar-pago-completo")
 async def solicitar_modificacion_pago_completo(
     formulario: FormularioModificarPago,
     archivo_evidencia: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ⚠️ COBRANZAS: Solicitar modificación de pago con formulario completo
 
@@ -291,14 +277,13 @@ async def solicitar_modificacion_pago_completo(
         "siguiente_paso": "Esperar aprobación del administrador"
     }
 
-
-@router.post("/cobranzas/anular-pago-completo")
+router.post("/cobranzas/anular-pago-completo")
 async def solicitar_anulacion_pago_completo(
     formulario: FormularioAnularPago,
     archivo_evidencia: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ⚠️ COBRANZAS: Solicitar anulación de pago con formulario completo
     """
@@ -377,16 +362,15 @@ async def solicitar_anulacion_pago_completo(
         "acciones_solicitadas": datos_solicitados
     }
 
-
 # Mantener endpoints originales para compatibilidad
-@router.post("/cobranzas/modificar-pago")
+router.post("/cobranzas/modificar-pago")
 def solicitar_modificacion_pago(
     pago_id: int,
     nuevos_datos: Dict[str, Any],
     justificacion: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ⚠️ COBRANZAS: Solicitar modificación de monto de pago
     """
@@ -426,15 +410,14 @@ def solicitar_modificacion_pago(
         }
     }
 
-
-@router.post("/cobranzas/anular-pago")
+router.post("/cobranzas/anular-pago")
 def solicitar_anulacion_pago(
     pago_id: int,
     justificacion: str,
     revertir_amortizacion: bool = True,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ⚠️ COBRANZAS: Solicitar anulación de pago
     """
@@ -475,15 +458,14 @@ def solicitar_anulacion_pago(
         }
     }
 
-
-@router.post("/cobranzas/modificar-amortizacion")
+router.post("/cobranzas/modificar-amortizacion")
 def solicitar_modificacion_amortizacion(
     prestamo_id: int,
     nuevos_parametros: Dict[str, Any],
     justificacion: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ⚠️ COBRANZAS: Solicitar modificación de tabla de amortización
     """
@@ -492,7 +474,7 @@ def solicitar_modificacion_amortizacion(
         raise HTTPException(status_code=403, detail="Usuario no autorizado")
 
     # Verificar que el préstamo existe
-    from app.models.prestamo import Prestamo
+    
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
@@ -524,19 +506,18 @@ def solicitar_modificacion_amortizacion(
         }
     }
 
-
 # ============================================
 # SOLICITUDES DE USER
 # ============================================
 
-@router.post("/comercial/editar-cliente")
+router.post("/comercial/editar-cliente")
 def solicitar_edicion_cliente_comercial(
     cliente_id: int,
     nuevos_datos: Dict[str, Any],
     justificacion: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ⚠️ USER: Solicitar autorización para editar cliente
     """
@@ -577,19 +558,18 @@ def solicitar_edicion_cliente_comercial(
         }
     }
 
-
 # ============================================
 # SOLICITUDES DE USER
 # ============================================
 
-@router.post("/analista/editar-cliente-propio")
+router.post("/analista/editar-cliente-propio")
 def solicitar_edicion_cliente_propio(
     cliente_id: int,
     nuevos_datos: Dict[str, Any],
     justificacion: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ⚠️ USER: Solicitar autorización para editar SUS clientes asignados
     """
@@ -637,12 +617,11 @@ def solicitar_edicion_cliente_propio(
         }
     }
 
-
 # ============================================
 # GESTIÓN DE SOLICITUDES (ADMIN)
 # ============================================
 
-@router.get("/pendientes", response_model=List[SolicitudResponse])
+router.get("/pendientes", response_model=List[SolicitudResponse])
 def listar_solicitudes_pendientes(
     tipo_solicitud: Optional[str] = Query(None),
     solicitante_id: Optional[int] = Query(None),
@@ -650,7 +629,7 @@ def listar_solicitudes_pendientes(
     page_size: int = Query(20, ge=1, le=1000),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 Listar solicitudes pendientes de aprobación (Solo Admin)
     """
@@ -692,14 +671,13 @@ def listar_solicitudes_pendientes(
 
     return resultado
 
-
-@router.post("/aprobar/{solicitud_id}")
+router.post("/aprobar/{solicitud_id}")
 async def aprobar_solicitud(
     solicitud_id: int,
     comentarios: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ✅ Aprobar solicitud (Solo Admin)
     """
@@ -735,14 +713,13 @@ async def aprobar_solicitud(
         "notificacion_enviada": True
     }
 
-
-@router.post("/rechazar/{solicitud_id}")
+router.post("/rechazar/{solicitud_id}")
 async def rechazar_solicitud(
     solicitud_id: int,
     comentarios: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ❌ Rechazar solicitud (Solo Admin)
     """
@@ -775,13 +752,12 @@ async def rechazar_solicitud(
         "notificacion_enviada": True
     }
 
-
-@router.get("/mis-solicitudes")
+router.get("/mis-solicitudes")
 def listar_mis_solicitudes(
     estado: Optional[str] = Query(None, description="PENDIENTE, APROBADA, RECHAZADA"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 Ver mis solicitudes enviadas
     """
@@ -808,7 +784,6 @@ def listar_mis_solicitudes(
             for sol in solicitudes
         ]
     }
-
 
 # ============================================
 # FUNCIONES AUXILIARES
@@ -861,12 +836,11 @@ def _ejecutar_accion_aprobada(solicitud: Aprobacion, db: Session) -> Dict[str, A
     except Exception as e:
         return {"error": f"Error ejecutando acción: {str(e)}"}
 
-
-@router.get("/estadisticas")
+router.get("/estadisticas")
 def estadisticas_solicitudes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Estadísticas de solicitudes de aprobación
     """
@@ -914,12 +888,11 @@ def estadisticas_solicitudes(
         }
     }
 
-
-@router.get("/dashboard-aprobaciones")
+router.get("/dashboard-aprobaciones")
 def dashboard_aprobaciones(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Dashboard visual completo del sistema de aprobaciones
     """
@@ -1061,11 +1034,10 @@ def dashboard_aprobaciones(
         }
     }
 
-
-@router.get("/matriz-permisos")
+router.get("/matriz-permisos")
 def obtener_matriz_permisos_actualizada(
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 Obtener matriz de permisos actualizada con sistema de aprobaciones
     """
@@ -1122,7 +1094,6 @@ def obtener_matriz_permisos_actualizada(
         }
     }
 
-
 def _get_actions_requiring_approval(is_admin: bool) -> list:
     """
     Obtener acciones que requieren aprobación para un usuario específico
@@ -1136,7 +1107,6 @@ def _get_actions_requiring_approval(is_admin: bool) -> list:
             "Modificar tabla de amortización",
             "Editar clientes"
         ]
-
 
 # ============================================
 # SISTEMA DE NOTIFICACIONES PARA APROBACIONES
@@ -1152,7 +1122,7 @@ async def _notificar_nueva_solicitud_admin(solicitud: Aprobacion, db: Session):
 
         for admin in admins:
             # Crear notificación in-app
-            from app.models.notificacion import Notificacion
+            
             notificacion = Notificacion(
                 usuario_id=admin.id,
                 tipo="SOLICITUD_APROBACION",
@@ -1160,22 +1130,22 @@ async def _notificar_nueva_solicitud_admin(solicitud: Aprobacion, db: Session):
                 prioridad=solicitud.prioridad,
                 titulo=f"Nueva solicitud de aprobación - {solicitud.tipo_solicitud}",
                 mensaje=f"""
-🔔 Nueva solicitud de aprobación recibida
+ Nueva solicitud de aprobación recibida
 
-📋 **Detalles:**
-- **Tipo:** {solicitud.tipo_solicitud}
-- **Solicitante:** {solicitud.solicitante.full_name}
-- **Entidad:** {solicitud.entidad} #{solicitud.entidad_id}
-- **Prioridad:** {solicitud.prioridad}
-- **Fecha límite:** {solicitud.fecha_limite}
+ **Detalles:**
+ **Tipo:** {solicitud.tipo_solicitud}
+ **Solicitante:** {solicitud.solicitante.full_name}
+ **Entidad:** {solicitud.entidad} #{solicitud.entidad_id}
+ **Prioridad:** {solicitud.prioridad}
+ **Fecha límite:** {solicitud.fecha_limite}
 
-📝 **Justificación:**
-{solicitud.justificacion}
+ **Justificación:**
+solicitud.justificacion}
 
-🔗 **Acciones:**
-- Ver detalles: /solicitudes/pendientes
-- Aprobar: /solicitudes/aprobar/{solicitud.id}
-- Rechazar: /solicitudes/rechazar/{solicitud.id}
+ **Acciones:**
+ Ver detalles: /solicitudes/pendientes
+ Aprobar: /solicitudes/aprobar/{solicitud.id}
+ Rechazar: /solicitudes/rechazar/{solicitud.id}
                 """,
                 extra_data=str({
                     "solicitud_id": solicitud.id,
@@ -1196,7 +1166,6 @@ async def _notificar_nueva_solicitud_admin(solicitud: Aprobacion, db: Session):
 
     except Exception as e:
         logger.error(f"Error enviando notificaciones: {e}")
-
 
 async def _enviar_email_nueva_solicitud(solicitud: Aprobacion, admins: List[User]):
     """
@@ -1293,14 +1262,13 @@ async def _enviar_email_nueva_solicitud(solicitud: Aprobacion, admins: List[User
     except Exception as e:
         logger.error(f"Error enviando emails: {e}")
 
-
 async def _notificar_resultado_solicitud(solicitud: Aprobacion, db: Session):
     """
     Notificar al solicitante sobre el resultado de su solicitud
     """
     try:
         # Crear notificación in-app
-        from app.models.notificacion import Notificacion
+        
 
         estado_emoji = {
             "APROBADA": "✅",
@@ -1316,18 +1284,18 @@ async def _notificar_resultado_solicitud(solicitud: Aprobacion, db: Session):
             prioridad="ALTA",
             titulo=f"{emoji} Solicitud {solicitud.estado.lower()} - {solicitud.tipo_solicitud}",
             mensaje=f"""
-{emoji} **Solicitud {solicitud.estado.lower()}**
+emoji} **Solicitud {solicitud.estado.lower()}**
 
-📋 **Detalles:**
-- **Tipo:** {solicitud.tipo_solicitud}
-- **Entidad:** {solicitud.entidad} #{solicitud.entidad_id}
-- **Revisado por:** {solicitud.revisor.full_name if solicitud.revisor else 'N/A'}
-- **Fecha de revisión:** {solicitud.fecha_revision}
+ **Detalles:**
+ **Tipo:** {solicitud.tipo_solicitud}
+ **Entidad:** {solicitud.entidad} #{solicitud.entidad_id}
+ **Revisado por:** {solicitud.revisor.full_name if solicitud.revisor else 'N/A'}
+ **Fecha de revisión:** {solicitud.fecha_revision}
 
-💬 **Comentarios del revisor:**
-{solicitud.comentarios_revisor or 'Sin comentarios adicionales'}
+ **Comentarios del revisor:**
+solicitud.comentarios_revisor or 'Sin comentarios adicionales'}
 
-{'🎉 **La acción solicitada ha sido ejecutada exitosamente.**' if solicitud.estado == 'APROBADA' else '⚠️ **La solicitud no fue aprobada. Revise los comentarios del revisor.**'}
+'🎉 **La acción solicitada ha sido ejecutada exitosamente.**' if solicitud.estado == 'APROBADA' else '⚠️ **La solicitud no fue aprobada. Revise los comentarios del revisor.**'}
             """,
             extra_data=str({
                 "solicitud_id": solicitud.id,
@@ -1348,13 +1316,11 @@ async def _notificar_resultado_solicitud(solicitud: Aprobacion, db: Session):
     except Exception as e:
         logger.error(f"Error enviando notificación de resultado: {e}")
 
-
 async def _enviar_email_resultado_solicitud(solicitud: Aprobacion):
     """
     Enviar email al solicitante sobre el resultado
     """
     try:
-        from app.services.email_service import EmailService
 
         estado_emoji = {
             "APROBADA": "✅",

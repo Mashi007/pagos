@@ -1,16 +1,17 @@
 # backend/app/services/validators_service.py
-"""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+"
 Servicio de Validadores y Auto-Formateo
 Sistema completo para validar y corregir formatos incorrectos de datos
-"""
-import re
-from datetime import datetime, date, timedelta
-from decimal import Decimal, InvalidOperation
-from typing import Dict, Any, Optional, Tuple, List
-import logging
+"
+time, timedelta
+ InvalidOperation
 
 logger = logging.getLogger(__name__)
-
 
 class ValidadorTelefono:
     """
@@ -260,7 +261,6 @@ class ValidadorTelefono:
                 "valor_formateado": None
             }
 
-
 class ValidadorCedula:
     """
     📝 Validador y formateador de cédulas
@@ -498,7 +498,6 @@ class ValidadorCedula:
             "formato_esperado": config["descripcion"]
         }
 
-
 class ValidadorNombre:
     """
     👤 Validador de nombres completos (4 palabras mínimo)
@@ -567,7 +566,6 @@ class ValidadorNombre:
                 "error": f"Error de validación: {str(e)}",
                 "valor_original": nombre
             }
-
 
 class ValidadorFecha:
     """
@@ -768,7 +766,6 @@ class ValidadorFecha:
         except (ValueError, IndexError):
             return None
 
-
 class ValidadorMonto:
     """
     💰 Validador y formateador de montos financieros
@@ -875,7 +872,6 @@ class ValidadorMonto:
 
         return None  # Sin errores
 
-
 class ValidadorAmortizaciones:
     """
     🔢 Validador de número de amortizaciones
@@ -945,7 +941,6 @@ class ValidadorAmortizaciones:
                 "error": f"Error de validación: {str(e)}",
                 "valor_original": amortizaciones_str
             }
-
 
 class ValidadorEmail:
     """
@@ -1068,7 +1063,6 @@ class ValidadorEmail:
                 "valor_original": email_str
             }
 
-
 class ServicioCorreccionDatos:
     """
     Servicio principal para corrección de datos incorrectos
@@ -1171,11 +1165,11 @@ class ServicioCorreccionDatos:
         Detectar datos incorrectos en la base de datos masivamente
         """
         try:
-            from app.models.cliente import Cliente
-            from app.models.pago import Pago
+            
+            
 
             # Obtener clientes con posibles errores
-            clientes = db.query(Cliente).filter(Cliente.activo == True).limit(limite).all()
+            clientes = db.query(Cliente).filter(Cliente.activo ).limit(limite).all()
 
             clientes_con_errores = []
             tipos_errores = {
@@ -1265,7 +1259,6 @@ class ServicioCorreccionDatos:
         except Exception as e:
             logger.error(f"Error detectando datos incorrectos: {e}")
             return {"error": str(e)}
-
 
 class AutoFormateador:
     """
@@ -1396,7 +1389,6 @@ class AutoFormateador:
         except ValueError:
             return {"valor_formateado": valor, "cursor_posicion": len(valor), "valido": False}
 
-
 # ============================================
 # VALIDADORES ADICIONALES CRÍTICOS
 # ============================================
@@ -1494,7 +1486,6 @@ class ValidadorEdad:
                 "error": f"Error al validar edad: {str(e)}",
                 "edad": None
             }
-
 
 class ValidadorCoherenciaFinanciera:
     """
@@ -1599,7 +1590,6 @@ class ValidadorCoherenciaFinanciera:
                 "error": f"Error al validar coherencia: {str(e)}"
             }
 
-
 class ValidadorDuplicados:
     """
     Validador de duplicados en base de datos
@@ -1617,7 +1607,7 @@ class ValidadorDuplicados:
             cliente_id: ID del cliente (para excluir en updates)
         """
         try:
-            from app.models.cliente import Cliente
+            
 
             if not chasis or not chasis.strip():
                 return {
@@ -1668,7 +1658,7 @@ class ValidadorDuplicados:
         Validar que el email sea único (opcional, puede haber clientes sin email)
         """
         try:
-            from app.models.cliente import Cliente
+            
 
             if not email or not email.strip():
                 return {

@@ -1,20 +1,20 @@
 # backend/app/models/configuracion_sistema.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Modelo de Configuración del Sistema
 Centraliza todas las configuraciones del sistema para fácil gestión desde el frontend
-"""
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, Numeric, JSON
+""
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
-from datetime import datetime
-from typing import Dict, Any, Optional
-import json
-import logging
+
 
 from app.db.session import Base
 
 logger = logging.getLogger(__name__)
-
 
 class ConfiguracionSistema(Base):
     """
@@ -121,7 +121,6 @@ class ConfiguracionSistema(Base):
             }
 
         return resultado
-
 
 class ConfiguracionPorDefecto:
     """
@@ -634,7 +633,6 @@ class ConfiguracionPorDefecto:
             db.rollback()
             logger = logging.getLogger(__name__)
             logger.error(f"Error creando configuraciones por defecto: {e}")
-
 
 # ============================================
 # HELPER PARA ACCESO RÁPIDO A CONFIGURACIONES

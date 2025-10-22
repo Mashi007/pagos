@@ -1,26 +1,15 @@
-"""
-🌐 Sistema de Diagnóstico de Red y Latencia
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Sistema de Diagnóstico de Red y Latencia
 Analiza problemas de conectividad y rendimiento de red
-"""
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Tuple
-import json
-import logging
-import asyncio
-import time
-import statistics
-from collections import defaultdict, deque
+""
+
 import threading
 import socket
-import subprocess
-import platform
-
-from app.db.session import get_db
-from app.models.user import User
-from app.core.config import settings
-from app.api.deps import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -95,7 +84,6 @@ class NetworkDiagnosticSystem:
 
         # Test de conectividad HTTPS
         try:
-            import urllib.request
             start_time = time.time()
             urllib.request.urlopen('https://httpbin.org/get', timeout=10)
             latency = (time.time() - start_time) * 1000
@@ -140,7 +128,6 @@ class NetworkDiagnosticSystem:
             try:
                 if 'url' in service:
                     # Test HTTP/HTTPS
-                    import urllib.request
                     start_time = time.time()
                     urllib.request.urlopen(service['url'], timeout=10)
                     latency = (time.time() - start_time) * 1000
@@ -391,11 +378,11 @@ network_diagnostic = NetworkDiagnosticSystem()
 # ENDPOINTS DE DIAGNÓSTICO DE RED
 # ============================================
 
-@router.get("/network-health")
+router.get("/network-health")
 async def get_network_health(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🌐 Análisis completo de salud de red
     """
@@ -416,11 +403,11 @@ async def get_network_health(
             "error": str(e)
         }
 
-@router.post("/test-connectivity")
+router.post("/test-connectivity")
 async def test_connectivity_now(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔍 Test inmediato de conectividad
     """
@@ -446,11 +433,11 @@ async def test_connectivity_now(
             "error": str(e)
         }
 
-@router.post("/test-latency")
+router.post("/test-latency")
 async def test_latency_now(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ⚡ Test inmediato de latencia
     """
@@ -477,11 +464,11 @@ async def test_latency_now(
             "error": str(e)
         }
 
-@router.get("/network-statistics")
+router.get("/network-statistics")
 async def get_network_statistics(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Estadísticas históricas de red
     """
@@ -531,11 +518,11 @@ async def get_network_statistics(
             "error": str(e)
         }
 
-@router.get("/network-trends")
+router.get("/network-trends")
 async def get_network_trends(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📈 Análisis de tendencias de red
     """

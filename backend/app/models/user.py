@@ -1,18 +1,21 @@
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Modelo de Usuario Simplificado
 Solo 2 roles: ADMIN (acceso completo) y USER (acceso limitado)
-"""
+""
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
-from datetime import datetime
+
 from app.db.session import Base
 
 # Constantes de longitud de campos
 EMAIL_LENGTH = 255
 NAME_LENGTH = 100
 PASSWORD_LENGTH = 255
-
 
 class User(Base):
     """Modelo de Usuario Simplificado"""

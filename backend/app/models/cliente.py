@@ -1,6 +1,11 @@
-from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Text, Boolean, Numeric, ForeignKey
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Text, Boolean
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
+
 from app.db.session import Base
 
 # Constantes de longitud de campos

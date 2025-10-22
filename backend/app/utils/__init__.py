@@ -1,7 +1,7 @@
 # backend/app/utils/__init__.py
-"""
+""
 Utilidades del sistema
-"""
+""
 from app.utils.date_helpers import (
     add_months,
     add_weeks,
@@ -11,7 +11,6 @@ from app.utils.date_helpers import (
     days_overdue,
     format_date_es,
     get_notification_dates
-)
 
 from app.utils.validators import (
     validate_dni,
@@ -25,7 +24,6 @@ from app.utils.validators import (
     sanitize_string,
     sanitize_html,
     normalize_text
-)
 
 __all__ = [
     # Date helpers
@@ -49,4 +47,4 @@ __all__ = [
     "sanitize_string",
     "sanitize_html",
     "normalize_text",
-]
+

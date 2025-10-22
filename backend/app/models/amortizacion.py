@@ -1,15 +1,18 @@
 # backend/app/models/amortizacion.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Modelo de Cuota/Amortización
 Representa cada cuota de un préstamo con su detalle de capital, interés y saldos
-"""
+""
 from sqlalchemy import Column, Integer, String, Numeric, Date, ForeignKey, DateTime, Boolean, Table
-from sqlalchemy.orm import relationship
+
 from sqlalchemy.sql import func
-from decimal import Decimal
 
 from app.db.session import Base
-
 
 class Cuota(Base):
     """
@@ -82,7 +85,7 @@ class Cuota(Base):
     @property
     def esta_vencida(self) -> bool:
         """Verifica si la cuota está vencida"""
-        from datetime import date
+        
         if self.estado == "PAGADA":
             return False
         return date.today() > self.fecha_vencimiento
@@ -109,7 +112,7 @@ class Cuota(Base):
         Returns:
             Decimal: Monto de mora calculado
         """
-        from datetime import date
+        
 
         if self.estado == "PAGADA" or not self.esta_vencida:
             return Decimal("0.00")
@@ -180,7 +183,7 @@ class Cuota(Base):
 
     def actualizar_estado(self):
         """Actualiza el estado de la cuota según los pagos realizados"""
-        from datetime import date
+        
 
         if self.capital_pendiente <= 0 and self.interes_pendiente <= 0:
             self.estado = "PAGADA"
@@ -193,13 +196,11 @@ class Cuota(Base):
         else:
             self.estado = "PENDIENTE"
 
-
 # ============================================
 # ALIAS PARA COMPATIBILIDAD
 # ============================================
 # Algunos endpoints/services pueden referenciar "Amortizacion"
 Amortizacion = Cuota
-
 
 # ============================================
 # TABLA DE ASOCIACIÓN PAGO-CUOTAS
@@ -214,4 +215,4 @@ pago_cuotas = Table(
     Column('aplicado_a_interes', Numeric(12, 2), default=Decimal("0.00")),
     Column('aplicado_a_mora', Numeric(12, 2), default=Decimal("0.00")),
     Column('creado_en', DateTime(timezone=True), server_default=func.now())
-)
+

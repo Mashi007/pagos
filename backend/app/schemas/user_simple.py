@@ -1,13 +1,15 @@
 # backend/app/schemas/user.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Schemas de usuario simplificado.
 Solo 2 roles: ADMIN (acceso completo) y USER (acceso limitado)
 Compatible con Pydantic v2.
-"""
-from typing import Optional
-from datetime import datetime
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
-
+""
+from pydantic import BaseModel, Field, ConfigDict
 
 # ============================================
 # SCHEMAS BASE
@@ -21,11 +23,9 @@ class UserBase(BaseModel):
     is_admin: bool = Field(default=False)  # Cambio clave: rol → is_admin
     is_active: bool = Field(default=True)
 
-
 class UserCreate(UserBase):
     """Schema para crear usuario."""
     password: str = Field(..., min_length=8)
-
 
 class UserUpdate(BaseModel):
     """Schema para actualizar usuario."""
@@ -36,7 +36,6 @@ class UserUpdate(BaseModel):
     is_admin: Optional[bool] = None  # Cambio clave: rol → is_admin
     is_active: Optional[bool] = None
     password: Optional[str] = Field(None, min_length=8)
-
 
 # ============================================
 # SCHEMAS DE RESPUESTA
@@ -55,14 +54,12 @@ class UserResponse(UserBase):
         """Nombre completo del usuario."""
         return f"{self.nombre} {self.apellido}"
 
-
 class UserListResponse(BaseModel):
     """Schema para lista de usuarios."""
     items: list[UserResponse]
     total: int
     page: int
     page_size: int
-
 
 # ============================================
 # SCHEMAS DE AUTENTICACIÓN
@@ -73,13 +70,11 @@ class LoginRequest(BaseModel):
     password: str
     remember_me: bool = Field(default=False)
 
-
 class LoginResponse(BaseModel):
     """Schema de respuesta de login."""
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
-
 
 class TokenPayload(BaseModel):
     """Schema del payload del token JWT."""

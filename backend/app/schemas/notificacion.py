@@ -1,11 +1,14 @@
 # backend/app/schemas/notificacion.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Schemas de Pydantic para Notificación
-"""
-from datetime import datetime
-from typing import Optional, Dict, Any
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
-
+""
+from typing import Dict, Any
+from pydantic import BaseModel, Field, ConfigDict
 
 # ============================================================================
 # Schemas Base
@@ -37,11 +40,9 @@ class NotificacionBase(BaseModel):
     programada_para: Optional[datetime] = None
     max_intentos: int = Field(default=3, ge=1, le=10)
 
-
 class NotificacionCreate(NotificacionBase):
     """Schema para crear una notificación"""
     pass
-
 
 class NotificacionUpdate(BaseModel):
     """Schema para actualizar una notificación"""
@@ -52,7 +53,6 @@ class NotificacionUpdate(BaseModel):
     extra_data: Optional[Dict[str, Any]] = None
     programada_para: Optional[datetime] = None
     prioridad: Optional[str] = None
-
 
 # ============================================================================
 # Schemas de Respuesta
@@ -79,7 +79,6 @@ class NotificacionInDB(NotificacionBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-
 class NotificacionResponse(NotificacionInDB):
     """Schema de respuesta de notificación"""
 
@@ -89,7 +88,6 @@ class NotificacionResponse(NotificacionInDB):
     fallo: bool = False
     puede_reintentar: bool = False
 
-
 # ============================================================================
 # Schemas para acciones específicas
 # ============================================================================
@@ -98,11 +96,9 @@ class NotificacionMarcarEnviada(BaseModel):
     """Schema para marcar notificación como enviada"""
     respuesta_servicio: Optional[str] = None
 
-
 class NotificacionMarcarFallida(BaseModel):
     """Schema para marcar notificación como fallida"""
     error_mensaje: str
-
 
 class NotificacionRecordatorioPago(BaseModel):
     """Schema para crear recordatorio de pago"""
@@ -115,7 +111,6 @@ class NotificacionRecordatorioPago(BaseModel):
         None,
         description="Datos adicionales como monto, fecha_vencimiento, etc."
     )
-
 
 # ============================================================================
 # Schemas de Listado y Filtrado
@@ -133,7 +128,6 @@ class NotificacionFilter(BaseModel):
     fecha_desde: Optional[datetime] = None
     fecha_hasta: Optional[datetime] = None
 
-
 class NotificacionList(BaseModel):
     """Schema para lista de notificaciones"""
 
@@ -142,7 +136,6 @@ class NotificacionList(BaseModel):
     page: int
     page_size: int
     total_pages: int
-
 
 # ============================================================================
 # Schemas de Estadísticas

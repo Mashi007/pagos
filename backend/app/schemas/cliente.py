@@ -1,8 +1,12 @@
 # backend/app/schemas/cliente.py
-from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
-from typing import Optional, List
-from datetime import date, datetime
-from decimal import Decimal
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+ datetime
+
 from app.utils.validators import sanitize_html
 
 # Constantes de validación
@@ -18,7 +22,6 @@ MAX_NOTES_LENGTH = 1000
 MAX_AMORTIZACIONES = 360
 MAX_TASA_INTERES = 100
 MAX_COMMENTS_LENGTH = 500
-
 
 class ClienteBase(BaseModel):
     # Datos personales - OBLIGATORIOS
@@ -60,7 +63,6 @@ class ClienteBase(BaseModel):
         """Sanitizar campos de texto para prevenir XSS"""
         if v is None or v == "":
             return "NA" if v is None else v
-        from app.utils.validators import sanitize_html
         return sanitize_html(v)
 
     @field_validator('estado', mode='before')
@@ -71,19 +73,16 @@ class ClienteBase(BaseModel):
             return v.upper()
         return v
 
-
 class ClienteCreate(ClienteBase):
     """Schema para crear cliente - todos los campos son obligatorios"""
     # Campo para confirmación de duplicados
     confirm_duplicate: bool = Field(False, description="Indica si el usuario confirma crear un duplicado")
-
 
 class ClienteCreateWithConfirmation(BaseModel):
     """Schema para crear cliente con confirmación de duplicado"""
     cliente_data: ClienteCreate
     confirmacion: bool = Field(True, description="Confirmación del operador")
     comentarios: str = Field("", max_length=MAX_COMMENTS_LENGTH, description="Comentarios del operador sobre la confirmación")
-
 
 class ClienteUpdate(BaseModel):
     """Schema para actualizar cliente - campos opcionales para actualización parcial"""
@@ -130,7 +129,6 @@ class ClienteUpdate(BaseModel):
             return sanitize_html(v)
         return v
 
-
 class ClienteResponse(ClienteBase):
     """Schema de respuesta para cliente"""
     id: int
@@ -141,7 +139,6 @@ class ClienteResponse(ClienteBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-
 class ClienteList(BaseModel):
     """Schema para lista de clientes con paginación"""
     items: List[ClienteResponse]
@@ -151,7 +148,6 @@ class ClienteList(BaseModel):
     total_pages: int
 
     model_config = ConfigDict(from_attributes=True)
-
 
 class ClienteSearchFilters(BaseModel):
     """Filtros avanzados para búsqueda de clientes"""
@@ -173,7 +169,6 @@ class ClienteSearchFilters(BaseModel):
     order_by: Optional[str] = Field(None, pattern="^(nombres|apellidos|cedula|fecha_registro|estado)$")
     order_direction: Optional[str] = Field("asc", pattern="^(asc|desc)$")
 
-
 class ClienteDetallado(ClienteResponse):
     """Cliente con información detallada"""
     # Información del analista
@@ -184,7 +179,6 @@ class ClienteDetallado(ClienteResponse):
     prestamos_activos: int = 0
 
     model_config = ConfigDict(from_attributes=True)
-
 
 class ClienteCreateWithLoan(ClienteBase):
     """Schema para crear cliente con préstamo automático"""
@@ -200,7 +194,6 @@ class ClienteCreateWithLoan(ClienteBase):
     # Configuración del préstamo
     tasa_interes_anual: Optional[Decimal] = Field(None, ge=0, le=MAX_TASA_INTERES, description="Tasa de interés anual (%)")
     generar_tabla_automatica: bool = Field(True, description="Generar tabla de amortización automáticamente")
-
 
 class ClienteQuickActions(BaseModel):
     """Acciones rápidas disponibles para un cliente"""

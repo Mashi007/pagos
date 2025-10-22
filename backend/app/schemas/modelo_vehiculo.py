@@ -1,28 +1,27 @@
 # backend/app/schemas/modelo_vehiculo.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Schemas para ModeloVehiculo
-"""
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
-from datetime import datetime
-
+""
+from pydantic import BaseModel, ConfigDict
 
 class ModeloVehiculoBase(BaseModel):
     """Schema base para ModeloVehiculo"""
     modelo: str = Field(..., min_length=1, max_length=100, description="Nombre del modelo de vehículo")
     activo: bool = Field(default=True, description="Estado del modelo")
 
-
 class ModeloVehiculoCreate(ModeloVehiculoBase):
     """Schema para crear un modelo de vehículo"""
     pass
-
 
 class ModeloVehiculoUpdate(BaseModel):
     """Schema para actualizar un modelo de vehículo"""
     modelo: Optional[str] = Field(None, min_length=1, max_length=100)
     activo: Optional[bool] = None
-
 
 class ModeloVehiculoResponse(ModeloVehiculoBase):
     """Schema de respuesta para ModeloVehiculo"""
@@ -31,7 +30,6 @@ class ModeloVehiculoResponse(ModeloVehiculoBase):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
-
 
 class ModeloVehiculoListResponse(BaseModel):
     """Schema para respuesta de lista paginada"""

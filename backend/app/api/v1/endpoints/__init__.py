@@ -1,7 +1,7 @@
 # backend/app/api/v1/endpoints/__init__.py
-"""
+""
 Endpoints de la API v1
-"""
+""
 
 # Importar todos los routers disponibles
 from . import (
@@ -54,7 +54,6 @@ from . import (
     strategic_measurements,
     verificar_concesionarios,
     diagnostico_refresh_token,
-)
 
 __all__ = [
     "health",
@@ -106,4 +105,4 @@ __all__ = [
     "strategic_measurements",
     "verificar_concesionarios",
     "diagnostico_refresh_token",
-]
+

@@ -1,23 +1,14 @@
-"""
-📊 Sistema Comparativo de Análisis Diferencial
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Sistema Comparativo de Análisis Diferencial
 Compara casos exitosos vs fallidos para identificar diferencias específicas
-"""
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Tuple
-import json
-import logging
-import statistics
-from collections import defaultdict, deque
-import threading
-import time
+""
 
-from app.db.session import get_db
-from app.models.user import User
-from app.core.config import settings
-from app.core.security import decode_token
-from app.api.deps import get_current_user
+import threading
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -491,12 +482,12 @@ comparative_system = ComparativeAnalysisSystem()
 # ENDPOINTS COMPARATIVOS
 # ============================================
 
-@router.post("/log-successful-case")
+router.post("/log-successful-case")
 async def log_successful_case_endpoint(
     case_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ✅ Registrar caso exitoso para análisis comparativo
     """
@@ -517,12 +508,12 @@ async def log_successful_case_endpoint(
             "error": str(e)
         }
 
-@router.post("/log-failed-case")
+router.post("/log-failed-case")
 async def log_failed_case_endpoint(
     case_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ❌ Registrar caso fallido para análisis comparativo
     """
@@ -543,12 +534,12 @@ async def log_failed_case_endpoint(
             "error": str(e)
         }
 
-@router.post("/differential-analysis")
+router.post("/differential-analysis")
 async def perform_differential_analysis_endpoint(
     analysis_request: Dict[str, str],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Realizar análisis diferencial completo
     """
@@ -570,11 +561,11 @@ async def perform_differential_analysis_endpoint(
             "error": str(e)
         }
 
-@router.get("/comparative-summary")
+router.get("/comparative-summary")
 async def get_comparative_summary_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📈 Resumen comparativo general
     """

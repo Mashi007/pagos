@@ -1,11 +1,11 @@
 # app/api/v1/endpoints/prestamos.py
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from typing import List
-from datetime import datetime, timedelta
-from app.db.session import get_db
-from app.models.prestamo import Prestamo
-from app.models.cliente import Cliente
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+
 from app.schemas.prestamo import PrestamoCreate, PrestamoUpdate, PrestamoResponse
 
 # Constantes de cálculo de fechas
@@ -14,7 +14,6 @@ DAYS_PER_QUINCENA = 15
 DAYS_PER_MONTH = 30
 
 router = APIRouter()
-
 
 def calcular_proxima_fecha_pago(fecha_inicio: datetime, modalidad: str, cuotas_pagadas: int) -> datetime:
     """Calcula la próxima fecha de pago según la modalidad"""
@@ -25,8 +24,7 @@ def calcular_proxima_fecha_pago(fecha_inicio: datetime, modalidad: str, cuotas_p
     else:  # MENSUAL
         return fecha_inicio + timedelta(days=DAYS_PER_MONTH * (cuotas_pagadas + 1))
 
-
-@router.post("/", response_model=PrestamoResponse, status_code=201)
+router.post("/", response_model=PrestamoResponse, status_code=201)
 def crear_prestamo(prestamo: PrestamoCreate, db: Session = Depends(get_db)):
     """Crear un nuevo préstamo"""
 
@@ -56,15 +54,14 @@ def crear_prestamo(prestamo: PrestamoCreate, db: Session = Depends(get_db)):
 
     return db_prestamo
 
-
-@router.get("/", response_model=List[PrestamoResponse])
+router.get("/", response_model=List[PrestamoResponse])
 def listar_prestamos(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=1000),
     cliente_id: int = Query(None),
     estado: str = Query(None),
     db: Session = Depends(get_db)
-):
+:
     """Listar préstamos con filtros"""
     query = db.query(Prestamo)
 
@@ -77,8 +74,7 @@ def listar_prestamos(
     prestamos = query.offset(skip).limit(limit).all()
     return prestamos
 
-
-@router.get("/{prestamo_id}", response_model=PrestamoResponse)
+router.get("/{prestamo_id}", response_model=PrestamoResponse)
 def obtener_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     """Obtener un préstamo por ID"""
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
@@ -86,13 +82,12 @@ def obtener_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
     return prestamo
 
-
-@router.put("/{prestamo_id}", response_model=PrestamoResponse)
+router.put("/{prestamo_id}", response_model=PrestamoResponse)
 def actualizar_prestamo(
     prestamo_id: int,
     prestamo_data: PrestamoUpdate,
     db: Session = Depends(get_db)
-):
+:
     """Actualizar datos de un préstamo"""
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:
@@ -105,7 +100,6 @@ def actualizar_prestamo(
     db.commit()
     db.refresh(prestamo)
     return prestamo
-
 
 # TEMPORALMENTE COMENTADO PARA EVITAR ERROR 503
 # @router.get("/stats")
@@ -137,7 +131,7 @@ def actualizar_prestamo(
 #         raise HTTPException(status_code=500, detail=f"Error al obtener estadísticas: {str(e)}")
 
 # ENDPOINT TEMPORAL CON DATOS MOCK PARA EVITAR ERROR 503
-@router.get("/stats")
+router.get("/stats")
 def obtener_estadisticas_prestamos(db: Session = Depends(get_db)):
     """Obtener estadísticas de préstamos - DATOS MOCK TEMPORALES"""
     try:

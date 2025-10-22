@@ -1,9 +1,12 @@
 # backend/app/schemas/reportes.py
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional, Dict, Any
-from datetime import date, datetime
-from decimal import Decimal
-
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, ConfigDict
+from typing import Dict, Any
+ datetime
 
 class FiltrosReporte(BaseModel):
     """Filtros comunes para reportes"""
@@ -13,7 +16,6 @@ class FiltrosReporte(BaseModel):
     estado: Optional[str] = None
     tipo_prestamo: Optional[str] = None
 
-
 class DistribucionMonto(BaseModel):
     """Distribución por rango de montos"""
     rango: str
@@ -22,7 +24,6 @@ class DistribucionMonto(BaseModel):
 
     class Config:
         from_attributes = True
-
 
 class ReporteCartera(BaseModel):
     """Esquema para reporte de cartera"""
@@ -41,7 +42,6 @@ class ReporteCartera(BaseModel):
             Decimal: lambda v: float(v)
         }
 
-
 class RangoMorosidad(BaseModel):
     """Detalle por rango de morosidad"""
     rango: str
@@ -49,7 +49,6 @@ class RangoMorosidad(BaseModel):
     monto_total: Decimal
 
     model_config = ConfigDict(from_attributes=True)
-
 
 class ReporteMorosidad(BaseModel):
     """Esquema para reporte de morosidad"""
@@ -64,7 +63,6 @@ class ReporteMorosidad(BaseModel):
             Decimal: lambda v: float(v)
         }
 
-
 class DetalleConcepto(BaseModel):
     """Detalle de pagos por concepto"""
     concepto: str
@@ -73,7 +71,6 @@ class DetalleConcepto(BaseModel):
 
     class Config:
         from_attributes = True
-
 
 class ReporteCobranza(BaseModel):
     """Esquema para reporte de cobranza"""
@@ -91,7 +88,6 @@ class ReporteCobranza(BaseModel):
             Decimal: lambda v: float(v)
         }
 
-
 class ReporteVencimientos(BaseModel):
     """Reporte de cuotas por vencer"""
     fecha_inicio: date
@@ -102,7 +98,6 @@ class ReporteVencimientos(BaseModel):
 
     class Config:
         from_attributes = True
-
 
 class ReporteRendimiento(BaseModel):
     """Reporte de rendimiento del portafolio"""
@@ -120,7 +115,6 @@ class ReporteRendimiento(BaseModel):
             Decimal: lambda v: float(v)
         }
 
-
 class ClienteTop(BaseModel):
     """Cliente top por volumen"""
     cliente_id: int
@@ -132,7 +126,6 @@ class ClienteTop(BaseModel):
 
     class Config:
         from_attributes = True
-
 
 class ReporteClientesTop(BaseModel):
     """Reporte de mejores clientes"""

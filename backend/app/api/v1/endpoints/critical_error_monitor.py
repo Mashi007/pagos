@@ -1,24 +1,13 @@
-"""
-🚨 Sistema de Monitoreo de Errores Críticos
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Sistema de Monitoreo de Errores Críticos
 Monitorea específicamente errores que causan fallos de despliegue y 503
-"""
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
-import json
-import logging
-import time
-import asyncio
-from collections import defaultdict, deque
+""
 import threading
-import traceback
-
-from app.db.session import get_db
-from app.models.user import User
-from app.core.config import settings
-from app.core.security import decode_token
-from app.api.deps import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -243,12 +232,12 @@ critical_error_monitor = CriticalErrorMonitor()
 # ENDPOINTS DE MONITOREO DE ERRORES CRÍTICOS
 # ============================================
 
-@router.post("/log-critical-error")
+router.post("/log-critical-error")
 async def log_critical_error_endpoint(
     error_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🚨 Registrar error crítico específico
     """
@@ -277,11 +266,11 @@ async def log_critical_error_endpoint(
             "error": str(e)
         }
 
-@router.get("/critical-error-analysis")
+router.get("/critical-error-analysis")
 async def get_critical_error_analysis(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Análisis de tendencias de errores críticos
     """
@@ -302,11 +291,11 @@ async def get_critical_error_analysis(
             "error": str(e)
         }
 
-@router.get("/critical-error-summary")
+router.get("/critical-error-summary")
 async def get_critical_error_summary_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 Resumen de errores críticos
     """

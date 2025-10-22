@@ -1,25 +1,26 @@
 # backend/app/api/v1/endpoints/auth.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoints de autenticación - VERSIÓN SIMPLIFICADA SIN AUDITORÍA
 Solución temporal para resolver error 503
-"""
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
-from sqlalchemy.orm import Session
-import logging
+""
+from fastapi import APIRouter, status, Request, Response
 
-from app.db.session import get_db
-from app.api.deps import get_current_user
-from app.models.user import User
+
 from app.schemas.auth import (
     LoginRequest,
     Token,
     LoginResponse,
     RefreshTokenRequest,
     ChangePasswordRequest
-)
+
 from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
-from app.core.security import create_access_token, verify_password, get_password_hash, validate_password_strength, create_refresh_token
+ verify_password, get_password_hash, validate_password_strength, create_refresh_token
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ def add_cors_headers(request: Request, response: Response) -> None:
     """
     Helper function para agregar headers CORS de forma consistente
     """
-    from app.core.config import settings
+    
 
     origin = request.headers.get("origin")
     logger.info(f"CORS Debug - Origin recibido: {origin}")
@@ -55,13 +56,13 @@ def add_cors_headers(request: Request, response: Response) -> None:
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
     response.headers["Access-Control-Allow-Credentials"] = "true"
 
-@router.post("/login", response_model=LoginResponse)
+router.post("/login", response_model=LoginResponse)
 async def login(
     request: Request,
     response: Response,
     login_data: LoginRequest,
     db: Session = Depends(get_db)
-):
+:
     """
     🔐 Login de usuario - VERSIÓN SIMPLIFICADA
 
@@ -119,12 +120,12 @@ async def login(
             detail="Error interno del servidor"
         )
 
-@router.get("/me", response_model=UserMeResponse)
+router.get("/me", response_model=UserMeResponse)
 async def get_current_user_info(
     request: Request,
     response: Response,
     current_user: User = Depends(get_current_user)
-):
+:
     """
     👤 Obtener información del usuario actual
     """
@@ -141,12 +142,12 @@ async def get_current_user_info(
             detail="Error interno del servidor"
         )
 
-@router.post("/logout")
+router.post("/logout")
 async def logout(
     request: Request,
     response: Response,
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🚪 Logout de usuario
     """
@@ -165,13 +166,13 @@ async def logout(
             detail="Error interno del servidor"
         )
 
-@router.post("/refresh", response_model=Token)
+router.post("/refresh", response_model=Token)
 async def refresh_token(
     request: Request,
     response: Response,
     refresh_data: RefreshTokenRequest,
     db: Session = Depends(get_db)
-):
+:
     """
     🔄 Refrescar token de acceso
     """
@@ -195,14 +196,14 @@ async def refresh_token(
             detail="Error interno del servidor"
         )
 
-@router.post("/change-password")
+router.post("/change-password")
 async def change_password(
     request: Request,
     response: Response,
     password_data: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
-):
+:
     """
     🔑 Cambiar contraseña
     """
@@ -244,7 +245,7 @@ async def change_password(
             detail="Error interno del servidor"
         )
 
-@router.options("/{path:path}")
+router.options("/{path:path}")
 async def options_handler(request: Request, response: Response, path: str):
     """
     Manejar requests OPTIONS para CORS

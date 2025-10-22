@@ -1,38 +1,36 @@
 # backend/app/api/v1/endpoints/users.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoints de gestión de usuarios
 CRUD completo (solo para ADMIN)
-"""
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import List
+""
+from fastapi import APIRouter, status
 
-from app.db.session import get_db
 from app.api.deps import get_admin_user, get_current_user, get_pagination_params, PaginationParams
-from app.models.user import User
+
 from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserListResponse
 from app.utils.auditoria_helper import (
-    registrar_creacion, registrar_actualizacion, registrar_eliminacion, registrar_error
-)
+    registrar_creacion, registrar_eliminacion
+
 from app.core.security import get_password_hash
 from app.utils.validators import validate_password_strength
-from datetime import datetime
-import logging
 
 logger = logging.getLogger(__name__)
 
-
 router = APIRouter()
-
 
 # ============================================
 # VERIFICACIÓN DE ADMINISTRADORES
 # ============================================
 
-@router.get("/verificar-admin")
+router.get("/verificar-admin")
 def verificar_rol_administracion(
     db: Session = Depends(get_db)
-):
+:
     """
     🔍 Verificar estado del rol de administración en el sistema
     """
@@ -128,13 +126,12 @@ def verificar_rol_administracion(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error verificando administración: {str(e)}")
 
-
-@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED, summary="Crear usuario")
+router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED, summary="Crear usuario")
 def create_user(
     user_data: UserCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_admin_user)
-):
+:
     """
     Crear un nuevo usuario (solo ADMIN)
 
@@ -200,11 +197,10 @@ def create_user(
 
     return new_user
 
-
-@router.get("/test-simple")
+router.get("/test-simple")
 def test_users_simple(
     db: Session = Depends(get_db)
-):
+:
     """
     Test endpoint simple para verificar usuarios (sin autenticación)
     """
@@ -238,11 +234,11 @@ def test_users_simple(
             "message": "Error en test endpoint"
         }
 
-@router.get("/test")
+router.get("/test")
 def test_users_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Test endpoint para verificar usuarios
     """
@@ -279,13 +275,13 @@ def test_users_endpoint(
             "message": "Error en test endpoint"
         }
 
-@router.get("/")
+router.get("/")
 def list_users(
     db: Session = Depends(get_db),
     pagination: PaginationParams = Depends(get_pagination_params),
     current_user: User = Depends(get_admin_user),
     is_active: bool = None
-):
+:
     """
     Listar usuarios con paginación (solo ADMIN)
 
@@ -312,13 +308,12 @@ def list_users(
         page_size=pagination.page_size
     )
 
-
-@router.get("/{user_id}", response_model=UserResponse, summary="Obtener usuario")
+router.get("/{user_id}", response_model=UserResponse, summary="Obtener usuario")
 def get_user(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_admin_user)
-):
+:
     """
     Obtener un usuario por ID (solo ADMIN)
     """
@@ -332,14 +327,13 @@ def get_user(
 
     return user
 
-
-@router.put("/{user_id}", response_model=UserResponse, summary="Actualizar usuario")
+router.put("/{user_id}", response_model=UserResponse, summary="Actualizar usuario")
 def update_user(
     user_id: int,
     user_data: UserUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_admin_user)
-):
+:
     """
     Actualizar un usuario (solo ADMIN)
 
@@ -383,13 +377,12 @@ def update_user(
 
     return user
 
-
-@router.delete("/{user_id}", status_code=status.HTTP_200_OK, summary="Eliminar usuario")
+router.delete("/{user_id}", status_code=status.HTTP_200_OK, summary="Eliminar usuario")
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_admin_user)
-):
+:
     """
     Eliminar un usuario (HARD DELETE - borrado completo de BD)
 
@@ -440,13 +433,12 @@ def delete_user(
         "message": f"Usuario {user_email} eliminado completamente de la base de datos"
     }
 
-
-@router.post("/{user_id}/activate", response_model=UserResponse, summary="Activar usuario")
+router.post("/{user_id}/activate", response_model=UserResponse, summary="Activar usuario")
 def activate_user(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_admin_user)
-):
+:
     """
     Reactivar un usuario desactivado (solo ADMIN)
     """
@@ -466,13 +458,12 @@ def activate_user(
 
     return user
 
-
-@router.post("/{user_id}/deactivate", response_model=UserResponse, summary="Desactivar usuario")
+router.post("/{user_id}/deactivate", response_model=UserResponse, summary="Desactivar usuario")
 def deactivate_user(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_admin_user)
-):
+:
     """
     Desactivar un usuario (solo ADMIN)
     """

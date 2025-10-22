@@ -1,27 +1,22 @@
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoint de diagnóstico completo del sistema
 Verifica todos los componentes críticos
-"""
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy import text
-from datetime import datetime
-import logging
-from typing import Dict, Any, List
+""
 
-from app.db.session import get_db
-from app.models.user import User
-from app.models.cliente import Cliente
+
 from app.models.analista import Analista
 from app.models.concesionario import Concesionario
 from app.models.modelo_vehiculo import ModeloVehiculo
-from app.models.auditoria import Auditoria
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-@router.get("/sistema")
+router.get("/sistema")
 def diagnostico_completo_sistema(db: Session = Depends(get_db)):
     """
     🔍 Diagnóstico completo del sistema
@@ -75,9 +70,9 @@ def diagnostico_completo_sistema(db: Session = Depends(get_db)):
 
         # 3. Verificar datos de configuración
         try:
-            analistas_activos = db.query(Analista).filter(Analista.activo == True).count()
-            concesionarios_activos = db.query(Concesionario).filter(Concesionario.activo == True).count()
-            modelos_activos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo == True).count()
+            analistas_activos = db.query(Analista).filter(Analista.activo ).count()
+            concesionarios_activos = db.query(Concesionario).filter(Concesionario.activo ).count()
+            modelos_activos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo ).count()
 
             diagnostico["componentes"]["configuracion"] = {
                 "status": "ok",
@@ -94,10 +89,10 @@ def diagnostico_completo_sistema(db: Session = Depends(get_db)):
 
         # 4. Verificar usuario administrador
         try:
-            admin_count = db.query(User).filter(User.is_admin == True).count()
+            admin_count = db.query(User).filter(User.is_admin ).count()
             admin_activo = db.query(User).filter(
-                User.is_admin == True, 
-                User.is_active == True
+                User.is_admin , 
+                User.is_active 
             ).count()
 
             diagnostico["componentes"]["administradores"] = {
@@ -147,7 +142,7 @@ def diagnostico_completo_sistema(db: Session = Depends(get_db)):
             "componentes": {}
         }
 
-@router.get("/endpoints")
+router.get("/endpoints")
 def verificar_endpoints_criticos():
     """
     🔗 Verificar estado de endpoints críticos
@@ -171,7 +166,7 @@ def verificar_endpoints_criticos():
         "nota": "Usar herramientas como Postman o curl para verificar cada endpoint"
     }
 
-@router.get("/configuracion")
+router.get("/configuracion")
 def verificar_configuracion_sistema():
     """
     ⚙️ Verificar configuración del sistema
@@ -191,7 +186,7 @@ def verificar_configuracion_sistema():
         "message": "Configuración del sistema verificada"
     }
 
-@router.get("/monitoreo")
+router.get("/monitoreo")
 def monitoreo_tiempo_real(db: Session = Depends(get_db)):
     """
     📊 Monitoreo en tiempo real del sistema
@@ -212,13 +207,13 @@ def monitoreo_tiempo_real(db: Session = Depends(get_db)):
         modelos_count = db.query(ModeloVehiculo).count()
 
         # Verificar usuarios activos
-        usuarios_activos = db.query(User).filter(User.is_active == True).count()
-        usuarios_admin = db.query(User).filter(User.is_admin == True).count()
+        usuarios_activos = db.query(User).filter(User.is_active ).count()
+        usuarios_admin = db.query(User).filter(User.is_admin ).count()
 
         # Verificar datos de configuración activos
-        analistas_activos = db.query(Analista).filter(Analista.activo == True).count()
-        concesionarios_activos = db.query(Concesionario).filter(Concesionario.activo == True).count()
-        modelos_activos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo == True).count()
+        analistas_activos = db.query(Analista).filter(Analista.activo ).count()
+        concesionarios_activos = db.query(Concesionario).filter(Concesionario.activo ).count()
+        modelos_activos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo ).count()
 
         return {
             "timestamp": datetime.now().isoformat(),
@@ -258,7 +253,7 @@ def monitoreo_tiempo_real(db: Session = Depends(get_db)):
             "message": "Error en monitoreo del sistema"
         }
 
-@router.get("/logs")
+router.get("/logs")
 def obtener_logs_sistema():
     """
     📝 Obtener información de logs del sistema

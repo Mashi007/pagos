@@ -1,18 +1,13 @@
-"""
-📊 Dashboard de Diagnóstico en Tiempo Real
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Dashboard de Diagnóstico en Tiempo Real
 Sistema de monitoreo y auditoría para problemas de autenticación
-"""
-from fastapi import APIRouter, Depends, Request, Response
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import Dict, Any, List
-import logging
-import json
-from collections import defaultdict, deque
+""
 
-from app.db.session import get_db
-from app.models.user import User
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -85,10 +80,10 @@ class AuditLogger:
             "time_range": "last_60_minutes"
         }
 
-@router.get("/dashboard")
+router.get("/dashboard")
 async def dashboard_diagnostico(
     db: Session = Depends(get_db)
-):
+:
     """
     📊 Dashboard principal de diagnóstico
     """
@@ -104,8 +99,8 @@ async def dashboard_diagnostico(
         # 2. Estadísticas de usuarios
         try:
             total_users = db.query(User).count()
-            active_users = db.query(User).filter(User.is_active == True).count()
-            admin_users = db.query(User).filter(User.is_admin == True).count()
+            active_users = db.query(User).filter(User.is_active ).count()
+            admin_users = db.query(User).filter(User.is_admin ).count()
 
             user_stats = {
                 "total_users": total_users,
@@ -156,11 +151,11 @@ async def dashboard_diagnostico(
             "error": str(e)
         }
 
-@router.get("/logs")
+router.get("/logs")
 async def obtener_logs_auditoria(
     minutes: int = 60,
     limit: int = 100
-):
+:
     """
     📝 Obtener logs de auditoría
     """
@@ -194,10 +189,10 @@ async def obtener_logs_auditoria(
             "error": str(e)
         }
 
-@router.get("/health-check")
+router.get("/health-check")
 async def health_check_detallado(
     db: Session = Depends(get_db)
-):
+:
     """
     🏥 Health check detallado del sistema
     """
@@ -227,7 +222,7 @@ async def health_check_detallado(
 
         # 3. Verificar usuarios admin
         try:
-            admin_count = db.query(User).filter(User.is_admin == True).count()
+            admin_count = db.query(User).filter(User.is_admin ).count()
             admin_ok = admin_count > 0
             checks["admin_users"] = {
                 "status": "healthy" if admin_ok else "unhealthy",
@@ -278,7 +273,7 @@ async def health_check_detallado(
             "error": str(e)
         }
 
-@router.post("/clear-logs")
+router.post("/clear-logs")
 async def limpiar_logs_auditoria():
     """
     🧹 Limpiar logs de auditoría

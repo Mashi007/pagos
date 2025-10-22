@@ -1,7 +1,11 @@
 # backend/app/core/config.py
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
-from typing import Optional, List
+
 from functools import lru_cache
 
 # Constantes de configuración
@@ -31,7 +35,6 @@ DEFAULT_SENTRY_TRACES_SAMPLE_RATE = 0.1
 DEFAULT_UVICORN_WORKERS = 1
 DEFAULT_UVICORN_TIMEOUT_KEEP_ALIVE = 120
 DEFAULT_UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN = 30
-
 
 class Settings(BaseSettings):
     """Configuración centralizada de la aplicación"""
@@ -286,12 +289,10 @@ class Settings(BaseSettings):
         extra="allow"  # Permite variables extra del .env
     )
 
-
-@lru_cache()
+lru_cache()
 def get_settings() -> Settings:
     """Obtiene configuración singleton (cache)"""
     return Settings()
-
 
 # Instancia global
 settings = get_settings()

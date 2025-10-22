@@ -1,28 +1,23 @@
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoint de diagnóstico específico para problemas de refresh token
-"""
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-from datetime import datetime
-from typing import Dict, Any
-import logging
-import jwt
-from jose import JWTError
+""
 
-from app.db.session import get_db
-from app.models.user import User
-from app.core.config import settings
-from app.core.security import decode_token, create_access_token, create_refresh_token
-from app.api.deps import get_current_user
+
+ create_access_token, create_refresh_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-@router.post("/diagnosticar-refresh-token")
+router.post("/diagnosticar-refresh-token")
 async def diagnosticar_refresh_token(
     request: Request,
     db: Session = Depends(get_db)
-):
+:
     """
     🔍 Diagnóstico específico para problemas de refresh token
     """
@@ -196,11 +191,11 @@ async def diagnosticar_refresh_token(
             "recomendacion": "Error interno del servidor."
         }
 
-@router.get("/estado-refresh-tokens")
+router.get("/estado-refresh-tokens")
 async def estado_refresh_tokens(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Estado general de los refresh tokens en el sistema
     """

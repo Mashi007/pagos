@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Script de Validación de Calidad para Services
 Aplica normas de linting, formateo y trazabilidad
-"""
+""
 import sys
-import os
-import json
 from pathlib import Path
-from datetime import datetime
 
 # Agregar el directorio del proyecto al path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from app.services.quality_standards import apply_quality_standards
 from app.services.logging_config import configure_service_logging
-
 
 def main():
     """
@@ -119,7 +120,6 @@ def main():
     else:
         print("Calidad insuficiente")
         return 2
-
 
 if __name__ == "__main__":
     exit_code = main()

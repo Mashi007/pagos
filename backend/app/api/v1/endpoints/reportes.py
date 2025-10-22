@@ -1,35 +1,31 @@
 # backend/app/api/v1/endpoints/reportes.py
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
 from datetime import datetime, date, timedelta
-from typing import Optional
-from decimal import Decimal
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
+
+time, timedelta
+
 import io
 
-from app.db.session import get_db
-from app.models.prestamo import Prestamo, EstadoPrestamo
-from app.models.pago import Pago
-from app.models.cliente import Cliente
+ EstadoPrestamo
+
 from app.models.amortizacion import Cuota
 from app.schemas.reportes import (
     ReporteCartera,
     ReporteMorosidad,
     ReporteCobranza,
     FiltrosReporte
-)
-from app.api.deps import get_current_user
-from app.models.user import User
 
 router = APIRouter()
 
-
-@router.get("/cartera", response_model=ReporteCartera)
+router.get("/cartera", response_model=ReporteCartera)
 def reporte_cartera(
     fecha_corte: Optional[date] = None,
     db: Session = Depends(get_db)
-):
+:
     """
     Genera reporte de cartera al día de corte.
     """
@@ -92,12 +88,11 @@ def reporte_cartera(
         ]
     )
 
-
-@router.get("/morosidad", response_model=ReporteMorosidad)
+router.get("/morosidad", response_model=ReporteMorosidad)
 def reporte_morosidad(
     dias_mora_minimo: int = 1,
     db: Session = Depends(get_db)
-):
+:
     """
     Genera reporte detallado de morosidad.
     """
@@ -147,13 +142,12 @@ def reporte_morosidad(
         detalle_por_rango=detalle_rangos
     )
 
-
-@router.get("/cobranza", response_model=ReporteCobranza)
+router.get("/cobranza", response_model=ReporteCobranza)
 def reporte_cobranza(
     fecha_inicio: date,
     fecha_fin: date,
     db: Session = Depends(get_db)
-):
+:
     """
     Genera reporte de gestión de cobranza.
     """
@@ -200,20 +194,19 @@ def reporte_cobranza(
         eficiencia_cobranza=round(eficiencia, 2)
     )
 
-
-@router.get("/exportar/excel")
+router.get("/exportar/excel")
 async def exportar_excel(
     tipo_reporte: str,
     fecha_inicio: Optional[date] = None,
     fecha_fin: Optional[date] = None,
     db: Session = Depends(get_db)
-):
+:
     """
     Exporta reportes a Excel.
     """
     try:
         import openpyxl
-        from openpyxl.styles import Font, Alignment, PatternFill
+        
     except ImportError:
         raise HTTPException(
             status_code=500,
@@ -316,12 +309,11 @@ async def exportar_excel(
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
-
-@router.get("/clientes-top")
+router.get("/clientes-top")
 def clientes_top(
     limite: int = 10,
     db: Session = Depends(get_db)
-):
+:
     """
     Obtiene los top clientes por monto prestado.
     """
@@ -343,16 +335,15 @@ def clientes_top(
         for r in resultado
     ]
 
-
 # ============================================
 # REPORTES PREDEFINIDOS
 # ============================================
 
-@router.get("/estado-cuenta/{cliente_id}/pdf")
+router.get("/estado-cuenta/{cliente_id}/pdf")
 async def generar_estado_cuenta_pdf(
     cliente_id: int,
     db: Session = Depends(get_db)
-):
+:
     """
     1. Estado de cuenta por cliente (PDF)
     - Datos del cliente
@@ -361,10 +352,8 @@ async def generar_estado_cuenta_pdf(
     - Saldo pendiente
     """
     try:
-        from reportlab.lib.pagesizes import letter
-        from reportlab.pdfgen import canvas
-        from reportlab.lib.units import inch
-        import io
+        
+        
 
         # Obtener datos del cliente
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
@@ -428,12 +417,11 @@ async def generar_estado_cuenta_pdf(
     except ImportError:
         raise HTTPException(status_code=500, detail="reportlab no está instalado")
 
-
-@router.get("/tabla-amortizacion/{cliente_id}/pdf")
+router.get("/tabla-amortizacion/{cliente_id}/pdf")
 async def generar_tabla_amortizacion_pdf(
     cliente_id: int,
     db: Session = Depends(get_db)
-):
+:
     """
     2. Tabla de amortización por cliente (PDF)
     - Plan de pagos completo
@@ -442,15 +430,14 @@ async def generar_tabla_amortizacion_pdf(
     - Estado de cada cuota
     """
     try:
-        from reportlab.lib.pagesizes import letter, A4
-        from reportlab.pdfgen import canvas
-        from reportlab.lib.units import inch
+        
+        
+        
         from reportlab.lib import colors
         from reportlab.platypus import (
             SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         )
         from reportlab.lib.styles import getSampleStyleSheet
-        import io
 
         # Obtener cliente y sus cuotas
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
@@ -458,8 +445,7 @@ async def generar_tabla_amortizacion_pdf(
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
         # Obtener préstamo y cuotas
-        from app.models.prestamo import Prestamo
-        from app.models.amortizacion import Cuota
+        
         prestamo = db.query(Prestamo).filter(Prestamo.cliente_id == cliente_id).first()
         if not prestamo:
             raise HTTPException(status_code=404, detail="Préstamo no encontrado")
@@ -542,12 +528,11 @@ async def generar_tabla_amortizacion_pdf(
     except ImportError:
         raise HTTPException(status_code=500, detail="reportlab no está instalado")
 
-
-@router.get("/cobranza-diaria/pdf")
+router.get("/cobranza-diaria/pdf")
 async def reporte_cobranza_diaria_pdf(
     fecha: Optional[date] = Query(None, description="Fecha del reporte (default: hoy)"),
     db: Session = Depends(get_db)
-):
+:
     """
     2. Reporte de cobranza diaria (PDF/Excel)
     - Pagos recibidos hoy
@@ -606,8 +591,7 @@ async def reporte_cobranza_diaria_pdf(
         }
     }
 
-
-@router.get("/personalizado")
+router.get("/personalizado")
 def generar_reporte_personalizado(
     # Filtros
     fecha_inicio: Optional[date] = Query(None),
@@ -631,7 +615,7 @@ def generar_reporte_personalizado(
 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔍 Generador de reportes personalizados con filtros
     """
@@ -737,18 +721,17 @@ def generar_reporte_personalizado(
         "opciones_exportacion": ["PDF", "Excel", "CSV"]
     }
 
-
 # ============================================
 # REPORTES PDF FALTANTES
 # ============================================
 
-@router.get("/cartera-mensual/pdf")
+router.get("/cartera-mensual/pdf")
 async def reporte_mensual_cartera_pdf(
     mes: Optional[int] = Query(None, description="Mes (1-12)"),
     anio: Optional[int] = Query(None, description="Año"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     4. Reporte mensual de cartera (PDF)
     - KPIs del mes
@@ -757,14 +740,9 @@ async def reporte_mensual_cartera_pdf(
     - Proyecciones
     """
     try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.platypus import (
             SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         )
-        from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.lib import colors
-        import io
-        from datetime import datetime
+        time
 
         # Establecer período
         if not mes:
@@ -883,15 +861,14 @@ async def reporte_mensual_cartera_pdf(
     except ImportError:
         raise HTTPException(status_code=500, detail="reportlab no está instalado")
 
-
-@router.get("/asesor/{asesor_id}/pdf")
+router.get("/asesor/{asesor_id}/pdf")
 async def reporte_asesor_pdf(
     asesor_id: int,
     fecha_inicio: Optional[date] = Query(None),
     fecha_fin: Optional[date] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     5. Reporte por asesor (PDF)
     - Clientes del asesor
@@ -901,13 +878,8 @@ async def reporte_asesor_pdf(
     - Cartera asignada
     """
     try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.platypus import (
             SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         )
-        from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.lib import colors
-        import io
 
         # Verificar que el analista existe
         from app.models.analista import Analista
@@ -924,7 +896,7 @@ async def reporte_asesor_pdf(
         # Obtener clientes del asesor
         clientes_asesor = db.query(Cliente).filter(
             Cliente.asesor_id == asesor_id,
-            Cliente.activo == True
+            Cliente.activo 
         ).all()
 
         # Ventas del período
@@ -1028,15 +1000,14 @@ async def reporte_asesor_pdf(
     except ImportError:
         raise HTTPException(status_code=500, detail="reportlab no está instalado")
 
-
 # ============================================
 # ENDPOINT DE VERIFICACIÓN DE REPORTES
 # ============================================
 
-@router.get("/verificacion-reportes-pdf")
+router.get("/verificacion-reportes-pdf")
 def verificar_reportes_pdf_implementados(
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 Verificación completa de reportes PDF implementados
     """

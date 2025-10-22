@@ -1,22 +1,19 @@
 # backend/app/api/v1/endpoints/configuracion.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoint para configuración administrativa del sistema.
 Gestión de parámetros, tasas, límites y ajustes generales.
-"""
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, Field
-from decimal import Decimal
-import logging
-import json
-from datetime import datetime
+""
 
-from app.db.session import get_db
-from app.models.user import User
-from app.models.cliente import Cliente
+from typing import Dict, Any, List
+from pydantic import BaseModel
+
+
 from app.models.configuracion_sistema import ConfiguracionSistema
-from app.api.deps import get_current_user
 
 # Funciones auxiliares para validación y pruebas
 def _validar_configuracion(config: str, valor: Any) -> Optional[str]:
@@ -50,15 +47,14 @@ def _generar_alertas_configuracion(db: Session, estado_categorias: Dict[str, Any
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-
 # ============================================
 # MONITOREO Y OBSERVABILIDAD
 # ============================================
 
-@router.get("/monitoreo/estado")
+router.get("/monitoreo/estado")
 def obtener_estado_monitoreo(
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔍 Verificar estado del sistema de monitoreo y observabilidad
     """
@@ -69,11 +65,10 @@ def obtener_estado_monitoreo(
     from app.core.monitoring import get_monitoring_status
     return get_monitoring_status()
 
-
-@router.post("/monitoreo/habilitar")
+router.post("/monitoreo/habilitar")
 def habilitar_monitoreo_basico(
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ⚡ Habilitar monitoreo básico sin dependencias externas
     """
@@ -82,7 +77,6 @@ def habilitar_monitoreo_basico(
 
     try:
         # Configurar logging estructurado básico
-        import logging
 
         # Configurar formato mejorado
         logging.basicConfig(
@@ -115,17 +109,16 @@ def habilitar_monitoreo_basico(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error habilitando monitoreo: {str(e)}")
 
-
 # ============================================
 # CONFIGURACIÓN CENTRALIZADA DEL SISTEMA
 # ============================================
 
-@router.get("/sistema/completa")
+router.get("/sistema/completa")
 def obtener_configuracion_completa(
     categoria: Optional[str] = Query(None, description="Filtrar por categoría"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔧 Obtener configuración completa del sistema para el frontend
     """
@@ -134,11 +127,10 @@ def obtener_configuracion_completa(
         raise HTTPException(status_code=403, detail="Solo administradores pueden ver configuración completa")
 
     try:
-        from app.models.configuracion_sistema import ConfiguracionSistema
-        from datetime import datetime
+        time
 
         query = db.query(ConfiguracionSistema).filter(
-            ConfiguracionSistema.visible_frontend == True
+            ConfiguracionSistema.visible_frontend 
         )
 
         if categoria:
@@ -178,8 +170,7 @@ def obtener_configuracion_completa(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración: {str(e)}")
 
-
-@router.get("/validadores")
+router.get("/validadores")
 def obtener_configuracion_validadores():
     """
     🔍 Obtener configuración completa de validadores para el módulo de configuración
@@ -339,16 +330,14 @@ def obtener_configuracion_validadores():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración de validadores: {str(e)}")
 
-
-@router.post("/validadores/probar")
+router.post("/validadores/probar")
 def probar_validadores(
     datos_prueba: Dict[str, Any]
-):
+:
     """
     🧪 Probar validadores con datos de ejemplo
     """
     try:
-        from app.services.validators_service import (
             ValidadorTelefono, ValidadorCedula, ValidadorFecha, ValidadorEmail
         )
 
@@ -391,22 +380,20 @@ def probar_validadores(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error probando validadores: {str(e)}")
 
-
-@router.get("/sistema/categoria/{categoria}")
+router.get("/sistema/categoria/{categoria}")
 def obtener_configuracion_categoria(
     categoria: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 Obtener configuración de una categoría específica
     """
     try:
-        from app.models.configuracion_sistema import ConfiguracionSistema
 
         configs = db.query(ConfiguracionSistema).filter(
             ConfiguracionSistema.categoria == categoria.upper(),
-            ConfiguracionSistema.visible_frontend == True
+            ConfiguracionSistema.visible_frontend 
         ).all()
 
         if not configs:
@@ -438,13 +425,12 @@ def obtener_configuracion_categoria(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración de categoría: {str(e)}")
 
-
-@router.post("/sistema/actualizar")
+router.post("/sistema/actualizar")
 def actualizar_configuracion_sistema(
     configuraciones: Dict[str, Dict[str, Any]],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ✏️ Actualizar configuraciones del sistema
 
@@ -465,7 +451,6 @@ def actualizar_configuracion_sistema(
         raise HTTPException(status_code=403, detail="Solo administradores pueden actualizar configuración")
 
     try:
-        from app.models.configuracion_sistema import ConfiguracionSistema
 
         actualizaciones_exitosas = []
         errores = []
@@ -512,7 +497,7 @@ def actualizar_configuracion_sistema(
             db.commit()
 
             # Registrar en auditoría
-            from app.models.auditoria import Auditoria, TipoAccion
+            , TipoAccion
             auditoria = Auditoria.registrar(
                 usuario_id=current_user.id,
                 accion=TipoAccion.ACTUALIZACION,
@@ -539,13 +524,12 @@ def actualizar_configuracion_sistema(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error actualizando configuraciones: {str(e)}")
 
-
-@router.post("/sistema/probar-integracion/{categoria}")
+router.post("/sistema/probar-integracion/{categoria}")
 def probar_integracion(
     categoria: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🧪 Probar integración de una categoría específica
     """
@@ -571,12 +555,11 @@ def probar_integracion(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error probando integración: {str(e)}")
 
-
-@router.get("/sistema/estado-servicios")
+router.get("/sistema/estado-servicios")
 def obtener_estado_servicios(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Obtener estado de todos los servicios configurados
     """
@@ -632,12 +615,11 @@ def obtener_estado_servicios(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo estado de servicios: {str(e)}")
 
-
-@router.post("/sistema/inicializar-defaults")
+router.post("/sistema/inicializar-defaults")
 def inicializar_configuraciones_default(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔧 Inicializar configuraciones por defecto del sistema
     """
@@ -677,25 +659,23 @@ def inicializar_configuraciones_default(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error inicializando configuraciones: {str(e)}")
 
-
 # ============================================
 # CONFIGURACIÓN DE IA
 # ============================================
 
-@router.get("/ia")
+router.get("/ia")
 def obtener_configuracion_ia(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🤖 Obtener configuración de Inteligencia Artificial
     """
     try:
-        from app.models.configuracion_sistema import ConfiguracionSistema
 
         configs_ia = db.query(ConfiguracionSistema).filter(
             ConfiguracionSistema.categoria == "AI",
-            ConfiguracionSistema.visible_frontend == True
+            ConfiguracionSistema.visible_frontend 
         ).all()
 
         configuracion = {}
@@ -754,8 +734,7 @@ def obtener_configuracion_ia(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración IA: {str(e)}")
 
-
-@router.post("/ia/actualizar")
+router.post("/ia/actualizar")
 def actualizar_configuracion_ia(
     openai_api_key: Optional[str] = None,
     openai_model: Optional[str] = None,
@@ -764,7 +743,7 @@ def actualizar_configuracion_ia(
     chatbot_enabled: Optional[bool] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🤖 Actualizar configuración de IA
     """
@@ -772,7 +751,6 @@ def actualizar_configuracion_ia(
         raise HTTPException(status_code=403, detail="Solo administradores pueden configurar IA")
 
     try:
-        from app.models.configuracion_sistema import ConfiguracionSistema
 
         actualizaciones = []
 
@@ -823,21 +801,19 @@ def actualizar_configuracion_ia(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error actualizando configuración IA: {str(e)}")
 
-
 # ============================================
 # CONFIGURACIÓN DE EMAIL
 # ============================================
 
-@router.get("/email")
+router.get("/email")
 def obtener_configuracion_email(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📧 Obtener configuración de email
     """
     try:
-        from app.models.configuracion_sistema import ConfiguracionSistema
 
         configs_email = db.query(ConfiguracionSistema).filter(
             ConfiguracionSistema.categoria == "EMAIL"
@@ -893,8 +869,7 @@ def obtener_configuracion_email(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración email: {str(e)}")
 
-
-@router.post("/email/actualizar")
+router.post("/email/actualizar")
 def actualizar_configuracion_email(
     smtp_host: Optional[str] = None,
     smtp_port: Optional[int] = None,
@@ -904,7 +879,7 @@ def actualizar_configuracion_email(
     templates_enabled: Optional[bool] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📧 Actualizar configuración de email
     """
@@ -912,7 +887,6 @@ def actualizar_configuracion_email(
         raise HTTPException(status_code=403, detail="Solo administradores pueden configurar email")
 
     try:
-        from app.models.configuracion_sistema import ConfiguracionSistema
 
         actualizaciones = []
 
@@ -946,21 +920,19 @@ def actualizar_configuracion_email(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error actualizando configuración email: {str(e)}")
 
-
 # ============================================
 # CONFIGURACIÓN DE WHATSAPP
 # ============================================
 
-@router.get("/whatsapp")
+router.get("/whatsapp")
 def obtener_configuracion_whatsapp(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📱 Obtener configuración de WhatsApp
     """
     try:
-        from app.models.configuracion_sistema import ConfiguracionSistema
 
         configs_whatsapp = db.query(ConfiguracionSistema).filter(
             ConfiguracionSistema.categoria == "WHATSAPP"
@@ -1007,16 +979,15 @@ def obtener_configuracion_whatsapp(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración WhatsApp: {str(e)}")
 
-
 # ============================================
 # DASHBOARD DE CONFIGURACIÓN
 # ============================================
 
-@router.get("/dashboard")
+router.get("/dashboard")
 def dashboard_configuracion_sistema(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Dashboard principal de configuración del sistema
     """
@@ -1034,11 +1005,11 @@ def dashboard_configuracion_sistema(
         ).count()
 
         configs_requeridas = db.query(ConfiguracionSistema).filter(
-            ConfiguracionSistema.requerido == True
+            ConfiguracionSistema.requerido 
         ).count()
 
         configs_requeridas_configuradas = db.query(ConfiguracionSistema).filter(
-            ConfiguracionSistema.requerido == True,
+            ConfiguracionSistema.requerido ,
             ConfiguracionSistema.valor.isnot(None),
             ConfiguracionSistema.valor != ""
         ).count()
@@ -1119,7 +1090,6 @@ def dashboard_configuracion_sistema(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en dashboard de configuración: {str(e)}")
 
-
 # Schemas
 class ConfiguracionTasas(BaseModel):
     tasa_interes_base: Decimal = Field(..., ge=0, le=100, description="Tasa de interés base anual (%)")
@@ -1187,23 +1157,21 @@ _config_cache: Dict[str, Any] = {
         "moneda": "VES",
         "version_sistema": "1.0.0"
     }
-}
 
-
-@router.get("/general")
+router.get("/general")
 def obtener_configuracion_general(
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 Obtener configuración general del sistema
     """
     return _config_cache["general"]
 
-@router.put("/general")
+router.put("/general")
 def actualizar_configuracion_general(
     config: ConfiguracionGeneral,
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔧 Actualizar configuración general del sistema
     """
@@ -1221,21 +1189,20 @@ def actualizar_configuracion_general(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error actualizando configuración: {str(e)}")
 
-@router.get("/tasas")
+router.get("/tasas")
 def obtener_configuracion_tasas(
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Obtener configuración de tasas de interés.
     """
     return _config_cache["tasas"]
 
-
-@router.put("/tasas")
+router.put("/tasas")
 def actualizar_configuracion_tasas(
     config: ConfiguracionTasas,
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Actualizar configuración de tasas de interés.
     Solo accesible para ADMIN.
@@ -1256,22 +1223,20 @@ def actualizar_configuracion_tasas(
         "tasas": _config_cache["tasas"]
     }
 
-
-@router.get("/limites")
+router.get("/limites")
 def obtener_configuracion_limites(
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Obtener configuración de límites de préstamos.
     """
     return _config_cache["limites"]
 
-
-@router.put("/limites")
+router.put("/limites")
 def actualizar_configuracion_limites(
     config: ConfiguracionLimites,
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Actualizar configuración de límites.
     Solo accesible para ADMIN.
@@ -1307,22 +1272,20 @@ def actualizar_configuracion_limites(
         "limites": _config_cache["limites"]
     }
 
-
-@router.get("/notificaciones")
+router.get("/notificaciones")
 def obtener_configuracion_notificaciones(
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Obtener configuración de notificaciones.
     """
     return _config_cache["notificaciones"]
 
-
-@router.put("/notificaciones")
+router.put("/notificaciones")
 def actualizar_configuracion_notificaciones(
     config: ConfiguracionNotificaciones,
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Actualizar configuración de notificaciones.
     Solo accesible para ADMIN y GERENTE.
@@ -1345,22 +1308,20 @@ def actualizar_configuracion_notificaciones(
         "notificaciones": _config_cache["notificaciones"]
     }
 
-
-@router.get("/general")
+router.get("/general")
 def obtener_configuracion_general(
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Obtener configuración general del sistema.
     """
     return _config_cache["general"]
 
-
-@router.put("/general")
+router.put("/general")
 def actualizar_configuracion_general(
     config: ConfiguracionGeneral,
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Actualizar configuración general.
     Solo accesible para ADMIN.
@@ -1385,11 +1346,10 @@ def actualizar_configuracion_general(
         "configuracion": _config_cache["general"]
     }
 
-
-@router.get("/completa")
+router.get("/completa")
 def obtener_configuracion_cache(
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Obtener toda la configuración del sistema desde caché.
     """
@@ -1400,12 +1360,11 @@ def obtener_configuracion_cache(
         "general": _config_cache["general"]
     }
 
-
-@router.post("/restablecer")
+router.post("/restablecer")
 def restablecer_configuracion_defecto(
     seccion: str,  # tasas, limites, notificaciones, general, todo
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Restablecer configuración a valores por defecto.
     Solo accesible para ADMIN.
@@ -1466,14 +1425,13 @@ def restablecer_configuracion_defecto(
             detail=f"Sección inválida. Opciones: tasas, limites, notificaciones, general, todo"
         )
 
-
-@router.get("/calcular-cuota")
+router.get("/calcular-cuota")
 def calcular_cuota_ejemplo(
     monto: float,
     plazo_meses: int,
     tasa_personalizada: Optional[float] = None,
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Calcular cuota mensual con la configuración actual de tasas.
     """
@@ -1515,18 +1473,17 @@ def calcular_cuota_ejemplo(
         "relacion_cuota_ingreso_sugerida": "< 40%"
     }
 
-
-@router.get("/validar-limites/{cliente_id}")
+router.get("/validar-limites/{cliente_id}")
 def validar_limites_cliente(
     cliente_id: int,
     monto_solicitado: float,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Validar si un cliente puede solicitar un nuevo préstamo según límites configurados.
     """
-    from app.models.prestamo import Prestamo
+    
 
     # Contar préstamos activos del cliente
     prestamos_activos = db.query(Prestamo).filter(
@@ -1569,7 +1526,6 @@ def validar_limites_cliente(
         **validaciones
     }
 
-
 # ============================================
 # FUNCIONES AUXILIARES
 # ============================================
@@ -1591,7 +1547,6 @@ def _validar_configuracion(config, nuevo_valor):
     except Exception as e:
         return f"Error de validación: {str(e)}"
 
-
 def _probar_configuracion_email(db):
     """Probar configuración de email"""
     return {
@@ -1599,7 +1554,6 @@ def _probar_configuracion_email(db):
         "mensaje": "Configuración de email probada exitosamente",
         "detalles": "Conexión SMTP verificada"
     }
-
 
 def _probar_configuracion_whatsapp(db):
     """Probar configuración de WhatsApp"""
@@ -1609,7 +1563,6 @@ def _probar_configuracion_whatsapp(db):
         "detalles": "API de WhatsApp verificada"
     }
 
-
 def _probar_configuracion_ai(db):
     """Probar configuración de IA"""
     return {
@@ -1618,7 +1571,6 @@ def _probar_configuracion_ai(db):
         "detalles": "API de OpenAI verificada"
     }
 
-
 def _probar_configuracion_database(db):
     """Probar configuración de base de datos"""
     return {
@@ -1626,7 +1578,6 @@ def _probar_configuracion_database(db):
         "mensaje": "Configuración de base de datos probada exitosamente",
         "detalles": "Conexión a PostgreSQL verificada"
     }
-
 
 def _generar_recomendaciones_configuracion(estado_servicios):
     """Generar recomendaciones de configuración"""
@@ -1642,7 +1593,6 @@ def _generar_recomendaciones_configuracion(estado_servicios):
             })
 
     return recomendaciones
-
 
 def _generar_alertas_configuracion(db, estado_categorias):
     """Generar alertas de configuración"""

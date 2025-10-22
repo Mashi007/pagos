@@ -1,23 +1,14 @@
-"""
-🔍 Sistema de Análisis de Esquema de Base de Datos
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Sistema de Análisis de Esquema de Base de Datos
 Identifica inconsistencias específicas entre modelos y esquema real
-"""
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
-import json
-import logging
-import time
-import asyncio
-from collections import defaultdict, deque
-import threading
+""
 
-from app.db.session import get_db
-from app.models.user import User
-from app.core.config import settings
-from app.core.security import decode_token
-from app.api.deps import get_current_user
+import threading
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -177,11 +168,11 @@ schema_analyzer = DatabaseSchemaAnalyzer()
 # ENDPOINTS DE ANÁLISIS DE ESQUEMA
 # ============================================
 
-@router.get("/schema-inconsistencies")
+router.get("/schema-inconsistencies")
 async def get_schema_inconsistencies(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔍 Analizar inconsistencias específicas del esquema de BD
     """
@@ -202,11 +193,11 @@ async def get_schema_inconsistencies(
             "error": str(e)
         }
 
-@router.get("/schema-fixes")
+router.get("/schema-fixes")
 async def get_schema_fixes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔧 Generar fixes específicos para el esquema
     """
@@ -227,11 +218,11 @@ async def get_schema_fixes(
             "error": str(e)
         }
 
-@router.get("/schema-monitoring")
+router.get("/schema-monitoring")
 async def get_schema_monitoring(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Monitorear estado actual del esquema
     """

@@ -1,16 +1,19 @@
 # backend/app/models/notificacion.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Modelo de Notificación
 Sistema de notificaciones por email, SMS o WhatsApp
-"""
+""
 from enum import Enum as PyEnum
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, JSON, Enum
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Enum
+
 from sqlalchemy.sql import func
-from datetime import datetime
 
 from app.db.session import Base
-
 
 # Enums para mejor validación y tipado
 class EstadoNotificacion(str, PyEnum):
@@ -20,14 +23,12 @@ class EstadoNotificacion(str, PyEnum):
     FALLIDA = "FALLIDA"
     LEIDA = "LEIDA"
 
-
 class TipoNotificacion(str, PyEnum):
     """Tipos de notificación disponibles"""
     EMAIL = "EMAIL"
     SMS = "SMS"
     WHATSAPP = "WHATSAPP"
     PUSH = "PUSH"
-
 
 class CategoriaNotificacion(str, PyEnum):
     """Categorías de notificación"""
@@ -40,14 +41,12 @@ class CategoriaNotificacion(str, PyEnum):
     MORA_APLICADA = "MORA_APLICADA"
     GENERAL = "GENERAL"
 
-
 class PrioridadNotificacion(str, PyEnum):
     """Niveles de prioridad"""
     BAJA = "BAJA"
     NORMAL = "NORMAL"
     ALTA = "ALTA"
     URGENTE = "URGENTE"
-
 
 class Notificacion(Base):
     """

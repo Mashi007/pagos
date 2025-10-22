@@ -1,28 +1,25 @@
 # backend/app/services/notification_multicanal_service.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Servicio de Notificaciones Multicanal
 Sistema 100% automático de notificaciones por Email + WhatsApp
 Sin IA - Basado en templates y reglas de negocio
-"""
-import logging
-from datetime import datetime, date, timedelta
-from typing import Dict, List, Optional, Any
-from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func
-from enum import Enum
-import asyncio
+""
+from datetime import datetime, timedelta
+from typing import Dict, List, Any
 
-from app.models.cliente import Cliente
-from app.models.prestamo import Prestamo
-from app.models.pago import Pago
+from enum import Enum
+
 from app.models.amortizacion import Cuota
-from app.models.notificacion import Notificacion
-from app.models.user import User
+
 from app.services.email_service import EmailService
 from app.services.whatsapp_service import WhatsAppService
 
 logger = logging.getLogger(__name__)
-
 
 class TipoNotificacionCliente(str, Enum):
     """Tipos de notificaciones a clientes"""
@@ -34,14 +31,12 @@ class TipoNotificacionCliente(str, Enum):
     MORA_5_DIAS = "MORA_5_DIAS"
     CONFIRMACION_PAGO = "CONFIRMACION_PAGO"
 
-
 class CanalNotificacion(str, Enum):
     """Canales de notificación disponibles"""
     EMAIL = "EMAIL"
     WHATSAPP = "WHATSAPP"
     AMBOS = "AMBOS"
     NINGUNO = "NINGUNO"
-
 
 class PreferenciasNotificacion:
     """Gestión de preferencias de notificación por cliente"""
@@ -91,7 +86,6 @@ class PreferenciasNotificacion:
         except Exception as e:
             logger.error(f"Error actualizando preferencias: {e}")
             return False
-
 
 class NotificacionMulticanal:
     """
@@ -226,7 +220,7 @@ class NotificacionMulticanal:
                 cuotas = self.db.query(Cuota).join(Prestamo).join(Cliente).filter(
                     Cuota.fecha_vencimiento == fecha_objetivo,
                     Cuota.estado.in_(["PENDIENTE", "PARCIAL"]),
-                    Cliente.activo == True
+                    Cliente.activo 
                 ).all()
 
             elif tipo == TipoNotificacionCliente.RECORDATORIO_1_DIA:
@@ -235,7 +229,7 @@ class NotificacionMulticanal:
                 cuotas = self.db.query(Cuota).join(Prestamo).join(Cliente).filter(
                     Cuota.fecha_vencimiento == fecha_objetivo,
                     Cuota.estado.in_(["PENDIENTE", "PARCIAL"]),
-                    Cliente.activo == True
+                    Cliente.activo 
                 ).all()
 
             elif tipo == TipoNotificacionCliente.DIA_VENCIMIENTO:
@@ -243,7 +237,7 @@ class NotificacionMulticanal:
                 cuotas = self.db.query(Cuota).join(Prestamo).join(Cliente).filter(
                     Cuota.fecha_vencimiento == hoy,
                     Cuota.estado.in_(["PENDIENTE", "PARCIAL"]),
-                    Cliente.activo == True
+                    Cliente.activo 
                 ).all()
 
             elif tipo == TipoNotificacionCliente.MORA_1_DIA:
@@ -252,7 +246,7 @@ class NotificacionMulticanal:
                 cuotas = self.db.query(Cuota).join(Prestamo).join(Cliente).filter(
                     Cuota.fecha_vencimiento == fecha_vencida,
                     Cuota.estado.in_(["PENDIENTE", "PARCIAL", "VENCIDA"]),
-                    Cliente.activo == True
+                    Cliente.activo 
                 ).all()
 
             elif tipo == TipoNotificacionCliente.MORA_3_DIAS:
@@ -261,7 +255,7 @@ class NotificacionMulticanal:
                 cuotas = self.db.query(Cuota).join(Prestamo).join(Cliente).filter(
                     Cuota.fecha_vencimiento == fecha_vencida,
                     Cuota.estado.in_(["PENDIENTE", "PARCIAL", "VENCIDA"]),
-                    Cliente.activo == True
+                    Cliente.activo 
                 ).all()
 
             elif tipo == TipoNotificacionCliente.MORA_5_DIAS:
@@ -270,7 +264,7 @@ class NotificacionMulticanal:
                 cuotas = self.db.query(Cuota).join(Prestamo).join(Cliente).filter(
                     Cuota.fecha_vencimiento == fecha_vencida,
                     Cuota.estado.in_(["PENDIENTE", "PARCIAL", "VENCIDA"]),
-                    Cliente.activo == True
+                    Cliente.activo 
                 ).all()
             else:
                 cuotas = []
@@ -566,13 +560,13 @@ class NotificacionMulticanal:
             TipoNotificacionCliente.RECORDATORIO_3_DIAS: {
                 "mensaje": f"""👋 Hola {nombre},
 
-🚗 Te recordamos que tu cuota #{cuota} de tu {vehiculo} vence el {fecha}.
+ Te recordamos que tu cuota #{cuota} de tu {vehiculo} vence el {fecha}.
 
-💰 Monto: {monto}
+ Monto: {monto}
 
 Por favor realiza tu pago a tiempo. 💳
 
-¿Dudas? Responde este mensaje.
+Dudas? Responde este mensaje.
 
 Gracias,
 Financiamiento Automotriz"""
@@ -581,11 +575,11 @@ Financiamiento Automotriz"""
             TipoNotificacionCliente.RECORDATORIO_1_DIA: {
                 "mensaje": f"""⏰ {nombre}, tu cuota vence MAÑANA
 
-🚗 Vehículo: {vehiculo}
-💰 Monto: {monto}
-📅 Vence: {fecha}
+ Vehículo: {vehiculo}
+ Monto: {monto}
+ Vence: {fecha}
 
-¡No olvides realizar tu pago!
+No olvides realizar tu pago!
 
 Financiamiento Automotriz"""
             },
@@ -593,9 +587,9 @@ Financiamiento Automotriz"""
             TipoNotificacionCliente.DIA_VENCIMIENTO: {
                 "mensaje": f"""📅 {nombre}, tu cuota vence HOY
 
-🚗 {vehiculo}
-💰 {monto}
-📅 Vence: HOY
+ {vehiculo}
+ {monto}
+ Vence: HOY
 
 Realiza tu pago antes de las 6:00 PM para evitar mora.
 
@@ -605,13 +599,13 @@ Financiamiento Automotriz"""
             TipoNotificacionCliente.MORA_1_DIA: {
                 "mensaje": f"""⚠️ {nombre}, tu cuota está vencida
 
-🚗 {vehiculo}
-💰 {monto}
-📅 Días de atraso: {dias_mora}
+ {vehiculo}
+ {monto}
+ Días de atraso: {dias_mora}
 
 Para evitar cargos adicionales, paga hoy.
 
-¿Necesitas ayuda? Responde este mensaje.
+Necesitas ayuda? Responde este mensaje.
 
 Financiamiento Automotriz"""
             },
@@ -619,9 +613,9 @@ Financiamiento Automotriz"""
             TipoNotificacionCliente.MORA_3_DIAS: {
                 "mensaje": f"""🚨 {nombre}, URGENTE - 3 días de atraso
 
-🚗 {vehiculo}
-💰 {monto} + mora
-📅 Atraso: {dias_mora} días
+ {vehiculo}
+ {monto} + mora
+ Atraso: {dias_mora} días
 
 Contacta inmediatamente para evitar acciones legales.
 
@@ -633,11 +627,11 @@ Financiamiento Automotriz"""
             TipoNotificacionCliente.MORA_5_DIAS: {
                 "mensaje": f"""🚨 {nombre}, CRÍTICO - 5 días de atraso
 
-🚗 {vehiculo}
-💰 {monto} + mora acumulada
-📅 Atraso: {dias_mora} días
+ {vehiculo}
+ {monto} + mora acumulada
+ Atraso: {dias_mora} días
 
-ÚLTIMA OPORTUNIDAD antes de proceso legal.
+LTIMA OPORTUNIDAD antes de proceso legal.
 
 LLAMA AHORA: 809-XXX-XXXX
 
@@ -649,10 +643,10 @@ Financiamiento Automotriz"""
 
 Gracias {nombre} por tu pago de {monto}.
 
-🚗 {vehiculo}
-📅 Cuota #{cuota}: ✅ PAGADA
+ {vehiculo}
+ Cuota #{cuota}: ✅ PAGADA
 
-¡Tu cuenta está al día!
+Tu cuenta está al día!
 
 Financiamiento Automotriz"""
             }
@@ -742,8 +736,8 @@ Financiamiento Automotriz"""
         try:
             # Obtener usuarios de cobranzas para enviar reporte
             usuarios_cobranzas = self.db.query(User).filter(
-                User.is_admin == True,  # Cambio clave: rol → is_admin
-                User.is_active == True,
+                User.is_admin ,  # Cambio clave: rol → is_admin
+                User.is_active ,
                 User.email.isnot(None)
             ).all()
 
@@ -790,7 +784,6 @@ Financiamiento Automotriz"""
 
         except Exception as e:
             logger.error(f"Error generando reporte diario: {e}")
-
 
 # ============================================
 # SCHEDULER DE NOTIFICACIONES
@@ -861,7 +854,6 @@ class NotificationScheduler:
                 "whatsapp_habilitado": False,
                 "puede_enviar_notificaciones": False
             }
-
 
 # ============================================
 # GESTIÓN DE REINTENTOS
@@ -971,8 +963,8 @@ class GestorReintentos:
         try:
             # Obtener administradores
             admins = db.query(User).filter(
-                User.is_admin == True,  # Cambio clave: rol → is_admin
-                User.is_active == True,
+                User.is_admin ,  # Cambio clave: rol → is_admin
+                User.is_active ,
                 User.email.isnot(None)
             ).all()
 
@@ -991,7 +983,7 @@ Cliente: {notificacion.destinatario_nombre}
 Canal: {notificacion.canal}
 Tipo: {notificacion.tipo}
 Intentos realizados: {notificacion.intentos}
-Último error: {notificacion.error_mensaje}
+ltimo error: {notificacion.error_mensaje}
 
 Acción requerida: Revisar configuración del servicio.
                     """,
@@ -1005,7 +997,6 @@ Acción requerida: Revisar configuración del servicio.
 
         except Exception as e:
             logger.error(f"Error notificando fallo crítico: {e}")
-
 
 # ============================================
 # CONFIGURACIÓN DE TEMPLATES WHATSAPP
@@ -1114,7 +1105,6 @@ class WhatsAppTemplateManager:
             }
             for nombre, template in WhatsAppTemplateManager.TEMPLATES_WHATSAPP.items()
         ]
-
 
 # ============================================
 # INSTANCIA GLOBAL DEL SCHEDULER

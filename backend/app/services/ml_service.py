@@ -1,26 +1,21 @@
 # backend/app/services/ml_service.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Servicio de Inteligencia Artificial y Machine Learning
 Sistema avanzado de predicción, scoring y recomendaciones para financiamiento automotriz
-"""
-import numpy as np
-import pandas as pd
-from datetime import datetime, date, timedelta
-from decimal import Decimal
-from typing import Dict, List, Optional, Tuple, Any
-from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
-import logging
-import pickle
-import os
+""
+from datetime import datetime, timedelta
+
+from typing import Dict, List, Any
+
 from pathlib import Path
 
-from app.models.cliente import Cliente
-from app.models.prestamo import Prestamo
-from app.models.pago import Pago
 from app.models.amortizacion import Cuota
 from app.models.analista import Analista
-from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +48,6 @@ class MLConfig:
         "ANALISIS_DETALLADO": 400,
         "RECHAZO_AUTOMATICO": 0
     }
-
 
 # ============================================
 # SISTEMA DE SCORING CREDITICIO
@@ -436,7 +430,6 @@ class ScoringCrediticio:
 
         return round((datos_disponibles / total_componentes) * 100, 1)
 
-
 # ============================================
 # PREDICCIÓN DE MORA CON MACHINE LEARNING
 # ============================================
@@ -677,7 +670,6 @@ class PrediccionMora:
 
         return recomendaciones
 
-
 # ============================================
 # SISTEMA DE RECOMENDACIONES INTELIGENTES
 # ============================================
@@ -822,7 +814,6 @@ class SistemaRecomendaciones:
                 ]
             }
 
-
 # ============================================
 # ANÁLISIS PREDICTIVO DE CARTERA
 # ============================================
@@ -883,13 +874,13 @@ class AnalisisPredictivoCartera:
 
             clientes_mora = db.query(Cliente).filter(
                 Cliente.fecha_registro <= fecha_mes,
-                Cliente.activo == True,
+                Cliente.activo ,
                 Cliente.dias_mora > 0
             ).count()
 
             total_clientes = db.query(Cliente).filter(
                 Cliente.fecha_registro <= fecha_mes,
-                Cliente.activo == True
+                Cliente.activo 
             ).count()
 
             tasa_mora = (clientes_mora / total_clientes * 100) if total_clientes > 0 else 0
@@ -975,7 +966,6 @@ class AnalisisPredictivoCartera:
         proyeccion = intercepto + pendiente * (len(tasas_historicas) + 3)
 
         return max(0, min(proyeccion, 50))  # Entre 0% y 50%
-
 
 # ============================================
 # OPTIMIZACIÓN INTELIGENTE DE TASAS
@@ -1097,7 +1087,6 @@ class OptimizadorTasas:
         except Exception:
             return monto / plazo_meses  # Cuota simple en caso de error
 
-
 # ============================================
 # CHATBOT INTELIGENTE DE COBRANZA
 # ============================================
@@ -1178,18 +1167,18 @@ class ChatbotCobranza:
         mensajes = {
             "RECORDATORIO_AMIGABLE": {
                 "whatsapp": f"""
-🚗 Hola {nombre}! 
+ Hola {nombre}! 
 
 Te recordamos que tu cuota #{contexto['ultima_cuota']['numero']} de tu {vehiculo} vence el {contexto['ultima_cuota']['fecha_vencimiento']}.
 
-💰 Monto: ${contexto['ultima_cuota']['monto']:,.0f}
+ Monto: ${contexto['ultima_cuota']['monto']:,.0f}
 
 Puedes pagar por:
-• Transferencia bancaria
-• Oficinas autorizadas
-• App móvil
+ Transferencia bancaria
+ Oficinas autorizadas
+ App móvil
 
-¡Gracias por tu puntualidad! 😊
+Gracias por tu puntualidad! 😊
                 """,
                 "email": f"""
 Estimado/a {nombre},
@@ -1207,15 +1196,15 @@ Equipo de Cobranzas
 
             "MORA_TEMPRANA": {
                 "whatsapp": f"""
-⚠️ {nombre}, tu cuota #{contexto['ultima_cuota']['numero']} está vencida.
+️ {nombre}, tu cuota #{contexto['ultima_cuota']['numero']} está vencida.
 
-🚗 Vehículo: {vehiculo}
-💰 Monto: ${contexto['ultima_cuota']['monto']:,.0f}
-📅 Días de mora: {contexto['dias_mora']}
+ Vehículo: {vehiculo}
+ Monto: ${contexto['ultima_cuota']['monto']:,.0f}
+ Días de mora: {contexto['dias_mora']}
 
 Para evitar cargos adicionales, realiza tu pago hoy.
 
-¿Necesitas ayuda? Responde este mensaje.
+Necesitas ayuda? Responde este mensaje.
                 """,
                 "sms": f"FINANCIERA: {nombre}, tu cuota está vencida ({contexto['dias_mora']} días). Monto: ${contexto['ultima_cuota']['monto']:,.0f}. Paga hoy para evitar cargos. Info: 809-XXX-XXXX"
             },
@@ -1226,7 +1215,7 @@ Buenos días {nombre}, le habla [NOMBRE] de Cobranzas.
 
 Le contacto porque su cuota #{contexto['ultima_cuota']['numero']} de su {vehiculo} tiene {contexto['dias_mora']} días de mora.
 
-¿Cuándo podría realizar el pago de ${contexto['ultima_cuota']['monto']:,.0f}?
+Cuándo podría realizar el pago de ${contexto['ultima_cuota']['monto']:,.0f}?
 
 Podemos ofrecerle facilidades de pago si lo necesita.
                 """
@@ -1234,16 +1223,16 @@ Podemos ofrecerle facilidades de pago si lo necesita.
 
             "FELICITACION_PUNTUALIDAD": {
                 "whatsapp": f"""
-🎉 ¡Felicidades {nombre}!
+ ¡Felicidades {nombre}!
 
 Has mantenido tu {vehiculo} al día con todos los pagos. 
 
 Como cliente puntual, tienes beneficios especiales:
-• Descuentos en renovaciones
-• Tasas preferenciales
-• Atención prioritaria
+ Descuentos en renovaciones
+ Tasas preferenciales
+ Atención prioritaria
 
-¡Gracias por ser un cliente ejemplar! ⭐
+Gracias por ser un cliente ejemplar! ⭐
                 """
             }
         }
@@ -1277,7 +1266,6 @@ Como cliente puntual, tienes beneficios especiales:
                 "hora_optima": "10:00",
                 "dia_semana": "LUNES_O_JUEVES"
             }
-
 
 # ============================================
 # DETECTOR DE PATRONES Y ANOMALÍAS
@@ -1342,7 +1330,7 @@ class DetectorPatrones:
         """Detectar clientes con cambio súbito en comportamiento"""
         # Clientes que pasaron de puntuales a morosos recientemente
         clientes_cambio = db.query(Cliente).filter(
-            Cliente.activo == True,
+            Cliente.activo ,
             Cliente.dias_mora > 15,  # Actualmente en mora
             Cliente.estado_financiero == "EN_MORA"
         ).all()
@@ -1387,7 +1375,7 @@ class DetectorPatrones:
             func.sum(func.case([(Cliente.dias_mora > 0, 1)], else_=0)).label('clientes_mora'),
             func.avg(Cliente.dias_mora).label('promedio_mora')
         ).join(Cliente, Analista.id == Cliente.analista_id).filter(
-            Cliente.activo == True
+            Cliente.activo 
         ).group_by(User.id, User.full_name).all()
 
         resultado = []
@@ -1417,7 +1405,7 @@ class DetectorPatrones:
         for mes in range(1, 13):
             clientes_mes = db.query(Cliente).filter(
                 func.extract('month', Cliente.fecha_registro) == mes,
-                Cliente.activo == True
+                Cliente.activo 
             ).all()
 
             if clientes_mes:
@@ -1433,7 +1421,6 @@ class DetectorPatrones:
                 }
 
         return mora_por_mes
-
 
 # ============================================
 # SISTEMA DE ALERTAS INTELIGENTES
@@ -1506,7 +1493,7 @@ class AlertasInteligentes:
         clientes_riesgo = []
 
         clientes_al_dia = db.query(Cliente).filter(
-            Cliente.activo == True,
+            Cliente.activo ,
             Cliente.estado_financiero == "AL_DIA"
         ).all()
 
@@ -1535,11 +1522,11 @@ class AlertasInteligentes:
         mes_anterior = hoy - timedelta(days=30)
 
         mora_actual = db.query(Cliente).filter(
-            Cliente.activo == True,
+            Cliente.activo ,
             Cliente.dias_mora > 0
         ).count()
 
-        total_actual = db.query(Cliente).filter(Cliente.activo == True).count()
+        total_actual = db.query(Cliente).filter(Cliente.activo ).count()
         tasa_actual = (mora_actual / total_actual * 100) if total_actual > 0 else 0
 
         # Simular tasa del mes anterior (en producción sería histórica)
@@ -1560,7 +1547,7 @@ class AlertasInteligentes:
         """Identificar oportunidades de negocio"""
         # Clientes puntuales elegibles para productos adicionales
         clientes_excelentes = db.query(Cliente).filter(
-            Cliente.activo == True,
+            Cliente.activo ,
             Cliente.estado_financiero == "AL_DIA",
             Cliente.dias_mora == 0
         ).all()

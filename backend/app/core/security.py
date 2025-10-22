@@ -1,19 +1,20 @@
-"""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+"
 Sistema de seguridad: JWT, hashing de passwords, tokens y dependencias de FastAPI
-"""
-from datetime import datetime, timedelta
-from typing import Optional, Any
-from jose import JWTError, jwt
+"
+ jwt
 from passlib.context import CryptContext
 
-from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
 
 # Importaciones de dependencias del proyecto
 from app.core.config import get_settings
-from app.db.session import get_db  # Necesario para interactuar con la DB
-from app.models.user import User    # Necesario para cargar el objeto User
+  # Necesario para interactuar con la DB
+    # Necesario para cargar el objeto User
 
 # Constantes de seguridad
 DEFAULT_ACCESS_TOKEN_EXPIRE_MINUTES = 30
@@ -35,13 +36,11 @@ REFRESH_TOKEN_EXPIRE_DAYS = DEFAULT_REFRESH_TOKEN_EXPIRE_DAYS
 # Esquema OAuth2 para FastAPI, que define dónde esperar el token (Authorization: Bearer <token>)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login") 
 
-
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     Verifica si una contraseña en texto plano coincide con el hash
     """
     return pwd_context.verify(plain_password, hashed_password)
-
 
 def get_password_hash(password: str) -> str:
     """
@@ -49,12 +48,11 @@ def get_password_hash(password: str) -> str:
     """
     return pwd_context.hash(password)
 
-
 def create_access_token(
     subject: str | int,
     expires_delta: Optional[timedelta] = None,
     additional_claims: Optional[dict[str, Any]] = None
-) -> str:
+ -> str:
     """
     Crea un token de acceso JWT
     """
@@ -76,7 +74,6 @@ def create_access_token(
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-
 def create_refresh_token(subject: str | int) -> str:
     """
     Crea un token de refresh JWT
@@ -92,7 +89,6 @@ def create_refresh_token(subject: str | int) -> str:
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-
 def decode_token(token: str) -> dict:
     """
     Decodifica y valida un token JWT
@@ -107,18 +103,15 @@ def decode_token(token: str) -> dict:
         # Re-lanza JWTError para que el manejador de excepciones de FastAPI lo capture
         raise JWTError(f"Error decodificando token: {str(e)}")
 
-
 # -------------------------------------------------------------
 # DEPENDENCIAS DE AUTENTICACIÓN PARA FASTAPI (ELIMINADAS - DUPLICADAS)
 # -------------------------------------------------------------
 # Las funciones get_current_user y get_current_active_user están definidas en app/api/deps.py
 # para evitar duplicación y conflictos de importación
 
-
 # -------------------------------------------------------------
 # [Resto de funciones originales]
 # -------------------------------------------------------------
-
 
 def verify_token_type(token: str, expected_type: str) -> bool:
     """
@@ -129,7 +122,6 @@ def verify_token_type(token: str, expected_type: str) -> bool:
         return payload.get("type") == expected_type
     except JWTError:
         return False
-
 
 def validate_password_strength(password: str) -> tuple[bool, str]:
     """
@@ -153,7 +145,6 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
 
     return True, "Contraseña válida"
 
-
 def generate_password_reset_token(email: str) -> str:
     """
     Genera un token para reset de contraseña
@@ -168,7 +159,6 @@ def generate_password_reset_token(email: str) -> str:
 
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
-
 
 def verify_password_reset_token(token: str) -> Optional[str]:
     """

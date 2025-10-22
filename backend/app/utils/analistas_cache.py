@@ -1,10 +1,12 @@
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Sistema de cache inteligente para analistas
 Evita consultas repetidas a la base de datos
-"""
-import time
-from typing import Dict, Any, Optional
-import logging
+""
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +82,7 @@ def generate_cache_key(
     limit: int = 100, 
     activo: Optional[bool] = None, 
     search: Optional[str] = None
-) -> str:
+ -> str:
     """
     Generar clave única para el cache basada en parámetros
 

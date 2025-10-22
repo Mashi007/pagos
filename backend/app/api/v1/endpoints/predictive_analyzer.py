@@ -1,26 +1,19 @@
-"""
-🧠 Sistema de Análisis Predictivo de Autenticación
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Sistema de Análisis Predictivo de Autenticación
 Machine Learning y análisis estadístico para predecir problemas de autenticación
-"""
-from fastapi import APIRouter, Depends, Request
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple
-import logging
-import json
-import statistics
-from collections import defaultdict, deque
-import numpy as np
-from dataclasses import dataclass
+""
 
-from app.db.session import get_db
-from app.models.user import User
-from app.core.config import settings
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-@dataclass
+dataclass
 class AuthMetrics:
     """Métricas de autenticación"""
     timestamp: datetime
@@ -168,10 +161,10 @@ class PredictiveAnalyzer:
             "last_update": metrics[-1].timestamp.isoformat() if metrics else None
         }
 
-@router.post("/collect-metrics")
+router.post("/collect-metrics")
 async def collect_authentication_metrics(
     db: Session = Depends(get_db)
-):
+:
     """
     📊 Recolectar métricas actuales de autenticación
     """
@@ -183,7 +176,7 @@ async def collect_authentication_metrics(
         # Por ahora, calcularemos métricas básicas
 
         # Contar usuarios activos
-        active_users = db.query(User).filter(User.is_active == True).count()
+        active_users = db.query(User).filter(User.is_active ).count()
         total_users = db.query(User).count()
 
         # Métricas simuladas basadas en configuración
@@ -222,7 +215,7 @@ async def collect_authentication_metrics(
             "error": str(e)
         }
 
-@router.get("/predictive-analysis")
+router.get("/predictive-analysis")
 async def get_predictive_analysis():
     """
     🔮 Análisis predictivo de problemas de autenticación
@@ -309,7 +302,7 @@ async def get_predictive_analysis():
             "error": str(e)
         }
 
-@router.get("/health-score")
+router.get("/health-score")
 async def calculate_authentication_health_score():
     """
     🏥 Calcular puntuación de salud del sistema de autenticación
@@ -423,11 +416,11 @@ async def calculate_authentication_health_score():
             "error": str(e)
         }
 
-@router.get("/metrics-history")
+router.get("/metrics-history")
 async def get_metrics_history(
     hours: int = 24,
     limit: int = 100
-):
+:
     """
     📈 Obtener historial de métricas
     """

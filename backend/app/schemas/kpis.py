@@ -1,11 +1,13 @@
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Schemas para KPIs (Key Performance Indicators)
-"""
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, Dict, Any, List
-from datetime import datetime
-from decimal import Decimal
-
+""
+from pydantic import BaseModel, ConfigDict
+from typing import Dict, Any, List
 
 class KPIBase(BaseModel):
     """Schema base para KPIs"""
@@ -16,13 +18,11 @@ class KPIBase(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-
 class KPICreate(KPIBase):
     """Schema para crear un KPI"""
     valor_objetivo: Optional[Decimal] = Field(None, description="Valor objetivo del KPI")
     periodicidad: Optional[str] = Field("mensual", description="Periodicidad de medición")
     activo: bool = Field(True, description="Indica si el KPI está activo")
-
 
 class KPIUpdate(BaseModel):
     """Schema para actualizar un KPI"""
@@ -36,7 +36,6 @@ class KPIUpdate(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-
 class KPIResponse(KPIBase):
     """Schema de respuesta para un KPI"""
     id: int
@@ -48,7 +47,6 @@ class KPIResponse(KPIBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-
 class KPIValorBase(BaseModel):
     """Schema base para valores de KPI"""
     kpi_id: int = Field(..., description="ID del KPI")
@@ -57,12 +55,10 @@ class KPIValorBase(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-
 class KPIValorCreate(KPIValorBase):
     """Schema para registrar un valor de KPI"""
     notas: Optional[str] = Field(None, description="Notas adicionales sobre la medición")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Metadata adicional")
-
 
 class KPIValorUpdate(BaseModel):
     """Schema para actualizar un valor de KPI"""
@@ -72,7 +68,6 @@ class KPIValorUpdate(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
     model_config = ConfigDict(from_attributes=True)
-
 
 class KPIValorResponse(KPIValorBase):
     """Schema de respuesta para un valor de KPI"""
@@ -84,11 +79,9 @@ class KPIValorResponse(KPIValorBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-
 class KPIConValores(KPIResponse):
     """Schema de KPI con sus valores históricos"""
     valores: List[KPIValorResponse] = Field(default_factory=list, description="Valores históricos del KPI")
-
 
 class KPIEstadisticas(BaseModel):
     """Schema para estadísticas de un KPI"""
@@ -104,7 +97,6 @@ class KPIEstadisticas(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-
 class DashboardKPIs(BaseModel):
     """Schema para dashboard con múltiples KPIs"""
     fecha_consulta: datetime = Field(default_factory=datetime.now)
@@ -114,7 +106,6 @@ class DashboardKPIs(BaseModel):
     estadisticas_generales: Optional[Dict[str, Any]] = None
 
     model_config = ConfigDict(from_attributes=True)
-
 
 # Exportar todos los schemas
 __all__ = [
@@ -129,4 +120,4 @@ __all__ = [
     "KPIConValores",
     "KPIEstadisticas",
     "DashboardKPIs",
-]
+

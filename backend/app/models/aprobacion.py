@@ -1,15 +1,18 @@
 # backend/app/models/aprobacion.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Modelo de Aprobación
 Sistema de workflow para solicitudes que requieren aprobación
-"""
+""
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Date, Boolean
-from sqlalchemy.orm import relationship
+
 from sqlalchemy.sql import func
-from datetime import datetime
 
 from app.db.session import Base
-
 
 class Aprobacion(Base):
     """
@@ -111,18 +114,15 @@ class Aprobacion(Base):
     @property
     def esta_aprobada(self) -> bool:
         """Verifica si la aprobación fue aprobada"""
-        from app.core.constants import EstadoAprobacion
         return self.estado == EstadoAprobacion.APROBADA.value
 
     @property
     def esta_rechazada(self) -> bool:
         """Verifica si la aprobación fue rechazada"""
-        from app.core.constants import EstadoAprobacion
         return self.estado == EstadoAprobacion.RECHAZADA.value
 
     def aprobar(self, revisor_id: int, comentarios: str = None):
         """Marca la aprobación como aprobada"""
-        from app.core.constants import EstadoAprobacion
         self.estado = EstadoAprobacion.APROBADA.value
         self.revisor_id = revisor_id
         self.comentarios_revisor = comentarios
@@ -130,7 +130,6 @@ class Aprobacion(Base):
 
     def rechazar(self, revisor_id: int, comentarios: str):
         """Marca la aprobación como rechazada"""
-        from app.core.constants import EstadoAprobacion
         self.estado = EstadoAprobacion.RECHAZADA.value
         self.revisor_id = revisor_id
         self.comentarios_revisor = comentarios
@@ -140,7 +139,6 @@ class Aprobacion(Base):
 
     def cancelar(self):
         """Cancela la solicitud de aprobación"""
-        from app.core.constants import EstadoAprobacion
         self.estado = EstadoAprobacion.CANCELADA.value
 
     def marcar_como_visto(self, admin_id: int):
@@ -179,7 +177,7 @@ class Aprobacion(Base):
         """Verificar si la solicitud está vencida"""
         if not self.fecha_limite:
             return False
-        from datetime import date
+        
         return date.today() > self.fecha_limite
 
     @property

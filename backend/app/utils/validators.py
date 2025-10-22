@@ -1,12 +1,13 @@
 # backend/app/utils/validators.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Validadores personalizados para el sistema
 DNI, teléfonos, emails, montos, etc.
-"""
-import re
-from typing import Optional
-from decimal import Decimal
-from datetime import date
+""
 
 # Constantes de validación
 MIN_DNI_LENGTH = 7
@@ -19,7 +20,6 @@ MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_LENGTH = 128
 MIN_CUENTA_LENGTH = 8
 MAX_CUENTA_LENGTH = 20
-
 
 def validate_dni(dni: str) -> bool:
     """
@@ -46,7 +46,6 @@ def validate_dni(dni: str) -> bool:
 
     return True
 
-
 def validate_phone(phone: str) -> bool:
     """
     Valida formato de teléfono venezolano
@@ -70,7 +69,6 @@ def validate_phone(phone: str) -> bool:
 
     return bool(re.match(pattern, phone_clean))
 
-
 def validate_email(email: str) -> bool:
     """
     Valida formato de email
@@ -86,7 +84,6 @@ def validate_email(email: str) -> bool:
 
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return bool(re.match(pattern, email))
-
 
 def validate_ruc(ruc: str) -> bool:
     """
@@ -116,7 +113,6 @@ def validate_ruc(ruc: str) -> bool:
 
     return True
 
-
 def validate_positive_amount(amount: Decimal) -> bool:
     """
     Valida que un monto sea positivo
@@ -132,7 +128,6 @@ def validate_positive_amount(amount: Decimal) -> bool:
 
     return amount > Decimal("0")
 
-
 def validate_percentage(percentage: Decimal) -> bool:
     """
     Valida que un porcentaje esté entre 0 y 100
@@ -147,7 +142,6 @@ def validate_percentage(percentage: Decimal) -> bool:
         return False
 
     return Decimal("0") <= percentage <= Decimal("100")
-
 
 def validate_date_range(start_date: date, end_date: date) -> bool:
     """
@@ -165,7 +159,6 @@ def validate_date_range(start_date: date, end_date: date) -> bool:
 
     return start_date <= end_date
 
-
 def validate_future_date(check_date: date) -> bool:
     """
     Valida que una fecha sea futura
@@ -180,7 +173,6 @@ def validate_future_date(check_date: date) -> bool:
         return False
 
     return check_date > date.today()
-
 
 def validate_past_date(check_date: date) -> bool:
     """
@@ -197,7 +189,6 @@ def validate_past_date(check_date: date) -> bool:
 
     return check_date < date.today()
 
-
 def validate_date_not_future(check_date: date) -> bool:
     """
     Valida que una fecha no sea futura (hoy o antes)
@@ -212,7 +203,6 @@ def validate_date_not_future(check_date: date) -> bool:
         return False
 
     return check_date <= date.today()
-
 
 def validate_cuotas(numero_cuotas: int) -> bool:
     """
@@ -229,7 +219,6 @@ def validate_cuotas(numero_cuotas: int) -> bool:
 
     return 1 <= numero_cuotas <= MAX_CUOTAS
 
-
 def validate_tasa_interes(tasa: Decimal) -> bool:
     """
     Valida tasa de interés
@@ -244,7 +233,6 @@ def validate_tasa_interes(tasa: Decimal) -> bool:
         return False
 
     return Decimal("0") <= tasa <= Decimal(str(MAX_TASA_INTERES))
-
 
 def sanitize_string(text: Optional[str]) -> Optional[str]:
     """
@@ -264,7 +252,6 @@ def sanitize_string(text: Optional[str]) -> Optional[str]:
     text = ' '.join(text.split())
 
     return text.strip()
-
 
 def sanitize_html(text: Optional[str]) -> Optional[str]:
     """
@@ -295,7 +282,6 @@ def sanitize_html(text: Optional[str]) -> Optional[str]:
 
     return text.strip()
 
-
 def format_dni(dni: str) -> str:
     """
     Formatea DNI con puntos
@@ -324,7 +310,6 @@ def format_dni(dni: str) -> str:
 
     return dni_clean
 
-
 def format_phone(phone: str) -> str:
     """
     Formatea teléfono
@@ -352,7 +337,6 @@ def format_phone(phone: str) -> str:
         # 981 234567
         return f"{phone_clean[:3]} {phone_clean[3:6]}-{phone_clean[6:]}"
 
-
 def validate_cuenta_bancaria(cuenta: str) -> bool:
     """
     Valida formato de cuenta bancaria
@@ -378,7 +362,6 @@ def validate_cuenta_bancaria(cuenta: str) -> bool:
 
     return True
 
-
 def validate_codigo_prestamo(codigo: str) -> bool:
     """
     Valida formato de código de préstamo
@@ -396,12 +379,11 @@ def validate_codigo_prestamo(codigo: str) -> bool:
     pattern = r'^PREST-\d{8}-\d{4}$'
     return bool(re.match(pattern, codigo))
 
-
 def validate_monto_vs_ingreso(
     monto_cuota: Decimal,
     ingreso_mensual: Decimal,
     max_percentage: Decimal = Decimal(str(MAX_PERCENTAGE_INGRESO))
-) -> bool:
+ -> bool:
     """
     Valida que el monto de cuota no supere un porcentaje del ingreso
 
@@ -423,12 +405,11 @@ def validate_monto_vs_ingreso(
 
     return percentage <= max_percentage
 
-
 def validate_payment_amount(
     payment_amount: Decimal,
     expected_amount: Decimal,
     tolerance: Decimal = Decimal(str(DEFAULT_TOLERANCE_PAYMENT))
-) -> bool:
+ -> bool:
     """
     Valida que un monto de pago sea válido con respecto al esperado
 
@@ -447,7 +428,6 @@ def validate_payment_amount(
 
     return difference <= tolerance or payment_amount >= expected_amount
 
-
 def _validate_password_length(password: str) -> tuple[bool, str]:
     """Validar longitud de contraseña"""
     if not password:
@@ -460,7 +440,6 @@ def _validate_password_length(password: str) -> tuple[bool, str]:
         return False, f"La contraseña no puede tener más de {MAX_PASSWORD_LENGTH} caracteres"
 
     return True, ""
-
 
 def _validate_password_patterns(password: str) -> tuple[bool, str]:
     """Validar patrones requeridos en contraseña"""
@@ -486,7 +465,6 @@ def _validate_password_patterns(password: str) -> tuple[bool, str]:
 
     return True, ""
 
-
 def _validate_password_weak_patterns(password: str) -> tuple[bool, str]:
     """Validar patrones débiles comunes"""
     weak_patterns = [
@@ -503,7 +481,6 @@ def _validate_password_weak_patterns(password: str) -> tuple[bool, str]:
             return False, "La contraseña contiene patrones débiles comunes"
 
     return True, ""
-
 
 def validate_password_strength(password: str) -> tuple[bool, str]:
     """
@@ -531,7 +508,6 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
         return is_valid, message
 
     return True, "Contraseña válida"
-
 
 def normalize_text(text: str) -> str:
     """

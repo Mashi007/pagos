@@ -1,12 +1,15 @@
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Helper para registrar acciones de auditoría
 Integración automática con todos los módulos
-"""
-from sqlalchemy.orm import Session
-from app.models.auditoria import Auditoria
-from app.models.user import User
-from typing import Optional, Dict, Any
-import logging
+""
+
+from typing import Dict, Any, Optional
+
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +27,7 @@ def registrar_auditoria(
     user_agent: Optional[str] = None,
     resultado: str = "EXITOSO",
     mensaje_error: Optional[str] = None
-) -> Auditoria:
+ -> Auditoria:
     """
     Registrar una acción en la auditoría del sistema
 
@@ -85,7 +88,7 @@ def registrar_login_exitoso(
     usuario: User,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None
-) -> Auditoria:
+ -> Auditoria:
     """Registrar login exitoso"""
     return registrar_auditoria(
         db=db,
@@ -105,7 +108,7 @@ def registrar_logout(
     usuario: User,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None
-) -> Auditoria:
+ -> Auditoria:
     """Registrar logout"""
     return registrar_auditoria(
         db=db,
@@ -130,7 +133,7 @@ def registrar_creacion(
     datos_nuevos: Optional[Dict[str, Any]] = None,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None
-) -> Auditoria:
+ -> Auditoria:
     """Registrar creación de registro"""
     return registrar_auditoria(
         db=db,
@@ -157,7 +160,7 @@ def registrar_actualizacion(
     datos_nuevos: Optional[Dict[str, Any]] = None,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None
-) -> Auditoria:
+ -> Auditoria:
     """Registrar actualización de registro"""
     return registrar_auditoria(
         db=db,
@@ -184,7 +187,7 @@ def registrar_eliminacion(
     datos_anteriores: Optional[Dict[str, Any]] = None,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None
-) -> Auditoria:
+ -> Auditoria:
     """Registrar eliminación de registro"""
     return registrar_auditoria(
         db=db,
@@ -211,7 +214,7 @@ def registrar_error(
     registro_id: Optional[int] = None,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None
-) -> Auditoria:
+ -> Auditoria:
     """Registrar error en acción"""
     return registrar_auditoria(
         db=db,

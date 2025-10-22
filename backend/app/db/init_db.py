@@ -1,8 +1,12 @@
 # backend/app/db/init_db.py
-from sqlalchemy import text, inspect
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ inspect
 from app.db.session import engine, Base, SessionLocal
-from app.core.config import settings
-import logging
+
 
 # Constantes de configuración
 DEFAULT_TIMEOUT_SECONDS = 60
@@ -10,7 +14,6 @@ DEFAULT_SEPARATOR_LENGTH = 50
 MAIN_TABLES = ["usuarios", "clientes", "prestamos", "pagos"]
 
 logger = logging.getLogger(__name__)
-
 
 def check_database_connection() -> bool:
     """Verifica si la conexión a la base de datos está funcionando"""
@@ -22,7 +25,6 @@ def check_database_connection() -> bool:
         logger.error(f"Error conectando a base de datos: {e}")
         return False
 
-
 def table_exists(table_name: str) -> bool:
     """Verifica si una tabla existe en la base de datos"""
     try:
@@ -31,7 +33,6 @@ def table_exists(table_name: str) -> bool:
     except Exception as e:
         logger.error(f"Error verificando tabla {table_name}: {e}")
         return False
-
 
 def create_tables():
     """Crea todas las tablas definidas en los modelos"""
@@ -47,13 +48,10 @@ def create_tables():
         logger.error(f"Error creando tablas: {e}")
         return False
 
-
 def run_migrations():
     """Ejecuta las migraciones de Alembic"""
     try:
-        import subprocess
-        import os
-
+                
         # Cambiar al directorio del backend
         backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         os.chdir(backend_dir)
@@ -79,15 +77,14 @@ def run_migrations():
         logger.error(f"Error ejecutando migraciones: {e}")
         return False
 
-
 def create_admin_user():
     """Crea el usuario administrador si no existe"""
     try:
         logger.info("🔄 Verificando usuario administrador...")
 
-        from app.models.user import User
+        
         from app.core.security import get_password_hash
-        from datetime import datetime
+        time
 
         db = SessionLocal()
 
@@ -137,10 +134,8 @@ def create_admin_user():
         return False
     except Exception as e:
         logger.error(f"Error creando usuario admin: {e}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
         return False
-
 
 def init_db() -> bool:
     """Inicializa la base de datos creando las tablas si no existen"""
@@ -177,9 +172,7 @@ def init_db() -> bool:
         logger.error(f"Error inicializando base de datos: {e}")
         return False
 
-
 init_database = init_db
-
 
 def init_db_startup():
     """Función que se llama al inicio de la aplicación"""
@@ -216,7 +209,6 @@ def init_db_startup():
     except Exception as e:
         logger.error(f"Error en startup de DB: {e}")
         logger.warning("Continuando sin conexión a base de datos")
-
 
 def init_db_shutdown():
     """Función que se llama al cerrar la aplicación"""

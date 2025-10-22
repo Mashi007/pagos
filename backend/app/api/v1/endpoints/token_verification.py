@@ -1,29 +1,24 @@
-"""
-🔍 Endpoint de Verificación de Tokens JWT
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Endpoint de Verificación de Tokens JWT
 Sistema avanzado para diagnosticar problemas de autenticación
-"""
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
-import logging
-import jwt
-from jose import JWTError
+""
 
-from app.db.session import get_db
-from app.models.user import User
-from app.core.config import settings
-from app.core.security import decode_token, create_access_token
-from app.api.deps import get_current_user
+
+ create_access_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-@router.post("/verify-token")
+router.post("/verify-token")
 async def verificar_token_detallado(
     request: Request,
     db: Session = Depends(get_db)
-):
+:
     """
     🔍 Verificación detallada de token JWT
     Analiza token sin requerir autenticación previa
@@ -205,11 +200,11 @@ async def verificar_token_detallado(
             "error": str(e)
         }
 
-@router.get("/token-info")
+router.get("/token-info")
 async def obtener_info_token(
     request: Request,
     db: Session = Depends(get_db)
-):
+:
     """
     📊 Información básica del token actual
     """
@@ -266,10 +261,10 @@ async def obtener_info_token(
             "error": str(e)
         }
 
-@router.post("/generate-test-token")
+router.post("/generate-test-token")
 async def generar_token_prueba(
     db: Session = Depends(get_db)
-):
+:
     """
     🧪 Generar token de prueba para testing
     """

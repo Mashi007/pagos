@@ -1,32 +1,23 @@
-"""
-🏗️ Sistema Arquitectural de Análisis de Componentes
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+️ Sistema Arquitectural de Análisis de Componentes
 Identifica fallas en componentes específicos del sistema
-"""
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Tuple
-import json
-import logging
-import time
-import statistics
-from collections import defaultdict, deque
+""
+
 import threading
-import asyncio
 # Import condicional de psutil
 try:
-    import psutil
+    
     PSUTIL_AVAILABLE = True
 except ImportError:
     PSUTIL_AVAILABLE = False
     psutil = None
-import os
 
-from app.db.session import get_db
-from app.models.user import User
-from app.core.config import settings
-from app.core.security import decode_token, create_access_token
-from app.api.deps import get_current_user
+ create_access_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -585,12 +576,12 @@ architectural_system = ArchitecturalAnalysisSystem()
 # ENDPOINTS ARQUITECTURALES
 # ============================================
 
-@router.get("/component-health/{component_id}")
+router.get("/component-health/{component_id}")
 async def get_component_health(
     component_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🏗️ Obtener salud de componente específico
     """
@@ -617,11 +608,11 @@ async def get_component_health(
             "error": str(e)
         }
 
-@router.get("/all-components-health")
+router.get("/all-components-health")
 async def get_all_components_health(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🏗️ Obtener salud de todos los componentes
     """
@@ -643,11 +634,11 @@ async def get_all_components_health(
             "error": str(e)
         }
 
-@router.get("/component-dependencies")
+router.get("/component-dependencies")
 async def get_component_dependencies(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔗 Análisis de dependencias entre componentes
     """
@@ -668,11 +659,11 @@ async def get_component_dependencies(
             "error": str(e)
         }
 
-@router.get("/architectural-summary")
+router.get("/architectural-summary")
 async def get_architectural_summary_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Resumen arquitectural general
     """
@@ -693,12 +684,12 @@ async def get_architectural_summary_endpoint(
             "error": str(e)
         }
 
-@router.post("/force-component-check/{component_id}")
+router.post("/force-component-check/{component_id}")
 async def force_component_health_check(
     component_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔄 Forzar verificación de salud de componente
     """

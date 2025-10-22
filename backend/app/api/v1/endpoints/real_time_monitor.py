@@ -1,23 +1,16 @@
-"""
-🔍 Sistema de Monitoreo en Tiempo Real para Autenticación
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Sistema de Monitoreo en Tiempo Real para Autenticación
 Análisis continuo de tokens, requests y patrones de error
-"""
-from fastapi import APIRouter, Depends, Request, Response
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
-import asyncio
-import json
-import logging
-from collections import defaultdict, deque
-import threading
-import time
+""
 
-from app.db.session import get_db
-from app.models.user import User
-from app.core.config import settings
-from app.core.security import decode_token, create_access_token
-from app.api.deps import get_current_user
+import threading
+
+ create_access_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -204,7 +197,7 @@ auth_monitor = RealTimeAuthMonitor()
 # ENDPOINTS DE MONITOREO
 # ============================================
 
-@router.get("/real-time-status")
+router.get("/real-time-status")
 async def get_real_time_status():
     """
     📊 Estado en tiempo real del sistema de autenticación
@@ -224,12 +217,12 @@ async def get_real_time_status():
             "error": str(e)
         }
 
-@router.get("/token-analysis/{user_id}")
+router.get("/token-analysis/{user_id}")
 async def analyze_user_tokens(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔍 Análisis detallado de tokens de un usuario específico
     """
@@ -288,11 +281,11 @@ async def analyze_user_tokens(
             "error": str(e)
         }
 
-@router.post("/log-request")
+router.post("/log-request")
 async def log_request_data(
     request: Request,
     request_data: Dict[str, Any]
-):
+:
     """
     📝 Endpoint para registrar datos de request (usado por middleware)
     """
@@ -321,7 +314,7 @@ async def log_request_data(
             "error": str(e)
         }
 
-@router.get("/error-patterns")
+router.get("/error-patterns")
 async def get_error_patterns():
     """
     🚨 Patrones de error detectados
@@ -349,7 +342,7 @@ async def get_error_patterns():
             "error": str(e)
         }
 
-@router.get("/performance-metrics")
+router.get("/performance-metrics")
 async def get_performance_metrics():
     """
     ⚡ Métricas de rendimiento del sistema

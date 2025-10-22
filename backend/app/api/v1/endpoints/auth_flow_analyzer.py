@@ -1,24 +1,17 @@
-"""
-🔬 Sistema de Análisis de Flujo de Autenticación
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Sistema de Análisis de Flujo de Autenticación
 Tracing avanzado y análisis de causa raíz para problemas de autenticación
-"""
-from fastapi import APIRouter, Depends, Request, Response
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple
-import logging
-import json
-import uuid
-import time
-from collections import defaultdict, deque
-import hashlib
-import re
+""
 
-from app.db.session import get_db
-from app.models.user import User
-from app.core.config import settings
-from app.core.security import decode_token, create_access_token
-from app.api.deps import get_current_user
+import uuid
+import hashlib
+
+ create_access_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -116,7 +109,7 @@ class CorrelationAnalyzer:
             token = auth_header.split(" ")[1]
             try:
                 # Decodificar sin verificar para análisis
-                import jwt
+                
                 payload = jwt.decode(token, options={"verify_signature": False})
                 token_analysis = {
                     "user_id": payload.get("sub"),
@@ -135,11 +128,11 @@ class CorrelationAnalyzer:
             "timestamp": datetime.now().isoformat()
         }
 
-@router.post("/trace-auth-flow")
+router.post("/trace-auth-flow")
 async def trace_authentication_flow(
     request: Request,
     db: Session = Depends(get_db)
-):
+:
     """
     🔬 Trace completo del flujo de autenticación
     Analiza cada paso del proceso de autenticación
@@ -216,7 +209,7 @@ async def trace_authentication_flow(
         tracer.add_step("token_decoding", "started")
 
         try:
-            import jwt
+            
             # Decodificar sin verificar primero para análisis
             unverified_payload = jwt.decode(token, options={"verify_signature": False})
 
@@ -361,11 +354,11 @@ async def trace_authentication_flow(
             "steps": tracer.steps
         }
 
-@router.get("/analyze-correlation")
+router.get("/analyze-correlation")
 async def analyze_request_correlation(
     request: Request,
     minutes: int = 60
-):
+:
     """
     🔗 Análisis de correlación entre requests
     Identifica patrones y relaciones entre requests fallidos
@@ -451,7 +444,7 @@ async def analyze_request_correlation(
             "error": str(e)
         }
 
-@router.get("/detect-anomalies")
+router.get("/detect-anomalies")
 async def detect_authentication_anomalies():
     """
     🚨 Detección de patrones anómalos en autenticación
@@ -546,11 +539,11 @@ async def detect_authentication_anomalies():
             "error": str(e)
         }
 
-@router.get("/flow-timeline")
+router.get("/flow-timeline")
 async def get_authentication_timeline(
     minutes: int = 30,
     limit: int = 50
-):
+:
     """
     📈 Timeline de flujos de autenticación
     """

@@ -1,8 +1,13 @@
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Modelo de Préstamo
 Define la estructura básica de un préstamo.
 Sincronizado con el endpoint de aprobaciones.
-"""
+""
 from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Text, Numeric, ForeignKey
 from sqlalchemy.sql import func
 from enum import Enum
@@ -31,7 +36,6 @@ class EstadoPrestamo(str, Enum):
     REFINANCIADO = "REFINANCIADO"
     EN_MORA = "EN_MORA"
 
-
 class ModalidadPago(str, Enum):
     """Modalidades de pago disponibles"""
     TRADICIONAL = "TRADICIONAL"
@@ -39,7 +43,6 @@ class ModalidadPago(str, Enum):
     QUINCENAL = "QUINCENAL"
     MENSUAL = "MENSUAL"
     BIMESTRAL = "BIMESTRAL"
-
 
 class Prestamo(Base):
     __tablename__ = "prestamos"

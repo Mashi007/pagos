@@ -1,29 +1,26 @@
 # backend/app/api/v1/endpoints/kpis.py
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_, case
-from typing import Optional, List
 from datetime import datetime, date, timedelta
-from decimal import Decimal
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Query
 
-from app.db.session import get_db
-from app.models.cliente import Cliente
-from app.models.prestamo import Prestamo
-from app.models.pago import Pago
+from sqlalchemy import func, case
+time, timedelta
+
 from app.models.amortizacion import Cuota
-from app.models.user import User
+
 from app.models.analista import Analista
-from app.api.deps import get_current_user
 
 router = APIRouter()
 
-
-@router.get("/dashboard")
+router.get("/dashboard")
 def dashboard_kpis_principales(
     fecha_corte: Optional[date] = Query(None, description="Fecha de corte (default: hoy)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     KPIs principales para el dashboard
 
@@ -42,13 +39,13 @@ def dashboard_kpis_principales(
     cartera_total = db.query(
         func.sum(Cliente.total_financiamiento)
     ).filter(
-        Cliente.activo == True,
+        Cliente.activo ,
         Cliente.total_financiamiento.isnot(None)
     ).scalar() or Decimal('0')
 
     # ✅ CLIENTES AL DÍA
     clientes_al_dia = db.query(Cliente).filter(
-        Cliente.activo == True,
+        Cliente.activo ,
         or_(
             Cliente.estado_financiero == "AL_DIA",
             Cliente.dias_mora == 0
@@ -57,7 +54,7 @@ def dashboard_kpis_principales(
 
     # ⚠️ CLIENTES EN MORA
     clientes_en_mora = db.query(Cliente).filter(
-        Cliente.activo == True,
+        Cliente.activo ,
         Cliente.estado_financiero == "MORA",
         Cliente.dias_mora > 0
     ).count()
@@ -127,15 +124,14 @@ def dashboard_kpis_principales(
         }
     }
 
-
-@router.get("/financieros")
+router.get("/financieros")
 def kpis_financieros(
     periodo: str = Query("mes", description="dia, semana, mes, año"),
     fecha_inicio: Optional[date] = Query(None),
     fecha_fin: Optional[date] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📈 KPIs Financieros
     - Cartera total
@@ -165,7 +161,7 @@ def kpis_financieros(
     cartera_total = db.query(
         func.sum(Cliente.total_financiamiento - Cliente.cuota_inicial)
     ).filter(
-        Cliente.activo == True,
+        Cliente.activo ,
         Cliente.total_financiamiento.isnot(None)
     ).scalar() or Decimal('0')
 
@@ -221,7 +217,7 @@ def kpis_financieros(
         func.sum(Cliente.total_financiamiento).label('monto_total'),
         func.avg(Cliente.total_financiamiento).label('ticket_promedio')
     ).filter(
-        Cliente.activo == True,
+        Cliente.activo ,
         Cliente.modalidad_pago.isnot(None)
     ).group_by(Cliente.modalidad_pago).all()
 
@@ -254,12 +250,11 @@ def kpis_financieros(
         }
     }
 
-
-@router.get("/cobranza")
+router.get("/cobranza")
 def kpis_cobranza(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     👥 KPIs de Cobranza
     - Tasa de morosidad general
@@ -270,14 +265,14 @@ def kpis_cobranza(
     - Evolución mensual
     """
     # Tasa de morosidad general
-    total_clientes = db.query(Cliente).filter(Cliente.activo == True).count()
+    total_clientes = db.query(Cliente).filter(Cliente.activo ).count()
     clientes_mora = db.query(Cliente).filter(
-        Cliente.activo == True,
+        Cliente.activo ,
         Cliente.dias_mora > 0
     ).count()
 
     clientes_al_dia = db.query(Cliente).filter(
-        Cliente.activo == True,
+        Cliente.activo ,
         Cliente.dias_mora == 0
     ).count()
 
@@ -289,15 +284,15 @@ def kpis_cobranza(
         func.count(Cliente.id).label('total_clientes'),
         func.sum(case((Cliente.dias_mora > 0, 1), else_=0)).label('clientes_mora')
     ).outerjoin(Cliente, Analista.id == Cliente.analista_id).filter(
-        Analista.activo == True,
-        Cliente.activo == True
+        Analista.activo ,
+        Cliente.activo 
     ).group_by(User.id, User.full_name).all()
 
     # Promedio de días de retraso
     promedio_dias_mora = db.query(
         func.avg(Cliente.dias_mora)
     ).filter(
-        Cliente.activo == True,
+        Cliente.activo ,
         Cliente.dias_mora > 0
     ).scalar() or 0
 
@@ -322,7 +317,7 @@ def kpis_cobranza(
         Cliente.dias_mora,
         Cliente.total_financiamiento
     ).filter(
-        Cliente.activo == True,
+        Cliente.activo ,
         Cliente.dias_mora > 0
     ).order_by(Cliente.dias_mora.desc()).limit(10).all()
 
@@ -370,12 +365,11 @@ def kpis_cobranza(
         "evolucion_mensual": evolucion_mensual
     }
 
-
-@router.get("/analistaes")
+router.get("/analistaes")
 def kpis_analistaes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🏆 KPIs de Analistaes
     - Ranking de ventas
@@ -390,8 +384,8 @@ def kpis_analistaes(
         func.sum(Cliente.total_financiamiento).label('monto_vendido'),
         func.avg(Cliente.total_financiamiento).label('ticket_promedio')
     ).outerjoin(Cliente, Analista.id == Cliente.analista_id).filter(
-        Analista.activo == True,
-        Cliente.activo == True
+        Analista.activo ,
+        Cliente.activo 
     ).group_by(User.id, User.full_name).order_by(
         func.sum(Cliente.total_financiamiento).desc()
     ).all()
@@ -404,8 +398,8 @@ def kpis_analistaes(
         func.sum(case((Cliente.dias_mora == 0, 1), else_=0)).label('clientes_al_dia'),
         func.sum(case((Cliente.dias_mora > 0, 1), else_=0)).label('clientes_mora')
     ).outerjoin(Cliente, Analista.id == Cliente.analista_id).filter(
-        Analista.activo == True,
-        Cliente.activo == True
+        Analista.activo ,
+        Cliente.activo 
     ).group_by(User.id, User.full_name).all()
 
     # Procesar datos para ranking
@@ -459,12 +453,11 @@ def kpis_analistaes(
         }
     }
 
-
-@router.get("/productos")
+router.get("/productos")
 def kpis_productos(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🏍️ KPIs de Producto
     - Modelo más/menos vendido
@@ -480,7 +473,7 @@ def kpis_productos(
         func.sum(Cliente.total_financiamiento).label('monto_total'),
         func.avg(Cliente.total_financiamiento).label('ticket_promedio')
     ).filter(
-        Cliente.activo == True,
+        Cliente.activo ,
         Cliente.modelo_vehiculo.isnot(None)
     ).group_by(Cliente.modelo_vehiculo, Cliente.marca_vehiculo).all()
 
@@ -490,7 +483,7 @@ def kpis_productos(
         func.count(Cliente.id).label('total_clientes'),
         func.sum(case((Cliente.dias_mora > 0, 1), else_=0)).label('clientes_mora')
     ).filter(
-        Cliente.activo == True,
+        Cliente.activo ,
         Cliente.modelo_vehiculo.isnot(None)
     ).group_by(Cliente.modelo_vehiculo).all()
 
@@ -531,12 +524,11 @@ def kpis_productos(
         }
     }
 
-
-@router.get("/concesionarios")
+router.get("/concesionarios")
 def kpis_concesionarios(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🏢 KPIs de Concesionario
     - Ventas por concesionario
@@ -550,7 +542,7 @@ def kpis_concesionarios(
         func.sum(Cliente.total_financiamiento).label('monto_total'),
         func.avg(Cliente.total_financiamiento).label('ticket_promedio')
     ).filter(
-        Cliente.activo == True,
+        Cliente.activo ,
         Cliente.concesionario.isnot(None)
     ).group_by(Cliente.concesionario).all()
 
@@ -561,7 +553,7 @@ def kpis_concesionarios(
         func.sum(case((Cliente.dias_mora > 0, 1), else_=0)).label('clientes_mora'),
         func.avg(Cliente.dias_mora).label('promedio_dias_mora')
     ).filter(
-        Cliente.activo == True,
+        Cliente.activo ,
         Cliente.concesionario.isnot(None)
     ).group_by(Cliente.concesionario).all()
 

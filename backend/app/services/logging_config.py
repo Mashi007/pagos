@@ -1,13 +1,14 @@
 # backend/app/services/logging_config.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Configuración de Logging Estructurado para Services
 Implementa normas de monitoreo y trazabilidad
-"""
-import logging
-import json
+""
 import sys
-from datetime import datetime
-from typing import Dict, Any, Optional
 from contextvars import ContextVar
 import uuid
 
@@ -15,7 +16,6 @@ import uuid
 request_id: ContextVar[Optional[str]] = ContextVar('request_id', default=None)
 user_id: ContextVar[Optional[int]] = ContextVar('user_id', default=None)
 session_id: ContextVar[Optional[str]] = ContextVar('session_id', default=None)
-
 
 class StructuredFormatter(logging.Formatter):
     """
@@ -60,7 +60,6 @@ class StructuredFormatter(logging.Formatter):
             log_data["extra_data"] = record.extra_data
 
         return json.dumps(log_data, ensure_ascii=False, default=str)
-
 
 class ServiceLogger:
     """
@@ -121,19 +120,17 @@ class ServiceLogger:
         """Log crítico"""
         self._log_with_context(logging.CRITICAL, message, **kwargs)
 
-
 def get_service_logger(name: str) -> ServiceLogger:
     """
     Obtener logger especializado para servicio
     """
     return ServiceLogger(name)
 
-
 def set_request_context(
     request_id_val: Optional[str] = None,
     user_id_val: Optional[int] = None,
     session_id_val: Optional[str] = None
-):
+:
     """
     Establecer contexto de trazabilidad para el request actual
     """
@@ -144,13 +141,11 @@ def set_request_context(
     if session_id_val:
         session_id.set(session_id_val)
 
-
 def generate_request_id() -> str:
     """
     Generar ID único para request
     """
     return str(uuid.uuid4())
-
 
 def log_service_call(
     service_name: str,
@@ -159,7 +154,7 @@ def log_service_call(
     duration_ms: Optional[float] = None,
     success: bool = True,
     error: Optional[str] = None
-):
+:
     """
     Log estructurado para llamadas a servicios
     """
@@ -190,14 +185,13 @@ def log_service_call(
     else:
         logger.error(f"Service call failed: {service_name}.{method_name}", **log_data)
 
-
 def log_business_event(
     event_type: str,
     entity_type: str,
     entity_id: Optional[str] = None,
     user_action: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None
-):
+:
     """
     Log de eventos de negocio para auditoría
     """
@@ -213,13 +207,12 @@ def log_business_event(
 
     logger.info(f"Business event: {event_type}", **event_data)
 
-
 def log_performance_metric(
     metric_name: str,
     value: float,
     unit: str = "ms",
     tags: Optional[Dict[str, str]] = None
-):
+:
     """
     Log de métricas de rendimiento
     """
@@ -234,13 +227,12 @@ def log_performance_metric(
 
     logger.info(f"Performance metric: {metric_name}", **metric_data)
 
-
 def log_security_event(
     event_type: str,
     severity: str = "MEDIUM",
     details: Optional[Dict[str, Any]] = None,
     threat_level: str = "UNKNOWN"
-):
+:
     """
     Log de eventos de seguridad
     """
@@ -257,7 +249,6 @@ def log_security_event(
         logger.critical(f"Security event: {event_type}", **security_data)
     else:
         logger.warning(f"Security event: {event_type}", **security_data)
-
 
 # Configuración global de logging
 def configure_service_logging():
@@ -290,7 +281,6 @@ def configure_service_logging():
             handler = logging.StreamHandler(sys.stdout)
             handler.setFormatter(StructuredFormatter())
             logger.addHandler(handler)
-
 
 # Decorador para logging automático de métodos
 def log_method_calls(logger_name: str):

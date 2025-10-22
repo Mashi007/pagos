@@ -1,19 +1,19 @@
 # backend/app/services/whatsapp_service.py
-"""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+"
 Servicio para envío de mensajes WhatsApp usando Meta Developers API.
-"""
+"
 import aiohttp
-import json
-from typing import Optional, Dict, Any
-from datetime import datetime
-import logging
+from typing import Dict, Any
 
-from app.core.config import settings
 from app.db.session import SessionLocal
-from app.models.notificacion import Notificacion, EstadoNotificacion
+ EstadoNotificacion
 
 logger = logging.getLogger(__name__)
-
 
 class WhatsAppService:
     """Servicio para gestión de WhatsApp usando Meta Developers API"""
@@ -375,8 +375,7 @@ class WhatsAppService:
         Returns:
             True si es válido
         """
-        import re
-
+        
         # Formato esperado: +593999999999 (Ecuador) o similar
         pattern = r'^\+\d{10,15}$'
         return bool(re.match(pattern, phone_number))

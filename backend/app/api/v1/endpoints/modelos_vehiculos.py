@@ -1,28 +1,27 @@
 # backend/app/api/v1/endpoints/modelos_vehiculos.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoints para gestión de modelos de vehículos
-"""
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import or_, desc
-from typing import List, Optional
-from app.db.session import get_db
+""
+
+
 from app.models.modelo_vehiculo import ModeloVehiculo
-from app.models.user import User
-from app.api.deps import get_current_user
+
 from app.schemas.modelo_vehiculo import (
     ModeloVehiculoCreate,
     ModeloVehiculoUpdate,
     ModeloVehiculoResponse,
     ModeloVehiculoListResponse
-)
-import logging
+
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-
-@router.get("/", response_model=ModeloVehiculoListResponse)
+router.get("/", response_model=ModeloVehiculoListResponse)
 def listar_modelos_vehiculos(
     # Paginación
     page: int = Query(1, ge=1, description="Número de página"),
@@ -36,7 +35,7 @@ def listar_modelos_vehiculos(
 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 Listar modelos de vehículos con paginación y filtros
     """
@@ -83,19 +82,18 @@ def listar_modelos_vehiculos(
         logger.error(f"Error listando modelos de vehículos: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
-
-@router.get("/activos", response_model=List[ModeloVehiculoResponse])
+router.get("/activos", response_model=List[ModeloVehiculoResponse])
 def listar_modelos_activos(
     db: Session = Depends(get_db)
     # TEMPORALMENTE SIN AUTENTICACIÓN PARA DROPDOWNS
     # current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 Listar solo modelos de vehículos activos (para formularios)
     """
     try:
         modelos = db.query(ModeloVehiculo).filter(
-            ModeloVehiculo.activo == True
+            ModeloVehiculo.activo 
         ).order_by(ModeloVehiculo.modelo).all()
 
         return [
@@ -107,13 +105,12 @@ def listar_modelos_activos(
         logger.error(f"Error listando modelos activos: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
-
-@router.get("/{modelo_id}", response_model=ModeloVehiculoResponse)
+router.get("/{modelo_id}", response_model=ModeloVehiculoResponse)
 def obtener_modelo_vehiculo(
     modelo_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔍 Obtener un modelo de vehículo por ID
     """
@@ -133,13 +130,12 @@ def obtener_modelo_vehiculo(
         logger.error(f"Error obteniendo modelo {modelo_id}: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
-
-@router.post("/", response_model=ModeloVehiculoResponse)
+router.post("/", response_model=ModeloVehiculoResponse)
 def crear_modelo_vehiculo(
     modelo_data: ModeloVehiculoCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ➕ Crear un nuevo modelo de vehículo
     """
@@ -176,14 +172,13 @@ def crear_modelo_vehiculo(
         logger.error(f"Error creando modelo de vehículo: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
-
-@router.put("/{modelo_id}", response_model=ModeloVehiculoResponse)
+router.put("/{modelo_id}", response_model=ModeloVehiculoResponse)
 def actualizar_modelo_vehiculo(
     modelo_id: int,
     modelo_data: ModeloVehiculoUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ✏️ Actualizar un modelo de vehículo existente
     """
@@ -229,13 +224,12 @@ def actualizar_modelo_vehiculo(
         logger.error(f"Error actualizando modelo {modelo_id}: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
-
-@router.delete("/{modelo_id}")
+router.delete("/{modelo_id}")
 def eliminar_modelo_vehiculo(
     modelo_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🗑️ Eliminar un modelo de vehículo (HARD DELETE - borrado completo de BD)
     """

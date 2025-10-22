@@ -1,37 +1,31 @@
 # backend/app/api/v1/endpoints/carga_masiva.py
-"""
-🔄 Sistema de Carga Masiva de Clientes y Pagos
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Sistema de Carga Masiva de Clientes y Pagos
 Proceso completo con validación, corrección en línea y articulación por cédula
-"""
-import logging
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
+""
+from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import StreamingResponse, FileResponse
-from sqlalchemy.orm import Session
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
-import pandas as pd
-import io
-import os
-from datetime import datetime, date
-from decimal import Decimal
 
-from app.db.session import get_db
-from app.models.cliente import Cliente
-from app.models.pago import Pago
+from typing import Dict, Any
+from pydantic import BaseModel
+import io
+
 from app.models.concesionario import Concesionario
 from app.models.analista import Analista
 from app.models.modelo_vehiculo import ModeloVehiculo
-from app.schemas.cliente import ClienteCreate
-from app.api.deps import get_current_user
-from app.models.user import User
-from app.models.auditoria import Auditoria, TipoAccion
+
+ TipoAccion
 from app.services.validators_service import (
     ValidadorTelefono,
     ValidadorCedula,
     ValidadorEmail,
     ValidadorFecha,
     ValidadorMonto
-)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -51,7 +45,6 @@ class ErrorCargaMasiva(BaseModel):
     puede_corregirse: bool
     sugerencia: Optional[str] = None
 
-
 class RegistroCargaMasiva(BaseModel):
     """Registro procesado en carga masiva"""
     fila: int
@@ -60,7 +53,6 @@ class RegistroCargaMasiva(BaseModel):
     estado: str  # PROCESADO, ERROR, PENDIENTE_CORRECCION
     errores: List[ErrorCargaMasiva]
     datos: Dict[str, Any]
-
 
 class ResultadoCargaMasiva(BaseModel):
     """Resultado del proceso de carga masiva"""
@@ -76,25 +68,23 @@ class ResultadoCargaMasiva(BaseModel):
     fecha_carga: datetime
     usuario_id: int
 
-
 class CorreccionRegistro(BaseModel):
     """Corrección de un registro con errores"""
     fila: int
     cedula: str
     correcciones: Dict[str, str]
 
-
 # ============================================
 # ENDPOINT: SUBIR ARCHIVO EXCEL
 # ============================================
 
-@router.post("/upload", response_model=ResultadoCargaMasiva)
+router.post("/upload", response_model=ResultadoCargaMasiva)
 async def cargar_archivo_excel(
     archivo: UploadFile = File(...),
     tipo_carga: str = Form(..., description="clientes o pagos"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📤 PASO 1: Subir archivo Excel y analizar errores
 
@@ -154,7 +144,6 @@ async def cargar_archivo_excel(
             detail=f"Error al procesar archivo: {str(e)}"
         )
 
-
 # ============================================
 # FUNCIÓN: ANALIZAR ARCHIVO DE CLIENTES
 # ============================================
@@ -164,7 +153,7 @@ async def _analizar_archivo_clientes(
     nombre_archivo: str,
     db: Session,
     usuario_id: int
-) -> ResultadoCargaMasiva:
+ -> ResultadoCargaMasiva:
     """
     Analizar archivo de clientes sin guardar
     Detectar TODOS los errores y clasificarlos
@@ -513,7 +502,7 @@ async def _analizar_archivo_clientes(
             if concesionario:
                 concesionario_obj = db.query(Concesionario).filter(
                     Concesionario.nombre.ilike(f"%{concesionario}%"),
-                    Concesionario.activo == True
+                    Concesionario.activo 
                 ).first()
 
                 if not concesionario_obj:
@@ -533,7 +522,7 @@ async def _analizar_archivo_clientes(
             if modelo_vehiculo:
                 modelo_obj = db.query(ModeloVehiculo).filter(
                     ModeloVehiculo.modelo.ilike(f"%{modelo_vehiculo}%"),
-                    ModeloVehiculo.activo == True
+                    ModeloVehiculo.activo 
                 ).first()
 
                 if not modelo_obj:
@@ -553,7 +542,7 @@ async def _analizar_archivo_clientes(
             if asesor:
                 asesor_obj = db.query(Analista).filter(
                     Analista.nombre.ilike(f"%{asesor}%"),
-                    Analista.activo == True
+                    Analista.activo 
                 ).first()
 
                 if not asesor_obj:
@@ -653,7 +642,6 @@ async def _analizar_archivo_clientes(
             detail=f"Error analizando archivo de clientes: {str(e)}"
         )
 
-
 # ============================================
 # FUNCIÓN: ANALIZAR ARCHIVO DE PAGOS
 # ============================================
@@ -663,7 +651,7 @@ async def _analizar_archivo_pagos(
     nombre_archivo: str,
     db: Session,
     usuario_id: int
-) -> ResultadoCargaMasiva:
+ -> ResultadoCargaMasiva:
     """
     Analizar archivo de pagos y articular con clientes por cédula
     """
@@ -892,17 +880,16 @@ async def _analizar_archivo_pagos(
             detail=f"Error analizando archivo de pagos: {str(e)}"
         )
 
-
 # ============================================
 # ENDPOINT: CORREGIR REGISTRO EN LÍNEA
 # ============================================
 
-@router.post("/corregir-registro")
+router.post("/corregir-registro")
 async def corregir_registro_en_linea(
     correccion: CorreccionRegistro,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ✏️ PASO 2: Corregir un registro con errores en línea
 
@@ -957,7 +944,7 @@ async def corregir_registro_en_linea(
                 # Verificar que existe
                 concesionario = db.query(Concesionario).filter(
                     Concesionario.nombre.ilike(f"%{valor}%"),
-                    Concesionario.activo == True
+                    Concesionario.activo 
                 ).first()
                 if not concesionario:
                     errores_validacion.append(f"Concesionario '{valor}' no existe en la BD")
@@ -969,7 +956,7 @@ async def corregir_registro_en_linea(
                 # Verificar que existe
                 modelo = db.query(ModeloVehiculo).filter(
                     ModeloVehiculo.modelo.ilike(f"%{valor}%"),
-                    ModeloVehiculo.activo == True
+                    ModeloVehiculo.activo 
                 ).first()
                 if not modelo:
                     errores_validacion.append(f"Modelo '{valor}' no existe en la BD")
@@ -981,7 +968,7 @@ async def corregir_registro_en_linea(
                 # Verificar que existe
                 asesor = db.query(Analista).filter(
                     Analista.nombre.ilike(f"%{valor}%"),
-                    Analista.activo == True
+                    Analista.activo 
                 ).first()
                 if not asesor:
                     errores_validacion.append(f"Analista '{valor}' no existe en la BD")
@@ -1022,18 +1009,17 @@ async def corregir_registro_en_linea(
             detail=f"Error corrigiendo registro: {str(e)}"
         )
 
-
 # ============================================
 # ENDPOINT: GUARDAR REGISTROS CORREGIDOS
 # ============================================
 
-@router.post("/guardar-registros")
+router.post("/guardar-registros")
 async def guardar_registros_corregidos(
     registros: List[Dict[str, Any]],
     tipo_carga: str = Form(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     💾 PASO 3: Guardar registros que pasaron validación
 
@@ -1098,7 +1084,6 @@ async def guardar_registros_corregidos(
             detail=f"Error guardando registros: {str(e)}"
         )
 
-
 # ============================================
 # FUNCIÓN: GUARDAR CLIENTE DESDE CARGA MASIVA
 # ============================================
@@ -1107,7 +1092,7 @@ async def _guardar_cliente_desde_carga(
     datos: Dict[str, Any],
     db: Session,
     usuario_id: int
-):
+:
     """
     Guardar cliente usando MISMO proceso que crear_cliente
     """
@@ -1124,7 +1109,7 @@ async def _guardar_cliente_desde_carga(
         if datos.get('concesionario'):
             concesionario_obj = db.query(Concesionario).filter(
                 Concesionario.nombre.ilike(f"%{datos['concesionario']}%"),
-                Concesionario.activo == True
+                Concesionario.activo 
             ).first()
             if concesionario_obj:
                 concesionario_id = concesionario_obj.id
@@ -1133,7 +1118,7 @@ async def _guardar_cliente_desde_carga(
         if datos.get('modelo_vehiculo'):
             modelo_obj = db.query(ModeloVehiculo).filter(
                 ModeloVehiculo.modelo.ilike(f"%{datos['modelo_vehiculo']}%"),
-                ModeloVehiculo.activo == True
+                ModeloVehiculo.activo 
             ).first()
             if modelo_obj:
                 modelo_vehiculo_id = modelo_obj.id
@@ -1142,7 +1127,7 @@ async def _guardar_cliente_desde_carga(
         if datos.get('asesor'):
             asesor_obj = db.query(Analista).filter(
                 Analista.nombre.ilike(f"%{datos['asesor']}%"),
-                Analista.activo == True
+                Analista.activo 
             ).first()
             if asesor_obj:
                 asesor_id = asesor_obj.id
@@ -1217,7 +1202,6 @@ async def _guardar_cliente_desde_carga(
     except Exception as e:
         raise Exception(f"Error guardando cliente {datos.get('cedula')}: {str(e)}")
 
-
 # ============================================
 # FUNCIÓN: GUARDAR PAGO DESDE CARGA MASIVA
 # ============================================
@@ -1226,7 +1210,7 @@ async def _guardar_pago_desde_carga(
     datos: Dict[str, Any],
     db: Session,
     usuario_id: int
-):
+:
     """
     Guardar pago articulado con cliente por cédula
     """
@@ -1284,17 +1268,16 @@ async def _guardar_pago_desde_carga(
     except Exception as e:
         raise Exception(f"Error guardando pago para {datos.get('cedula')}: {str(e)}")
 
-
 # ============================================
 # ENDPOINT: DESCARGAR TEMPLATE EXCEL
 # ============================================
 
-@router.get("/template-excel/{tipo}")
+router.get("/template-excel/{tipo}")
 async def descargar_template_excel(
     tipo: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📥 Descargar template de Excel con formato establecido
 
@@ -1391,16 +1374,15 @@ async def descargar_template_excel(
             detail=f"Error generando template: {str(e)}"
         )
 
-
 # ============================================
 # ENDPOINT: OBTENER LISTAS DE CONFIGURACIÓN
 # ============================================
 
-@router.get("/opciones-configuracion")
+router.get("/opciones-configuracion")
 async def obtener_opciones_configuracion(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 Obtener listas de opciones para corrección en línea
 
@@ -1413,17 +1395,17 @@ async def obtener_opciones_configuracion(
     try:
         # Obtener concesionarios activos
         concesionarios = db.query(Concesionario).filter(
-            Concesionario.activo == True
+            Concesionario.activo 
         ).all()
 
         # Obtener asesores activos
         asesores = db.query(Analista).filter(
-            Analista.activo == True
+            Analista.activo 
         ).all()
 
         # Obtener modelos de vehículos activos
         modelos = db.query(ModeloVehiculo).filter(
-            ModeloVehiculo.activo == True
+            ModeloVehiculo.activo 
         ).all()
 
         # Modalidades de pago configurables
@@ -1447,16 +1429,15 @@ async def obtener_opciones_configuracion(
             detail=f"Error obteniendo opciones: {str(e)}"
         )
 
-
 # ============================================
 # ENDPOINT: DASHBOARD DE CARGA MASIVA
 # ============================================
 
-@router.get("/dashboard")
+router.get("/dashboard")
 async def dashboard_carga_masiva(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Dashboard de carga masiva
 

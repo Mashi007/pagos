@@ -1,20 +1,15 @@
-"""
-🚨 Sistema de Alertas Inteligentes para Autenticación
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Sistema de Alertas Inteligentes para Autenticación
 Sistema avanzado de monitoreo y alertas basado en patrones y umbrales
-"""
-from fastapi import APIRouter, Depends, Request
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple
-import logging
-import json
-from collections import defaultdict, deque
+""
+
 from dataclasses import dataclass
 from enum import Enum
-
-from app.db.session import get_db
-from app.models.user import User
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -33,7 +28,7 @@ class AlertStatus(Enum):
     RESOLVED = "resolved"
     SUPPRESSED = "suppressed"
 
-@dataclass
+dataclass
 class AlertRule:
     """Regla de alerta"""
     name: str
@@ -43,7 +38,7 @@ class AlertRule:
     cooldown_minutes: int = 15
     enabled: bool = True
 
-@dataclass
+dataclass
 class Alert:
     """Alerta generada"""
     id: str
@@ -245,10 +240,10 @@ class IntelligentAlertSystem:
 # Instancia global del sistema de alertas
 alert_system = IntelligentAlertSystem()
 
-@router.post("/evaluate-alerts")
+router.post("/evaluate-alerts")
 async def evaluate_alerts(
     db: Session = Depends(get_db)
-):
+:
     """
     🚨 Evaluar condiciones y generar alertas
     """
@@ -300,7 +295,7 @@ async def evaluate_alerts(
             "error": str(e)
         }
 
-@router.get("/active-alerts")
+router.get("/active-alerts")
 async def get_active_alerts():
     """
     📋 Obtener alertas activas
@@ -348,11 +343,11 @@ async def get_active_alerts():
             "error": str(e)
         }
 
-@router.post("/acknowledge-alert/{alert_id}")
+router.post("/acknowledge-alert/{alert_id}")
 async def acknowledge_alert(
     alert_id: str,
     acknowledged_by: str = "system"
-):
+:
     """
     ✅ Reconocer alerta
     """
@@ -388,11 +383,11 @@ async def acknowledge_alert(
             "error": str(e)
         }
 
-@router.post("/resolve-alert/{alert_id}")
+router.post("/resolve-alert/{alert_id}")
 async def resolve_alert(
     alert_id: str,
     resolved_by: str = "system"
-):
+:
     """
     ✅ Resolver alerta
     """
@@ -427,7 +422,7 @@ async def resolve_alert(
             "error": str(e)
         }
 
-@router.get("/alert-rules")
+router.get("/alert-rules")
 async def get_alert_rules():
     """
     ⚙️ Obtener reglas de alerta configuradas
@@ -459,13 +454,13 @@ async def get_alert_rules():
             "error": str(e)
         }
 
-@router.post("/update-alert-rule")
+router.post("/update-alert-rule")
 async def update_alert_rule(
     rule_name: str,
     threshold: float = None,
     enabled: bool = None,
     cooldown_minutes: int = None
-):
+:
     """
     ⚙️ Actualizar regla de alerta
     """
@@ -506,7 +501,7 @@ async def update_alert_rule(
             "error": str(e)
         }
 
-@router.get("/alert-summary")
+router.get("/alert-summary")
 async def get_alert_summary():
     """
     📊 Resumen de alertas

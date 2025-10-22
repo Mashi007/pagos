@@ -1,18 +1,18 @@
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Sistema de Manejo de Errores con Análisis de Impacto en Performance
 Implementa manejo robusto de errores con métricas de impacto
-"""
-import time
-import logging
-import traceback
-from datetime import datetime
-from typing import Dict, Any, Optional, Callable, Type
+""
+ Type
 from dataclasses import dataclass, asdict
 from enum import Enum
 from functools import wraps
-import psutil
+
 import threading
-from collections import defaultdict, deque
 
 # Constantes de configuración
 ERROR_RETENTION_HOURS = 24
@@ -23,7 +23,6 @@ CIRCUIT_BREAKER_TIMEOUT = 60  # segundos
 
 logger = logging.getLogger(__name__)
 
-
 class ErrorSeverity(Enum):
     """Severidad de errores"""
     LOW = "LOW"
@@ -31,8 +30,7 @@ class ErrorSeverity(Enum):
     HIGH = "HIGH"
     CRITICAL = "CRITICAL"
 
-
-@dataclass
+dataclass
 class ErrorMetrics:
     """Métricas de un error"""
     error_type: str
@@ -47,8 +45,7 @@ class ErrorMetrics:
     user_id: Optional[str] = None
     request_id: Optional[str] = None
 
-
-@dataclass
+dataclass
 class ErrorImpactAnalysis:
     """Análisis de impacto de errores"""
     error_rate: float
@@ -57,7 +54,6 @@ class ErrorImpactAnalysis:
     consecutive_errors: int
     circuit_breaker_status: str
     recommendations: list
-
 
 class CircuitBreaker:
     """
@@ -100,7 +96,6 @@ class CircuitBreaker:
 
         if self.failure_count >= self.failure_threshold:
             self.state = "OPEN"
-
 
 class ErrorImpactAnalyzer:
     """
@@ -298,10 +293,8 @@ class ErrorImpactAnalyzer:
             recent_errors = list(self.error_history)[-limit:]
             return [asdict(error) for error in recent_errors]
 
-
 # Instancia global del analizador
 error_analyzer = ErrorImpactAnalyzer()
-
 
 def error_handler(endpoint: str):
     """
@@ -325,7 +318,6 @@ def error_handler(endpoint: str):
         return wrapper
     return decorator
 
-
 def circuit_breaker_call(endpoint: str, func: Callable, *args, **kwargs):
     """
     Ejecutar función con circuit breaker
@@ -336,22 +328,18 @@ def circuit_breaker_call(endpoint: str, func: Callable, *args, **kwargs):
     circuit_breaker = error_analyzer.circuit_breakers[endpoint]
     return circuit_breaker.call(func, *args, **kwargs)
 
-
 def get_error_analyzer() -> ErrorImpactAnalyzer:
     """Obtener instancia del analizador de errores"""
     return error_analyzer
-
 
 def record_error(error: Exception, endpoint: str, response_time_ms: float,
                 user_id: Optional[str] = None, request_id: Optional[str] = None):
     """Registrar un error"""
     error_analyzer.record_error(error, endpoint, response_time_ms, user_id, request_id)
 
-
 def record_success(endpoint: str, response_time_ms: float):
     """Registrar request exitoso"""
     error_analyzer.record_success(endpoint, response_time_ms)
-
 
 if __name__ == "__main__":
     # Ejemplo de uso

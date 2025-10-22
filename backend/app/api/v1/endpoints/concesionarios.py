@@ -1,30 +1,30 @@
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoints de gestión de concesionarios
 CRUD completo para concesionarios
-"""
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
-from app.db.session import get_db
+""
+
 from app.models.concesionario import Concesionario
-from app.models.user import User
+
 from app.schemas.concesionario import (
     ConcesionarioCreate, 
     ConcesionarioUpdate, 
     ConcesionarioResponse,
     ConcesionarioListResponse
-)
-from app.api.deps import get_current_user
-import logging
+
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-@router.get("/test-no-auth")
+router.get("/test-no-auth")
 def test_concesionarios_no_auth(
     db: Session = Depends(get_db)
-):
+:
     """
     Test endpoint sin autenticación para verificar concesionarios
     """
@@ -52,10 +52,10 @@ def test_concesionarios_no_auth(
             "message": "Error en test endpoint concesionarios no auth"
         }
 
-@router.get("/test-simple")
+router.get("/test-simple")
 def test_concesionarios_simple(
     db: Session = Depends(get_db)
-):
+:
     """
     Test endpoint simple para verificar concesionarios (sin autenticación)
     """
@@ -83,11 +83,11 @@ def test_concesionarios_simple(
             "message": "Error en test endpoint concesionarios"
         }
 
-@router.get("/test-auth")
+router.get("/test-auth")
 def test_concesionarios_auth(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Test endpoint con autenticación para verificar concesionarios
     """
@@ -107,14 +107,14 @@ def test_concesionarios_auth(
             "message": "Error en test endpoint concesionarios auth"
         }
 
-@router.get("/list-no-auth")
+router.get("/list-no-auth")
 def listar_concesionarios_no_auth(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db)
-):
+:
     """
     📋 Listar concesionarios SIN autenticación (para testing)
     """
@@ -148,7 +148,7 @@ def listar_concesionarios_no_auth(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al listar concesionarios: {str(e)}")
 
-@router.get("/", response_model=ConcesionarioListResponse)
+router.get("/", response_model=ConcesionarioListResponse)
 def listar_concesionarios(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
@@ -156,7 +156,7 @@ def listar_concesionarios(
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 Listar todos los concesionarios con paginación y filtros
     """
@@ -190,28 +190,28 @@ def listar_concesionarios(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al listar concesionarios: {str(e)}")
 
-@router.get("/activos")
+router.get("/activos")
 def listar_concesionarios_activos(
     db: Session = Depends(get_db)
     # TEMPORALMENTE SIN AUTENTICACIÓN PARA DROPDOWNS
     # current_user: User = Depends(get_current_user)
-):
+:
     """
     🏢 Listar solo concesionarios activos (para formularios)
     """
     try:
-        concesionarios = db.query(Concesionario).filter(Concesionario.activo == True).all()
+        concesionarios = db.query(Concesionario).filter(Concesionario.activo ).all()
         return [c.to_dict() for c in concesionarios]
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al listar concesionarios activos: {str(e)}")
 
-@router.get("/{concesionario_id}", response_model=ConcesionarioResponse)
+router.get("/{concesionario_id}", response_model=ConcesionarioResponse)
 def obtener_concesionario(
     concesionario_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔍 Obtener un concesionario por ID
     """
@@ -222,12 +222,12 @@ def obtener_concesionario(
 
     return ConcesionarioResponse.model_validate(concesionario)
 
-@router.post("/", response_model=ConcesionarioResponse)
+router.post("/", response_model=ConcesionarioResponse)
 def crear_concesionario(
     concesionario_data: ConcesionarioCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ➕ Crear un nuevo concesionario
     """
@@ -245,18 +245,17 @@ def crear_concesionario(
         raise
     except Exception as e:
         logger.error(f"Error creando concesionario: {e}")
-        import traceback
-        traceback.print_exc()
+                traceback.print_exc()
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al crear concesionario: {str(e)}")
 
-@router.put("/{concesionario_id}", response_model=ConcesionarioResponse)
+router.put("/{concesionario_id}", response_model=ConcesionarioResponse)
 def actualizar_concesionario(
     concesionario_id: int,
     concesionario_data: ConcesionarioUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ✏️ Actualizar un concesionario existente
     """
@@ -291,12 +290,12 @@ def actualizar_concesionario(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al actualizar concesionario: {str(e)}")
 
-@router.delete("/{concesionario_id}")
+router.delete("/{concesionario_id}")
 def eliminar_concesionario(
     concesionario_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🗑️ Eliminar un concesionario (HARD DELETE - borrado completo de BD)
     """

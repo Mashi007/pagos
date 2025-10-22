@@ -1,22 +1,20 @@
 # backend/app/api/v1/endpoints/validadores.py
-"""
-🔍 Endpoints de Validadores y Corrección de Datos
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Endpoints de Validadores y Corrección de Datos
 Sistema para validar y corregir formatos incorrectos
-"""
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
-from sqlalchemy.orm import Session
-from typing import Dict, Any, List, Optional
-from datetime import datetime, date
-from decimal import Decimal
-from pydantic import BaseModel, Field
-import logging
+""
+from fastapi import APIRouter, BackgroundTasks
 
-from app.db.session import get_db
-from app.models.cliente import Cliente
-from app.models.pago import Pago
-from app.models.user import User
-from app.models.auditoria import Auditoria, TipoAccion
-from app.api.deps import get_current_user
+from typing import List, Optional
+
+from pydantic import BaseModel
+
+ TipoAccion
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -30,7 +28,6 @@ from app.services.validators_service import (
     ValidadorEmail,
     ServicioCorreccionDatos,
     AutoFormateador
-)
 
 router = APIRouter()
 
@@ -45,7 +42,6 @@ class ValidacionCampo(BaseModel):
     pais: str = Field("VENEZUELA", description="País para validaciones específicas")
     contexto: Optional[Dict[str, Any]] = Field(None, description="Contexto adicional para validación")
 
-
 class CorreccionDatos(BaseModel):
     """Schema para corrección de datos de cliente"""
     cliente_id: int = Field(..., description="ID del cliente")
@@ -53,12 +49,11 @@ class CorreccionDatos(BaseModel):
     pais: str = Field("VENEZUELA", description="País para validaciones")
     recalcular_amortizacion: bool = Field(True, description="Recalcular amortización si cambia fecha")
 
-
 # ============================================
 # VALIDACIÓN EN TIEMPO REAL
 # ============================================
 
-@router.get("/test-cedula/{cedula}")
+router.get("/test-cedula/{cedula}")
 def test_cedula_simple(cedula: str):
     """Endpoint simple para probar validación de cédula sin autenticación"""
     try:
@@ -79,8 +74,7 @@ def test_cedula_simple(cedula: str):
             "cedula_test": cedula
         }
 
-
-@router.get("/test-simple")
+router.get("/test-simple")
 def test_simple():
     """Endpoint de prueba muy simple para verificar que el servidor responde"""
     return {
@@ -89,8 +83,7 @@ def test_simple():
         "status": "ok"
     }
 
-
-@router.post("/test-cedula-post")
+router.post("/test-cedula-post")
 def test_cedula_post(cedula: str = "E12345678"):
     """Endpoint POST simple para probar validación sin autenticación"""
     try:
@@ -107,8 +100,7 @@ def test_cedula_post(cedula: str = "E12345678"):
             "cedula_test": cedula
         }
 
-
-@router.post("/test-cedula-custom")
+router.post("/test-cedula-custom")
 def test_cedula_custom(cedula: str):
     """Endpoint POST para probar cualquier cédula sin autenticación"""
     try:
@@ -129,11 +121,10 @@ def test_cedula_custom(cedula: str):
             "cedula_test": cedula
         }
 
-
-@router.post("/validar-campo")
+router.post("/validar-campo")
 def validar_campo_tiempo_real(
     validacion: ValidacionCampo
-):
+:
     """
     🔍 Validar campo individual en tiempo real (para frontend)
 
@@ -191,14 +182,13 @@ def validar_campo_tiempo_real(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error validando campo: {str(e)}")
 
-
-@router.post("/formatear-tiempo-real")
+router.post("/formatear-tiempo-real")
 def formatear_mientras_escribe(
     campo: str,
     valor: str,
     pais: str = "VENEZUELA",
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ✨ Auto-formatear valor mientras el usuario escribe (para frontend)
 
@@ -220,12 +210,11 @@ def formatear_mientras_escribe(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error formateando: {str(e)}")
 
-
 # ============================================
 # CORRECCIÓN DE DATOS
 # ============================================
 
-@router.post("/corregir-cliente/{cliente_id}")
+router.post("/corregir-cliente/{cliente_id}")
 def corregir_datos_cliente(
     cliente_id: int,
     correcciones: Dict[str, str],
@@ -233,7 +222,7 @@ def corregir_datos_cliente(
     recalcular_amortizacion: bool = Query(True, description="Recalcular amortización si cambia fecha"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔧 Corregir datos incorrectos de un cliente específico
 
@@ -335,8 +324,7 @@ def corregir_datos_cliente(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error corrigiendo datos: {str(e)}")
 
-
-@router.post("/corregir-pago/{pago_id}")
+router.post("/corregir-pago/{pago_id}")
 def corregir_datos_pago(
     pago_id: int,
     monto_pagado: Optional[str] = None,
@@ -344,7 +332,7 @@ def corregir_datos_pago(
     numero_operacion: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     💰 Corregir datos incorrectos de un pago específico
 
@@ -446,19 +434,18 @@ def corregir_datos_pago(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error corrigiendo pago: {str(e)}")
 
-
 # ============================================
 # DETECCIÓN MASIVA DE ERRORES
 # ============================================
 
-@router.get("/detectar-errores-masivo")
+router.get("/detectar-errores-masivo")
 def detectar_errores_masivo(
     limite: int = Query(100, ge=1, le=1000, description="Límite de registros a analizar"),
     tipo_analisis: str = Query("CLIENTES", description="CLIENTES, PAGOS, AMBOS"),
     pais: str = Query("VENEZUELA", description="País para validaciones"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔍 Detectar datos incorrectos masivamente en la base de datos
 
@@ -495,14 +482,13 @@ def detectar_errores_masivo(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en análisis masivo: {str(e)}")
 
-
-@router.post("/corregir-masivo")
+router.post("/corregir-masivo")
 def corregir_datos_masivo(
     correcciones_masivas: List[CorreccionDatos],
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔧 Corrección masiva de datos incorrectos
     """
@@ -530,16 +516,15 @@ def corregir_datos_masivo(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error iniciando corrección masiva: {str(e)}")
 
-
 # ============================================
 # EJEMPLOS DE CORRECCIÓN
 # ============================================
 
-@router.get("/ejemplos-correccion")
+router.get("/ejemplos-correccion")
 def obtener_ejemplos_correccion(
     pais: str = Query("VENEZUELA", description="País para ejemplos"),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 Obtener ejemplos de corrección de formatos incorrectos
     """
@@ -620,20 +605,19 @@ def obtener_ejemplos_correccion(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo ejemplos: {str(e)}")
 
-
 # ============================================
 # ENDPOINTS DE PRUEBA
 # ============================================
 
-@router.get("/test")
+router.get("/test")
 def test_validadores():
     """
     🧪 Endpoint de prueba simple
     """
     return {"message": "Validadores endpoint funcionando", "status": "ok"}
 
-@router.get("/")
-@router.get("/info")
+router.get("/")
+router.get("/info")
 def obtener_validadores_info():
     """
     📋 Información general de validadores disponibles
@@ -664,7 +648,7 @@ def obtener_validadores_info():
         "version": "1.0.0"
     }
 
-@router.get("/ping")
+router.get("/ping")
 def ping_validadores():
     """
     🏓 Endpoint de prueba para verificar conectividad
@@ -680,10 +664,10 @@ def ping_validadores():
 # CONFIGURACIÓN DE VALIDADORES
 # ============================================
 
-@router.get("/configuracion")
+router.get("/configuracion")
 def obtener_configuracion_validadores(
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ⚙️ Obtener configuración de validadores para el frontend
     """
@@ -791,7 +775,6 @@ def obtener_configuracion_validadores(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración: {str(e)}")
 
-
 # ============================================
 # FUNCIONES AUXILIARES
 # ============================================
@@ -800,7 +783,7 @@ async def _procesar_correcciones_masivas(
     correcciones: List[CorreccionDatos],
     user_id: int,
     db_session: Session
-):
+:
     """Procesar correcciones masivas en background"""
     try:
         from app.db.session import SessionLocal
@@ -833,7 +816,6 @@ async def _procesar_correcciones_masivas(
     except Exception as e:
         logger.error(f"Error en corrección masiva: {e}")
 
-
 def _generar_recomendaciones_campo(campo: str, resultado_validacion: Dict) -> List[str]:
     """Generar recomendaciones específicas por campo"""
     recomendaciones = []
@@ -857,15 +839,14 @@ def _generar_recomendaciones_campo(campo: str, resultado_validacion: Dict) -> Li
 
     return recomendaciones
 
-
 # ============================================
 # ENDPOINT DE VERIFICACIÓN
 # ============================================
 
-@router.get("/verificacion-validadores")
+router.get("/verificacion-validadores")
 def verificar_sistema_validadores(
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔍 Verificación completa del sistema de validadores
     """
@@ -950,8 +931,7 @@ def verificar_sistema_validadores(
         ]
     }
 
-
-@router.get("/configuracion-validadores")
+router.get("/configuracion-validadores")
 async def obtener_configuracion_validadores():
     """
     🔧 Obtener configuración actualizada de validadores para el frontend

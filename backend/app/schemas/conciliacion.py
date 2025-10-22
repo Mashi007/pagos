@@ -1,8 +1,13 @@
 # backend/app/schemas/conciliacion.py
-from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import List, Optional, Dict, Any
-from datetime import date, datetime
-from decimal import Decimal
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, field_validator, ConfigDict
+from typing import Dict, Any
+ datetime
+
 from enum import Enum
 
 # Constantes de validación
@@ -10,7 +15,6 @@ MAX_CONFIDENCE = 100
 MIN_YEAR = 2020
 MAX_YEAR = 2100
 DECIMAL_ZERO = Decimal("0.00")
-
 
 class EstadoConciliacion(str, Enum):
     """Estados posibles de conciliación"""
@@ -20,13 +24,11 @@ class EstadoConciliacion(str, Enum):
     RECHAZADO = "RECHAZADO"
     EN_REVISION = "EN_REVISION"
 
-
 class TipoMatch(str, Enum):
     """Tipos de match en conciliación"""
     REFERENCIA = "referencia"
     MONTO_FECHA = "monto_fecha"
     MANUAL = "manual"
-
 
 # ============================================
 # MOVIMIENTO BANCARIO
@@ -55,7 +57,6 @@ class MovimientoBancario(BaseModel):
             raise ValueError('El monto debe ser mayor a 0')
         return v
 
-
 class MovimientoBancarioResponse(MovimientoBancario):
     """Response con información adicional del movimiento"""
     id: Optional[int] = None
@@ -63,7 +64,6 @@ class MovimientoBancarioResponse(MovimientoBancario):
     pago_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
-
 
 # ============================================
 # CONCILIACIÓN
@@ -82,7 +82,6 @@ class ConciliacionCreate(BaseModel):
             raise ValueError('La fecha fin debe ser posterior a la fecha inicio')
         return v
 
-
 class ConciliacionMatch(BaseModel):
     """Detalle de un match de conciliación"""
     movimiento_bancario: MovimientoBancario
@@ -98,7 +97,6 @@ class ConciliacionMatch(BaseModel):
             date: lambda v: v.isoformat()
         }
     )
-
 
 class ResultadoConciliacion(BaseModel):
     """Resultado del proceso de conciliación"""
@@ -127,7 +125,6 @@ class ResultadoConciliacion(BaseModel):
             datetime: lambda v: v.isoformat()
         }
 
-
 class ConciliacionResponse(BaseModel):
     """Response de conciliación guardada"""
     id: int
@@ -145,7 +142,6 @@ class ConciliacionResponse(BaseModel):
             datetime: lambda v: v.isoformat()
         }
     )
-
 
 # ============================================
 # CONFIRMACIÓN MANUAL
@@ -165,7 +161,6 @@ class ConfirmacionConciliacion(BaseModel):
             raise ValueError('La referencia bancaria es obligatoria')
         return v.strip()
 
-
 class ConfirmacionResponse(BaseModel):
     """Response de confirmación de conciliación"""
     success: bool
@@ -178,7 +173,6 @@ class ConfirmacionResponse(BaseModel):
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
-
 
 # ============================================
 # REPORTES
@@ -200,7 +194,6 @@ class ReporteConciliacionMensual(BaseModel):
             Decimal: lambda v: float(v)
         }
 
-
 class FiltroConciliacion(BaseModel):
     """Filtros para búsqueda de conciliaciones"""
     fecha_inicio: Optional[date] = None
@@ -215,7 +208,6 @@ class FiltroConciliacion(BaseModel):
             Decimal: lambda v: float(v),
             date: lambda v: v.isoformat() if v else None
         }
-
 
 # ============================================
 # PENDIENTES
@@ -239,7 +231,6 @@ class PagoPendienteConciliacion(BaseModel):
         }
     )
 
-
 # ============================================
 # CARGA DE EXTRACTO
 # ============================================
@@ -259,7 +250,6 @@ class ExtractoBancarioUpload(BaseModel):
         "descripcion": "descripcion"
     }
 
-
 class ValidacionExtracto(BaseModel):
     """Resultado de validación de extracto"""
     valido: bool
@@ -267,7 +257,6 @@ class ValidacionExtracto(BaseModel):
     advertencias: List[str] = []
     total_movimientos: int = 0
     movimientos_validos: int = 0
-
 
 # ============================================
 # ESTADÍSTICAS
@@ -288,7 +277,6 @@ class EstadisticasConciliacion(BaseModel):
             Decimal: lambda v: float(v)
         }
 
-
 # ============================================
 # SCHEMAS PARA FUNCIONALIDAD AVANZADA
 # ============================================
@@ -304,7 +292,6 @@ class MovimientoBancarioExtendido(MovimientoBancario):
 
     model_config = ConfigDict(from_attributes=True)
 
-
 class ValidacionArchivoBancario(BaseModel):
     """Resultado de validación de archivo bancario"""
     archivo_valido: bool
@@ -317,14 +304,12 @@ class ValidacionArchivoBancario(BaseModel):
     cedulas_no_registradas: List[str] = []
     vista_previa: List[MovimientoBancarioExtendido] = []
 
-
 class ConciliacionMasiva(BaseModel):
     """Schema para conciliación masiva"""
     movimientos_a_aplicar: List[int] = Field(..., description="IDs de movimientos a aplicar")
     aplicar_exactos: bool = Field(True, description="Aplicar coincidencias exactas automáticamente")
     aplicar_parciales: bool = Field(False, description="Aplicar coincidencias parciales")
     observaciones: Optional[str] = None
-
 
 class ResultadoConciliacionMasiva(BaseModel):
     """Resultado de conciliación masiva"""
@@ -341,7 +326,6 @@ class ResultadoConciliacionMasiva(BaseModel):
             datetime: lambda v: v.isoformat()
         }
 
-
 class RevisionManual(BaseModel):
     """Schema para revisión manual de movimiento"""
     movimiento_id: int
@@ -350,7 +334,6 @@ class RevisionManual(BaseModel):
     monto_ajustado: Optional[Decimal] = None
     observaciones: str
     accion: str = Field(..., pattern="^(APLICAR|RECHAZAR|NO_APLICABLE)$")
-
 
 class HistorialConciliacion(BaseModel):
     """Historial de conciliaciones"""

@@ -1,23 +1,14 @@
-"""
-⚡ Sistema de Monitoreo en Tiempo Real Específico
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Sistema de Monitoreo en Tiempo Real Específico
 Monitorea específicamente los momentos cuando ocurren fallos 401 intermitentes
-"""
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
-import json
-import logging
-import time
-import asyncio
-from collections import defaultdict, deque
-import threading
+""
 
-from app.db.session import get_db
-from app.models.user import User
-from app.core.config import settings
-from app.core.security import decode_token
-from app.api.deps import get_current_user
+import threading
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -280,12 +271,12 @@ real_time_monitor = RealTimeSpecificMonitor()
 # ENDPOINTS DE MONITOREO ESPECÍFICO
 # ============================================
 
-@router.post("/start-monitoring")
+router.post("/start-monitoring")
 async def start_specific_monitoring_endpoint(
     monitoring_request: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔍 Iniciar monitoreo específico de fallos 401
     """
@@ -309,12 +300,12 @@ async def start_specific_monitoring_endpoint(
             "error": str(e)
         }
 
-@router.post("/stop-monitoring/{session_id}")
+router.post("/stop-monitoring/{session_id}")
 async def stop_specific_monitoring_endpoint(
     session_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ⏹️ Detener monitoreo específico
     """
@@ -335,12 +326,12 @@ async def stop_specific_monitoring_endpoint(
             "error": str(e)
         }
 
-@router.post("/capture-auth-event")
+router.post("/capture-auth-event")
 async def capture_auth_event_endpoint(
     event_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📡 Capturar evento de autenticación en tiempo real
     """
@@ -369,11 +360,11 @@ async def capture_auth_event_endpoint(
             "error": str(e)
         }
 
-@router.get("/failure-moments-analysis")
+router.get("/failure-moments-analysis")
 async def get_failure_moments_analysis(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔍 Análisis de momentos específicos de fallo
     """
@@ -394,11 +385,11 @@ async def get_failure_moments_analysis(
             "error": str(e)
         }
 
-@router.get("/real-time-status")
+router.get("/real-time-status")
 async def get_real_time_status_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Estado del monitoreo en tiempo real
     """
@@ -419,12 +410,12 @@ async def get_real_time_status_endpoint(
             "error": str(e)
         }
 
-@router.get("/monitoring-session/{session_id}")
+router.get("/monitoring-session/{session_id}")
 async def get_monitoring_session_details_endpoint(
     session_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 Detalles de sesión de monitoreo específica
     """

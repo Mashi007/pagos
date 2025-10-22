@@ -1,20 +1,19 @@
 # backend/app/api/v1/endpoints/inteligencia_artificial.py
-"""
-🤖 Endpoints de Inteligencia Artificial y Machine Learning
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Endpoints de Inteligencia Artificial y Machine Learning
 Sistema avanzado de scoring, predicción y recomendaciones
-"""
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
-from sqlalchemy.orm import Session
-from typing import List, Optional, Dict, Any
-from datetime import date, datetime, timedelta
-from decimal import Decimal
-from pydantic import BaseModel, Field
+""
+from fastapi import APIRouter, BackgroundTasks
 
-from app.db.session import get_db
-from app.models.cliente import Cliente
-from app.models.user import User
-from app.api.deps import get_current_user
-import logging
+from typing import Dict, Any
+
+from pydantic import BaseModel
+
 logger = logging.getLogger(__name__)
 
 from app.services.ml_service import (
@@ -26,7 +25,6 @@ from app.services.ml_service import (
     ChatbotCobranza,
     DetectorPatrones,
     AlertasInteligentes
-)
 
 router = APIRouter()
 
@@ -53,7 +51,6 @@ class SolicitudScoring(BaseModel):
     tiene_seguro_vida: bool = Field(False, description="Tiene seguro de vida")
     tiene_propiedad: bool = Field(False, description="Tiene propiedades")
 
-
 class ResultadoScoring(BaseModel):
     """Schema de respuesta del scoring"""
     score_final: int = Field(..., ge=0, le=1000)
@@ -63,17 +60,16 @@ class ResultadoScoring(BaseModel):
     factores_riesgo: List[Dict[str, Any]]
     confianza: float
 
-
 # ============================================
 # SCORING CREDITICIO
 # ============================================
 
-@router.post("/scoring-crediticio", response_model=ResultadoScoring)
+router.post("/scoring-crediticio", response_model=ResultadoScoring)
 def calcular_scoring_crediticio(
     solicitud: SolicitudScoring,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🧠 SCORING CREDITICIO INTELIGENTE (0-1000 puntos)
 
@@ -117,7 +113,7 @@ def calcular_scoring_crediticio(
         )
 
         # Registrar en auditoría
-        from app.models.auditoria import Auditoria, TipoAccion
+        , TipoAccion
         auditoria = Auditoria.registrar(
             usuario_id=current_user.id,
             accion=TipoAccion.CONSULTA,
@@ -133,15 +129,14 @@ def calcular_scoring_crediticio(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error calculando scoring: {str(e)}")
 
-
-@router.get("/scoring-masivo")
+router.get("/scoring-masivo")
 def calcular_scoring_masivo_cartera(
     background_tasks: BackgroundTasks,
     limite: int = Query(100, ge=1, le=1000, description="Límite de clientes a procesar"),
     solo_activos: bool = Query(True, description="Solo clientes activos"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Calcular scoring masivo para toda la cartera
     """
@@ -153,7 +148,7 @@ def calcular_scoring_masivo_cartera(
         # Obtener clientes
         query = db.query(Cliente)
         if solo_activos:
-            query = query.filter(Cliente.activo == True)
+            query = query.filter(Cliente.activo )
 
         clientes = query.limit(limite).all()
 
@@ -176,18 +171,17 @@ def calcular_scoring_masivo_cartera(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error iniciando scoring masivo: {str(e)}")
 
-
 # ============================================
 # PREDICCIÓN DE MORA
 # ============================================
 
-@router.get("/prediccion-mora/{cliente_id}")
+router.get("/prediccion-mora/{cliente_id}")
 def predecir_mora_cliente(
     cliente_id: int,
     horizonte_dias: int = Query(30, ge=1, le=365, description="Días a futuro para predicción"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔮 Predicción de mora usando Machine Learning
 
@@ -225,20 +219,19 @@ def predecir_mora_cliente(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error prediciendo mora: {str(e)}")
 
-
-@router.get("/clientes-riesgo")
+router.get("/clientes-riesgo")
 def listar_clientes_alto_riesgo(
     limite: int = Query(50, ge=1, le=200),
     umbral_riesgo: float = Query(0.5, ge=0.1, le=0.9, description="Umbral de probabilidad de mora"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🚨 Listar clientes con alto riesgo de mora
     """
     try:
         clientes_activos = db.query(Cliente).filter(
-            Cliente.activo == True,
+            Cliente.activo ,
             Cliente.estado_financiero == "AL_DIA"
         ).limit(limite * 2).all()  # Obtener más para filtrar
 
@@ -291,17 +284,16 @@ def listar_clientes_alto_riesgo(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listando clientes de riesgo: {str(e)}")
 
-
 # ============================================
 # RECOMENDACIONES INTELIGENTES
 # ============================================
 
-@router.get("/recomendaciones-cobranza/{cliente_id}")
+router.get("/recomendaciones-cobranza/{cliente_id}")
 def obtener_recomendaciones_cobranza(
     cliente_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     💡 Recomendaciones inteligentes de estrategia de cobranza
     """
@@ -320,8 +312,7 @@ def obtener_recomendaciones_cobranza(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando recomendaciones: {str(e)}")
 
-
-@router.get("/optimizar-condiciones")
+router.get("/optimizar-condiciones")
 def optimizar_condiciones_prestamo(
     cedula: str = Query(..., description="Cédula del cliente"),
     monto_total: Decimal = Query(..., gt=0, description="Monto total del financiamiento"),
@@ -330,7 +321,7 @@ def optimizar_condiciones_prestamo(
     ingresos_mensuales: Decimal = Query(..., gt=0, description="Ingresos mensuales"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🎯 Optimizar condiciones de préstamo basado en perfil del cliente
     """
@@ -371,19 +362,18 @@ def optimizar_condiciones_prestamo(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error optimizando condiciones: {str(e)}")
 
-
 # ============================================
 # CHATBOT INTELIGENTE
 # ============================================
 
-@router.post("/chatbot/generar-mensaje")
+router.post("/chatbot/generar-mensaje")
 def generar_mensaje_chatbot(
     cliente_id: int,
     tipo_mensaje: str = Query(..., description="RECORDATORIO_AMIGABLE, MORA_TEMPRANA, MORA_AVANZADA, FELICITACION_PUNTUALIDAD"),
     canal: str = Query("WHATSAPP", description="WHATSAPP, EMAIL, SMS, LLAMADA"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🤖 Generar mensaje personalizado con IA para cobranza
     """
@@ -415,17 +405,16 @@ def generar_mensaje_chatbot(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando mensaje: {str(e)}")
 
-
 # ============================================
 # ANÁLISIS PREDICTIVO
 # ============================================
 
-@router.get("/analisis-predictivo")
+router.get("/analisis-predictivo")
 def analisis_predictivo_cartera(
     horizonte_meses: int = Query(6, ge=1, le=24, description="Meses a futuro para análisis"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📈 Análisis predictivo completo de la cartera
     """
@@ -451,16 +440,15 @@ def analisis_predictivo_cartera(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en análisis predictivo: {str(e)}")
 
-
 # ============================================
 # DETECTOR DE ANOMALÍAS
 # ============================================
 
-@router.get("/detectar-anomalias")
+router.get("/detectar-anomalias")
 def detectar_anomalias_sistema(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔍 Detectar anomalías y patrones inusuales en la cartera
     """
@@ -487,22 +475,21 @@ def detectar_anomalias_sistema(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error detectando anomalías: {str(e)}")
 
-
 # ============================================
 # DASHBOARD DE INTELIGENCIA ARTIFICIAL
 # ============================================
 
-@router.get("/dashboard-ia")
+router.get("/dashboard-ia")
 def dashboard_inteligencia_artificial(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🤖 Dashboard principal de Inteligencia Artificial
     """
     try:
         # Métricas de IA en tiempo real
-        total_clientes = db.query(Cliente).filter(Cliente.activo == True).count()
+        total_clientes = db.query(Cliente).filter(Cliente.activo ).count()
 
         # Simular métricas de ML (en producción serían reales)
         metricas_ia = {
@@ -593,7 +580,6 @@ def dashboard_inteligencia_artificial(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en dashboard IA: {str(e)}")
 
-
 # ============================================
 # FUNCIONES AUXILIARES
 # ============================================
@@ -630,7 +616,6 @@ async def _procesar_scoring_masivo(cliente_ids: List[int], user_id: int):
     except Exception as e:
         logger.error(f"Error en scoring masivo: {e}")
 
-
 def _interpretar_prediccion_mora(probabilidad: float) -> str:
     """Interpretar probabilidad de mora"""
     if probabilidad >= 70:
@@ -642,7 +627,6 @@ def _interpretar_prediccion_mora(probabilidad: float) -> str:
     else:
         return "CLIENTE_ESTABLE"
 
-
 def _interpretar_tendencia(analisis: Dict) -> str:
     """Interpretar tendencia general de la cartera"""
     tendencia = analisis.get("tendencia_mora", {}).get("tendencia", "ESTABLE")
@@ -653,7 +637,6 @@ def _interpretar_tendencia(analisis: Dict) -> str:
         return "✅ Mejora continua - Mantener estrategia"
     else:
         return "📊 Cartera estable - Monitoreo regular"
-
 
 def _generar_acciones_predictivas(analisis: Dict) -> List[str]:
     """Generar acciones basadas en análisis predictivo"""
@@ -672,7 +655,6 @@ def _generar_acciones_predictivas(analisis: Dict) -> List[str]:
 
     return acciones
 
-
 def _identificar_alertas_criticas(analisis: Dict) -> List[str]:
     """Identificar alertas críticas del análisis"""
     alertas = []
@@ -684,15 +666,14 @@ def _identificar_alertas_criticas(analisis: Dict) -> List[str]:
 
     return alertas
 
-
 # ============================================
 # ENDPOINT DE VERIFICACIÓN
 # ============================================
 
-@router.get("/verificacion-ia")
+router.get("/verificacion-ia")
 def verificar_sistema_ia(
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔍 Verificación completa del sistema de IA implementado
     """

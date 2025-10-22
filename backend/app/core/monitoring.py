@@ -1,11 +1,13 @@
 # backend/app/core/monitoring.py
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Configuración de Monitoreo y Observabilidad
 Integración con Sentry, Prometheus y logging estructurado
-"""
-import logging
-from typing import Optional
-from datetime import datetime
+""
 
 from fastapi import FastAPI
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -13,9 +15,6 @@ import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastAPIIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from pythonjsonlogger import jsonlogger
-
-from app.core.config import settings
-
 
 def configure_sentry(app: FastAPI) -> None:
     """
@@ -47,7 +46,6 @@ def configure_sentry(app: FastAPI) -> None:
 
     logging.info(f"Sentry configurado - Environment: {settings.ENVIRONMENT}")
 
-
 def before_send_sentry(event, hint):
     """
     Hook para modificar eventos antes de enviar a Sentry
@@ -63,7 +61,6 @@ def before_send_sentry(event, hint):
                     event["request"]["headers"][header] = "[FILTERED]"
 
     return event
-
 
 def configure_prometheus(app: FastAPI) -> Optional[Instrumentator]:
     """
@@ -113,7 +110,6 @@ def configure_prometheus(app: FastAPI) -> Optional[Instrumentator]:
 
     return instrumentator
 
-
 def configure_structured_logging() -> None:
     """
     Configura logging estructurado en formato JSON
@@ -157,7 +153,6 @@ def configure_structured_logging() -> None:
 
     logging.info(f"Logging estructurado configurado - Level: {log_level}")
 
-
 def setup_monitoring(app: FastAPI) -> dict:
     """
     Configura todo el sistema de monitoreo
@@ -200,7 +195,6 @@ def setup_monitoring(app: FastAPI) -> dict:
 
     return config_applied
 
-
 # ============================================
 # MÉTRICAS PERSONALIZADAS DE FINANCIAMIENTO AUTOMOTRIZ
 # ============================================
@@ -209,7 +203,7 @@ def track_business_metrics(
     metric_name: str,
     value: float,
     labels: Optional[dict] = None
-) -> None:
+ -> None:
     """
     Registra métricas de negocio personalizadas para financiamiento automotriz
 
@@ -245,14 +239,13 @@ def track_business_metrics(
     except Exception as e:
         logging.error(f"Error registrando métrica de negocio: {e}")
 
-
 def track_financial_operation(
     operation_type: str,
     amount: float,
     client_id: int,
     user_id: int,
     additional_data: Optional[dict] = None
-) -> None:
+ -> None:
     """
     Trackear operaciones financieras específicas
 
@@ -274,13 +267,12 @@ def track_financial_operation(
         }
     )
 
-
 def track_approval_workflow(
     workflow_step: str,
     request_type: str,
     user_role: str,
     processing_time_seconds: Optional[float] = None
-) -> None:
+ -> None:
     """
     Trackear flujo de aprobaciones
 
@@ -300,14 +292,13 @@ def track_approval_workflow(
         }
     )
 
-
 def track_bulk_migration(
     total_records: int,
     successful: int,
     failed: int,
     warnings: int,
     migration_type: str
-) -> None:
+ -> None:
     """
     Trackear migraciones masivas
     """
@@ -315,7 +306,6 @@ def track_bulk_migration(
     track_business_metrics("bulk_migration_successful", successful, {"type": migration_type})
     track_business_metrics("bulk_migration_failed", failed, {"type": migration_type})
     track_business_metrics("bulk_migration_warnings", warnings, {"type": migration_type})
-
 
 # Context managers para tracking
 class track_operation:
@@ -344,7 +334,6 @@ class track_operation:
             )
         else:
             logging.info(f"Operación completada: {self.operation_name}", extra=self.context)
-
 
 # ============================================
 # ENDPOINT DE VERIFICACIÓN DE MONITOREO

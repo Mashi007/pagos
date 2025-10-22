@@ -1,23 +1,20 @@
 # backend/app/api/v1/endpoints/notificaciones_multicanal.py
-"""
-🔔 Endpoints de Notificaciones Multicanal
-Sistema 100% automático de notificaciones por Email + WhatsApp
-"""
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
-from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_, desc
-from typing import List, Optional, Dict, Any
+""
 from datetime import datetime, date, timedelta
-from pydantic import BaseModel, Field
-import logging
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Endpoints de Notificaciones Multicanal
+Sistema 100% automático de notificaciones por Email + WhatsApp
+""
+from fastapi import APIRouter, BackgroundTasks
 
-from app.db.session import get_db
-from app.models.cliente import Cliente
-from app.models.prestamo import Prestamo
+from sqlalchemy import func, desc
+from datetime import datetime, timedelta
+from pydantic import BaseModel
+
 from app.models.amortizacion import Cuota
-from app.models.notificacion import Notificacion
-from app.models.user import User
-from app.api.deps import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -31,7 +28,6 @@ from app.services.notification_multicanal_service import (
     WhatsAppTemplateManager,
     GestorReintentos,
     notification_scheduler
-)
 
 router = APIRouter()
 
@@ -50,7 +46,6 @@ class ConfiguracionNotificacionesCliente(BaseModel):
     confirmacion_pago: bool = Field(True, description="Confirmación de pago")
     canal_preferido: CanalNotificacion = Field(CanalNotificacion.AMBOS, description="Canal preferido")
 
-
 class EstadisticasNotificaciones(BaseModel):
     """Schema para estadísticas de notificaciones"""
     total_enviadas: int
@@ -60,18 +55,17 @@ class EstadisticasNotificaciones(BaseModel):
     por_tipo: Dict[str, int]
     tasa_exito: float
 
-
 # ============================================
 # PROCESAMIENTO AUTOMÁTICO
 # ============================================
 
-@router.post("/procesar-automaticas")
+router.post("/procesar-automaticas")
 async def procesar_notificaciones_automaticas(
     background_tasks: BackgroundTasks,
     forzar_procesamiento: bool = Query(False, description="Forzar procesamiento fuera de horario"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🤖 Procesar notificaciones automáticas (Endpoint para scheduler/cron)
 
@@ -127,12 +121,11 @@ async def procesar_notificaciones_automaticas(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error iniciando procesamiento: {str(e)}")
 
-
-@router.get("/estado-procesamiento")
+router.get("/estado-procesamiento")
 def obtener_estado_procesamiento(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Obtener estado actual del procesamiento de notificaciones
     """
@@ -205,12 +198,11 @@ def obtener_estado_procesamiento(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo estado: {str(e)}")
 
-
 # ============================================
 # HISTORIAL DE NOTIFICACIONES
 # ============================================
 
-@router.get("/historial")
+router.get("/historial")
 def obtener_historial_notificaciones(
     cliente_id: Optional[int] = Query(None, description="Filtrar por cliente"),
     canal: Optional[str] = Query(None, description="EMAIL, WHATSAPP, AMBOS"),
@@ -222,7 +214,7 @@ def obtener_historial_notificaciones(
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 Historial completo de notificaciones con filtros avanzados
 
@@ -328,17 +320,16 @@ def obtener_historial_notificaciones(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo historial: {str(e)}")
 
-
 # ============================================
 # CONFIGURACIÓN DE PREFERENCIAS POR CLIENTE
 # ============================================
 
-@router.get("/cliente/{cliente_id}/preferencias")
+router.get("/cliente/{cliente_id}/preferencias")
 def obtener_preferencias_cliente(
     cliente_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🎯 Obtener preferencias de notificación de un cliente específico
     """
@@ -392,14 +383,13 @@ def obtener_preferencias_cliente(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo preferencias: {str(e)}")
 
-
-@router.post("/cliente/{cliente_id}/preferencias")
+router.post("/cliente/{cliente_id}/preferencias")
 def actualizar_preferencias_cliente(
     cliente_id: int,
     canal_preferido: CanalNotificacion,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ✏️ Actualizar preferencias de notificación del cliente
 
@@ -457,15 +447,14 @@ def actualizar_preferencias_cliente(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error actualizando preferencias: {str(e)}")
 
-
 # ============================================
 # GESTIÓN DE TEMPLATES WHATSAPP
 # ============================================
 
-@router.get("/whatsapp/templates")
+router.get("/whatsapp/templates")
 def listar_templates_whatsapp(
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📝 Listar templates de WhatsApp disponibles
 
@@ -500,12 +489,11 @@ def listar_templates_whatsapp(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listando templates: {str(e)}")
 
-
-@router.post("/whatsapp/templates/{template_name}/aprobar")
+router.post("/whatsapp/templates/{template_name}/aprobar")
 def enviar_template_para_aprobacion(
     template_name: str,
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📤 Enviar template de WhatsApp a Meta para aprobación
     """
@@ -539,17 +527,16 @@ def enviar_template_para_aprobacion(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error enviando template: {str(e)}")
 
-
 # ============================================
 # REINTENTOS Y RECUPERACIÓN
 # ============================================
 
-@router.post("/procesar-reintentos")
+router.post("/procesar-reintentos")
 async def procesar_reintentos_fallidas(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔄 Procesar reintentos de notificaciones fallidas
 
@@ -586,17 +573,16 @@ async def procesar_reintentos_fallidas(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error procesando reintentos: {str(e)}")
 
-
 # ============================================
 # DASHBOARD DE NOTIFICACIONES MULTICANAL
 # ============================================
 
-@router.get("/dashboard")
+router.get("/dashboard")
 def dashboard_notificaciones_multicanal(
     periodo: str = Query("hoy", description="hoy, semana, mes"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Dashboard completo de notificaciones multicanal
     """
@@ -719,19 +705,18 @@ def dashboard_notificaciones_multicanal(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en dashboard: {str(e)}")
 
-
 # ============================================
 # TESTING Y PRUEBAS
 # ============================================
 
-@router.post("/probar-envio")
+router.post("/probar-envio")
 async def probar_envio_notificacion(
     cliente_id: int,
     tipo_notificacion: TipoNotificacionCliente,
     canal: CanalNotificacion = CanalNotificacion.AMBOS,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🧪 Probar envío de notificación a cliente específico
     """
@@ -793,7 +778,6 @@ async def probar_envio_notificacion(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en prueba de notificación: {str(e)}")
 
-
 # ============================================
 # FUNCIONES AUXILIARES
 # ============================================
@@ -815,11 +799,9 @@ async def _ejecutar_procesamiento_background(db_session: Session, user_id: int, 
     except Exception as e:
         logger.error(f"Error en procesamiento background: {e}")
 
-
 async def _procesar_reintentos_background(db_session: Session):
     """Procesar reintentos en background"""
     try:
-        from app.db.session import SessionLocal
         db = SessionLocal()
 
         resultado = await GestorReintentos.procesar_reintentos_pendientes(db)
@@ -830,7 +812,6 @@ async def _procesar_reintentos_background(db_session: Session):
 
     except Exception as e:
         logger.error(f"Error procesando reintentos: {e}")
-
 
 def _traducir_tipo_notificacion(tipo: str) -> str:
     """Traducir tipo de notificación a descripción amigable"""
@@ -845,7 +826,6 @@ def _traducir_tipo_notificacion(tipo: str) -> str:
     }
     return traducciones.get(tipo, tipo)
 
-
 def _traducir_estado_notificacion(estado: str) -> str:
     """Traducir estado de notificación"""
     traducciones = {
@@ -856,7 +836,6 @@ def _traducir_estado_notificacion(estado: str) -> str:
     }
     return traducciones.get(estado, estado)
 
-
 def _agrupar_por_campo(lista: List[Dict], extractor) -> Dict[str, int]:
     """Agrupar lista por campo específico"""
     agrupado = {}
@@ -865,16 +844,15 @@ def _agrupar_por_campo(lista: List[Dict], extractor) -> Dict[str, int]:
         agrupado[clave] = agrupado.get(clave, 0) + 1
     return agrupado
 
-
 # ============================================
 # ENDPOINT DE VERIFICACIÓN
 # ============================================
 
-@router.get("/verificacion-sistema")
+router.get("/verificacion-sistema")
 def verificar_sistema_notificaciones_multicanal(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔍 Verificación completa del sistema de notificaciones multicanal
     """

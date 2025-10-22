@@ -1,18 +1,16 @@
 # backend/app/api/v1/endpoints/scheduler_notificaciones.py
-"""
-⏰ Endpoints para Scheduler de Notificaciones Automáticas
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Endpoints para Scheduler de Notificaciones Automáticas
 Configuración y gestión del cron job de notificaciones
-"""
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from sqlalchemy.orm import Session
-from typing import Dict, Any
-from datetime import datetime, timedelta, date, time
-from pydantic import BaseModel, Field
-import logging
+""
 
-from app.db.session import get_db
-from app.models.user import User
-from app.api.deps import get_current_user
+time, time
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -35,16 +33,15 @@ class ConfiguracionScheduler(BaseModel):
     )
     reporte_diario_hora: str = Field("18:00", description="Hora del reporte diario")
 
-
 # ============================================
 # CONFIGURACIÓN DEL SCHEDULER
 # ============================================
 
-@router.get("/configuracion")
+router.get("/configuracion")
 def obtener_configuracion_scheduler(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ⚙️ Obtener configuración actual del scheduler de notificaciones
     """
@@ -102,13 +99,12 @@ def obtener_configuracion_scheduler(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración: {str(e)}")
 
-
-@router.post("/configurar")
+router.post("/configurar")
 def configurar_scheduler(
     configuracion: ConfiguracionScheduler,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ⚙️ Configurar scheduler de notificaciones
     """
@@ -131,13 +127,12 @@ def configurar_scheduler(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error configurando scheduler: {str(e)}")
 
-
-@router.get("/logs")
+router.get("/logs")
 def obtener_logs_scheduler(
     limite: int = 100,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 Obtener logs del scheduler de notificaciones
     """
@@ -188,13 +183,12 @@ def obtener_logs_scheduler(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo logs: {str(e)}")
 
-
-@router.post("/ejecutar-ahora")
+router.post("/ejecutar-ahora")
 async def ejecutar_scheduler_manual(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ▶️ Ejecutar scheduler manualmente (fuera del horario programado)
     """
@@ -222,12 +216,11 @@ async def ejecutar_scheduler_manual(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error ejecutando scheduler: {str(e)}")
 
-
-@router.get("/estado")
+router.get("/estado")
 def obtener_estado_scheduler(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Obtener estado actual del scheduler
     """
@@ -268,7 +261,6 @@ def obtener_estado_scheduler(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo estado: {str(e)}")
 
-
 # ============================================
 # FUNCIONES AUXILIARES
 # ============================================
@@ -289,7 +281,6 @@ async def _ejecutar_scheduler_manual(db: Session, user_id: int):
 
     except Exception as e:
         logger.error(f"Error en scheduler manual: {e}")
-
 
 def _generar_expresion_cron(config: ConfiguracionScheduler) -> str:
     """Generar expresión cron basada en configuración"""
@@ -322,16 +313,15 @@ def _generar_expresion_cron(config: ConfiguracionScheduler) -> str:
     except Exception:
         return "0 * * * *"  # Por defecto cada hora
 
-
 # ============================================
 # ENDPOINT DE VERIFICACIÓN
 # ============================================
 
-@router.get("/verificacion-completa")
+router.get("/verificacion-completa")
 def verificar_sistema_notificaciones_completo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔍 Verificación completa del sistema de notificaciones multicanal
     """

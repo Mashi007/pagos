@@ -1,19 +1,17 @@
-"""
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 Sistema de Monitoreo con Análisis de Impacto en Performance
 Implementa monitoreo avanzado con métricas de impacto en recursos del sistema
-"""
-import time
-import psutil
-import os
-import logging
-import json
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional
+""
+
+from typing import List, Optional
 from dataclasses import dataclass, asdict
 from enum import Enum
 import threading
-from collections import deque
-import asyncio
 
 # Constantes de configuración
 MONITORING_INTERVAL_SECONDS = 30
@@ -26,15 +24,13 @@ MAX_METRICS_HISTORY = 1000
 
 logger = logging.getLogger(__name__)
 
-
 class AlertSeverity(Enum):
     """Severidad de alertas"""
     INFO = "INFO"
     WARNING = "WARNING"
     CRITICAL = "CRITICAL"
 
-
-@dataclass
+dataclass
 class SystemMetrics:
     """Métricas del sistema"""
     timestamp: datetime
@@ -48,8 +44,7 @@ class SystemMetrics:
     network_bytes_sent: int
     network_bytes_recv: int
 
-
-@dataclass
+dataclass
 class PerformanceImpact:
     """Análisis de impacto en performance"""
     endpoint: str
@@ -59,8 +54,7 @@ class PerformanceImpact:
     impact_level: str
     timestamp: datetime
 
-
-@dataclass
+dataclass
 class Alert:
     """Estructura de alerta"""
     id: str
@@ -70,7 +64,6 @@ class Alert:
     timestamp: datetime
     metrics: Dict[str, Any]
     resolved: bool = False
-
 
 class ImpactAnalyzer:
     """
@@ -375,30 +368,24 @@ class ImpactAnalyzer:
 
         return recommendations
 
-
 # Instancia global del analizador
 impact_analyzer = ImpactAnalyzer()
-
 
 def get_impact_analyzer() -> ImpactAnalyzer:
     """Obtener instancia del analizador de impacto"""
     return impact_analyzer
 
-
 def start_monitoring():
     """Iniciar monitoreo del sistema"""
     impact_analyzer.start_monitoring()
-
 
 def stop_monitoring():
     """Detener monitoreo del sistema"""
     impact_analyzer.stop_monitoring()
 
-
 def record_endpoint_performance(endpoint: str, response_time_ms: float):
     """Registrar performance de un endpoint"""
     impact_analyzer.record_endpoint_performance(endpoint, response_time_ms)
-
 
 if __name__ == "__main__":
     # Ejemplo de uso

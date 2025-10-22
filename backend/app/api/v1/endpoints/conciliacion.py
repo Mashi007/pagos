@@ -1,21 +1,18 @@
 # backend/app/api/v1/endpoints/conciliacion.py
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
-from typing import List, Optional
-from datetime import datetime, date
-from decimal import Decimal
-import csv
-import io
-import pandas as pd
-import logging
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, UploadFile, File, BackgroundTasks, Query
 
-from app.db.session import get_db, SessionLocal
-from app.models.pago import Pago
-from app.models.prestamo import Prestamo
-from app.models.cliente import Cliente
+
+import io
+
+ SessionLocal
+
 from app.models.amortizacion import Cuota
-from app.models.user import User
+
 from app.schemas.conciliacion import (
     ConciliacionCreate,
     ConciliacionResponse,
@@ -29,19 +26,16 @@ from app.schemas.conciliacion import (
     ResultadoConciliacionMasiva,
     RevisionManual,
     HistorialConciliacion
-)
-from app.api.deps import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-
-@router.post("/validar-archivo", response_model=ValidacionArchivoBancario)
+router.post("/validar-archivo", response_model=ValidacionArchivoBancario)
 async def validar_archivo_bancario(
     archivo: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Validar archivo bancario (Excel/CSV) y mostrar vista previa
 
@@ -243,13 +237,12 @@ async def validar_archivo_bancario(
             detail=f"Error procesando archivo: {str(e)}"
         )
 
-
-@router.post("/matching-automatico", response_model=ResultadoConciliacion)
+router.post("/matching-automatico", response_model=ResultadoConciliacion)
 def matching_automatico(
     movimientos: List[MovimientoBancarioExtendido],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Realizar matching automático avanzado con prioridades:
     1° Cédula + Monto exacto
@@ -372,13 +365,12 @@ def matching_automatico(
         detalle_sin_conciliar_sistema=parciales
     )
 
-
-@router.post("/confirmar-conciliacion/{pago_id}")
+router.post("/confirmar-conciliacion/{pago_id}")
 def confirmar_conciliacion(
     pago_id: int,
     referencia_bancaria: str,
     db: Session = Depends(get_db)
-):
+:
     """
     Confirma manualmente la conciliación de un pago.
     """
@@ -396,13 +388,12 @@ def confirmar_conciliacion(
 
     return {"message": "Conciliación confirmada", "pago_id": pago_id}
 
-
-@router.get("/pendientes", response_model=List[dict])
+router.get("/pendientes", response_model=List[dict])
 def obtener_pendientes_conciliacion(
     fecha_inicio: Optional[date] = None,
     fecha_fin: Optional[date] = None,
     db: Session = Depends(get_db)
-):
+:
     """
     Obtiene pagos pendientes de conciliar.
     """
@@ -428,13 +419,12 @@ def obtener_pendientes_conciliacion(
         for p in pagos
     ]
 
-
-@router.get("/reporte-conciliacion")
+router.get("/reporte-conciliacion")
 def reporte_conciliacion(
     mes: int,
     anio: int,
     db: Session = Depends(get_db)
-):
+:
     """
     Genera reporte mensual de conciliación.
     """
@@ -466,17 +456,16 @@ def reporte_conciliacion(
         "porcentaje_conciliacion": round((conciliados / total_pagos * 100) if total_pagos > 0 else 0, 2)
     }
 
-
 # ============================================
 # REVISIÓN MANUAL
 # ============================================
 
-@router.post("/revision-manual")
+router.post("/revision-manual")
 def procesar_revision_manual(
     revision: RevisionManual,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Procesar revisión manual de movimiento bancario
     """
@@ -548,18 +537,17 @@ def procesar_revision_manual(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error en revisión manual: {str(e)}")
 
-
 # ============================================
 # APLICACIÓN MASIVA
 # ============================================
 
-@router.post("/aplicar-masivo", response_model=ResultadoConciliacionMasiva)
+router.post("/aplicar-masivo", response_model=ResultadoConciliacionMasiva)
 def aplicar_conciliacion_masiva(
     conciliacion_data: ConciliacionMasiva,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Aplicar conciliación masiva de movimientos
     """
@@ -614,19 +602,18 @@ def aplicar_conciliacion_masiva(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en aplicación masiva: {str(e)}")
 
-
 # ============================================
 # HISTORIAL DE CONCILIACIONES
 # ============================================
 
-@router.get("/historial", response_model=List[HistorialConciliacion])
+router.get("/historial", response_model=List[HistorialConciliacion])
 def obtener_historial_conciliaciones(
     fecha_desde: Optional[date] = Query(None),
     fecha_hasta: Optional[date] = Query(None),
     usuario: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Obtener historial de conciliaciones procesadas
     """
@@ -672,13 +659,12 @@ def obtener_historial_conciliaciones(
 
     return resultado
 
-
-@router.get("/tabla-resultados/{proceso_id}")
+router.get("/tabla-resultados/{proceso_id}")
 def obtener_tabla_resultados(
     proceso_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     Obtener tabla de resultados visual como el diagrama
     """
@@ -734,7 +720,6 @@ def obtener_tabla_resultados(
         }
     }
 
-
 # ============================================
 # FUNCIONES AUXILIARES
 # ============================================
@@ -745,7 +730,6 @@ async def _generar_reporte_conciliacion(user_id: int, pagos_creados: List[int], 
     """
     try:
         # Simulación de generación de reporte
-        import logging
         logger = logging.getLogger(__name__)
         logger.info(f"Generando reporte de conciliación - Usuario: {user_id}, Pagos: {len(pagos_creados)}, Monto: ${total_monto}")
 
@@ -755,22 +739,20 @@ async def _generar_reporte_conciliacion(user_id: int, pagos_creados: List[int], 
         # 3. Almacenar en sistema de archivos
 
     except Exception as e:
-        import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Error generando reporte de conciliación: {str(e)}")
-
 
 # ============================================
 # FLUJO COMPLETO DE CONCILIACIÓN BANCARIA
 # ============================================
 
-@router.post("/flujo-completo")
+router.post("/flujo-completo")
 async def flujo_completo_conciliacion(
     background_tasks: BackgroundTasks,
     archivo: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🏦 FLUJO COMPLETO DE CONCILIACIÓN BANCARIA MASIVA
 
@@ -928,14 +910,13 @@ async def flujo_completo_conciliacion(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en flujo de conciliación: {str(e)}")
 
-
-@router.post("/aplicar-exactos/{proceso_id}")
+router.post("/aplicar-exactos/{proceso_id}")
 async def aplicar_coincidencias_exactas(
     proceso_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🚀 PASO 11a: Aplicar solo coincidencias exactas automáticamente
     """
@@ -971,7 +952,7 @@ async def aplicar_coincidencias_exactas(
                 })
 
         # Registrar en auditoría
-        from app.models.auditoria import Auditoria, TipoAccion
+        , TipoAccion
         auditoria = Auditoria.registrar(
             usuario_id=current_user.id,
             accion=TipoAccion.CREAR.value,
@@ -1032,14 +1013,13 @@ async def aplicar_coincidencias_exactas(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error aplicando conciliación: {str(e)}")
 
-
-@router.get("/flujo-completo/paso/{paso}")
+router.get("/flujo-completo/paso/{paso}")
 def obtener_paso_flujo_conciliacion(
     paso: int,
     proceso_id: Optional[str] = Query(None, description="ID del proceso de conciliación"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📋 INFORMACIÓN DETALLADA DE CADA PASO DEL FLUJO
     """
@@ -1185,7 +1165,6 @@ def obtener_paso_flujo_conciliacion(
             }
         }
 
-
 # ============================================
 # FUNCIONES AUXILIARES PARA FLUJO COMPLETO
 # ============================================
@@ -1195,12 +1174,11 @@ async def _generar_reporte_conciliacion_completo(
     user_id: int,
     pagos_creados: List[dict],
     total_monto: float
-):
+:
     """
     📄 PASO 13: Generar reporte PDF de conciliación
     """
     try:
-        import logging
         logger = logging.getLogger(__name__)
 
         # Simulación de generación de reporte PDF
@@ -1223,17 +1201,15 @@ async def _generar_reporte_conciliacion_completo(
         # 5. Enviar por email al usuario
 
     except Exception as e:
-        import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Error generando reporte completo: {str(e)}")
-
 
 async def _notificar_admin_conciliacion(
     proceso_id: str,
     usuario_proceso: str,
     pagos_aplicados: int,
     total_monto: float
-):
+:
     """
     🔔 PASO 15: Notificar a Admin sobre conciliación completada
     """
@@ -1242,8 +1218,8 @@ async def _notificar_admin_conciliacion(
 
         # Obtener administradores
         admins = db.query(User).filter(
-            User.is_admin == True,
-            User.is_active == True,
+            User.is_admin ,
+            User.is_active ,
             User.email.isnot(None)
         ).all()
 
@@ -1253,31 +1229,31 @@ Hola {admin.full_name},
 
 CONCILIACIÓN BANCARIA COMPLETADA
 
-📊 RESUMEN DEL PROCESO:
-• Proceso ID: {proceso_id}
-• Usuario: {usuario_proceso}
-• Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+ RESUMEN DEL PROCESO:
+ Proceso ID: {proceso_id}
+ Usuario: {usuario_proceso}
+ Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}
 
-📈 RESULTADOS:
-• Pagos aplicados: {pagos_aplicados}
-• Monto total: ${total_monto:,.2f}
-• Tasa de éxito: 95.5%
+ RESULTADOS:
+ Pagos aplicados: {pagos_aplicados}
+ Monto total: ${total_monto:,.2f}
+ Tasa de éxito: 95.5%
 
-📄 REPORTE GENERADO:
-• Archivo: conciliacion_{proceso_id}.pdf
-• Disponible en sistema de archivos
+ REPORTE GENERADO:
+ Archivo: conciliacion_{proceso_id}.pdf
+ Disponible en sistema de archivos
 
 ACCIONES RECOMENDADAS:
-• Revisar reporte detallado
-• Verificar pagos aplicados
-• Confirmar actualización de cartera
+ Revisar reporte detallado
+ Verificar pagos aplicados
+ Confirmar actualización de cartera
 
 Acceder al sistema: https://pagos-f2qf.onrender.com
 
 Saludos.
             """
 
-            from app.models.notificacion import Notificacion
+            
             notif = Notificacion(
                 user_id=admin.id,
                 tipo="EMAIL",
@@ -1314,6 +1290,5 @@ Saludos.
         db.close()
 
     except Exception as e:
-        import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Error notificando admin sobre conciliación {proceso_id}: {str(e)}")

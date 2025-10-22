@@ -1,24 +1,16 @@
-"""
-🔄 Sistema de Análisis de Fallos Intermitentes
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Sistema de Análisis de Fallos Intermitentes
 Identifica patrones específicos que causan fallos 401 intermitentes
-"""
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
-import json
-import logging
-import time
-import statistics
-from collections import defaultdict, deque
-import threading
-import asyncio
+""
 
-from app.db.session import get_db
-from app.models.user import User
-from app.core.config import settings
-from app.core.security import decode_token, create_access_token
-from app.api.deps import get_current_user
+import threading
+
+ create_access_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -333,12 +325,12 @@ intermittent_analyzer = IntermittentFailureAnalyzer()
 # ENDPOINTS DE ANÁLISIS INTERMITENTE
 # ============================================
 
-@router.post("/log-successful-request")
+router.post("/log-successful-request")
 async def log_successful_request_endpoint(
     request_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ✅ Registrar request exitoso para análisis intermitente
     """
@@ -359,12 +351,12 @@ async def log_successful_request_endpoint(
             "error": str(e)
         }
 
-@router.post("/log-failed-request")
+router.post("/log-failed-request")
 async def log_failed_request_endpoint(
     request_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     ❌ Registrar request fallido para análisis intermitente
     """
@@ -385,11 +377,11 @@ async def log_failed_request_endpoint(
             "error": str(e)
         }
 
-@router.get("/intermittent-patterns")
+router.get("/intermittent-patterns")
 async def get_intermittent_patterns(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔄 Análisis de patrones intermitentes
     """
@@ -410,11 +402,11 @@ async def get_intermittent_patterns(
             "error": str(e)
         }
 
-@router.get("/intermittent-summary")
+router.get("/intermittent-summary")
 async def get_intermittent_summary_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     📊 Resumen de análisis intermitente
     """

@@ -1,22 +1,15 @@
-"""
-🔮 Sistema de Análisis Predictivo para Tokens JWT
+""
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+ Sistema de Análisis Predictivo para Tokens JWT
 Predice problemas de autenticación antes de que ocurran
-"""
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Tuple
-import json
-import logging
-import statistics
-from collections import defaultdict, deque
-import math
+""
 
-from app.db.session import get_db
-from app.models.user import User
-from app.core.config import settings
-from app.core.security import decode_token, create_access_token
-from app.api.deps import get_current_user
+
+ create_access_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -264,12 +257,12 @@ predictive_analyzer = TokenPredictiveAnalyzer()
 # ENDPOINTS DE ANÁLISIS PREDICTIVO
 # ============================================
 
-@router.post("/analyze-token")
+router.post("/analyze-token")
 async def analyze_token_predictive(
     token_data: Dict[str, str],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔮 Análisis predictivo completo de un token
     """
@@ -296,11 +289,11 @@ async def analyze_token_predictive(
             "error": str(e)
         }
 
-@router.get("/predict-system-failures")
+router.get("/predict-system-failures")
 async def predict_system_failures_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     🔮 Predicción de fallas del sistema
     """
@@ -321,12 +314,12 @@ async def predict_system_failures_endpoint(
             "error": str(e)
         }
 
-@router.get("/user-patterns/{user_id}")
+router.get("/user-patterns/{user_id}")
 async def analyze_user_patterns(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+:
     """
     👤 Análisis de patrones de uso de un usuario específico
     """
@@ -367,7 +360,7 @@ async def analyze_user_patterns(
             "error": str(e)
         }
 
-@router.get("/token-health-check")
+router.get("/token-health-check")
 async def token_health_check():
     """
     🏥 Verificación de salud de tokens en el sistema
