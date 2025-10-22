@@ -34,7 +34,6 @@ from app.services.validators_service import (
 )
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter()
 
 # ============================================
@@ -110,7 +109,7 @@ async def cargar_archivo_excel(
         # Validar tipo de archivo
         if not archivo.filename.endswith(('.xlsx', '.xls')):
             raise HTTPException(
-                status_code=400,
+                status_code=400, 
                 detail="Solo se permiten archivos Excel (.xlsx, .xls)"
             )
 
@@ -178,7 +177,7 @@ async def _analizar_archivo_clientes(
         # MAPEO DE COLUMNAS EXCEL → SISTEMA
         # ============================================
         mapeo_columnas = {
-            'CEDULA IDENTIDAD': 'cedula',
+            'CEDULA IDENTIDAD': 'cedula', 
             'CEDULA IDENT': 'cedula',
             'CEDULA': 'cedula',
             'NOMBRE': 'nombre',
@@ -230,7 +229,7 @@ async def _analizar_archivo_clientes(
         errores_criticos = 0
         errores_advertencia = 0
         datos_vacios = 0
-
+        
         for index, row in df.iterrows():
             fila_numero = index + 2  # +2 porque Excel empieza en 1 y tiene header
             errores_registro = []
@@ -242,7 +241,7 @@ async def _analizar_archivo_clientes(
             nombre = str(row.get('nombre', '')).strip()
             apellido = str(row.get('apellido', '')).strip() if 'apellido' in row else ''
             movil = str(row.get('movil', '')).strip()
-            email = str(row.get('email', '')).strip()
+                email = str(row.get('email', '')).strip()
             direccion = str(row.get('direccion', '')).strip()
             modelo_vehiculo = str(row.get('modelo_vehiculo', '')).strip()
             concesionario = str(row.get('concesionario', '')).strip()
@@ -690,11 +689,11 @@ async def _analizar_archivo_pagos(
         }
 
         df = df.rename(columns=mapeo_columnas)
-
+        
         # Validar columnas requeridas
         columnas_requeridas = ['cedula', 'fecha_pago', 'monto_pagado']
         columnas_faltantes = [col for col in columnas_requeridas if col not in df.columns]
-
+        
         if columnas_faltantes:
             raise HTTPException(
                 status_code=400,
@@ -708,7 +707,7 @@ async def _analizar_archivo_pagos(
         errores_criticos = 0
         errores_advertencia = 0
         datos_vacios = 0
-
+        
         for index, row in df.iterrows():
             fila_numero = index + 2
             errores_registro = []
@@ -723,12 +722,12 @@ async def _analizar_archivo_pagos(
             # ============================================
             # VALIDACIÓN: ARTICULACIÓN CON CLIENTE
             # ============================================
-
-            # Buscar cliente por cédula
+                
+                # Buscar cliente por cédula
             cliente = None
             if cedula and cedula.upper() != 'ERROR':
                 cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
-
+                
                 if not cliente:
                     errores_registro.append(ErrorCargaMasiva(
                         fila=fila_numero,
@@ -886,7 +885,7 @@ async def _analizar_archivo_pagos(
             fecha_carga=datetime.utcnow(),
             usuario_id=usuario_id
         )
-
+        
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -923,7 +922,7 @@ async def corregir_registro_en_linea(
                 resultado = ValidadorCedula.validar_y_formatear_cedula(valor, "VENEZUELA")
                 if not resultado.get("valido"):
                     errores_validacion.append(f"Cédula: {resultado.get('mensaje')}")
-                else:
+        else:
                     datos_corregidos[campo] = resultado.get("valor_formateado")
 
             elif campo == 'movil':
@@ -1085,8 +1084,8 @@ async def guardar_registros_corregidos(
         db.add(auditoria)
         db.commit()
 
-        return {
-            "success": True,
+    return {
+        "success": True,
             "mensaje": f"✅ {registros_guardados} registros guardados exitosamente",
             "registros_guardados": registros_guardados,
             "errores": errores_guardado
@@ -1152,7 +1151,7 @@ async def _guardar_cliente_desde_carga(
         # CREAR CLIENTE CON FOREIGNKEYS
         # ============================================
 
-        cliente_data = {
+                cliente_data = {
             "cedula": datos['cedula'],
             "nombres": datos['nombre'],
             "apellidos": datos.get('apellido', ''),
@@ -1178,9 +1177,9 @@ async def _guardar_cliente_desde_carga(
             "fecha_entrega": datetime.strptime(datos['fecha_entrega'], '%Y-%m-%d').date() if datos.get('fecha_entrega') else None,
 
             # Estado
-            "estado": "ACTIVO",
-            "activo": True,
-            "fecha_registro": datetime.utcnow(),
+                    "estado": "ACTIVO",
+                    "activo": True,
+                    "fecha_registro": datetime.utcnow(),
             "usuario_registro": f"CARGA_MASIVA_USER_{usuario_id}"
         }
 
@@ -1238,7 +1237,7 @@ async def _guardar_pago_desde_carga(
 
         cliente = db.query(Cliente).filter(Cliente.cedula == datos['cedula']).first()
 
-        if not cliente:
+            if not cliente:
             raise Exception(f"Cliente con cédula {datos['cedula']} no existe")
 
         # Verificar que el cliente tenga préstamo activo
@@ -1252,14 +1251,14 @@ async def _guardar_pago_desde_carga(
         # CREAR PAGO
         # ============================================
 
-        pago_data = {
+            pago_data = {
             "prestamo_id": prestamo.id,
             "monto": Decimal(str(datos['monto_pagado'])),
             "fecha_pago": datetime.strptime(datos['fecha_pago'], '%Y-%m-%d').date() if isinstance(datos['fecha_pago'], str) else datos['fecha_pago'],
             "numero_cuota": int(datos.get('numero_cuota', 1)) if datos.get('numero_cuota') else None,
             "referencia": datos.get('documento_pago', ''),
             "metodo_pago": datos.get('metodo_pago', 'TRANSFERENCIA').upper(),
-            "estado": "CONFIRMADO",
+                "estado": "CONFIRMADO",
             "registrado_por": usuario_id,
             "fecha_registro": datetime.utcnow()
         }
@@ -1385,7 +1384,7 @@ async def descargar_template_excel(
                 "Content-Disposition": f"attachment; filename={nombre_archivo}"
             }
         )
-
+            
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -1441,8 +1440,8 @@ async def obtener_opciones_configuracion(
             "modelos_vehiculos": [{"id": m.id, "modelo": m.modelo} for m in modelos],
             "modalidades_pago": modalidades_pago
         }
-
-    except Exception as e:
+                        
+            except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Error obteniendo opciones: {str(e)}"
@@ -1472,7 +1471,7 @@ async def dashboard_carga_masiva(
             Auditoria.usuario_id == current_user.id,
             Auditoria.tabla == "CargaMasiva"
         ).order_by(Auditoria.fecha.desc()).limit(10).all()
-
+        
         return {
             "titulo": "📊 Dashboard de Carga Masiva",
             "usuario": f"{current_user.nombre} {current_user.apellido}".strip(),
@@ -1504,7 +1503,7 @@ async def dashboard_carga_masiva(
                 }
             ]
         }
-
+        
     except Exception as e:
         raise HTTPException(
             status_code=500,
