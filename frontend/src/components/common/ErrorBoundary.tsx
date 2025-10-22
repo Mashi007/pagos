@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react'
+import React, { Component, ErrorInfo, ReactNode, FC } from 'react'
 import { motion } from 'framer-motion'
 
 interface Props {
@@ -185,7 +185,7 @@ export const useErrorHandler = () => {
 /**
  * Componente wrapper para páginas con ErrorBoundary
  */
-export const PageErrorBoundary: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const PageErrorBoundary: FC<{ children: ReactNode }> = ({ children }) => {
   return (
     <ErrorBoundary
       onError={(error, errorInfo) => {

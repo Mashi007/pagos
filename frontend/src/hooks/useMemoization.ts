@@ -1,4 +1,4 @@
-import React, { memo, useMemo, useCallback } from 'react'
+import React, { memo, useMemo, useCallback, DependencyList } from 'react'
 
 /**
  * Hook personalizado para memoización de funciones
@@ -6,7 +6,7 @@ import React, { memo, useMemo, useCallback } from 'react'
  */
 export const useStableCallback = <T extends (...args: any[]) => any>(
   callback: T,
-  deps: React.DependencyList
+  deps: DependencyList
 ): T => {
   return useCallback(callback, deps)
 }
@@ -17,7 +17,7 @@ export const useStableCallback = <T extends (...args: any[]) => any>(
  */
 export const useStableMemo = <T>(
   factory: () => T,
-  deps: React.DependencyList
+  deps: DependencyList
 ): T => {
   return useMemo(factory, deps)
 }
@@ -50,7 +50,7 @@ export const withMemo = <P extends object>(
  */
 export const useStableObject = <T extends object>(
   factory: () => T,
-  deps: React.DependencyList
+  deps: DependencyList
 ): T => {
   return useMemo(factory, deps)
 }
@@ -61,7 +61,7 @@ export const useStableObject = <T extends object>(
  */
 export const useStableArray = <T>(
   factory: () => T[],
-  deps: React.DependencyList
+  deps: DependencyList
 ): T[] => {
   return useMemo(factory, deps)
 }
@@ -128,7 +128,7 @@ MemoizedButton.displayName = 'MemoizedButton'
 export const useFilteredData = <T>(
   data: T[],
   filterFn: (item: T) => boolean,
-  deps: React.DependencyList
+  deps: DependencyList
 ): T[] => {
   return useStableMemo(() => {
     return data.filter(filterFn)
@@ -142,7 +142,7 @@ export const useFilteredData = <T>(
 export const useSortedData = <T>(
   data: T[],
   sortFn: (a: T, b: T) => number,
-  deps: React.DependencyList
+  deps: DependencyList
 ): T[] => {
   return useStableMemo(() => {
     return [...data].sort(sortFn)
@@ -157,7 +157,7 @@ export const useSearchData = <T>(
   data: T[],
   searchTerm: string,
   searchFn: (item: T, term: string) => boolean,
-  deps: React.DependencyList
+  deps: DependencyList
 ): T[] => {
   return useStableMemo(() => {
     if (!searchTerm.trim()) {
