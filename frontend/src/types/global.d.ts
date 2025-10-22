@@ -85,46 +85,13 @@ declare global {
   }
 }
 
-// Declaraciones para módulos externos
+// Declaraciones para módulos externos - Solo hooks adicionales
 declare module 'react' {
-  export function useState<T>(initialState: T | (() => T)): [T, (value: T | ((prev: T) => T)) => void]
-  export function useRef<T>(initialValue: T | null): { current: T | null }
-  export function useEffect(effect: () => void | (() => void), deps?: any[]): void
-  export function useCallback<T extends (...args: any[]) => any>(callback: T, deps: any[]): T
-  export function useMemo<T>(factory: () => T, deps: any[]): T
   export function useQuery<T = any>(queryKey: any[], queryFn: () => Promise<T>, options?: any): any
   export function useMutation<T = any>(mutationFn: (variables: any) => Promise<T>, options?: any): any
   export function map<T, U>(array: T[], callback: (item: T, index: number) => U): U[]
   export function filter<T>(array: T[], callback: (item: T, index: number) => boolean): T[]
   export function reduce<T, U>(array: T[], callback: (acc: U, item: T, index: number) => U, initial: U): U
-  
-  // Declaraciones adicionales para React
-  export type ReactNode = any
-  export type ComponentType<P = {}> = (props: P) => any
-  export type HTMLAttributes<T = Element> = any
-  export type InputHTMLAttributes<T = Element> = any
-  export type TextareaHTMLAttributes<T = Element> = any
-  export type ButtonHTMLAttributes<T = Element> = any
-  export type ThHTMLAttributes<T = Element> = any
-  export type TdHTMLAttributes<T = Element> = any
-  export type ElementRef<T> = any
-  export type ComponentPropsWithoutRef<T> = any
-  export type KeyboardEvent<T = Element> = any
-  
-  // Declaraciones para ErrorBoundary
-  export class Component<P = {}, S = {}> {
-    props: P
-    state: S
-    setState(state: Partial<S> | ((prevState: S) => Partial<S>)): void
-    forceUpdate(): void
-  }
-  export interface ErrorInfo {
-    componentStack: string
-  }
-  
-  export function forwardRef<T, P = {}>(component: (props: P, ref: React.Ref<T>) => any): any
-  export function useId(): string
-  export const StrictMode: any
 }
 
 declare module 'framer-motion' {
