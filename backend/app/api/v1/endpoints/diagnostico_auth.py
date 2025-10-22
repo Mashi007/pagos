@@ -318,8 +318,7 @@ async def aplicar_fix_autenticacion(
                 fixes_applied.append("admin_user_activated")
 
         # 2. Limpiar cache de requests fallidos
-        global failed_requests_cache
-        failed_requests_cache = []
+        failed_requests_cache.clear()
         fixes_applied.append("failed_requests_cache_cleared")
 
         # 3. Verificar configuración JWT
