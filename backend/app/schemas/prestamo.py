@@ -37,7 +37,7 @@ class PrestamoBase(BaseModel):
     modalidad: str = Field(default="MENSUAL", description="SEMANAL, QUINCENAL, MENSUAL")
     destino_credito: Optional[str] = None
     observaciones: Optional[str] = None
-    
+
     @field_validator(
         'monto_total', 
         'monto_financiado', 
@@ -68,7 +68,7 @@ class PrestamoUpdate(BaseModel):
     estado: Optional[str] = None
     categoria: Optional[str] = None
     observaciones: Optional[str] = None
-    
+
     @field_validator('monto_total', 'tasa_interes', mode='before')
     @classmethod
     def validate_decimal_places(cls, v):
@@ -94,9 +94,9 @@ class PrestamoResponse(PrestamoBase):
     cuotas_pendientes: Optional[int] = None
     creado_en: datetime
     actualizado_en: Optional[datetime] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     @field_validator(
         'saldo_pendiente',
         'saldo_capital', 

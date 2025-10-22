@@ -42,12 +42,12 @@ class SolicitudScoring(BaseModel):
     ocupacion: str = Field(..., description="Ocupación del cliente")
     antiguedad_laboral_meses: int = Field(..., ge=0, description="Antigüedad laboral en meses")
     tipo_empleo: str = Field(..., description="EMPLEADO_PUBLICO, EMPLEADO_PRIVADO, INDEPENDIENTE")
-    
+
     # Datos del préstamo
     monto_total: Decimal = Field(..., gt=0, description="Monto total del financiamiento")
     cuota_inicial: Decimal = Field(..., ge=0, description="Cuota inicial")
     plazo_meses: int = Field(..., ge=12, le=84, description="Plazo en meses")
-    
+
     # Garantías adicionales
     tiene_aval: bool = Field(False, description="Tiene aval o codeudor")
     tiene_seguro_vida: bool = Field(False, description="Tiene seguro de vida")
@@ -76,14 +76,14 @@ def calcular_scoring_crediticio(
 ):
     """
     🧠 SCORING CREDITICIO INTELIGENTE (0-1000 puntos)
-    
+
     Variables analizadas:
     • Ingresos vs cuota (30%)
     • Historial crediticio (25%)  
     • Estabilidad laboral (20%)
     • Garantías adicionales (15%)
     • Comportamiento de pago (10%)
-    
+
     Decisiones automáticas:
     • 800-1000: ✅ APROBACIÓN AUTOMÁTICA
     • 600-799:  ⚠️ REVISIÓN MANUAL
@@ -103,19 +103,19 @@ def calcular_scoring_crediticio(
             "tiene_seguro_vida": solicitud.tiene_seguro_vida,
             "tiene_propiedad": solicitud.tiene_propiedad
         }
-        
+
         prestamo_data = {
             "monto_total": float(solicitud.monto_total),
             "monto_financiado": float(solicitud.monto_total - solicitud.cuota_inicial),
             "plazo_meses": solicitud.plazo_meses,
             "cuota_mensual": float(solicitud.monto_total - solicitud.cuota_inicial) / solicitud.plazo_meses
         }
-        
+
         # Calcular scoring
         resultado = ScoringCrediticio.calcular_score_completo(
             cliente_data, prestamo_data, db
         )
-        
+
         # Registrar en auditoría
         from app.models.auditoria import Auditoria, TipoAccion
         auditoria = Auditoria.registrar(
@@ -127,9 +127,9 @@ def calcular_scoring_crediticio(
         )
         db.add(auditoria)
         db.commit()
-        
+
         return ResultadoScoring(**resultado)
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error calculando scoring: {str(e)}")
 
@@ -148,22 +148,22 @@ def calcular_scoring_masivo_cartera(
     # Todos los usuarios pueden ejecutar scoring masivo
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Usuario no autorizado")
-    
+
     try:
         # Obtener clientes
         query = db.query(Cliente)
         if solo_activos:
             query = query.filter(Cliente.activo == True)
-        
+
         clientes = query.limit(limite).all()
-        
+
         # Procesar en background
         background_tasks.add_task(
             _procesar_scoring_masivo,
             cliente_ids=[c.id for c in clientes],
             user_id=current_user.id
         )
-        
+
         return {
             "mensaje": "✅ Scoring masivo iniciado en background",
             "total_clientes": len(clientes),
@@ -172,7 +172,7 @@ def calcular_scoring_masivo_cartera(
             "estado": "PROCESANDO",
             "seguimiento": "GET /api/v1/ia/scoring-masivo/estado/{proceso_id}"
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error iniciando scoring masivo: {str(e)}")
 
@@ -190,13 +190,13 @@ def predecir_mora_cliente(
 ):
     """
     🔮 Predicción de mora usando Machine Learning
-    
+
     Analiza:
     • Comportamiento histórico de pagos
     • Patrones estacionales
     • Variables demográficas
     • Situación financiera actual
-    
+
     Retorna:
     • Probabilidad de mora (0-100%)
     • Clasificación de riesgo
@@ -206,10 +206,10 @@ def predecir_mora_cliente(
         resultado = PrediccionMora.predecir_probabilidad_mora(
             cliente_id, horizonte_dias, db
         )
-        
+
         if "error" in resultado:
             raise HTTPException(status_code=404, detail=resultado["error"])
-        
+
         return {
             "prediccion": resultado,
             "interpretacion": {
@@ -219,7 +219,7 @@ def predecir_mora_cliente(
             },
             "fecha_prediccion": datetime.now().isoformat()
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -241,12 +241,12 @@ def listar_clientes_alto_riesgo(
             Cliente.activo == True,
             Cliente.estado_financiero == "AL_DIA"
         ).limit(limite * 2).all()  # Obtener más para filtrar
-        
+
         clientes_riesgo = []
-        
+
         for cliente in clientes_activos:
             prediccion = PrediccionMora.predecir_probabilidad_mora(cliente.id, 30, db)
-            
+
             if prediccion.get("probabilidad_mora", 0) >= umbral_riesgo * 100:
                 clientes_riesgo.append({
                     "cliente": {
@@ -263,10 +263,10 @@ def listar_clientes_alto_riesgo(
                         "factores_principales": prediccion.get("recomendaciones", [])[:3]
                     }
                 })
-        
+
         # Ordenar por riesgo descendente
         clientes_riesgo.sort(key=lambda x: x["riesgo"]["probabilidad_mora"], reverse=True)
-        
+
         return {
             "titulo": "🚨 Clientes en Alto Riesgo de Mora",
             "fecha_analisis": datetime.now().isoformat(),
@@ -287,7 +287,7 @@ def listar_clientes_alto_riesgo(
                 "Verificación de situación laboral"
             ]
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listando clientes de riesgo: {str(e)}")
 
@@ -309,12 +309,12 @@ def obtener_recomendaciones_cobranza(
         recomendaciones = SistemaRecomendaciones.recomendar_estrategia_cobranza(
             cliente_id, db
         )
-        
+
         if "error" in recomendaciones:
             raise HTTPException(status_code=404, detail=recomendaciones["error"])
-        
+
         return recomendaciones
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -339,18 +339,18 @@ def optimizar_condiciones_prestamo(
             "cedula": cedula,
             "ingresos_mensuales": float(ingresos_mensuales)
         }
-        
+
         prestamo_data = {
             "monto_total": float(monto_total),
             "monto_financiado": float(monto_total - cuota_inicial),
             "plazo_meses": plazo_solicitado,
             "cuota_inicial": float(cuota_inicial)
         }
-        
+
         condiciones_optimizadas = OptimizadorTasas.optimizar_condiciones_prestamo(
             cliente_data, prestamo_data, db
         )
-        
+
         return {
             "cliente_cedula": cedula,
             "condiciones_solicitadas": {
@@ -367,7 +367,7 @@ def optimizar_condiciones_prestamo(
                 "Menor probabilidad de mora"
             ]
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error optimizando condiciones: {str(e)}")
 
@@ -391,10 +391,10 @@ def generar_mensaje_chatbot(
         mensaje = ChatbotCobranza.generar_mensaje_personalizado(
             cliente_id, tipo_mensaje, db
         )
-        
+
         if "error" in mensaje:
             raise HTTPException(status_code=404, detail=mensaje["error"])
-        
+
         return {
             "mensaje_generado": mensaje,
             "personalizacion": {
@@ -409,7 +409,7 @@ def generar_mensaje_chatbot(
                 "satisfaccion_cliente": "Alta"
             }
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -432,12 +432,12 @@ def analisis_predictivo_cartera(
     # Solo roles gerenciales pueden ver análisis predictivo
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Sin permisos para análisis predictivo")
-    
+
     try:
         analisis = AnalisisPredictivoCartera.analizar_tendencias_cartera(
             horizonte_meses, db
         )
-        
+
         return {
             "titulo": "📈 ANÁLISIS PREDICTIVO DE CARTERA",
             "analisis": analisis,
@@ -447,7 +447,7 @@ def analisis_predictivo_cartera(
                 "alertas_criticas": _identificar_alertas_criticas(analisis)
             }
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en análisis predictivo: {str(e)}")
 
@@ -467,10 +467,10 @@ def detectar_anomalias_sistema(
     try:
         # Detectar patrones anómalos
         patrones = DetectorPatrones.detectar_anomalias_cartera(db)
-        
+
         # Generar alertas inteligentes
         alertas = AlertasInteligentes.generar_alertas_predictivas(db)
-        
+
         return {
             "titulo": "🔍 DETECCIÓN DE ANOMALÍAS Y PATRONES",
             "fecha_analisis": datetime.now().isoformat(),
@@ -483,7 +483,7 @@ def detectar_anomalias_sistema(
                 "requiere_atencion": alertas.get("nivel_sistema") == "CRITICO"
             }
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error detectando anomalías: {str(e)}")
 
@@ -503,7 +503,7 @@ def dashboard_inteligencia_artificial(
     try:
         # Métricas de IA en tiempo real
         total_clientes = db.query(Cliente).filter(Cliente.activo == True).count()
-        
+
         # Simular métricas de ML (en producción serían reales)
         metricas_ia = {
             "scoring_procesados_hoy": 25,
@@ -513,7 +513,7 @@ def dashboard_inteligencia_artificial(
             "precision_modelo": 87.5,
             "clientes_alto_riesgo": 12
         }
-        
+
         # Estado de los modelos
         estado_modelos = {
             "scoring_crediticio": {
@@ -535,11 +535,11 @@ def dashboard_inteligencia_artificial(
                 "recomendaciones_hoy": metricas_ia["recomendaciones_activas"]
             }
         }
-        
+
         return {
             "titulo": "🤖 DASHBOARD DE INTELIGENCIA ARTIFICIAL",
             "fecha_actualizacion": datetime.now().isoformat(),
-            
+
             "metricas_principales": {
                 "scoring_procesados": {
                     "valor": metricas_ia["scoring_procesados_hoy"],
@@ -566,22 +566,22 @@ def dashboard_inteligencia_artificial(
                     "descripcion": "Precisión promedio de modelos"
                 }
             },
-            
+
             "estado_modelos": estado_modelos,
-            
+
             "alertas_ia": [
                 f"🚨 {metricas_ia['clientes_alto_riesgo']} clientes identificados en alto riesgo",
                 f"⚠️ {metricas_ia['alertas_criticas']} alertas críticas requieren atención",
                 f"💡 {metricas_ia['recomendaciones_activas']} recomendaciones activas"
             ],
-            
+
             "acciones_rapidas": {
                 "ver_clientes_riesgo": "/api/v1/ia/clientes-riesgo",
                 "generar_scoring": "/api/v1/ia/scoring-masivo",
                 "detectar_anomalias": "/api/v1/ia/detectar-anomalias",
                 "analisis_predictivo": "/api/v1/ia/analisis-predictivo"
             },
-            
+
             "rendimiento_ia": {
                 "modelos_activos": len(estado_modelos),
                 "predicciones_diarias": 200,
@@ -589,7 +589,7 @@ def dashboard_inteligencia_artificial(
                 "disponibilidad": "99.9%"
             }
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en dashboard IA: {str(e)}")
 
@@ -603,7 +603,7 @@ async def _procesar_scoring_masivo(cliente_ids: List[int], user_id: int):
     try:
         from app.db.session import SessionLocal
         db = SessionLocal()
-        
+
         resultados = []
         for cliente_id in cliente_ids:
             cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
@@ -611,22 +611,22 @@ async def _procesar_scoring_masivo(cliente_ids: List[int], user_id: int):
                 # Simular datos para scoring
                 cliente_data = {"cedula": cliente.cedula}
                 prestamo_data = {"monto_total": float(cliente.total_financiamiento or 0)}
-                
+
                 scoring = ScoringCrediticio.calcular_score_completo(
                     cliente_data, prestamo_data, db
                 )
-                
+
                 resultados.append({
                     "cliente_id": cliente_id,
                     "score": scoring["score_final"],
                     "clasificacion": scoring["clasificacion"]
                 })
-        
+
         # Guardar resultados (en producción se guardarían en BD)
         logger.info(f"Scoring masivo completado: {len(resultados)} clientes procesados")
-        
+
         db.close()
-        
+
     except Exception as e:
         logger.error(f"Error en scoring masivo: {e}")
 
@@ -646,7 +646,7 @@ def _interpretar_prediccion_mora(probabilidad: float) -> str:
 def _interpretar_tendencia(analisis: Dict) -> str:
     """Interpretar tendencia general de la cartera"""
     tendencia = analisis.get("tendencia_mora", {}).get("tendencia", "ESTABLE")
-    
+
     if tendencia == "CRECIENTE":
         return "⚠️ Deterioro detectado - Revisar políticas"
     elif tendencia == "DECRECIENTE":
@@ -658,30 +658,30 @@ def _interpretar_tendencia(analisis: Dict) -> str:
 def _generar_acciones_predictivas(analisis: Dict) -> List[str]:
     """Generar acciones basadas en análisis predictivo"""
     acciones = []
-    
+
     # Basado en proyección de flujo
     flujo = analisis.get("proyeccion_flujo_caja", {})
     if flujo.get("total_proyectado", 0) < 1000000:  # Menos de 1M proyectado
         acciones.append("🎯 Intensificar esfuerzos comerciales")
-    
+
     # Basado en tendencia de mora
     tendencia = analisis.get("tendencia_mora", {})
     if tendencia.get("tendencia") == "CRECIENTE":
         acciones.append("🔍 Revisar proceso de aprobación")
         acciones.append("📞 Intensificar seguimiento preventivo")
-    
+
     return acciones
 
 
 def _identificar_alertas_criticas(analisis: Dict) -> List[str]:
     """Identificar alertas críticas del análisis"""
     alertas = []
-    
+
     # Revisar proyección de mora
     proyeccion_mora = analisis.get("tendencia_mora", {}).get("proyeccion_3_meses", 0)
     if proyeccion_mora > 15:  # >15% de mora proyectada
         alertas.append(f"🚨 Mora proyectada: {proyeccion_mora:.1f}% - Acción inmediata requerida")
-    
+
     return alertas
 
 
@@ -699,7 +699,7 @@ def verificar_sistema_ia(
     return {
         "titulo": "🤖 SISTEMA DE INTELIGENCIA ARTIFICIAL",
         "fecha_verificacion": datetime.now().isoformat(),
-        
+
         "modulos_implementados": {
             "scoring_crediticio": {
                 "estado": "✅ IMPLEMENTADO",
@@ -738,7 +738,7 @@ def verificar_sistema_ia(
                 "endpoint": "/api/v1/ia/detectar-anomalias"
             }
         },
-        
+
         "capacidades_ia": {
             "scoring_automatico": "Evaluación crediticia en 0.3 segundos",
             "prediccion_mora": "Predicción hasta 365 días a futuro",
@@ -747,7 +747,7 @@ def verificar_sistema_ia(
             "deteccion_patrones": "Identificación de anomalías en tiempo real",
             "chatbot": "Mensajes personalizados por perfil de cliente"
         },
-        
+
         "beneficios_comprobados": [
             "📉 Reducción de mora: 20-30%",
             "📈 Mejora en aprobaciones: 15-25%", 
@@ -756,7 +756,7 @@ def verificar_sistema_ia(
             "🎯 Precisión en predicciones: 85-95%",
             "🤖 Eficiencia operacional: 60% mejora"
         ],
-        
+
         "endpoints_principales": {
             "dashboard": "/api/v1/ia/dashboard-ia",
             "scoring": "/api/v1/ia/scoring-crediticio",
@@ -765,7 +765,7 @@ def verificar_sistema_ia(
             "anomalias": "/api/v1/ia/detectar-anomalias",
             "chatbot": "/api/v1/ia/chatbot/generar-mensaje"
         },
-        
+
         "impacto_negocio": {
             "reduccion_riesgo": "ALTO",
             "automatizacion_procesos": "ALTO", 

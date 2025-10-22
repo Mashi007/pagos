@@ -38,38 +38,38 @@ def verificar_rol_administracion(
     """
     try:
         # Buscar todos los administradores
-        admins = db.query(User).filter(User.is_admin == True).all()  # Cambio clave: rol → is_admin
+        admins = db.query(User).filter(User.is_admin).all()  # Cambio clave: rol → is_admin
         admins_activos = db.query(User).filter(
-            User.is_admin == True,  # Cambio clave: rol → is_admin
-            User.is_active == True
+            User.is_admin,  # Cambio clave: rol → is_admin
+            User.is_active
         ).all()
-        
+
         # Estadísticas de usuarios por tipo
         tipos_stats = {
             "ADMIN": {
-                "total": db.query(User).filter(User.is_admin == True).count(),
-                "activos": db.query(User).filter(User.is_admin == True, User.is_active == True).count()
+                "total": db.query(User).filter(User.is_admin).count(),
+                "activos": db.query(User).filter(User.is_admin, User.is_active).count()
             },
             "USER": {
-                "total": db.query(User).filter(User.is_admin == False).count(),
-                "activos": db.query(User).filter(User.is_admin == False, User.is_active == True).count()
+                "total": db.query(User).filter(~User.is_admin).count(),
+                "activos": db.query(User).filter(~User.is_admin, User.is_active).count()
             }
         }
-        
+
         # Estado del sistema
         sistema_funcional = len(admins_activos) > 0
-        
+
         return {
             "titulo": "🔍 VERIFICACIÓN DEL ROL DE ADMINISTRACIÓN",
             "fecha_verificacion": datetime.now().isoformat(),
-            
+
             "estado_administracion": {
                 "activo": sistema_funcional,
                 "total_admins": len(admins),
                 "admins_activos": len(admins_activos),
                 "estado": "✅ FUNCIONAL" if sistema_funcional else "❌ SIN ADMINISTRADOR ACTIVO"
             },
-            
+
             "administradores_registrados": [
                 {
                     "id": admin.id,
@@ -82,7 +82,7 @@ def verificar_rol_administracion(
                 }
                 for admin in admins
             ],
-            
+
             "permisos_administrador": {
                 "gestion_usuarios": "✅ Crear, editar, eliminar usuarios",
                 "gestion_clientes": "✅ Acceso completo a todos los clientes",
@@ -94,13 +94,13 @@ def verificar_rol_administracion(
                 "auditoria": "✅ Ver logs completos del sistema",
                 "dashboard": "✅ Dashboard administrativo completo"
             },
-            
+
             "estadisticas_usuarios": {
                 "por_tipo": tipos_stats,
                 "total_usuarios": sum(stats["total"] for stats in tipos_stats.values()),
                 "usuarios_activos": sum(stats["activos"] for stats in tipos_stats.values())
             },
-            
+
             "recomendaciones": [
                 "✅ Sistema funcional" if sistema_funcional else "❌ Crear usuario administrador",
                 "🔐 Cambiar contraseñas por defecto" if any(admin.email == "itmaster@rapicreditca.com" for admin in admins) else None,
@@ -108,14 +108,14 @@ def verificar_rol_administracion(
                 "📊 Revisar dashboard administrativo regularmente",
                 "🔔 Configurar notificaciones automáticas"
             ],
-            
+
             "acciones_disponibles": {
                 "crear_admin": "python backend/scripts/create_admin.py",
                 "modo_interactivo": "python backend/scripts/create_admin.py --interactive",
                 "listar_admins": "python backend/scripts/create_admin.py --list",
                 "verificar_sistema": "python backend/scripts/create_admin.py --verify"
             },
-            
+
             "urls_sistema": {
                 "aplicacion": "https://pagos-f2qf.onrender.com",
                 "documentacion": "https://pagos-f2qf.onrender.com/docs",
@@ -124,7 +124,7 @@ def verificar_rol_administracion(
                 "verificar_admin": "GET /api/v1/users/verificar-admin"
             }
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error verificando administración: {str(e)}")
 
@@ -137,7 +137,7 @@ def create_user(
 ):
     """
     Crear un nuevo usuario (solo ADMIN)
-    
+
     - **email**: Email único del usuario
     - **nombre**: Nombre del usuario
     - **apellido**: Apellido del usuario
@@ -153,7 +153,7 @@ def create_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El email ya está registrado"
         )
-    
+
     # Validar fortaleza de contraseña
     is_valid, message = validate_password_strength(user_data.password)
     if not is_valid:
@@ -161,7 +161,7 @@ def create_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=message
         )
-    
+
     # Crear usuario
     new_user = User(
         email=user_data.email,
@@ -173,11 +173,11 @@ def create_user(
         is_active=user_data.is_active,
         created_at=datetime.utcnow()
     )
-    
+
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    
+
     # Registrar auditoría
     try:
         registrar_creacion(
@@ -197,7 +197,7 @@ def create_user(
         )
     except Exception as e:
         logger.warning(f"Error registrando auditoría de creación de usuario: {e}")
-    
+
     return new_user
 
 
@@ -211,7 +211,7 @@ def test_users_simple(
     try:
         total_users = db.query(User).count()
         users = db.query(User).limit(5).all()
-        
+
         users_data = []
         for user in users:
             users_data.append({
@@ -223,7 +223,7 @@ def test_users_simple(
                 "is_active": user.is_active,
                 "created_at": user.created_at.isoformat() if user.created_at else None
             })
-        
+
         return {
             "success": True,
             "total_users": total_users,
@@ -249,7 +249,7 @@ def test_users_endpoint(
     try:
         total_users = db.query(User).count()
         users = db.query(User).limit(5).all()
-        
+
         users_data = []
         for user in users:
             users_data.append({
@@ -260,7 +260,7 @@ def test_users_endpoint(
                 "is_admin": user.is_admin,  # Cambio clave: rol → is_admin
                 "is_active": user.is_active
             })
-        
+
         return {
             "status": "success",
             "total_users": total_users,
@@ -271,7 +271,7 @@ def test_users_endpoint(
             },
             "users": users_data
         }
-        
+
     except Exception as e:
         return {
             "status": "error",
@@ -288,23 +288,23 @@ def list_users(
 ):
     """
     Listar usuarios con paginación (solo ADMIN)
-    
+
     - **page**: Número de página (default: 1)
     - **page_size**: Tamaño de página (default: 10, max: 100)
     - **is_active**: Filtrar por estado activo/inactivo
     """
     query = db.query(User)
-    
+
     # Filtros
     if is_active is not None:
         query = query.filter(User.is_active == is_active)
-    
+
     # Total
     total = query.count()
-    
+
     # Paginación
     users = query.offset(pagination.skip).limit(pagination.limit).all()
-    
+
     return UserListResponse(
         items=users,
         total=total,
@@ -323,13 +323,13 @@ def get_user(
     Obtener un usuario por ID (solo ADMIN)
     """
     user = db.query(User).filter(User.id == user_id).first()
-    
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Usuario no encontrado"
         )
-    
+
     return user
 
 
@@ -342,17 +342,17 @@ def update_user(
 ):
     """
     Actualizar un usuario (solo ADMIN)
-    
+
     Solo se actualizan los campos proporcionados
     """
     user = db.query(User).filter(User.id == user_id).first()
-    
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Usuario no encontrado"
         )
-    
+
     # Verificar email único si se está actualizando
     if user_data.email and user_data.email != user.email:
         existing = db.query(User).filter(User.email == user_data.email).first()
@@ -361,26 +361,26 @@ def update_user(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="El email ya está registrado"
             )
-    
+
     # Actualizar campos
     update_data = user_data.model_dump(exclude_unset=True)
-    
+
     # Manejar contraseña especial - solo actualizar si se proporciona un valor no vacío
     if 'password' in update_data:
         password_value = update_data.pop('password')
         if password_value and password_value.strip():
             # Solo actualizar contraseña si se proporciona un valor no vacío
             user.hashed_password = get_password_hash(password_value)
-    
+
     # Actualizar otros campos
     for field, value in update_data.items():
         setattr(user, field, value)
-    
+
     user.updated_at = datetime.utcnow()
-    
+
     db.commit()
     db.refresh(user)
-    
+
     return user
 
 
@@ -392,27 +392,27 @@ def delete_user(
 ):
     """
     Eliminar un usuario (HARD DELETE - borrado completo de BD)
-    
+
     Solo ADMIN puede eliminar usuarios permanentemente
     """
     user = db.query(User).filter(User.id == user_id).first()
-    
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Usuario no encontrado"
         )
-    
+
     # No permitir eliminar el propio usuario
     if user.id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No puedes desactivar tu propio usuario"
         )
-    
+
     # HARD DELETE - eliminar completamente de la base de datos
     user_email = user.email  # Guardar email para log
-    
+
     # Registrar auditoría antes de eliminar
     try:
         registrar_eliminacion(
@@ -432,10 +432,10 @@ def delete_user(
         )
     except Exception as e:
         logger.warning(f"Error registrando auditoría de eliminación de usuario: {e}")
-    
+
     db.delete(user)
     db.commit()
-    
+
     return {
         "message": f"Usuario {user_email} eliminado completamente de la base de datos"
     }
@@ -451,19 +451,19 @@ def activate_user(
     Reactivar un usuario desactivado (solo ADMIN)
     """
     user = db.query(User).filter(User.id == user_id).first()
-    
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Usuario no encontrado"
         )
-    
+
     user.is_active = True
     user.updated_at = datetime.utcnow()
-    
+
     db.commit()
     db.refresh(user)
-    
+
     return user
 
 
@@ -477,17 +477,17 @@ def deactivate_user(
     Desactivar un usuario (solo ADMIN)
     """
     user = db.query(User).filter(User.id == user_id).first()
-    
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Usuario no encontrado"
         )
-    
+
     user.is_active = False
     user.updated_at = datetime.utcnow()
-    
+
     db.commit()
     db.refresh(user)
-    
+
     return user

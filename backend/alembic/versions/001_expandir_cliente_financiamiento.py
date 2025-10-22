@@ -20,7 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Aplicar cambios a la base de datos."""
-    
+
     # Agregar nuevos campos al modelo Cliente
     op.add_column('clientes', sa.Column('modelo_vehiculo', sa.String(100), nullable=True))
     op.add_column('clientes', sa.Column('concesionario', sa.String(100), nullable=True))
@@ -32,7 +32,7 @@ def upgrade() -> None:
     op.add_column('clientes', sa.Column('asesor_id', sa.Integer(), nullable=True))
     op.add_column('clientes', sa.Column('dias_mora', sa.Integer(), server_default='0'))
     op.add_column('clientes', sa.Column('saldo_pendiente_total', sa.Numeric(12, 2), server_default='0.00'))
-    
+
     # Crear índices para mejorar performance de búsquedas
     op.create_index('idx_clientes_telefono', 'clientes', ['telefono'])
     op.create_index('idx_clientes_email', 'clientes', ['email'])
@@ -42,7 +42,7 @@ def upgrade() -> None:
     op.create_index('idx_clientes_asesor_id', 'clientes', ['asesor_id'])
     op.create_index('idx_clientes_estado', 'clientes', ['estado'])
     op.create_index('idx_clientes_dias_mora', 'clientes', ['dias_mora'])
-    
+
     # Crear foreign key para asesor
     op.create_foreign_key(
         'fk_clientes_asesor_id', 
@@ -56,10 +56,10 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Revertir cambios de la base de datos."""
-    
+
     # Eliminar foreign key
     op.drop_constraint('fk_clientes_asesor_id', 'clientes', type_='foreignkey')
-    
+
     # Eliminar índices
     op.drop_index('idx_clientes_dias_mora', 'clientes')
     op.drop_index('idx_clientes_estado', 'clientes')
@@ -69,7 +69,7 @@ def downgrade() -> None:
     op.drop_index('idx_clientes_modelo_vehiculo', 'clientes')
     op.drop_index('idx_clientes_email', 'clientes')
     op.drop_index('idx_clientes_telefono', 'clientes')
-    
+
     # Eliminar columnas
     op.drop_column('clientes', 'saldo_pendiente_total')
     op.drop_column('clientes', 'dias_mora')

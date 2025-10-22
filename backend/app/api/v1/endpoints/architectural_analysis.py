@@ -37,20 +37,20 @@ router = APIRouter()
 
 class ArchitecturalAnalysisSystem:
     """Sistema arquitectural para análisis de componentes específicos"""
-    
+
     def __init__(self):
         self.component_health = {}  # Salud de componentes
         self.component_metrics = defaultdict(list)  # Métricas por componente
         self.component_dependencies = {}  # Dependencias entre componentes
         self.failure_patterns = defaultdict(list)  # Patrones de fallo por componente
         self.lock = threading.Lock()
-        
+
         # Inicializar componentes del sistema
         self._initialize_system_components()
-        
+
         # Iniciar monitoreo arquitectural
         self._start_architectural_monitoring()
-    
+
     def _initialize_system_components(self):
         """Inicializar componentes del sistema"""
         self.system_components = {
@@ -91,7 +91,7 @@ class ArchitecturalAnalysisSystem:
                 'health_checks': ['cors_headers', 'response_format', 'error_propagation']
             }
         }
-    
+
     def _start_architectural_monitoring(self):
         """Iniciar monitoreo arquitectural"""
         def monitoring_loop():
@@ -102,11 +102,11 @@ class ArchitecturalAnalysisSystem:
                 except Exception as e:
                     logger.error(f"Error en monitoreo arquitectural: {e}")
                     time.sleep(60)
-        
+
         thread = threading.Thread(target=monitoring_loop, daemon=True)
         thread.start()
         logger.info("🏗️ Sistema arquitectural de análisis iniciado")
-    
+
     def _monitor_all_components(self):
         """Monitorear todos los componentes"""
         with self.lock:
@@ -114,7 +114,7 @@ class ArchitecturalAnalysisSystem:
                 try:
                     health_status = self._check_component_health(component_id, component_info)
                     self.component_health[component_id] = health_status
-                    
+
                     # Registrar métricas
                     self.component_metrics[component_id].append({
                         'timestamp': datetime.now(),
@@ -122,11 +122,11 @@ class ArchitecturalAnalysisSystem:
                         'status': health_status['status'],
                         'metrics': health_status['metrics']
                     })
-                    
+
                     # Limitar historial de métricas
                     if len(self.component_metrics[component_id]) > 100:
                         self.component_metrics[component_id] = self.component_metrics[component_id][-100:]
-                
+
                 except Exception as e:
                     logger.error(f"Error monitoreando componente {component_id}: {e}")
                     self.component_health[component_id] = {
@@ -134,13 +134,13 @@ class ArchitecturalAnalysisSystem:
                         'error': str(e),
                         'overall_health_score': 0
                     }
-    
+
     def _check_component_health(self, component_id: str, component_info: Dict[str, Any]) -> Dict[str, Any]:
         """Verificar salud de un componente específico"""
         health_checks = component_info.get('health_checks', [])
         health_results = {}
         overall_score = 0
-        
+
         for check in health_checks:
             try:
                 check_result = self._perform_health_check(component_id, check)
@@ -152,11 +152,11 @@ class ArchitecturalAnalysisSystem:
                     'error': str(e),
                     'score': 0
                 }
-        
+
         # Calcular score promedio
         if health_checks:
             overall_score = overall_score / len(health_checks)
-        
+
         # Determinar estado general
         if overall_score >= 0.9:
             status = 'excellent'
@@ -166,7 +166,7 @@ class ArchitecturalAnalysisSystem:
             status = 'degraded'
         else:
             status = 'poor'
-        
+
         return {
             'component_id': component_id,
             'component_name': component_info['name'],
@@ -176,7 +176,7 @@ class ArchitecturalAnalysisSystem:
             'timestamp': datetime.now(),
             'metrics': self._extract_component_metrics(component_id)
         }
-    
+
     def _perform_health_check(self, component_id: str, check_name: str) -> Dict[str, Any]:
         """Realizar verificación de salud específica"""
         if component_id == 'jwt_handler':
@@ -193,7 +193,7 @@ class ArchitecturalAnalysisSystem:
             return self._check_frontend_integration(check_name)
         else:
             return {'status': 'unknown', 'score': 0, 'error': 'Componente no reconocido'}
-    
+
     def _check_jwt_handler(self, check_name: str) -> Dict[str, Any]:
         """Verificar JWT Handler"""
         if check_name == 'token_creation':
@@ -204,7 +204,7 @@ class ArchitecturalAnalysisSystem:
                     additional_claims={'type': 'access', 'test': True}
                 )
                 creation_time = (time.time() - start_time) * 1000
-                
+
                 return {
                     'status': 'success',
                     'score': 1.0,
@@ -216,7 +216,7 @@ class ArchitecturalAnalysisSystem:
                 }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         elif check_name == 'token_validation':
             try:
                 test_token = create_access_token(
@@ -226,7 +226,7 @@ class ArchitecturalAnalysisSystem:
                 start_time = time.time()
                 payload = decode_token(test_token)
                 validation_time = (time.time() - start_time) * 1000
-                
+
                 return {
                     'status': 'success',
                     'score': 1.0,
@@ -238,7 +238,7 @@ class ArchitecturalAnalysisSystem:
                 }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         elif check_name == 'token_decoding':
             try:
                 # Test con token malformado
@@ -254,9 +254,9 @@ class ArchitecturalAnalysisSystem:
                     }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         return {'status': 'unknown', 'score': 0, 'error': 'Check no reconocido'}
-    
+
     def _check_database_layer(self, check_name: str) -> Dict[str, Any]:
         """Verificar Database Layer"""
         if check_name == 'connection_test':
@@ -269,14 +269,14 @@ class ArchitecturalAnalysisSystem:
                 }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         elif check_name == 'query_performance':
             try:
                 # Simular test de performance
                 start_time = time.time()
                 time.sleep(0.001)  # Simular query
                 query_time = (time.time() - start_time) * 1000
-                
+
                 return {
                     'status': 'success',
                     'score': 1.0 if query_time < 100 else 0.5,
@@ -287,7 +287,7 @@ class ArchitecturalAnalysisSystem:
                 }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         elif check_name == 'transaction_integrity':
             try:
                 # Simular verificación de integridad
@@ -301,9 +301,9 @@ class ArchitecturalAnalysisSystem:
                 }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         return {'status': 'unknown', 'score': 0, 'error': 'Check no reconocido'}
-    
+
     def _check_auth_middleware(self, check_name: str) -> Dict[str, Any]:
         """Verificar Authentication Middleware"""
         if check_name == 'token_extraction':
@@ -319,7 +319,7 @@ class ArchitecturalAnalysisSystem:
                 }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         elif check_name == 'user_validation':
             try:
                 # Simular validación de usuario
@@ -333,7 +333,7 @@ class ArchitecturalAnalysisSystem:
                 }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         elif check_name == 'permission_check':
             try:
                 # Simular verificación de permisos
@@ -347,9 +347,9 @@ class ArchitecturalAnalysisSystem:
                 }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         return {'status': 'unknown', 'score': 0, 'error': 'Check no reconocido'}
-    
+
     def _check_user_model(self, check_name: str) -> Dict[str, Any]:
         """Verificar User Model"""
         if check_name == 'user_lookup':
@@ -365,7 +365,7 @@ class ArchitecturalAnalysisSystem:
                 }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         elif check_name == 'user_validation':
             try:
                 # Simular validación de usuario
@@ -379,7 +379,7 @@ class ArchitecturalAnalysisSystem:
                 }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         elif check_name == 'permission_verification':
             try:
                 # Simular verificación de permisos
@@ -393,9 +393,9 @@ class ArchitecturalAnalysisSystem:
                 }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         return {'status': 'unknown', 'score': 0, 'error': 'Check no reconocido'}
-    
+
     def _check_api_endpoints(self, check_name: str) -> Dict[str, Any]:
         """Verificar API Endpoints"""
         if check_name == 'endpoint_availability':
@@ -411,14 +411,14 @@ class ArchitecturalAnalysisSystem:
                 }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         elif check_name == 'response_time':
             try:
                 # Simular test de tiempo de respuesta
                 start_time = time.time()
                 time.sleep(0.01)  # Simular procesamiento
                 response_time = (time.time() - start_time) * 1000
-                
+
                 return {
                     'status': 'success',
                     'score': 1.0 if response_time < 1000 else 0.5,
@@ -429,7 +429,7 @@ class ArchitecturalAnalysisSystem:
                 }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         elif check_name == 'error_handling':
             try:
                 # Simular verificación de manejo de errores
@@ -443,9 +443,9 @@ class ArchitecturalAnalysisSystem:
                 }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         return {'status': 'unknown', 'score': 0, 'error': 'Check no reconocido'}
-    
+
     def _check_frontend_integration(self, check_name: str) -> Dict[str, Any]:
         """Verificar Frontend Integration"""
         if check_name == 'cors_headers':
@@ -461,7 +461,7 @@ class ArchitecturalAnalysisSystem:
                 }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         elif check_name == 'response_format':
             try:
                 # Simular verificación de formato de respuesta
@@ -475,7 +475,7 @@ class ArchitecturalAnalysisSystem:
                 }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         elif check_name == 'error_propagation':
             try:
                 # Simular verificación de propagación de errores
@@ -489,9 +489,9 @@ class ArchitecturalAnalysisSystem:
                 }
             except Exception as e:
                 return {'status': 'error', 'score': 0, 'error': str(e)}
-        
+
         return {'status': 'unknown', 'score': 0, 'error': 'Check no reconocido'}
-    
+
     def _extract_component_metrics(self, component_id: str) -> Dict[str, Any]:
         """Extraer métricas específicas del componente"""
         metrics = {
@@ -500,15 +500,15 @@ class ArchitecturalAnalysisSystem:
             'disk_usage': psutil.disk_usage('/').percent if PSUTIL_AVAILABLE else 0,
             'timestamp': datetime.now().isoformat()
         }
-        
+
         # Métricas específicas por componente
         if component_id == 'database_layer':
             metrics['db_connections'] = 'simulated_metric'
         elif component_id == 'jwt_handler':
             metrics['token_operations'] = 'simulated_metric'
-        
+
         return metrics
-    
+
     def analyze_component_dependencies(self) -> Dict[str, Any]:
         """Analizar dependencias entre componentes"""
         dependency_analysis = {
@@ -517,16 +517,16 @@ class ArchitecturalAnalysisSystem:
             'bottlenecks': [],
             'recommendations': []
         }
-        
+
         # Mapear dependencias
         for component_id, component_info in self.system_components.items():
             dependencies = component_info.get('dependencies', [])
             dependency_analysis['dependency_map'][component_id] = dependencies
-        
+
         # Identificar rutas críticas
         critical_components = ['jwt_handler', 'database_layer', 'authentication_middleware']
         dependency_analysis['critical_paths'] = critical_components
-        
+
         # Identificar cuellos de botella
         for component_id in self.component_health:
             health_score = self.component_health[component_id].get('overall_health_score', 0)
@@ -536,30 +536,30 @@ class ArchitecturalAnalysisSystem:
                     'health_score': health_score,
                     'impact': 'high' if component_id in critical_components else 'medium'
                 })
-        
+
         # Generar recomendaciones
         if dependency_analysis['bottlenecks']:
             dependency_analysis['recommendations'].append("🔧 Revisar componentes con baja salud")
-        
+
         if not dependency_analysis['bottlenecks']:
             dependency_analysis['recommendations'].append("✅ Arquitectura funcionando correctamente")
-        
+
         return dependency_analysis
-    
+
     def get_architectural_summary(self) -> Dict[str, Any]:
         """Obtener resumen arquitectural general"""
         with self.lock:
             current_time = datetime.now()
-            
+
             # Estadísticas generales
             total_components = len(self.system_components)
             healthy_components = len([c for c in self.component_health.values() if c.get('status') in ['excellent', 'good']])
             degraded_components = len([c for c in self.component_health.values() if c.get('status') == 'degraded'])
             poor_components = len([c for c in self.component_health.values() if c.get('status') == 'poor'])
-            
+
             # Análisis de dependencias
             dependency_analysis = self.analyze_component_dependencies()
-            
+
             return {
                 'timestamp': current_time.isoformat(),
                 'summary': {
@@ -598,15 +598,15 @@ async def get_component_health(
         with architectural_system.lock:
             if component_id not in architectural_system.component_health:
                 raise HTTPException(status_code=404, detail="Componente no encontrado")
-            
+
             health_data = architectural_system.component_health[component_id]
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
             "component_health": health_data
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -628,13 +628,13 @@ async def get_all_components_health(
     try:
         with architectural_system.lock:
             all_health = architectural_system.component_health.copy()
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
             "components_health": all_health
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo salud de componentes: {e}")
         return {
@@ -653,13 +653,13 @@ async def get_component_dependencies(
     """
     try:
         analysis = architectural_system.analyze_component_dependencies()
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
             "dependency_analysis": analysis
         }
-        
+
     except Exception as e:
         logger.error(f"Error analizando dependencias: {e}")
         return {
@@ -678,13 +678,13 @@ async def get_architectural_summary_endpoint(
     """
     try:
         summary = architectural_system.get_architectural_summary()
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
             "summary": summary
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo resumen arquitectural: {e}")
         return {
@@ -706,17 +706,17 @@ async def force_component_health_check(
         with architectural_system.lock:
             if component_id not in architectural_system.system_components:
                 raise HTTPException(status_code=404, detail="Componente no encontrado")
-            
+
             component_info = architectural_system.system_components[component_id]
             health_status = architectural_system._check_component_health(component_id, component_info)
             architectural_system.component_health[component_id] = health_status
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
             "component_health": health_status
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:

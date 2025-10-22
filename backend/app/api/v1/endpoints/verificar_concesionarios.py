@@ -22,11 +22,11 @@ def verificar_datos_concesionarios(
     """
     try:
         logger.info(f"🔍 Verificando datos de concesionarios - Usuario: {current_user.email}")
-        
+
         # 1. Contar total de concesionarios
         total_result = db.execute(text("SELECT COUNT(*) as total FROM concesionarios"))
         total = total_result.fetchone()[0]
-        
+
         # 2. Verificar estructura de la tabla
         columns_result = db.execute(text("""
             SELECT column_name, data_type, is_nullable 
@@ -35,7 +35,7 @@ def verificar_datos_concesionarios(
             ORDER BY ordinal_position
         """))
         columns = columns_result.fetchall()
-        
+
         # 3. Mostrar algunos registros de ejemplo
         registros_result = db.execute(text("""
             SELECT id, nombre, activo, created_at, updated_at 
@@ -44,7 +44,7 @@ def verificar_datos_concesionarios(
             LIMIT 10
         """))
         registros = registros_result.fetchall()
-        
+
         # 4. Verificar si hay datos genéricos vs reales
         stats_result = db.execute(text("""
             SELECT 
@@ -54,7 +54,7 @@ def verificar_datos_concesionarios(
             FROM concesionarios
         """))
         stats = stats_result.fetchone()
-        
+
         # 5. Mostrar algunos nombres reales si existen
         nombres_reales_result = db.execute(text("""
             SELECT nombre 
@@ -63,7 +63,7 @@ def verificar_datos_concesionarios(
             LIMIT 5
         """))
         nombres_reales = nombres_reales_result.fetchall()
-        
+
         # 6. Verificar concesionarios activos
         activos_result = db.execute(text("""
             SELECT COUNT(*) as activos 
@@ -71,7 +71,7 @@ def verificar_datos_concesionarios(
             WHERE activo = true
         """))
         activos = activos_result.fetchone()[0]
-        
+
         # Preparar respuesta
         response = {
             "timestamp": "2025-10-19T21:55:00Z",
@@ -109,10 +109,10 @@ def verificar_datos_concesionarios(
                 "recomendacion": "Migrar datos reales" if stats[1] > stats[2] else "Datos correctos"
             }
         }
-        
+
         logger.info(f"✅ Verificación completada - Total: {total}, Reales: {stats[2]}")
         return response
-        
+
     except Exception as e:
         logger.error(f"❌ Error verificando concesionarios: {e}")
         raise HTTPException(

@@ -35,7 +35,7 @@ class LoginRequest(BaseModel):
     """Schema para request de login"""
     email: EmailStr = Field(..., description="Email del usuario")
     password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, description="Contraseña del usuario")
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -56,7 +56,7 @@ class ChangePasswordRequest(BaseModel):
     current_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, description="Contraseña actual")
     new_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, description="Nueva contraseña")
     confirm_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, description="Confirmar nueva contraseña")
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {

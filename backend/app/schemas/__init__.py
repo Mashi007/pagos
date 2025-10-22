@@ -91,12 +91,12 @@ __all__ = [
     "ClienteCreate",
     "ClienteUpdate",
     "ClienteResponse",
-    
+
     # ========== PRÉSTAMO ==========
     "PrestamoCreate",
     "PrestamoUpdate",
     "PrestamoResponse",
-    
+
     # ========== PAGO ==========
     "PagoCreate",
     "PagoUpdate",
@@ -106,11 +106,11 @@ __all__ = [
     "ConciliacionResponse",
     "KPIsPagos",
     "ResumenCliente",
-    
+
     # ========== USUARIO ==========
     # NOTA: UserRole eliminado - ahora se usa is_admin boolean
     # Los schemas de usuario están disponibles directamente desde app.schemas.user
-    
+
     # ========== CONCILIACIÓN ==========
     "EstadoConciliacion",
     "TipoMatch",
@@ -128,7 +128,7 @@ __all__ = [
     "ExtractoBancarioUpload",
     "ValidacionExtracto",
     "EstadisticasConciliacion",
-    
+
     # ========== KPIs (ACTUALIZADO) ==========
     "KPIBase",
     "KPICreate",

@@ -64,7 +64,7 @@ def crear_cuotas_prestamo(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Préstamo no encontrado"
         )
-    
+
     # Verificar que no tenga cuotas ya creadas
     cuotas_existentes = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id).count()
     if cuotas_existentes > 0:
@@ -72,14 +72,14 @@ def crear_cuotas_prestamo(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El préstamo ya tiene cuotas generadas"
         )
-    
+
     try:
         # Generar tabla
         tabla = AmortizacionService.generar_tabla_amortizacion(request)
-        
+
         # Crear cuotas en BD
         cuotas = AmortizacionService.crear_cuotas_prestamo(db, prestamo_id, tabla)
-        
+
         return cuotas
     except ValueError as e:
         raise HTTPException(
@@ -105,15 +105,15 @@ def obtener_cuotas_prestamo(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Préstamo no encontrado"
         )
-    
+
     cuotas = AmortizacionService.obtener_cuotas_prestamo(db, prestamo_id, estado)
-    
+
     # Agregar propiedades calculadas
     for cuota in cuotas:
         cuota.esta_vencida = cuota.esta_vencida
         cuota.monto_pendiente_total = cuota.monto_pendiente_total
         cuota.porcentaje_pagado = cuota.porcentaje_pagado
-    
+
     return cuotas
 
 
@@ -132,12 +132,12 @@ def obtener_cuota(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Cuota no encontrada"
         )
-    
+
     # Agregar propiedades calculadas
     cuota.esta_vencida = cuota.esta_vencida
     cuota.monto_pendiente_total = cuota.monto_pendiente_total
     cuota.porcentaje_pagado = cuota.porcentaje_pagado
-    
+
     return cuota
 
 
@@ -158,11 +158,11 @@ def recalcular_mora(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Préstamo no encontrado"
         )
-    
+
     # Tasa de mora por defecto (0.1% diario = 3% mensual)
     tasa_mora = request.tasa_mora_diaria or Decimal("0.1")
     fecha_calculo = request.fecha_calculo or date.today()
-    
+
     try:
         resultado = AmortizacionService.recalcular_mora(
             db,
@@ -170,13 +170,13 @@ def recalcular_mora(
             tasa_mora,
             fecha_calculo
         )
-        
+
         # Obtener cuotas con mora
         cuotas_con_mora = db.query(Cuota).filter(
             Cuota.prestamo_id == prestamo_id,
             Cuota.monto_mora > 0
         ).all()
-        
+
         cuotas_detalle = [
             {
                 "cuota_id": c.id,
@@ -187,7 +187,7 @@ def recalcular_mora(
             }
             for c in cuotas_con_mora
         ]
-        
+
         return RecalcularMoraResponse(
             prestamo_id=prestamo_id,
             cuotas_actualizadas=resultado["cuotas_actualizadas"],
@@ -221,32 +221,32 @@ def obtener_estado_cuenta(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Préstamo no encontrado"
         )
-    
+
     # Obtener cuotas por estado
     cuotas_pagadas = db.query(Cuota).filter(
         Cuota.prestamo_id == prestamo_id,
         Cuota.estado == "PAGADA"
     ).order_by(Cuota.numero_cuota).all()
-    
+
     cuotas_vencidas = db.query(Cuota).filter(
         Cuota.prestamo_id == prestamo_id,
         Cuota.estado.in_(["VENCIDA", "PARCIAL"])
     ).order_by(Cuota.numero_cuota).all()
-    
+
     cuotas_pendientes = db.query(Cuota).filter(
         Cuota.prestamo_id == prestamo_id,
         Cuota.estado == "PENDIENTE"
     ).order_by(Cuota.numero_cuota).all()
-    
+
     # Próximas 3 cuotas
     proximas_cuotas = db.query(Cuota).filter(
         Cuota.prestamo_id == prestamo_id,
         Cuota.estado == "PENDIENTE"
     ).order_by(Cuota.numero_cuota).limit(3).all()
-    
+
     # Calcular resumen
     total_mora = sum(c.monto_mora for c in cuotas_vencidas)
-    
+
     resumen = {
         "monto_total": float(prestamo.monto_total),
         "monto_financiado": float(prestamo.monto_financiado),
@@ -258,14 +258,14 @@ def obtener_estado_cuenta(
         "cuotas_pendientes": len(cuotas_pendientes),
         "cuotas_totales": prestamo.numero_cuotas
     }
-    
+
     # Cliente info
     cliente_info = {
         "id": prestamo.cliente.id,
         "nombre_completo": prestamo.cliente.nombre_completo,
         "dni": prestamo.cliente.dni
     }
-    
+
     return EstadoCuentaResponse(
         prestamo_id=prestamo_id,
         codigo_prestamo=prestamo.codigo_prestamo or f"PREST-{prestamo_id}",
@@ -297,7 +297,7 @@ def proyectar_pago(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Préstamo no encontrado"
         )
-    
+
     # Obtener cuotas pendientes ordenadas (primero vencidas, luego por número)
     cuotas = db.query(Cuota).filter(
         Cuota.prestamo_id == prestamo_id,
@@ -306,45 +306,45 @@ def proyectar_pago(
         Cuota.estado.desc(),  # VENCIDA primero
         Cuota.numero_cuota
     ).all()
-    
+
     if not cuotas:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No hay cuotas pendientes para aplicar pago"
         )
-    
+
     # Simular aplicación de pago
     monto_disponible = request.monto_pago
     cuotas_afectadas = []
     monto_a_mora = Decimal("0.00")
     monto_a_interes = Decimal("0.00")
     monto_a_capital = Decimal("0.00")
-    
+
     for cuota in cuotas:
         if monto_disponible <= 0:
             break
-        
+
         # Simular aplicación (sin guardar)
         aplicado_mora = min(monto_disponible, cuota.monto_mora)
         monto_disponible -= aplicado_mora
         monto_a_mora += aplicado_mora
-        
+
         if monto_disponible > 0:
             aplicado_interes = min(monto_disponible, cuota.interes_pendiente)
             monto_disponible -= aplicado_interes
             monto_a_interes += aplicado_interes
-        
+
         if monto_disponible > 0:
             aplicado_capital = min(monto_disponible, cuota.capital_pendiente)
             monto_disponible -= aplicado_capital
             monto_a_capital += aplicado_capital
-        
+
         if aplicado_mora > 0 or aplicado_interes > 0 or aplicado_capital > 0:
             cuotas_afectadas.append(cuota)
-    
+
     nuevo_saldo = prestamo.saldo_pendiente - monto_a_capital
     cuotas_restantes = len([c for c in cuotas if c not in cuotas_afectadas])
-    
+
     return ProyeccionPagoResponse(
         cuotas_que_se_pagarian=cuotas_afectadas,
         monto_a_mora=monto_a_mora,
@@ -379,21 +379,21 @@ def obtener_informacion_adicional(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Préstamo no encontrado"
         )
-    
+
     # Obtener todas las cuotas
     todas_cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id).all()
-    
+
     # Calcular estadísticas
     cuotas_pagadas = len([c for c in todas_cuotas if c.estado == "PAGADA"])
     cuotas_totales = len(todas_cuotas)
     porcentaje_avance = (cuotas_pagadas / cuotas_totales * 100) if cuotas_totales > 0 else 0
-    
+
     # Próximo vencimiento
     proxima_cuota = db.query(Cuota).filter(
         Cuota.prestamo_id == prestamo_id,
         Cuota.estado.in_(["PENDIENTE", "VENCIDA"])
     ).order_by(Cuota.fecha_vencimiento).first()
-    
+
     proximo_vencimiento = None
     if proxima_cuota:
         dias_hasta_vencimiento = (proxima_cuota.fecha_vencimiento - date.today()).days
@@ -404,18 +404,18 @@ def obtener_informacion_adicional(
             "dias_hasta_vencimiento": dias_hasta_vencimiento,
             "esta_vencida": proxima_cuota.esta_vencida
         }
-    
+
     # Días en mora (máximo de todas las cuotas)
     cuotas_vencidas = [c for c in todas_cuotas if c.esta_vencida and c.estado != "PAGADA"]
     dias_mora_maximos = 0
     if cuotas_vencidas:
         dias_mora_maximos = max(c.dias_mora for c in cuotas_vencidas)
-    
+
     # Totales financieros
     total_pagado = sum(c.total_pagado for c in todas_cuotas)
     saldo_pendiente = sum(c.monto_pendiente_total for c in todas_cuotas)
     total_mora_acumulada = sum(c.monto_mora for c in todas_cuotas)
-    
+
     # Estados de cuotas
     estados_cuotas = {}
     for cuota in todas_cuotas:
@@ -423,7 +423,7 @@ def obtener_informacion_adicional(
         if estado not in estados_cuotas:
             estados_cuotas[estado] = 0
         estados_cuotas[estado] += 1
-    
+
     return {
         "prestamo_id": prestamo_id,
         "codigo_prestamo": prestamo.codigo_prestamo,
@@ -468,12 +468,12 @@ def obtener_tabla_visual(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Préstamo no encontrado"
         )
-    
+
     # Obtener cuotas ordenadas
     cuotas = db.query(Cuota).filter(
         Cuota.prestamo_id == prestamo_id
     ).order_by(Cuota.numero_cuota).all()
-    
+
     # Formatear para tabla visual
     tabla_visual = []
     for cuota in cuotas:
@@ -493,12 +493,12 @@ def obtener_tabla_visual(
         else:  # PENDIENTE
             emoji = "⏳"
             color = "info"
-        
+
         # Determinar si es adelantado
         if cuota.estado == "PAGADA" and cuota.fecha_pago and cuota.fecha_pago < cuota.fecha_vencimiento:
             emoji = "🚀"
             color = "primary"
-        
+
         tabla_visual.append({
             "numero_cuota": cuota.numero_cuota,
             "fecha_vencimiento": cuota.fecha_vencimiento.strftime("%d/%m/%Y"),
@@ -511,7 +511,7 @@ def obtener_tabla_visual(
             "porcentaje_pagado": float(cuota.porcentaje_pagado),
             "fecha_pago_real": cuota.fecha_pago.strftime("%d/%m/%Y") if cuota.fecha_pago else None
         })
-    
+
     return {
         "prestamo_id": prestamo_id,
         "cliente": {

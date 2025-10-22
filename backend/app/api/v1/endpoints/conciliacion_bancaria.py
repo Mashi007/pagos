@@ -26,14 +26,14 @@ async def generar_template_conciliacion(
     """Generar template Excel para conciliación bancaria"""
     try:
         logger.info(f"Usuario {current_user.email} generando template de conciliación")
-        
+
         # Crear workbook
         wb = Workbook()
-        
+
         # HOJA 1: INSTRUCCIONES
         ws_instrucciones = wb.active
         ws_instrucciones.title = "Instrucciones"
-        
+
         instrucciones = [
             ["INSTRUCCIONES PARA CONCILIACIÓN BANCARIA"],
             [""],
@@ -80,44 +80,44 @@ async def generar_template_conciliacion(
             ["FECHA DE GENERACIÓN: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
             ["GENERADO POR: " + current_user.email]
         ]
-        
+
         # Agregar instrucciones a la hoja
         for i, instruccion in enumerate(instrucciones, 1):
             ws_instrucciones.cell(row=i, column=1, value=instruccion[0])
-        
+
         # HOJA 2: TEMPLATE VACÍA
         ws_template = wb.create_sheet("Template_Conciliacion")
-        
+
         # Encabezados
         encabezados = ["fecha", "numero_documento"]
         for i, encabezado in enumerate(encabezados, 1):
             ws_template.cell(row=1, column=i, value=encabezado)
-        
+
         # Ejemplo de datos
         ejemplo = ["2024-01-15", "DOC001234"]
         for i, valor in enumerate(ejemplo, 1):
             ws_template.cell(row=2, column=i, value=valor)
-        
+
         # Aplicar validaciones
         # Validación para fecha (formato YYYY-MM-DD)
         dv_fecha = DataValidation(type="date", formula1="2020-01-01", formula2="2030-12-31")
         dv_fecha.add("A2:A100")
         ws_template.add_data_validation(dv_fecha)
-        
+
         # Guardar en memoria
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
-        
+
         logger.info("Template de conciliación generado exitosamente")
-        
+
         return {
             "success": True,
             "message": "Template generado exitosamente",
             "filename": f"Template_Conciliacion_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
             "content": output.getvalue()
         }
-        
+
     except Exception as e:
         logger.error(f"Error generando template de conciliación: {e}")
         raise HTTPException(
@@ -134,18 +134,18 @@ async def procesar_conciliacion(
     """Procesar archivo Excel de conciliación bancaria"""
     try:
         logger.info(f"Usuario {current_user.email} procesando conciliación bancaria")
-        
+
         # Validar tipo de archivo
         if not file.filename.endswith(('.xlsx', '.xls')):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Archivo debe ser Excel (.xlsx o .xls)"
             )
-        
+
         # Leer archivo Excel
         file_content = await file.read()
         df = pd.read_excel(io.BytesIO(file_content), sheet_name=1)  # Segunda hoja
-        
+
         # Validar columnas requeridas
         required_columns = ['fecha', 'numero_documento']
         if not all(col in df.columns for col in required_columns):
@@ -153,23 +153,23 @@ async def procesar_conciliacion(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Columnas requeridas: {required_columns}"
             )
-        
+
         # Validar límite de registros
         if len(df) > 100:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Máximo 100 registros por archivo"
             )
-        
+
         # Procesar cada registro
         resultados = []
         conciliados = 0
         pendientes = 0
-        
+
         for index, row in df.iterrows():
             fecha = row['fecha']
             numero_documento = str(row['numero_documento']).strip()
-            
+
             # Buscar pago en BD
             pago = db.query(Pago).filter(
                 and_(
@@ -177,7 +177,7 @@ async def procesar_conciliacion(
                     Pago.numero_documento == numero_documento
                 )
             ).first()
-            
+
             if pago:
                 # Marcar como conciliado
                 pago.conciliado = True
@@ -187,7 +187,7 @@ async def procesar_conciliacion(
             else:
                 pendientes += 1
                 estado = "PENDIENTE"
-            
+
             resultados.append({
                 "fila": index + 2,  # +2 porque Excel es 1-indexed y primera fila es encabezado
                 "fecha": str(fecha),
@@ -195,12 +195,12 @@ async def procesar_conciliacion(
                 "estado": estado,
                 "pago_id": pago.id if pago else None
             })
-        
+
         # Guardar cambios
         db.commit()
-        
+
         logger.info(f"Conciliación procesada: {conciliados} conciliados, {pendientes} pendientes")
-        
+
         return {
             "success": True,
             "message": "Conciliación procesada exitosamente",
@@ -211,7 +211,7 @@ async def procesar_conciliacion(
             },
             "resultados": resultados
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -231,7 +231,7 @@ async def desconciliar_pago(
     """Desconciliar un pago ya conciliado"""
     try:
         logger.info(f"Usuario {current_user.email} desconciliando pago {conciliacion_data.numero_documento_anterior}")
-        
+
         # Buscar el pago a desconciliar
         pago = db.query(Pago).filter(
             and_(
@@ -240,17 +240,17 @@ async def desconciliar_pago(
                 Pago.conciliado == True
             )
         ).first()
-        
+
         if not pago:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Pago no encontrado o no está conciliado"
             )
-        
+
         # Desconciliar el pago
         pago.conciliado = False
         pago.fecha_conciliacion = None
-        
+
         # Crear registro de auditoría (simulado - se integrará con módulo de auditoría)
         conciliacion_record = {
             "id": len(db.query(Pago).all()) + 1,  # ID temporal
@@ -263,13 +263,13 @@ async def desconciliar_pago(
             "responsable": current_user.email,
             "pago_id": pago.id
         }
-        
+
         db.commit()
-        
+
         logger.info(f"Pago {conciliacion_data.numero_documento_anterior} desconciliado exitosamente")
-        
+
         return conciliacion_record
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -293,10 +293,10 @@ async def obtener_estado_conciliacion(
             and_(Pago.activo == True, Pago.conciliado == True)
         ).count()
         pagos_pendientes = total_pagos - pagos_conciliados
-        
+
         # Porcentaje de conciliación
         porcentaje_conciliacion = (pagos_conciliados / total_pagos * 100) if total_pagos > 0 else 0
-        
+
         return {
             "success": True,
             "estadisticas": {
@@ -307,7 +307,7 @@ async def obtener_estado_conciliacion(
             },
             "fecha_actualizacion": datetime.now()
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo estado de conciliación: {e}")
         raise HTTPException(

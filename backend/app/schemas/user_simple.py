@@ -47,9 +47,9 @@ class UserResponse(UserBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     last_login: Optional[datetime] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     @property
     def full_name(self) -> str:
         """Nombre completo del usuario."""

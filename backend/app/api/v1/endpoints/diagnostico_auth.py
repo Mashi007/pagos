@@ -37,14 +37,14 @@ async def debug_autenticacion(
         # 1. Analizar headers de la request
         headers_analysis = {}
         auth_header = request.headers.get("authorization")
-        
+
         if auth_header:
             headers_analysis["authorization_present"] = True
             headers_analysis["authorization_type"] = auth_header.split(" ")[0] if " " in auth_header else "unknown"
             headers_analysis["token_length"] = len(auth_header.split(" ")[1]) if " " in auth_header else 0
         else:
             headers_analysis["authorization_present"] = False
-        
+
         # 2. Verificar configuración JWT
         jwt_config = {
             "secret_key_length": len(settings.SECRET_KEY) if settings.SECRET_KEY else 0,
@@ -52,14 +52,14 @@ async def debug_autenticacion(
             "access_token_expire_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
             "refresh_token_expire_days": settings.REFRESH_TOKEN_EXPIRE_DAYS
         }
-        
+
         # 3. Verificar usuarios en BD
         users_analysis = {}
         try:
             total_users = db.query(User).count()
             active_users = db.query(User).filter(User.is_active == True).count()
             admin_users = db.query(User).filter(User.is_admin == True).count()
-            
+
             users_analysis = {
                 "total_users": total_users,
                 "active_users": active_users,
@@ -71,14 +71,14 @@ async def debug_autenticacion(
                 "status": "error",
                 "error": str(e)
             }
-        
+
         # 4. Verificar tokens recientes (simulado)
         recent_tokens_analysis = {
             "failed_requests_last_hour": len([r for r in failed_requests_cache if r.get("timestamp", datetime.min) > datetime.now() - timedelta(hours=1)]),
             "total_failed_requests": len(failed_requests_cache),
             "last_failed_request": failed_requests_cache[-1] if failed_requests_cache else None
         }
-        
+
         # 5. Test de creación de token
         token_test = {}
         try:
@@ -106,14 +106,14 @@ async def debug_autenticacion(
                 "status": "error",
                 "error": str(e)
             }
-        
+
         # 6. Verificar CORS y headers de seguridad
         cors_analysis = {
             "cors_origins": settings.CORS_ORIGINS,
             "cors_origins_count": len(settings.CORS_ORIGINS),
             "environment": settings.ENVIRONMENT
         }
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "diagnostic_complete",
@@ -127,7 +127,7 @@ async def debug_autenticacion(
             },
             "recommendations": _generate_recommendations(headers_analysis, jwt_config, users_analysis)
         }
-        
+
     except Exception as e:
         logger.error(f"Error en diagnóstico de autenticación: {e}")
         return {
@@ -174,7 +174,7 @@ async def test_autenticacion(
                 "status": "error",
                 "error": str(e)
             }
-        
+
         # 2. Test de validación de token
         validation_test = {}
         try:
@@ -198,7 +198,7 @@ async def test_autenticacion(
                 "status": "error",
                 "error": str(e)
             }
-        
+
         # 3. Test de endpoint protegido
         protected_test = {}
         try:
@@ -228,7 +228,7 @@ async def test_autenticacion(
                 "status": "error",
                 "error": str(e)
             }
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "test_complete",
@@ -239,7 +239,7 @@ async def test_autenticacion(
             },
             "overall_status": "success" if all(t.get("status") == "success" for t in [login_test, validation_test, protected_test]) else "failed"
         }
-        
+
     except Exception as e:
         logger.error(f"Error en test de autenticación: {e}")
         return {
@@ -259,13 +259,13 @@ async def obtener_logs_autenticacion():
             log for log in failed_requests_cache 
             if log.get("timestamp", datetime.min) > datetime.now() - timedelta(hours=1)
         ]
-        
+
         # Agrupar por tipo de error
         error_summary = {}
         for log in recent_logs:
             error_type = log.get("error_type", "unknown")
             error_summary[error_type] = error_summary.get(error_type, 0) + 1
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "logs": {
@@ -274,7 +274,7 @@ async def obtener_logs_autenticacion():
                 "recent_requests": recent_logs[-10:] if recent_logs else []  # Últimos 10
             }
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo logs de autenticación: {e}")
         return {
@@ -293,7 +293,7 @@ async def aplicar_fix_autenticacion(
     """
     try:
         fixes_applied = []
-        
+
         # 1. Verificar y recrear usuario admin si es necesario
         admin_user = db.query(User).filter(User.is_admin == True).first()
         if not admin_user:
@@ -316,23 +316,23 @@ async def aplicar_fix_autenticacion(
                 admin_user.is_active = True
                 db.commit()
                 fixes_applied.append("admin_user_activated")
-        
+
         # 2. Limpiar cache de requests fallidos
         global failed_requests_cache
         failed_requests_cache = []
         fixes_applied.append("failed_requests_cache_cleared")
-        
+
         # 3. Verificar configuración JWT
         if not settings.SECRET_KEY:
             fixes_applied.append("jwt_secret_key_missing")
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "fixes_applied",
             "fixes": fixes_applied,
             "message": f"Aplicados {len(fixes_applied)} fixes"
         }
-        
+
     except Exception as e:
         logger.error(f"Error aplicando fixes: {e}")
         return {
@@ -344,22 +344,22 @@ async def aplicar_fix_autenticacion(
 def _generate_recommendations(headers_analysis: Dict, jwt_config: Dict, users_analysis: Dict) -> List[str]:
     """Generar recomendaciones basadas en el análisis"""
     recommendations = []
-    
+
     if not headers_analysis.get("authorization_present"):
         recommendations.append("🔑 No se encontró header Authorization - Verificar que el frontend esté enviando el token")
-    
+
     if jwt_config.get("secret_key_length", 0) < 32:
         recommendations.append("🔐 SECRET_KEY muy corta - Debe tener al menos 32 caracteres")
-    
+
     if users_analysis.get("admin_users", 0) == 0:
         recommendations.append("👤 No hay usuarios administradores - Crear usuario admin")
-    
+
     if users_analysis.get("active_users", 0) == 0:
         recommendations.append("⚠️ No hay usuarios activos - Verificar estado de usuarios")
-    
+
     if not recommendations:
         recommendations.append("✅ Configuración parece correcta - Revisar logs de aplicación")
-    
+
     return recommendations
 
 # Nota: Middleware removido - APIRouter no soporta middleware directamente

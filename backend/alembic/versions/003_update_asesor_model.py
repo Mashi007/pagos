@@ -22,7 +22,7 @@ def upgrade():
     op.alter_column('asesores', 'apellido',
                     existing_type=sa.VARCHAR(255),
                     nullable=True)
-    
+
     # Make email nullable
     op.alter_column('asesores', 'email',
                     existing_type=sa.VARCHAR(255),
@@ -35,7 +35,7 @@ def downgrade():
     op.alter_column('asesores', 'apellido',
                     existing_type=sa.VARCHAR(255),
                     nullable=False)
-    
+
     # Make email not nullable
     op.alter_column('asesores', 'email',
                     existing_type=sa.VARCHAR(255),

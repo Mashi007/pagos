@@ -32,7 +32,7 @@ def diagnostico_completo_sistema(db: Session = Depends(get_db)):
         "status": "checking",
         "componentes": {}
     }
-    
+
     try:
         # 1. Verificar conexión a base de datos
         try:
@@ -47,7 +47,7 @@ def diagnostico_completo_sistema(db: Session = Depends(get_db)):
                 "status": "error",
                 "message": f"Error de conexión: {str(e)}"
             }
-        
+
         # 2. Verificar tablas críticas
         tablas_criticas = [
             ("usuarios", User),
@@ -57,7 +57,7 @@ def diagnostico_completo_sistema(db: Session = Depends(get_db)):
             ("modelos_vehiculos", ModeloVehiculo),
             ("auditoria", Auditoria)
         ]
-        
+
         diagnostico["componentes"]["tablas"] = {}
         for nombre_tabla, modelo in tablas_criticas:
             try:
@@ -72,13 +72,13 @@ def diagnostico_completo_sistema(db: Session = Depends(get_db)):
                     "status": "error",
                     "message": f"Error en tabla {nombre_tabla}: {str(e)}"
                 }
-        
+
         # 3. Verificar datos de configuración
         try:
             analistas_activos = db.query(Analista).filter(Analista.activo == True).count()
             concesionarios_activos = db.query(Concesionario).filter(Concesionario.activo == True).count()
             modelos_activos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo == True).count()
-            
+
             diagnostico["componentes"]["configuracion"] = {
                 "status": "ok",
                 "analistas_activos": analistas_activos,
@@ -91,7 +91,7 @@ def diagnostico_completo_sistema(db: Session = Depends(get_db)):
                 "status": "error",
                 "message": f"Error en configuración: {str(e)}"
             }
-        
+
         # 4. Verificar usuario administrador
         try:
             admin_count = db.query(User).filter(User.is_admin == True).count()
@@ -99,7 +99,7 @@ def diagnostico_completo_sistema(db: Session = Depends(get_db)):
                 User.is_admin == True, 
                 User.is_active == True
             ).count()
-            
+
             diagnostico["componentes"]["administradores"] = {
                 "status": "ok",
                 "total_admins": admin_count,
@@ -111,7 +111,7 @@ def diagnostico_completo_sistema(db: Session = Depends(get_db)):
                 "status": "error",
                 "message": f"Error verificando administradores: {str(e)}"
             }
-        
+
         # 5. Verificar configuración de la aplicación
         diagnostico["componentes"]["configuracion_app"] = {
             "status": "ok",
@@ -121,13 +121,13 @@ def diagnostico_completo_sistema(db: Session = Depends(get_db)):
             "secret_key_configurado": bool(settings.SECRET_KEY),
             "database_url_configurado": bool(settings.DATABASE_URL)
         }
-        
+
         # 6. Determinar estado general
         errores = []
         for componente, info in diagnostico["componentes"].items():
             if info.get("status") == "error":
                 errores.append(f"{componente}: {info.get('message', 'Error desconocido')}")
-        
+
         if errores:
             diagnostico["status"] = "error"
             diagnostico["errores"] = errores
@@ -135,9 +135,9 @@ def diagnostico_completo_sistema(db: Session = Depends(get_db)):
         else:
             diagnostico["status"] = "ok"
             diagnostico["message"] = "Sistema funcionando correctamente"
-        
+
         return diagnostico
-        
+
     except Exception as e:
         logger.error(f"Error en diagnóstico completo: {str(e)}")
         return {
@@ -162,7 +162,7 @@ def verificar_endpoints_criticos():
         "/api/v1/concesionarios/activos",
         "/api/v1/modelos-vehiculos/activos"
     ]
-    
+
     return {
         "timestamp": datetime.now().isoformat(),
         "endpoints_criticos": endpoints_criticos,
@@ -199,27 +199,27 @@ def monitoreo_tiempo_real(db: Session = Depends(get_db)):
     try:
         # Métricas de rendimiento
         start_time = datetime.now()
-        
+
         # Verificar conexión DB
         db.execute(text("SELECT 1"))
         db_response_time = (datetime.now() - start_time).total_seconds() * 1000
-        
+
         # Contar registros en tiempo real
         usuarios_count = db.query(User).count()
         clientes_count = db.query(Cliente).count()
         analistas_count = db.query(Analista).count()
         concesionarios_count = db.query(Concesionario).count()
         modelos_count = db.query(ModeloVehiculo).count()
-        
+
         # Verificar usuarios activos
         usuarios_activos = db.query(User).filter(User.is_active == True).count()
         usuarios_admin = db.query(User).filter(User.is_admin == True).count()
-        
+
         # Verificar datos de configuración activos
         analistas_activos = db.query(Analista).filter(Analista.activo == True).count()
         concesionarios_activos = db.query(Concesionario).filter(Concesionario.activo == True).count()
         modelos_activos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo == True).count()
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "healthy",
@@ -249,7 +249,7 @@ def monitoreo_tiempo_real(db: Session = Depends(get_db)):
             "alertas": [],
             "message": "Sistema funcionando correctamente"
         }
-        
+
     except Exception as e:
         return {
             "timestamp": datetime.now().isoformat(),

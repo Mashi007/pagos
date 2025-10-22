@@ -10,61 +10,61 @@ class Permission(str, Enum):
     """Permisos del sistema - COMPLETO"""
     # Dashboard
     VIEW_DASHBOARD = "dashboard:view"
-    
+
     # Usuarios
     USER_CREATE = "user:create"
     USER_READ = "user:read"
     USER_UPDATE = "user:update"
     USER_DELETE = "user:delete"
-    
+
     # Clientes
     CLIENTE_CREATE = "cliente:create"
     CLIENTE_READ = "cliente:read"
     CLIENTE_UPDATE = "cliente:update"
     CLIENTE_DELETE = "cliente:delete"
-    
+
     # Préstamos
     PRESTAMO_CREATE = "prestamo:create"
     PRESTAMO_READ = "prestamo:read"
     PRESTAMO_UPDATE = "prestamo:update"
     PRESTAMO_DELETE = "prestamo:delete"
     PRESTAMO_APPROVE = "prestamo:approve"
-    
+
     # Pagos
     PAGO_CREATE = "pago:create"
     PAGO_READ = "pago:read"
     PAGO_UPDATE = "pago:update"
     PAGO_DELETE = "pago:delete"
-    
+
     # Reportes
     REPORTE_READ = "reporte:read"
-    
+
     # Auditoría
     AUDIT_READ = "audit:read"
-    
+
     # Configuración
     CONFIG_READ = "config:read"
     CONFIG_UPDATE = "config:update"
     CONFIG_MANAGE = "config:manage"
-    
+
     # Analistas
     ANALISTA_CREATE = "analista:create"
     ANALISTA_READ = "analista:read"
     ANALISTA_UPDATE = "analista:update"
     ANALISTA_DELETE = "analista:delete"
-    
+
     # Concesionarios
     CONCESIONARIO_CREATE = "concesionario:create"
     CONCESIONARIO_READ = "concesionario:read"
     CONCESIONARIO_UPDATE = "concesionario:update"
     CONCESIONARIO_DELETE = "concesionario:delete"
-    
+
     # Modelos de Vehículos
     MODELO_CREATE = "modelo:create"
     MODELO_READ = "modelo:read"
     MODELO_UPDATE = "modelo:update"
     MODELO_DELETE = "modelo:delete"
-    
+
     # Validadores
     VALIDADOR_CREATE = "validador:create"
     VALIDADOR_READ = "validador:read"
@@ -76,61 +76,61 @@ class Permission(str, Enum):
 ADMIN_PERMISSIONS: List[Permission] = [
     # Dashboard
     Permission.VIEW_DASHBOARD,
-    
+
     # Usuarios - Gestión completa
     Permission.USER_CREATE,
     Permission.USER_READ,
     Permission.USER_UPDATE,
     Permission.USER_DELETE,
-    
+
     # Clientes - Gestión completa
     Permission.CLIENTE_CREATE,
     Permission.CLIENTE_READ,
     Permission.CLIENTE_UPDATE,
     Permission.CLIENTE_DELETE,
-    
+
     # Préstamos - Gestión completa
     Permission.PRESTAMO_CREATE,
     Permission.PRESTAMO_READ,
     Permission.PRESTAMO_UPDATE,
     Permission.PRESTAMO_DELETE,
     Permission.PRESTAMO_APPROVE,
-    
+
     # Pagos - Gestión completa
     Permission.PAGO_CREATE,
     Permission.PAGO_READ,
     Permission.PAGO_UPDATE,
     Permission.PAGO_DELETE,
-    
+
     # Reportes
     Permission.REPORTE_READ,
-    
+
     # Auditoría
     Permission.AUDIT_READ,
-    
+
     # Configuración - Gestión completa
     Permission.CONFIG_READ,
     Permission.CONFIG_UPDATE,
     Permission.CONFIG_MANAGE,
-    
+
     # Analistas - Gestión completa
     Permission.ANALISTA_CREATE,
     Permission.ANALISTA_READ,
     Permission.ANALISTA_UPDATE,
     Permission.ANALISTA_DELETE,
-    
+
     # Concesionarios - Gestión completa
     Permission.CONCESIONARIO_CREATE,
     Permission.CONCESIONARIO_READ,
     Permission.CONCESIONARIO_UPDATE,
     Permission.CONCESIONARIO_DELETE,
-    
+
     # Modelos de Vehículos - Gestión completa
     Permission.MODELO_CREATE,
     Permission.MODELO_READ,
     Permission.MODELO_UPDATE,
     Permission.MODELO_DELETE,
-    
+
     # Validadores - Gestión completa
     Permission.VALIDADOR_CREATE,
     Permission.VALIDADOR_READ,
@@ -142,13 +142,13 @@ ADMIN_PERMISSIONS: List[Permission] = [
 USER_PERMISSIONS: List[Permission] = [
     # Dashboard básico
     Permission.VIEW_DASHBOARD,
-    
+
     # Solo lectura de datos básicos
     Permission.CLIENTE_READ,
     Permission.PRESTAMO_READ,
     Permission.PAGO_READ,
     Permission.REPORTE_READ,
-    
+
     # PERMISOS OPERATIVOS AGREGADOS - Usuarios regulares pueden gestionar operaciones básicas
     Permission.CLIENTE_CREATE,      # ✅ Crear clientes
     Permission.CLIENTE_UPDATE,      # ✅ Actualizar clientes
@@ -163,11 +163,11 @@ USER_PERMISSIONS: List[Permission] = [
 def has_permission(user_is_admin: bool, permission: Permission) -> bool:
     """
     Verificar si un usuario tiene un permiso específico
-    
+
     Args:
         user_is_admin: True si es admin, False si es user
         permission: Permiso a verificar
-    
+
     Returns:
         True si tiene el permiso, False en caso contrario
     """
@@ -180,10 +180,10 @@ def has_permission(user_is_admin: bool, permission: Permission) -> bool:
 def get_user_permissions(user_is_admin: bool) -> List[Permission]:
     """
     Obtener todos los permisos de un usuario
-    
+
     Args:
         user_is_admin: True si es admin, False si es user
-    
+
     Returns:
         Lista de permisos del usuario
     """

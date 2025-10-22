@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, desc
 from typing import List, Optional
 from datetime import datetime
-import json
 from app.db.session import get_db
 from app.models.cliente import Cliente
 from app.models.user import User
@@ -32,7 +31,7 @@ def serializar_datos_auditoria(datos: dict) -> dict:
     """Serializar datos para auditoría, convirtiendo fechas a strings"""
     if not datos:
         return datos
-    
+
     datos_serializados = {}
     for key, value in datos.items():
         if hasattr(value, 'isoformat'):  # datetime.date o datetime.datetime
@@ -41,7 +40,7 @@ def serializar_datos_auditoria(datos: dict) -> dict:
             datos_serializados[key] = serializar_datos_auditoria(value)
         else:
             datos_serializados[key] = value
-    
+
     return datos_serializados
 
 def registrar_auditoria_cliente(
@@ -62,7 +61,7 @@ def registrar_auditoria_cliente(
         datos_nuevos_serializados = (
             serializar_datos_auditoria(datos_nuevos) if datos_nuevos else None
         )
-        
+
         # ✅ OPTIMIZACIÓN: Auditoría mínima para reducir uso de recursos
         auditoria = Auditoria(
             usuario_email=usuario_email,
@@ -97,19 +96,19 @@ def listar_clientes(
     # Paginación
     page: int = Query(1, ge=1, description="Número de página"),
     per_page: int = Query(20, ge=1, le=1000, description="Tamaño de página"),
-    
+
     # Búsqueda de texto
     search: Optional[str] = Query(None, description="Buscar en nombre, cédula o móvil"),
-    
+
     # Filtros específicos
     estado: Optional[str] = Query(None, description="ACTIVO, INACTIVO, FINALIZADO"),
-    
+
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
     📋 Listar clientes con paginación y filtros
-    
+
     Características:
     - Paginación completa
     - Búsqueda por texto
@@ -119,10 +118,10 @@ def listar_clientes(
     """
     try:
         logger.info(f"Listar clientes - Usuario: {current_user.email}")
-        
+
         # Query base
         query = db.query(Cliente)
-        
+
         # Aplicar filtros
         if search:
             search_pattern = f"%{search}%"
@@ -134,20 +133,20 @@ def listar_clientes(
                     Cliente.telefono.ilike(search_pattern)
                 )
             )
-        
+
         if estado:
             query = query.filter(Cliente.estado == estado)
-        
+
         # Ordenamiento
         query = query.order_by(Cliente.id.desc())
-        
+
         # Contar total
         total = query.count()
-        
+
         # Paginación
         offset = (page - 1) * per_page
         clientes = query.offset(offset).limit(per_page).all()
-        
+
         # Serialización segura
         clientes_dict = []
         for cliente in clientes:
@@ -185,10 +184,10 @@ def listar_clientes(
             except Exception as e:
                 logger.error(f"Error serializando cliente {cliente.id}: {e}")
                 continue
-        
+
         # Calcular páginas
         total_pages = (total + per_page - 1) // per_page
-        
+
         return {
             "clientes": clientes_dict,
             "paginacion": {
@@ -200,7 +199,7 @@ def listar_clientes(
                 "tiene_anterior": page > 1
             }
         }
-        
+
     except Exception as e:
         logger.error(f"Error en listar_clientes: {e}")
         raise HTTPException(
@@ -216,7 +215,7 @@ def obtener_cliente(
 ):
     """
     👤 Obtener cliente por ID
-    
+
     Características:
     - Validación de existencia
     - Serialización segura
@@ -224,17 +223,17 @@ def obtener_cliente(
     """
     try:
         logger.info(f"Obtener cliente {cliente_id} - Usuario: {current_user.email}")
-        
+
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
-        
+
         if not cliente:
             raise HTTPException(
                 status_code=404,
                 detail="Cliente no encontrado"
             )
-        
+
         return ClienteResponse.model_validate(cliente)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -257,7 +256,7 @@ def crear_cliente(
 ):
     """
     ➕ Crear nuevo cliente
-    
+
     Características:
     - Validación completa de datos
     - Campos obligatorios
@@ -267,7 +266,7 @@ def crear_cliente(
     try:
         logger.info(f"Crear cliente - Usuario: {current_user.email}")
         logger.info(f"Datos recibidos: {cliente_data}")
-        
+
         # CORREGIDO: Detectar cédulas duplicadas y manejar confirmación
         cliente_existente = db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
         if cliente_existente:
@@ -277,7 +276,7 @@ def crear_cliente(
                     f"✅ Cliente con cédula {cliente_data.cedula} "
                     f"confirmado como duplicado - actualizando datos"
                 )
-                
+
                 # Actualizar datos del cliente existente
                 cliente_existente.nombres = cliente_data.nombres
                 cliente_existente.apellidos = cliente_data.apellidos
@@ -292,10 +291,10 @@ def crear_cliente(
                 cliente_existente.estado = cliente_data.estado
                 cliente_existente.notas = cliente_data.notas or "NA"
                 cliente_existente.fecha_actualizacion = datetime.now()
-                
+
                 db.commit()
                 db.refresh(cliente_existente)
-                
+
                 # Registrar auditoría
                 registrar_auditoria_cliente(
                     db=db,
@@ -313,7 +312,7 @@ def crear_cliente(
                         f"{cliente_data.nombres} {cliente_data.apellidos}"
                     )
                 )
-                
+
                 logger.info(
                     f"Cliente actualizado exitosamente por confirmación: "
                     f"{cliente_existente.id}"
@@ -325,7 +324,7 @@ def crear_cliente(
                     f"⚠️ Cliente con cédula {cliente_data.cedula} "
                     f"ya existe - activando popup de confirmación"
                 )
-                
+
                 # ✅ SOLUCIÓN LIGERA: HTTPException simplificado sin auditoría pesada
                 raise HTTPException(
                     status_code=409,
@@ -344,7 +343,7 @@ def crear_cliente(
                         "action": "SHOW_DUPLICATE_POPUP"
                     }
                 )
-        
+
         # Crear nuevo cliente
         nuevo_cliente = Cliente(
             cedula=cliente_data.cedula,
@@ -364,11 +363,11 @@ def crear_cliente(
             fecha_registro=datetime.now(),
             fecha_actualizacion=datetime.now()
         )
-        
+
         db.add(nuevo_cliente)
         db.commit()
         db.refresh(nuevo_cliente)
-        
+
         # Registrar auditoría
         registrar_auditoria_cliente(
             db=db,
@@ -380,10 +379,10 @@ def crear_cliente(
                 f"Cliente creado: {cliente_data.nombres} {cliente_data.apellidos}"
             )
         )
-        
+
         logger.info(f"Cliente creado exitosamente: {nuevo_cliente.id}")
         return ClienteResponse.model_validate(nuevo_cliente)
-        
+
     except HTTPException as e:
         # ✅ OPTIMIZACIÓN: Logging simplificado para reducir uso de recursos
         logger.error(f"❌ Error HTTP en crear_cliente: {e.status_code}")
@@ -407,7 +406,7 @@ def crear_cliente_con_confirmacion(
 ):
     """
     ➕ Crear cliente con confirmación de duplicado
-    
+
     Características:
     - Permite crear cliente duplicado con confirmación del operador
     - Registra auditoría de la confirmación
@@ -420,15 +419,15 @@ def crear_cliente_con_confirmacion(
             f"Confirmación: {request_data.confirmacion}, "
             f"Comentarios: {request_data.comentarios}"
         )
-        
+
         if not request_data.confirmacion:
             raise HTTPException(
                 status_code=400,
                 detail="Confirmación requerida para crear cliente duplicado"
             )
-        
+
         cliente_data = request_data.cliente_data
-        
+
         # Crear nuevo cliente (sin validación de duplicados)
         nuevo_cliente = Cliente(
             cedula=cliente_data.cedula,
@@ -451,11 +450,11 @@ def crear_cliente_con_confirmacion(
             fecha_registro=datetime.now(),
             fecha_actualizacion=datetime.now()
         )
-        
+
         db.add(nuevo_cliente)
         db.commit()
         db.refresh(nuevo_cliente)
-        
+
         # Registrar auditoría especial para confirmación
         registrar_auditoria_cliente(
             db=db,
@@ -469,10 +468,10 @@ def crear_cliente_con_confirmacion(
                 f"Comentarios: {request_data.comentarios}"
             )
         )
-        
+
         logger.info(f"Cliente creado con confirmación exitosamente: {nuevo_cliente.id}")
         return ClienteResponse.model_validate(nuevo_cliente)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -496,7 +495,7 @@ def actualizar_cliente(
 ):
     """
     ✏️ Actualizar cliente
-    
+
     Características:
     - Validación de existencia
     - Actualización parcial
@@ -505,15 +504,15 @@ def actualizar_cliente(
     """
     try:
         logger.info(f"Actualizar cliente {cliente_id} - Usuario: {current_user.email}")
-        
+
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
-        
+
         if not cliente:
             raise HTTPException(
                 status_code=404,
                 detail="Cliente no encontrado"
             )
-        
+
         # Guardar datos anteriores para auditoría
         datos_anteriores = {
             "cedula": cliente.cedula,
@@ -533,19 +532,19 @@ def actualizar_cliente(
             "estado": cliente.estado,
             "notas": cliente.notas
         }
-        
+
         # Actualizar campos
         update_data = cliente_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             if hasattr(cliente, field):
                 setattr(cliente, field, value)
-        
+
         # Actualizar fecha de actualización automáticamente
         cliente.fecha_actualizacion = datetime.now()
-        
+
         db.commit()
         db.refresh(cliente)
-        
+
         # Registrar auditoría
         registrar_auditoria_cliente(
             db=db,
@@ -556,10 +555,10 @@ def actualizar_cliente(
             datos_nuevos=update_data,
             descripcion=f"Cliente actualizado: {cliente.nombres} {cliente.apellidos}"
         )
-        
+
         logger.info(f"Cliente actualizado exitosamente: {cliente_id}")
         return ClienteResponse.model_validate(cliente)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -582,7 +581,7 @@ def eliminar_cliente(
 ):
     """
     🗑️ Eliminar cliente (hard delete)
-    
+
     Características:
     - Hard delete (eliminación física de la BD)
     - Auditoría automática
@@ -590,15 +589,15 @@ def eliminar_cliente(
     """
     try:
         logger.info(f"Eliminar cliente {cliente_id} - Usuario: {current_user.email}")
-        
+
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
-        
+
         if not cliente:
             raise HTTPException(
                 status_code=404,
                 detail="Cliente no encontrado"
             )
-        
+
         # Guardar datos para auditoría
         datos_anteriores = {
             "cedula": cliente.cedula,
@@ -607,11 +606,11 @@ def eliminar_cliente(
             "estado": cliente.estado,
             "activo": cliente.activo
         }
-        
+
         # Hard delete - eliminar físicamente de la BD
         db.delete(cliente)
         db.commit()
-        
+
         # Registrar auditoría
         registrar_auditoria_cliente(
             db=db,
@@ -625,10 +624,10 @@ def eliminar_cliente(
                 f"{cliente.nombres} {cliente.apellidos}"
             )
         )
-        
+
         logger.info(f"Cliente eliminado exitosamente: {cliente_id}")
         return {"message": "Cliente eliminado exitosamente"}
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -688,13 +687,13 @@ def buscar_cliente_por_cedula(
     """
     try:
         logger.info(f"Buscando cliente por cédula (MOCK): {cedula}")
-        
+
         # Datos mock temporales hasta que se resuelva el problema de BD
         raise HTTPException(
             status_code=404,
             detail="Cliente no encontrado - Datos mock temporales"
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:

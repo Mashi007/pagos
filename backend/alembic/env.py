@@ -16,38 +16,38 @@ logger = logging.getLogger(__name__)
 def get_url() -> str:
     """
     Obtiene DATABASE_URL con normalización y reintentos.
-    
+
     Normaliza automáticamente postgres:// a postgresql:// para 
     compatibilidad con SQLAlchemy 1.4+.
-    
+
     Returns:
         str: URL de conexión normalizada a la base de datos.
-        
+
     Raises:
         ValueError: Si DATABASE_URL no está configurada después de reintentos.
     """
     for attempt in range(1, MAX_ATTEMPTS + 1):
         database_url = os.environ.get("DATABASE_URL")
-        
+
         if database_url:
             # Normalizar: Railway puede usar postgres://, SQLAlchemy necesita postgresql://
             if database_url.startswith("postgres://"):
                 database_url = database_url.replace("postgres://", "postgresql://", 1)
-            
+
             logger.info(f"DATABASE_URL encontrada (intento {attempt}/{MAX_ATTEMPTS})")
             return database_url
-        
+
         if attempt < MAX_ATTEMPTS:
             logger.warning(
                 f"DATABASE_URL no encontrada, esperando {WAIT_SECONDS}s... "
                 f"(intento {attempt}/{MAX_ATTEMPTS})"
             )
             time.sleep(WAIT_SECONDS)
-    
+
     # Si llegamos aquí, no se encontró DATABASE_URL
     logger.error("DATABASE_URL no está configurada")
     logger.info("Variables de entorno relacionadas encontradas:")
-    
+
     found_vars = False
     for key in sorted(os.environ.keys()):
         if any(term in key.upper() for term in ["DATA", "POSTGRES", "DB", "SQL"]):
@@ -56,10 +56,10 @@ def get_url() -> str:
             masked = f"{value[:MASK_PREFIX_LENGTH]}...{value[-MASK_SUFFIX_LENGTH:]}" if len(value) > MASK_THRESHOLD else "***"
             logger.info(f"  {key}: {masked}")
             found_vars = True
-    
+
     if not found_vars:
         logger.warning("No se encontraron variables de entorno relacionadas con base de datos")
-    
+
     raise ValueError(
         "DATABASE_URL no está configurada después de múltiples reintentos.\n\n"
         "SOLUCIÓN EN RAILWAY:\n"

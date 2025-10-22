@@ -20,12 +20,12 @@ def upgrade() -> None:
     """Crear tabla pagos con todos los campos necesarios"""
     conn = op.get_bind()
     inspector = inspect(conn)
-    
+
     # Verificar si la tabla ya existe
     if 'pagos' in inspector.get_table_names():
         print("Tabla 'pagos' ya existe")
         return
-    
+
     # Crear tabla pagos
     op.create_table('pagos',
         sa.Column('id', sa.Integer(), nullable=False),
@@ -45,14 +45,14 @@ def upgrade() -> None:
         sa.Column('fecha_actualizacion', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
         sa.PrimaryKeyConstraint('id')
     )
-    
+
     # Crear índices
     op.create_index('idx_pagos_cedula_cliente', 'pagos', ['cedula_cliente'])
     op.create_index('idx_pagos_numero_documento', 'pagos', ['numero_documento'])
     op.create_index('idx_pagos_fecha_pago', 'pagos', ['fecha_pago'])
     op.create_index('idx_pagos_conciliado', 'pagos', ['conciliado'])
     op.create_index('idx_pagos_activo', 'pagos', ['activo'])
-    
+
     print("Tabla 'pagos' creada exitosamente")
     print("Índices creados para optimización de consultas")
 

@@ -33,7 +33,7 @@ def test_analistas_no_auth(
     try:
         total_analistas = db.query(Analista).count()
         analistas = db.query(Analista).limit(5).all()
-        
+
         analistas_data = []
         for analista in analistas:
             analistas_data.append({
@@ -44,7 +44,7 @@ def test_analistas_no_auth(
                 "activo": analista.activo,
                 "updated_at": analista.updated_at.isoformat() if analista.updated_at else None  # ✅ CORREGIDO: updated_at
             })
-        
+
         return {
             "success": True,
             "total_analistas": total_analistas,
@@ -107,7 +107,7 @@ def health_check_analistas(db: Session = Depends(get_db)):
         # Verificar conexión a base de datos
         result = db.execute(text("SELECT COUNT(*) FROM analistas"))
         total = result.fetchone()[0]
-        
+
         return {
             "status": "healthy",
             "module": "analistas",
@@ -141,37 +141,37 @@ def analistas_backup1(
         cached_result = analistas_cache.get(cache_key)
         if cached_result:
             return cached_result
-        
+
         # Usar SQL directo para máxima compatibilidad
         base_query = "SELECT id, nombre, activo, updated_at FROM analistas"  # ✅ CORREGIDO: updated_at en lugar de created_at
         count_query = "SELECT COUNT(*) FROM analistas"
         where_conditions = []
-        
+
         # Aplicar filtros
         if activo is not None:
             where_conditions.append(f"activo = {activo}")
-        
+
         if search:
             where_conditions.append(f"nombre ILIKE '%{search}%'")
-        
+
         # Agregar WHERE si hay condiciones
         if where_conditions:
             where_clause = " WHERE " + " AND ".join(where_conditions)
             base_query += where_clause
             count_query += where_clause
-        
+
         # Obtener total
         total_result = db.execute(text(count_query))
         total = total_result.fetchone()[0]
-        
+
         # Aplicar paginación
         paginated_query = f"{base_query} ORDER BY id OFFSET {skip} LIMIT {limit}"
         result = db.execute(text(paginated_query))
         rows = result.fetchall()
-        
+
         # Calcular páginas
         pages = (total + limit - 1) // limit
-        
+
         # Convertir filas a formato de respuesta
         items = []
         for row in rows:
@@ -179,7 +179,7 @@ def analistas_backup1(
             partes_nombre = nombre_completo.split()
             primer_nombre = partes_nombre[0] if partes_nombre else ""
             apellido = " ".join(partes_nombre[1:]) if len(partes_nombre) > 1 else ""
-            
+
             items.append({
                 "id": row[0],
                 "nombre": nombre_completo,
@@ -194,7 +194,7 @@ def analistas_backup1(
                 "primer_nombre": primer_nombre,
                 "updated_at": row[3].isoformat() if row[3] else None  # ✅ CORREGIDO: updated_at
             })
-        
+
         result_data = {
             "items": items,
             "total": total,
@@ -204,11 +204,11 @@ def analistas_backup1(
             "backup_mode": "backup1",
             "message": "Endpoint de respaldo 1 funcionando"
         }
-        
+
         # Guardar en cache
         analistas_cache.set(cache_key, result_data)
         return result_data
-        
+
     except Exception as e:
         logger.error(f"Error en endpoint backup1: {str(e)}")
         return {
@@ -237,18 +237,18 @@ def analistas_backup2(
         # Consulta más simple para evitar problemas
         query = "SELECT id, nombre, activo FROM analistas ORDER BY id OFFSET %s LIMIT %s"
         count_query = "SELECT COUNT(*) FROM analistas"
-        
+
         # Obtener total
         total_result = db.execute(text(count_query))
         total = total_result.fetchone()[0]
-        
+
         # Obtener datos
         result = db.execute(text(query), (skip, limit))
         rows = result.fetchall()
-        
+
         # Calcular páginas
         pages = (total + limit - 1) // limit
-        
+
         # Convertir filas a formato de respuesta
         items = []
         for row in rows:
@@ -256,7 +256,7 @@ def analistas_backup2(
             partes_nombre = nombre_completo.split()
             primer_nombre = partes_nombre[0] if partes_nombre else ""
             apellido = " ".join(partes_nombre[1:]) if len(partes_nombre) > 1 else ""
-            
+
             items.append({
                 "id": row[0],
                 "nombre": nombre_completo,
@@ -272,7 +272,7 @@ def analistas_backup2(
                 "created_at": None,
                 "updated_at": None
             })
-        
+
         return {
             "items": items,
             "total": total,
@@ -282,7 +282,7 @@ def analistas_backup2(
             "backup_mode": "backup2",
             "message": "Endpoint de respaldo 2 funcionando"
         }
-        
+
     except Exception as e:
         logger.error(f"Error en endpoint backup2: {str(e)}")
         return {
@@ -313,32 +313,32 @@ def analistas_emergency(
         base_query = "SELECT id, nombre, activo, updated_at FROM analistas"  # ✅ CORREGIDO: updated_at en lugar de created_at
         count_query = "SELECT COUNT(*) FROM analistas"
         where_conditions = []
-        
+
         # Aplicar filtros
         if activo is not None:
             where_conditions.append(f"activo = {activo}")
-        
+
         if search:
             where_conditions.append(f"nombre ILIKE '%{search}%'")
-        
+
         # Agregar WHERE si hay condiciones
         if where_conditions:
             where_clause = " WHERE " + " AND ".join(where_conditions)
             base_query += where_clause
             count_query += where_clause
-        
+
         # Obtener total
         total_result = db.execute(text(count_query))
         total = total_result.fetchone()[0]
-        
+
         # Aplicar paginación
         paginated_query = f"{base_query} ORDER BY id OFFSET {skip} LIMIT {limit}"
         result = db.execute(text(paginated_query))
         rows = result.fetchall()
-        
+
         # Calcular páginas
         pages = (total + limit - 1) // limit
-        
+
         # Convertir filas a formato de respuesta
         items = []
         for row in rows:
@@ -346,7 +346,7 @@ def analistas_emergency(
             partes_nombre = nombre_completo.split()
             primer_nombre = partes_nombre[0] if partes_nombre else ""
             apellido = " ".join(partes_nombre[1:]) if len(partes_nombre) > 1 else ""
-            
+
             items.append({
                 "id": row[0],
                 "nombre": nombre_completo,
@@ -361,7 +361,7 @@ def analistas_emergency(
                 "primer_nombre": primer_nombre,
                 "updated_at": row[3].isoformat() if row[3] else None  # ✅ CORREGIDO: updated_at
             })
-        
+
         return {
             "items": items,
             "total": total,
@@ -371,7 +371,7 @@ def analistas_emergency(
             "emergency_mode": True,
             "message": "Endpoint de emergencia funcionando"
         }
-        
+
     except Exception as e:
         logger.error(f"Error en endpoint de emergencia: {str(e)}")
         return {
@@ -399,26 +399,26 @@ def listar_analistas(
     """
     try:
         query = db.query(Analista)
-        
+
         # Aplicar filtros
         if activo is not None:
             query = query.filter(Analista.activo == activo)
-        
+
         if search:
             query = query.filter(
                 Analista.nombre.ilike(f"%{search}%") | 
                 Analista.apellido.ilike(f"%{search}%")
             )
-        
+
         # Obtener total
         total = query.count()
-        
+
         # Aplicar paginación
         analistas = query.offset(skip).limit(limit).all()
-        
+
         # Calcular páginas
         pages = (total + limit - 1) // limit
-        
+
         # Convertir a formato de respuesta
         items = []
         for analista in analistas:
@@ -432,7 +432,7 @@ def listar_analistas(
                 "updated_at": analista.updated_at.isoformat() if analista.updated_at else None,  # ✅ Campo correcto
                 "fecha_eliminacion": analista.fecha_eliminacion.isoformat() if analista.fecha_eliminacion else None
             })
-        
+
         return {
             "items": items,
             "total": total,
@@ -441,7 +441,7 @@ def listar_analistas(
             "pages": pages,
             "message": "Analistas obtenidos exitosamente"
         }
-        
+
     except Exception as e:
         logger.error(f"Error listando analistas: {str(e)}")
         raise HTTPException(
@@ -462,26 +462,26 @@ def listar_analistas_no_auth(
     """
     try:
         query = db.query(Analista)
-        
+
         # Aplicar filtros
         if activo is not None:
             query = query.filter(Analista.activo == activo)
-        
+
         if search:
             query = query.filter(
                 Analista.nombre.ilike(f"%{search}%") | 
                 Analista.apellido.ilike(f"%{search}%")
             )
-        
+
         # Obtener total
         total = query.count()
-        
+
         # Aplicar paginación
         analistas = query.offset(skip).limit(limit).all()
-        
+
         # Calcular páginas
         pages = (total + limit - 1) // limit
-        
+
         return {
             "items": [AnalistaResponse.model_validate(a) for a in analistas],
             "total": total,
@@ -489,7 +489,7 @@ def listar_analistas_no_auth(
             "size": limit,
             "pages": pages
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al listar analistas: {str(e)}")
 
@@ -510,32 +510,32 @@ def listar_asesores(
         base_query = "SELECT id, nombre, activo, updated_at FROM analistas"  # ✅ CORREGIDO: updated_at en lugar de created_at
         count_query = "SELECT COUNT(*) FROM analistas"
         where_conditions = []
-        
+
         # Aplicar filtros
         if activo is not None:
             where_conditions.append(f"activo = {activo}")
-        
+
         if search:
             where_conditions.append(f"nombre ILIKE '%{search}%'")
-        
+
         # Agregar WHERE si hay condiciones
         if where_conditions:
             where_clause = " WHERE " + " AND ".join(where_conditions)
             base_query += where_clause
             count_query += where_clause
-        
+
         # Obtener total
         total_result = db.execute(text(count_query))
         total = total_result.fetchone()[0]
-        
+
         # Aplicar paginación
         paginated_query = f"{base_query} ORDER BY id OFFSET {skip} LIMIT {limit}"
         result = db.execute(text(paginated_query))
         rows = result.fetchall()
-        
+
         # Calcular páginas
         pages = (total + limit - 1) // limit
-        
+
         # Convertir filas a objetos AnalistaResponse
         items = []
         for row in rows:
@@ -555,7 +555,7 @@ def listar_asesores(
                 "updated_at": None
             }
             items.append(AnalistaResponse.model_validate(analista_data))
-        
+
         return AnalistaListResponse(
             items=items,
             total=total,
@@ -563,7 +563,7 @@ def listar_asesores(
             size=limit,
             pages=pages
         )
-        
+
     except Exception as e:
         logger.error(f"Error en endpoint principal: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error al listar asesores: {str(e)}")
@@ -583,14 +583,14 @@ def listar_asesores_activos(
 ):
     """
     Listar solo asesores activos (para formularios)
-    
+
     Simplificado: Sin filtros adicionales, solo asesores activos
     """
     try:
         query = db.query(Analista).filter(Analista.activo == True)
         asesores = query.all()
         return [AnalistaResponse.model_validate(a) for a in asesores]
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al listar asesores activos: {str(e)}")
 
@@ -604,10 +604,10 @@ def obtener_asesor(
     Obtener un asesor por ID
     """
     asesor = db.query(Analista).filter(Analista.id == asesor_id).first()
-    
+
     if not asesor:
         raise HTTPException(status_code=404, detail="Analista no encontrado")
-    
+
     return AnalistaResponse.model_validate(asesor)
 
 @router.post("/crear", response_model=AnalistaResponse)
@@ -623,23 +623,23 @@ def crear_asesor(
         # Generar email automático si no se proporciona
         if not asesor_data.email:
             asesor_data.email = f"{asesor_data.nombre.lower().replace(' ', '.')}@asesor.local"
-        
+
         # Verificar que no exista un asesor con el mismo email (solo si se proporciona email)
         if asesor_data.email:
             existing = db.query(Analista).filter(Analista.email == asesor_data.email).first()
             if existing:
                 raise HTTPException(status_code=400, detail="Ya existe un asesor con este email")
-        
+
         # Crear nuevo asesor (nombre_completo es una propiedad, no se asigna)
         asesor_dict = asesor_data.model_dump()  # Pydantic v2
-        
+
         asesor = Analista(**asesor_dict)
         db.add(asesor)
         db.commit()
         db.refresh(asesor)
-        
+
         return AnalistaResponse.model_validate(asesor)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -658,10 +658,10 @@ def actualizar_asesor(
     """
     try:
         asesor = db.query(Analista).filter(Analista.id == asesor_id).first()
-        
+
         if not asesor:
             raise HTTPException(status_code=404, detail="Analista no encontrado")
-        
+
         # Verificar email único si se está cambiando
         if asesor_data.email and asesor_data.email != asesor.email:
             existing = db.query(Analista).filter(
@@ -670,17 +670,17 @@ def actualizar_asesor(
             ).first()
             if existing:
                 raise HTTPException(status_code=400, detail="Ya existe un asesor con este email")
-        
+
         # Actualizar campos
         update_data = asesor_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(asesor, field, value)
-        
+
         db.commit()
         db.refresh(asesor)
-        
+
         return AnalistaResponse.model_validate(asesor)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -698,17 +698,17 @@ def eliminar_asesor(
     """
     try:
         asesor = db.query(Analista).filter(Analista.id == asesor_id).first()
-        
+
         if not asesor:
             raise HTTPException(status_code=404, detail="Analista no encontrado")
-        
+
         # HARD DELETE - eliminar completamente de la base de datos
         asesor_nombre = asesor.nombre_completo  # Guardar nombre para log
         db.delete(asesor)
         db.commit()
-        
+
         return {"message": "Analista eliminado completamente de la base de datos"}
-        
+
     except HTTPException:
         raise
     except Exception as e:

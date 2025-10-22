@@ -22,35 +22,35 @@ class ConfiguracionSistema(Base):
     Permite configurar desde el frontend todos los aspectos del sistema
     """
     __tablename__ = "configuracion_sistema"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     categoria = Column(String(50), nullable=False, index=True)  # AI, EMAIL, WHATSAPP, etc.
     subcategoria = Column(String(50), nullable=True, index=True)  # OPENAI, GMAIL, TWILIO, etc.
     clave = Column(String(100), nullable=False, index=True)  # Nombre de la configuración
     valor = Column(Text, nullable=True)  # Valor de la configuración
     valor_json = Column(JSON, nullable=True)  # Para configuraciones complejas
-    
+
     # Metadatos
     descripcion = Column(Text, nullable=True)
     tipo_dato = Column(String(20), default="STRING")  # STRING, INTEGER, BOOLEAN, JSON, PASSWORD
     requerido = Column(Boolean, default=False)
     visible_frontend = Column(Boolean, default=True)
     solo_lectura = Column(Boolean, default=False)
-    
+
     # Validaciones
     valor_minimo = Column(String(100), nullable=True)
     valor_maximo = Column(String(100), nullable=True)
     opciones_validas = Column(Text, nullable=True)  # JSON array de opciones válidas
     patron_validacion = Column(String(200), nullable=True)  # Regex para validación
-    
+
     # Auditoría
     creado_en = Column(DateTime, server_default=func.now())
     actualizado_en = Column(DateTime, server_default=func.now(), onupdate=func.now())
     actualizado_por = Column(String(100), nullable=True)
-    
+
     def __repr__(self):
         return f"<ConfiguracionSistema({self.categoria}.{self.clave}={self.valor})>"
-    
+
     @property
     def valor_procesado(self):
         """Obtener valor procesado según el tipo de dato"""
@@ -73,7 +73,7 @@ class ConfiguracionSistema(Base):
                 return self.valor_json or {}
         else:
             return self.valor or ""
-    
+
     def actualizar_valor(self, nuevo_valor: Any, usuario: str = None):
         """Actualizar valor con validación"""
         # Validar según tipo
@@ -91,11 +91,11 @@ class ConfiguracionSistema(Base):
                 self.valor = str(nuevo_valor)
         else:
             self.valor = str(nuevo_valor)
-        
+
         self.actualizado_en = datetime.utcnow()
         if usuario:
             self.actualizado_por = usuario
-    
+
     @staticmethod
     def obtener_por_clave(db, categoria: str, clave: str) -> Optional['ConfiguracionSistema']:
         """Obtener configuración por categoría y clave"""
@@ -103,14 +103,14 @@ class ConfiguracionSistema(Base):
             ConfiguracionSistema.categoria == categoria,
             ConfiguracionSistema.clave == clave
         ).first()
-    
+
     @staticmethod
     def obtener_categoria(db, categoria: str) -> Dict[str, Any]:
         """Obtener todas las configuraciones de una categoría"""
         configs = db.query(ConfiguracionSistema).filter(
             ConfiguracionSistema.categoria == categoria
         ).all()
-        
+
         resultado = {}
         for config in configs:
             resultado[config.clave] = {
@@ -119,7 +119,7 @@ class ConfiguracionSistema(Base):
                 "tipo": config.tipo_dato,
                 "requerido": config.requerido
             }
-        
+
         return resultado
 
 
@@ -128,7 +128,7 @@ class ConfiguracionPorDefecto:
     Configuraciones por defecto del sistema
     Se crean automáticamente al inicializar el sistema
     """
-    
+
     CONFIGURACIONES_DEFAULT = {
         # ============================================
         # INTELIGENCIA ARTIFICIAL
@@ -168,7 +168,7 @@ class ConfiguracionPorDefecto:
                 "requerido": False
             }
         },
-        
+
         # ============================================
         # CONFIGURACIÓN DE EMAIL
         # ============================================
@@ -215,7 +215,7 @@ class ConfiguracionPorDefecto:
                 "requerido": False
             }
         },
-        
+
         # ============================================
         # CONFIGURACIÓN DE WHATSAPP MULTICANAL
         # ============================================
@@ -233,7 +233,7 @@ class ConfiguracionPorDefecto:
                 "opciones_validas": ["META_CLOUD_API"],
                 "requerido": False
             },
-            
+
             # CONFIGURACIÓN META CLOUD API
             "META_ACCESS_TOKEN": {
                 "valor": "",
@@ -249,7 +249,7 @@ class ConfiguracionPorDefecto:
                 "requerido": False,
                 "visible_frontend": True
             },
-            
+
             # CONFIGURACIÓN GENERAL
             "WHATSAPP_FROM_NUMBER": {
                 "valor": "",
@@ -277,7 +277,7 @@ class ConfiguracionPorDefecto:
                 "requerido": False
             }
         },
-        
+
         # ============================================
         # CONFIGURACIÓN DE ROLES Y PERMISOS
         # ============================================
@@ -310,7 +310,7 @@ class ConfiguracionPorDefecto:
                 "requerido": True
             }
         },
-        
+
         # ============================================
         # CONFIGURACIÓN FINANCIERA
         # ============================================
@@ -356,7 +356,7 @@ class ConfiguracionPorDefecto:
                 "requerido": True
             }
         },
-        
+
         # ============================================
         # CONFIGURACIÓN DE NOTIFICACIONES
         # ============================================
@@ -389,7 +389,7 @@ class ConfiguracionPorDefecto:
                 "requerido": False
             }
         },
-        
+
         # ============================================
         # CONFIGURACIÓN DE SEGURIDAD
         # ============================================
@@ -427,7 +427,7 @@ class ConfiguracionPorDefecto:
                 "requerido": True
             }
         },
-        
+
         # ============================================
         # CONFIGURACIÓN DE BASE DE DATOS
         # ============================================
@@ -454,7 +454,7 @@ class ConfiguracionPorDefecto:
                 "requerido": False
             }
         },
-        
+
         # ============================================
         # CONFIGURACIÓN DE REPORTES
         # ============================================
@@ -490,7 +490,7 @@ class ConfiguracionPorDefecto:
                 "requerido": False
             }
         },
-        
+
         # ============================================
         # CONFIGURACIÓN DE INTEGRACIONES
         # ============================================
@@ -522,7 +522,7 @@ class ConfiguracionPorDefecto:
                 "requerido": False
             }
         },
-        
+
         # ============================================
         # CONFIGURACIÓN DE MONITOREO
         # ============================================
@@ -548,7 +548,7 @@ class ConfiguracionPorDefecto:
                 "requerido": True
             }
         },
-        
+
         # ============================================
         # CONFIGURACIÓN DE LA APLICACIÓN
         # ============================================
@@ -593,7 +593,7 @@ class ConfiguracionPorDefecto:
             }
         }
     }
-    
+
     @staticmethod
     def crear_configuraciones_default(db):
         """Crear configuraciones por defecto si no existen"""
@@ -605,7 +605,7 @@ class ConfiguracionPorDefecto:
                         ConfiguracionSistema.categoria == categoria,
                         ConfiguracionSistema.clave == clave
                     ).first()
-                    
+
                     if not existing:
                         # Crear nueva configuración
                         nueva_config = ConfiguracionSistema(
@@ -623,13 +623,13 @@ class ConfiguracionPorDefecto:
                             valor_minimo=config_data.get("valor_minimo"),
                             valor_maximo=config_data.get("valor_maximo")
                         )
-                        
+
                         db.add(nueva_config)
-            
+
             db.commit()
             logger = logging.getLogger(__name__)
             logger.info("Configuraciones por defecto creadas exitosamente")
-            
+
         except Exception as e:
             db.rollback()
             logger = logging.getLogger(__name__)
@@ -644,7 +644,7 @@ class ConfigHelper:
     """
     Helper para acceso rápido a configuraciones
     """
-    
+
     @staticmethod
     def get_config(db, categoria: str, clave: str, default=None):
         """Obtener valor de configuración"""
@@ -652,24 +652,24 @@ class ConfigHelper:
         if config:
             return config.valor_procesado
         return default
-    
+
     @staticmethod
     def is_ai_enabled(db) -> bool:
         """Verificar si IA está habilitada"""
         return ConfigHelper.get_config(db, "AI", "AI_SCORING_ENABLED", False)
-    
+
     @staticmethod
     def is_email_configured(db) -> bool:
         """Verificar si email está configurado"""
         smtp_host = ConfigHelper.get_config(db, "EMAIL", "SMTP_HOST")
         smtp_user = ConfigHelper.get_config(db, "EMAIL", "SMTP_USERNAME")
         return bool(smtp_host and smtp_user)
-    
+
     @staticmethod
     def is_whatsapp_enabled(db) -> bool:
         """Verificar si WhatsApp está habilitado"""
         return ConfigHelper.get_config(db, "WHATSAPP", "WHATSAPP_ENABLED", False)
-    
+
     @staticmethod
     def get_financial_config(db) -> Dict:
         """Obtener configuración financiera completa"""
@@ -680,7 +680,7 @@ class ConfigHelper:
             "monto_maximo": ConfigHelper.get_config(db, "FINANCIERO", "MONTO_MAXIMO_FINANCIAMIENTO", 5000000),
             "plazo_maximo": ConfigHelper.get_config(db, "FINANCIERO", "PLAZO_MAXIMO_MESES", 84)
         }
-    
+
     @staticmethod
     def get_notification_config(db) -> Dict:
         """Obtener configuración de notificaciones"""

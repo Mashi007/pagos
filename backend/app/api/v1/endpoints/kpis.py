@@ -26,7 +26,7 @@ def dashboard_kpis_principales(
 ):
     """
     KPIs principales para el dashboard
-    
+
     📊 KPIs mostrados:
     - 💰 Cartera Total
     - ✅ Clientes al Día  
@@ -37,7 +37,7 @@ def dashboard_kpis_principales(
     """
     if not fecha_corte:
         fecha_corte = date.today()
-    
+
     # 💰 CARTERA TOTAL
     cartera_total = db.query(
         func.sum(Cliente.total_financiamiento)
@@ -45,7 +45,7 @@ def dashboard_kpis_principales(
         Cliente.activo == True,
         Cliente.total_financiamiento.isnot(None)
     ).scalar() or Decimal('0')
-    
+
     # ✅ CLIENTES AL DÍA
     clientes_al_dia = db.query(Cliente).filter(
         Cliente.activo == True,
@@ -54,18 +54,18 @@ def dashboard_kpis_principales(
             Cliente.dias_mora == 0
         )
     ).count()
-    
+
     # ⚠️ CLIENTES EN MORA
     clientes_en_mora = db.query(Cliente).filter(
         Cliente.activo == True,
         Cliente.estado_financiero == "MORA",
         Cliente.dias_mora > 0
     ).count()
-    
+
     # 📈 TASA DE MOROSIDAD
     total_clientes = clientes_al_dia + clientes_en_mora
     tasa_morosidad = (clientes_en_mora / total_clientes * 100) if total_clientes > 0 else 0
-    
+
     # 💸 COBRADO HOY
     cobrado_hoy = db.query(
         func.sum(Pago.monto_pagado)
@@ -73,13 +73,13 @@ def dashboard_kpis_principales(
         Pago.fecha_pago == fecha_corte,
         Pago.estado != "ANULADO"
     ).scalar() or Decimal('0')
-    
+
     # 📅 VENCIMIENTOS HOY
     vencimientos_hoy = db.query(Cuota).filter(
         Cuota.fecha_vencimiento == fecha_corte,
         Cuota.estado.in_(["PENDIENTE", "PARCIAL"])
     ).count()
-    
+
     return {
         "fecha_corte": fecha_corte,
         "kpis_principales": {
@@ -147,7 +147,7 @@ def kpis_financieros(
     """
     # Calcular fechas según período
     hoy = date.today()
-    
+
     if not fecha_inicio or not fecha_fin:
         if periodo == "dia":
             fecha_inicio = fecha_fin = hoy
@@ -160,7 +160,7 @@ def kpis_financieros(
         elif periodo == "año":
             fecha_inicio = hoy.replace(month=1, day=1)
             fecha_fin = hoy.replace(month=12, day=31)
-    
+
     # Cartera total (saldos pendientes)
     cartera_total = db.query(
         func.sum(Cliente.total_financiamiento - Cliente.cuota_inicial)
@@ -168,7 +168,7 @@ def kpis_financieros(
         Cliente.activo == True,
         Cliente.total_financiamiento.isnot(None)
     ).scalar() or Decimal('0')
-    
+
     # Total cobrado en el período
     total_cobrado = db.query(
         func.sum(Pago.monto_pagado)
@@ -177,7 +177,7 @@ def kpis_financieros(
         Pago.fecha_pago <= fecha_fin,
         Pago.estado != "ANULADO"
     ).scalar() or Decimal('0')
-    
+
     # Proyección próximos 30 días
     fecha_proyeccion = hoy + timedelta(days=30)
     flujo_proyectado = db.query(
@@ -187,23 +187,23 @@ def kpis_financieros(
         Cuota.fecha_vencimiento <= fecha_proyeccion,
         Cuota.estado.in_(["PENDIENTE", "PARCIAL"])
     ).scalar() or Decimal('0')
-    
+
     # Ingresos por período (capital + interés + mora)
     ingresos_capital = db.query(func.sum(Pago.monto_capital)).filter(
         Pago.fecha_pago >= fecha_inicio,
         Pago.fecha_pago <= fecha_fin
     ).scalar() or Decimal('0')
-    
+
     ingresos_interes = db.query(func.sum(Pago.monto_interes)).filter(
         Pago.fecha_pago >= fecha_inicio,
         Pago.fecha_pago <= fecha_fin
     ).scalar() or Decimal('0')
-    
+
     ingresos_mora = db.query(func.sum(Pago.monto_mora)).filter(
         Pago.fecha_pago >= fecha_inicio,
         Pago.fecha_pago <= fecha_fin
     ).scalar() or Decimal('0')
-    
+
     # Tasa de recuperación
     total_vencido = db.query(
         func.sum(Cuota.monto_cuota)
@@ -211,9 +211,9 @@ def kpis_financieros(
         Cuota.fecha_vencimiento <= hoy,
         Cuota.estado.in_(["PENDIENTE", "VENCIDA", "PARCIAL"])
     ).scalar() or Decimal('0')
-    
+
     tasa_recuperacion = (total_cobrado / total_vencido * 100) if total_vencido > 0 else 100
-    
+
     # Rentabilidad por modalidad
     rentabilidad_modalidad = db.query(
         Cliente.modalidad_pago,
@@ -224,7 +224,7 @@ def kpis_financieros(
         Cliente.activo == True,
         Cliente.modalidad_pago.isnot(None)
     ).group_by(Cliente.modalidad_pago).all()
-    
+
     return {
         "periodo": {
             "tipo": periodo,
@@ -275,14 +275,14 @@ def kpis_cobranza(
         Cliente.activo == True,
         Cliente.dias_mora > 0
     ).count()
-    
+
     clientes_al_dia = db.query(Cliente).filter(
         Cliente.activo == True,
         Cliente.dias_mora == 0
     ).count()
-    
+
     tasa_morosidad_general = (clientes_mora / total_clientes * 100) if total_clientes > 0 else 0
-    
+
     # Tasa de morosidad por analista
     morosidad_por_analista = db.query(
         User.full_name,
@@ -292,7 +292,7 @@ def kpis_cobranza(
         Analista.activo == True,
         Cliente.activo == True
     ).group_by(User.id, User.full_name).all()
-    
+
     # Promedio de días de retraso
     promedio_dias_mora = db.query(
         func.avg(Cliente.dias_mora)
@@ -300,19 +300,19 @@ def kpis_cobranza(
         Cliente.activo == True,
         Cliente.dias_mora > 0
     ).scalar() or 0
-    
+
     # Porcentaje de cumplimiento de pagos (cuotas pagadas a tiempo)
     cuotas_vencidas = db.query(Cuota).filter(
         Cuota.fecha_vencimiento <= date.today()
     ).count()
-    
+
     cuotas_pagadas_tiempo = db.query(Cuota).filter(
         Cuota.estado == "PAGADA",
         Cuota.fecha_pago <= Cuota.fecha_vencimiento
     ).count()
-    
+
     porcentaje_cumplimiento = (cuotas_pagadas_tiempo / cuotas_vencidas * 100) if cuotas_vencidas > 0 else 0
-    
+
     # Top 10 clientes morosos
     top_morosos = db.query(
         Cliente.id,
@@ -325,7 +325,7 @@ def kpis_cobranza(
         Cliente.activo == True,
         Cliente.dias_mora > 0
     ).order_by(Cliente.dias_mora.desc()).limit(10).all()
-    
+
     # Evolución mensual de mora (últimos 6 meses)
     evolucion_mensual = []
     for i in range(6):
@@ -336,7 +336,7 @@ def kpis_cobranza(
             "tasa_morosidad": round(tasa_morosidad_general - (i * 0.5), 2),
             "clientes_mora": max(0, clientes_mora - (i * 10))
         })
-    
+
     return {
         "kpis_cobranza": {
             "tasa_morosidad_general": round(tasa_morosidad_general, 2),
@@ -395,7 +395,7 @@ def kpis_analistaes(
     ).group_by(User.id, User.full_name).order_by(
         func.sum(Cliente.total_financiamiento).desc()
     ).all()
-    
+
     # Gestión de cobranza por analista
     cobranza_por_analista = db.query(
         User.id,
@@ -407,11 +407,11 @@ def kpis_analistaes(
         Analista.activo == True,
         Cliente.activo == True
     ).group_by(User.id, User.full_name).all()
-    
+
     # Procesar datos para ranking
     ranking_ventas = []
     ranking_cobranza = []
-    
+
     for analista_id, nombre, ventas, monto, ticket in ventas_por_analista:
         ranking_ventas.append({
             "analista_id": analista_id,
@@ -420,7 +420,7 @@ def kpis_analistaes(
             "monto_vendido": float(monto or 0),
             "ticket_promedio": float(ticket or 0)
         })
-    
+
     for analista_id, nombre, total, al_dia, mora in cobranza_por_analista:
         tasa_cobro = (al_dia / total * 100) if total > 0 else 0
         ranking_cobranza.append({
@@ -431,15 +431,15 @@ def kpis_analistaes(
             "clientes_mora": mora or 0,
             "tasa_cobro": round(tasa_cobro, 2)
         })
-    
+
     # Identificar mejores y peores
     mejor_vendedor = max(ranking_ventas, key=lambda x: x["total_ventas"]) if ranking_ventas else None
     mayor_monto = max(ranking_ventas, key=lambda x: x["monto_vendido"]) if ranking_ventas else None
     menor_ventas = min(ranking_ventas, key=lambda x: x["total_ventas"]) if ranking_ventas else None
-    
+
     mejor_cobrador = max(ranking_cobranza, key=lambda x: x["tasa_cobro"]) if ranking_cobranza else None
     peor_cobrador = min(ranking_cobranza, key=lambda x: x["tasa_cobro"]) if ranking_cobranza else None
-    
+
     return {
         "ranking_ventas": {
             "mejor_vendedor_unidades": mejor_vendedor,
@@ -483,7 +483,7 @@ def kpis_productos(
         Cliente.activo == True,
         Cliente.modelo_vehiculo.isnot(None)
     ).group_by(Cliente.modelo_vehiculo, Cliente.marca_vehiculo).all()
-    
+
     # Mora por modelo
     mora_por_modelo = db.query(
         Cliente.modelo_vehiculo,
@@ -493,15 +493,15 @@ def kpis_productos(
         Cliente.activo == True,
         Cliente.modelo_vehiculo.isnot(None)
     ).group_by(Cliente.modelo_vehiculo).all()
-    
+
     # Procesar datos
     modelos_data = []
     for modelo, marca, ventas, monto, ticket in ventas_por_modelo:
         # Buscar datos de mora para este modelo
         mora_data = next((m for m in mora_por_modelo if m[0] == modelo), (modelo, 0, 0))
-        
+
         tasa_mora_modelo = (mora_data[2] / mora_data[1] * 100) if mora_data[1] > 0 else 0
-        
+
         modelos_data.append({
             "modelo": modelo,
             "marca": marca,
@@ -511,11 +511,11 @@ def kpis_productos(
             "clientes_mora": mora_data[2],
             "tasa_mora": round(tasa_mora_modelo, 2)
         })
-    
+
     # Identificar extremos
     modelo_mas_vendido = max(modelos_data, key=lambda x: x["total_ventas"]) if modelos_data else None
     modelo_menos_vendido = min(modelos_data, key=lambda x: x["total_ventas"]) if modelos_data else None
-    
+
     return {
         "modelo_mas_vendido": modelo_mas_vendido,
         "modelo_menos_vendido": modelo_menos_vendido,
@@ -553,7 +553,7 @@ def kpis_concesionarios(
         Cliente.activo == True,
         Cliente.concesionario.isnot(None)
     ).group_by(Cliente.concesionario).all()
-    
+
     # Mora por concesionario
     mora_por_concesionario = db.query(
         Cliente.concesionario,
@@ -564,16 +564,16 @@ def kpis_concesionarios(
         Cliente.activo == True,
         Cliente.concesionario.isnot(None)
     ).group_by(Cliente.concesionario).all()
-    
+
     # Combinar datos
     concesionarios_data = []
     for concesionario, ventas, monto, ticket in ventas_por_concesionario:
         # Buscar datos de mora
         mora_data = next((m for m in mora_por_concesionario if m[0] == concesionario), 
                         (concesionario, 0, 0, 0))
-        
+
         tasa_mora = (mora_data[2] / mora_data[1] * 100) if mora_data[1] > 0 else 0
-        
+
         concesionarios_data.append({
             "concesionario": concesionario,
             "total_ventas": ventas,
@@ -583,10 +583,10 @@ def kpis_concesionarios(
             "tasa_mora": round(tasa_mora, 2),
             "promedio_dias_mora": round(float(mora_data[3] or 0), 1)
         })
-    
+
     # Ordenar por monto total
     concesionarios_data.sort(key=lambda x: x["monto_total"], reverse=True)
-    
+
     return {
         "ventas_por_concesionario": concesionarios_data,
         "comparativa": {

@@ -18,7 +18,7 @@ class CuotaBase(BaseModel):
     monto_interes: Decimal = Field(..., ge=0, description="Monto de interés")
     saldo_capital_inicial: Decimal = Field(..., ge=0, description="Saldo inicial de capital")
     saldo_capital_final: Decimal = Field(..., ge=0, description="Saldo final de capital")
-    
+
     @field_validator('monto_cuota', 'monto_capital', 'monto_interes', 
                      'saldo_capital_inicial', 'saldo_capital_final', mode='before')
     @classmethod
@@ -44,7 +44,7 @@ class CuotaUpdate(BaseModel):
     mora_pagada: Optional[Decimal] = Field(None, ge=0)
     estado: Optional[str] = None
     observaciones: Optional[str] = None
-    
+
     @field_validator('capital_pagado', 'interes_pagado', 'mora_pagada', mode='before')
     @classmethod
     def validate_decimal_places(cls, v):
@@ -75,12 +75,12 @@ class CuotaResponse(CuotaBase):
     es_cuota_especial: bool
     creado_en: datetime
     actualizado_en: Optional[datetime] = None
-    
+
     # Propiedades calculadas
     esta_vencida: bool = False
     monto_pendiente_total: Decimal = Decimal("0.00")
     porcentaje_pagado: Decimal = Decimal("0.00")
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -92,7 +92,7 @@ class TablaAmortizacionRequest(BaseModel):
     fecha_primer_vencimiento: date = Field(..., description="Fecha del primer vencimiento")
     modalidad: str = Field(default="MENSUAL", description="SEMANAL, QUINCENAL, MENSUAL")
     sistema_amortizacion: str = Field(default="FRANCES", description="FRANCES, ALEMAN, AMERICANO")
-    
+
     @field_validator('monto_financiado', 'tasa_interes_anual', mode='before')
     @classmethod
     def validate_decimal_places(cls, v):
@@ -102,7 +102,7 @@ class TablaAmortizacionRequest(BaseModel):
         if not isinstance(v, Decimal):
             v = Decimal(str(v))
         return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-    
+
     @field_validator('modalidad')
     @classmethod
     def validate_modalidad(cls, v):
@@ -111,7 +111,7 @@ class TablaAmortizacionRequest(BaseModel):
         if v not in modalidades_validas:
             raise ValueError(f'Modalidad debe ser una de: {", ".join(modalidades_validas)}')
         return v
-    
+
     @field_validator('sistema_amortizacion')
     @classmethod
     def validate_sistema(cls, v):
@@ -131,7 +131,7 @@ class CuotaDetalle(BaseModel):
     interes: Decimal
     cuota: Decimal
     saldo_final: Decimal
-    
+
     @field_validator('saldo_inicial', 'capital', 'interes', 'cuota', 'saldo_final', mode='before')
     @classmethod
     def validate_decimal_places(cls, v):
@@ -164,7 +164,7 @@ class AplicarPagoRequest(BaseModel):
         default="SECUENCIAL",
         description="SECUENCIAL (orden de cuotas) o VENCIDAS_PRIMERO"
     )
-    
+
     @field_validator('monto_total', mode='before')
     @classmethod
     def validate_decimal_places(cls, v):
@@ -199,7 +199,7 @@ class EstadoCuentaResponse(BaseModel):
     cuotas_vencidas: List[CuotaResponse]
     proximas_cuotas: List[CuotaResponse]
     historial_pagos: List[dict]
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -211,7 +211,7 @@ class ProyeccionPagoRequest(BaseModel):
         default=None,
         description="Fecha para la proyección (default: hoy)"
     )
-    
+
     @field_validator('monto_pago', mode='before')
     @classmethod
     def validate_decimal_places(cls, v):
@@ -248,7 +248,7 @@ class RecalcularMoraRequest(BaseModel):
         default=None,
         description="Fecha para el cálculo (default: hoy)"
     )
-    
+
     @field_validator('tasa_mora_diaria', mode='before')
     @classmethod
     def validate_decimal_places(cls, v):

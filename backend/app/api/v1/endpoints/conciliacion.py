@@ -44,7 +44,7 @@ async def validar_archivo_bancario(
 ):
     """
     Validar archivo bancario (Excel/CSV) y mostrar vista previa
-    
+
     Formato requerido (Excel):
     - Columna A: Fecha de transacción
     - Columna B: Monto  
@@ -65,14 +65,14 @@ async def validar_archivo_bancario(
                 status_code=400,
                 detail="Solo se aceptan archivos Excel (.xlsx, .xls) o CSV"
             )
-        
+
         # Leer archivo
         contenido = await archivo.read()
-        
+
         if formato == "EXCEL":
             # Leer Excel
             df = pd.read_excel(io.BytesIO(contenido))
-            
+
             # Mapear columnas esperadas
             columnas_esperadas = {
                 0: 'fecha',
@@ -82,26 +82,26 @@ async def validar_archivo_bancario(
                 4: 'descripcion',
                 5: 'cuenta_origen'
             }
-            
+
             # Renombrar columnas
             df.columns = [columnas_esperadas.get(i, f'col_{i}') for i in range(len(df.columns))]
-            
+
         else:  # CSV
             df = pd.read_csv(io.StringIO(contenido.decode('utf-8')))
-        
+
         # Validaciones
         errores = []
         advertencias = []
         movimientos_validos = []
         duplicados = []
         cedulas_no_registradas = []
-        
+
         # Verificar columnas requeridas
         columnas_requeridas = ['fecha', 'monto', 'referencia', 'cedula_pagador']
         for col in columnas_requeridas:
             if col not in df.columns:
                 errores.append(f"Columna requerida '{col}' no encontrada")
-        
+
         if errores:
             return ValidacionArchivoBancario(
                 archivo_valido=False,
@@ -111,35 +111,35 @@ async def validar_archivo_bancario(
                 errores=errores,
                 vista_previa=[]
             )
-        
+
         # Procesar cada fila
         referencias_vistas = set()
-        
+
         for index, fila in df.iterrows():
             try:
                 # Validar fecha
                 if pd.isna(fila['fecha']):
                     advertencias.append(f"Fila {index + 1}: Fecha vacía")
                     continue
-                
+
                 fecha_str = str(fila['fecha'])
                 if '/' in fecha_str:
                     fecha = datetime.strptime(fecha_str, '%d/%m/%Y').date()
                 else:
                     fecha = pd.to_datetime(fila['fecha']).date()
-                
+
                 # Validar monto
                 monto = Decimal(str(fila['monto']))
                 if monto <= 0:
                     advertencias.append(f"Fila {index + 1}: Monto inválido")
                     continue
-                
+
                 # Validar referencia
                 referencia = str(fila['referencia']).strip()
                 if not referencia or referencia == 'nan':
                     advertencias.append(f"Fila {index + 1}: Referencia vacía")
                     continue
-                
+
                 # Detectar duplicados
                 if referencia in referencias_vistas:
                     duplicados.append({
@@ -149,7 +149,7 @@ async def validar_archivo_bancario(
                     })
                     continue
                 referencias_vistas.add(referencia)
-                
+
                 # Validar cédula
                 cedula = str(fila['cedula_pagador']).strip()
                 if cedula and cedula != 'nan':
@@ -158,7 +158,7 @@ async def validar_archivo_bancario(
                     if not cliente:
                         if cedula not in cedulas_no_registradas:
                             cedulas_no_registradas.append(cedula)
-                
+
                 # Crear movimiento
                 movimiento = MovimientoBancarioExtendido(
                     fecha=fecha,
@@ -169,7 +169,7 @@ async def validar_archivo_bancario(
                     cuenta_origen=str(fila.get('cuenta_origen', '')) if 'cuenta_origen' in fila else None,
                     id=len(movimientos_validos) + 1
                 )
-                
+
                 # Intentar matching automático para vista previa
                 if cedula and cedula != 'nan':
                     cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
@@ -180,7 +180,7 @@ async def validar_archivo_bancario(
                             Cuota.estado.in_(["PENDIENTE", "VENCIDA", "PARCIAL"]),
                             Cuota.monto_cuota == monto  # Monto exacto
                         ).first()
-                        
+
                         if cuotas_pendientes:
                             movimiento.tipo_match = TipoMatch.MONTO_FECHA
                             movimiento.confianza_match = 95.0
@@ -203,7 +203,7 @@ async def validar_archivo_bancario(
                                 Cuota.monto_cuota >= (monto - tolerancia),
                                 Cuota.monto_cuota <= (monto + tolerancia)
                             ).first()
-                            
+
                             if cuota_aproximada:
                                 movimiento.tipo_match = TipoMatch.MONTO_FECHA
                                 movimiento.confianza_match = 75.0
@@ -219,12 +219,12 @@ async def validar_archivo_bancario(
                                     "monto_cuota": float(cuota_aproximada.monto_cuota),
                                     "diferencia": float(abs(cuota_aproximada.monto_cuota - monto))
                                 }
-                
+
                 movimientos_validos.append(movimiento)
-                
+
             except Exception as e:
                 errores.append(f"Fila {index + 1}: {str(e)}")
-        
+
         return ValidacionArchivoBancario(
             archivo_valido=len(errores) == 0,
             formato_detectado=formato,
@@ -236,7 +236,7 @@ async def validar_archivo_bancario(
             cedulas_no_registradas=cedulas_no_registradas,
             vista_previa=movimientos_validos[:10]  # Primeros 10 para vista previa
         )
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -259,14 +259,14 @@ def matching_automatico(
     exactos = []  # ✅ COINCIDENCIA EXACTA
     parciales = []  # ⚠️ COINCIDENCIA PARCIAL  
     sin_match = []  # ❌ SIN COINCIDENCIA
-    
+
     for mov in movimientos:
         match_encontrado = False
-        
+
         # 1° PRIORIDAD: Cédula + Monto exacto
         if mov.cedula_pagador and not match_encontrado:
             cliente = db.query(Cliente).filter(Cliente.cedula == mov.cedula_pagador).first()
-            
+
             if cliente:
                 # Buscar cuota con monto exacto
                 cuota_exacta = db.query(Cuota).join(Prestamo).filter(
@@ -274,7 +274,7 @@ def matching_automatico(
                     Cuota.estado.in_(["PENDIENTE", "VENCIDA", "PARCIAL"]),
                     Cuota.monto_cuota == mov.monto
                 ).first()
-                
+
                 if cuota_exacta:
                     exactos.append({
                         "movimiento": mov,
@@ -294,11 +294,11 @@ def matching_automatico(
                         "estado_visual": "✅ EXACTO"
                     })
                     match_encontrado = True
-        
+
         # 2° PRIORIDAD: Cédula + Monto aproximado (±2%)
         if mov.cedula_pagador and not match_encontrado:
             cliente = db.query(Cliente).filter(Cliente.cedula == mov.cedula_pagador).first()
-            
+
             if cliente:
                 tolerancia = mov.monto * Decimal("0.02")
                 cuota_aproximada = db.query(Cuota).join(Prestamo).filter(
@@ -307,11 +307,11 @@ def matching_automatico(
                     Cuota.monto_cuota >= (mov.monto - tolerancia),
                     Cuota.monto_cuota <= (mov.monto + tolerancia)
                 ).first()
-                
+
                 if cuota_aproximada:
                     diferencia = abs(cuota_aproximada.monto_cuota - mov.monto)
                     porcentaje_diferencia = (diferencia / mov.monto) * 100
-                    
+
                     parciales.append({
                         "movimiento": mov,
                         "cliente": {
@@ -331,13 +331,13 @@ def matching_automatico(
                         "estado_visual": "⚠️ REVISAR"
                     })
                     match_encontrado = True
-        
+
         # 3° PRIORIDAD: Referencia conocida
         if not match_encontrado:
             pago_existente = db.query(Pago).filter(
                 Pago.numero_operacion == mov.referencia
             ).first()
-            
+
             if pago_existente:
                 exactos.append({
                     "movimiento": mov,
@@ -351,7 +351,7 @@ def matching_automatico(
                     "estado_visual": "✅ EXACTO"
                 })
                 match_encontrado = True
-        
+
         # Sin coincidencia
         if not match_encontrado:
             sin_match.append({
@@ -359,7 +359,7 @@ def matching_automatico(
                 "estado_visual": "❌ MANUAL",
                 "requiere_busqueda_manual": True
             })
-    
+
     return ResultadoConciliacion(
         total_movimientos=len(movimientos),
         total_pagos=0,  # No relevante en este contexto
@@ -383,17 +383,17 @@ def confirmar_conciliacion(
     Confirma manualmente la conciliación de un pago.
     """
     pago = db.query(Pago).filter(Pago.id == pago_id).first()
-    
+
     if not pago:
         raise HTTPException(status_code=404, detail="Pago no encontrado")
-    
+
     pago.referencia_bancaria = referencia_bancaria
     pago.estado_conciliacion = EstadoConciliacion.CONCILIADO
     pago.fecha_conciliacion = datetime.now()
-    
+
     db.commit()
     db.refresh(pago)
-    
+
     return {"message": "Conciliación confirmada", "pago_id": pago_id}
 
 
@@ -409,14 +409,14 @@ def obtener_pendientes_conciliacion(
     query = db.query(Pago).filter(
         Pago.estado_conciliacion == EstadoConciliacion.PENDIENTE
     )
-    
+
     if fecha_inicio:
         query = query.filter(Pago.fecha_pago >= fecha_inicio)
     if fecha_fin:
         query = query.filter(Pago.fecha_pago <= fecha_fin)
-    
+
     pagos = query.all()
-    
+
     return [
         {
             "id": p.id,
@@ -439,24 +439,24 @@ def reporte_conciliacion(
     Genera reporte mensual de conciliación.
     """
     from calendar import monthrange
-    
+
     fecha_inicio = date(anio, mes, 1)
     ultimo_dia = monthrange(anio, mes)[1]
     fecha_fin = date(anio, mes, ultimo_dia)
-    
+
     total_pagos = db.query(Pago).filter(
         Pago.fecha_pago >= fecha_inicio,
         Pago.fecha_pago <= fecha_fin
     ).count()
-    
+
     conciliados = db.query(Pago).filter(
         Pago.fecha_pago >= fecha_inicio,
         Pago.fecha_pago <= fecha_fin,
         Pago.estado_conciliacion == EstadoConciliacion.CONCILIADO
     ).count()
-    
+
     pendientes = total_pagos - conciliados
-    
+
     return {
         "mes": mes,
         "anio": anio,
@@ -486,7 +486,7 @@ def procesar_revision_manual(
             cliente = db.query(Cliente).filter(Cliente.cedula == revision.cliente_cedula).first()
             if not cliente:
                 raise HTTPException(status_code=404, detail="Cliente no encontrado")
-            
+
             # Buscar cuota si se especifica
             cuota = None
             if revision.cuota_id:
@@ -494,16 +494,16 @@ def procesar_revision_manual(
                     Cuota.id == revision.cuota_id,
                     Prestamo.cliente_id == cliente.id
                 ).first()
-                
+
                 if not cuota:
                     raise HTTPException(status_code=404, detail="Cuota no encontrada")
-            
+
             # Crear pago
             monto_final = revision.monto_ajustado or revision.monto
-            
+
             # Obtener movimiento original (esto requeriría almacenamiento temporal)
             # Por simplicidad, crear pago directamente
-            
+
             db_pago = Pago(
                 prestamo_id=cuota.prestamo_id if cuota else cliente.prestamos[0].id,
                 numero_cuota=cuota.numero_cuota if cuota else 1,
@@ -518,32 +518,32 @@ def procesar_revision_manual(
                 usuario_registro=current_user.email,
                 estado_conciliacion="CONCILIADO_MANUAL"
             )
-            
+
             db.add(db_pago)
             db.commit()
             db.refresh(db_pago)
-            
+
             return {
                 "message": "Pago aplicado manualmente",
                 "pago_id": db_pago.id,
                 "cliente": cliente.nombre_completo,
                 "monto": float(monto_final)
             }
-        
+
         elif revision.accion == "RECHAZAR":
             # Marcar como rechazado (requeriría tabla de movimientos temporales)
             return {
                 "message": "Movimiento rechazado",
                 "observaciones": revision.observaciones
             }
-        
+
         elif revision.accion == "NO_APLICABLE":
             # Marcar como no aplicable
             return {
                 "message": "Movimiento marcado como no aplicable",
                 "observaciones": revision.observaciones
             }
-        
+
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error en revisión manual: {str(e)}")
@@ -568,27 +568,27 @@ def aplicar_conciliacion_masiva(
         errores = []
         total_monto = Decimal("0.00")
         clientes_afectados = set()
-        
+
         # Procesar cada movimiento (esto requeriría almacenamiento temporal de movimientos)
         # Por simplicidad, simulamos el proceso
-        
+
         for mov_id in conciliacion_data.movimientos_a_aplicar:
             try:
                 # En implementación real, obtendríamos el movimiento de almacenamiento temporal
                 # Por ahora simulamos la creación de pago
-                
+
                 # Simular creación de pago exitoso
                 pago_id = len(pagos_creados) + 1000  # ID simulado
                 pagos_creados.append(pago_id)
                 total_monto += Decimal("500.00")  # Monto simulado
                 clientes_afectados.add(f"Cliente-{mov_id}")
-                
+
             except Exception as e:
                 errores.append({
                     "movimiento_id": mov_id,
                     "error": str(e)
                 })
-        
+
         # Generar reporte en background
         background_tasks.add_task(
             _generar_reporte_conciliacion,
@@ -596,7 +596,7 @@ def aplicar_conciliacion_masiva(
             pagos_creados=pagos_creados,
             total_monto=float(total_monto)
         )
-        
+
         return ResultadoConciliacionMasiva(
             total_procesados=len(conciliacion_data.movimientos_a_aplicar),
             exitosos=len(pagos_creados),
@@ -610,7 +610,7 @@ def aplicar_conciliacion_masiva(
             },
             reporte_generado=True
         )
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en aplicación masiva: {str(e)}")
 
@@ -632,7 +632,7 @@ def obtener_historial_conciliaciones(
     """
     # Por ahora retornamos datos simulados
     # En implementación real, habría una tabla de conciliaciones
-    
+
     historial_simulado = [
         {
             "id": 1,
@@ -657,19 +657,19 @@ def obtener_historial_conciliaciones(
             "observaciones": "Conciliación mensual febrero"
         }
     ]
-    
+
     # Aplicar filtros si se proporcionan
     resultado = historial_simulado
-    
+
     if fecha_desde:
         resultado = [h for h in resultado if h["fecha_proceso"].date() >= fecha_desde]
-    
+
     if fecha_hasta:
         resultado = [h for h in resultado if h["fecha_proceso"].date() <= fecha_hasta]
-    
+
     if usuario:
         resultado = [h for h in resultado if usuario.lower() in h["usuario_proceso"].lower()]
-    
+
     return resultado
 
 
@@ -716,7 +716,7 @@ def obtener_tabla_resultados(
             "accion_sugerida": "BUSQUEDA_MANUAL"
         }
     ]
-    
+
     return {
         "proceso_id": proceso_id,
         "fecha_proceso": datetime.now(),
@@ -748,12 +748,12 @@ async def _generar_reporte_conciliacion(user_id: int, pagos_creados: List[int], 
         import logging
         logger = logging.getLogger(__name__)
         logger.info(f"Generando reporte de conciliación - Usuario: {user_id}, Pagos: {len(pagos_creados)}, Monto: ${total_monto}")
-        
+
         # En implementación real:
         # 1. Crear PDF/Excel con detalles
         # 2. Enviar por email al usuario
         # 3. Almacenar en sistema de archivos
-        
+
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
@@ -773,7 +773,7 @@ async def flujo_completo_conciliacion(
 ):
     """
     🏦 FLUJO COMPLETO DE CONCILIACIÓN BANCARIA MASIVA
-    
+
     Pasos del flujo:
     1. ✅ COBRANZAS descarga extracto del banco (Excel)
     2. ✅ Ingresa a "Conciliación Bancaria"
@@ -795,14 +795,14 @@ async def flujo_completo_conciliacion(
         # ============================================
         # PASOS 1-5: VALIDACIÓN Y VISTA PREVIA
         # ============================================
-        
+
         # Verificar permisos
         if not current_user.is_admin:
             raise HTTPException(status_code=403, detail="Sin permisos para conciliación bancaria")
-        
+
         # Validar archivo (reutilizar endpoint existente)
         validacion = await validar_archivo_bancario(archivo=archivo, db=db, current_user=current_user)
-        
+
         if not validacion.archivo_valido:
             return {
                 "paso": "4_VALIDACION_FALLIDA",
@@ -810,26 +810,26 @@ async def flujo_completo_conciliacion(
                 "advertencias": validacion.advertencias,
                 "mensaje": "❌ Archivo no válido - Corrija los errores y vuelva a intentar"
             }
-        
+
         # ============================================
         # PASOS 6-7: MATCHING AUTOMÁTICO
         # ============================================
-        
+
         movimientos_extendidos = validacion.vista_previa
-        
+
         # Ejecutar matching automático
         resultado_matching = matching_automatico(
             movimientos=movimientos_extendidos,
             db=db,
             current_user=current_user
         )
-        
+
         # ============================================
         # PASO 8: TABLA DE RESULTADOS
         # ============================================
-        
+
         tabla_resultados = []
-        
+
         # Procesar coincidencias exactas
         for match in resultado_matching.detalle_conciliados:
             tabla_resultados.append({
@@ -843,7 +843,7 @@ async def flujo_completo_conciliacion(
                 "accion_sugerida": "AUTO_APLICAR",
                 "requiere_revision": False
             })
-        
+
         # Procesar coincidencias parciales
         for match in resultado_matching.detalle_sin_conciliar_sistema:
             tabla_resultados.append({
@@ -858,7 +858,7 @@ async def flujo_completo_conciliacion(
                 "diferencia": f"${match['cuota']['diferencia']:,.2f}" if 'diferencia' in match.get('cuota', {}) else None,
                 "requiere_revision": True
             })
-        
+
         # Procesar sin coincidencia
         for match in resultado_matching.detalle_sin_conciliar_banco:
             tabla_resultados.append({
@@ -872,25 +872,25 @@ async def flujo_completo_conciliacion(
                 "accion_sugerida": "BUSQUEDA_MANUAL",
                 "requiere_revision": True
             })
-        
+
         # ============================================
         # PASO 10: RESUMEN ANTES DE APLICAR
         # ============================================
-        
+
         exactos = len([r for r in tabla_resultados if "✅" in r["estado"]])
         revision = len([r for r in tabla_resultados if "⚠️" in r["estado"]])
         manuales = len([r for r in tabla_resultados if "❌" in r["estado"]])
-        
+
         total_monto_aplicable = sum(
             float(r["monto"].replace("$", "").replace(",", ""))
             for r in tabla_resultados if "✅" in r["estado"]
         )
-        
+
         clientes_afectados = len(set(
             r["cedula"] for r in tabla_resultados 
             if "✅" in r["estado"] and r["cedula"] != "Desconocida"
         ))
-        
+
         resumen_final = {
             "total_movimientos": len(tabla_resultados),
             "pagos_aplicar_automatico": exactos,
@@ -900,11 +900,11 @@ async def flujo_completo_conciliacion(
             "clientes_afectados": clientes_afectados,
             "tasa_exito_automatico": round((exactos / len(tabla_resultados) * 100), 2) if tabla_resultados else 0
         }
-        
+
         # Guardar datos temporalmente para aplicación posterior
         # En implementación real, usarías Redis o tabla temporal
         proceso_id = f"CONC-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        
+
         return {
             "paso": "8_TABLA_RESULTADOS",
             "proceso_id": proceso_id,
@@ -924,7 +924,7 @@ async def flujo_completo_conciliacion(
             },
             "mensaje": f"✅ Archivo procesado - {exactos} coincidencias exactas, {revision} requieren revisión"
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en flujo de conciliación: {str(e)}")
 
@@ -942,12 +942,12 @@ async def aplicar_coincidencias_exactas(
     try:
         # En implementación real, recuperarías datos del proceso desde Redis/BD temporal
         # Por ahora simulamos la aplicación
-        
+
         pagos_creados = []
         clientes_afectados = set()
         total_aplicado = Decimal("0.00")
         errores = []
-        
+
         # Simular aplicación de pagos exactos
         # En implementación real, iterarías sobre los movimientos exactos guardados
         for i in range(5):  # Simulación de 5 pagos exactos
@@ -959,17 +959,17 @@ async def aplicar_coincidencias_exactas(
                     "cliente": f"Cliente-{i+1}",
                     "cuota": i + 1
                 }
-                
+
                 pagos_creados.append(pago_simulado)
                 clientes_afectados.add(pago_simulado["cliente"])
                 total_aplicado += Decimal(str(pago_simulado["monto"]))
-                
+
             except Exception as e:
                 errores.append({
                     "movimiento": f"MOV-{i+1}",
                     "error": str(e)
                 })
-        
+
         # Registrar en auditoría
         from app.models.auditoria import Auditoria, TipoAccion
         auditoria = Auditoria.registrar(
@@ -986,7 +986,7 @@ async def aplicar_coincidencias_exactas(
         )
         db.add(auditoria)
         db.commit()
-        
+
         # Generar reporte en background
         background_tasks.add_task(
             _generar_reporte_conciliacion_completo,
@@ -995,7 +995,7 @@ async def aplicar_coincidencias_exactas(
             pagos_creados=pagos_creados,
             total_monto=float(total_aplicado)
         )
-        
+
         # Notificar a admin
         background_tasks.add_task(
             _notificar_admin_conciliacion,
@@ -1004,7 +1004,7 @@ async def aplicar_coincidencias_exactas(
             pagos_aplicados=len(pagos_creados),
             total_monto=float(total_aplicado)
         )
-        
+
         return {
             "paso": "12_EJECUCION_LOTE",
             "proceso_id": proceso_id,
@@ -1028,7 +1028,7 @@ async def aplicar_coincidencias_exactas(
             },
             "mensaje": f"✅ {len(pagos_creados)} pagos aplicados exitosamente - Total: ${total_aplicado:,.2f}"
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error aplicando conciliación: {str(e)}")
 
@@ -1061,7 +1061,7 @@ def obtener_paso_flujo_conciliacion(
             },
             "siguiente_paso": "Ingresar al sistema y acceder a Conciliación Bancaria"
         }
-    
+
     elif paso == 2:
         return {
             "paso": 2,
@@ -1071,7 +1071,7 @@ def obtener_paso_flujo_conciliacion(
             "permisos_requeridos": ["COBRANZAS", "ADMIN", "GERENTE"],
             "siguiente_paso": "Cargar archivo Excel"
         }
-    
+
     elif paso == 7:
         return {
             "paso": 7,
@@ -1104,7 +1104,7 @@ def obtener_paso_flujo_conciliacion(
             },
             "siguiente_paso": "Mostrar tabla de resultados"
         }
-    
+
     elif paso == 12:
         return {
             "paso": 12,
@@ -1138,7 +1138,7 @@ def obtener_paso_flujo_conciliacion(
             ],
             "siguiente_paso": "Generar reporte PDF"
         }
-    
+
     elif paso == 13:
         return {
             "paso": 13,
@@ -1155,7 +1155,7 @@ def obtener_paso_flujo_conciliacion(
             "formato": "PDF descargable",
             "siguiente_paso": "Notificar a administrador"
         }
-    
+
     else:
         return {
             "flujo_completo": {
@@ -1202,7 +1202,7 @@ async def _generar_reporte_conciliacion_completo(
     try:
         import logging
         logger = logging.getLogger(__name__)
-        
+
         # Simulación de generación de reporte PDF
         reporte_data = {
             "proceso_id": proceso_id,
@@ -1212,16 +1212,16 @@ async def _generar_reporte_conciliacion_completo(
             "total_monto": total_monto,
             "archivo_generado": f"conciliacion_{proceso_id}.pdf"
         }
-        
+
         logger.info(f"📄 Reporte de conciliación generado: {reporte_data}")
-        
+
         # En implementación real:
         # 1. Crear PDF con reportlab
         # 2. Incluir tabla de movimientos procesados
         # 3. Agregar estadísticas y gráficos
         # 4. Guardar en sistema de archivos
         # 5. Enviar por email al usuario
-        
+
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
@@ -1239,14 +1239,14 @@ async def _notificar_admin_conciliacion(
     """
     try:
         db = SessionLocal()
-        
+
         # Obtener administradores
         admins = db.query(User).filter(
             User.is_admin == True,
             User.is_active == True,
             User.email.isnot(None)
         ).all()
-        
+
         for admin in admins:
             mensaje = f"""
 Hola {admin.full_name},
@@ -1276,7 +1276,7 @@ Acceder al sistema: https://pagos-f2qf.onrender.com
 
 Saludos.
             """
-            
+
             from app.models.notificacion import Notificacion
             notif = Notificacion(
                 user_id=admin.id,
@@ -1288,21 +1288,21 @@ Saludos.
                 programada_para=datetime.now(),
                 prioridad="NORMAL"
             )
-            
+
             db.add(notif)
-        
+
         db.commit()
-        
+
         # Enviar emails
         from app.services.email_service import EmailService
         email_service = EmailService()
-        
+
         for admin in admins:
             notif = db.query(Notificacion).filter(
                 Notificacion.user_id == admin.id,
                 Notificacion.asunto.like(f"%{proceso_id}%")
             ).order_by(Notificacion.id.desc()).first()
-            
+
             if notif:
                 await email_service.send_email(
                     to_email=admin.email,
@@ -1310,9 +1310,9 @@ Saludos.
                     body=notif.mensaje,
                     notificacion_id=notif.id
                 )
-        
+
         db.close()
-        
+
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)

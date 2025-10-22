@@ -40,14 +40,14 @@ class MovimientoBancario(BaseModel):
     cedula_pagador: Optional[str] = Field(None, description="Cédula del pagador")
     descripcion: Optional[str] = ""
     cuenta_origen: Optional[str] = Field(None, description="Número de cuenta origen")
-    
+
     model_config = ConfigDict(
         json_encoders={
             Decimal: lambda v: float(v),
             date: lambda v: v.isoformat()
         }
     )
-    
+
     @field_validator('monto')
     @classmethod
     def validar_monto(cls, v):
@@ -61,7 +61,7 @@ class MovimientoBancarioResponse(MovimientoBancario):
     id: Optional[int] = None
     conciliado: bool = False
     pago_id: Optional[int] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -74,7 +74,7 @@ class ConciliacionCreate(BaseModel):
     fecha_inicio: date
     fecha_fin: date
     movimientos: List[MovimientoBancario]
-    
+
     @field_validator('fecha_fin')
     @classmethod
     def validar_fechas(cls, v, info):
@@ -91,7 +91,7 @@ class ConciliacionMatch(BaseModel):
     fecha_pago: date
     tipo_match: TipoMatch
     confianza: float = Field(ge=0, le=MAX_CONFIDENCE, description="Porcentaje de confianza del match")
-    
+
     model_config = ConfigDict(
         json_encoders={
             Decimal: lambda v: float(v),
@@ -108,20 +108,20 @@ class ResultadoConciliacion(BaseModel):
     sin_conciliar_banco: int
     sin_conciliar_sistema: int
     porcentaje_conciliacion: float = 0.0
-    
+
     detalle_conciliados: List[Dict[str, Any]] = []
     detalle_sin_conciliar_banco: List[MovimientoBancario] = []
     detalle_sin_conciliar_sistema: List[Dict[str, Any]] = []
-    
+
     fecha_proceso: datetime = Field(default_factory=datetime.now)
-    
+
     @field_validator('porcentaje_conciliacion')
     @classmethod
     def calcular_porcentaje(cls, v, info):
         if 'total_movimientos' in info.data and info.data['total_movimientos'] > 0:
             return round((info.data.get('conciliados', 0) / info.data['total_movimientos']) * 100, 2)
         return 0.0
-    
+
     class Config:
         json_encoders = {
             datetime: lambda v: v.isoformat()
@@ -137,7 +137,7 @@ class ConciliacionResponse(BaseModel):
     total_conciliados: int
     estado: EstadoConciliacion
     created_at: datetime
-    
+
     model_config = ConfigDict(
         from_attributes=True,
         json_encoders={
@@ -157,7 +157,7 @@ class ConfirmacionConciliacion(BaseModel):
     movimiento_id: Optional[int] = None
     referencia_bancaria: str
     observaciones: Optional[str] = None
-    
+
     @field_validator('referencia_bancaria')
     @classmethod
     def validar_referencia(cls, v):
@@ -173,7 +173,7 @@ class ConfirmacionResponse(BaseModel):
     pago_id: int
     referencia_bancaria: str
     fecha_conciliacion: datetime
-    
+
     class Config:
         json_encoders = {
             datetime: lambda v: v.isoformat()
@@ -194,7 +194,7 @@ class ReporteConciliacionMensual(BaseModel):
     porcentaje_conciliacion: float
     monto_total: Decimal = DECIMAL_ZERO
     monto_conciliado: Decimal = DECIMAL_ZERO
-    
+
     class Config:
         json_encoders = {
             Decimal: lambda v: float(v)
@@ -209,7 +209,7 @@ class FiltroConciliacion(BaseModel):
     monto_min: Optional[Decimal] = None
     monto_max: Optional[Decimal] = None
     referencia: Optional[str] = None
-    
+
     class Config:
         json_encoders = {
             Decimal: lambda v: float(v),
@@ -230,7 +230,7 @@ class PagoPendienteConciliacion(BaseModel):
     fecha_pago: date
     concepto: str
     dias_pendiente: int = 0
-    
+
     model_config = ConfigDict(
         from_attributes=True,
         json_encoders={
@@ -251,7 +251,7 @@ class ExtractoBancarioUpload(BaseModel):
     separador: str = ","
     codificacion: str = "utf-8"
     tiene_encabezado: bool = True
-    
+
     columnas: Dict[str, str] = {
         "fecha": "fecha",
         "referencia": "referencia", 
@@ -267,8 +267,8 @@ class ValidacionExtracto(BaseModel):
     advertencias: List[str] = []
     total_movimientos: int = 0
     movimientos_validos: int = 0
-    
-    
+
+
 # ============================================
 # ESTADÍSTICAS
 # ============================================
@@ -279,10 +279,10 @@ class EstadisticasConciliacion(BaseModel):
     tasa_conciliacion: float  # Porcentaje
     tiempo_promedio_conciliacion: float  # En días
     total_diferencias: Decimal
-    
+
     por_estado: Dict[str, int] = {}
     por_mes: Dict[str, int] = {}
-    
+
     class Config:
         json_encoders = {
             Decimal: lambda v: float(v)
@@ -301,7 +301,7 @@ class MovimientoBancarioExtendido(MovimientoBancario):
     cliente_encontrado: Optional[dict] = None
     pago_sugerido: Optional[dict] = None
     requiere_revision: bool = False
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -335,7 +335,7 @@ class ResultadoConciliacionMasiva(BaseModel):
     errores: List[dict] = []
     resumen_financiero: dict
     reporte_generado: bool = True
-    
+
     class Config:
         json_encoders = {
             datetime: lambda v: v.isoformat()
@@ -363,7 +363,7 @@ class HistorialConciliacion(BaseModel):
     tasa_exito: float
     estado: EstadoConciliacion
     observaciones: Optional[str] = None
-    
+
     model_config = ConfigDict(
         from_attributes=True,
         json_encoders={

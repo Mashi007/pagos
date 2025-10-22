@@ -18,7 +18,7 @@ class ConcesionarioResponse(ConcesionarioBase):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     fecha_eliminacion: Optional[datetime] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 class ConcesionarioListResponse(BaseModel):

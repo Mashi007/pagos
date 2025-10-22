@@ -20,14 +20,14 @@ from app.core.config import settings
 def configure_sentry(app: FastAPI) -> None:
     """
     Configura Sentry para tracking de errores
-    
+
     Args:
         app: Instancia de FastAPI
     """
     if not settings.SENTRY_DSN:
         logging.warning("SENTRY_DSN no configurado - Sentry deshabilitado")
         return
-    
+
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
         environment=settings.ENVIRONMENT,
@@ -44,7 +44,7 @@ def configure_sentry(app: FastAPI) -> None:
         attach_stacktrace=True,
         max_breadcrumbs=50,
     )
-    
+
     logging.info(f"Sentry configurado - Environment: {settings.ENVIRONMENT}")
 
 
@@ -61,24 +61,24 @@ def before_send_sentry(event, hint):
             for header in sensitive_headers:
                 if header in event["request"]["headers"]:
                     event["request"]["headers"][header] = "[FILTERED]"
-    
+
     return event
 
 
 def configure_prometheus(app: FastAPI) -> Optional[Instrumentator]:
     """
     Configura Prometheus para métricas
-    
+
     Args:
         app: Instancia de FastAPI
-        
+
     Returns:
         Instrumentator configurado o None
     """
     if not settings.PROMETHEUS_ENABLED:
         logging.warning("PROMETHEUS_ENABLED=False - Prometheus deshabilitado")
         return None
-    
+
     instrumentator = Instrumentator(
         should_group_status_codes=True,
         should_ignore_untemplated=True,
@@ -89,7 +89,7 @@ def configure_prometheus(app: FastAPI) -> Optional[Instrumentator]:
         inprogress_name="fastapi_inprogress",
         inprogress_labels=True,
     )
-    
+
     # Configurar métricas adicionales
     instrumentator.add(
         # Duración de requests por endpoint
@@ -97,20 +97,20 @@ def configure_prometheus(app: FastAPI) -> Optional[Instrumentator]:
             buckets=(0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0)
         )
     )
-    
+
     instrumentator.add(
         # Tamaño de requests/responses
         instrumentator.metrics.requests()
     )
-    
+
     # Instrumentar la app
     instrumentator.instrument(app)
-    
+
     # Exponer endpoint /metrics
     instrumentator.expose(app, endpoint="/metrics", include_in_schema=False)
-    
+
     logging.info("Prometheus configurado - Métricas en /metrics")
-    
+
     return instrumentator
 
 
@@ -119,7 +119,7 @@ def configure_structured_logging() -> None:
     Configura logging estructurado en formato JSON
     """
     log_level = settings.LOG_LEVEL.upper()
-    
+
     # Configurar formato JSON
     log_handler = logging.StreamHandler()
     formatter = jsonlogger.JsonFormatter(
@@ -132,13 +132,13 @@ def configure_structured_logging() -> None:
         }
     )
     log_handler.setFormatter(formatter)
-    
+
     # Configurar logger raíz
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
     root_logger.handlers = []
     root_logger.addHandler(log_handler)
-    
+
     # Configurar loggers específicos
     loggers_to_configure = [
         "uvicorn",
@@ -147,24 +147,24 @@ def configure_structured_logging() -> None:
         "sqlalchemy.engine",
         "app",
     ]
-    
+
     for logger_name in loggers_to_configure:
         logger = logging.getLogger(logger_name)
         logger.setLevel(log_level)
         logger.handlers = []
         logger.addHandler(log_handler)
         logger.propagate = False
-    
+
     logging.info(f"Logging estructurado configurado - Level: {log_level}")
 
 
 def setup_monitoring(app: FastAPI) -> dict:
     """
     Configura todo el sistema de monitoreo
-    
+
     Args:
         app: Instancia de FastAPI
-        
+
     Returns:
         dict con configuración aplicada
     """
@@ -173,31 +173,31 @@ def setup_monitoring(app: FastAPI) -> dict:
         "prometheus": False,
         "structured_logging": False,
     }
-    
+
     try:
         # Logging estructurado
         configure_structured_logging()
         config_applied["structured_logging"] = True
-        
+
         # Sentry
         if settings.SENTRY_DSN:
             configure_sentry(app)
             config_applied["sentry"] = True
-        
+
         # Prometheus
         if settings.PROMETHEUS_ENABLED:
             instrumentator = configure_prometheus(app)
             if instrumentator:
                 config_applied["prometheus"] = True
-        
+
         logging.info("Sistema de monitoreo configurado exitosamente")
         logging.info(f"Configuración aplicada: {config_applied}")
-        
+
     except Exception as e:
         logging.error(f"Error configurando monitoreo: {str(e)}")
         # No fallar si el monitoreo falla
         pass
-    
+
     return config_applied
 
 
@@ -212,12 +212,12 @@ def track_business_metrics(
 ) -> None:
     """
     Registra métricas de negocio personalizadas para financiamiento automotriz
-    
+
     Args:
         metric_name: Nombre de la métrica
         value: Valor de la métrica
         labels: Labels adicionales
-        
+
     Examples:
         track_business_metrics("clientes_creados", 1, {"analista": "Juan", "concesionario": "AutoCenter"})
         track_business_metrics("pagos_procesados", monto, {"estado": "EXITOSO", "metodo": "TRANSFERENCIA"})
@@ -236,12 +236,12 @@ def track_business_metrics(
                 "system": "financiamiento_automotriz"
             }
         )
-        
+
         # Si Prometheus está habilitado, registrar métrica
         if settings.PROMETHEUS_ENABLED:
             # Implementar contadores específicos del negocio
             pass
-            
+
     except Exception as e:
         logging.error(f"Error registrando métrica de negocio: {e}")
 
@@ -255,7 +255,7 @@ def track_financial_operation(
 ) -> None:
     """
     Trackear operaciones financieras específicas
-    
+
     Args:
         operation_type: PAGO, PRESTAMO, ANULACION, MODIFICACION
         amount: Monto de la operación
@@ -283,7 +283,7 @@ def track_approval_workflow(
 ) -> None:
     """
     Trackear flujo de aprobaciones
-    
+
     Args:
         workflow_step: SOLICITUD, APROBACION, RECHAZO, EJECUCION
         request_type: MODIFICAR_PAGO, ANULAR_PAGO, EDITAR_CLIENTE
@@ -321,7 +321,7 @@ def track_bulk_migration(
 class track_operation:
     """
     Context manager para trackear operaciones
-    
+
     Example:
         with track_operation("crear_prestamo", cliente_id=123):
             # código
@@ -330,11 +330,11 @@ class track_operation:
     def __init__(self, operation_name: str, **kwargs):
         self.operation_name = operation_name
         self.context = kwargs
-    
+
     def __enter__(self):
         logging.info(f"Iniciando operación: {self.operation_name}", extra=self.context)
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type:
             logging.error(
@@ -357,7 +357,7 @@ def get_monitoring_status() -> dict:
     return {
         "titulo": "🔍 ESTADO DEL SISTEMA DE MONITOREO",
         "fecha_verificacion": datetime.now().isoformat(),
-        
+
         "servicios_monitoreo": {
             "sentry": {
                 "habilitado": bool(getattr(settings, 'SENTRY_DSN', None)),
@@ -378,7 +378,7 @@ def get_monitoring_status() -> dict:
                 "descripcion": "Logs estructurados para análisis"
             }
         },
-        
+
         "metricas_negocio_disponibles": {
             "financieras": [
                 "clientes_creados",
@@ -399,13 +399,13 @@ def get_monitoring_status() -> dict:
                 "database_connections"
             ]
         },
-        
+
         "integracion_actual": {
             "main_py": "❌ No integrado",
             "endpoints": "❌ No utilizado",
             "recomendacion": "Integrar en main.py para habilitar monitoreo completo"
         },
-        
+
         "beneficios_implementacion": [
             "🔍 Tracking automático de errores con Sentry",
             "📊 Métricas de performance con Prometheus",
@@ -414,7 +414,7 @@ def get_monitoring_status() -> dict:
             "📈 Métricas de negocio específicas",
             "🔧 Debugging mejorado en producción"
         ],
-        
+
         "pasos_integracion": [
             "1. Agregar variables de entorno (SENTRY_DSN, etc.)",
             "2. Importar setup_monitoring en main.py",
@@ -422,7 +422,7 @@ def get_monitoring_status() -> dict:
             "4. Usar track_operation en endpoints críticos",
             "5. Configurar alertas en Sentry/Prometheus"
         ],
-        
+
         "utilidad_para_financiamiento": {
             "alta": "✅ Muy útil para sistema empresarial",
             "razones": [

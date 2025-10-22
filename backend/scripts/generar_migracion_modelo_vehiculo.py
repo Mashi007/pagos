@@ -20,10 +20,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def generar_migracion():
     """Generar migración para agregar columna modelo_vehiculo"""
-    
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"backend/alembic/versions/{timestamp}_add_modelo_vehiculo_column.py"
-    
+
     migracion_content = f'''"""Add modelo_vehiculo column to clientes table
 
 Revision ID: {timestamp}
@@ -46,7 +46,7 @@ def upgrade():
     connection = op.get_bind()
     inspector = sa.inspect(connection)
     columns = [col['name'] for col in inspector.get_columns('clientes')]
-    
+
     if 'modelo_vehiculo' not in columns:
         op.add_column('clientes', sa.Column('modelo_vehiculo', sa.String(MODELO_VEHICULO_LENGTH), nullable=True))
         logger.info("Columna modelo_vehiculo agregada a la tabla clientes")
@@ -59,23 +59,23 @@ def downgrade():
     connection = op.get_bind()
     inspector = sa.inspect(connection)
     columns = [col['name'] for col in inspector.get_columns('clientes')]
-    
+
     if 'modelo_vehiculo' in columns:
         op.drop_column('clientes', 'modelo_vehiculo')
         logger.info("Columna modelo_vehiculo eliminada de la tabla clientes")
     else:
         logger.info("Columna modelo_vehiculo no existe en la tabla clientes")
 '''
-    
+
     try:
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(migracion_content)
-        
+
         logger.info(f"Migración generada: {filename}")
         logger.info("Próximos pasos:")
         logger.info("1. Ejecutar: alembic upgrade head")
         logger.info("2. Verificar que la columna se agregó correctamente")
-        
+
     except Exception as e:
         logger.error(f"Error generando migración: {e}")
 

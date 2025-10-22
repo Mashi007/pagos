@@ -36,14 +36,14 @@ router = APIRouter()
 
 class StrategicMeasurements:
     """Sistema de mediciones específicas para problemas identificados"""
-    
+
     def __init__(self):
         self.measurements = deque(maxlen=10000)
         self.deployment_metrics = deque(maxlen=1000)
         self.schema_metrics = deque(maxlen=1000)
         self.performance_metrics = deque(maxlen=1000)
         self.lock = threading.Lock()
-        
+
         # Métricas específicas para problemas identificados
         self.metric_categories = {
             'deployment_health': {
@@ -71,7 +71,7 @@ class StrategicMeasurements:
                 'response_times': []
             }
         }
-    
+
     def measure_deployment_health(self) -> Dict[str, Any]:
         """Medir salud del despliegue"""
         with self.lock:
@@ -85,12 +85,12 @@ class StrategicMeasurements:
                     'dependency_health': self._check_dependencies()
                 }
             }
-            
+
             self.deployment_metrics.append(measurement)
             self.measurements.append(measurement)
-            
+
             return measurement
-    
+
     def measure_schema_consistency(self, db: Session) -> Dict[str, Any]:
         """Medir consistencia del esquema"""
         with self.lock:
@@ -104,12 +104,12 @@ class StrategicMeasurements:
                     'constraint_validation': self._check_constraints(db)
                 }
             }
-            
+
             self.schema_metrics.append(measurement)
             self.measurements.append(measurement)
-            
+
             return measurement
-    
+
     def measure_frontend_stability(self) -> Dict[str, Any]:
         """Medir estabilidad del frontend"""
         with self.lock:
@@ -123,11 +123,11 @@ class StrategicMeasurements:
                     'ui_component_health': self._check_ui_components()
                 }
             }
-            
+
             self.measurements.append(measurement)
-            
+
             return measurement
-    
+
     def measure_system_performance(self) -> Dict[str, Any]:
         """Medir rendimiento del sistema"""
         with self.lock:
@@ -142,12 +142,12 @@ class StrategicMeasurements:
                     'load_average': os.getloadavg() if hasattr(os, 'getloadavg') else [0, 0, 0]
                 }
             }
-            
+
             self.performance_metrics.append(measurement)
             self.measurements.append(measurement)
-            
+
             return measurement
-    
+
     def _check_port_scan_status(self) -> Dict[str, Any]:
         """Verificar estado de escaneo de puertos"""
         try:
@@ -164,7 +164,7 @@ class StrategicMeasurements:
                 'error': str(e),
                 'scan_timeout': True
             }
-    
+
     def _validate_imports(self) -> Dict[str, Any]:
         """Validar imports críticos"""
         critical_imports = [
@@ -173,7 +173,7 @@ class StrategicMeasurements:
             'sqlalchemy',
             'pydantic'
         ]
-        
+
         validation_results = {}
         for import_name in critical_imports:
             try:
@@ -181,14 +181,14 @@ class StrategicMeasurements:
                 validation_results[import_name] = 'valid'
             except ImportError as e:
                 validation_results[import_name] = f'error: {str(e)}'
-        
+
         return {
             'total_imports': len(critical_imports),
             'valid_imports': len([v for v in validation_results.values() if v == 'valid']),
             'invalid_imports': len([v for v in validation_results.values() if v != 'valid']),
             'details': validation_results
         }
-    
+
     def _check_startup_readiness(self) -> Dict[str, Any]:
         """Verificar preparación para inicio"""
         return {
@@ -198,7 +198,7 @@ class StrategicMeasurements:
             'configuration': 'valid',
             'startup_time': datetime.now().isoformat()
         }
-    
+
     def _check_dependencies(self) -> Dict[str, Any]:
         """Verificar dependencias críticas"""
         return {
@@ -208,12 +208,12 @@ class StrategicMeasurements:
             'uvicorn_version': 'available',
             'dependency_health': 'healthy'
         }
-    
+
     def _check_critical_tables(self, db: Session) -> Dict[str, Any]:
         """Verificar salud de tablas críticas"""
         critical_tables = ['analistas', 'clientes', 'users', 'usuarios']
         table_health = {}
-        
+
         for table in critical_tables:
             try:
                 # Verificar si la tabla existe
@@ -225,7 +225,7 @@ class StrategicMeasurements:
                 """
                 result = db.execute(query, (table,))
                 exists = result.fetchone()[0]
-                
+
                 if exists:
                     # Verificar columnas críticas
                     column_query = """
@@ -234,7 +234,7 @@ class StrategicMeasurements:
                     """
                     columns_result = db.execute(column_query, (table,))
                     columns = [row[0] for row in columns_result.fetchall()]
-                    
+
                     table_health[table] = {
                         'exists': True,
                         'columns': columns,
@@ -245,20 +245,20 @@ class StrategicMeasurements:
                         'exists': False,
                         'health': 'missing'
                     }
-                    
+
             except Exception as e:
                 table_health[table] = {
                     'exists': False,
                     'health': 'error',
                     'error': str(e)
                 }
-        
+
         return table_health
-    
+
     def _check_column_consistency(self, db: Session) -> Dict[str, Any]:
         """Verificar consistencia de columnas"""
         consistency_issues = []
-        
+
         # Verificar columna created_at en analistas
         try:
             query = """
@@ -271,27 +271,27 @@ class StrategicMeasurements:
             """
             result = db.execute(query)
             has_created_at = result.fetchone()[0]
-            
+
             if not has_created_at:
                 consistency_issues.append({
                     'table': 'analistas',
                     'missing_column': 'created_at',
                     'severity': 'critical'
                 })
-                
+
         except Exception as e:
             consistency_issues.append({
                 'table': 'analistas',
                 'error': str(e),
                 'severity': 'error'
             })
-        
+
         return {
             'total_issues': len(consistency_issues),
             'critical_issues': len([i for i in consistency_issues if i.get('severity') == 'critical']),
             'issues': consistency_issues
         }
-    
+
     def _check_index_health(self, db: Session) -> Dict[str, Any]:
         """Verificar salud de índices"""
         try:
@@ -304,25 +304,25 @@ class StrategicMeasurements:
             """
             result = db.execute(query)
             indexes = result.fetchall()
-            
+
             index_count = {}
             for row in indexes:
                 table = row[0]
                 index_count[table] = index_count.get(table, 0) + 1
-            
+
             return {
                 'total_indexes': len(indexes),
                 'indexes_per_table': index_count,
                 'health': 'healthy' if len(indexes) > 0 else 'warning'
             }
-            
+
         except Exception as e:
             return {
                 'total_indexes': 0,
                 'health': 'error',
                 'error': str(e)
             }
-    
+
     def _check_constraints(self, db: Session) -> Dict[str, Any]:
         """Verificar constraints"""
         try:
@@ -335,27 +335,27 @@ class StrategicMeasurements:
             """
             result = db.execute(query)
             constraints = result.fetchall()
-            
+
             constraint_count = {}
             for row in constraints:
                 table = row[0]
                 constraint_type = row[2]
                 key = f"{table}_{constraint_type}"
                 constraint_count[key] = constraint_count.get(key, 0) + 1
-            
+
             return {
                 'total_constraints': len(constraints),
                 'constraints_per_table_type': constraint_count,
                 'health': 'healthy' if len(constraints) > 0 else 'warning'
             }
-            
+
         except Exception as e:
             return {
                 'total_constraints': 0,
                 'health': 'error',
                 'error': str(e)
             }
-    
+
     def _check_api_endpoints(self) -> Dict[str, Any]:
         """Verificar salud de endpoints API"""
         return {
@@ -364,7 +364,7 @@ class StrategicMeasurements:
             'problematic_endpoints': 5,
             'health_percentage': 90.0
         }
-    
+
     def _analyze_frontend_errors(self) -> Dict[str, Any]:
         """Analizar patrones de errores del frontend"""
         return {
@@ -373,7 +373,7 @@ class StrategicMeasurements:
             'api_call_failures': 0,
             'last_error': None
         }
-    
+
     def _check_data_validation(self) -> Dict[str, Any]:
         """Verificar validación de datos"""
         return {
@@ -381,7 +381,7 @@ class StrategicMeasurements:
             'data_integrity': 'maintained',
             'error_handling': 'implemented'
         }
-    
+
     def _check_ui_components(self) -> Dict[str, Any]:
         """Verificar salud de componentes UI"""
         return {
@@ -390,7 +390,7 @@ class StrategicMeasurements:
             'problematic_components': 2,
             'health_percentage': 92.0
         }
-    
+
     def get_measurement_summary(self) -> Dict[str, Any]:
         """Obtener resumen de mediciones"""
         with self.lock:
@@ -422,13 +422,13 @@ async def get_deployment_health(
     """
     try:
         measurement = strategic_measurements.measure_deployment_health()
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
             "measurement": measurement
         }
-        
+
     except Exception as e:
         logger.error(f"Error midiendo salud de despliegue: {e}")
         return {
@@ -447,13 +447,13 @@ async def get_schema_consistency(
     """
     try:
         measurement = strategic_measurements.measure_schema_consistency(db)
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
             "measurement": measurement
         }
-        
+
     except Exception as e:
         logger.error(f"Error midiendo consistencia de esquema: {e}")
         return {
@@ -472,13 +472,13 @@ async def get_frontend_stability(
     """
     try:
         measurement = strategic_measurements.measure_frontend_stability()
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
             "measurement": measurement
         }
-        
+
     except Exception as e:
         logger.error(f"Error midiendo estabilidad del frontend: {e}")
         return {
@@ -497,13 +497,13 @@ async def get_system_performance(
     """
     try:
         measurement = strategic_measurements.measure_system_performance()
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
             "measurement": measurement
         }
-        
+
     except Exception as e:
         logger.error(f"Error midiendo rendimiento del sistema: {e}")
         return {
@@ -522,13 +522,13 @@ async def get_measurement_summary_endpoint(
     """
     try:
         summary = strategic_measurements.get_measurement_summary()
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
             "summary": summary
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo resumen de mediciones: {e}")
         return {

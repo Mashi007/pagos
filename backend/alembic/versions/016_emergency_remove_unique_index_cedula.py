@@ -20,7 +20,7 @@ def upgrade():
     """EMERGENCY: Force remove the unique index ix_clientes_cedula"""
     # Drop the problematic unique index
     op.execute("DROP INDEX IF EXISTS ix_clientes_cedula")
-    
+
     # Create a non-unique index for performance
     op.execute("CREATE INDEX IF NOT EXISTS idx_clientes_cedula_performance ON clientes (cedula)")
 
@@ -29,6 +29,6 @@ def downgrade():
     """Restore the unique index"""
     # Drop the performance index
     op.execute("DROP INDEX IF EXISTS idx_clientes_cedula_performance")
-    
+
     # Restore the unique index
     op.execute("CREATE UNIQUE INDEX ix_clientes_cedula ON clientes (cedula)")

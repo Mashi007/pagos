@@ -9,11 +9,11 @@ class Analista(Base):
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(255), nullable=False, index=True)  # Nombre completo (incluye apellido)
     activo = Column(Boolean, default=True, nullable=False)
-    
+
     # Timestamps
     updated_at = Column(DateTime(timezone=True), server_default=func.now())
     fecha_eliminacion = Column(DateTime(timezone=True), nullable=True)
-    
+
     # Relaciones
     # clientes = relationship("Cliente", back_populates="asesor_config_rel")  # COMENTADO: Solo plantilla vacía
 

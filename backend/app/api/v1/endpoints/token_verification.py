@@ -38,7 +38,7 @@ async def verificar_token_detallado(
                 "error": "No Authorization header found",
                 "recommendation": "Verificar que el frontend esté enviando el header Authorization"
             }
-        
+
         # Extraer token
         if not auth_header.startswith("Bearer "):
             return {
@@ -48,9 +48,9 @@ async def verificar_token_detallado(
                 "expected_format": "Bearer <token>",
                 "received": auth_header[:20] + "..." if len(auth_header) > 20 else auth_header
             }
-        
+
         token = auth_header.split(" ")[1]
-        
+
         # Análisis del token
         token_analysis = {
             "token_length": len(token),
@@ -58,7 +58,7 @@ async def verificar_token_detallado(
             "has_dots": "." in token,
             "dot_count": token.count(".")
         }
-        
+
         # Verificar estructura JWT
         if token.count(".") != 2:
             return {
@@ -69,17 +69,17 @@ async def verificar_token_detallado(
                 "actual_dots": token.count("."),
                 "token_analysis": token_analysis
             }
-        
+
         # Decodificar sin verificar firma (para análisis)
         try:
             # Decodificar header
             header_encoded = token.split(".")[0]
             header_decoded = jwt.get_unverified_header(token)
-            
+
             # Decodificar payload sin verificar
             payload_encoded = token.split(".")[1]
             payload_decoded = jwt.decode(token, options={"verify_signature": False})
-            
+
             token_analysis.update({
                 "header": header_decoded,
                 "payload": payload_decoded,
@@ -89,7 +89,7 @@ async def verificar_token_detallado(
                 "exp": payload_decoded.get("exp"),
                 "iat": payload_decoded.get("iat")
             })
-            
+
         except Exception as e:
             return {
                 "timestamp": datetime.now().isoformat(),
@@ -97,7 +97,7 @@ async def verificar_token_detallado(
                 "error": f"Error decodificando token: {str(e)}",
                 "token_analysis": token_analysis
             }
-        
+
         # Verificar expiración
         exp_timestamp = payload_decoded.get("exp")
         if exp_timestamp:
@@ -112,7 +112,7 @@ async def verificar_token_detallado(
             token_analysis["expiration"] = {
                 "error": "No expiration found in token"
             }
-        
+
         # Verificar con SECRET_KEY real
         verification_result = {}
         try:
@@ -137,7 +137,7 @@ async def verificar_token_detallado(
                 "error": str(e),
                 "error_type": "Unknown"
             }
-        
+
         # Verificar usuario en BD
         user_verification = {}
         if verification_result.get("verified"):
@@ -169,24 +169,24 @@ async def verificar_token_detallado(
                     "status": "error",
                     "error": "No user_id in token payload"
                 }
-        
+
         # Generar recomendaciones
         recommendations = []
         if not verification_result.get("verified"):
             recommendations.append("🔐 Token no válido - Verificar SECRET_KEY o regenerar token")
-        
+
         if token_analysis.get("expiration", {}).get("is_expired"):
             recommendations.append("⏰ Token expirado - Hacer login nuevamente")
-        
+
         if not user_verification.get("user_found"):
             recommendations.append("👤 Usuario no encontrado en BD - Verificar datos de usuario")
-        
-        if user_verification.get("user_active") == False:
+
+        if not user_verification.get("user_active"):
             recommendations.append("⚠️ Usuario inactivo - Contactar administrador")
-        
+
         if not recommendations:
             recommendations.append("✅ Token válido y usuario correcto")
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "analysis_complete",
@@ -196,7 +196,7 @@ async def verificar_token_detallado(
             "recommendations": recommendations,
             "overall_status": "valid" if verification_result.get("verified") and user_verification.get("user_found") else "invalid"
         }
-        
+
     except Exception as e:
         logger.error(f"Error en verificación de token: {e}")
         return {
@@ -221,13 +221,13 @@ async def obtener_info_token(
                 "status": "no_token",
                 "message": "No valid token provided"
             }
-        
+
         token = auth_header.split(" ")[1]
-        
+
         # Decodificar sin verificar
         try:
             payload = jwt.decode(token, options={"verify_signature": False})
-            
+
             # Información básica
             user_id = payload.get("sub")
             user_info = {}
@@ -239,7 +239,7 @@ async def obtener_info_token(
                         "active": user.is_active,
                         "admin": user.is_admin
                     }
-            
+
             return {
                 "timestamp": datetime.now().isoformat(),
                 "status": "success",
@@ -251,14 +251,14 @@ async def obtener_info_token(
                     "user_info": user_info
                 }
             }
-            
+
         except Exception as e:
             return {
                 "timestamp": datetime.now().isoformat(),
                 "status": "error",
                 "error": f"Error decoding token: {str(e)}"
             }
-            
+
     except Exception as e:
         return {
             "timestamp": datetime.now().isoformat(),
@@ -275,20 +275,20 @@ async def generar_token_prueba(
     """
     try:
         # Buscar usuario admin
-        admin_user = db.query(User).filter(User.is_admin == True).first()
+        admin_user = db.query(User).filter(User.is_admin).first()
         if not admin_user:
             return {
                 "timestamp": datetime.now().isoformat(),
                 "status": "error",
                 "error": "No admin user found"
             }
-        
+
         # Generar token
         test_token = create_access_token(
             subject=str(admin_user.id),
             additional_claims={"type": "access"}
         )
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
@@ -301,7 +301,7 @@ async def generar_token_prueba(
             },
             "usage": "Use this token in Authorization header: Bearer <token>"
         }
-        
+
     except Exception as e:
         logger.error(f"Error generando token de prueba: {e}")
         return {

@@ -45,7 +45,7 @@ class AnalistaResponse(AnalistaBase):
     primer_nombre: str
     updated_at: Optional[datetime] = None
     fecha_eliminacion: Optional[datetime] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 class AnalistaListResponse(BaseModel):

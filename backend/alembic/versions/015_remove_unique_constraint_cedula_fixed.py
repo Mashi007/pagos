@@ -23,17 +23,17 @@ def upgrade():
         op.drop_constraint('clientes_cedula_key', 'clientes', type_='unique')
     except Exception:
         pass  # Constraint might not exist
-    
+
     try:
         op.drop_constraint('ix_clientes_cedula', 'clientes', type_='unique')
     except Exception:
         pass  # Constraint might not exist
-    
+
     try:
         op.drop_index('ix_clientes_cedula', 'clientes')
     except Exception:
         pass  # Index might not exist
-    
+
     # Create a non-unique index for performance
     op.create_index('ix_clientes_cedula_non_unique', 'clientes', ['cedula'], unique=False)
 
@@ -45,6 +45,6 @@ def downgrade():
         op.drop_index('ix_clientes_cedula_non_unique', 'clientes')
     except Exception:
         pass
-    
+
     # Restore the unique constraint
     op.create_unique_constraint('clientes_cedula_key', 'clientes', ['cedula'])

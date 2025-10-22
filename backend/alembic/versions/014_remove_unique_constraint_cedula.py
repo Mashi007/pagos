@@ -20,7 +20,7 @@ def upgrade():
     """Remove unique constraint from cedula column in clientes table"""
     # Drop the unique constraint on cedula column
     op.drop_constraint('clientes_cedula_key', 'clientes', type_='unique')
-    
+
     # Keep the index for performance
     # op.create_index('ix_clientes_cedula', 'clientes', ['cedula'])
 

@@ -48,7 +48,7 @@ class NotificacionResponse(BaseModel):
     estado: str
     enviada_en: Optional[datetime]
     creado_en: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -76,7 +76,7 @@ async def enviar_notificacion(
     cliente = db.query(Cliente).filter(Cliente.id == notificacion.cliente_id).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    
+
     # Crear registro de notificación
     nueva_notif = Notificacion(
         cliente_id=notificacion.cliente_id,
@@ -87,11 +87,11 @@ async def enviar_notificacion(
         estado="PENDIENTE",
         programada_para=notificacion.programada_para or datetime.now()
     )
-    
+
     db.add(nueva_notif)
     db.commit()
     db.refresh(nueva_notif)
-    
+
     # Enviar en background
     if notificacion.canal == "EMAIL":
         background_tasks.add_task(
@@ -108,7 +108,7 @@ async def enviar_notificacion(
             message=notificacion.mensaje,
             notificacion_id=nueva_notif.id
         )
-    
+
     logger.info(f"Notificación {nueva_notif.id} programada para envío por {notificacion.canal}")
     return nueva_notif
 
@@ -124,18 +124,18 @@ async def envio_masivo_notificaciones(
     """
     # Construir query de clientes según filtros
     query = db.query(Cliente).join(Prestamo)
-    
+
     if request.tipo_cliente == "MOROSO":
         query = query.filter(Prestamo.dias_mora > 0)
-    
+
     if request.dias_mora_min:
         query = query.filter(Prestamo.dias_mora >= request.dias_mora_min)
-    
+
     clientes = query.all()
-    
+
     # Crear notificaciones masivas
     notificaciones_creadas = []
-    
+
     for cliente in clientes:
         # Personalizar mensaje según template
         mensaje = _generar_mensaje_template(
@@ -143,7 +143,7 @@ async def envio_masivo_notificaciones(
             cliente=cliente,
             db=db
         )
-        
+
         notif = Notificacion(
             cliente_id=cliente.id,
             tipo=request.canal,
@@ -153,16 +153,16 @@ async def envio_masivo_notificaciones(
             estado="PENDIENTE",
             programada_para=datetime.now()
         )
-        
+
         db.add(notif)
         notificaciones_creadas.append(notif)
-    
+
     db.commit()
-    
+
     # Programar envíos en background
     for notif in notificaciones_creadas:
         cliente = db.query(Cliente).filter(Cliente.id == notif.cliente_id).first()
-        
+
         if request.canal == "EMAIL" and cliente.email:
             background_tasks.add_task(
                 email_service.send_email,
@@ -178,7 +178,7 @@ async def envio_masivo_notificaciones(
                 message=notif.mensaje,
                 notificacion_id=notif.id
             )
-    
+
     return {
         "total_enviados": len(notificaciones_creadas),
         "canal": request.canal,
@@ -197,7 +197,7 @@ def historial_notificaciones(
     notificaciones = db.query(Notificacion).filter(
         Notificacion.cliente_id == cliente_id
     ).order_by(Notificacion.creado_en.desc()).all()
-    
+
     return {
         "cliente_id": cliente_id,
         "total": len(notificaciones),
@@ -227,7 +227,7 @@ def notificaciones_pendientes(
         Notificacion.estado == "PENDIENTE",
         Notificacion.programada_para <= datetime.now()
     ).all()
-    
+
     return {
         "total_pendientes": len(pendientes),
         "notificaciones": [
@@ -252,18 +252,18 @@ async def programar_recordatorios_automaticos(
     Programar recordatorios automáticos para cuotas próximas a vencer.
     """
     from datetime import date
-    
+
     # Préstamos con cuotas que vencen en los próximos 3 días
     fecha_limite = date.today() + timedelta(days=3)
-    
+
     prestamos_proximos = db.query(Prestamo).filter(
         Prestamo.fecha_vencimiento <= fecha_limite,
         Prestamo.fecha_vencimiento >= date.today(),
         Prestamo.estado == "ACTIVO"
     ).all()
-    
+
     recordatorios = []
-    
+
     for prestamo in prestamos_proximos:
         mensaje = f"""
 Estimado/a {prestamo.cliente.nombres},
@@ -277,7 +277,7 @@ Por favor, realice su pago a tiempo para evitar recargos.
 
 Gracias.
         """
-        
+
         notif = Notificacion(
             cliente_id=prestamo.cliente_id,
             tipo="EMAIL",
@@ -287,12 +287,12 @@ Gracias.
             estado="PENDIENTE",
             programada_para=datetime.now()
         )
-        
+
         db.add(notif)
         recordatorios.append(notif)
-    
+
     db.commit()
-    
+
     # Enviar en background
     for notif in recordatorios:
         cliente = db.query(Cliente).filter(Cliente.id == notif.cliente_id).first()
@@ -304,7 +304,7 @@ Gracias.
                 body=notif.mensaje,
                 notificacion_id=notif.id
             )
-    
+
     return {
         "recordatorios_programados": len(recordatorios),
         "prestamos_notificados": [p.id for p in prestamos_proximos]
@@ -320,7 +320,7 @@ def _generar_mensaje_template(template: str, cliente: Cliente, db: Session) -> s
         Prestamo.cliente_id == cliente.id,
         Prestamo.estado == "ACTIVO"
     ).all()
-    
+
     if template == "RECORDATORIO_PAGO":
         total_deuda = sum(p.saldo_pendiente for p in prestamos)
         return f"""
@@ -332,7 +332,7 @@ Por favor, póngase al día con sus pagos para evitar recargos.
 
 Gracias por su atención.
         """
-    
+
     elif template == "MORA":
         prestamos_mora = [p for p in prestamos if p.dias_mora > 0]
         return f"""
@@ -342,7 +342,7 @@ Su cuenta presenta {len(prestamos_mora)} préstamo(s) en mora.
 
 Por favor, comuníquese con nosotros para regularizar su situación.
         """
-    
+
     return "Mensaje genérico de notificación."
 
 
@@ -360,29 +360,29 @@ async def programar_notificaciones_automaticas(
     Debe ejecutarse diariamente via cron job
     """
     from datetime import date
-    
+
     notificaciones_programadas = []
-    
+
     # 1. RECORDATORIOS PRE-VENCIMIENTO (3 días antes)
     fecha_recordatorio = date.today() + timedelta(days=3)
-    
+
     cuotas_proximas = db.query(Cuota).join(Prestamo).join(Cliente).filter(
         Cuota.fecha_vencimiento == fecha_recordatorio,
         Cuota.estado.in_(["PENDIENTE", "PARCIAL"]),
         Cliente.email.isnot(None),
         Cliente.activo == True
     ).all()
-    
+
     for cuota in cuotas_proximas:
         cliente = cuota.prestamo.cliente
-        
+
         # Verificar que no se haya enviado ya
         ya_enviado = db.query(Notificacion).filter(
             Notificacion.cliente_id == cliente.id,
             Notificacion.categoria == "CUOTA_PROXIMA",
             func.date(Notificacion.creado_en) == date.today()
         ).first()
-        
+
         if not ya_enviado:
             mensaje = f"""
 Estimado/a {cliente.nombre_completo},
@@ -407,7 +407,7 @@ Email: cobranzas@financiera.com
 
 Gracias por su puntualidad.
             """
-            
+
             notif = Notificacion(
                 cliente_id=cliente.id,
                 tipo="EMAIL",
@@ -418,10 +418,10 @@ Gracias por su puntualidad.
                 programada_para=datetime.now().replace(hour=9, minute=0, second=0),
                 prioridad="ALTA"
             )
-            
+
             db.add(notif)
             notificaciones_programadas.append(notif)
-    
+
     # 2. AVISOS DE CUOTA VENCIDA (día siguiente)
     cuotas_vencidas_ayer = db.query(Cuota).join(Prestamo).join(Cliente).filter(
         Cuota.fecha_vencimiento == date.today() - timedelta(days=1),
@@ -429,13 +429,13 @@ Gracias por su puntualidad.
         Cliente.email.isnot(None),
         Cliente.activo == True
     ).all()
-    
+
     for cuota in cuotas_vencidas_ayer:
         cliente = cuota.prestamo.cliente
-        
+
         # Calcular mora
         mora_calculada = cuota.calcular_mora(Decimal(str(settings.TASA_MORA_DIARIA)))
-        
+
         mensaje = f"""
 Estimado/a {cliente.nombre_completo},
 
@@ -453,7 +453,7 @@ URGENTE: Regularice su pago inmediatamente para evitar:
 
 Contacto inmediato: (021) 123-456
         """
-        
+
         notif = Notificacion(
             cliente_id=cliente.id,
             tipo="EMAIL",
@@ -464,12 +464,12 @@ Contacto inmediato: (021) 123-456
             programada_para=datetime.now(),
             prioridad="URGENTE"
         )
-        
+
         db.add(notif)
         notificaciones_programadas.append(notif)
-    
+
     db.commit()
-    
+
     # Programar envíos
     for notif in notificaciones_programadas:
         cliente = db.query(Cliente).filter(Cliente.id == notif.cliente_id).first()
@@ -487,7 +487,7 @@ Contacto inmediato: (021) 123-456
                 },
                 notificacion_id=notif.id
             )
-    
+
     return {
         "notificaciones_programadas": len(notificaciones_programadas),
         "recordatorios_pre_vencimiento": len([n for n in notificaciones_programadas if n.categoria == "CUOTA_PROXIMA"]),
@@ -512,19 +512,19 @@ async def enviar_confirmacion_pago(
     ).filter(Pago.id == pago_id).first()
     if not pago:
         raise HTTPException(status_code=404, detail="Pago no encontrado")
-    
+
     cliente = pago.prestamo.cliente
-    
+
     # Calcular próximo vencimiento
     proxima_cuota = db.query(Cuota).filter(
         Cuota.prestamo_id == pago.prestamo_id,
         Cuota.estado.in_(["PENDIENTE", "PARCIAL"])
     ).order_by(Cuota.numero_cuota).first()
-    
+
     proximo_vencimiento = "No hay cuotas pendientes"
     if proxima_cuota:
         proximo_vencimiento = f"Cuota #{proxima_cuota.numero_cuota} - {proxima_cuota.fecha_vencimiento.strftime('%d/%m/%Y')}"
-    
+
     mensaje = f"""
 Estimado/a {cliente.nombre_completo},
 
@@ -548,7 +548,7 @@ ESTADO ACTUAL:
 
 Agradecemos su puntualidad y confianza.
     """
-    
+
     # Crear notificación
     notif = Notificacion(
         cliente_id=cliente.id,
@@ -560,11 +560,11 @@ Agradecemos su puntualidad y confianza.
         programada_para=datetime.now(),
         prioridad="NORMAL"
     )
-    
+
     db.add(notif)
     db.commit()
     db.refresh(notif)
-    
+
     # Enviar inmediatamente
     if cliente.email:
         background_tasks.add_task(
@@ -574,7 +574,7 @@ Agradecemos su puntualidad y confianza.
             body=notif.mensaje,
             notificacion_id=notif.id
         )
-    
+
     return {
         "message": "Confirmación de pago programada",
         "notificacion_id": notif.id,
@@ -595,15 +595,15 @@ async def enviar_estados_cuenta_mensual(
         Cliente.activo == True,
         Cliente.email.isnot(None)
     ).all()
-    
+
     estados_enviados = []
-    
+
     for cliente in clientes:
         # Calcular resumen del mes anterior
         mes_anterior = date.today().replace(day=1) - timedelta(days=1)
         inicio_mes = mes_anterior.replace(day=1)
         fin_mes = mes_anterior
-        
+
         # Pagos del mes anterior con joins explícitos
         pagos_mes = db.query(Pago).select_from(Pago).join(
             Prestamo, Pago.prestamo_id == Prestamo.id
@@ -612,7 +612,7 @@ async def enviar_estados_cuenta_mensual(
             Pago.fecha_pago >= inicio_mes,
             Pago.fecha_pago <= fin_mes
         ).all()
-        
+
         # Cuotas pendientes con joins explícitos
         cuotas_pendientes = db.query(Cuota).select_from(Cuota).join(
             Prestamo, Cuota.prestamo_id == Prestamo.id
@@ -620,10 +620,10 @@ async def enviar_estados_cuenta_mensual(
             Prestamo.cliente_id == cliente.id,
             Cuota.estado.in_(["PENDIENTE", "VENCIDA", "PARCIAL"])
         ).order_by(Cuota.fecha_vencimiento).limit(3).all()
-        
+
         # Resumen financiero
         resumen = cliente.calcular_resumen_financiero(db)
-        
+
         mensaje = f"""
 Estimado/a {cliente.nombre_completo},
 
@@ -642,12 +642,12 @@ ESTADO ACTUAL:
 
 PRÓXIMOS VENCIMIENTOS:
 """
-        
+
         for cuota in cuotas_pendientes:
             mensaje += f"• Cuota #{cuota.numero_cuota}: ${float(cuota.monto_cuota):,.2f} - {cuota.fecha_vencimiento.strftime('%d/%m/%Y')}\n"
-        
+
         mensaje += "\nMantengase al día con sus pagos.\n\nSaludos cordiales."
-        
+
         # Crear notificación
         notif = Notificacion(
             cliente_id=cliente.id,
@@ -659,12 +659,12 @@ PRÓXIMOS VENCIMIENTOS:
             programada_para=datetime.now().replace(hour=10, minute=0),
             prioridad="NORMAL"
         )
-        
+
         db.add(notif)
         estados_enviados.append(notif)
-    
+
     db.commit()
-    
+
     # Programar envíos
     for notif in estados_enviados:
         cliente = db.query(Cliente).filter(Cliente.id == notif.cliente_id).first()
@@ -675,7 +675,7 @@ PRÓXIMOS VENCIMIENTOS:
             body=notif.mensaje,
             notificacion_id=notif.id
         )
-    
+
     return {
         "estados_cuenta_programados": len(estados_enviados),
         "clientes_notificados": [c.id for c in clientes]
@@ -700,40 +700,40 @@ async def enviar_resumen_diario_usuarios(
     """
     hoy = date.today()
     ayer = hoy - timedelta(days=1)
-    
+
     # Obtener datos del día
     vencimientos_hoy = db.query(Cuota).join(Prestamo).join(Cliente).filter(
         Cuota.fecha_vencimiento == hoy,
         Cuota.estado.in_(["PENDIENTE", "PARCIAL"])
     ).count()
-    
+
     pagos_ayer = db.query(Pago).filter(
         Pago.fecha_pago == ayer,
         Pago.estado != "ANULADO"
     ).all()
-    
+
     total_cobrado_ayer = sum(float(p.monto_pagado) for p in pagos_ayer)
-    
+
     # Clientes que entraron en mora ayer
     nuevos_morosos = db.query(Cliente).join(Prestamo).join(Cuota).filter(
         Cuota.fecha_vencimiento == ayer,
         Cuota.estado == "VENCIDA",
         Cliente.activo == True
     ).distinct().all()
-    
+
     # Clientes críticos (>30 días mora)
     clientes_criticos = db.query(Cliente).filter(
         Cliente.activo == True,
         Cliente.dias_mora > 30
     ).count()
-    
+
     # Obtener usuarios para notificar
     usuarios_notificar = db.query(User).filter(
         User.is_admin == True,
         User.is_active == True,
         User.email.isnot(None)
     ).all()
-    
+
     for usuario in usuarios_notificar:
         mensaje = f"""
 Buenos días {usuario.full_name},
@@ -754,7 +754,7 @@ Acceder al sistema: https://pagos-f2qf.onrender.com
 
 Saludos.
         """
-        
+
         notif = Notificacion(
             user_id=usuario.id,
             tipo="EMAIL",
@@ -765,9 +765,9 @@ Saludos.
             programada_para=datetime.now().replace(hour=8, minute=0),
             prioridad="NORMAL"
         )
-        
+
         db.add(notif)
-        
+
         # Enviar
         background_tasks.add_task(
             email_service.send_email,
@@ -776,9 +776,9 @@ Saludos.
             body=notif.mensaje,
             notificacion_id=notif.id
         )
-    
+
     db.commit()
-    
+
     return {
         "usuarios_notificados": len(usuarios_notificar),
         "vencimientos_hoy": vencimientos_hoy,
@@ -804,19 +804,19 @@ async def enviar_reporte_semanal_usuarios(
     hoy = date.today()
     inicio_semana = hoy - timedelta(days=hoy.weekday() + 7)  # Lunes semana anterior
     fin_semana = inicio_semana + timedelta(days=6)  # Domingo semana anterior
-    
+
     # Datos de la semana
     pagos_semana = db.query(Pago).filter(
         Pago.fecha_pago >= inicio_semana,
         Pago.fecha_pago <= fin_semana,
         Pago.estado != "ANULADO"
     ).all()
-    
+
     nuevos_clientes = db.query(Cliente).filter(
         func.date(Cliente.fecha_registro) >= inicio_semana,
         func.date(Cliente.fecha_registro) <= fin_semana
     ).all()
-    
+
     # Top analista de la semana
     top_analista = db.query(
         User.full_name,
@@ -830,14 +830,14 @@ async def enviar_reporte_semanal_usuarios(
     ).group_by(User.id, User.full_name).order_by(
         func.count(Cliente.id).desc()
     ).first()
-    
+
     # Enviar a usuarios gerenciales
     usuarios_gerenciales = db.query(User).filter(
         User.is_admin == True,
         User.is_active == True,
         User.email.isnot(None)
     ).all()
-    
+
     for usuario in usuarios_gerenciales:
         mensaje = f"""
 Buenos días {usuario.full_name},
@@ -861,7 +861,7 @@ Revisar dashboard completo: https://pagos-f2qf.onrender.com
 
 Saludos.
         """
-        
+
         notif = Notificacion(
             user_id=usuario.id,
             tipo="EMAIL",
@@ -872,9 +872,9 @@ Saludos.
             programada_para=datetime.now().replace(hour=9, minute=0),
             prioridad="NORMAL"
         )
-        
+
         db.add(notif)
-        
+
         background_tasks.add_task(
             email_service.send_email,
             to_email=usuario.email,
@@ -882,9 +882,9 @@ Saludos.
             body=notif.mensaje,
             notificacion_id=notif.id
         )
-    
+
     db.commit()
-    
+
     return {
         "usuarios_notificados": len(usuarios_gerenciales),
         "nuevos_clientes_semana": len(nuevos_clientes),
@@ -961,28 +961,28 @@ def historial_completo_notificaciones(
     - Filtros por cliente, tipo, fecha
     """
     query = db.query(Notificacion).select_from(Notificacion).outerjoin(Cliente).outerjoin(User)
-    
+
     # Aplicar filtros
     if fecha_desde:
         query = query.filter(func.date(Notificacion.creado_en) >= fecha_desde)
-    
+
     if fecha_hasta:
         query = query.filter(func.date(Notificacion.creado_en) <= fecha_hasta)
-    
+
     if tipo:
         query = query.filter(Notificacion.tipo == tipo)
-    
+
     if estado:
         query = query.filter(Notificacion.estado == estado)
-    
+
     if cliente_id:
         query = query.filter(Notificacion.cliente_id == cliente_id)
-    
+
     # Paginación
     total = query.count()
     skip = (page - 1) * page_size
     notificaciones = query.order_by(Notificacion.creado_en.desc()).offset(skip).limit(page_size).all()
-    
+
     return {
         "total": total,
         "page": page,
@@ -1025,17 +1025,17 @@ async def reenviar_notificacion(
     notif = db.query(Notificacion).filter(Notificacion.id == notificacion_id).first()
     if not notif:
         raise HTTPException(status_code=404, detail="Notificación no encontrada")
-    
+
     if not notif.puede_reintentar:
         raise HTTPException(
             status_code=400, 
             detail="No se puede reenviar: máximo de intentos alcanzado o estado inválido"
         )
-    
+
     # Resetear estado
     notif.estado = "PENDIENTE"
     notif.programada_para = datetime.now()
-    
+
     # Obtener destinatario
     if notif.cliente_id:
         cliente = db.query(Cliente).filter(Cliente.id == notif.cliente_id).first()
@@ -1045,10 +1045,10 @@ async def reenviar_notificacion(
         email_destino = usuario.email
     else:
         email_destino = notif.destinatario_email
-    
+
     if not email_destino:
         raise HTTPException(status_code=400, detail="No hay email de destino")
-    
+
     # Reenviar
     background_tasks.add_task(
         email_service.send_email,
@@ -1057,9 +1057,9 @@ async def reenviar_notificacion(
         body=notif.mensaje,
         notificacion_id=notif.id
     )
-    
+
     db.commit()
-    
+
     return {
         "message": "Notificación reenviada",
         "notificacion_id": notificacion_id,

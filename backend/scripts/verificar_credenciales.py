@@ -24,7 +24,7 @@ def probar_credenciales_admin():
     """Probar diferentes credenciales de administrador"""
     logger.info("PROBANDO CREDENCIALES DE ADMINISTRADOR")
     logger.info("=" * SEPARATOR_LENGTH)
-    
+
     # Diferentes combinaciones de credenciales
     credenciales_posibles = [
         {"email": "itmaster@rapicreditca.com", "password": "admin123"},
@@ -36,7 +36,7 @@ def probar_credenciales_admin():
         {"email": "admin@rapicreditca.com", "password": "Admin123"},
         {"email": "admin@rapicreditca.com", "password": "ADMIN123"},
     ]
-    
+
     for i, creds in enumerate(credenciales_posibles, 1):
         logger.info(f"📊 Intento {i}: {creds['email']} / {creds['password']}")
         try:
@@ -44,7 +44,7 @@ def probar_credenciales_admin():
                                    json={**creds, "remember": True}, 
                                    timeout=REQUEST_TIMEOUT)
             logger.info(f"   📊 Status Code: {response.status_code}")
-            
+
             if response.status_code == 200:
                 data = response.json()
                 logger.info(f"   ✅ LOGIN EXITOSO!")
@@ -55,10 +55,10 @@ def probar_credenciales_admin():
             else:
                 logger.info(f"   ❌ Error: {response.status_code}")
                 logger.info(f"   📊 Respuesta: {response.text}")
-                
+
         except Exception as e:
             logger.error(f"   ❌ Error: {e}")
-    
+
     logger.error("❌ No se encontraron credenciales válidas")
     return None
 
@@ -67,7 +67,7 @@ def probar_login_usuario_prueba():
     logger.info("")
     logger.info("👤 PROBANDO LOGIN CON USUARIO PRUEBA")
     logger.info("=" * 60)
-    
+
     credenciales_usuario = [
         {"email": "prueba2@gmail.com", "password": "Casa1803"},
         {"email": "prueba2@gmail.com", "password": "casa1803"},
@@ -75,7 +75,7 @@ def probar_login_usuario_prueba():
         {"email": "prueba2@gmail.com", "password": "Prueba123"},
         {"email": "prueba2@gmail.com", "password": "prueba123"},
     ]
-    
+
     for i, creds in enumerate(credenciales_usuario, 1):
         logger.info(f"📊 Intento {i}: {creds['email']} / {creds['password']}")
         try:
@@ -83,7 +83,7 @@ def probar_login_usuario_prueba():
                                    json={**creds, "remember": True}, 
                                    timeout=REQUEST_TIMEOUT)
             logger.info(f"   📊 Status Code: {response.status_code}")
-            
+
             if response.status_code == 200:
                 data = response.json()
                 logger.info(f"   ✅ LOGIN EXITOSO!")
@@ -94,10 +94,10 @@ def probar_login_usuario_prueba():
             else:
                 logger.info(f"   ❌ Error: {response.status_code}")
                 logger.info(f"   📊 Respuesta: {response.text}")
-                
+
         except Exception as e:
             logger.error(f"   ❌ Error: {e}")
-    
+
     logger.error("❌ No se pudo hacer login con usuario prueba")
     return False
 
@@ -106,13 +106,13 @@ def main():
     logger.info("=" * 60)
     logger.info(f"🌐 Servidor: {BASE_URL}")
     logger.info("")
-    
+
     # Probar credenciales de admin
     admin_token = probar_credenciales_admin()
-    
+
     # Probar credenciales de usuario
     usuario_ok = probar_login_usuario_prueba()
-    
+
     # Resumen
     logger.info("")
     logger.info("📊 RESUMEN")
@@ -121,7 +121,7 @@ def main():
         logger.info("✅ Credenciales de administrador encontradas")
     else:
         logger.error("❌ No se encontraron credenciales de administrador válidas")
-    
+
     if usuario_ok:
         logger.info("✅ Usuario prueba puede hacer login")
     else:

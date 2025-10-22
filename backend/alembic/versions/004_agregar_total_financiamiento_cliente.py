@@ -21,7 +21,7 @@ def upgrade():
     connection = op.get_bind()
     inspector = sa.inspect(connection)
     columns = [col['name'] for col in inspector.get_columns('clientes')]
-    
+
     if 'total_financiamiento' not in columns:
         # Agregar la columna total_financiamiento
         op.add_column('clientes', sa.Column('total_financiamiento', sa.Numeric(12, 2), nullable=True))

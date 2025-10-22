@@ -98,7 +98,7 @@ async def cargar_archivo_excel(
 ):
     """
     📤 PASO 1: Subir archivo Excel y analizar errores
-    
+
     Proceso:
     1. Leer archivo Excel
     2. Validar TODOS los registros
@@ -113,10 +113,10 @@ async def cargar_archivo_excel(
                 status_code=400,
                 detail="Solo se permiten archivos Excel (.xlsx, .xls)"
             )
-        
+
         # Leer contenido
         contenido = await archivo.read()
-        
+
         # Procesar según tipo
         if tipo_carga == "clientes":
             resultado = await _analizar_archivo_clientes(contenido, archivo.filename, db, current_user.id)
@@ -127,7 +127,7 @@ async def cargar_archivo_excel(
                 status_code=400,
                 detail="Tipo de carga inválido. Use 'clientes' o 'pagos'"
             )
-        
+
         # Registrar en auditoría
         auditoria = Auditoria.registrar(
             usuario_id=current_user.id,
@@ -144,9 +144,9 @@ async def cargar_archivo_excel(
         )
         db.add(auditoria)
         db.commit()
-        
+
         return resultado
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -173,7 +173,7 @@ async def _analizar_archivo_clientes(
     try:
         # Leer Excel
         df = pd.read_excel(io.BytesIO(contenido))
-        
+
         # ============================================
         # MAPEO DE COLUMNAS EXCEL → SISTEMA
         # ============================================
@@ -205,22 +205,22 @@ async def _analizar_archivo_clientes(
             'USER': 'asesor',
             'USER ASIGNADO': 'asesor'
         }
-        
+
         # Renombrar columnas
         df = df.rename(columns=mapeo_columnas)
-        
+
         # ============================================
         # VALIDAR COLUMNAS REQUERIDAS
         # ============================================
         columnas_requeridas = ['cedula', 'nombre']
         columnas_faltantes = [col for col in columnas_requeridas if col not in df.columns]
-        
+
         if columnas_faltantes:
             raise HTTPException(
                 status_code=400,
                 detail=f"❌ Faltan columnas requeridas: {', '.join(columnas_faltantes)}"
             )
-        
+
         # ============================================
         # PROCESAR CADA REGISTRO
         # ============================================
@@ -230,11 +230,11 @@ async def _analizar_archivo_clientes(
         errores_criticos = 0
         errores_advertencia = 0
         datos_vacios = 0
-        
+
         for index, row in df.iterrows():
             fila_numero = index + 2  # +2 porque Excel empieza en 1 y tiene header
             errores_registro = []
-            
+
             # ============================================
             # EXTRAER DATOS DE LA FILA
             # ============================================
@@ -252,18 +252,18 @@ async def _analizar_archivo_clientes(
             modalidad_pago = str(row.get('modalidad_pago', '')).strip()
             fecha_entrega = str(row.get('fecha_entrega', '')).strip()
             asesor = str(row.get('asesor', '')).strip()
-            
+
             # Si no hay apellido separado, intentar split del nombre
             if not apellido and nombre:
                 partes_nombre = nombre.split(' ', 1)
                 if len(partes_nombre) > 1:
                     nombre = partes_nombre[0]
                     apellido = partes_nombre[1]
-            
+
             # ============================================
             # VALIDACIÓN 1: CAMPOS CRÍTICOS VACÍOS
             # ============================================
-            
+
             # Cédula (CRÍTICO)
             if not cedula or cedula.upper() == 'ERROR':
                 errores_registro.append(ErrorCargaMasiva(
@@ -277,7 +277,7 @@ async def _analizar_archivo_clientes(
                     sugerencia='Ingrese cédula válida (ej: V12345678)'
                 ))
                 errores_criticos += 1
-            
+
             # Nombre (CRÍTICO)
             if not nombre or nombre.upper() == 'ERROR':
                 errores_registro.append(ErrorCargaMasiva(
@@ -291,7 +291,7 @@ async def _analizar_archivo_clientes(
                     sugerencia='Ingrese nombre completo del cliente'
                 ))
                 errores_criticos += 1
-            
+
             # Total Financiamiento (CRÍTICO si se quiere financiamiento)
             if not total_financiamiento or total_financiamiento.upper() == 'ERROR':
                 errores_registro.append(ErrorCargaMasiva(
@@ -305,7 +305,7 @@ async def _analizar_archivo_clientes(
                     sugerencia='Ingrese monto del financiamiento (ej: 50000)'
                 ))
                 datos_vacios += 1
-            
+
             # Número de Amortizaciones (CRÍTICO si hay financiamiento)
             if total_financiamiento and (not numero_amortizaciones or numero_amortizaciones.upper() == 'ERROR'):
                 errores_registro.append(ErrorCargaMasiva(
@@ -319,7 +319,7 @@ async def _analizar_archivo_clientes(
                     sugerencia='Ingrese número de cuotas (ej: 12, 24, 36)'
                 ))
                 datos_vacios += 1
-            
+
             # Fecha Entrega (CRÍTICO si hay financiamiento)
             if total_financiamiento and (not fecha_entrega or fecha_entrega.upper() == 'ERROR'):
                 errores_registro.append(ErrorCargaMasiva(
@@ -333,11 +333,11 @@ async def _analizar_archivo_clientes(
                     sugerencia='Ingrese fecha de entrega (ej: 2025-01-15)'
                 ))
                 errores_criticos += 1
-            
+
             # ============================================
             # VALIDACIÓN 2: CAMPOS DE ADVERTENCIA VACÍOS
             # ============================================
-            
+
             # Móvil (ADVERTENCIA)
             if not movil or movil.upper() == 'ERROR':
                 errores_registro.append(ErrorCargaMasiva(
@@ -351,7 +351,7 @@ async def _analizar_archivo_clientes(
                     sugerencia='Ingrese número móvil (ej: 4241234567)'
                 ))
                 errores_advertencia += 1
-            
+
             # Email (ADVERTENCIA)
             if not email or email.upper() == 'ERROR':
                 errores_registro.append(ErrorCargaMasiva(
@@ -365,7 +365,7 @@ async def _analizar_archivo_clientes(
                     sugerencia='Ingrese email válido (ej: cliente@ejemplo.com)'
                 ))
                 errores_advertencia += 1
-            
+
             # Concesionario (DATO_VACIO)
             if not concesionario:
                 errores_registro.append(ErrorCargaMasiva(
@@ -379,7 +379,7 @@ async def _analizar_archivo_clientes(
                     sugerencia='Seleccione un concesionario de la lista'
                 ))
                 datos_vacios += 1
-            
+
             # Modelo de Vehículo (DATO_VACIO)
             if not modelo_vehiculo:
                 errores_registro.append(ErrorCargaMasiva(
@@ -393,7 +393,7 @@ async def _analizar_archivo_clientes(
                     sugerencia='Seleccione un modelo de la lista'
                 ))
                 datos_vacios += 1
-            
+
             # Analista (DATO_VACIO)
             if not asesor:
                 errores_registro.append(ErrorCargaMasiva(
@@ -407,7 +407,7 @@ async def _analizar_archivo_clientes(
                     sugerencia='Seleccione un asesor de la lista'
                 ))
                 datos_vacios += 1
-            
+
             # Modalidad de Pago (DATO_VACIO)
             if not modalidad_pago:
                 errores_registro.append(ErrorCargaMasiva(
@@ -421,11 +421,11 @@ async def _analizar_archivo_clientes(
                     sugerencia='Seleccione: SEMANAL, QUINCENAL o MENSUAL'
                 ))
                 datos_vacios += 1
-            
+
             # ============================================
             # VALIDACIÓN 3: FORMATO DE DATOS
             # ============================================
-            
+
             # Validar cédula con validador del sistema
             if cedula and cedula.upper() != 'ERROR':
                 resultado_cedula = ValidadorCedula.validar_y_formatear_cedula(cedula, "VENEZUELA")
@@ -441,7 +441,7 @@ async def _analizar_archivo_clientes(
                         sugerencia='Formato: V/E/J + 7-10 dígitos (ej: V12345678)'
                     ))
                     errores_criticos += 1
-            
+
             # Validar móvil con validador del sistema
             if movil and movil.upper() != 'ERROR':
                 resultado_movil = ValidadorTelefono.validar_y_formatear_telefono(movil, "VENEZUELA")
@@ -457,7 +457,7 @@ async def _analizar_archivo_clientes(
                         sugerencia='Formato: +58 XXXXXXXXXX (10 dígitos)'
                     ))
                     errores_advertencia += 1
-            
+
             # Validar email con validador del sistema
             if email and email.upper() != 'ERROR':
                 resultado_email = ValidadorEmail.validar_email(email)
@@ -473,7 +473,7 @@ async def _analizar_archivo_clientes(
                         sugerencia='Formato: usuario@dominio.com'
                     ))
                     errores_advertencia += 1
-            
+
             # Validar fecha de entrega
             if fecha_entrega and fecha_entrega.upper() != 'ERROR':
                 resultado_fecha = ValidadorFecha.validar_y_formatear_fecha(fecha_entrega)
@@ -489,7 +489,7 @@ async def _analizar_archivo_clientes(
                         sugerencia='Formato: DD/MM/YYYY o YYYY-MM-DD'
                     ))
                     errores_criticos += 1
-            
+
             # Validar monto de financiamiento
             if total_financiamiento and total_financiamiento.upper() != 'ERROR':
                 resultado_monto = ValidadorMonto.validar_y_formatear_monto(total_financiamiento)
@@ -505,18 +505,18 @@ async def _analizar_archivo_clientes(
                         sugerencia='Ingrese monto numérico (ej: 50000.00)'
                     ))
                     errores_criticos += 1
-            
+
             # ============================================
             # VALIDACIÓN 4: EXISTENCIA EN BD
             # ============================================
-            
+
             # Verificar si concesionario existe
             if concesionario:
                 concesionario_obj = db.query(Concesionario).filter(
                     Concesionario.nombre.ilike(f"%{concesionario}%"),
                     Concesionario.activo == True
                 ).first()
-                
+
                 if not concesionario_obj:
                     errores_registro.append(ErrorCargaMasiva(
                         fila=fila_numero,
@@ -529,14 +529,14 @@ async def _analizar_archivo_clientes(
                         sugerencia='Seleccione un concesionario existente o créelo primero en Configuración'
                     ))
                     datos_vacios += 1
-            
+
             # Verificar si modelo de vehículo existe
             if modelo_vehiculo:
                 modelo_obj = db.query(ModeloVehiculo).filter(
                     ModeloVehiculo.modelo.ilike(f"%{modelo_vehiculo}%"),
                     ModeloVehiculo.activo == True
                 ).first()
-                
+
                 if not modelo_obj:
                     errores_registro.append(ErrorCargaMasiva(
                         fila=fila_numero,
@@ -549,14 +549,14 @@ async def _analizar_archivo_clientes(
                         sugerencia='Seleccione un modelo existente o créelo primero en Configuración'
                     ))
                     datos_vacios += 1
-            
+
             # Verificar si asesor existe
             if asesor:
                 asesor_obj = db.query(Analista).filter(
                     Analista.nombre.ilike(f"%{asesor}%"),
                     Analista.activo == True
                 ).first()
-                
+
                 if not asesor_obj:
                     errores_registro.append(ErrorCargaMasiva(
                         fila=fila_numero,
@@ -569,7 +569,7 @@ async def _analizar_archivo_clientes(
                         sugerencia='Seleccione un asesor existente o créelo primero en Configuración'
                     ))
                     datos_vacios += 1
-            
+
             # Validar modalidad de pago
             if modalidad_pago:
                 modalidades_validas = ['SEMANAL', 'QUINCENAL', 'MENSUAL', 'BIMENSUAL']
@@ -585,14 +585,14 @@ async def _analizar_archivo_clientes(
                         sugerencia=f'Use: {", ".join(modalidades_validas)}'
                     ))
                     errores_criticos += 1
-            
+
             # ============================================
             # DETERMINAR ESTADO DEL REGISTRO
             # ============================================
-            
+
             tiene_errores_criticos = any(e.tipo_error == 'CRITICO' for e in errores_registro)
             tiene_datos_vacios = any(e.tipo_error == 'DATO_VACIO' for e in errores_registro)
-            
+
             if tiene_errores_criticos:
                 estado = 'ERROR'
                 registros_con_errores += 1
@@ -604,7 +604,7 @@ async def _analizar_archivo_clientes(
                 registros_con_errores += 1
             else:
                 estado = 'LISTO'
-            
+
             # Agregar registro procesado
             registros_procesados.append(RegistroCargaMasiva(
                 fila=fila_numero,
@@ -629,11 +629,11 @@ async def _analizar_archivo_clientes(
                     'asesor': asesor
                 }
             ))
-        
+
         # ============================================
         # RETORNAR RESULTADO PARA DASHBOARD
         # ============================================
-        
+
         return ResultadoCargaMasiva(
             total_registros=total_registros,
             registros_procesados=len([r for r in registros_procesados if r.estado == 'LISTO']),
@@ -647,7 +647,7 @@ async def _analizar_archivo_clientes(
             fecha_carga=datetime.utcnow(),
             usuario_id=usuario_id
         )
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -671,7 +671,7 @@ async def _analizar_archivo_pagos(
     try:
         # Leer Excel
         df = pd.read_excel(io.BytesIO(contenido))
-        
+
         # Mapeo de columnas para pagos
         mapeo_columnas = {
             'CEDULA IDENTIDAD': 'cedula',
@@ -688,19 +688,19 @@ async def _analizar_archivo_pagos(
             'METODO PAGO': 'metodo_pago',
             'METODO': 'metodo_pago'
         }
-        
+
         df = df.rename(columns=mapeo_columnas)
-        
+
         # Validar columnas requeridas
         columnas_requeridas = ['cedula', 'fecha_pago', 'monto_pagado']
         columnas_faltantes = [col for col in columnas_requeridas if col not in df.columns]
-        
+
         if columnas_faltantes:
             raise HTTPException(
                 status_code=400,
                 detail=f"❌ Faltan columnas requeridas: {', '.join(columnas_faltantes)}"
             )
-        
+
         # Procesar cada pago
         registros_procesados = []
         total_registros = len(df)
@@ -708,27 +708,27 @@ async def _analizar_archivo_pagos(
         errores_criticos = 0
         errores_advertencia = 0
         datos_vacios = 0
-        
+
         for index, row in df.iterrows():
             fila_numero = index + 2
             errores_registro = []
-            
+
             cedula = str(row.get('cedula', '')).strip()
             fecha_pago = str(row.get('fecha_pago', '')).strip()
             monto_pagado = str(row.get('monto_pagado', '')).strip()
             numero_cuota = str(row.get('numero_cuota', '')).strip()
             documento_pago = str(row.get('documento_pago', '')).strip()
             metodo_pago = str(row.get('metodo_pago', '')).strip()
-            
+
             # ============================================
             # VALIDACIÓN: ARTICULACIÓN CON CLIENTE
             # ============================================
-            
+
             # Buscar cliente por cédula
             cliente = None
             if cedula and cedula.upper() != 'ERROR':
                 cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
-                
+
                 if not cliente:
                     errores_registro.append(ErrorCargaMasiva(
                         fila=fila_numero,
@@ -753,7 +753,7 @@ async def _analizar_archivo_pagos(
                     sugerencia='Ingrese cédula del cliente'
                 ))
                 errores_criticos += 1
-            
+
             # Validar fecha de pago
             if not fecha_pago or fecha_pago.upper() == 'ERROR':
                 errores_registro.append(ErrorCargaMasiva(
@@ -781,7 +781,7 @@ async def _analizar_archivo_pagos(
                         sugerencia='Formato: DD/MM/YYYY o YYYY-MM-DD'
                     ))
                     errores_criticos += 1
-            
+
             # Validar monto pagado
             if not monto_pagado or monto_pagado.upper() == 'ERROR':
                 errores_registro.append(ErrorCargaMasiva(
@@ -809,7 +809,7 @@ async def _analizar_archivo_pagos(
                         sugerencia='Ingrese monto numérico (ej: 5000.00)'
                     ))
                     errores_criticos += 1
-            
+
             # Documento de pago (ADVERTENCIA si vacío)
             if not documento_pago or documento_pago.upper() == 'ERROR':
                 errores_registro.append(ErrorCargaMasiva(
@@ -823,7 +823,7 @@ async def _analizar_archivo_pagos(
                     sugerencia='Ingrese número de referencia o documento'
                 ))
                 errores_advertencia += 1
-            
+
             # Método de pago (DATO_VACIO si vacío)
             if not metodo_pago:
                 errores_registro.append(ErrorCargaMasiva(
@@ -837,11 +837,11 @@ async def _analizar_archivo_pagos(
                     sugerencia='Seleccione: TRANSFERENCIA, EFECTIVO, CHEQUE, etc.'
                 ))
                 datos_vacios += 1
-            
+
             # Determinar estado
             tiene_errores_criticos = any(e.tipo_error == 'CRITICO' for e in errores_registro)
             tiene_datos_vacios = any(e.tipo_error == 'DATO_VACIO' for e in errores_registro)
-            
+
             if tiene_errores_criticos:
                 estado = 'ERROR'
                 registros_con_errores += 1
@@ -853,7 +853,7 @@ async def _analizar_archivo_pagos(
                 registros_con_errores += 1
             else:
                 estado = 'LISTO'
-            
+
             # Agregar registro
             registros_procesados.append(RegistroCargaMasiva(
                 fila=fila_numero,
@@ -872,7 +872,7 @@ async def _analizar_archivo_pagos(
                     'cliente_nombre': cliente.nombre_completo if cliente else None
                 }
             ))
-        
+
         return ResultadoCargaMasiva(
             total_registros=total_registros,
             registros_procesados=len([r for r in registros_procesados if r.estado == 'LISTO']),
@@ -886,7 +886,7 @@ async def _analizar_archivo_pagos(
             fecha_carga=datetime.utcnow(),
             usuario_id=usuario_id
         )
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -906,7 +906,7 @@ async def corregir_registro_en_linea(
 ):
     """
     ✏️ PASO 2: Corregir un registro con errores en línea
-    
+
     Proceso:
     1. Recibir correcciones del usuario
     2. Validar con validadores del sistema
@@ -916,7 +916,7 @@ async def corregir_registro_en_linea(
     try:
         errores_validacion = []
         datos_corregidos = {}
-        
+
         # Validar cada corrección
         for campo, valor in correccion.correcciones.items():
             if campo == 'cedula':
@@ -925,35 +925,35 @@ async def corregir_registro_en_linea(
                     errores_validacion.append(f"Cédula: {resultado.get('mensaje')}")
                 else:
                     datos_corregidos[campo] = resultado.get("valor_formateado")
-            
+
             elif campo == 'movil':
                 resultado = ValidadorTelefono.validar_y_formatear_telefono(valor, "VENEZUELA")
                 if not resultado.get("valido"):
                     errores_validacion.append(f"Móvil: {resultado.get('mensaje')}")
                 else:
                     datos_corregidos[campo] = resultado.get("valor_formateado")
-            
+
             elif campo == 'email':
                 resultado = ValidadorEmail.validar_email(valor)
                 if not resultado.get("valido"):
                     errores_validacion.append(f"Email: {resultado.get('mensaje')}")
                 else:
                     datos_corregidos[campo] = resultado.get("valor_formateado")
-            
+
             elif campo == 'fecha_entrega' or campo == 'fecha_pago':
                 resultado = ValidadorFecha.validar_y_formatear_fecha(valor)
                 if not resultado.get("valido"):
                     errores_validacion.append(f"Fecha: {resultado.get('mensaje')}")
                 else:
                     datos_corregidos[campo] = resultado.get("valor_formateado")
-            
+
             elif campo in ['total_financiamiento', 'cuota_inicial', 'monto_pagado']:
                 resultado = ValidadorMonto.validar_y_formatear_monto(valor)
                 if not resultado.get("valido"):
                     errores_validacion.append(f"Monto: {resultado.get('mensaje')}")
                 else:
                     datos_corregidos[campo] = resultado.get("valor_formateado")
-            
+
             elif campo == 'concesionario':
                 # Verificar que existe
                 concesionario = db.query(Concesionario).filter(
@@ -965,7 +965,7 @@ async def corregir_registro_en_linea(
                 else:
                     datos_corregidos[campo] = valor
                     datos_corregidos['concesionario_id'] = concesionario.id
-            
+
             elif campo == 'modelo_vehiculo':
                 # Verificar que existe
                 modelo = db.query(ModeloVehiculo).filter(
@@ -977,7 +977,7 @@ async def corregir_registro_en_linea(
                 else:
                     datos_corregidos[campo] = valor
                     datos_corregidos['modelo_vehiculo_id'] = modelo.id
-            
+
             elif campo == 'asesor':
                 # Verificar que existe
                 asesor = db.query(Analista).filter(
@@ -989,18 +989,18 @@ async def corregir_registro_en_linea(
                 else:
                     datos_corregidos[campo] = valor
                     datos_corregidos['asesor_id'] = asesor.id
-            
+
             elif campo == 'modalidad_pago':
                 modalidades_validas = ['SEMANAL', 'QUINCENAL', 'MENSUAL', 'BIMENSUAL']
                 if valor.upper() not in modalidades_validas:
                     errores_validacion.append(f"Modalidad '{valor}' no es válida. Use: {', '.join(modalidades_validas)}")
                 else:
                     datos_corregidos[campo] = valor.upper()
-            
+
             else:
                 # Otros campos sin validación especial
                 datos_corregidos[campo] = valor
-        
+
         # Si hay errores, retornar sin guardar
         if errores_validacion:
             return {
@@ -1008,7 +1008,7 @@ async def corregir_registro_en_linea(
                 "errores": errores_validacion,
                 "datos_corregidos": datos_corregidos
             }
-        
+
         # Si todo está OK, retornar éxito
         return {
             "success": True,
@@ -1016,7 +1016,7 @@ async def corregir_registro_en_linea(
             "datos_corregidos": datos_corregidos,
             "puede_guardarse": True
         }
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -1037,7 +1037,7 @@ async def guardar_registros_corregidos(
 ):
     """
     💾 PASO 3: Guardar registros que pasaron validación
-    
+
     Proceso:
     1. Recibir solo registros con estado LISTO
     2. Usar MISMO proceso que crear_cliente o crear_pago
@@ -1048,27 +1048,27 @@ async def guardar_registros_corregidos(
     try:
         registros_guardados = 0
         errores_guardado = []
-        
+
         for registro in registros:
             try:
                 if tipo_carga == "clientes":
                     # Usar MISMO proceso que crear_cliente
                     await _guardar_cliente_desde_carga(registro, db, current_user.id)
                     registros_guardados += 1
-                    
+
                 elif tipo_carga == "pagos":
                     # Usar MISMO proceso que crear_pago
                     await _guardar_pago_desde_carga(registro, db, current_user.id)
                     registros_guardados += 1
-                    
+
             except Exception as e:
                 errores_guardado.append({
                     'cedula': registro.get('cedula'),
                     'error': str(e)
                 })
-        
+
         db.commit()
-        
+
         # Registrar en auditoría
         auditoria = Auditoria.registrar(
             usuario_id=current_user.id,
@@ -1084,14 +1084,14 @@ async def guardar_registros_corregidos(
         )
         db.add(auditoria)
         db.commit()
-        
+
         return {
             "success": True,
             "mensaje": f"✅ {registros_guardados} registros guardados exitosamente",
             "registros_guardados": registros_guardados,
             "errores": errores_guardado
         }
-        
+
     except Exception as e:
         db.rollback()
         raise HTTPException(
@@ -1116,11 +1116,11 @@ async def _guardar_cliente_desde_carga(
         # ============================================
         # MAPEAR NOMBRES A FOREIGNKEYS
         # ============================================
-        
+
         concesionario_id = None
         modelo_vehiculo_id = None
         asesor_id = None
-        
+
         # Buscar concesionario_id
         if datos.get('concesionario'):
             concesionario_obj = db.query(Concesionario).filter(
@@ -1129,7 +1129,7 @@ async def _guardar_cliente_desde_carga(
             ).first()
             if concesionario_obj:
                 concesionario_id = concesionario_obj.id
-        
+
         # Buscar modelo_vehiculo_id
         if datos.get('modelo_vehiculo'):
             modelo_obj = db.query(ModeloVehiculo).filter(
@@ -1138,7 +1138,7 @@ async def _guardar_cliente_desde_carga(
             ).first()
             if modelo_obj:
                 modelo_vehiculo_id = modelo_obj.id
-        
+
         # Buscar asesor_id
         if datos.get('asesor'):
             asesor_obj = db.query(Analista).filter(
@@ -1147,11 +1147,11 @@ async def _guardar_cliente_desde_carga(
             ).first()
             if asesor_obj:
                 asesor_id = asesor_obj.id
-        
+
         # ============================================
         # CREAR CLIENTE CON FOREIGNKEYS
         # ============================================
-        
+
         cliente_data = {
             "cedula": datos['cedula'],
             "nombres": datos['nombre'],
@@ -1159,50 +1159,50 @@ async def _guardar_cliente_desde_carga(
             "telefono": datos.get('movil', ''),
             "email": datos.get('email', ''),
             "direccion": datos.get('direccion', ''),
-            
+
             # ForeignKeys
             "concesionario_id": concesionario_id,
             "modelo_vehiculo_id": modelo_vehiculo_id,
             "asesor_id": asesor_id,
-            
+
             # Campos legacy (mantener por compatibilidad)
             "concesionario": datos.get('concesionario', ''),
             "modelo_vehiculo": datos.get('modelo_vehiculo', ''),
             "marca_vehiculo": datos.get('modelo_vehiculo', '').split(' ')[0] if datos.get('modelo_vehiculo') else '',
-            
+
             # Financiamiento
             "total_financiamiento": Decimal(str(datos.get('total_financiamiento', 0))) if datos.get('total_financiamiento') else None,
             "cuota_inicial": Decimal(str(datos.get('cuota_inicial', 0))) if datos.get('cuota_inicial') else None,
             "numero_amortizaciones": int(datos.get('numero_amortizaciones', 12)) if datos.get('numero_amortizaciones') else None,
             "modalidad_pago": datos.get('modalidad_pago', 'MENSUAL').upper(),
             "fecha_entrega": datetime.strptime(datos['fecha_entrega'], '%Y-%m-%d').date() if datos.get('fecha_entrega') else None,
-            
+
             # Estado
             "estado": "ACTIVO",
             "activo": True,
             "fecha_registro": datetime.utcnow(),
             "usuario_registro": f"CARGA_MASIVA_USER_{usuario_id}"
         }
-        
+
         # Verificar si ya existe
         cliente_existente = db.query(Cliente).filter(Cliente.cedula == datos['cedula']).first()
-        
+
         if cliente_existente:
             # Actualizar cliente existente
             for key, value in cliente_data.items():
                 if key not in ['cedula', 'fecha_registro']:
                     setattr(cliente_existente, key, value)
             cliente_existente.fecha_actualizacion = datetime.utcnow()
-            
+
             logger.info(f"Cliente actualizado: {datos['cedula']}")
         else:
             # Crear nuevo cliente
             nuevo_cliente = Cliente(**cliente_data)
             db.add(nuevo_cliente)
             db.flush()
-            
+
             logger.info(f"Cliente creado: {datos['cedula']} (ID: {nuevo_cliente.id})")
-        
+
         # Registrar en auditoría
         auditoria = Auditoria.registrar(
             usuario_id=usuario_id,
@@ -1214,7 +1214,7 @@ async def _guardar_cliente_desde_carga(
             resultado="EXITOSO"
         )
         db.add(auditoria)
-        
+
     except Exception as e:
         raise Exception(f"Error guardando cliente {datos.get('cedula')}: {str(e)}")
 
@@ -1235,23 +1235,23 @@ async def _guardar_pago_desde_carga(
         # ============================================
         # ARTICULACIÓN: Buscar cliente por cédula
         # ============================================
-        
+
         cliente = db.query(Cliente).filter(Cliente.cedula == datos['cedula']).first()
-        
+
         if not cliente:
             raise Exception(f"Cliente con cédula {datos['cedula']} no existe")
-        
+
         # Verificar que el cliente tenga préstamo activo
         if not cliente.prestamos or len(cliente.prestamos) == 0:
             raise Exception(f"Cliente {datos['cedula']} no tiene préstamos activos")
-        
+
         # Usar el primer préstamo activo
         prestamo = cliente.prestamos[0]
-        
+
         # ============================================
         # CREAR PAGO
         # ============================================
-        
+
         pago_data = {
             "prestamo_id": prestamo.id,
             "monto": Decimal(str(datos['monto_pagado'])),
@@ -1263,13 +1263,13 @@ async def _guardar_pago_desde_carga(
             "registrado_por": usuario_id,
             "fecha_registro": datetime.utcnow()
         }
-        
+
         nuevo_pago = Pago(**pago_data)
         db.add(nuevo_pago)
         db.flush()
-        
+
         logger.info(f"Pago creado para cliente {datos['cedula']}: ${datos['monto_pagado']}")
-        
+
         # Registrar en auditoría
         auditoria = Auditoria.registrar(
             usuario_id=usuario_id,
@@ -1281,7 +1281,7 @@ async def _guardar_pago_desde_carga(
             resultado="EXITOSO"
         )
         db.add(auditoria)
-        
+
     except Exception as e:
         raise Exception(f"Error guardando pago para {datos.get('cedula')}: {str(e)}")
 
@@ -1298,7 +1298,7 @@ async def descargar_template_excel(
 ):
     """
     📥 Descargar template de Excel con formato establecido
-    
+
     Tipos:
     - clientes: Template para carga de clientes
     - pagos: Template para carga de pagos
@@ -1322,7 +1322,7 @@ async def descargar_template_excel(
                 'FECHA ENTREGA',
                 'USER'
             ])
-            
+
             # Agregar fila de ejemplo
             df.loc[0] = [
                 'V12345678',
@@ -1340,9 +1340,9 @@ async def descargar_template_excel(
                 '2025-01-15',
                 'Roberto Martínez'
             ]
-            
+
             nombre_archivo = "template_clientes.xlsx"
-            
+
         elif tipo == "pagos":
             # Crear DataFrame para pagos
             df = pd.DataFrame(columns=[
@@ -1353,7 +1353,7 @@ async def descargar_template_excel(
                 'DOCUMENTO PAGO',
                 'METODO PAGO'
             ])
-            
+
             # Agregar fila de ejemplo
             df.loc[0] = [
                 'V12345678',
@@ -1363,21 +1363,21 @@ async def descargar_template_excel(
                 'REF-001234',
                 'TRANSFERENCIA'
             ]
-            
+
             nombre_archivo = "template_pagos.xlsx"
         else:
             raise HTTPException(
                 status_code=400,
                 detail="Tipo inválido. Use 'clientes' o 'pagos'"
             )
-        
+
         # Guardar en buffer
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Datos')
-        
+
         output.seek(0)
-        
+
         return StreamingResponse(
             output,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1385,7 +1385,7 @@ async def descargar_template_excel(
                 "Content-Disposition": f"attachment; filename={nombre_archivo}"
             }
         )
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -1404,7 +1404,7 @@ async def obtener_opciones_configuracion(
 ):
     """
     📋 Obtener listas de opciones para corrección en línea
-    
+
     Retorna:
     - Concesionarios activos
     - Analistaes activos
@@ -1416,17 +1416,17 @@ async def obtener_opciones_configuracion(
         concesionarios = db.query(Concesionario).filter(
             Concesionario.activo == True
         ).all()
-        
+
         # Obtener asesores activos
         asesores = db.query(Analista).filter(
             Analista.activo == True
         ).all()
-        
+
         # Obtener modelos de vehículos activos
         modelos = db.query(ModeloVehiculo).filter(
             ModeloVehiculo.activo == True
         ).all()
-        
+
         # Modalidades de pago configurables
         modalidades_pago = [
             {"value": "SEMANAL", "label": "Semanal"},
@@ -1434,14 +1434,14 @@ async def obtener_opciones_configuracion(
             {"value": "MENSUAL", "label": "Mensual"},
             {"value": "BIMENSUAL", "label": "Bimensual"}
         ]
-        
+
         return {
             "concesionarios": [{"id": c.id, "nombre": c.nombre} for c in concesionarios],
             "asesores": [{"id": a.id, "nombre": a.nombre_completo} for a in asesores],
             "modelos_vehiculos": [{"id": m.id, "modelo": m.modelo} for m in modelos],
             "modalidades_pago": modalidades_pago
         }
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -1460,7 +1460,7 @@ async def dashboard_carga_masiva(
 ):
     """
     📊 Dashboard de carga masiva
-    
+
     Muestra:
     - Historial de cargas
     - Estadísticas de errores
@@ -1472,7 +1472,7 @@ async def dashboard_carga_masiva(
             Auditoria.usuario_id == current_user.id,
             Auditoria.tabla == "CargaMasiva"
         ).order_by(Auditoria.fecha.desc()).limit(10).all()
-        
+
         return {
             "titulo": "📊 Dashboard de Carga Masiva",
             "usuario": f"{current_user.nombre} {current_user.apellido}".strip(),
@@ -1504,7 +1504,7 @@ async def dashboard_carga_masiva(
                 }
             ]
         }
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=500,

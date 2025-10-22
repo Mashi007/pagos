@@ -38,7 +38,7 @@ def create_tables():
     try:
         # Importar models para registrar en metadata
         import app.models  # noqa
-        
+
         # Crear tablas
         Base.metadata.create_all(bind=engine)
         logger.info("Tablas creadas exitosamente")
@@ -53,13 +53,13 @@ def run_migrations():
     try:
         import subprocess
         import os
-        
+
         # Cambiar al directorio del backend
         backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         os.chdir(backend_dir)
-        
+
         logger.info("🔄 Ejecutando migraciones de Alembic...")
-        
+
         # Ejecutar alembic upgrade head
         result = subprocess.run(
             ["alembic", "upgrade", "head"],
@@ -67,14 +67,14 @@ def run_migrations():
             text=True,
             timeout=DEFAULT_TIMEOUT_SECONDS
         )
-        
+
         if result.returncode == 0:
             logger.info("Migraciones aplicadas exitosamente")
             return True
         else:
             logger.error(f"Error ejecutando migraciones: {result.stderr}")
             return False
-            
+
     except Exception as e:
         logger.error(f"Error ejecutando migraciones: {e}")
         return False
@@ -84,30 +84,30 @@ def create_admin_user():
     """Crea el usuario administrador si no existe"""
     try:
         logger.info("🔄 Verificando usuario administrador...")
-        
+
         from app.models.user import User
         from app.core.security import get_password_hash
         from datetime import datetime
-        
+
         db = SessionLocal()
-        
+
         # Verificar si ya existe el admin correcto
         existing_admin = db.query(User).filter(User.email == "itmaster@rapicreditca.com").first()
-        
+
         if existing_admin:
             logger.info(f"Usuario itmaster@rapicreditca.com ya existe: {existing_admin.email}")
             db.close()
             return True
-        
+
         # Eliminar admin@financiamiento.com si existe
         wrong_admin = db.query(User).filter(User.email == "admin@financiamiento.com").first()
         if wrong_admin:
             logger.info(f"Eliminando usuario incorrecto: {wrong_admin.email}")
             db.delete(wrong_admin)
             db.commit()
-        
+
         logger.info("Creando usuario administrador...")
-        
+
         # Crear admin con las credenciales desde settings
         admin = User(
             email=settings.ADMIN_EMAIL,
@@ -118,18 +118,18 @@ def create_admin_user():
             is_active=True,
             created_at=datetime.utcnow()
         )
-        
+
         db.add(admin)
         db.commit()
         db.refresh(admin)
-        
+
         logger.info("Usuario ADMIN creado exitosamente")
         logger.info(f"Email: {admin.email}")
         logger.info("Password: (ver settings.ADMIN_PASSWORD)")
-        
+
         db.close()
         return True
-        
+
     except LookupError as e:
         # Error de enum - esto es esperado si la DB tiene roles antiguos
         logger.warning(f"Error de enum detectado (esperado): {e}")
@@ -146,17 +146,17 @@ def init_db() -> bool:
     """Inicializa la base de datos creando las tablas si no existen"""
     try:
         logger.info("Inicializando base de datos...")
-        
+
         if not check_database_connection():
             logger.error("No se pudo conectar a la base de datos")
             return False
-        
+
         # NO ejecutar migraciones automáticamente para evitar conflictos con enum
         # Las migraciones deben ejecutarse manualmente vía endpoint de emergencia
         logger.info("Saltando migraciones automáticas (usar endpoint de emergencia si es necesario)")
-        
+
         tables_exist = all(table_exists(table) for table in MAIN_TABLES)
-        
+
         if not tables_exist:
             logger.info("Tablas no encontradas, creando...")
             if create_tables():
@@ -172,7 +172,7 @@ def init_db() -> bool:
             # Intentar crear usuario admin si no existe (puede fallar con enum error)
             create_admin_user()
             return True
-            
+
     except Exception as e:
         logger.error(f"Error inicializando base de datos: {e}")
         return False
@@ -188,7 +188,7 @@ def init_db_startup():
         logger.info(f"Sistema de Préstamos y Cobranza v{settings.APP_VERSION}")
         logger.info("="*DEFAULT_SEPARATOR_LENGTH)
         logger.info(f"Base de datos: {settings.get_database_url(hide_password=True)}")
-        
+
         # Intentar inicializar la base de datos pero no fallar si no se puede conectar
         db_initialized = False
         try:
@@ -202,17 +202,17 @@ def init_db_startup():
                 logger.warning("Advertencia: Error inicializando tablas")
         except Exception as db_error:
             logger.error(f"Error de base de datos (la aplicación continuará): {db_error}")
-        
+
         if not db_initialized:
             logger.warning("La aplicación iniciará en modo de funcionalidad limitada")
             logger.warning("Algunas funciones pueden no estar disponibles")
-        
+
         logger.info(f"Entorno: {settings.ENVIRONMENT}")
         logger.info("Documentación: /docs")
         logger.info(f"Debug mode: {'ON' if settings.DEBUG else 'OFF'}")
         logger.info("="*DEFAULT_SEPARATOR_LENGTH)
         logger.info("")
-        
+
     except Exception as e:
         logger.error(f"Error en startup de DB: {e}")
         logger.warning("Continuando sin conexión a base de datos")

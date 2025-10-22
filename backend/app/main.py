@@ -92,25 +92,25 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        
+
         # Headers básicos de seguridad (menos restrictivos)
         response.headers["X-Content-Type-Options"] = "nosniff"
-        
+
         # Permitir iframe para desarrollo
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
-        
+
         # XSS Protection
         response.headers["X-XSS-Protection"] = "1; mode=block"
-        
+
         # CSP más permisivo para desarrollo
         response.headers["Content-Security-Policy"] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' *;"
-        
+
         # Referrer Policy más permisivo
         response.headers["Referrer-Policy"] = "no-referrer-when-downgrade"
-        
+
         # Permissions Policy más permisivo
         response.headers["Permissions-Policy"] = "geolocation=*, microphone=*, camera=*"
-        
+
         return response
 
 

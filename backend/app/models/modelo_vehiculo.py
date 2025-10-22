@@ -13,7 +13,7 @@ class ModeloVehiculo(Base):
     id = Column(Integer, primary_key=True, index=True)
     modelo = Column(String(100), nullable=False, unique=True, index=True)
     activo = Column(Boolean, nullable=False, default=True, index=True)
-    
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

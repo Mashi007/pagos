@@ -53,9 +53,9 @@ def db_session(test_db):
     connection = engine.connect()
     transaction = connection.begin()
     session = TestingSessionLocal(bind=connection)
-    
+
     yield session
-    
+
     session.close()
     transaction.rollback()
     connection.close()
@@ -69,12 +69,12 @@ def test_client(db_session):
             yield db_session
         finally:
             pass
-    
+
     app.dependency_overrides[get_db] = override_get_db
-    
+
     with TestClient(app) as client:
         yield client
-    
+
     app.dependency_overrides.clear()
 
 
@@ -195,9 +195,9 @@ def setup_test_environment():
     os.environ["ENVIRONMENT"] = "testing"
     os.environ["DEBUG"] = "true"
     os.environ["LOG_LEVEL"] = "DEBUG"
-    
+
     yield
-    
+
     # Limpiar variables de entorno después de las pruebas
     test_env_vars = ["ENVIRONMENT", "DEBUG", "LOG_LEVEL"]
     for var in test_env_vars:

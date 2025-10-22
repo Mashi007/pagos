@@ -74,7 +74,7 @@ async def procesar_notificaciones_automaticas(
 ):
     """
     🤖 Procesar notificaciones automáticas (Endpoint para scheduler/cron)
-    
+
     FLUJO AUTOMÁTICO:
     1. Busca clientes con cuotas que requieren notificación hoy
     2. Para cada cliente:
@@ -91,18 +91,18 @@ async def procesar_notificaciones_automaticas(
     # Solo admin y cobranzas pueden ejecutar procesamiento manual
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Sin permisos para procesar notificaciones")
-    
+
     try:
         # Verificar configuración de servicios
         scheduler = NotificationScheduler()
         config_servicios = scheduler.verificar_configuracion_servicios(db)
-        
+
         if not config_servicios["puede_enviar_notificaciones"]:
             raise HTTPException(
                 status_code=400, 
                 detail="Servicios de notificación no configurados. Configure email y/o WhatsApp."
             )
-        
+
         # Ejecutar procesamiento en background
         background_tasks.add_task(
             _ejecutar_procesamiento_background,
@@ -110,7 +110,7 @@ async def procesar_notificaciones_automaticas(
             user_id=current_user.id,
             forzar=forzar_procesamiento
         )
-        
+
         return {
             "mensaje": "✅ Procesamiento de notificaciones iniciado en background",
             "timestamp": datetime.now().isoformat(),
@@ -121,7 +121,7 @@ async def procesar_notificaciones_automaticas(
             "estimacion_tiempo": "2-5 minutos dependiendo del volumen",
             "seguimiento": "GET /api/v1/notificaciones-multicanal/estado-procesamiento"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -139,40 +139,40 @@ def obtener_estado_procesamiento(
     try:
         # Estadísticas de hoy
         hoy = date.today()
-        
+
         notificaciones_hoy = db.query(Notificacion).filter(
             func.date(Notificacion.creado_en) == hoy,
             Notificacion.categoria == "CLIENTE"
         ).all()
-        
+
         # Agrupar por estado
         por_estado = {}
         por_canal = {}
         por_tipo = {}
-        
+
         for notif in notificaciones_hoy:
             # Por estado
             estado = notif.estado
             por_estado[estado] = por_estado.get(estado, 0) + 1
-            
+
             # Por canal
             canal = notif.canal or "NO_ESPECIFICADO"
             por_canal[canal] = por_canal.get(canal, 0) + 1
-            
+
             # Por tipo
             tipo = notif.tipo
             por_tipo[tipo] = por_tipo.get(tipo, 0) + 1
-        
+
         total_hoy = len(notificaciones_hoy)
         exitosas = por_estado.get("ENTREGADO", 0)
         fallidas = por_estado.get("ERROR", 0)
         pendientes = por_estado.get("PENDIENTE", 0)
-        
+
         return {
             "titulo": "📊 ESTADO DE NOTIFICACIONES MULTICANAL",
             "fecha_consulta": datetime.now().isoformat(),
             "periodo": f"Hoy ({hoy.strftime('%d/%m/%Y')})",
-            
+
             "resumen_hoy": {
                 "total_procesadas": total_hoy,
                 "exitosas": exitosas,
@@ -180,28 +180,28 @@ def obtener_estado_procesamiento(
                 "pendientes": pendientes,
                 "tasa_exito": round((exitosas / total_hoy * 100), 2) if total_hoy > 0 else 0
             },
-            
+
             "por_canal": {
                 "email": por_canal.get("EMAIL", 0),
                 "whatsapp": por_canal.get("WHATSAPP", 0),
                 "total": sum(por_canal.values())
             },
-            
+
             "por_tipo": por_tipo,
-            
+
             "estado_scheduler": {
                 "ejecutandose": notification_scheduler.is_running,
                 "ultima_ejecucion": "Simulado - cada hora",
                 "proxima_ejecucion": "En la próxima hora"
             },
-            
+
             "alertas": [
                 f"🚨 {fallidas} notificaciones fallidas requieren atención" if fallidas > 0 else None,
                 f"⏳ {pendientes} notificaciones pendientes de envío" if pendientes > 0 else None,
                 "✅ Sistema funcionando correctamente" if fallidas == 0 and pendientes == 0 else None
             ]
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo estado: {str(e)}")
 
@@ -225,7 +225,7 @@ def obtener_historial_notificaciones(
 ):
     """
     📋 Historial completo de notificaciones con filtros avanzados
-    
+
     Estados posibles:
     • ✅ ENTREGADO
     • 📬 LEIDO (solo WhatsApp)
@@ -237,37 +237,37 @@ def obtener_historial_notificaciones(
         query = db.query(Notificacion).filter(
             Notificacion.categoria == "CLIENTE"
         )
-        
+
         # Aplicar filtros
         if cliente_id:
             query = query.filter(Notificacion.usuario_id == cliente_id)
-        
+
         if canal and canal != "AMBOS":
             query = query.filter(Notificacion.canal == canal)
-        
+
         if tipo:
             query = query.filter(Notificacion.tipo == tipo)
-        
+
         if estado:
             query = query.filter(Notificacion.estado == estado)
-        
+
         if fecha_desde:
             query = query.filter(func.date(Notificacion.creado_en) >= fecha_desde)
-        
+
         if fecha_hasta:
             query = query.filter(func.date(Notificacion.creado_en) <= fecha_hasta)
-        
+
         # Paginación
         total = query.count()
         skip = (page - 1) * page_size
         notificaciones = query.order_by(desc(Notificacion.creado_en)).offset(skip).limit(page_size).all()
-        
+
         # Formatear resultados
         historial = []
         for notif in notificaciones:
             # Obtener datos del cliente
             cliente = db.query(Cliente).filter(Cliente.id == notif.usuario_id).first()
-            
+
             historial.append({
                 "id": notif.id,
                 "cliente": {
@@ -300,7 +300,7 @@ def obtener_historial_notificaciones(
                 },
                 "error": notif.error_mensaje if notif.estado == "ERROR" else None
             })
-        
+
         return {
             "titulo": "📋 HISTORIAL DE NOTIFICACIONES MULTICANAL",
             "filtros_aplicados": {
@@ -324,7 +324,7 @@ def obtener_historial_notificaciones(
                 "por_canal": _agrupar_por_campo(historial, lambda x: x["canal"]["tipo"])
             }
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo historial: {str(e)}")
 
@@ -346,10 +346,10 @@ def obtener_preferencias_cliente(
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
         if not cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
-        
+
         # Obtener preferencias actuales
         canal_preferido = PreferenciasNotificacion.obtener_preferencias_cliente(cliente_id, db)
-        
+
         return {
             "cliente": {
                 "id": cliente.id,
@@ -386,7 +386,7 @@ def obtener_preferencias_cliente(
                 {"codigo": "CONFIRMACION_PAGO", "descripcion": "Confirmación de pago", "hora": "Inmediato"}
             ]
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -402,7 +402,7 @@ def actualizar_preferencias_cliente(
 ):
     """
     ✏️ Actualizar preferencias de notificación del cliente
-    
+
     Opciones:
     • AMBOS: Email + WhatsApp (recomendado)
     • EMAIL: Solo email
@@ -414,25 +414,25 @@ def actualizar_preferencias_cliente(
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
         if not cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
-        
+
         # Validar que el cliente tenga los canales solicitados
         if canal_preferido == CanalNotificacion.EMAIL and not cliente.email:
             raise HTTPException(status_code=400, detail="Cliente no tiene email configurado")
-        
+
         if canal_preferido == CanalNotificacion.WHATSAPP and not cliente.telefono:
             raise HTTPException(status_code=400, detail="Cliente no tiene teléfono configurado")
-        
+
         if canal_preferido == CanalNotificacion.AMBOS and not (cliente.email and cliente.telefono):
             raise HTTPException(status_code=400, detail="Cliente debe tener email Y teléfono para canal AMBOS")
-        
+
         # Actualizar preferencias
         exito = PreferenciasNotificacion.actualizar_preferencias_cliente(
             cliente_id, canal_preferido, db
         )
-        
+
         if not exito:
             raise HTTPException(status_code=500, detail="Error actualizando preferencias")
-        
+
         return {
             "mensaje": "✅ Preferencias de notificación actualizadas exitosamente",
             "cliente": {
@@ -451,7 +451,7 @@ def actualizar_preferencias_cliente(
             "fecha_actualizacion": datetime.now().isoformat(),
             "actualizado_por": current_user.full_name
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -468,13 +468,13 @@ def listar_templates_whatsapp(
 ):
     """
     📝 Listar templates de WhatsApp disponibles
-    
+
     ⚠️ IMPORTANTE: Las plantillas de WhatsApp deben ser aprobadas por Meta
     antes de poder usarse. El sistema las enviará para aprobación.
     """
     try:
         templates = WhatsAppTemplateManager.listar_todos_templates()
-        
+
         return {
             "titulo": "📝 TEMPLATES DE WHATSAPP BUSINESS API",
             "total_templates": len(templates),
@@ -496,7 +496,7 @@ def listar_templates_whatsapp(
                 "{telefono_empresa} - Teléfono de contacto"
             ]
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listando templates: {str(e)}")
 
@@ -511,17 +511,17 @@ def enviar_template_para_aprobacion(
     """
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores pueden gestionar templates")
-    
+
     try:
         # Obtener template formateado para Meta
         template_meta = WhatsAppTemplateManager.obtener_template_para_aprobacion(template_name)
-        
+
         if not template_meta:
             raise HTTPException(status_code=404, detail="Template no encontrado")
-        
+
         # En producción, aquí se enviaría a la API de Meta
         # Por ahora, simular el proceso
-        
+
         return {
             "mensaje": f"✅ Template '{template_name}' enviado para aprobación",
             "template_enviado": template_meta,
@@ -533,7 +533,7 @@ def enviar_template_para_aprobacion(
             },
             "fecha_envio": datetime.now().isoformat()
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -552,7 +552,7 @@ async def procesar_reintentos_fallidas(
 ):
     """
     🔄 Procesar reintentos de notificaciones fallidas
-    
+
     Configuración de reintentos:
     • Máximo 2 reintentos por notificación
     • Intervalo de 30 minutos entre reintentos
@@ -560,18 +560,18 @@ async def procesar_reintentos_fallidas(
     """
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Sin permisos para procesar reintentos")
-    
+
     try:
         # Ejecutar reintentos en background
         background_tasks.add_task(_procesar_reintentos_background, db)
-        
+
         # Contar notificaciones pendientes de reintento
         pendientes_reintento = db.query(Notificacion).filter(
             Notificacion.estado == "ERROR",
             Notificacion.intentos < Notificacion.max_intentos,
             Notificacion.creado_en >= datetime.now() - timedelta(hours=24)
         ).count()
-        
+
         return {
             "mensaje": "✅ Procesamiento de reintentos iniciado en background",
             "notificaciones_pendientes": pendientes_reintento,
@@ -582,7 +582,7 @@ async def procesar_reintentos_fallidas(
             },
             "timestamp": datetime.now().isoformat()
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error procesando reintentos: {str(e)}")
 
@@ -613,40 +613,40 @@ def dashboard_notificaciones_multicanal(
             fecha_fin = hoy
         else:
             fecha_inicio = fecha_fin = hoy
-        
+
         # Obtener notificaciones del período
         notificaciones = db.query(Notificacion).filter(
             Notificacion.categoria == "CLIENTE",
             func.date(Notificacion.creado_en) >= fecha_inicio,
             func.date(Notificacion.creado_en) <= fecha_fin
         ).all()
-        
+
         # Calcular métricas
         total = len(notificaciones)
         exitosas = len([n for n in notificaciones if n.estado == "ENTREGADO"])
         fallidas = len([n for n in notificaciones if n.estado == "ERROR"])
         pendientes = len([n for n in notificaciones if n.estado == "PENDIENTE"])
-        
+
         # Métricas por canal
         por_canal = {
             "EMAIL": len([n for n in notificaciones if n.canal == "EMAIL"]),
             "WHATSAPP": len([n for n in notificaciones if n.canal == "WHATSAPP"])
         }
-        
+
         # Métricas por tipo
         por_tipo = {}
         for notif in notificaciones:
             tipo = notif.tipo
             por_tipo[tipo] = por_tipo.get(tipo, 0) + 1
-        
+
         # Top clientes con más notificaciones
         clientes_notificaciones = {}
         for notif in notificaciones:
             cliente_id = notif.usuario_id
             clientes_notificaciones[cliente_id] = clientes_notificaciones.get(cliente_id, 0) + 1
-        
+
         top_clientes = sorted(clientes_notificaciones.items(), key=lambda x: x[1], reverse=True)[:10]
-        
+
         return {
             "titulo": "📊 DASHBOARD DE NOTIFICACIONES MULTICANAL",
             "periodo": {
@@ -654,7 +654,7 @@ def dashboard_notificaciones_multicanal(
                 "fecha_inicio": fecha_inicio,
                 "fecha_fin": fecha_fin
             },
-            
+
             "metricas_principales": {
                 "total_enviadas": {
                     "valor": total,
@@ -679,7 +679,7 @@ def dashboard_notificaciones_multicanal(
                     "color": "#17a2b8"
                 }
             },
-            
+
             "distribucion_canales": {
                 "email": {
                     "cantidad": por_canal["EMAIL"],
@@ -692,7 +692,7 @@ def dashboard_notificaciones_multicanal(
                     "color": "#25d366"
                 }
             },
-            
+
             "tipos_mas_enviados": [
                 {
                     "tipo": tipo,
@@ -701,13 +701,13 @@ def dashboard_notificaciones_multicanal(
                 }
                 for tipo, cantidad in sorted(por_tipo.items(), key=lambda x: x[1], reverse=True)
             ],
-            
+
             "estado_servicios": {
                 "email": "✅ ACTIVO",  # Placeholder
                 "whatsapp": "✅ ACTIVO",  # Placeholder
                 "scheduler": "✅ EJECUTÁNDOSE"
             },
-            
+
             "acciones_rapidas": {
                 "procesar_ahora": "POST /api/v1/notificaciones-multicanal/procesar-automaticas",
                 "ver_historial": "GET /api/v1/notificaciones-multicanal/historial",
@@ -715,7 +715,7 @@ def dashboard_notificaciones_multicanal(
                 "configurar_templates": "GET /api/v1/notificaciones-multicanal/whatsapp/templates"
             }
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en dashboard: {str(e)}")
 
@@ -737,21 +737,21 @@ async def probar_envio_notificacion(
     """
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Sin permisos para probar notificaciones")
-    
+
     try:
         # Obtener datos del cliente
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
         if not cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
-        
+
         # Obtener cuota más reciente para datos de prueba
         cuota = db.query(Cuota).join(Prestamo).filter(
             Prestamo.cliente_id == cliente_id
         ).order_by(Cuota.numero_cuota.desc()).first()
-        
+
         if not cuota:
             raise HTTPException(status_code=404, detail="Cliente no tiene cuotas registradas")
-        
+
         # Preparar datos para notificación de prueba
         cliente_data = {
             "cliente_id": cliente.id,
@@ -765,13 +765,13 @@ async def probar_envio_notificacion(
             "saldo_pendiente": float(cuota.capital_pendiente + cuota.interes_pendiente),
             "vehiculo": cliente.vehiculo_completo or "Vehículo de prueba"
         }
-        
+
         # Crear servicio y enviar notificación de prueba
         servicio = NotificacionMulticanal(db)
         resultado = await servicio._enviar_notificacion_multicanal(
             cliente_data, tipo_notificacion, canal
         )
-        
+
         return {
             "mensaje": "🧪 Notificación de prueba enviada",
             "cliente": {
@@ -787,7 +787,7 @@ async def probar_envio_notificacion(
             "resultado_envio": resultado,
             "timestamp": datetime.now().isoformat()
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -803,15 +803,15 @@ async def _ejecutar_procesamiento_background(db_session: Session, user_id: int, 
     try:
         from app.db.session import SessionLocal
         db = SessionLocal()
-        
+
         # Ejecutar ciclo de notificaciones
         resultado = await notification_scheduler.ejecutar_ciclo_notificaciones(db)
-        
+
         logger.info(f"📧 Procesamiento background completado por usuario {user_id}")
         logger.info(f"📊 Resultados: {resultado}")
-        
+
         db.close()
-        
+
     except Exception as e:
         logger.error(f"Error en procesamiento background: {e}")
 
@@ -821,13 +821,13 @@ async def _procesar_reintentos_background(db_session: Session):
     try:
         from app.db.session import SessionLocal
         db = SessionLocal()
-        
+
         resultado = await GestorReintentos.procesar_reintentos_pendientes(db)
-        
+
         logger.info(f"🔄 Reintentos procesados: {resultado}")
-        
+
         db.close()
-        
+
     except Exception as e:
         logger.error(f"Error procesando reintentos: {e}")
 
@@ -881,7 +881,7 @@ def verificar_sistema_notificaciones_multicanal(
     return {
         "titulo": "🔔 SISTEMA DE NOTIFICACIONES MULTICANAL",
         "fecha_verificacion": datetime.now().isoformat(),
-        
+
         "caracteristicas_implementadas": {
             "notificaciones_duales": "✅ Email + WhatsApp simultáneo",
             "procesamiento_automatico": "✅ Scheduler cada hora",
@@ -892,7 +892,7 @@ def verificar_sistema_notificaciones_multicanal(
             "preferencias_cliente": "✅ Configuración por cliente",
             "reportes_automaticos": "✅ Reporte diario a cobranzas"
         },
-        
+
         "tipos_notificacion": [
             "1️⃣ 3 días antes del vencimiento (09:00 AM)",
             "2️⃣ 1 día antes del vencimiento (09:00 AM)",
@@ -902,7 +902,7 @@ def verificar_sistema_notificaciones_multicanal(
             "6️⃣ 5 días de atraso (10:00 AM)",
             "7️⃣ Confirmación de pago (Inmediato)"
         ],
-        
+
         "canales_soportados": {
             "email": {
                 "proveedor": "Google Workspace / SMTP",
@@ -917,7 +917,7 @@ def verificar_sistema_notificaciones_multicanal(
                 "estado": "⚠️ REQUIERE CONFIGURACIÓN"
             }
         },
-        
+
         "flujo_automatico": {
             "frecuencia": "Cada hora (scheduler/cron)",
             "pasos": [
@@ -932,7 +932,7 @@ def verificar_sistema_notificaciones_multicanal(
                 "9. Generar reporte diario"
             ]
         },
-        
+
         "endpoints_principales": {
             "dashboard": "/api/v1/notificaciones-multicanal/dashboard",
             "procesar_automaticas": "/api/v1/notificaciones-multicanal/procesar-automaticas",
@@ -941,7 +941,7 @@ def verificar_sistema_notificaciones_multicanal(
             "templates_whatsapp": "/api/v1/notificaciones-multicanal/whatsapp/templates",
             "probar_envio": "/api/v1/notificaciones-multicanal/probar-envio"
         },
-        
+
         "configuracion_requerida": {
             "email": "Configurado en /api/v1/configuracion/email",
             "whatsapp": "Configurar en /api/v1/configuracion/whatsapp",

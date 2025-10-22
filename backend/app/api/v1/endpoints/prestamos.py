@@ -29,19 +29,19 @@ def calcular_proxima_fecha_pago(fecha_inicio: datetime, modalidad: str, cuotas_p
 @router.post("/", response_model=PrestamoResponse, status_code=201)
 def crear_prestamo(prestamo: PrestamoCreate, db: Session = Depends(get_db)):
     """Crear un nuevo préstamo"""
-    
+
     # Verificar que el cliente existe
     cliente = db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    
+
     # Calcular próxima fecha de pago
     proxima_fecha = calcular_proxima_fecha_pago(
         prestamo.fecha_inicio, 
         prestamo.modalidad.value, 
         0
     )
-    
+
     # ✅ CORRECCIÓN: usar model_dump() en lugar de dict()
     db_prestamo = Prestamo(
         **prestamo.model_dump(),
@@ -49,11 +49,11 @@ def crear_prestamo(prestamo: PrestamoCreate, db: Session = Depends(get_db)):
         cuotas_pagadas=0,
         proxima_fecha_pago=proxima_fecha
     )
-    
+
     db.add(db_prestamo)
     db.commit()
     db.refresh(db_prestamo)
-    
+
     return db_prestamo
 
 
@@ -67,13 +67,13 @@ def listar_prestamos(
 ):
     """Listar préstamos con filtros"""
     query = db.query(Prestamo)
-    
+
     if cliente_id:
         query = query.filter(Prestamo.cliente_id == cliente_id)
-    
+
     if estado:
         query = query.filter(Prestamo.estado == estado)
-    
+
     prestamos = query.offset(skip).limit(limit).all()
     return prestamos
 
@@ -97,11 +97,11 @@ def actualizar_prestamo(
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    
+
     # ✅ CORRECCIÓN: usar model_dump() en lugar de dict()
     for field, value in prestamo_data.model_dump(exclude_unset=True).items():
         setattr(prestamo, field, value)
-    
+
     db.commit()
     db.refresh(prestamo)
     return prestamo

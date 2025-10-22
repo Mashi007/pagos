@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class EmailService:
     """Servicio para gestión de emails"""
-    
+
     def __init__(self):
         self.smtp_host = settings.SMTP_HOST
         self.smtp_port = settings.SMTP_PORT
@@ -30,12 +30,12 @@ class EmailService:
         self.from_name = settings.FROM_NAME
         self.use_tls = getattr(settings, 'SMTP_USE_TLS', True)
         self.use_ssl = getattr(settings, 'SMTP_USE_SSL', False)
-        
+
         # Verificar configuración
         if not self.smtp_user or not self.smtp_password:
             logger.warning("Credenciales de email no configuradas")
             logger.info("Variables requeridas: SMTP_USER, SMTP_PASSWORD")
-    
+
     async def send_email(
         self,
         to_email: str,
@@ -48,7 +48,7 @@ class EmailService:
     ) -> bool:
         """
         Enviar email.
-        
+
         Args:
             to_email: Email destinatario
             subject: Asunto
@@ -57,7 +57,7 @@ class EmailService:
             cc: Lista de emails en copia
             bcc: Lista de emails en copia oculta
             notificacion_id: ID de notificación para actualizar estado
-        
+
         Returns:
             True si se envió exitosamente
         """
@@ -67,18 +67,18 @@ class EmailService:
             message['Subject'] = subject
             message['From'] = f"{self.from_name} <{self.from_email}>"
             message['To'] = to_email
-            
+
             if cc:
                 message['Cc'] = ', '.join(cc)
             if bcc:
                 message['Bcc'] = ', '.join(bcc)
-            
+
             # Adjuntar contenido
             if html:
                 message.attach(MIMEText(body, 'html'))
             else:
                 message.attach(MIMEText(body, 'plain'))
-            
+
             # Enviar
             async with aiosmtplib.SMTP(
                 hostname=self.smtp_host,
@@ -87,21 +87,21 @@ class EmailService:
             ) as smtp:
                 await smtp.login(self.smtp_user, self.smtp_password)
                 await smtp.send_message(message)
-            
+
             logger.info(f"Email enviado exitosamente a {to_email}")
-            
+
             # Actualizar notificación
             if notificacion_id:
                 self._actualizar_notificacion(
                     notificacion_id,
                     EstadoNotificacion.ENVIADA.value
                 )
-            
+
             return True
-            
+
         except Exception as e:
             logger.error(f"Error enviando email a {to_email}: {str(e)}")
-            
+
             # Actualizar notificación como fallida
             if notificacion_id:
                 self._actualizar_notificacion(
@@ -109,9 +109,9 @@ class EmailService:
                     EstadoNotificacion.FALLIDA.value,
                     error=str(e)
                 )
-            
+
             return False
-    
+
     async def send_template_email(
         self,
         to_email: str,
@@ -122,14 +122,14 @@ class EmailService:
     ) -> bool:
         """
         Enviar email usando template HTML.
-        
+
         Args:
             to_email: Email destinatario
             subject: Asunto
             template_name: Nombre del template
             context: Variables para el template
             notificacion_id: ID de notificación
-        
+
         Returns:
             True si se envió exitosamente
         """
@@ -137,7 +137,7 @@ class EmailService:
             # Cargar template
             template = self._load_template(template_name)
             html_body = template.render(**context)
-            
+
             return await self.send_email(
                 to_email=to_email,
                 subject=subject,
@@ -145,11 +145,11 @@ class EmailService:
                 html=True,
                 notificacion_id=notificacion_id
             )
-            
+
         except Exception as e:
             logger.error(f"Error enviando template email: {str(e)}")
             return False
-    
+
     def _load_template(self, template_name: str) -> Template:
         """
         Cargar template HTML desde archivo.
@@ -194,7 +194,7 @@ class EmailService:
                 </body>
                 </html>
             """,
-            
+
             "prestamo_aprobado": """
                 <!DOCTYPE html>
                 <html>
@@ -227,7 +227,7 @@ class EmailService:
                 </body>
                 </html>
             """,
-            
+
             "mora": """
                 <!DOCTYPE html>
                 <html>
@@ -264,12 +264,12 @@ class EmailService:
                 </html>
             """
         }
-        
+
         if template_name not in templates:
             raise ValueError(f"Template '{template_name}' no encontrado")
-        
+
         return Template(templates[template_name])
-    
+
     def _actualizar_notificacion(
         self,
         notificacion_id: int,
@@ -284,16 +284,16 @@ class EmailService:
             notificacion = db.query(Notificacion).filter(
                 Notificacion.id == notificacion_id
             ).first()
-            
+
             if notificacion:
                 notificacion.estado = estado
                 notificacion.enviada_en = datetime.now()
-                
+
                 if error:
                     notificacion.error = error
-                
+
                 db.commit()
-                
+
         except Exception as e:
             logger.error(f"Error actualizando notificación {notificacion_id}: {str(e)}")
         finally:

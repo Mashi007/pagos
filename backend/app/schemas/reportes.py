@@ -47,7 +47,7 @@ class RangoMorosidad(BaseModel):
     rango: str
     cantidad: int
     monto_total: Decimal
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 

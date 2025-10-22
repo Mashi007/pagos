@@ -41,7 +41,7 @@ def log_security_event(
 ):
     """
     Registra un evento de seguridad
-    
+
     Args:
         event_type: Tipo de evento de seguridad
         user_email: Email del usuario (si aplica)
@@ -59,7 +59,7 @@ def log_security_event(
         "success": success,
         "details": details or {}
     }
-    
+
     # Nivel de log según tipo de evento
     if not success or event_type in [
         SecurityEventType.LOGIN_FAILED,

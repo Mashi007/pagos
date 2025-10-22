@@ -62,17 +62,17 @@ def create_access_token(
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    
+
     to_encode = {
         "exp": expire,
         "sub": str(subject),
         "type": "access"
     }
-    
+
     # Añadir claims adicionales si existen
     if additional_claims:
         to_encode.update(additional_claims)
-    
+
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
@@ -82,13 +82,13 @@ def create_refresh_token(subject: str | int) -> str:
     Crea un token de refresh JWT
     """
     expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    
+
     to_encode = {
         "exp": expire,
         "sub": str(subject),
         "type": "refresh"
     }
-    
+
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
@@ -96,7 +96,7 @@ def create_refresh_token(subject: str | int) -> str:
 def decode_token(token: str) -> dict:
     """
     Decodifica y valida un token JWT
-    
+
     Raises:
         JWTError: Si el token es inválido o expiró
     """
@@ -137,20 +137,20 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
     """
     if len(password) < MIN_PASSWORD_LENGTH:
         return False, "La contraseña debe tener al menos 8 caracteres"
-    
+
     if not any(c.isupper() for c in password):
         return False, "La contraseña debe contener al menos una mayúscula"
-    
+
     if not any(c.islower() for c in password):
         return False, "La contraseña debe contener al menos una minúscula"
-    
+
     if not any(c.isdigit() for c in password):
         return False, "La contraseña debe contener al menos un número"
-    
+
     special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
     if not any(c in special_chars for c in password):
         return False, "La contraseña debe contener al menos un carácter especial"
-    
+
     return True, "Contraseña válida"
 
 
@@ -159,13 +159,13 @@ def generate_password_reset_token(email: str) -> str:
     Genera un token para reset de contraseña
     """
     expire = datetime.utcnow() + timedelta(hours=PASSWORD_RESET_EXPIRE_HOURS)  # Expira en 1 hora
-    
+
     to_encode = {
         "exp": expire,
         "sub": email,
         "type": "password_reset"
     }
-    
+
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 

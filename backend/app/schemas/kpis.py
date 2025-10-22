@@ -13,7 +13,7 @@ class KPIBase(BaseModel):
     descripcion: Optional[str] = Field(None, description="Descripción del KPI")
     categoria: Optional[str] = Field(None, description="Categoría del KPI")
     unidad_medida: Optional[str] = Field(None, description="Unidad de medida (%, $, unidades, etc)")
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -33,7 +33,7 @@ class KPIUpdate(BaseModel):
     valor_objetivo: Optional[Decimal] = None
     periodicidad: Optional[str] = None
     activo: Optional[bool] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -45,7 +45,7 @@ class KPIResponse(KPIBase):
     activo: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -54,7 +54,7 @@ class KPIValorBase(BaseModel):
     kpi_id: int = Field(..., description="ID del KPI")
     valor: Decimal = Field(..., description="Valor medido del KPI")
     fecha_medicion: datetime = Field(..., description="Fecha de la medición")
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -70,7 +70,7 @@ class KPIValorUpdate(BaseModel):
     fecha_medicion: Optional[datetime] = None
     notas: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -81,7 +81,7 @@ class KPIValorResponse(KPIValorBase):
     metadata: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -101,7 +101,7 @@ class KPIEstadisticas(BaseModel):
     valor_maximo: Optional[Decimal] = None
     tendencia: Optional[str] = Field(None, description="ascendente, descendente, estable")
     cumplimiento_objetivo: Optional[float] = Field(None, description="Porcentaje de cumplimiento del objetivo")
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -112,7 +112,7 @@ class DashboardKPIs(BaseModel):
     kpis_activos: int
     kpis: List[KPIConValores]
     estadisticas_generales: Optional[Dict[str, Any]] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 

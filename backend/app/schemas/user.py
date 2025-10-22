@@ -56,9 +56,9 @@ class UserResponse(UserBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     last_login: Optional[datetime] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     @property
     def full_name(self) -> str:
         """Nombre completo del usuario."""
@@ -93,7 +93,7 @@ class LoginResponse(BaseModel):
 class UserMeResponse(UserResponse):
     """Schema para respuesta de usuario actual (/me endpoint)."""
     permissions: list[str] = Field(default_factory=list)
-    
+
     @property
     def rol(self) -> str:
         """Propiedad para compatibilidad hacia atrás."""

@@ -50,7 +50,7 @@ def obtener_configuracion_scheduler(
     """
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Sin permisos para ver configuración del scheduler")
-    
+
     try:
         # Configuración actual (simulada - en producción sería de BD)
         configuracion_actual = {
@@ -61,11 +61,11 @@ def obtener_configuracion_scheduler(
             "dias_activos": ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO"],
             "reporte_diario_hora": "18:00"
         }
-        
+
         return {
             "titulo": "⏰ CONFIGURACIÓN DEL SCHEDULER DE NOTIFICACIONES",
             "configuracion_actual": configuracion_actual,
-            
+
             "estado_scheduler": {
                 "activo": True,  # Placeholder
                 "ejecutandose": notification_scheduler.is_running,
@@ -73,7 +73,7 @@ def obtener_configuracion_scheduler(
                 "proxima_ejecucion": "En la próxima hora",
                 "total_ejecuciones_hoy": 18  # Placeholder
             },
-            
+
             "horarios_notificacion": {
                 "recordatorio_3_dias": "09:00 AM",
                 "recordatorio_1_dia": "09:00 AM", 
@@ -83,14 +83,14 @@ def obtener_configuracion_scheduler(
                 "mora_5_dias": "10:00 AM",
                 "confirmacion_pago": "INMEDIATO"
             },
-            
+
             "configuracion_cron": {
                 "expresion_actual": "0 * * * *",  # Cada hora
                 "descripcion": "Se ejecuta cada hora durante horario laboral",
                 "comando_sugerido": "0 * 6-22 * * 1-6",  # Cada hora de 6AM a 10PM, Lun-Sab
                 "archivo_cron": "/etc/crontab"
             },
-            
+
             "instrucciones_setup": {
                 "paso_1": "Configurar cron job en el servidor",
                 "paso_2": "Usar endpoint: POST /api/v1/notificaciones-multicanal/procesar-automaticas",
@@ -98,7 +98,7 @@ def obtener_configuracion_scheduler(
                 "comando_cron": "0 * 6-22 * * 1-6 curl -X POST 'https://pagos-f2qf.onrender.com/api/v1/notificaciones-multicanal/procesar-automaticas' -H 'Authorization: Bearer TOKEN'"
             }
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración: {str(e)}")
 
@@ -114,11 +114,11 @@ def configurar_scheduler(
     """
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores pueden configurar el scheduler")
-    
+
     try:
         # En producción, guardar configuración en BD
         # Por ahora, simular guardado
-        
+
         return {
             "mensaje": "✅ Configuración del scheduler actualizada exitosamente",
             "configuracion_aplicada": configuracion.dict(),
@@ -127,7 +127,7 @@ def configurar_scheduler(
             "actualizado_por": current_user.full_name,
             "siguiente_paso": "Aplicar configuración en el servidor cron"
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error configurando scheduler: {str(e)}")
 
@@ -144,7 +144,7 @@ def obtener_logs_scheduler(
     try:
         # En producción, obtener logs reales
         # Por ahora, simular logs
-        
+
         logs_simulados = [
             {
                 "timestamp": datetime.now().isoformat(),
@@ -176,7 +176,7 @@ def obtener_logs_scheduler(
                 }
             }
         ]
-        
+
         return {
             "titulo": "📋 LOGS DEL SCHEDULER DE NOTIFICACIONES",
             "total_logs": len(logs_simulados),
@@ -184,7 +184,7 @@ def obtener_logs_scheduler(
             "filtros_disponibles": ["INFO", "WARNING", "ERROR"],
             "actualizacion_tiempo_real": "Los logs se actualizan cada ejecución del scheduler"
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo logs: {str(e)}")
 
@@ -200,15 +200,15 @@ async def ejecutar_scheduler_manual(
     """
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Sin permisos para ejecutar scheduler manual")
-    
+
     try:
         # Verificar si ya está ejecutándose
         if notification_scheduler.is_running:
             raise HTTPException(status_code=400, detail="Scheduler ya está ejecutándose")
-        
+
         # Ejecutar en background
         background_tasks.add_task(_ejecutar_scheduler_manual, db, current_user.id)
-        
+
         return {
             "mensaje": "✅ Scheduler ejecutándose manualmente en background",
             "ejecutado_por": current_user.full_name,
@@ -216,7 +216,7 @@ async def ejecutar_scheduler_manual(
             "estimacion_tiempo": "2-5 minutos",
             "seguimiento": "GET /api/v1/scheduler/estado"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -235,7 +235,7 @@ def obtener_estado_scheduler(
         return {
             "titulo": "📊 ESTADO DEL SCHEDULER DE NOTIFICACIONES",
             "fecha_consulta": datetime.now().isoformat(),
-            
+
             "estado_actual": {
                 "ejecutandose": notification_scheduler.is_running,
                 "habilitado": True,  # Placeholder
@@ -243,28 +243,28 @@ def obtener_estado_scheduler(
                 "proxima_ejecucion": "En 30 minutos",  # Placeholder
                 "total_ejecuciones_hoy": 18  # Placeholder
             },
-            
+
             "configuracion_activa": {
                 "frecuencia": "Cada hora",
                 "horario_activo": "06:00 - 22:00",
                 "dias_activos": "Lunes a Sábado",
                 "reporte_diario": "18:00 (6 PM)"
             },
-            
+
             "metricas_rendimiento": {
                 "tiempo_promedio_ejecucion": "2.3 segundos",
                 "notificaciones_por_minuto": "~20",
                 "tasa_exito_promedio": "95.7%",
                 "memoria_utilizada": "< 50MB"
             },
-            
+
             "alertas_sistema": [
                 "✅ Scheduler funcionando correctamente",
                 "✅ Servicios de email y WhatsApp disponibles",
                 "✅ Sin errores críticos en las últimas 24 horas"
             ]
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo estado: {str(e)}")
 
@@ -278,15 +278,15 @@ async def _ejecutar_scheduler_manual(db: Session, user_id: int):
     try:
         from app.db.session import SessionLocal
         db_local = SessionLocal()
-        
+
         # Ejecutar ciclo de notificaciones
         resultado = await notification_scheduler.ejecutar_ciclo_notificaciones(db_local)
-        
+
         logger.info(f"📧 Scheduler manual ejecutado por usuario {user_id}")
         logger.info(f"📊 Resultados: {resultado}")
-        
+
         db_local.close()
-        
+
     except Exception as e:
         logger.error(f"Error en scheduler manual: {e}")
 
@@ -303,12 +303,12 @@ def _generar_expresion_cron(config: ConfiguracionScheduler) -> str:
             minuto = "0,15,30,45"
         else:
             minuto = f"*/{config.frecuencia_minutos}"
-        
+
         # Convertir horas
         hora_inicio = int(config.hora_inicio.split(":")[0])
         hora_fin = int(config.hora_fin.split(":")[0])
         hora = f"{hora_inicio}-{hora_fin}"
-        
+
         # Convertir días
         dias_map = {
             "LUNES": "1", "MARTES": "2", "MIERCOLES": "3", 
@@ -316,9 +316,9 @@ def _generar_expresion_cron(config: ConfiguracionScheduler) -> str:
         }
         dias_numeros = [dias_map[dia] for dia in config.dias_activos if dia in dias_map]
         dias = ",".join(dias_numeros) if dias_numeros else "*"
-        
+
         return f"{minuto} {hora} * * {dias}"
-        
+
     except Exception:
         return "0 * * * *"  # Por defecto cada hora
 
@@ -338,7 +338,7 @@ def verificar_sistema_notificaciones_completo(
     return {
         "titulo": "🔔 SISTEMA DE NOTIFICACIONES MULTICANAL - VERIFICACIÓN COMPLETA",
         "fecha_verificacion": datetime.now().isoformat(),
-        
+
         "cumplimiento_especificaciones": {
             "notificaciones_duales": "✅ Email + WhatsApp simultáneo",
             "procesamiento_automatico": "✅ Scheduler cada hora",
@@ -350,7 +350,7 @@ def verificar_sistema_notificaciones_completo(
             "reintentos_automaticos": "✅ Hasta 2 reintentos",
             "reporte_diario": "✅ A equipo de cobranzas"
         },
-        
+
         "proveedores_whatsapp": {
             "twilio": {
                 "implementado": True,
@@ -371,7 +371,7 @@ def verificar_sistema_notificaciones_completo(
                 "configuracion": ["ACCESS_TOKEN", "PHONE_NUMBER_ID"]
             }
         },
-        
+
         "flujo_automatico_implementado": {
             "paso_1": "✅ Scheduler se ejecuta cada hora",
             "paso_2": "✅ Busca clientes con cuotas que requieren notificación",
@@ -385,7 +385,7 @@ def verificar_sistema_notificaciones_completo(
             "paso_10": "✅ Notifica a Admin si fallo crítico",
             "paso_11": "✅ Genera reporte diario a Cobranzas"
         },
-        
+
         "templates_whatsapp": {
             "total_templates": 7,
             "estado_aprobacion": "PENDIENTE_CONFIGURACION",
@@ -400,7 +400,7 @@ def verificar_sistema_notificaciones_completo(
                 "confirmacion_pago"
             ]
         },
-        
+
         "endpoints_implementados": {
             "procesamiento": "/api/v1/notificaciones-multicanal/procesar-automaticas",
             "historial": "/api/v1/notificaciones-multicanal/historial",
@@ -410,14 +410,14 @@ def verificar_sistema_notificaciones_completo(
             "scheduler": "/api/v1/scheduler/configuracion",
             "pruebas": "/api/v1/notificaciones-multicanal/probar-envio"
         },
-        
+
         "configuracion_requerida": {
             "email": "✅ Configurado en /api/v1/configuracion/email",
             "whatsapp": "⚠️ Configurar en /api/v1/configuracion/whatsapp",
             "cron_job": "⚠️ Configurar en servidor",
             "templates_meta": "⚠️ Aprobar templates con Meta"
         },
-        
+
         "beneficios_sistema": [
             "📧 Notificaciones duales aumentan tasa de respuesta 40%",
             "⏰ Automatización reduce trabajo manual 80%",

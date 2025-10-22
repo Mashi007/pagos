@@ -19,7 +19,7 @@ def upgrade():
     """Agregar columna cargo a la tabla usuarios si no existe"""
     # Verificar si la columna ya existe antes de agregarla
     connection = op.get_bind()
-    
+
     # Verificar si la columna cargo existe
     result = connection.execute(sa.text("""
         SELECT column_name 
@@ -27,7 +27,7 @@ def upgrade():
         WHERE table_name = 'usuarios' 
         AND column_name = 'cargo'
     """))
-    
+
     if not result.fetchone():
         # La columna no existe, agregarla
         op.add_column('usuarios', sa.Column('cargo', sa.String(length=100), nullable=True))
@@ -40,14 +40,14 @@ def downgrade():
     """Eliminar columna cargo de la tabla usuarios"""
     # Verificar si la columna existe antes de eliminarla
     connection = op.get_bind()
-    
+
     result = connection.execute(sa.text("""
         SELECT column_name 
         FROM information_schema.columns 
         WHERE table_name = 'usuarios' 
         AND column_name = 'cargo'
     """))
-    
+
     if result.fetchone():
         # La columna existe, eliminarla
         op.drop_column('usuarios', 'cargo')

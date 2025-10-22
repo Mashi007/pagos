@@ -136,7 +136,7 @@ def validar_campo_tiempo_real(
 ):
     """
     🔍 Validar campo individual en tiempo real (para frontend)
-    
+
     Ejemplos de uso:
     • Teléfono: "4241234567" → "+58 424 1234567"
     • Cédula: "12345678" → "V12345678"
@@ -148,46 +148,46 @@ def validar_campo_tiempo_real(
         campo = validacion.campo.lower()
         valor = validacion.valor
         pais = validacion.pais
-        
+
         if campo == "telefono":
             resultado = ValidadorTelefono.validar_y_formatear_telefono(valor, pais)
-            
+
         elif campo == "cedula":
             resultado = ValidadorCedula.validar_y_formatear_cedula(valor, pais)
-            
+
         elif campo == "email":
             resultado = ValidadorEmail.validar_email(valor)
-            
+
         elif campo == "fecha_entrega":
             resultado = ValidadorFecha.validar_fecha_entrega(valor)
-            
+
         elif campo == "fecha_pago":
             resultado = ValidadorFecha.validar_fecha_pago(valor)
-            
+
         elif campo in ["total_financiamiento", "monto_pagado", "cuota_inicial"]:
             saldo_maximo = None
             if validacion.contexto and "saldo_pendiente" in validacion.contexto:
                 saldo_maximo = Decimal(str(validacion.contexto["saldo_pendiente"]))
-            
+
             resultado = ValidadorMonto.validar_y_formatear_monto(valor, campo.upper(), saldo_maximo)
-            
+
         elif campo == "amortizaciones":
             resultado = ValidadorAmortizaciones.validar_amortizaciones(valor)
-            
+
         else:
             return {
                 "valido": False,
                 "error": f"Campo '{campo}' no soporta validación automática",
                 "valor_original": valor
             }
-        
+
         return {
             "campo": validacion.campo,
             "validacion": resultado,
             "timestamp": datetime.now().isoformat(),
             "recomendaciones": _generar_recomendaciones_campo(campo, resultado)
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error validando campo: {str(e)}")
 
@@ -201,7 +201,7 @@ def formatear_mientras_escribe(
 ):
     """
     ✨ Auto-formatear valor mientras el usuario escribe (para frontend)
-    
+
     Uso en frontend:
     - onKeyUp/onChange del input
     - Formateo instantáneo sin validación completa
@@ -209,14 +209,14 @@ def formatear_mientras_escribe(
     """
     try:
         resultado = AutoFormateador.formatear_mientras_escribe(campo, valor, pais)
-        
+
         return {
             "campo": campo,
             "valor_original": valor,
             "resultado_formateo": resultado,
             "timestamp": datetime.now().isoformat()
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error formateando: {str(e)}")
 
@@ -236,7 +236,7 @@ def corregir_datos_cliente(
 ):
     """
     🔧 Corregir datos incorrectos de un cliente específico
-    
+
     Ejemplo de uso:
     {
         "telefono": "+58 424 1234567",
@@ -250,22 +250,22 @@ def corregir_datos_cliente(
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
         if not cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
-        
+
         # Procesar correcciones
         resultado_correccion = ServicioCorreccionDatos.corregir_datos_cliente(
             cliente_id, correcciones, pais
         )
-        
+
         if resultado_correccion.get("error_general"):
             raise HTTPException(status_code=400, detail=resultado_correccion["error_general"])
-        
+
         # Aplicar correcciones válidas a la base de datos
         cambios_aplicados = []
         for correccion in resultado_correccion["correcciones_aplicadas"]:
             if correccion["cambio_realizado"]:
                 campo = correccion["campo"]
                 nuevo_valor = correccion["valor_nuevo"]
-                
+
                 # Mapear campos a atributos del modelo
                 if campo == "telefono":
                     cliente.telefono = nuevo_valor
@@ -281,17 +281,17 @@ def corregir_datos_cliente(
                     cliente.cuota_inicial = Decimal(nuevo_valor)
                 elif campo == "amortizaciones":
                     cliente.numero_amortizaciones = int(nuevo_valor)
-                
+
                 cambios_aplicados.append({
                     "campo": campo,
                     "valor_anterior": correccion["valor_anterior"],
                     "valor_nuevo": nuevo_valor
                 })
-        
+
         # Guardar cambios si hay correcciones válidas
         if cambios_aplicados:
             db.commit()
-            
+
             # Registrar en auditoría
             auditoria = Auditoria.registrar(
                 usuario_id=current_user.id,
@@ -302,13 +302,13 @@ def corregir_datos_cliente(
             )
             db.add(auditoria)
             db.commit()
-        
+
         # Manejar recálculo de amortización si es necesario
         mensaje_recalculo = None
         if resultado_correccion["requiere_recalculo_amortizacion"] and recalcular_amortizacion:
             # TODO: Integrar con servicio de amortización
             mensaje_recalculo = "⚠️ Se requiere recalcular la tabla de amortización"
-        
+
         return {
             "mensaje": "✅ Corrección de datos procesada exitosamente",
             "cliente": {
@@ -328,7 +328,7 @@ def corregir_datos_cliente(
             "fecha_correccion": datetime.now().isoformat(),
             "corregido_por": f"{current_user.nombre} {current_user.apellido}".strip()
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -347,7 +347,7 @@ def corregir_datos_pago(
 ):
     """
     💰 Corregir datos incorrectos de un pago específico
-    
+
     Ejemplo: Pago con "MONTO PAGADO = ERROR"
     """
     try:
@@ -355,16 +355,16 @@ def corregir_datos_pago(
         pago = db.query(Pago).filter(Pago.id == pago_id).first()
         if not pago:
             raise HTTPException(status_code=404, detail="Pago no encontrado")
-        
+
         correcciones_aplicadas = []
         errores_validacion = []
-        
+
         # Corregir monto pagado
         if monto_pagado is not None:
             validacion_monto = ValidadorMonto.validar_y_formatear_monto(
                 monto_pagado, "MONTO_PAGO"
             )
-            
+
             if validacion_monto["valido"]:
                 pago.monto_pagado = validacion_monto["valor_decimal"]
                 correcciones_aplicadas.append({
@@ -377,11 +377,11 @@ def corregir_datos_pago(
                     "campo": "monto_pagado",
                     "error": validacion_monto["error"]
                 })
-        
+
         # Corregir fecha de pago
         if fecha_pago is not None:
             validacion_fecha = ValidadorFecha.validar_fecha_pago(fecha_pago)
-            
+
             if validacion_fecha["valido"]:
                 fecha_parseada = datetime.strptime(validacion_fecha["fecha_iso"], "%Y-%m-%d").date()
                 pago.fecha_pago = fecha_parseada
@@ -395,7 +395,7 @@ def corregir_datos_pago(
                     "campo": "fecha_pago",
                     "error": validacion_fecha["error"]
                 })
-        
+
         # Corregir número de operación
         if numero_operacion is not None:
             if numero_operacion.upper() != "ERROR" and numero_operacion.strip():
@@ -405,16 +405,16 @@ def corregir_datos_pago(
                     "valor_anterior": pago.numero_operacion,
                     "valor_nuevo": numero_operacion.strip()
                 })
-        
+
         # Guardar cambios si hay correcciones válidas
         if correcciones_aplicadas:
             # Limpiar observaciones de error
             if pago.observaciones and "REQUIERE_VALIDACIÓN" in pago.observaciones:
                 usuario_nombre = f"{current_user.nombre} {current_user.apellido}".strip()
                 pago.observaciones = f"CORREGIDO - {datetime.now().strftime('%d/%m/%Y')} por {usuario_nombre}"
-            
+
             db.commit()
-            
+
             # Registrar en auditoría
             auditoria = Auditoria.registrar(
                 usuario_id=current_user.id,
@@ -425,7 +425,7 @@ def corregir_datos_pago(
             )
             db.add(auditoria)
             db.commit()
-        
+
         return {
             "mensaje": "✅ Corrección de pago procesada exitosamente",
             "pago": {
@@ -439,7 +439,7 @@ def corregir_datos_pago(
             "fecha_correccion": datetime.now().isoformat(),
             "corregido_por": f"{current_user.nombre} {current_user.apellido}".strip()
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -461,7 +461,7 @@ def detectar_errores_masivo(
 ):
     """
     🔍 Detectar datos incorrectos masivamente en la base de datos
-    
+
     Detecta:
     • Teléfonos mal formateados (sin +58)
     • Cédulas sin letra (V/E)
@@ -472,10 +472,10 @@ def detectar_errores_masivo(
     # Solo administrador general puede ejecutar análisis masivo
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Sin permisos para análisis masivo")
-    
+
     try:
         resultado = ServicioCorreccionDatos.detectar_datos_incorrectos_masivo(db, limite)
-        
+
         return {
             "analisis_masivo": resultado,
             "parametros": {
@@ -491,7 +491,7 @@ def detectar_errores_masivo(
                 "Implementar auto-formateo en tiempo real"
             ]
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en análisis masivo: {str(e)}")
 
@@ -508,7 +508,7 @@ def corregir_datos_masivo(
     """
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Sin permisos para corrección masiva")
-    
+
     try:
         # Ejecutar correcciones en background
         background_tasks.add_task(
@@ -517,7 +517,7 @@ def corregir_datos_masivo(
             current_user.id,
             db
         )
-        
+
         return {
             "mensaje": "✅ Corrección masiva iniciada en background",
             "total_clientes": len(correcciones_masivas),
@@ -526,7 +526,7 @@ def corregir_datos_masivo(
             "timestamp": datetime.now().isoformat(),
             "seguimiento": "GET /api/v1/validadores/estado-correccion-masiva"
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error iniciando corrección masiva: {str(e)}")
 
@@ -557,7 +557,7 @@ def obtener_ejemplos_correccion(
                     "✅ Longitud correcta"
                 ]
             },
-            
+
             "cedula": {
                 "titulo": "📝 CÉDULA SIN LETRA",
                 "ejemplo_incorrecto": "12345678",
@@ -570,7 +570,7 @@ def obtener_ejemplos_correccion(
                     "✅ Solo números después del prefijo"
                 ]
             },
-            
+
             "fecha": {
                 "titulo": "📅 FECHA EN FORMATO INCORRECTO",
                 "ejemplo_incorrecto": "ERROR",
@@ -584,7 +584,7 @@ def obtener_ejemplos_correccion(
                 ],
                 "accion_adicional": "Sistema pregunta si recalcular tabla de amortización"
             },
-            
+
             "monto": {
                 "titulo": "💰 MONTO PAGADO = ERROR",
                 "ejemplo_incorrecto": "ERROR",
@@ -598,7 +598,7 @@ def obtener_ejemplos_correccion(
                 ]
             }
         }
-        
+
         return {
             "titulo": "📋 EJEMPLOS DE CORRECCIÓN DE FORMATOS INCORRECTOS",
             "pais_configurado": pais,
@@ -616,7 +616,7 @@ def obtener_ejemplos_correccion(
                 "input_numerico": "Usar input type='number' para montos"
             }
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo ejemplos: {str(e)}")
 
@@ -691,7 +691,7 @@ def obtener_configuracion_validadores(
         logger.info(f"Obteniendo configuración de validadores para usuario: {current_user.email}")
         return {
             "titulo": "⚙️ CONFIGURACIÓN DE VALIDADORES",
-            
+
             "paises_soportados": {
                 "venezuela": {
                     "codigo": "VENEZUELA",
@@ -719,7 +719,7 @@ def obtener_configuracion_validadores(
                     "operadoras": ["300", "301", "310", "311", "320"]
                 }
             },
-            
+
             "validadores_disponibles": {
                 "telefono": {
                     "descripcion": "Validación y formateo de números telefónicos",
@@ -766,7 +766,7 @@ def obtener_configuracion_validadores(
                     "validacion_tiempo_real": True
                 }
             },
-            
+
             "reglas_negocio": {
                 "fecha_entrega": "Desde hace 2 años hasta 4 años en el futuro",
                 "fecha_pago": "Máximo 1 día en el futuro",
@@ -778,7 +778,7 @@ def obtener_configuracion_validadores(
                 "fecha_formato": "DD/MM/YYYY (día 2 dígitos, mes 2 dígitos, año 4 dígitos)",
                 "email_normalizacion": "Conversión automática a minúsculas (incluyendo @)"
             },
-            
+
             "configuracion_frontend": {
                 "validacion_onchange": "Validar al cambiar valor",
                 "formateo_onkeyup": "Formatear mientras escribe",
@@ -787,7 +787,7 @@ def obtener_configuracion_validadores(
                 "calendario_obligatorio": "Para fechas críticas"
             }
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración: {str(e)}")
 
@@ -805,10 +805,10 @@ async def _procesar_correcciones_masivas(
     try:
         from app.db.session import SessionLocal
         db = SessionLocal()
-        
+
         exitosas = 0
         fallidas = 0
-        
+
         for correccion in correcciones:
             try:
                 resultado = ServicioCorreccionDatos.corregir_datos_cliente(
@@ -816,20 +816,20 @@ async def _procesar_correcciones_masivas(
                     correccion.correcciones,
                     correccion.pais
                 )
-                
+
                 if resultado.get("cambios_realizados"):
                     exitosas += 1
                 else:
                     fallidas += 1
-                    
+
             except Exception as e:
                 logger.error(f"Error corrigiendo cliente {correccion.cliente_id}: {e}")
                 fallidas += 1
-        
+
         logger.info(f"📊 Corrección masiva completada: {exitosas} exitosas, {fallidas} fallidas")
-        
+
         db.close()
-        
+
     except Exception as e:
         logger.error(f"Error en corrección masiva: {e}")
 
@@ -837,7 +837,7 @@ async def _procesar_correcciones_masivas(
 def _generar_recomendaciones_campo(campo: str, resultado_validacion: Dict) -> List[str]:
     """Generar recomendaciones específicas por campo"""
     recomendaciones = []
-    
+
     if not resultado_validacion.get("valido"):
         if campo == "telefono":
             recomendaciones.append("📱 Use formato internacional: +58 424 1234567")
@@ -854,7 +854,7 @@ def _generar_recomendaciones_campo(campo: str, resultado_validacion: Dict) -> Li
         elif "monto" in campo:
             recomendaciones.append("💰 Use solo números y punto decimal")
             recomendaciones.append("📊 Verifique límites permitidos")
-    
+
     return recomendaciones
 
 
@@ -872,7 +872,7 @@ def verificar_sistema_validadores(
     return {
         "titulo": "🔍 SISTEMA DE VALIDADORES Y CORRECCIÓN DE DATOS",
         "fecha_verificacion": datetime.now().isoformat(),
-        
+
         "validadores_implementados": {
             "telefono": {
                 "estado": "✅ IMPLEMENTADO",
@@ -913,7 +913,7 @@ def verificar_sistema_validadores(
                 "ejemplo": "60.5 → 60 meses"
             }
         },
-        
+
         "funcionalidades_especiales": {
             "validacion_tiempo_real": "✅ Para uso en frontend",
             "auto_formateo_escritura": "✅ Mientras el usuario escribe",
@@ -922,7 +922,7 @@ def verificar_sistema_validadores(
             "reglas_negocio": "✅ Validaciones específicas del dominio",
             "recalculo_amortizacion": "✅ Al cambiar fecha de entrega"
         },
-        
+
         "endpoints_principales": {
             "validar_campo": "POST /api/v1/validadores/validar-campo",
             "formatear_tiempo_real": "POST /api/v1/validadores/formatear-tiempo-real",
@@ -930,7 +930,7 @@ def verificar_sistema_validadores(
             "detectar_errores": "GET /api/v1/validadores/detectar-errores-masivo",
             "ejemplos": "GET /api/v1/validadores/ejemplos-correccion"
         },
-        
+
         "integracion_frontend": {
             "validacion_onchange": "Validar cuando cambia el valor",
             "formateo_onkeyup": "Formatear mientras escribe",
@@ -939,7 +939,7 @@ def verificar_sistema_validadores(
             "calendario_fechas": "Usar datepicker para fechas",
             "input_numerico": "Input type='number' para montos"
         },
-        
+
         "beneficios": [
             "🔍 Detección automática de datos incorrectos",
             "✨ Auto-formateo mejora experiencia de usuario",

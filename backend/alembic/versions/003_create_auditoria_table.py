@@ -37,7 +37,7 @@ def upgrade():
         sa.ForeignKeyConstraint(['usuario_id'], ['usuarios.id'], ondelete='SET NULL'),
         sa.PrimaryKeyConstraint('id')
     )
-    
+
     # Crear índices para optimizar consultas
     op.create_index(op.f('ix_auditorias_id'), 'auditorias', ['id'], unique=False)
     op.create_index(op.f('ix_auditorias_usuario_id'), 'auditorias', ['usuario_id'], unique=False)
@@ -59,6 +59,6 @@ def downgrade():
     op.drop_index(op.f('ix_auditorias_usuario_email'), table_name='auditorias')
     op.drop_index(op.f('ix_auditorias_usuario_id'), table_name='auditorias')
     op.drop_index(op.f('ix_auditorias_id'), table_name='auditorias')
-    
+
     # Eliminar tabla
     op.drop_table('auditorias')

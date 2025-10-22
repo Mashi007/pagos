@@ -27,7 +27,7 @@ def registrar_auditoria(
 ) -> Auditoria:
     """
     Registrar una acción en la auditoría del sistema
-    
+
     Args:
         db: Sesión de base de datos
         usuario: Usuario que realizó la acción
@@ -42,7 +42,7 @@ def registrar_auditoria(
         user_agent: User agent del navegador
         resultado: Resultado de la acción
         mensaje_error: Mensaje de error si falló
-        
+
     Returns:
         Auditoria: Registro de auditoría creado
     """
@@ -50,7 +50,7 @@ def registrar_auditoria(
     if usuario is None:
         logger.warning(f"Intento de registrar auditoría sin usuario válido: {accion} - {modulo}")
         raise ValueError("No se puede registrar auditoría sin un usuario válido")
-    
+
     try:
         auditoria = Auditoria.registrar(
             usuario_id=usuario.id,
@@ -67,14 +67,14 @@ def registrar_auditoria(
             resultado=resultado,
             mensaje_error=mensaje_error
         )
-        
+
         db.add(auditoria)
         db.commit()
         db.refresh(auditoria)
-        
+
         logger.info(f"Auditoría registrada: {usuario.email} - {accion} - {modulo}")
         return auditoria
-        
+
     except Exception as e:
         logger.error(f"Error registrando auditoría: {e}")
         db.rollback()
