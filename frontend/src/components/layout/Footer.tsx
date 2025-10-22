@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { Heart, Shield } from 'lucide-react'
 
+// Constantes de configuración
+const APP_VERSION = '1.0.0'
+const LOGO_SIZE = 5
+const ICON_SIZE = 3
+
 export function Footer() {
   const currentYear = new Date().getFullYear()
 
@@ -9,7 +14,7 @@ export function Footer() {
       <div className="flex flex-col md:flex-row justify-between items-center space-y-2 md:space-y-0">
         {/* Left side - Copyright */}
         <div className="flex items-center space-x-2 text-sm text-gray-600">
-          <div className="w-5 h-5 bg-gradient-to-br from-blue-600 to-purple-700 rounded flex items-center justify-center">
+          <div className={`w-${LOGO_SIZE} h-${LOGO_SIZE} bg-gradient-to-br from-blue-600 to-purple-700 rounded flex items-center justify-center`}>
             <span className="text-white font-bold text-xs">RC</span>
           </div>
           <span>
@@ -19,11 +24,11 @@ export function Footer() {
 
         {/* Right side - Version and credits */}
         <div className="flex items-center space-x-4 text-sm text-gray-500">
-          <span>Versión 1.0.0</span>
+          <span>Versión {APP_VERSION}</span>
           <span className="hidden md:inline">•</span>
           <div className="flex items-center space-x-1">
             <span>Hecho con</span>
-            <Heart className="h-3 w-3 text-red-500 fill-current" />
+            <Heart className={`h-${ICON_SIZE} w-${ICON_SIZE} text-red-500 fill-current`} />
             <span>para RAPICREDIT</span>
           </div>
         </div>
@@ -33,7 +38,7 @@ export function Footer() {
       <div className="md:hidden mt-2 text-center">
         <div className="flex items-center justify-center space-x-1 text-xs text-gray-500">
           <span>Hecho con</span>
-          <Heart className="h-3 w-3 text-red-500 fill-current" />
+          <Heart className={`h-${ICON_SIZE} w-${ICON_SIZE} text-red-500 fill-current`} />
           <span>para RAPICREDIT</span>
         </div>
       </div>

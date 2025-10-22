@@ -5,15 +5,19 @@ import { Header } from './Header'
 import { Sidebar } from './Sidebar'
 import { Footer } from './Footer'
 
+// Constantes de configuración
+const DESKTOP_BREAKPOINT = 1024
+const ANIMATION_DURATION = 0.3
+
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
     const checkScreenSize = () => {
-      setIsMobile(window.innerWidth < 1024)
+      setIsMobile(window.innerWidth < DESKTOP_BREAKPOINT)
       // En desktop, mantener sidebar abierto por defecto
-      if (window.innerWidth >= 1024) {
+      if (window.innerWidth >= DESKTOP_BREAKPOINT) {
         setSidebarOpen(true)
       }
     }
@@ -46,7 +50,7 @@ export function Layout() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: ANIMATION_DURATION }}
             className="container mx-auto px-4 py-6 max-w-7xl"
           >
             <Outlet />

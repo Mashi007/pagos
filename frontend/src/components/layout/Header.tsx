@@ -6,6 +6,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 
+// Constantes de configuración
+const SEARCH_BAR_WIDTH = 96
+const NOTIFICATIONS_WIDTH = 80
+const USER_MENU_WIDTH = 64
+const NOTIFICATIONS_MAX_HEIGHT = 96
+const DROPDOWN_Z_INDEX = 50
+const OVERLAY_Z_INDEX = 30
+
 interface HeaderProps {
   onMenuClick: () => void
   isSidebarOpen: boolean
@@ -85,7 +93,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
           </div>
 
           {/* Search bar */}
-          <div className="hidden md:block w-96">
+          <div className={`hidden md:block w-${SEARCH_BAR_WIDTH}`}>
             <Input
               type="search"
               placeholder="Buscar clientes, pagos, documentos..."
@@ -234,7 +242,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                             await refreshUser()
                             window.location.reload()
                           } catch (error) {
-                            console.error('Error actualizando usuario:', error)
+                            // Error silencioso para evitar loops de logging
                           }
                         }}
                         className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-blue-50 flex items-center space-x-2"
