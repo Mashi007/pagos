@@ -1,5 +1,4 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react'
-import { motion } from 'framer-motion'
 
 interface Props {
   children: ReactNode
@@ -10,7 +9,6 @@ interface Props {
 interface State {
   hasError: boolean
   error?: Error
-  errorInfo?: ErrorInfo
 }
 
 /**
@@ -30,8 +28,7 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error('ErrorBoundary capturó un error:', error, errorInfo)
     
     this.setState({
-      error,
-      errorInfo
+      error
     })
 
     if (this.props.onError) {
@@ -40,7 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   handleRetry = () => {
-    this.setState({ hasError: false, error: undefined, errorInfo: undefined })
+    this.setState({ hasError: false, error: undefined })
   }
 
   handleReload = () => {
@@ -54,12 +51,7 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          className="min-h-screen flex items-center justify-center bg-gray-50"
-        >
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
           <div className="max-w-md w-full mx-4">
             <div className="bg-white rounded-lg shadow-lg p-8 text-center">
               <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-6">
@@ -136,7 +128,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
             </div>
           </div>
-        </motion.div>
+        </div>
       )
     }
 
