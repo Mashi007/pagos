@@ -1,22 +1,22 @@
 # backend/app/api/v1/endpoints/users.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoints de gestión de usuarios
 CRUD completo (solo para ADMIN)
 """
-from fastapi import APIRouter, status
+import logging
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_admin_user, get_current_user, get_pagination_params, PaginationParams
-
+from app.core.security import get_password_hash
+from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserListResponse
 from app.utils.auditoria_helper import (
     registrar_creacion, registrar_eliminacion
-
-from app.core.security import get_password_hash
+)
 from app.utils.validators import validate_password_strength
 
 logger = logging.getLogger(__name__)
@@ -27,10 +27,10 @@ router = APIRouter()
 # VERIFICACIÓN DE ADMINISTRADORES
 # ============================================
 
-router.get("/verificar-admin")
+@router.get("/verificar-admin")
 def verificar_rol_administracion(
     db: Session = Depends(get_db)
-:
+):
     """
     🔍 Verificar estado del rol de administración en el sistema
     """
