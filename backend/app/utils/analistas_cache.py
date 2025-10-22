@@ -4,13 +4,15 @@ Evita consultas repetidas a la base de datos
 """
 import time
 from typing import Dict, Any, Optional
-from functools import wraps
 import logging
 
 logger = logging.getLogger(__name__)
 
+# Constantes de configuración
+DEFAULT_TTL_SECONDS = 300  # 5 minutos por defecto
+
 class AnalistasCache:
-    def __init__(self, ttl_seconds: int = 300):  # 5 minutos por defecto
+    def __init__(self, ttl_seconds: int = DEFAULT_TTL_SECONDS):
         self.cache: Dict[str, Dict[str, Any]] = {}
         self.ttl = ttl_seconds
     
@@ -49,12 +51,11 @@ class AnalistasCache:
         }
 
 # Instancia global del cache
-analistas_cache = AnalistasCache(ttl_seconds=300)  # 5 minutos
+analistas_cache = AnalistasCache(ttl_seconds=DEFAULT_TTL_SECONDS)
 
 def cache_analistas(key_func):
     """Decorator para cachear resultados de analistas"""
     def decorator(func):
-        @wraps(func)
         def wrapper(*args, **kwargs):
             # Generar clave del cache basada en parámetros
             cache_key = key_func(*args, **kwargs)
@@ -69,9 +70,27 @@ def cache_analistas(key_func):
             analistas_cache.set(cache_key, result)
             return result
         
+        wrapper.__name__ = func.__name__
+        wrapper.__doc__ = func.__doc__
         return wrapper
     return decorator
 
-def generate_cache_key(skip: int = 0, limit: int = 100, activo: Optional[bool] = None, search: Optional[str] = None) -> str:
-    """Generar clave única para el cache basada en parámetros"""
+def generate_cache_key(
+    skip: int = 0, 
+    limit: int = 100, 
+    activo: Optional[bool] = None, 
+    search: Optional[str] = None
+) -> str:
+    """
+    Generar clave única para el cache basada en parámetros
+    
+    Args:
+        skip: Número de registros a omitir
+        limit: Límite de registros
+        activo: Filtro de estado activo
+        search: Término de búsqueda
+        
+    Returns:
+        str: Clave única para el cache
+    """
     return f"analistas_{skip}_{limit}_{activo}_{search or ''}"

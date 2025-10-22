@@ -3,10 +3,17 @@
 Validadores personalizados para el sistema
 DNI, teléfonos, emails, montos, etc.
 """
-import re
-from typing import Optional
-from decimal import Decimal
-from datetime import date
+# Constantes de validación
+MIN_DNI_LENGTH = 7
+MAX_DNI_LENGTH = 11
+MAX_CUOTAS = 360
+MAX_TASA_INTERES = 100
+MAX_PERCENTAGE_INGRESO = 40
+DEFAULT_TOLERANCE_PAYMENT = 0.01
+MIN_PASSWORD_LENGTH = 8
+MAX_PASSWORD_LENGTH = 128
+MIN_CUENTA_LENGTH = 8
+MAX_CUENTA_LENGTH = 20
 
 
 def validate_dni(dni: str) -> bool:
@@ -25,11 +32,11 @@ def validate_dni(dni: str) -> bool:
     # Remover espacios y guiones
     dni_clean = dni.replace(" ", "").replace("-", "")
     
-    # Debe tener entre 7 y 11 dígitos
+    # Debe tener entre MIN_DNI_LENGTH y MAX_DNI_LENGTH dígitos
     if not dni_clean.isdigit():
         return False
     
-    if len(dni_clean) < 7 or len(dni_clean) > 11:
+    if len(dni_clean) < MIN_DNI_LENGTH or len(dni_clean) > MAX_DNI_LENGTH:
         return False
     
     return True
@@ -210,12 +217,12 @@ def validate_cuotas(numero_cuotas: int) -> bool:
         numero_cuotas: Número de cuotas
         
     Returns:
-        bool: True si es válido (entre 1 y 360)
+        bool: True si es válido (entre 1 y MAX_CUOTAS)
     """
     if numero_cuotas is None:
         return False
     
-    return 1 <= numero_cuotas <= 360
+    return 1 <= numero_cuotas <= MAX_CUOTAS
 
 
 def validate_tasa_interes(tasa: Decimal) -> bool:
@@ -226,12 +233,12 @@ def validate_tasa_interes(tasa: Decimal) -> bool:
         tasa: Tasa de interés anual
         
     Returns:
-        bool: True si es válido (entre 0 y 100)
+        bool: True si es válido (entre 0 y MAX_TASA_INTERES)
     """
     if tasa is None:
         return False
     
-    return Decimal("0") <= tasa <= Decimal("100")
+    return Decimal("0") <= tasa <= Decimal(str(MAX_TASA_INTERES))
 
 
 def sanitize_string(text: Optional[str]) -> Optional[str]:
@@ -357,11 +364,11 @@ def validate_cuenta_bancaria(cuenta: str) -> bool:
     # Remover espacios y guiones
     cuenta_clean = cuenta.replace(" ", "").replace("-", "")
     
-    # Debe tener entre 8 y 20 dígitos
+    # Debe tener entre MIN_CUENTA_LENGTH y MAX_CUENTA_LENGTH dígitos
     if not cuenta_clean.isdigit():
         return False
     
-    if len(cuenta_clean) < 8 or len(cuenta_clean) > 20:
+    if len(cuenta_clean) < MIN_CUENTA_LENGTH or len(cuenta_clean) > MAX_CUENTA_LENGTH:
         return False
     
     return True
@@ -388,7 +395,7 @@ def validate_codigo_prestamo(codigo: str) -> bool:
 def validate_monto_vs_ingreso(
     monto_cuota: Decimal,
     ingreso_mensual: Decimal,
-    max_percentage: Decimal = Decimal("40")
+    max_percentage: Decimal = Decimal(str(MAX_PERCENTAGE_INGRESO))
 ) -> bool:
     """
     Valida que el monto de cuota no supere un porcentaje del ingreso
@@ -415,7 +422,7 @@ def validate_monto_vs_ingreso(
 def validate_payment_amount(
     payment_amount: Decimal,
     expected_amount: Decimal,
-    tolerance: Decimal = Decimal("0.01")
+    tolerance: Decimal = Decimal(str(DEFAULT_TOLERANCE_PAYMENT))
 ) -> bool:
     """
     Valida que un monto de pago sea válido con respecto al esperado
@@ -436,25 +443,22 @@ def validate_payment_amount(
     return difference <= tolerance or payment_amount >= expected_amount
 
 
-def validate_password_strength(password: str) -> tuple[bool, str]:
-    """
-    Valida la fortaleza de una contraseña
-    
-    Args:
-        password: Contraseña a validar
-        
-    Returns:
-        tuple[bool, str]: (es_valida, mensaje_error)
-    """
+def _validate_password_length(password: str) -> tuple[bool, str]:
+    """Validar longitud de contraseña"""
     if not password:
         return False, "La contraseña es requerida"
     
-    if len(password) < 8:
-        return False, "La contraseña debe tener al menos 8 caracteres"
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return False, f"La contraseña debe tener al menos {MIN_PASSWORD_LENGTH} caracteres"
     
-    if len(password) > 128:
-        return False, "La contraseña no puede tener más de 128 caracteres"
+    if len(password) > MAX_PASSWORD_LENGTH:
+        return False, f"La contraseña no puede tener más de {MAX_PASSWORD_LENGTH} caracteres"
     
+    return True, ""
+
+
+def _validate_password_patterns(password: str) -> tuple[bool, str]:
+    """Validar patrones requeridos en contraseña"""
     # Verificar que tenga al menos una letra minúscula
     if not re.search(r'[a-z]', password):
         return False, "La contraseña debe contener al menos una letra minúscula"
@@ -475,7 +479,11 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
     if ' ' in password:
         return False, "La contraseña no puede contener espacios"
     
-    # Verificar patrones comunes débiles
+    return True, ""
+
+
+def _validate_password_weak_patterns(password: str) -> tuple[bool, str]:
+    """Validar patrones débiles comunes"""
     weak_patterns = [
         r'(.)\1{2,}',  # Caracteres repetidos
         r'123456',     # Secuencia numérica
@@ -488,6 +496,34 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
     for pattern in weak_patterns:
         if re.search(pattern, password_lower):
             return False, "La contraseña contiene patrones débiles comunes"
+    
+    return True, ""
+
+
+def validate_password_strength(password: str) -> tuple[bool, str]:
+    """
+    Valida la fortaleza de una contraseña
+    
+    Args:
+        password: Contraseña a validar
+        
+    Returns:
+        tuple[bool, str]: (es_valida, mensaje_error)
+    """
+    # Validar longitud
+    is_valid, message = _validate_password_length(password)
+    if not is_valid:
+        return is_valid, message
+    
+    # Validar patrones requeridos
+    is_valid, message = _validate_password_patterns(password)
+    if not is_valid:
+        return is_valid, message
+    
+    # Validar patrones débiles
+    is_valid, message = _validate_password_weak_patterns(password)
+    if not is_valid:
+        return is_valid, message
     
     return True, "Contraseña válida"
 
