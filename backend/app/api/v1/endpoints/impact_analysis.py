@@ -18,6 +18,32 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@router.get("/health", response_model=Dict[str, Any])
+async def get_health_impact_analysis_public():
+    """
+    Obtener análisis de impacto de health checks (PÚBLICO)
+    
+    - Métricas de performance de health checks
+    - Impacto en recursos del sistema
+    - Alertas y recomendaciones
+    """
+    try:
+        analyzer = get_impact_analyzer()
+        status_data = analyzer.get_current_status()
+        
+        return {
+            "status": "success",
+            "data": status_data,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo análisis de health: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error obteniendo análisis de health: {str(e)}"
+        )
+
+
 @router.get("/impact/health", response_model=Dict[str, Any])
 async def get_health_impact_analysis(
     current_user: User = Depends(get_current_user)
