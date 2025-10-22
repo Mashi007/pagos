@@ -190,7 +190,7 @@ def reporte_cobranza(
         fecha_fin=fecha_fin,
         total_recaudado=total_recaudado,
         cantidad_pagos=cantidad_pagos,
-        promedio_pago = (
+        promedio_pago=(
             total_recaudado / cantidad_pagos if cantidad_pagos > 0 else Decimal('0')
         ),
         detalle_por_concepto=[
