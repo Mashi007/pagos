@@ -190,7 +190,9 @@ def reporte_cobranza(
         fecha_fin=fecha_fin,
         total_recaudado=total_recaudado,
         cantidad_pagos=cantidad_pagos,
-        promedio_pago=total_recaudado / cantidad_pagos if cantidad_pagos > 0 else Decimal('0'),
+        promedio_pago = (
+            total_recaudado / cantidad_pagos if cantidad_pagos > 0 else Decimal('0')
+        ),
         detalle_por_concepto=[
             {"concepto": c[0], "cantidad": c[1], "monto": c[2]}
             for c in por_concepto
@@ -222,7 +224,11 @@ async def exportar_excel(
     ws = wb.active
 
     # Estilo de encabezados
-    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+    header_fill = PatternFill(
+        start_color="366092", 
+        end_color="366092", 
+        fill_type="solid"
+    )
     header_font = Font(color="FFFFFF", bold=True)
 
     if tipo_reporte == "cartera":
@@ -231,7 +237,9 @@ async def exportar_excel(
         ws.append(["Fecha:", date.today().strftime("%d/%m/%Y"), "", ""])
         ws.append([])
 
-        headers = ["ID", "Cliente", "Monto Total", "Saldo Pendiente", "Estado", "Días Mora"]
+        headers = [
+            "ID", "Cliente", "Monto Total", "Saldo Pendiente", "Estado", "Días Mora"
+        ]
         ws.append(headers)
 
         # Aplicar estilo a encabezados
@@ -386,10 +394,22 @@ async def generar_estado_cuenta_pdf(
         p.drawString(50, y_pos, "RESUMEN FINANCIERO")
 
         p.setFont("Helvetica", 12)
-        p.drawString(50, y_pos - 30, f"Total Financiado: ${float(resumen['total_financiado']):,.2f}")
-        p.drawString(50, y_pos - 50, f"Total Pagado: ${float(resumen['total_pagado']):,.2f}")
-        p.drawString(50, y_pos - 70, f"Saldo Pendiente: ${float(resumen['saldo_pendiente']):,.2f}")
-        p.drawString(50, y_pos - 90, f"Cuotas: {resumen['cuotas_pagadas']} / {resumen['cuotas_totales']}")
+        p.drawString(
+            50, y_pos - 30, 
+            f"Total Financiado: ${float(resumen['total_financiado']):,.2f}"
+        )
+        p.drawString(
+            50, y_pos - 50, 
+            f"Total Pagado: ${float(resumen['total_pagado']):,.2f}"
+        )
+        p.drawString(
+            50, y_pos - 70, 
+            f"Saldo Pendiente: ${float(resumen['saldo_pendiente']):,.2f}"
+        )
+        p.drawString(
+            50, y_pos - 90, 
+            f"Cuotas: {resumen['cuotas_pagadas']} / {resumen['cuotas_totales']}"
+        )
         p.drawString(50, y_pos - 110, f"% Avance: {resumen['porcentaje_avance']}%")
 
         p.showPage()
@@ -400,7 +420,9 @@ async def generar_estado_cuenta_pdf(
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=estado_cuenta_{cliente.cedula}.pdf"}
+            headers={
+                "Content-Disposition": f"attachment; filename=estado_cuenta_{cliente.cedula}.pdf"
+            }
         )
 
     except ImportError:
@@ -424,7 +446,9 @@ async def generar_tabla_amortizacion_pdf(
         from reportlab.pdfgen import canvas
         from reportlab.lib.units import inch
         from reportlab.lib import colors
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.platypus import (
+            SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        )
         from reportlab.lib.styles import getSampleStyleSheet
         import io
 
@@ -440,7 +464,9 @@ async def generar_tabla_amortizacion_pdf(
         if not prestamo:
             raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
-        cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
+        cuotas = db.query(Cuota).filter(
+            Cuota.prestamo_id == prestamo.id
+        ).order_by(Cuota.numero_cuota).all()
 
         # Crear PDF
         buffer = io.BytesIO()
@@ -449,7 +475,10 @@ async def generar_tabla_amortizacion_pdf(
         story = []
 
         # Título
-        title = Paragraph(f"<b>TABLA DE AMORTIZACIÓN</b><br/>{cliente.nombre_completo}", styles['Title'])
+        title = Paragraph(
+            f"<b>TABLA DE AMORTIZACIÓN</b><br/>{cliente.nombre_completo}", 
+            styles['Title']
+        )
         story.append(title)
         story.append(Spacer(1, 20))
 
@@ -505,7 +534,9 @@ async def generar_tabla_amortizacion_pdf(
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=amortizacion_{cliente.cedula}.pdf"}
+            headers={
+                "Content-Disposition": f"attachment; filename=amortizacion_{cliente.cedula}.pdf"
+            }
         )
 
     except ImportError:
@@ -582,8 +613,12 @@ def generar_reporte_personalizado(
     fecha_inicio: Optional[date] = Query(None),
     fecha_fin: Optional[date] = Query(None),
     cliente_ids: Optional[str] = Query(None, description="IDs separados por coma"),
-    asesor_ids: Optional[str] = Query(None, description="IDs de asesores de configuración separados por coma"),
-    concesionarios: Optional[str] = Query(None, description="Nombres separados por coma"),
+    asesor_ids: Optional[str] = Query(
+        None, description="IDs de asesores de configuración separados por coma"
+    ),
+    concesionarios: Optional[str] = Query(
+        None, description="Nombres separados por coma"
+    ),
     modelos: Optional[str] = Query(None, description="Modelos separados por coma"),
     estado: Optional[str] = Query(None, description="AL_DIA, MORA, TODOS"),
     modalidad: Optional[str] = Query(None, description="SEMANAL, QUINCENAL, MENSUAL"),
@@ -723,7 +758,9 @@ async def reporte_mensual_cartera_pdf(
     """
     try:
         from reportlab.lib.pagesizes import A4
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.platypus import (
+            SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        )
         from reportlab.lib.styles import getSampleStyleSheet
         from reportlab.lib import colors
         import io
@@ -767,7 +804,10 @@ async def reporte_mensual_cartera_pdf(
         story = []
 
         # Título
-        title = Paragraph(f"<b>REPORTE MENSUAL DE CARTERA</b><br/>{mes:02d}/{anio}", styles['Title'])
+        title = Paragraph(
+            f"<b>REPORTE MENSUAL DE CARTERA</b><br/>{mes:02d}/{anio}", 
+            styles['Title']
+        )
         story.append(title)
         story.append(Spacer(1, 30))
 
@@ -775,8 +815,16 @@ async def reporte_mensual_cartera_pdf(
         kpis_data = [
             ['KPI', 'Valor', 'Porcentaje'],
             ['Total Clientes', f"{total_clientes:,}", "100%"],
-            ['Clientes al Día', f"{clientes_al_dia:,}", f"{(clientes_al_dia/total_clientes*100):.1f}%" if total_clientes > 0 else "0%"],
-            ['Clientes en Mora', f"{clientes_mora:,}", f"{(clientes_mora/total_clientes*100):.1f}%" if total_clientes > 0 else "0%"],
+            [
+                'Clientes al Día', 
+                f"{clientes_al_dia:,}", 
+                f"{(clientes_al_dia/total_clientes*100):.1f}%" if total_clientes > 0 else "0%"
+            ],
+            [
+                'Clientes en Mora', 
+                f"{clientes_mora:,}", 
+                f"{(clientes_mora/total_clientes*100):.1f}%" if total_clientes > 0 else "0%"
+            ],
             ['Total Cobrado', f"${float(pagos_mes):,.2f}", "-"]
         ]
 
@@ -799,7 +847,11 @@ async def reporte_mensual_cartera_pdf(
         # Análisis de mora por rangos
         mora_data = [
             ['Rango de Mora', 'Cantidad', 'Porcentaje'],
-            ['0 días (Al día)', str(clientes_al_dia), f"{(clientes_al_dia/total_clientes*100):.1f}%" if total_clientes > 0 else "0%"],
+            [
+                '0 días (Al día)', 
+                str(clientes_al_dia), 
+                f"{(clientes_al_dia/total_clientes*100):.1f}%" if total_clientes > 0 else "0%"
+            ],
             ['1-30 días', '0', '0%'],  # Placeholder - calcular real
             ['31-60 días', '0', '0%'],  # Placeholder - calcular real
             ['60+ días', '0', '0%']  # Placeholder - calcular real
@@ -823,7 +875,9 @@ async def reporte_mensual_cartera_pdf(
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=cartera_mensual_{mes:02d}_{anio}.pdf"}
+            headers={
+                "Content-Disposition": f"attachment; filename=cartera_mensual_{mes:02d}_{anio}.pdf"
+            }
         )
 
     except ImportError:
@@ -848,7 +902,9 @@ async def reporte_asesor_pdf(
     """
     try:
         from reportlab.lib.pagesizes import A4
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.platypus import (
+            SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        )
         from reportlab.lib.styles import getSampleStyleSheet
         from reportlab.lib import colors
         import io
