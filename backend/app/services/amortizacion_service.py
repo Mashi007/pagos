@@ -1,5 +1,5 @@
 # backend/app/services/amortizacion_service.py
-""
+"""
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
@@ -7,7 +7,7 @@ from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 Servicio de Amortización
 Lógica de negocio para generación y gestión de tablas de amortización
-""
+"""
  datetime
  ROUND_HALF_UP
 

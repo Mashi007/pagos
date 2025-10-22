@@ -1,5 +1,5 @@
 # backend/app/schemas/__init__.py
-""
+"""
 Schemas centralizados para la API.
 Incluye todos los modelos de datos para validación y serialización.
 Schemas organizados por módulo:
@@ -9,7 +9,7 @@ Schemas organizados por módulo:
  User: Gestión de usuarios y autenticación (SIMPLIFICADO - solo is_admin boolean)
  Conciliación: Conciliación bancaria
  KPIs: Métricas e indicadores
-""
+"""
 # ============================================
 # SCHEMAS DE CLIENTE
 # ============================================

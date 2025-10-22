@@ -1,11 +1,8 @@
 # backend/app/schemas/cliente.py
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field, ConfigDict, field_validator
- datetime
+from decimal import Decimal
+from pydantic import BaseModel, Field, ConfigDict, field_validator, EmailStr
 
 from app.utils.validators import sanitize_html
 

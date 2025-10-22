@@ -1,7 +1,7 @@
 # backend/app/utils/__init__.py
-""
+"""
 Utilidades del sistema
-""
+"""
 from app.utils.date_helpers import (
     add_months,
     add_weeks,

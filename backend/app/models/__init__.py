@@ -1,7 +1,7 @@
 # backend/app/models/__init__.py
-""
+"""
 Modelos de la base de datos del sistema de Préstamos y Cobranza.
-""
+"""
 from app.db.session import Base
 
 # Importar modelos

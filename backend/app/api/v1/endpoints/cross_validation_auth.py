@@ -1,4 +1,4 @@
-""
+"""
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
@@ -6,7 +6,7 @@ from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, status
  Sistema de Validación Cruzada de Autenticación
 Valida tokens desde múltiples perspectivas para detectar inconsistencias
-""
+"""
 
 import hashlib
 

@@ -1,5 +1,5 @@
 # backend/app/core/security_audit.py
-""
+"""
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
@@ -7,7 +7,7 @@ from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 Security Audit Logger - Logging de eventos de seguridad críticos
 Cumple con OWASP A09:2021 - Security Logging and Monitoring Failures
-""
+"""
 from typing import Dict, Any
 from enum import Enum
 

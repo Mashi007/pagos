@@ -1,5 +1,5 @@
 # backend/app/schemas/amortizacion.py
-""
+"""
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
@@ -7,7 +7,7 @@ from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 Schemas de Amortización/Cuotas
 Validación y serialización de datos de cuotas
-""
+"""
 from pydantic import BaseModel, field_validator, ConfigDict
  datetime
  ROUND_HALF_UP

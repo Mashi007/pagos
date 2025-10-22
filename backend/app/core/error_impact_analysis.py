@@ -1,4 +1,4 @@
-""
+"""
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
@@ -6,7 +6,7 @@ from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 Sistema de Manejo de Errores con Análisis de Impacto en Performance
 Implementa manejo robusto de errores con métricas de impacto
-""
+"""
  Type
 from dataclasses import dataclass, asdict
 from enum import Enum

@@ -1,4 +1,4 @@
-""
+"""
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 Modelo de Préstamo
 Define la estructura básica de un préstamo.
 Sincronizado con el endpoint de aprobaciones.
-""
+"""
 from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Text, Numeric, ForeignKey
 from sqlalchemy.sql import func
 from enum import Enum

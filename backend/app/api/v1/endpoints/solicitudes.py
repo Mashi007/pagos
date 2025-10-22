@@ -1,5 +1,5 @@
 # backend/app/api/v1/endpoints/solicitudes.py
-""
+"""
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
@@ -7,7 +7,7 @@ from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 Sistema de Solicitudes de Aprobación
 Maneja solicitudes para acciones que requieren autorización
-""
+"""
 from fastapi import APIRouter, UploadFile, File
 
 from typing import Dict, Any

@@ -1,12 +1,12 @@
 # backend/app/core/constants.py
-""
+"""
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 Constantes y enumeraciones del sistema de préstamos y cobranza.
-""
+"""
 from enum import Enum
 
 # ✅ ELIMINADO: Import de UserRole - ahora se usa sistema simplificado con is_admin

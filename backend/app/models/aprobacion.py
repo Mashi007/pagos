@@ -1,5 +1,5 @@
 # backend/app/models/aprobacion.py
-""
+"""
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
@@ -7,7 +7,7 @@ from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 Modelo de Aprobación
 Sistema de workflow para solicitudes que requieren aprobación
-""
+"""
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Date, Boolean
 
 from sqlalchemy.sql import func

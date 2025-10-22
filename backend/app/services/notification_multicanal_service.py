@@ -1,5 +1,5 @@
 # backend/app/services/notification_multicanal_service.py
-""
+"""
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 Servicio de Notificaciones Multicanal
 Sistema 100% automático de notificaciones por Email + WhatsApp
 Sin IA - Basado en templates y reglas de negocio
-""
+"""
 from datetime import datetime, timedelta
 from typing import Dict, List, Any
 

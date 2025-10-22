@@ -1,12 +1,12 @@
 # backend/app/api/v1/endpoints/amortizacion.py
-""
+"""
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoints para gestión de amortización y cuotas
-""
+"""
 from fastapi import APIRouter, status, Query
 
 from app.api.deps import get_db, get_current_active_user

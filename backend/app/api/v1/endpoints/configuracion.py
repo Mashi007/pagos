@@ -1,5 +1,5 @@
 # backend/app/api/v1/endpoints/configuracion.py
-""
+"""
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
@@ -7,7 +7,7 @@ from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoint para configuración administrativa del sistema.
 Gestión de parámetros, tasas, límites y ajustes generales.
-""
+"""
 
 from typing import Dict, Any, List
 from pydantic import BaseModel

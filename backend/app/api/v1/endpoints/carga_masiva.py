@@ -1,5 +1,5 @@
 # backend/app/api/v1/endpoints/carga_masiva.py
-""
+"""
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
@@ -7,7 +7,7 @@ from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, status
  Sistema de Carga Masiva de Clientes y Pagos
 Proceso completo con validación, corrección en línea y articulación por cédula
-""
+"""
 from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import StreamingResponse, FileResponse
 
