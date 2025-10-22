@@ -5,6 +5,7 @@ from typing import Optional, List
 from functools import lru_cache
 
 # Constantes de configuración
+DEFAULT_TOKEN_EXPIRE_MINUTES = 30
 DEFAULT_REFRESH_TOKEN_EXPIRE_DAYS = 7
 DEFAULT_TASA_INTERES_BASE = 15.0
 DEFAULT_TASA_MORA = 2.0
