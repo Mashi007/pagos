@@ -1,11 +1,25 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { AlertTriangle, Download, Eye, EyeOff, CheckCircle, XCircle, FileSpreadsheet, ChevronDown, ChevronRight } from 'lucide-react'
+import { AlertTriangle, Download, CheckCircle, XCircle, FileSpreadsheet, ChevronDown, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AlertWithIcon } from '@/components/ui/alert'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+
+// Constantes de configuración
+const ANIMATION_DELAY = 0.3
+const ROW_ANIMATION_DELAY = 0.05
+const GRID_COLS_LG = 2
+const GRID_COLS_MD = 2
+const GRID_GAP = 6
+const CARD_PADDING = 4
+const ICON_SIZE = 5
+const ICON_SIZE_SMALL = 4
+const SPACE_BETWEEN = 3
+const BORDER_RADIUS = 2
+const MAX_WIDTH_MD = 'md'
+const MAX_WIDTH_LG = 'lg'
 
 interface ErrorDetail {
   row: number
@@ -34,12 +48,14 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
     setErroresExpandidos(nuevosExpandidos)
   }
 
-  const generarArchivoCorreccion = () => {
-    const headers = tipo === 'clientes' 
+  const generarHeadersCSV = (): string[] => {
+    return tipo === 'clientes' 
       ? ['cedula', 'nombre', 'telefono', 'email', 'error', 'correccion_sugerida']
       : ['cedula', 'fecha', 'monto_pagado', 'documento_pago', 'error', 'correccion_sugerida']
-    
-    const datosCorreccion = errores.map(error => {
+  }
+
+  const generarDatosCorreccion = (): string[][] => {
+    return errores.map(error => {
       const correccionSugerida = generarCorreccionSugerida(error)
       return [
         error.cedula,
@@ -50,11 +66,9 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
         correccionSugerida
       ]
     })
+  }
 
-    const csvContent = [headers, ...datosCorreccion]
-      .map(row => row.map(cell => `"${cell}"`).join(','))
-      .join('\n')
-
+  const crearArchivoCSV = (csvContent: string): void => {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
@@ -62,44 +76,65 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
     link.click()
   }
 
-  const generarCorreccionSugerida = (error: ErrorDetail): string => {
-    const errorMsg = error.error.toLowerCase()
+  const generarArchivoCorreccion = (): void => {
+    const headers = generarHeadersCSV()
+    const datosCorreccion = generarDatosCorreccion()
     
-    if (errorMsg.includes('cedula')) {
-      return 'Verificar formato de cédula venezolana (V12345678)'
+    const csvContent = [headers, ...datosCorreccion]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n')
+
+    crearArchivoCSV(csvContent)
+  }
+
+  const obtenerCorreccionPorTipo = (errorMsg: string): string => {
+    const correcciones: Record<string, string> = {
+      cedula: 'Verificar formato de cédula venezolana (V12345678)',
+      telefono: 'Formato: +5804123456789 o 04123456789',
+      email: 'Formato válido: usuario@dominio.com',
+      monto: 'Solo números, usar punto para decimales (ej: 108.50)',
+      fecha: 'Formato: DD/MM/YYYY o YYYY-MM-DD',
+      'no encontrado': 'Primero cargar el cliente con esta cédula'
     }
-    if (errorMsg.includes('telefono')) {
-      return 'Formato: +5804123456789 o 04123456789'
-    }
-    if (errorMsg.includes('email')) {
-      return 'Formato válido: usuario@dominio.com'
-    }
-    if (errorMsg.includes('monto')) {
-      return 'Solo números, usar punto para decimales (ej: 108.50)'
-    }
-    if (errorMsg.includes('fecha')) {
-      return 'Formato: DD/MM/YYYY o YYYY-MM-DD'
-    }
-    if (errorMsg.includes('no encontrado')) {
-      return 'Primero cargar el cliente con esta cédula'
+
+    for (const [key, value] of Object.entries(correcciones)) {
+      if (errorMsg.includes(key)) {
+        return value
+      }
     }
     
     return 'Revisar datos y formato'
   }
 
-  const getErrorType = (error: string): string => {
-    const errorMsg = error.toLowerCase()
-    
-    if (errorMsg.includes('cedula')) return 'Cédula'
-    if (errorMsg.includes('telefono') || errorMsg.includes('móvil')) return 'Teléfono'
-    if (errorMsg.includes('email')) return 'Email'
-    if (errorMsg.includes('monto')) return 'Monto'
-    if (errorMsg.includes('fecha')) return 'Fecha'
-    if (errorMsg.includes('no encontrado')) return 'Cliente'
-    if (errorMsg.includes('formato')) return 'Formato'
-    if (errorMsg.includes('requerido') || errorMsg.includes('obligatorio')) return 'Requerido'
+  const generarCorreccionSugerida = (error: ErrorDetail): string => {
+    return obtenerCorreccionPorTipo(error.error.toLowerCase())
+  }
+
+  const obtenerTipoError = (errorMsg: string): string => {
+    const tiposError: Record<string, string> = {
+      cedula: 'Cédula',
+      telefono: 'Teléfono',
+      móvil: 'Teléfono',
+      email: 'Email',
+      monto: 'Monto',
+      fecha: 'Fecha',
+      'no encontrado': 'Cliente',
+      formato: 'Formato',
+      requerido: 'Requerido',
+      obligatorio: 'Requerido'
+    }
+
+    for (const [key, value] of Object.entries(tiposError)) {
+      if (errorMsg.includes(key)) {
+        return value
+      }
+    }
     
     return 'Validación'
+  }
+
+  const getErrorType = (error: string): string => {
+    return obtenerTipoError(error.toLowerCase())
   }
 
   if (errores.length === 0) {
@@ -110,14 +145,14 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.3 }}
+      transition={{ delay: ANIMATION_DELAY }}
     >
       <Card className="border-red-200 bg-gradient-to-r from-red-50 to-red-100">
         <CardHeader>
           <CardTitle className="flex items-center justify-between text-red-800">
-            <div className="flex items-center space-x-3">
+            <div className={`flex items-center space-x-${SPACE_BETWEEN}`}>
               <div className="bg-red-500 rounded-full p-2">
-                <AlertTriangle className="h-5 w-5 text-white" />
+                <AlertTriangle className={`h-${ICON_SIZE} w-${ICON_SIZE} text-white`} />
               </div>
               <div>
                 <span className="text-lg font-bold">Errores Requieren Corrección Manual</span>
@@ -133,7 +168,7 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
                 size="sm"
                 className="text-red-700 border-red-300 hover:bg-red-100 font-medium"
               >
-                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                <FileSpreadsheet className={`h-${ICON_SIZE_SMALL} w-${ICON_SIZE_SMALL} mr-2`} />
                 Lista de Correcciones
               </Button>
               <Button
@@ -142,13 +177,13 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
                 size="sm"
                 className="text-red-700 border-red-300 hover:bg-red-100 font-medium"
               >
-                <Download className="h-4 w-4 mr-2" />
+                <Download className={`h-${ICON_SIZE_SMALL} w-${ICON_SIZE_SMALL} mr-2`} />
                 Solo Errores
               </Button>
             </div>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className={`space-y-${GRID_GAP}`}>
           <AlertWithIcon
             variant="destructive"
             title={`${errores.length} registros requieren corrección manual`}
@@ -173,7 +208,7 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
                     key={index}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
+                    transition={{ delay: index * ROW_ANIMATION_DELAY }}
                     className="hover:bg-red-50/50 transition-colors"
                   >
                     <TableCell className="font-medium">
@@ -189,7 +224,7 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
                         {getErrorType(error.error)}
                       </Badge>
                     </TableCell>
-                    <TableCell className="max-w-md">
+                    <TableCell className={`max-w-${MAX_WIDTH_MD}`}>
                       <p className="text-sm text-gray-700 line-clamp-2">
                         {error.error}
                       </p>
@@ -202,9 +237,9 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
                         className="text-red-600 hover:text-red-800"
                       >
                         {erroresExpandidos.has(error.row) ? (
-                          <ChevronDown className="h-4 w-4" />
+                          <ChevronDown className={`h-${ICON_SIZE_SMALL} w-${ICON_SIZE_SMALL}`} />
                         ) : (
-                          <ChevronRight className="h-4 w-4" />
+                          <ChevronRight className={`h-${ICON_SIZE_SMALL} w-${ICON_SIZE_SMALL}`} />
                         )}
                       </Button>
                     </TableCell>
@@ -222,12 +257,12 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="bg-white border border-red-200 rounded-lg p-4"
+                className={`bg-white border border-red-200 rounded-lg p-${CARD_PADDING}`}
               >
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className={`grid grid-cols-1 lg:grid-cols-${GRID_COLS_LG} gap-${GRID_GAP}`}>
                   <div>
                     <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
-                      <XCircle className="h-4 w-4 mr-2 text-red-500" />
+                      <XCircle className={`h-${ICON_SIZE_SMALL} w-${ICON_SIZE_SMALL} mr-2 text-red-500`} />
                       Datos Originales
                     </h4>
                     <div className="bg-gray-50 p-3 rounded-lg">
@@ -238,7 +273,7 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
                   </div>
                   <div>
                     <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
-                      <CheckCircle className="h-4 w-4 mr-2 text-green-500" />
+                      <CheckCircle className={`h-${ICON_SIZE_SMALL} w-${ICON_SIZE_SMALL} mr-2 text-green-500`} />
                       Corrección Sugerida
                     </h4>
                     <div className="bg-green-50 p-3 rounded-lg border border-green-200">
@@ -253,12 +288,12 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
           ))}
           
           {/* Instrucciones mejoradas */}
-          <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-6 rounded-lg border border-blue-200">
+            <div className={`bg-gradient-to-r from-blue-50 to-blue-100 p-${GRID_GAP} rounded-lg border border-blue-200`}>
             <h4 className="font-bold text-blue-900 mb-4 flex items-center">
-              <FileSpreadsheet className="h-5 w-5 mr-2" />
+              <FileSpreadsheet className={`h-${ICON_SIZE} w-${ICON_SIZE} mr-2`} />
               📋 Instrucciones para Corrección
             </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={`grid grid-cols-1 md:grid-cols-${GRID_COLS_MD} gap-${CARD_PADDING}`}>
               <div>
                 <h5 className="font-semibold text-blue-800 mb-2">Pasos a seguir:</h5>
                 <ol className="text-sm text-blue-700 space-y-2 list-decimal list-inside">
@@ -284,3 +319,4 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
     </motion.div>
   )
 }
+
