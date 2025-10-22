@@ -102,15 +102,11 @@ export const MemoizedButton = memo<MemoizedButtonProps>(
       }
     }, [onClick, disabled])
 
-    return (
-      <button
-        className={buttonClasses}
-        onClick={handleClick}
-        disabled={disabled}
-      >
-        {children}
-      </button>
-    )
+    return React.createElement('button', {
+      className: buttonClasses,
+      onClick: handleClick,
+      disabled: disabled
+    }, children)
   },
   (prevProps, nextProps) => {
     // Comparación personalizada para optimización
