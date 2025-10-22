@@ -1,3 +1,7 @@
+/**
+ * Store de autenticación simplificado usando Zustand
+ * Gestiona el estado de autenticación del usuario con persistencia segura
+ */
 // frontend/src/store/simpleAuthStore.ts
 import { create } from 'zustand'
 import { User, LoginForm } from '@/types'
@@ -39,27 +43,21 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
         : safeGetSessionItem('user', null)
       
       if (user) {
-        console.log('SimpleAuth: Usuario encontrado en almacenamiento, verificando con backend...')
-        
         // CRÍTICO: Siempre verificar con el backend al inicializar
         try {
           const freshUser = await authService.getCurrentUser()
           
           if (freshUser) {
-            console.log('SimpleAuth: Usuario verificado desde backend:', freshUser)
             set({
               user: freshUser,
               isAuthenticated: true,
               isLoading: false,
               error: null,
             })
-            console.log('SimpleAuth: Usuario actualizado desde backend exitosamente')
           } else {
             throw new Error('Usuario no encontrado en backend')
           }
         } catch (error) {
-          console.error('SimpleAuth: Error verificando usuario con backend:', error)
-          
           // Si hay error, usar datos cacheados pero marcar como posiblemente obsoletos
           set({
             user,
@@ -67,11 +65,9 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
             isLoading: false,
             error: 'Datos posiblemente obsoletos - verificar conexión',
           })
-          console.log('SimpleAuth: Usando datos cacheados debido a error de verificación')
         }
       }
     } catch (error) {
-      console.error('SimpleAuth: Error al inicializar autenticación:', error)
       set({
         user: null,
         isAuthenticated: false,
@@ -86,11 +82,7 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
     set({ isLoading: true, error: null })
     
     try {
-      console.log('SimpleAuth: Iniciando login...')
-      
       const response = await authService.login(credentials)
-      
-      console.log('SimpleAuth: Login exitoso')
       
       // El authService ya guarda los datos de forma segura
       set({
@@ -100,10 +92,8 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
         error: null,
       })
 
-      console.log('SimpleAuth: Login completado exitosamente')
       toast.success(`¡Bienvenido, ${response.user.nombre}!`)
     } catch (error: any) {
-      console.error('SimpleAuth: Error en login:', error)
       set({
         user: null,
         isAuthenticated: false,
@@ -119,7 +109,7 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
     try {
       await authService.logout()
     } catch (error) {
-      console.error('SimpleAuth: Error en logout:', error)
+      // Error silencioso en logout
     } finally {
       set({
         user: null,
@@ -139,16 +129,11 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
   // REFRESCAR USUARIO DESDE BACKEND - SOLUCIÓN DEFINITIVA AL CACHE
   refreshUser: async () => {
     try {
-      console.log('SimpleAuth: Refrescando usuario desde backend...')
-      
       const freshUser = await authService.getCurrentUser()
       
       if (!freshUser) {
-        console.error('SimpleAuth: Usuario refrescado es null/undefined')
         throw new Error('Usuario no encontrado en la respuesta del servidor')
       }
-      
-      console.log('SimpleAuth: Usuario refrescado:', freshUser)
       
       set({
         user: freshUser,
@@ -156,19 +141,12 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
         isLoading: false,
         error: null,
       })
-      
-      console.log('SimpleAuth: Usuario actualizado exitosamente')
     } catch (error: any) {
-      console.error('SimpleAuth: Error al refrescar usuario:', error)
-      
       // NO hacer logout automático, solo mostrar error
       set({ 
         error: error.message || 'Error al actualizar usuario',
         isLoading: false 
       })
-      
-      // Mantener el usuario actual si hay error
-      console.log('SimpleAuth: Manteniendo usuario actual debido a error')
     }
   },
 }))
