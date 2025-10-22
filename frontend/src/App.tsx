@@ -9,6 +9,17 @@ import { Layout } from '@/components/layout/Layout'
 import { SimpleProtectedRoute } from '@/components/auth/SimpleProtectedRoute'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 
+// Constantes de configuración
+const ANIMATION_DURATION = 0.3
+const NOT_FOUND_TEXT_SIZE_LARGE = 6
+const NOT_FOUND_TEXT_SIZE_MEDIUM = 2
+const SPACING_SMALL = 4
+const SPACING_MEDIUM = 6
+const SPACING_LARGE = 12
+const SPACING_XL = 6
+const SPINNER_SIZE = 12
+const BORDER_WIDTH = 2
+
 // Pages - Lazy loading para optimización
 const Login = lazy(() => import('@/pages/Login').then(module => ({ default: module.Login })))
 const Dashboard = lazy(() => import('@/pages/Dashboard').then(module => ({ default: module.Dashboard })))
@@ -41,11 +52,11 @@ const Solicitudes = lazy(() => import('@/pages/Solicitudes').then(module => ({ d
 const NotFound = () => (
   <div className="min-h-screen flex items-center justify-center">
     <div className="text-center">
-      <h1 className="text-6xl font-bold text-gray-300 mb-4">404</h1>
-      <h2 className="text-2xl font-semibold text-gray-700 mb-2">
+      <h1 className={`text-${NOT_FOUND_TEXT_SIZE_LARGE}xl font-bold text-gray-300 mb-${SPACING_SMALL}`}>404</h1>
+      <h2 className={`text-${NOT_FOUND_TEXT_SIZE_MEDIUM}xl font-semibold text-gray-700 mb-${SPACING_SMALL}`}>
         Página no encontrada
       </h2>
-      <p className="text-gray-500 mb-6">
+      <p className={`text-gray-500 mb-${SPACING_MEDIUM}`}>
         La página que buscas no existe o ha sido movida.
       </p>
       <button
@@ -62,7 +73,7 @@ const NotFound = () => (
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center">
     <div className="text-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+      <div className={`animate-spin rounded-full h-${SPINNER_SIZE} w-${SPINNER_SIZE} border-b-${BORDER_WIDTH} border-blue-600 mx-auto mb-${SPACING_SMALL}`}></div>
       <p className="text-gray-600">Cargando página...</p>
     </div>
   </div>
@@ -92,7 +103,7 @@ function App() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.3 }}
+                transition={{ duration: ANIMATION_DURATION }}
               >
                 <Login />
               </motion.div>

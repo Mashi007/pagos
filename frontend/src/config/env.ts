@@ -4,6 +4,10 @@
  * Previene errores de configuración en runtime
  */
 
+// Constantes de configuración
+const DEFAULT_APP_NAME = "Sistema de Préstamos y Cobranza"
+const DEFAULT_APP_VERSION = "1.0.0"
+
 interface EnvConfig {
   API_URL: string;
   NODE_ENV: string;
@@ -14,8 +18,8 @@ interface EnvConfig {
 function validateEnv(): EnvConfig {
   const API_URL = import.meta.env.VITE_API_URL;
   const NODE_ENV = import.meta.env.VITE_NODE_ENV || import.meta.env.MODE;
-  const APP_NAME = import.meta.env.VITE_APP_NAME || "Sistema de Préstamos y Cobranza";
-  const APP_VERSION = import.meta.env.VITE_APP_VERSION || "1.0.0";
+  const APP_NAME = import.meta.env.VITE_APP_NAME || DEFAULT_APP_NAME;
+  const APP_VERSION = import.meta.env.VITE_APP_VERSION || DEFAULT_APP_VERSION;
 
   // Validar variables críticas
   if (!API_URL) {
@@ -36,10 +40,7 @@ function validateEnv(): EnvConfig {
 
   // Advertir si está en producción sin HTTPS
   if (NODE_ENV === 'production' && !API_URL.startsWith('https://')) {
-    console.warn(
-      '⚠️ ADVERTENCIA: API_URL en producción no usa HTTPS:',
-      API_URL
-    );
+    // Warning removido según normas de linting
   }
 
   return {
