@@ -241,7 +241,7 @@ async def _analizar_archivo_clientes(
             nombre = str(row.get('nombre', '')).strip()
             apellido = str(row.get('apellido', '')).strip() if 'apellido' in row else ''
             movil = str(row.get('movil', '')).strip()
-                email = str(row.get('email', '')).strip()
+            email = str(row.get('email', '')).strip()
             direccion = str(row.get('direccion', '')).strip()
             modelo_vehiculo = str(row.get('modelo_vehiculo', '')).strip()
             concesionario = str(row.get('concesionario', '')).strip()
