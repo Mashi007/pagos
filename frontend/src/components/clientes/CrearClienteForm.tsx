@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { logger } from '@/utils/logger'
 import {
   User,
   CreditCard,
@@ -141,7 +142,10 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   useEffect(() => {
     const cargarDatosConfiguracion = async () => {
       try {
-        console.log('🔄 Cargando datos de configuración...')
+        logger.info('Cargando datos de configuración', {
+          action: 'load_config_data',
+          component: 'CrearClienteForm'
+        })
         
         const [concesionariosData, analistasData, modelosData] = await Promise.all([
           concesionarioService.getConcesionarios(),
@@ -149,19 +153,28 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
           modeloVehiculoService.getModelosVehiculos()
         ])
         
-        console.log('📊 Datos cargados:')
-        console.log('  - Concesionarios:', concesionariosData.length)
-        console.log('  - Analistas:', analistasData.length)
-        console.log('  - Modelos:', modelosData.length)
-        console.log('  - Modelos detalle:', modelosData)
+        logger.info('Datos de configuración cargados exitosamente', {
+          action: 'config_data_loaded',
+          component: 'CrearClienteForm',
+          concesionarios: concesionariosData.length,
+          analistas: analistasData.length,
+          modelos: modelosData.length
+        })
         
         setConcesionarios(concesionariosData)
         setAnalistas(analistasData)
         setModelosVehiculos(modelosData)
         
-        console.log('✅ Estados actualizados correctamente')
+        logger.info('Estados actualizados correctamente', {
+          action: 'states_updated',
+          component: 'CrearClienteForm'
+        })
       } catch (error) {
-        console.error('❌ Error cargando datos de configuración:', error)
+        logger.error('Error cargando datos de configuración', {
+          action: 'load_config_error',
+          component: 'CrearClienteForm',
+          error: error instanceof Error ? error.message : String(error)
+        })
       }
     }
 
@@ -325,16 +338,14 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       onClienteCreated?.()
       onClose()
     } catch (error: any) {
-      console.error('Error creando cliente:', error)
-      console.log('🔍 DEBUG - Error response:', error.response)
-      console.log('🔍 DEBUG - Error status:', error.response?.status)
-      console.log('🔍 DEBUG - Error detail:', error.response?.data?.detail)
-      console.log('🔍 DEBUG - Error message:', error.response?.data?.message)
-      console.log('🔍 DEBUG - Error data keys:', Object.keys(error.response?.data || {}))
-      console.log('🔍 DEBUG - Verificando si contiene duplicate key:', typeof error.response?.data?.detail === 'string' ? error.response?.data?.detail?.includes('duplicate key') : 'N/A (no es string)')
-      console.log('🔍 DEBUG - Verificando si contiene already exists:', typeof error.response?.data?.detail === 'string' ? error.response?.data?.detail?.includes('already exists') : 'N/A (no es string)')
-      console.log('🔍 DEBUG - Verificando si contiene violates unique constraint:', typeof error.response?.data?.detail === 'string' ? error.response?.data?.detail?.includes('violates unique constraint') : 'N/A (no es string)')
-      console.log('🔍 DEBUG - Verificando si contiene cédula:', typeof error.response?.data?.detail === 'string' ? error.response?.data?.detail?.includes('cédula') : 'N/A (no es string)')
+      logger.error('Error creando cliente', {
+        action: 'create_client_error',
+        component: 'CrearClienteForm',
+        error: error instanceof Error ? error.message : String(error),
+        status: error?.response?.status,
+        detail: error?.response?.data?.detail,
+        message: error?.response?.data?.message
+      })
       
       // Verificar si es error de cédula duplicada (CORREGIDO: ahora es 409)
       if (error.response?.status === 409 && 

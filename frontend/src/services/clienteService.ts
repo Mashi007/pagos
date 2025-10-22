@@ -1,5 +1,6 @@
 import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
 import { Cliente, ClienteForm, ClienteFilters } from '@/types'
+import { logger } from '@/utils/logger'
 
 // Constantes de configuración
 const DEFAULT_PER_PAGE = 20
@@ -132,7 +133,11 @@ class ClienteService {
   // Exportar clientes (usando endpoint de carga masiva)
   async exportarClientes(filters?: ClienteFilters, format: 'excel' | 'pdf' = 'excel'): Promise<void> {
     // TODO: Implementar cuando esté disponible el endpoint de exportación
-    console.warn('Exportación de clientes no implementada aún')
+    logger.warn('Exportación de clientes no implementada aún', {
+      action: 'export_clientes',
+      service: 'ClienteService',
+      method: 'exportClientes'
+    })
     throw new Error('Exportación de clientes no disponible')
   }
 
