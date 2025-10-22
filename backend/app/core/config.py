@@ -4,6 +4,33 @@ from pydantic import Field
 from typing import Optional, List
 from functools import lru_cache
 
+# Constantes de configuración
+DEFAULT_REFRESH_TOKEN_EXPIRE_DAYS = 7
+DEFAULT_TASA_INTERES_BASE = 15.0
+DEFAULT_TASA_MORA = 2.0
+DEFAULT_TASA_MORA_DIARIA = 0.1
+DEFAULT_MAX_CUOTA_PERCENTAGE = 40
+DEFAULT_MONTO_MINIMO_PRESTAMO = 100.0
+DEFAULT_MONTO_MAXIMO_PRESTAMO = 50000.0
+DEFAULT_MIN_LOAN_AMOUNT = 1000000
+DEFAULT_MAX_LOAN_AMOUNT = 50000000
+DEFAULT_PLAZO_MINIMO_MESES = 1
+DEFAULT_PLAZO_MAXIMO_MESES = 60
+DEFAULT_MAX_LOAN_TERM = 60
+DEFAULT_DIAS_PREVIOS_RECORDATORIO = 3
+DEFAULT_DIAS_MORA_ALERTA = 15
+DEFAULT_SMTP_PORT = 587
+DEFAULT_MAX_UPLOAD_SIZE = 10485760
+DEFAULT_TOLERANCIA_CONCILIACION = 0.50
+DEFAULT_CACHE_EXPIRE_SECONDS = 3600
+DEFAULT_HEALTH_CHECK_CACHE_DURATION = 30
+DEFAULT_PAGE_SIZE = 50
+DEFAULT_MAX_PAGE_SIZE = 100
+DEFAULT_SENTRY_TRACES_SAMPLE_RATE = 0.1
+DEFAULT_UVICORN_WORKERS = 1
+DEFAULT_UVICORN_TIMEOUT_KEEP_ALIVE = 120
+DEFAULT_UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN = 30
+
 
 class Settings(BaseSettings):
     """Configuración centralizada de la aplicación"""
@@ -51,8 +78,8 @@ class Settings(BaseSettings):
     # ============================================
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = DEFAULT_TOKEN_EXPIRE_MINUTES
+    REFRESH_TOKEN_EXPIRE_DAYS: int = DEFAULT_REFRESH_TOKEN_EXPIRE_DAYS
     
     # ============================================
     # USUARIO ADMINISTRADOR INICIAL
@@ -84,33 +111,33 @@ class Settings(BaseSettings):
     # ============================================
     # AMORTIZACIÓN Y REGLAS DE NEGOCIO
     # ============================================
-    TASA_INTERES_BASE: float = 15.0
-    TASA_MORA: float = 2.0
-    TASA_MORA_DIARIA: float = 0.1
+    TASA_INTERES_BASE: float = DEFAULT_TASA_INTERES_BASE
+    TASA_MORA: float = DEFAULT_TASA_MORA
+    TASA_MORA_DIARIA: float = DEFAULT_TASA_MORA_DIARIA
     
-    MAX_CUOTA_PERCENTAGE: int = 40
+    MAX_CUOTA_PERCENTAGE: int = DEFAULT_MAX_CUOTA_PERCENTAGE
     
-    MONTO_MINIMO_PRESTAMO: float = 100.0
-    MONTO_MAXIMO_PRESTAMO: float = 50000.0
-    MIN_LOAN_AMOUNT: int = 1000000
-    MAX_LOAN_AMOUNT: int = 50000000
+    MONTO_MINIMO_PRESTAMO: float = DEFAULT_MONTO_MINIMO_PRESTAMO
+    MONTO_MAXIMO_PRESTAMO: float = DEFAULT_MONTO_MAXIMO_PRESTAMO
+    MIN_LOAN_AMOUNT: int = DEFAULT_MIN_LOAN_AMOUNT
+    MAX_LOAN_AMOUNT: int = DEFAULT_MAX_LOAN_AMOUNT
     
-    PLAZO_MINIMO_MESES: int = 1
-    PLAZO_MAXIMO_MESES: int = 60
-    MAX_LOAN_TERM: int = 60
+    PLAZO_MINIMO_MESES: int = DEFAULT_PLAZO_MINIMO_MESES
+    PLAZO_MAXIMO_MESES: int = DEFAULT_PLAZO_MAXIMO_MESES
+    MAX_LOAN_TERM: int = DEFAULT_MAX_LOAN_TERM
     
     AMORTIZATION_METHODS: List[str] = ["FRANCES", "ALEMAN", "AMERICANO"]
     
     # ============================================
     # NOTIFICACIONES
     # ============================================
-    DIAS_PREVIOS_RECORDATORIO: int = 3
-    DIAS_MORA_ALERTA: int = 15
+    DIAS_PREVIOS_RECORDATORIO: int = DEFAULT_DIAS_PREVIOS_RECORDATORIO
+    DIAS_MORA_ALERTA: int = DEFAULT_DIAS_MORA_ALERTA
     
     # EMAIL
     EMAIL_ENABLED: bool = True
     SMTP_HOST: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
+    SMTP_PORT: int = DEFAULT_SMTP_PORT
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     FROM_EMAIL: Optional[str] = "noreply@rapicredit.com"
@@ -141,27 +168,27 @@ class Settings(BaseSettings):
     # ============================================
     # FILE UPLOADS
     # ============================================
-    MAX_UPLOAD_SIZE: int = 10485760  # 10 MB
+    MAX_UPLOAD_SIZE: int = DEFAULT_MAX_UPLOAD_SIZE  # 10 MB
     ALLOWED_UPLOAD_EXTENSIONS: List[str] = [".pdf", ".jpg", ".jpeg", ".png", ".xlsx", ".xls"]
     UPLOAD_DIR: str = "/tmp/uploads"
     
     # ============================================
     # CONCILIACIÓN BANCARIA
     # ============================================
-    TOLERANCIA_CONCILIACION: float = 0.50
+    TOLERANCIA_CONCILIACION: float = DEFAULT_TOLERANCIA_CONCILIACION
     
     # ============================================
     # CACHE
     # ============================================
     REDIS_URL: Optional[str] = None
-    CACHE_EXPIRE_SECONDS: int = 3600
-    HEALTH_CHECK_CACHE_DURATION: int = 30
+    CACHE_EXPIRE_SECONDS: int = DEFAULT_CACHE_EXPIRE_SECONDS
+    HEALTH_CHECK_CACHE_DURATION: int = DEFAULT_HEALTH_CHECK_CACHE_DURATION
     
     # ============================================
     # PAGINACIÓN
     # ============================================
-    DEFAULT_PAGE_SIZE: int = 50
-    MAX_PAGE_SIZE: int = 100
+    DEFAULT_PAGE_SIZE: int = DEFAULT_PAGE_SIZE
+    MAX_PAGE_SIZE: int = DEFAULT_MAX_PAGE_SIZE
     
     # ============================================
     # LOGGING
@@ -182,7 +209,7 @@ class Settings(BaseSettings):
     # MONITOREO (Opcional)
     # ============================================
     SENTRY_DSN: Optional[str] = None
-    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+    SENTRY_TRACES_SAMPLE_RATE: float = DEFAULT_SENTRY_TRACES_SAMPLE_RATE
     PROMETHEUS_ENABLED: bool = False
     
     # ============================================
@@ -202,9 +229,9 @@ class Settings(BaseSettings):
     # ============================================
     # UVICORN
     # ============================================
-    UVICORN_WORKERS: int = 1
-    UVICORN_TIMEOUT_KEEP_ALIVE: int = 120
-    UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN: int = 30
+    UVICORN_WORKERS: int = DEFAULT_UVICORN_WORKERS
+    UVICORN_TIMEOUT_KEEP_ALIVE: int = DEFAULT_UVICORN_TIMEOUT_KEEP_ALIVE
+    UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN: int = DEFAULT_UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN
     
     # ============================================
     # MÉTODOS DE UTILIDAD

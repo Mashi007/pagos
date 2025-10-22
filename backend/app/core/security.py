@@ -15,15 +15,22 @@ from app.core.config import get_settings
 from app.db.session import get_db  # Necesario para interactuar con la DB
 from app.models.user import User    # Necesario para cargar el objeto User
 
+# Constantes de seguridad
+DEFAULT_ACCESS_TOKEN_EXPIRE_MINUTES = 30
+DEFAULT_REFRESH_TOKEN_EXPIRE_DAYS = 7
+MIN_PASSWORD_LENGTH = 8
+PASSWORD_RESET_EXPIRE_HOURS = 1
+
 settings = get_settings()
 
 # Configuración de hashing de passwords
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Configuración JWT
+
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-REFRESH_TOKEN_EXPIRE_DAYS = 7
+ACCESS_TOKEN_EXPIRE_MINUTES = DEFAULT_ACCESS_TOKEN_EXPIRE_MINUTES
+REFRESH_TOKEN_EXPIRE_DAYS = DEFAULT_REFRESH_TOKEN_EXPIRE_DAYS
 
 # Esquema OAuth2 para FastAPI, que define dónde esperar el token (Authorization: Bearer <token>)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login") 
@@ -128,7 +135,7 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
     """
     Valida la fortaleza de una contraseña
     """
-    if len(password) < 8:
+    if len(password) < MIN_PASSWORD_LENGTH:
         return False, "La contraseña debe tener al menos 8 caracteres"
     
     if not any(c.isupper() for c in password):
@@ -151,7 +158,7 @@ def generate_password_reset_token(email: str) -> str:
     """
     Genera un token para reset de contraseña
     """
-    expire = datetime.utcnow() + timedelta(hours=1)  # Expira en 1 hora
+    expire = datetime.utcnow() + timedelta(hours=PASSWORD_RESET_EXPIRE_HOURS)  # Expira en 1 hora
     
     to_encode = {
         "exp": expire,

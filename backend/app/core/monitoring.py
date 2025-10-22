@@ -4,7 +4,6 @@ Configuración de Monitoreo y Observabilidad
 Integración con Sentry, Prometheus y logging estructurado
 """
 import logging
-import os
 from typing import Optional
 from datetime import datetime
 
