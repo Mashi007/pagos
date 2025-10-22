@@ -9,8 +9,6 @@ import { Layout } from '@/components/layout/Layout'
 import { SimpleProtectedRoute } from '@/components/auth/SimpleProtectedRoute'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 
-// Error Boundary
-import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 
 // Constantes de configuración
 const ANIMATION_DURATION = 0.3
@@ -91,10 +89,9 @@ function App() {
   }, [initializeAuth])
 
   return (
-    <ErrorBoundary>
-      <AnimatePresence mode="wait">
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
+    <AnimatePresence mode="wait">
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
         {/* Ruta de login */}
         <Route
           path="/login"
@@ -295,7 +292,6 @@ function App() {
       </Routes>
       </Suspense>
     </AnimatePresence>
-    </ErrorBoundary>
   )
 }
 
