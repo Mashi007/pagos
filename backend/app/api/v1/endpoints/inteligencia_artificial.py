@@ -14,6 +14,9 @@ from app.db.session import get_db
 from app.models.cliente import Cliente
 from app.models.user import User
 from app.api.deps import get_current_user
+import logging
+logger = logging.getLogger(__name__)
+
 from app.services.ml_service import (
     ScoringCrediticio,
     PrediccionMora, 

@@ -5,6 +5,7 @@ Maneja solicitudes para acciones que requieren autorización
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel, Field
@@ -19,6 +20,8 @@ from app.models.cliente import Cliente
 from app.models.pago import Pago
 from app.api.deps import get_current_user
 from app.core.permissions_simple import Permission, get_user_permissions
+import logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
