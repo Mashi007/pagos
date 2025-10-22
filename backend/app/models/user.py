@@ -8,6 +8,11 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.db.session import Base
 
+# Constantes de longitud de campos
+EMAIL_LENGTH = 255
+NAME_LENGTH = 100
+PASSWORD_LENGTH = 255
+
 
 class User(Base):
     """Modelo de Usuario Simplificado"""
@@ -15,12 +20,12 @@ class User(Base):
     __tablename__ = "usuarios"
     
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(255), unique=True, index=True, nullable=False)
-    nombre = Column(String(100), nullable=False)
-    apellido = Column(String(100), nullable=False)
-    hashed_password = Column(String(255), nullable=False)
+    email = Column(String(EMAIL_LENGTH), unique=True, index=True, nullable=False)
+    nombre = Column(String(NAME_LENGTH), nullable=False)
+    apellido = Column(String(NAME_LENGTH), nullable=False)
+    hashed_password = Column(String(PASSWORD_LENGTH), nullable=False)
     is_admin = Column(Boolean, default=False, nullable=False)  # Cambio clave: rol → is_admin
-    cargo = Column(String(100), nullable=True)  # Campo separado para cargo en la empresa
+    cargo = Column(String(NAME_LENGTH), nullable=True)  # Campo separado para cargo en la empresa
     is_active = Column(Boolean, default=True, nullable=False)
     
     # Timestamps

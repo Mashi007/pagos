@@ -5,10 +5,17 @@ Sincronizado con el endpoint de aprobaciones.
 """
 from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Text, Numeric, ForeignKey
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
 from enum import Enum
 
 from app.db.session import Base
+
+# Constantes de longitud de campos
+CODIGO_LENGTH = 20
+NUMERIC_PRECISION = 12
+NUMERIC_SCALE = 2
+TASA_PRECISION = 5
+TASA_SCALE = 2
+ESTADO_LENGTH = 20
 
 # --- Enumeraciones ---
 
@@ -40,17 +47,17 @@ class Prestamo(Base):
     id = Column(Integer, primary_key=True, index=True)
     # CORREGIDO: Usamos "clientes.id" para referenciar correctamente al modelo Cliente
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False) 
-    codigo_prestamo = Column(String(20), unique=True, index=True)
+    codigo_prestamo = Column(String(CODIGO_LENGTH), unique=True, index=True)
     
     # Montos
-    monto_total = Column(Numeric(12, 2), nullable=False)
-    monto_financiado = Column(Numeric(12, 2), nullable=False)
-    monto_inicial = Column(Numeric(12, 2), default=0.00)
-    tasa_interes = Column(Numeric(5, 2), default=0.00)
+    monto_total = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
+    monto_financiado = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
+    monto_inicial = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), default=0.00)
+    tasa_interes = Column(Numeric(TASA_PRECISION, TASA_SCALE), default=0.00)
     
     # Cuotas
     numero_cuotas = Column(Integer, nullable=False)
-    monto_cuota = Column(Numeric(12, 2), nullable=False)
+    monto_cuota = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
     cuotas_pagadas = Column(Integer, default=0)
     # Se recomienda que cuotas_pendientes sea calculado, pero se mantiene como columna por diseño.
     cuotas_pendientes = Column(Integer) 
@@ -62,15 +69,15 @@ class Prestamo(Base):
     fecha_ultimo_vencimiento = Column(Date)
     
     # Estado financiero
-    saldo_pendiente = Column(Numeric(12, 2), nullable=False)
-    saldo_capital = Column(Numeric(12, 2), nullable=False)
-    saldo_interes = Column(Numeric(12, 2), default=0.00)
-    total_pagado = Column(Numeric(12, 2), default=0.00)
+    saldo_pendiente = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
+    saldo_capital = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
+    saldo_interes = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), default=0.00)
+    total_pagado = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), default=0.00)
     
     # Estado
-    estado = Column(String(20), default=EstadoPrestamo.PENDIENTE.value)
-    categoria = Column(String(20), default="NORMAL")
-    modalidad = Column(String(20), default=ModalidadPago.TRADICIONAL.value)
+    estado = Column(String(ESTADO_LENGTH), default=EstadoPrestamo.PENDIENTE.value)
+    categoria = Column(String(ESTADO_LENGTH), default="NORMAL")
+    modalidad = Column(String(ESTADO_LENGTH), default=ModalidadPago.TRADICIONAL.value)
     
     # Información adicional
     destino_credito = Column(Text)
