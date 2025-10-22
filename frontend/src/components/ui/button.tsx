@@ -2,6 +2,21 @@ import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/utils"
 
+// Constantes de configuración
+const DEFAULT_HEIGHT = 10
+const SMALL_HEIGHT = 9
+const LARGE_HEIGHT = 11
+const ICON_SIZE = 10
+const DEFAULT_PADDING_X = 4
+const DEFAULT_PADDING_Y = 2
+const SMALL_PADDING_X = 3
+const LARGE_PADDING_X = 8
+const ICON_SPINNER_SIZE = 4
+const ICON_SPINNER_MARGIN = 2
+const CIRCLE_RADIUS = 10
+const CIRCLE_STROKE_WIDTH = 4
+const SPRING_STIFFNESS = 200
+
 const buttonVariants = cva(
   "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
   {
@@ -20,10 +35,10 @@ const buttonVariants = cva(
         warning: "bg-yellow-600 text-white hover:bg-yellow-700",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-md px-8",
-        icon: "h-10 w-10",
+        default: `h-${DEFAULT_HEIGHT} px-${DEFAULT_PADDING_X} py-${DEFAULT_PADDING_Y}`,
+        sm: `h-${SMALL_HEIGHT} rounded-md px-${SMALL_PADDING_X}`,
+        lg: `h-${LARGE_HEIGHT} rounded-md px-${LARGE_PADDING_X}`,
+        icon: `h-${ICON_SIZE} w-${ICON_SIZE}`,
       },
     },
     defaultVariants: {
@@ -51,7 +66,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       >
         {loading && (
           <svg
-            className="mr-2 h-4 w-4 animate-spin"
+            className={`mr-${ICON_SPINNER_MARGIN} h-${ICON_SPINNER_SIZE} w-${ICON_SPINNER_SIZE} animate-spin`}
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
@@ -60,9 +75,9 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
               className="opacity-25"
               cx="12"
               cy="12"
-              r="10"
+              r={CIRCLE_RADIUS}
               stroke="currentColor"
-              strokeWidth="4"
+              strokeWidth={CIRCLE_STROKE_WIDTH}
             />
             <path
               className="opacity-75"

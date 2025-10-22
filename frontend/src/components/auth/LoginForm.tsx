@@ -13,6 +13,20 @@ import { AlertWithIcon } from '@/components/ui/alert'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { LoginForm as LoginFormType } from '@/types'
 
+// Constantes de configuración
+const MIN_PASSWORD_LENGTH = 6
+const ANIMATION_DURATION = 0.5
+const SPRING_DELAY = 0.2
+const SPRING_STIFFNESS = 200
+const LOGO_SIZE_LARGE = 24
+const LOGO_SIZE_SMALL = 16
+const TEXT_SIZE_LARGE = 3
+const TEXT_SIZE_MEDIUM = 1
+const SPACING_SMALL = 4
+const SPACING_MEDIUM = 6
+const BUTTON_HEIGHT = 12
+const ICON_SIZE = 4
+
 // Schema de validación
 const loginSchema = z.object({
   email: z
@@ -22,7 +36,7 @@ const loginSchema = z.object({
   password: z
     .string()
     .min(1, 'La contraseña es requerida')
-    .min(6, 'La contraseña debe tener al menos 6 caracteres'),
+    .min(MIN_PASSWORD_LENGTH, `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres`),
   remember: z.boolean().optional(),
 })
 
@@ -53,23 +67,17 @@ export function LoginForm() {
   const onSubmit = async (data: LoginFormData) => {
     try {
       clearError()
-      console.log('🔑 Intentando login con:', data)
-      console.log('🔍 Valor de remember en onSubmit:', data.remember)
-      console.log('🔍 Tipo de remember:', typeof data.remember)
       
       // Asegurar que remember sea boolean y email en minúsculas
       const loginData = {
         ...data,
-        email: data.email.toLowerCase().trim(), // ✅ Convertir a minúsculas
+        email: data.email.toLowerCase().trim(), // Convertir a minúsculas
         remember: Boolean(data.remember)
       }
       
-      console.log('🔍 Datos finales para login:', loginData)
       await login(loginData)
       navigate(from, { replace: true })
     } catch (error: any) {
-      console.error('Error en login:', error)
-      
       // Manejar diferentes tipos de errores
       if (error.code === 'NETWORK_ERROR' || !error.response) {
         setError('root', { 
@@ -107,7 +115,7 @@ export function LoginForm() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: ANIMATION_DURATION }}
         className="w-full max-w-md"
       >
         <Card className="shadow-2xl border-0">
@@ -115,33 +123,33 @@ export function LoginForm() {
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+          transition={{ delay: SPRING_DELAY, type: "spring", stiffness: SPRING_STIFFNESS }}
           className="mx-auto"
         >
           {/* Logo de Rapicredit */}
-          <div className="w-24 h-24 mx-auto mb-4 bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-2xl">
+          <div className={`w-${LOGO_SIZE_LARGE} h-${LOGO_SIZE_LARGE} mx-auto mb-${SPACING_SMALL} bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-2xl`}>
             <img 
               src="/logo-compact.svg" 
               alt="RAPICREDIT Logo" 
-              className="w-16 h-16"
+              className={`w-${LOGO_SIZE_SMALL} h-${LOGO_SIZE_SMALL}`}
             />
           </div>
         </motion.div>
             
             <div>
-              <CardTitle className="text-3xl font-bold text-gradient text-center">
+              <CardTitle className={`text-${TEXT_SIZE_LARGE}xl font-bold text-gradient text-center`}>
                 RAPICREDIT
               </CardTitle>
-              <CardDescription className="text-lg mt-2 text-center font-medium">
+              <CardDescription className={`text-lg mt-${SPACING_SMALL} text-center font-medium`}>
                 Sistema de Préstamos y Cobranza
               </CardDescription>
-              <CardDescription className="text-sm mt-1 text-center text-gray-500">
+              <CardDescription className={`text-sm mt-${TEXT_SIZE_MEDIUM} text-center text-gray-500`}>
                 Ingrese sus credenciales para acceder
               </CardDescription>
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-6">
+          <CardContent className={`space-y-${SPACING_MEDIUM}`}>
             {error && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -156,14 +164,14 @@ export function LoginForm() {
               </motion.div>
             )}
 
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div className="space-y-4">
+            <form onSubmit={handleSubmit(onSubmit)} className={`space-y-${SPACING_SMALL}`}>
+              <div className={`space-y-${SPACING_SMALL}`}>
                 <Input
                   {...register('email')}
                   type="email"
                   label="Correo electrónico"
                   placeholder="usuario@empresa.com"
-                  leftIcon={<Mail className="w-4 h-4" />}
+                  leftIcon={<Mail className={`w-${ICON_SIZE} h-${ICON_SIZE}`} />}
                   error={errors.email?.message}
                   autoComplete="email"
                   autoFocus
@@ -174,7 +182,7 @@ export function LoginForm() {
                   type={showPassword ? 'text' : 'password'}
                   label="Contraseña"
                   placeholder="••••••••"
-                  leftIcon={<Lock className="w-4 h-4" />}
+                  leftIcon={<Lock className={`w-${ICON_SIZE} h-${ICON_SIZE}`} />}
                   rightIcon={
                     <button
                       type="button"
@@ -182,9 +190,9 @@ export function LoginForm() {
                       className="hover:text-primary transition-colors"
                     >
                       {showPassword ? (
-                        <EyeOff className="w-4 h-4" />
+                        <EyeOff className={`w-${ICON_SIZE} h-${ICON_SIZE}`} />
                       ) : (
-                        <Eye className="w-4 h-4" />
+                        <Eye className={`w-${ICON_SIZE} h-${ICON_SIZE}`} />
                       )}
                     </button>
                   }
@@ -219,7 +227,7 @@ export function LoginForm() {
 
               <Button
                 type="submit"
-                className="w-full h-12 text-base font-semibold"
+                className={`w-full h-${BUTTON_HEIGHT} text-base font-semibold`}
                 loading={isLoading}
                 disabled={isLoading}
               >

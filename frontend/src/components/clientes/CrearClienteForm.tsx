@@ -103,17 +103,17 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   
   // DEBUG: Log de cambios de estado
   useEffect(() => {
-    console.log('🔍 DEBUG - showDuplicateWarning cambió a:', showDuplicateWarning)
+    // Debug logs removidos según normas
   }, [showDuplicateWarning])
   
   useEffect(() => {
-    console.log('🔍 DEBUG - duplicateCedula cambió a:', duplicateCedula)
+    // Debug logs removidos según normas
   }, [duplicateCedula])
   
   // Pre-cargar datos del cliente si se está editando
   useEffect(() => {
     if (cliente) {
-      console.log('📝 Cargando datos del cliente para edición:', cliente)
+      // Debug logs removidos según normas
       setFormData({
         cedula: cliente.cedula || '',
         nombres: cliente.nombres || '',
