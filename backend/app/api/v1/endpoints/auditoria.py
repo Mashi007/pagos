@@ -1,11 +1,12 @@
+"""
+Endpoints de auditoría del sistema
+Registro y consulta de acciones de usuarios
+"""
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi import APIRouter, Response
-
- asc, func
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum, asc, func
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 import io
 
 from app.schemas.auditoria import (

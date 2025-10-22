@@ -6,8 +6,10 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
+import logging
 
 from app.db.init_db import init_db_startup, init_db_shutdown
+from app.core.config import settings
 
 # Rate Limiting
 
@@ -52,6 +54,7 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout),  # Asegurar que vaya a stdout
     ],
     force=True  # Forzar reconfiguración
+)
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +109,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         return response
 
-asynccontextmanager
+@asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gestión del ciclo de vida"""
     init_db_startup()
@@ -144,6 +147,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+)
 
 # Registrar routers
 app.include_router(health.router, prefix=f"{settings.API_V1_PREFIX}", tags=["Health"])
@@ -175,7 +179,7 @@ app.include_router(migracion_emergencia.router, prefix=f"{settings.API_V1_PREFIX
 app.include_router(impact_analysis.router, prefix=f"{settings.API_V1_PREFIX}/impact", tags=["Análisis de Impacto"])
 # app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])  # Removido - se usarán datos reales
 
-app.get("/", include_in_schema=False)
+@app.get("/", include_in_schema=False)
 async def root():
     return {
         "message": "Sistema de Préstamos y Cobranza API v1.0.0", 
