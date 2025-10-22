@@ -4,6 +4,11 @@ from typing import Optional, Annotated
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
 
+# Constantes de validación
+MAX_PERCENTAGE = 100
+DECIMAL_PRECISION = 2
+MIN_PASSWORD_LENGTH = 8
+
 # Definir constraints personalizados para Decimal
 DecimalAmount = Annotated[
     Decimal, 
@@ -12,7 +17,7 @@ DecimalAmount = Annotated[
 
 DecimalPercentage = Annotated[
     Decimal,
-    Field(ge=0, le=100, description="Porcentaje con 2 decimales")
+    Field(ge=0, le=MAX_PERCENTAGE, description="Porcentaje con 2 decimales")
 ]
 
 
@@ -22,7 +27,7 @@ class PrestamoBase(BaseModel):
     monto_total: Decimal = Field(..., gt=0, description="Monto total del préstamo")
     monto_financiado: Decimal = Field(..., gt=0, description="Monto financiado")
     monto_inicial: Decimal = Field(default=Decimal("0.00"), ge=0, description="Monto inicial/cuota inicial")
-    tasa_interes: Decimal = Field(default=Decimal("0.00"), ge=0, le=100, description="Tasa de interés anual (%)")
+    tasa_interes: Decimal = Field(default=Decimal("0.00"), ge=0, le=MAX_PERCENTAGE, description="Tasa de interés anual (%)")
     numero_cuotas: int = Field(..., gt=0, description="Número de cuotas")
     monto_cuota: Decimal = Field(..., gt=0, description="Monto de cada cuota")
     fecha_aprobacion: date
@@ -59,7 +64,7 @@ class PrestamoCreate(PrestamoBase):
 class PrestamoUpdate(BaseModel):
     """Schema para actualizar un préstamo"""
     monto_total: Optional[Decimal] = Field(None, gt=0, description="Monto total del préstamo")
-    tasa_interes: Optional[Decimal] = Field(None, ge=0, le=100, description="Tasa de interés anual (%)")
+    tasa_interes: Optional[Decimal] = Field(None, ge=0, le=MAX_PERCENTAGE, description="Tasa de interés anual (%)")
     estado: Optional[str] = None
     categoria: Optional[str] = None
     observaciones: Optional[str] = None

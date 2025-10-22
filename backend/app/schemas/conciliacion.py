@@ -1,9 +1,15 @@
 # backend/app/schemas/conciliacion.py
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import List, Optional, Dict, Any
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
+
+# Constantes de validación
+MAX_CONFIDENCE = 100
+MIN_YEAR = 2020
+MAX_YEAR = 2100
+DECIMAL_ZERO = Decimal("0.00")
 
 
 class EstadoConciliacion(str, Enum):
@@ -35,11 +41,12 @@ class MovimientoBancario(BaseModel):
     descripcion: Optional[str] = ""
     cuenta_origen: Optional[str] = Field(None, description="Número de cuenta origen")
     
-    class Config:
-        json_encoders = {
+    model_config = ConfigDict(
+        json_encoders={
             Decimal: lambda v: float(v),
             date: lambda v: v.isoformat()
         }
+    )
     
     @field_validator('monto')
     @classmethod
@@ -55,8 +62,7 @@ class MovimientoBancarioResponse(MovimientoBancario):
     conciliado: bool = False
     pago_id: Optional[int] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================
@@ -84,13 +90,14 @@ class ConciliacionMatch(BaseModel):
     monto_pago: Decimal
     fecha_pago: date
     tipo_match: TipoMatch
-    confianza: float = Field(ge=0, le=100, description="Porcentaje de confianza del match")
+    confianza: float = Field(ge=0, le=MAX_CONFIDENCE, description="Porcentaje de confianza del match")
     
-    class Config:
-        json_encoders = {
+    model_config = ConfigDict(
+        json_encoders={
             Decimal: lambda v: float(v),
             date: lambda v: v.isoformat()
         }
+    )
 
 
 class ResultadoConciliacion(BaseModel):
@@ -131,8 +138,7 @@ class ConciliacionResponse(BaseModel):
     estado: EstadoConciliacion
     created_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
         json_encoders = {
             date: lambda v: v.isoformat(),
             datetime: lambda v: v.isoformat()
@@ -179,13 +185,13 @@ class ConfirmacionResponse(BaseModel):
 class ReporteConciliacionMensual(BaseModel):
     """Reporte mensual de conciliación"""
     mes: int = Field(ge=1, le=12)
-    anio: int = Field(ge=2020, le=2100)
+    anio: int = Field(ge=MIN_YEAR, le=MAX_YEAR)
     total_pagos: int
     conciliados: int
     pendientes: int
     porcentaje_conciliacion: float
-    monto_total: Decimal = Decimal("0.00")
-    monto_conciliado: Decimal = Decimal("0.00")
+    monto_total: Decimal = DECIMAL_ZERO
+    monto_conciliado: Decimal = DECIMAL_ZERO
     
     class Config:
         json_encoders = {
@@ -223,8 +229,7 @@ class PagoPendienteConciliacion(BaseModel):
     concepto: str
     dias_pendiente: int = 0
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
         json_encoders = {
             Decimal: lambda v: float(v),
             date: lambda v: v.isoformat()
@@ -293,8 +298,7 @@ class MovimientoBancarioExtendido(MovimientoBancario):
     pago_sugerido: Optional[dict] = None
     requiere_revision: bool = False
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ValidacionArchivoBancario(BaseModel):
@@ -356,8 +360,7 @@ class HistorialConciliacion(BaseModel):
     estado: EstadoConciliacion
     observaciones: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
