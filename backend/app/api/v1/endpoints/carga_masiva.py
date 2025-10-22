@@ -922,7 +922,7 @@ async def corregir_registro_en_linea(
                 resultado = ValidadorCedula.validar_y_formatear_cedula(valor, "VENEZUELA")
                 if not resultado.get("valido"):
                     errores_validacion.append(f"Cédula: {resultado.get('mensaje')}")
-        else:
+                else:
                     datos_corregidos[campo] = resultado.get("valor_formateado")
 
             elif campo == 'movil':
@@ -1084,8 +1084,8 @@ async def guardar_registros_corregidos(
         db.add(auditoria)
         db.commit()
 
-    return {
-        "success": True,
+        return {
+            "success": True,
             "mensaje": f"✅ {registros_guardados} registros guardados exitosamente",
             "registros_guardados": registros_guardados,
             "errores": errores_guardado
@@ -1151,7 +1151,7 @@ async def _guardar_cliente_desde_carga(
         # CREAR CLIENTE CON FOREIGNKEYS
         # ============================================
 
-                cliente_data = {
+        cliente_data = {
             "cedula": datos['cedula'],
             "nombres": datos['nombre'],
             "apellidos": datos.get('apellido', ''),
@@ -1177,9 +1177,9 @@ async def _guardar_cliente_desde_carga(
             "fecha_entrega": datetime.strptime(datos['fecha_entrega'], '%Y-%m-%d').date() if datos.get('fecha_entrega') else None,
 
             # Estado
-                    "estado": "ACTIVO",
-                    "activo": True,
-                    "fecha_registro": datetime.utcnow(),
+            "estado": "ACTIVO",
+            "activo": True,
+            "fecha_registro": datetime.utcnow(),
             "usuario_registro": f"CARGA_MASIVA_USER_{usuario_id}"
         }
 
@@ -1237,7 +1237,7 @@ async def _guardar_pago_desde_carga(
 
         cliente = db.query(Cliente).filter(Cliente.cedula == datos['cedula']).first()
 
-            if not cliente:
+        if not cliente:
             raise Exception(f"Cliente con cédula {datos['cedula']} no existe")
 
         # Verificar que el cliente tenga préstamo activo
@@ -1251,14 +1251,14 @@ async def _guardar_pago_desde_carga(
         # CREAR PAGO
         # ============================================
 
-            pago_data = {
+        pago_data = {
             "prestamo_id": prestamo.id,
             "monto": Decimal(str(datos['monto_pagado'])),
             "fecha_pago": datetime.strptime(datos['fecha_pago'], '%Y-%m-%d').date() if isinstance(datos['fecha_pago'], str) else datos['fecha_pago'],
             "numero_cuota": int(datos.get('numero_cuota', 1)) if datos.get('numero_cuota') else None,
             "referencia": datos.get('documento_pago', ''),
             "metodo_pago": datos.get('metodo_pago', 'TRANSFERENCIA').upper(),
-                "estado": "CONFIRMADO",
+            "estado": "CONFIRMADO",
             "registrado_por": usuario_id,
             "fecha_registro": datetime.utcnow()
         }
@@ -1441,7 +1441,7 @@ async def obtener_opciones_configuracion(
             "modalidades_pago": modalidades_pago
         }
                         
-            except Exception as e:
+    except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Error obteniendo opciones: {str(e)}"
