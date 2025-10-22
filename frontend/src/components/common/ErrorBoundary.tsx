@@ -15,10 +15,6 @@ interface State {
 
 /**
  * ErrorBoundary - Componente para capturar errores de React
- * 
- * Captura errores JavaScript en cualquier parte del árbol de componentes hijo,
- * registra esos errores y muestra una interfaz de respaldo en lugar del árbol
- * de componentes que falló.
  */
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
@@ -27,29 +23,19 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
-    // Actualiza el state para que la próxima renderización muestre la UI de error
     return { hasError: true, error }
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Registra el error
     console.error('ErrorBoundary capturó un error:', error, errorInfo)
     
-    // Actualiza el state con información del error
     this.setState({
       error,
       errorInfo
     })
 
-    // Llama al callback de error si está definido
     if (this.props.onError) {
       this.props.onError(error, errorInfo)
-    }
-
-    // En producción, podrías enviar el error a un servicio de monitoreo
-    if (process.env.NODE_ENV === 'production') {
-      // Ejemplo: enviar a Sentry, LogRocket, etc.
-      // Sentry.captureException(error, { extra: errorInfo })
     }
   }
 
@@ -63,12 +49,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
-      // Si hay un fallback personalizado, úsalo
       if (this.props.fallback) {
         return this.props.fallback
       }
 
-      // UI de error por defecto
       return (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -78,7 +62,6 @@ export class ErrorBoundary extends Component<Props, State> {
         >
           <div className="max-w-md w-full mx-4">
             <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-              {/* Icono de error */}
               <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-6">
                 <svg
                   className="h-8 w-8 text-red-600"
@@ -95,18 +78,15 @@ export class ErrorBoundary extends Component<Props, State> {
                 </svg>
               </div>
 
-              {/* Título */}
               <h1 className="text-2xl font-bold text-gray-900 mb-4">
                 ¡Oops! Algo salió mal
               </h1>
 
-              {/* Descripción */}
               <p className="text-gray-600 mb-6">
                 Ha ocurrido un error inesperado. Nuestro equipo ha sido notificado
                 y está trabajando para solucionarlo.
               </p>
 
-              {/* Información del error (solo en desarrollo) */}
               {process.env.NODE_ENV === 'development' && this.state.error && (
                 <details className="mb-6 text-left">
                   <summary className="cursor-pointer text-sm font-medium text-gray-700 mb-2">
@@ -128,7 +108,6 @@ export class ErrorBoundary extends Component<Props, State> {
                 </details>
               )}
 
-              {/* Botones de acción */}
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <button
                   onClick={this.handleRetry}
@@ -144,7 +123,6 @@ export class ErrorBoundary extends Component<Props, State> {
                 </button>
               </div>
 
-              {/* Información adicional */}
               <div className="mt-6 text-sm text-gray-500">
                 <p>
                   Si el problema persiste, contacta al{' '}
@@ -172,11 +150,6 @@ export class ErrorBoundary extends Component<Props, State> {
 export const useErrorHandler = () => {
   const handleError = (error: Error, errorInfo?: ErrorInfo) => {
     console.error('Error capturado:', error, errorInfo)
-    
-    // En producción, enviar a servicio de monitoreo
-    if (process.env.NODE_ENV === 'production') {
-      // Ejemplo: Sentry.captureException(error, { extra: errorInfo })
-    }
   }
 
   return { handleError }
@@ -189,7 +162,6 @@ export const PageErrorBoundary = ({ children }: { children: ReactNode }) => {
   return (
     <ErrorBoundary
       onError={(error, errorInfo) => {
-        // Log específico para páginas
         console.error('Error en página:', error, errorInfo)
       }}
     >

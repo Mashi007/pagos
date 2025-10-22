@@ -6,7 +6,7 @@ import React from 'react'
  */
 export const useStableCallback = <T extends (...args: any[]) => any>(
   callback: T,
-  deps: React.DependencyList
+  deps: any[]
 ): T => {
   return React.useCallback(callback, deps)
 }
@@ -17,31 +17,9 @@ export const useStableCallback = <T extends (...args: any[]) => any>(
  */
 export const useStableMemo = <T>(
   factory: () => T,
-  deps: React.DependencyList
+  deps: any[]
 ): T => {
   return React.useMemo(factory, deps)
-}
-
-/**
- * Componente memoizado genérico
- * Wrapper para React.memo con configuración por defecto
- */
-export const MemoizedComponent = React.memo<React.ComponentType<any>>(
-  (Component) => Component,
-  (prevProps, nextProps) => {
-    // Comparación superficial por defecto
-    return JSON.stringify(prevProps) === JSON.stringify(nextProps)
-  }
-)
-
-/**
- * HOC para memoizar componentes con comparación personalizada
- */
-export const withMemo = <P extends object>(
-  Component: React.ComponentType<P>,
-  areEqual?: (prevProps: P, nextProps: P) => boolean
-) => {
-  return React.memo(Component, areEqual)
 }
 
 /**
@@ -50,7 +28,7 @@ export const withMemo = <P extends object>(
  */
 export const useStableObject = <T extends object>(
   factory: () => T,
-  deps: React.DependencyList
+  deps: any[]
 ): T => {
   return React.useMemo(factory, deps)
 }
@@ -61,7 +39,7 @@ export const useStableObject = <T extends object>(
  */
 export const useStableArray = <T>(
   factory: () => T[],
-  deps: React.DependencyList
+  deps: any[]
 ): T[] => {
   return React.useMemo(factory, deps)
 }
@@ -73,7 +51,7 @@ export const useStableArray = <T>(
 export const useFilteredData = <T>(
   data: T[],
   filterFn: (item: T) => boolean,
-  deps: React.DependencyList
+  deps: any[]
 ): T[] => {
   return useStableMemo(() => {
     return data.filter(filterFn)
@@ -87,7 +65,7 @@ export const useFilteredData = <T>(
 export const useSortedData = <T>(
   data: T[],
   sortFn: (a: T, b: T) => number,
-  deps: React.DependencyList
+  deps: any[]
 ): T[] => {
   return useStableMemo(() => {
     return [...data].sort(sortFn)
@@ -102,7 +80,7 @@ export const useSearchData = <T>(
   data: T[],
   searchTerm: string,
   searchFn: (item: T, term: string) => boolean,
-  deps: React.DependencyList
+  deps: any[]
 ): T[] => {
   return useStableMemo(() => {
     if (!searchTerm.trim()) {
@@ -115,8 +93,6 @@ export const useSearchData = <T>(
 export default {
   useStableCallback,
   useStableMemo,
-  MemoizedComponent,
-  withMemo,
   useStableObject,
   useStableArray,
   useFilteredData,
