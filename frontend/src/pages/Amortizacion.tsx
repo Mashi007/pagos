@@ -16,6 +16,25 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 
+// Constantes de configuración
+const DEFAULT_CUOTA_MENSUAL = 416.67
+const DEFAULT_CUOTA_MENSUAL_ALT = 428.57
+const DEFAULT_MONTO_FINANCIADO_1 = 20000.00
+const DEFAULT_MONTO_FINANCIADO_2 = 15000.00
+const DEFAULT_MONTO_FINANCIADO_3 = 18000.00
+const DEFAULT_CUOTAS_TOTALES_1 = 48
+const DEFAULT_CUOTAS_TOTALES_2 = 36
+const DEFAULT_CUOTAS_TOTALES_3 = 42
+const DEFAULT_CUOTAS_PAGADAS_1 = 12
+const DEFAULT_CUOTAS_PAGADAS_2 = 8
+const DEFAULT_CUOTAS_PAGADAS_3 = 15
+const DEFAULT_SALDO_1 = 15000.00
+const DEFAULT_SALDO_2 = 11666.67
+const DEFAULT_SALDO_3 = 11571.43
+const DEFAULT_PROXIMA_CUOTA = '2024-02-15'
+const DEFAULT_PROXIMA_CUOTA_ALT = '2024-01-15'
+const DEFAULT_PERCENTAGE_MULTIPLIER = 100
+
 // Mock data para amortización
 const mockAmortizaciones = [
   {
@@ -23,12 +42,12 @@ const mockAmortizaciones = [
     cliente: 'Juan Carlos Pérez González',
     cedula: '12345678',
     vehiculo: 'Toyota Corolla 2022',
-    monto_financiado: 20000.00,
-    cuota_mensual: 416.67,
-    cuotas_pagadas: 12,
-    cuotas_totales: 48,
-    saldo_pendiente: 15000.00,
-    proxima_cuota: '2024-02-15',
+    monto_financiado: DEFAULT_MONTO_FINANCIADO_1,
+    cuota_mensual: DEFAULT_CUOTA_MENSUAL,
+    cuotas_pagadas: DEFAULT_CUOTAS_PAGADAS_1,
+    cuotas_totales: DEFAULT_CUOTAS_TOTALES_1,
+    saldo_pendiente: DEFAULT_SALDO_1,
+    proxima_cuota: DEFAULT_PROXIMA_CUOTA,
     estado: 'al_dia'
   },
   {
@@ -36,12 +55,12 @@ const mockAmortizaciones = [
     cliente: 'María Elena Rodríguez López',
     cedula: '87654321',
     vehiculo: 'Hyundai Accent 2023',
-    monto_financiado: 15000.00,
-    cuota_mensual: 416.67,
-    cuotas_pagadas: 8,
-    cuotas_totales: 36,
-    saldo_pendiente: 11666.67,
-    proxima_cuota: '2024-02-15',
+    monto_financiado: DEFAULT_MONTO_FINANCIADO_2,
+    cuota_mensual: DEFAULT_CUOTA_MENSUAL,
+    cuotas_pagadas: DEFAULT_CUOTAS_PAGADAS_2,
+    cuotas_totales: DEFAULT_CUOTAS_TOTALES_2,
+    saldo_pendiente: DEFAULT_SALDO_2,
+    proxima_cuota: DEFAULT_PROXIMA_CUOTA,
     estado: 'al_dia'
   },
   {
@@ -49,12 +68,12 @@ const mockAmortizaciones = [
     cliente: 'Carlos Alberto Martínez Silva',
     cedula: '11223344',
     vehiculo: 'Nissan Versa 2021',
-    monto_financiado: 18000.00,
-    cuota_mensual: 428.57,
-    cuotas_pagadas: 15,
-    cuotas_totales: 42,
-    saldo_pendiente: 11571.43,
-    proxima_cuota: '2024-01-15',
+    monto_financiado: DEFAULT_MONTO_FINANCIADO_3,
+    cuota_mensual: DEFAULT_CUOTA_MENSUAL_ALT,
+    cuotas_pagadas: DEFAULT_CUOTAS_PAGADAS_3,
+    cuotas_totales: DEFAULT_CUOTAS_TOTALES_3,
+    saldo_pendiente: DEFAULT_SALDO_3,
+    proxima_cuota: DEFAULT_PROXIMA_CUOTA_ALT,
     estado: 'en_mora'
   }
 ]
@@ -89,7 +108,7 @@ export function Amortizacion() {
   const clientesEnMora = mockAmortizaciones.filter(a => a.estado === 'en_mora').length
 
   const calcularProgreso = (pagadas: number, totales: number) => {
-    return (pagadas / totales) * 100
+    return (pagadas / totales) * DEFAULT_PERCENTAGE_MULTIPLIER
   }
 
   return (
