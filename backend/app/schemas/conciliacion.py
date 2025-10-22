@@ -138,11 +138,13 @@ class ConciliacionResponse(BaseModel):
     estado: EstadoConciliacion
     created_at: datetime
     
-    model_config = ConfigDict(from_attributes=True)
-        json_encoders = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
             date: lambda v: v.isoformat(),
             datetime: lambda v: v.isoformat()
         }
+    )
 
 
 # ============================================
@@ -229,11 +231,13 @@ class PagoPendienteConciliacion(BaseModel):
     concepto: str
     dias_pendiente: int = 0
     
-    model_config = ConfigDict(from_attributes=True)
-        json_encoders = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
             Decimal: lambda v: float(v),
             date: lambda v: v.isoformat()
         }
+    )
 
 
 # ============================================
@@ -360,7 +364,9 @@ class HistorialConciliacion(BaseModel):
     estado: EstadoConciliacion
     observaciones: Optional[str] = None
     
-    model_config = ConfigDict(from_attributes=True)
-        json_encoders = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
             datetime: lambda v: v.isoformat()
         }
+    )
