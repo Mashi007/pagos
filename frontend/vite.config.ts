@@ -27,7 +27,18 @@ export default defineConfig({
           vendor: ['react', 'react-dom'],
           router: ['react-router-dom'],
           ui: ['framer-motion', 'lucide-react'],
+          query: ['@tanstack/react-query'],
+          utils: ['clsx', 'tailwind-merge', 'date-fns'],
         },
+      },
+    },
+    chunkSizeWarningLimit: 1000,
+    target: 'esnext',
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
       },
     },
   },

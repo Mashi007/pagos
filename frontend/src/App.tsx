@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -9,32 +9,32 @@ import { Layout } from '@/components/layout/Layout'
 import { SimpleProtectedRoute } from '@/components/auth/SimpleProtectedRoute'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 
-// Pages
-import { Login } from '@/pages/Login'
-import { Dashboard } from '@/pages/Dashboard'
-import { Clientes } from '@/pages/Clientes'
-import { Prestamos } from '@/pages/Prestamos'
-import { Pagos } from '@/pages/Pagos'
-import { NuevoPago } from '@/pages/NuevoPago'
-import { ConciliacionBancaria } from '@/pages/ConciliacionBancaria'
-import { Amortizacion } from '@/pages/Amortizacion'
-import { Reportes } from '@/pages/Reportes'
-import { Aprobaciones } from '@/pages/Aprobaciones'
-import { Auditoria } from '@/pages/Auditoria'
-import { Notificaciones } from '@/pages/Notificaciones'
-import { Programador } from '@/pages/Programador'
-import { Configuracion } from '@/pages/Configuracion'
-import { PrestamosPage } from '@/pages/PrestamosPage'
-import { Analistas } from '@/pages/Analistas'
-import { PagosPage } from '@/pages/PagosPage'
-import { AmortizacionPage } from '@/pages/AmortizacionPage'
-import { ReportesPage } from '@/pages/ReportesPage'
-import { VisualizacionBD } from '@/pages/VisualizacionBD'
-import { Validadores } from '@/pages/Validadores'
-import { Concesionarios } from '@/pages/Concesionarios'
-import { ModelosVehiculos } from '@/pages/ModelosVehiculos'
-import { Usuarios } from '@/pages/Usuarios'
-import { Solicitudes } from '@/pages/Solicitudes'
+// Pages - Lazy loading para optimización
+const Login = lazy(() => import('@/pages/Login'))
+const Dashboard = lazy(() => import('@/pages/Dashboard'))
+const Clientes = lazy(() => import('@/pages/Clientes'))
+const Prestamos = lazy(() => import('@/pages/Prestamos'))
+const Pagos = lazy(() => import('@/pages/Pagos'))
+const NuevoPago = lazy(() => import('@/pages/NuevoPago'))
+const ConciliacionBancaria = lazy(() => import('@/pages/ConciliacionBancaria'))
+const Amortizacion = lazy(() => import('@/pages/Amortizacion'))
+const Reportes = lazy(() => import('@/pages/Reportes'))
+const Aprobaciones = lazy(() => import('@/pages/Aprobaciones'))
+const Auditoria = lazy(() => import('@/pages/Auditoria'))
+const Notificaciones = lazy(() => import('@/pages/Notificaciones'))
+const Programador = lazy(() => import('@/pages/Programador'))
+const Configuracion = lazy(() => import('@/pages/Configuracion'))
+const PrestamosPage = lazy(() => import('@/pages/PrestamosPage'))
+const Analistas = lazy(() => import('@/pages/Analistas'))
+const PagosPage = lazy(() => import('@/pages/PagosPage'))
+const AmortizacionPage = lazy(() => import('@/pages/AmortizacionPage'))
+const ReportesPage = lazy(() => import('@/pages/ReportesPage'))
+const VisualizacionBD = lazy(() => import('@/pages/VisualizacionBD'))
+const Validadores = lazy(() => import('@/pages/Validadores'))
+const Concesionarios = lazy(() => import('@/pages/Concesionarios'))
+const ModelosVehiculos = lazy(() => import('@/pages/ModelosVehiculos'))
+const Usuarios = lazy(() => import('@/pages/Usuarios'))
+const Solicitudes = lazy(() => import('@/pages/Solicitudes'))
 
 // Todas las páginas ahora están importadas desde archivos reales
 
@@ -58,6 +58,16 @@ const NotFound = () => (
   </div>
 )
 
+// Componente de loading para Suspense
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+      <p className="text-gray-600">Cargando página...</p>
+    </div>
+  </div>
+)
+
 function App() {
   const { isAuthenticated, initializeAuth } = useSimpleAuth()
 
@@ -68,7 +78,8 @@ function App() {
 
   return (
     <AnimatePresence mode="wait">
-      <Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
         {/* Ruta de login */}
         <Route
           path="/login"
@@ -267,6 +278,7 @@ function App() {
           }
         />
       </Routes>
+      </Suspense>
     </AnimatePresence>
   )
 }
