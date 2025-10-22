@@ -1,28 +1,32 @@
-""
+"""
+Endpoints de gestión de analistas
+CRUD completo para analistas
+"""
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-Endpoints de gestión de analistas
-CRUD completo para analistas
-""
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum, text
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+import logging
 from app.utils.analistas_cache import analistas_cache, generate_cache_key
 from app.models.analista import Analista
+from app.models.user import User
 from app.schemas.analista import (
     AnalistaCreate, 
     AnalistaUpdate, 
     AnalistaResponse,
     AnalistaListResponse
-
+)
+from app.api.deps import get_current_user
+from app.db.session import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-router.get("/test-no-auth")
+@router.get("/test-no-auth")
 def test_analistas_no_auth(
     db: Session = Depends(get_db)
-:
+):
     """
     Test endpoint sin autenticación para verificar analistas
     """
@@ -55,7 +59,7 @@ def test_analistas_no_auth(
             "message": "Error en test endpoint analistas no auth"
         }
 
-router.get("/cache-stats")
+@router.get("/cache-stats")
 def cache_stats():
     """
     Obtener estadísticas del cache de analistas
@@ -75,7 +79,7 @@ def cache_stats():
             "message": "Error obteniendo estadísticas del cache"
         }
 
-router.post("/cache-clear")
+@router.post("/cache-clear")
 def clear_cache():
     """
     Limpiar el cache de analistas
@@ -94,7 +98,7 @@ def clear_cache():
             "message": "Error limpiando cache"
         }
 
-router.get("/health")
+@router.get("/health")
 def health_check_analistas(db: Session = Depends(get_db)):
     """
     Health check específico para el módulo de analistas
@@ -121,14 +125,14 @@ def health_check_analistas(db: Session = Depends(get_db)):
             "message": "Error en módulo de analistas"
         }
 
-router.get("/backup1")
+@router.get("/backup1")
 def analistas_backup1(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db)
-:
+):
     """
     Endpoint de respaldo 1 - Sin autenticación, con cache
     """
@@ -218,14 +222,14 @@ def analistas_backup1(
             "message": "Error en endpoint backup1"
         }
 
-router.get("/backup2")
+@router.get("/backup2")
 def analistas_backup2(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db)
-:
+):
     """
     Endpoint de respaldo 2 - Sin autenticación, consulta simple
     """
@@ -292,14 +296,14 @@ def analistas_backup2(
             "message": "Error en endpoint backup2"
         }
 
-router.get("/emergency")
+@router.get("/emergency")
 def analistas_emergency(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db)
-:
+):
     """
     Endpoint de emergencia para analistas SIN autenticación
     Usar solo cuando el endpoint principal falle
@@ -381,7 +385,7 @@ def analistas_emergency(
             "message": "Error en endpoint de emergencia"
         }
 
-router.get("/")
+@router.get("/")
 def listar_analistas(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
@@ -389,7 +393,7 @@ def listar_analistas(
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Listar analistas CON autenticación (endpoint principal)
     """
@@ -445,14 +449,14 @@ def listar_analistas(
             detail=f"Error obteniendo analistas: {str(e)}"
         )
 
-router.get("/list-no-auth")
+@router.get("/list-no-auth")
 def listar_analistas_no_auth(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db)
-:
+):
     """
     Listar analistas SIN autenticación (para testing)
     """
@@ -489,7 +493,7 @@ def listar_analistas_no_auth(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al listar analistas: {str(e)}")
 
-router.get("/", response_model=AnalistaListResponse)
+@router.get("/", response_model=AnalistaListResponse)
 def listar_asesores(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
@@ -497,7 +501,7 @@ def listar_asesores(
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Listar todos los asesores con paginación y filtros
     """
@@ -564,19 +568,19 @@ def listar_asesores(
         logger.error(f"Error en endpoint principal: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error al listar asesores: {str(e)}")
 
-router.get("/test-activos")
+@router.get("/test-activos")
 def test_asesores_activos():
     """
     Endpoint de prueba para diagnosticar problemas
     """
     return {"mensaje": "Endpoint de asesores funcionando", "status": "ok"}
 
-router.get("/activos")
+@router.get("/activos")
 def listar_asesores_activos(
     db: Session = Depends(get_db)
     # TEMPORALMENTE SIN AUTENTICACIÓN PARA DROPDOWNS
     # current_user: User = Depends(get_current_user)
-:
+):
     """
     Listar solo asesores activos (para formularios)
 
@@ -590,12 +594,12 @@ def listar_asesores_activos(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al listar asesores activos: {str(e)}")
 
-router.get("/{asesor_id}", response_model=AnalistaResponse)
+@router.get("/{asesor_id}", response_model=AnalistaResponse)
 def obtener_asesor(
     asesor_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Obtener un asesor por ID
     """
@@ -606,12 +610,12 @@ def obtener_asesor(
 
     return AnalistaResponse.model_validate(asesor)
 
-router.post("/crear", response_model=AnalistaResponse)
+@router.post("/crear", response_model=AnalistaResponse)
 def crear_asesor(
     asesor_data: AnalistaCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Crear un nuevo asesor
     """
@@ -642,13 +646,13 @@ def crear_asesor(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al crear asesor: {str(e)}")
 
-router.put("/{asesor_id}", response_model=AnalistaResponse)
+@router.put("/{asesor_id}", response_model=AnalistaResponse)
 def actualizar_asesor(
     asesor_id: int,
     asesor_data: AnalistaUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Actualizar un asesor existente
     """
@@ -683,12 +687,12 @@ def actualizar_asesor(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al actualizar asesor: {str(e)}")
 
-router.delete("/{asesor_id}")
+@router.delete("/{asesor_id}")
 def eliminar_asesor(
     asesor_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Eliminar un analista (HARD DELETE - borrado completo de BD)
     """
