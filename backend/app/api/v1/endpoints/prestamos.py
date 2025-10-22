@@ -8,6 +8,11 @@ from app.models.prestamo import Prestamo
 from app.models.cliente import Cliente
 from app.schemas.prestamo import PrestamoCreate, PrestamoUpdate, PrestamoResponse
 
+# Constantes de cálculo de fechas
+DAYS_PER_WEEK = 7
+DAYS_PER_QUINCENA = 15
+DAYS_PER_MONTH = 30
+
 router = APIRouter()
 
 
@@ -16,9 +21,9 @@ def calcular_proxima_fecha_pago(fecha_inicio: datetime, modalidad: str, cuotas_p
     if modalidad == "SEMANAL":
         return fecha_inicio + timedelta(weeks=cuotas_pagadas + 1)
     elif modalidad == "QUINCENAL":
-        return fecha_inicio + timedelta(days=15 * (cuotas_pagadas + 1))
+        return fecha_inicio + timedelta(days=DAYS_PER_QUINCENA * (cuotas_pagadas + 1))
     else:  # MENSUAL
-        return fecha_inicio + timedelta(days=30 * (cuotas_pagadas + 1))
+        return fecha_inicio + timedelta(days=DAYS_PER_MONTH * (cuotas_pagadas + 1))
 
 
 @router.post("/", response_model=PrestamoResponse, status_code=201)

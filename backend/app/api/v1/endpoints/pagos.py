@@ -16,14 +16,15 @@ import os
 import uuid
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-router = APIRouter()
-
-# CONFIGURACIÓN DE ARCHIVOS
+# Constantes de configuración de archivos
 UPLOAD_DIR = Path("uploads/pagos")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.pdf'}
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+MAX_FILE_SIZE_MB = 5
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
 
 @router.post("/crear", response_model=PagoResponse, status_code=status.HTTP_201_CREATED)
 async def crear_pago(
@@ -82,7 +83,7 @@ async def subir_documento(
         
         # Validar tamaño
         file_content = await file.read()
-        if len(file_content) > MAX_FILE_SIZE:
+        if len(file_content) > MAX_FILE_SIZE_BYTES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Archivo demasiado grande. Máximo 5MB"

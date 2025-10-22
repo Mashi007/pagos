@@ -9,15 +9,20 @@ import logging
 from typing import Dict, Any
 import asyncio
 
+# Constantes de configuración
+CACHE_DURATION_SECONDS = 30
+TABLES_TO_DROP = [
+    "pagos",
+    "prestamos", 
+    "notificaciones",
+    "aprobaciones",
+    "auditorias",
+    "clientes",
+    "users"
+]
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-# Cache para evitar múltiples checks de DB
-_last_db_check: Dict[str, Any] = {
-    "timestamp": None,
-    "status": True,
-    "cache_duration": 30  # segundos
-}
 
 
 def check_database_cached() -> bool:
@@ -198,15 +203,7 @@ async def initialize_database(db: Session = Depends(get_db)):
         # PASO 1: Eliminar tablas
         logger.info("🗑️  Eliminando tablas...")
         
-        tables_to_drop = [
-            "pagos",
-            "prestamos",
-            "notificaciones",
-            "aprobaciones",
-            "auditorias",
-            "clientes",
-            "users"
-        ]
+        tables_to_drop = TABLES_TO_DROP
         
         for table in tables_to_drop:
             try:
