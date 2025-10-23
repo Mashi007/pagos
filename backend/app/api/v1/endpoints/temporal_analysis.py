@@ -5,6 +5,8 @@ Identifica problemas relacionados con tiempo y sincronización
 
 import logging
 import threading
+import time
+import statistics
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from collections import deque, defaultdict
@@ -13,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
-from app.core.security import create_access_token
+from app.core.security import create_access_token, decode_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -380,12 +382,12 @@ temporal_system = TemporalAnalysisSystem()
 # ENDPOINTS TEMPORALES
 # ============================================
 
-router.post("/log-timing-event")
+@router.post("/log-timing-event")
 async def log_timing_event_endpoint(
     event_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⏰ Registrar evento de timing
     """
@@ -415,12 +417,12 @@ async def log_timing_event_endpoint(
             "error": str(e)
         }
 
-router.post("/analyze-token-timing")
+@router.post("/analyze-token-timing")
 async def analyze_token_timing_endpoint(
     token_data: Dict[str, str],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔍 Analizar timing específico de un token
     """
@@ -447,11 +449,11 @@ async def analyze_token_timing_endpoint(
             "error": str(e)
         }
 
-router.get("/clock-synchronization")
+@router.get("/clock-synchronization")
 async def get_clock_synchronization_analysis(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🕐 Análisis de sincronización de reloj
     """
@@ -472,11 +474,11 @@ async def get_clock_synchronization_analysis(
             "error": str(e)
         }
 
-router.get("/temporal-correlations")
+@router.get("/temporal-correlations")
 async def get_temporal_correlations_analysis(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔗 Análisis de correlaciones temporales
     """
@@ -497,11 +499,11 @@ async def get_temporal_correlations_analysis(
             "error": str(e)
         }
 
-router.get("/temporal-summary")
+@router.get("/temporal-summary")
 async def get_temporal_summary_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Resumen temporal general
     """
