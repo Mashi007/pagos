@@ -1,14 +1,18 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Sistema Comparativo de Análisis Diferencial
+Sistema Comparativo de Análisis Diferencial
 Compara casos exitosos vs fallidos para identificar diferencias específicas
 """
 
+import logging
 import threading
+import statistics
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from collections import deque, defaultdict
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -482,12 +486,12 @@ comparative_system = ComparativeAnalysisSystem()
 # ENDPOINTS COMPARATIVOS
 # ============================================
 
-router.post("/log-successful-case")
+@router.post("/log-successful-case")
 async def log_successful_case_endpoint(
     case_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ✅ Registrar caso exitoso para análisis comparativo
     """
@@ -508,12 +512,12 @@ async def log_successful_case_endpoint(
             "error": str(e)
         }
 
-router.post("/log-failed-case")
+@router.post("/log-failed-case")
 async def log_failed_case_endpoint(
     case_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ❌ Registrar caso fallido para análisis comparativo
     """
@@ -534,12 +538,12 @@ async def log_failed_case_endpoint(
             "error": str(e)
         }
 
-router.post("/differential-analysis")
+@router.post("/differential-analysis")
 async def perform_differential_analysis_endpoint(
     analysis_request: Dict[str, str],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Realizar análisis diferencial completo
     """
@@ -561,11 +565,11 @@ async def perform_differential_analysis_endpoint(
             "error": str(e)
         }
 
-router.get("/comparative-summary")
+@router.get("/comparative-summary")
 async def get_comparative_summary_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📈 Resumen comparativo general
     """
