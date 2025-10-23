@@ -8,10 +8,12 @@ from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+import jwt
+from jwt import JWTError
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
-from app.core.security import create_access_token
+from app.core.security import create_access_token, decode_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -202,11 +204,11 @@ async def verificar_token_detallado(
             "error": str(e)
         }
 
-router.get("/token-info")
+@router.get("/token-info")
 async def obtener_info_token(
     request: Request,
     db: Session = Depends(get_db)
-:
+):
     """
     📊 Información básica del token actual
     """
@@ -263,10 +265,10 @@ async def obtener_info_token(
             "error": str(e)
         }
 
-router.post("/generate-test-token")
+@router.post("/generate-test-token")
 async def generar_token_prueba(
     db: Session = Depends(get_db)
-:
+):
     """
     🧪 Generar token de prueba para testing
     """
