@@ -1,19 +1,23 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoint de Análisis de Impacto en Performance
 Proporciona métricas y análisis de impacto del sistema
 """
-from fastapi import APIRouter, status
+
+import logging
+import time
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
+from app.core.impact_monitoring import get_impact_analyzer, get_error_analyzer
 
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-router.get("/health", response_model=Dict[str, Any])
+@router.get("/health", response_model=Dict[str, Any])
 async def get_health_impact_analysis_public():
     """
     Obtener análisis de impacto de health checks (PÚBLICO)
@@ -38,10 +42,10 @@ async def get_health_impact_analysis_public():
             detail=f"Error obteniendo análisis de health: {str(e)}"
         )
 
-router.get("/impact/health", response_model=Dict[str, Any])
+@router.get("/impact/health", response_model=Dict[str, Any])
 async def get_health_impact_analysis(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Obtener análisis de impacto de health checks
 
@@ -65,10 +69,10 @@ async def get_health_impact_analysis(
             detail=f"Error obteniendo análisis de health: {str(e)}"
         )
 
-router.get("/impact/performance", response_model=Dict[str, Any])
+@router.get("/impact/performance", response_model=Dict[str, Any])
 async def get_performance_impact_analysis(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Obtener análisis de impacto en performance
 
@@ -92,10 +96,10 @@ async def get_performance_impact_analysis(
             detail=f"Error obteniendo análisis de performance: {str(e)}"
         )
 
-router.get("/impact/errors", response_model=Dict[str, Any])
+@router.get("/impact/errors", response_model=Dict[str, Any])
 async def get_error_impact_analysis(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Obtener análisis de impacto de errores
 
@@ -126,10 +130,10 @@ async def get_error_impact_analysis(
             detail=f"Error obteniendo análisis de errores: {str(e)}"
         )
 
-router.get("/impact/comprehensive", response_model=Dict[str, Any])
+@router.get("/impact/comprehensive", response_model=Dict[str, Any])
 async def get_comprehensive_impact_analysis(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Obtener análisis integral de impacto del sistema
 
@@ -178,10 +182,10 @@ async def get_comprehensive_impact_analysis(
             detail=f"Error obteniendo análisis integral: {str(e)}"
         )
 
-router.post("/impact/monitoring/start")
+@router.post("/impact/monitoring/start")
 async def start_impact_monitoring(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Iniciar monitoreo de impacto del sistema
 
@@ -209,10 +213,10 @@ async def start_impact_monitoring(
             detail=f"Error iniciando monitoreo: {str(e)}"
         )
 
-router.post("/impact/monitoring/stop")
+@router.post("/impact/monitoring/stop")
 async def stop_impact_monitoring(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Detener monitoreo de impacto del sistema
 
