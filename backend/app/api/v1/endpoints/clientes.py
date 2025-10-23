@@ -8,10 +8,13 @@ from typing import Optional, List, Dict, Any, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Path
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 from app.api.deps import get_db, get_current_user, require_permission, Permission
 from app.models.cliente import Cliente
 from app.models.user import User
+from app.models.auditoria import Auditoria
+from app.core.constants import TipoAccion
 from app.schemas.cliente import (
     ClienteResponse, 
     ClienteCreate, 
@@ -51,7 +54,7 @@ def registrar_auditoria_cliente(
     datos_anteriores: dict = None,
     datos_nuevos: dict = None,
     descripcion: str = ""
-:
+):
     """Registrar auditoría para operaciones de cliente - VERSIÓN LIGERA"""
     try:
         # ✅ OPTIMIZACIÓN: Solo serializar si es necesario y simplificar datos
@@ -90,8 +93,8 @@ def registrar_auditoria_cliente(
 # ENDPOINTS DE CONSULTA
 # ============================================
 
-router.get("", response_model=dict)
-router.get("/", response_model=dict)
+@router.get("", response_model=dict)
+@router.get("/", response_model=dict)
 def listar_clientes(
     # Paginación
     page: int = Query(1, ge=1, description="Número de página"),
@@ -105,7 +108,7 @@ def listar_clientes(
 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📋 Listar clientes con paginación y filtros
 
@@ -207,12 +210,12 @@ def listar_clientes(
             detail="Error interno del servidor"
         )
 
-router.get("/{cliente_id}", response_model=ClienteResponse)
+@router.get("/{cliente_id}", response_model=ClienteResponse)
 def obtener_cliente(
     cliente_id: int = Path(..., description="ID del cliente"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     👤 Obtener cliente por ID
 
@@ -247,13 +250,13 @@ def obtener_cliente(
 # ENDPOINTS DE CREACIÓN
 # ============================================
 
-router.post("", response_model=ClienteResponse, status_code=201)
-router.post("/", response_model=ClienteResponse, status_code=201)
+@router.post("", response_model=ClienteResponse, status_code=201)
+@router.post("/", response_model=ClienteResponse, status_code=201)
 def crear_cliente(
     cliente_data: ClienteCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ➕ Crear nuevo cliente
 
@@ -397,12 +400,12 @@ def crear_cliente(
             detail="Error interno del servidor"
         )
 
-router.post("/confirmar-duplicado", response_model=ClienteResponse, status_code=201)
+@router.post("/confirmar-duplicado", response_model=ClienteResponse, status_code=201)
 def crear_cliente_con_confirmacion(
     request_data: ClienteCreateWithConfirmation,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ➕ Crear cliente con confirmación de duplicado
 
@@ -485,13 +488,13 @@ def crear_cliente_con_confirmacion(
 # ENDPOINTS DE ACTUALIZACIÓN
 # ============================================
 
-router.put("/{cliente_id}", response_model=ClienteResponse)
+@router.put("/{cliente_id}", response_model=ClienteResponse)
 def actualizar_cliente(
     cliente_id: int = Path(..., description="ID del cliente"),
     cliente_data: ClienteUpdate = ...,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ✏️ Actualizar cliente
 
@@ -572,12 +575,12 @@ def actualizar_cliente(
 # ENDPOINTS DE ELIMINACIÓN
 # ============================================
 
-router.delete("/{cliente_id}")
+@router.delete("/{cliente_id}")
 def eliminar_cliente(
     cliente_id: int = Path(..., description="ID del cliente"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🗑️ Eliminar cliente (hard delete)
 
@@ -675,11 +678,11 @@ def eliminar_cliente(
 #         )
 
 # ENDPOINT TEMPORAL CON DATOS MOCK PARA EVITAR ERROR 503
-router.get("/buscar-cedula/{cedula}", response_model=ClienteResponse)
+@router.get("/buscar-cedula/{cedula}", response_model=ClienteResponse)
 def buscar_cliente_por_cedula(
     cedula: str = Path(..., description="Cédula del cliente"),
     db: Session = Depends(get_db)
-:
+):
     """
     🔍 Buscar cliente por cédula - DATOS MOCK TEMPORALES
     """

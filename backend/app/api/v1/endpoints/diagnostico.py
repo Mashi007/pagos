@@ -259,7 +259,7 @@ def monitoreo_tiempo_real(db: Session = Depends(get_db)):
             "message": "Error en monitoreo del sistema"
         }
 
-router.get("/logs")
+@router.get("/logs")
 def obtener_logs_sistema():
     """
     📝 Obtener información de logs del sistema

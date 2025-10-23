@@ -65,14 +65,14 @@ def crear_prestamo(
 
     return db_prestamo
 
-router.get("/", response_model=List[PrestamoResponse])
+@router.get("/", response_model=List[PrestamoResponse])
 def listar_prestamos(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=1000),
     cliente_id: int = Query(None),
     estado: str = Query(None),
     db: Session = Depends(get_db)
-:
+):
     """Listar préstamos con filtros"""
     query = db.query(Prestamo)
 
@@ -85,7 +85,7 @@ def listar_prestamos(
     prestamos = query.offset(skip).limit(limit).all()
     return prestamos
 
-router.get("/{prestamo_id}", response_model=PrestamoResponse)
+@router.get("/{prestamo_id}", response_model=PrestamoResponse)
 def obtener_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     """Obtener un préstamo por ID"""
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
@@ -93,12 +93,12 @@ def obtener_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
     return prestamo
 
-router.put("/{prestamo_id}", response_model=PrestamoResponse)
+@router.put("/{prestamo_id}", response_model=PrestamoResponse)
 def actualizar_prestamo(
     prestamo_id: int,
     prestamo_data: PrestamoUpdate,
     db: Session = Depends(get_db)
-:
+):
     """Actualizar datos de un préstamo"""
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:
@@ -142,7 +142,7 @@ def actualizar_prestamo(
 #         raise HTTPException(status_code=500, detail=f"Error al obtener estadísticas: {str(e)}")
 
 # ENDPOINT TEMPORAL CON DATOS MOCK PARA EVITAR ERROR 503
-router.get("/stats")
+@router.get("/stats")
 def obtener_estadisticas_prestamos(db: Session = Depends(get_db)):
     """Obtener estadísticas de préstamos - DATOS MOCK TEMPORALES"""
     try:

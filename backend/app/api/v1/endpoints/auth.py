@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Request, R
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.security import verify_password, get_password_hash, create_refresh_token
+from app.core.security import verify_password, get_password_hash, create_refresh_token, create_access_token
 from app.schemas.auth import (
     LoginRequest,
     Token,
@@ -23,6 +23,7 @@ from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
+from app.utils.validators import validate_password_strength
 
 logger = logging.getLogger(__name__)
 
@@ -58,13 +59,13 @@ def add_cors_headers(request: Request, response: Response) -> None:
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
     response.headers["Access-Control-Allow-Credentials"] = "true"
 
-router.post("/login", response_model=LoginResponse)
+@router.post("/login", response_model=LoginResponse)
 async def login(
     request: Request,
     response: Response,
     login_data: LoginRequest,
     db: Session = Depends(get_db)
-:
+):
     """
     🔐 Login de usuario - VERSIÓN SIMPLIFICADA
 
@@ -122,12 +123,12 @@ async def login(
             detail="Error interno del servidor"
         )
 
-router.get("/me", response_model=UserMeResponse)
+@router.get("/me", response_model=UserMeResponse)
 async def get_current_user_info(
     request: Request,
     response: Response,
     current_user: User = Depends(get_current_user)
-:
+):
     """
     👤 Obtener información del usuario actual
     """
@@ -144,12 +145,12 @@ async def get_current_user_info(
             detail="Error interno del servidor"
         )
 
-router.post("/logout")
+@router.post("/logout")
 async def logout(
     request: Request,
     response: Response,
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🚪 Logout de usuario
     """
@@ -168,13 +169,13 @@ async def logout(
             detail="Error interno del servidor"
         )
 
-router.post("/refresh", response_model=Token)
+@router.post("/refresh", response_model=Token)
 async def refresh_token(
     request: Request,
     response: Response,
     refresh_data: RefreshTokenRequest,
     db: Session = Depends(get_db)
-:
+):
     """
     🔄 Refrescar token de acceso
     """
@@ -198,14 +199,14 @@ async def refresh_token(
             detail="Error interno del servidor"
         )
 
-router.post("/change-password")
+@router.post("/change-password")
 async def change_password(
     request: Request,
     response: Response,
     password_data: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
-:
+):
     """
     🔑 Cambiar contraseña
     """
@@ -247,7 +248,7 @@ async def change_password(
             detail="Error interno del servidor"
         )
 
-router.options("/{path:path}")
+@router.options("/{path:path}")
 async def options_handler(request: Request, response: Response, path: str):
     """
     Manejar requests OPTIONS para CORS

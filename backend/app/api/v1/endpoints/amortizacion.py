@@ -3,6 +3,7 @@
 Endpoints para gestión de amortización y cuotas
 """
 from datetime import datetime, date, timedelta
+from decimal import Decimal
 from typing import Optional, List, Dict, Any, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -201,12 +202,12 @@ def recalcular_mora(
             detail=f"Error al recalcular mora: {str(e)}"
         )
 
-router.get("/prestamo/{prestamo_id}/estado-cuenta", response_model=EstadoCuentaResponse)
+@router.get("/prestamo/{prestamo_id}/estado-cuenta", response_model=EstadoCuentaResponse)
 def obtener_estado_cuenta(
     prestamo_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-:
+):
     """
     Obtiene el estado de cuenta completo de un préstamo
     Incluye resumen, cuotas pagadas, pendientes, vencidas y próximas
@@ -275,13 +276,13 @@ def obtener_estado_cuenta(
         historial_pagos=[]  # TODO: Implementar cuando tengamos endpoint de pagos
     )
 
-router.post("/prestamo/{prestamo_id}/proyeccion-pago", response_model=ProyeccionPagoResponse)
+@router.post("/prestamo/{prestamo_id}/proyeccion-pago", response_model=ProyeccionPagoResponse)
 def proyectar_pago(
     prestamo_id: int,
     request: ProyeccionPagoRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-:
+):
     """
     Proyecta cómo se aplicaría un pago sobre las cuotas pendientes
     No realiza el pago, solo muestra la simulación
@@ -352,12 +353,12 @@ def proyectar_pago(
         mensaje=f"El pago de {request.monto_pago} afectaría {len(cuotas_afectadas)} cuota(s)"
     )
 
-router.get("/prestamo/{prestamo_id}/informacion-adicional")
+@router.get("/prestamo/{prestamo_id}/informacion-adicional")
 def obtener_informacion_adicional(
     prestamo_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-:
+):
     """
     Obtener información adicional de la tabla de amortización
     - Cuotas pagadas / Total
@@ -446,12 +447,12 @@ def obtener_informacion_adicional(
         "estados_detalle": estados_cuotas
     }
 
-router.get("/prestamo/{prestamo_id}/tabla-visual")
+@router.get("/prestamo/{prestamo_id}/tabla-visual")
 def obtener_tabla_visual(
     prestamo_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-:
+):
     """
     Obtener tabla de amortización en formato visual como el diagrama
     """

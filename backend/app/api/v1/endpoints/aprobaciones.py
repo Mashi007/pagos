@@ -1,18 +1,18 @@
 """
+Endpoints de Aprobaciones
+Sistema de workflow para solicitudes que requieren aprobación
+"""
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-Endpoints de Aprobaciones
-Sistema de workflow para solicitudes que requieren aprobación
-"""
-from fastapi import APIRouter, status
-
+from pydantic import BaseModel
 
 from app.core.constants import EstadoAprobacion
-
-from pydantic import BaseModel
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
+from app.models.aprobacion import Aprobacion
 
 router = APIRouter()
 
@@ -77,7 +77,7 @@ def crear_aprobacion(
 
     return aprobacion
 
-router.get("/", response_model=List[AprobacionResponse])
+@router.get("/", response_model=List[AprobacionResponse])
 def listar_aprobaciones(
     estado: Optional[str] = None,
     tipo_solicitud: Optional[str] = None,
@@ -85,7 +85,7 @@ def listar_aprobaciones(
     limit: int = 100,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """Listar aprobaciones con filtros"""
     query = db.query(Aprobacion)
 
@@ -98,12 +98,12 @@ def listar_aprobaciones(
     aprobaciones = query.offset(skip).limit(limit).all()
     return aprobaciones
 
-router.get("/{aprobacion_id}", response_model=AprobacionResponse)
+@router.get("/{aprobacion_id}", response_model=AprobacionResponse)
 def obtener_aprobacion(
     aprobacion_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """Obtener aprobación por ID"""
     aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
 
@@ -115,13 +115,13 @@ def obtener_aprobacion(
 
     return aprobacion
 
-router.put("/{aprobacion_id}", response_model=AprobacionResponse)
+@router.put("/{aprobacion_id}", response_model=AprobacionResponse)
 def actualizar_aprobacion(
     aprobacion_id: int,
     aprobacion_update: AprobacionUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """Aprobar o rechazar una solicitud"""
     aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
 
@@ -160,12 +160,12 @@ def actualizar_aprobacion(
 
     return aprobacion
 
-router.delete("/{aprobacion_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{aprobacion_id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_aprobacion(
     aprobacion_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """Eliminar una solicitud de aprobación"""
     aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
 

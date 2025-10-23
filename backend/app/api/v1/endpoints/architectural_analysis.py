@@ -4,13 +4,17 @@ Identifica fallas en componentes específicos del sistema
 """
 import logging
 import threading
+import time
+from collections import defaultdict
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.security import create_access_token
+from app.core.security import create_access_token, decode_token
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
 
 # Import condicional de psutil
 try:
@@ -577,12 +581,12 @@ architectural_system = ArchitecturalAnalysisSystem()
 # ENDPOINTS ARQUITECTURALES
 # ============================================
 
-router.get("/component-health/{component_id}")
+@router.get("/component-health/{component_id}")
 async def get_component_health(
     component_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🏗️ Obtener salud de componente específico
     """
@@ -609,11 +613,11 @@ async def get_component_health(
             "error": str(e)
         }
 
-router.get("/all-components-health")
+@router.get("/all-components-health")
 async def get_all_components_health(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🏗️ Obtener salud de todos los componentes
     """
@@ -635,11 +639,11 @@ async def get_all_components_health(
             "error": str(e)
         }
 
-router.get("/component-dependencies")
+@router.get("/component-dependencies")
 async def get_component_dependencies(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔗 Análisis de dependencias entre componentes
     """
@@ -660,11 +664,11 @@ async def get_component_dependencies(
             "error": str(e)
         }
 
-router.get("/architectural-summary")
+@router.get("/architectural-summary")
 async def get_architectural_summary_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Resumen arquitectural general
     """
@@ -685,12 +689,12 @@ async def get_architectural_summary_endpoint(
             "error": str(e)
         }
 
-router.post("/force-component-check/{component_id}")
+@router.post("/force-component-check/{component_id}")
 async def force_component_health_check(
     component_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔄 Forzar verificación de salud de componente
     """

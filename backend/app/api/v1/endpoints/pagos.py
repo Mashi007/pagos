@@ -69,12 +69,12 @@ async def crear_pago(
             detail=f"Error interno del servidor: {str(e)}"
         )
 
-router.post("/subir-documento", status_code=status.HTTP_200_OK)
+@router.post("/subir-documento", status_code=status.HTTP_200_OK)
 async def subir_documento(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """Subir documento de pago"""
     try:
         # Validar tipo de archivo
@@ -121,7 +121,7 @@ async def subir_documento(
             detail=f"Error interno del servidor: {str(e)}"
         )
 
-router.get("/listar", response_model=PagoListResponse)
+@router.get("/listar", response_model=PagoListResponse)
 async def listar_pagos(
     pagina: int = Query(1, ge=1, description="Número de página"),
     por_pagina: int = Query(20, ge=1, le=1000, description="Elementos por página"),
@@ -129,7 +129,7 @@ async def listar_pagos(
     conciliado: Optional[bool] = Query(None, description="Filtrar por estado de conciliación"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """Listar pagos con filtros"""
     try:
         query = db.query(Pago).filter(Pago.activo )
@@ -164,11 +164,11 @@ async def listar_pagos(
             detail=f"Error interno del servidor: {str(e)}"
         )
 
-router.get("/kpis", response_model=KPIsPagos)
+@router.get("/kpis", response_model=KPIsPagos)
 async def obtener_kpis_pagos(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """Obtener KPIs de pagos"""
     try:
         # KPIs básicos
@@ -198,12 +198,12 @@ async def obtener_kpis_pagos(
             detail=f"Error interno del servidor: {str(e)}"
         )
 
-router.get("/resumen-cliente/{cedula}", response_model=ResumenCliente)
+@router.get("/resumen-cliente/{cedula}", response_model=ResumenCliente)
 async def obtener_resumen_cliente(
     cedula: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """Obtener resumen de pagos por cliente"""
     try:
         # Filtrar pagos del cliente
@@ -253,11 +253,11 @@ async def obtener_resumen_cliente(
             detail=f"Error interno del servidor: {str(e)}"
         )
 
-router.get("/descargar-documento/{filename}")
+@router.get("/descargar-documento/{filename}")
 async def descargar_documento(
     filename: str,
     current_user: User = Depends(get_current_user)
-:
+):
     """Descargar documento de pago"""
     try:
         file_path = UPLOAD_DIR / filename
