@@ -1,12 +1,17 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Dashboard de Diagnóstico en Tiempo Real
+Dashboard de Diagnóstico en Tiempo Real
 Sistema de monitoreo y auditoría para problemas de autenticación
 """
+
+import logging
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from collections import deque, defaultdict
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request, Response
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
+from app.core.config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -80,10 +85,10 @@ class AuditLogger:
             "time_range": "last_60_minutes"
         }
 
-router.get("/dashboard")
+@router.get("/dashboard")
 async def dashboard_diagnostico(
     db: Session = Depends(get_db)
-:
+):
     """
     📊 Dashboard principal de diagnóstico
     """
@@ -151,11 +156,11 @@ async def dashboard_diagnostico(
             "error": str(e)
         }
 
-router.get("/logs")
+@router.get("/logs")
 async def obtener_logs_auditoria(
     minutes: int = 60,
     limit: int = 100
-:
+):
     """
     📝 Obtener logs de auditoría
     """
@@ -189,10 +194,10 @@ async def obtener_logs_auditoria(
             "error": str(e)
         }
 
-router.get("/health-check")
+@router.get("/health-check")
 async def health_check_detallado(
     db: Session = Depends(get_db)
-:
+):
     """
     🏥 Health check detallado del sistema
     """
@@ -273,7 +278,7 @@ async def health_check_detallado(
             "error": str(e)
         }
 
-router.post("/clear-logs")
+@router.post("/clear-logs")
 async def limpiar_logs_auditoria():
     """
     🧹 Limpiar logs de auditoría
