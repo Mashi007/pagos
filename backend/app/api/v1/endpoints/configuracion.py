@@ -7,9 +7,10 @@ Gestión de parámetros, tasas, límites y ajustes generales.
 import logging
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_user
@@ -69,7 +70,7 @@ def obtener_estado_monitoreo(
 @router.post("/monitoreo/habilitar")
 def habilitar_monitoreo_basico(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⚡ Habilitar monitoreo básico sin dependencias externas
     """
@@ -119,7 +120,7 @@ def obtener_configuracion_completa(
     categoria: Optional[str] = Query(None, description="Filtrar por categoría"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔧 Obtener configuración completa del sistema para el frontend
     """
@@ -334,7 +335,7 @@ def obtener_configuracion_validadores():
 @router.post("/validadores/probar")
 def probar_validadores(
     datos_prueba: Dict[str, Any]
-:
+):
     """
     🧪 Probar validadores con datos de ejemplo
     """
@@ -386,7 +387,7 @@ def obtener_configuracion_categoria(
     categoria: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📋 Obtener configuración de una categoría específica
     """
@@ -431,7 +432,7 @@ def actualizar_configuracion_sistema(
     configuraciones: Dict[str, Dict[str, Any]],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ✏️ Actualizar configuraciones del sistema
 
@@ -530,7 +531,7 @@ def probar_integracion(
     categoria: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🧪 Probar integración de una categoría específica
     """
@@ -560,7 +561,7 @@ def probar_integracion(
 def obtener_estado_servicios(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Obtener estado de todos los servicios configurados
     """
@@ -620,7 +621,7 @@ def obtener_estado_servicios(
 def inicializar_configuraciones_default(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔧 Inicializar configuraciones por defecto del sistema
     """
@@ -668,7 +669,7 @@ def inicializar_configuraciones_default(
 def obtener_configuracion_ia(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🤖 Obtener configuración de Inteligencia Artificial
     """
@@ -744,7 +745,7 @@ def actualizar_configuracion_ia(
     chatbot_enabled: Optional[bool] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🤖 Actualizar configuración de IA
     """
@@ -810,7 +811,7 @@ def actualizar_configuracion_ia(
 def obtener_configuracion_email(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📧 Obtener configuración de email
     """
@@ -880,7 +881,7 @@ def actualizar_configuracion_email(
     templates_enabled: Optional[bool] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📧 Actualizar configuración de email
     """
@@ -929,7 +930,7 @@ def actualizar_configuracion_email(
 def obtener_configuracion_whatsapp(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📱 Obtener configuración de WhatsApp
     """
@@ -988,7 +989,7 @@ def obtener_configuracion_whatsapp(
 def dashboard_configuracion_sistema(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Dashboard principal de configuración del sistema
     """
@@ -1162,7 +1163,7 @@ _config_cache: Dict[str, Any] = {
 @router.get("/general")
 def obtener_configuracion_general(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📋 Obtener configuración general del sistema
     """
@@ -1172,7 +1173,7 @@ def obtener_configuracion_general(
 def actualizar_configuracion_general(
     config: ConfiguracionGeneral,
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔧 Actualizar configuración general del sistema
     """
@@ -1193,7 +1194,7 @@ def actualizar_configuracion_general(
 @router.get("/tasas")
 def obtener_configuracion_tasas(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Obtener configuración de tasas de interés.
     """
@@ -1203,7 +1204,7 @@ def obtener_configuracion_tasas(
 def actualizar_configuracion_tasas(
     config: ConfiguracionTasas,
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Actualizar configuración de tasas de interés.
     Solo accesible para ADMIN.
@@ -1227,7 +1228,7 @@ def actualizar_configuracion_tasas(
 @router.get("/limites")
 def obtener_configuracion_limites(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Obtener configuración de límites de préstamos.
     """
@@ -1237,7 +1238,7 @@ def obtener_configuracion_limites(
 def actualizar_configuracion_limites(
     config: ConfiguracionLimites,
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Actualizar configuración de límites.
     Solo accesible para ADMIN.
@@ -1276,7 +1277,7 @@ def actualizar_configuracion_limites(
 @router.get("/notificaciones")
 def obtener_configuracion_notificaciones(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Obtener configuración de notificaciones.
     """
@@ -1286,7 +1287,7 @@ def obtener_configuracion_notificaciones(
 def actualizar_configuracion_notificaciones(
     config: ConfiguracionNotificaciones,
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Actualizar configuración de notificaciones.
     Solo accesible para ADMIN y GERENTE.
@@ -1312,7 +1313,7 @@ def actualizar_configuracion_notificaciones(
 @router.get("/general")
 def obtener_configuracion_general(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Obtener configuración general del sistema.
     """
@@ -1322,7 +1323,7 @@ def obtener_configuracion_general(
 def actualizar_configuracion_general(
     config: ConfiguracionGeneral,
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Actualizar configuración general.
     Solo accesible para ADMIN.
@@ -1350,7 +1351,7 @@ def actualizar_configuracion_general(
 @router.get("/completa")
 def obtener_configuracion_cache(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Obtener toda la configuración del sistema desde caché.
     """
@@ -1365,7 +1366,7 @@ def obtener_configuracion_cache(
 def restablecer_configuracion_defecto(
     seccion: str,  # tasas, limites, notificaciones, general, todo
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Restablecer configuración a valores por defecto.
     Solo accesible para ADMIN.
@@ -1432,7 +1433,7 @@ def calcular_cuota_ejemplo(
     plazo_meses: int,
     tasa_personalizada: Optional[float] = None,
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Calcular cuota mensual con la configuración actual de tasas.
     """
@@ -1480,7 +1481,7 @@ def validar_limites_cliente(
     monto_solicitado: float,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Validar si un cliente puede solicitar un nuevo préstamo según límites configurados.
     """
