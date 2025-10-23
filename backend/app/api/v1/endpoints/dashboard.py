@@ -5,8 +5,9 @@ Dashboards interactivos específicos por rol de usuario
 import logging
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
+from decimal import Decimal
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc, asc
+from sqlalchemy import func, desc, asc, and_, or_
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api.deps import get_db, get_current_user
@@ -16,6 +17,7 @@ from app.models.analista import Analista
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.pago import Pago
+from app.models.notificacion import Notificacion
 
 router = APIRouter()
 
@@ -217,11 +219,11 @@ def dashboard_administrador(
         "alertas_criticas": alertas_criticas
     }
 
-router.get("/cobranzas")
+@router.get("/cobranzas")
 def dashboard_cobranzas(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     💰 DASHBOARD COBRANZAS - ACCESO COMPLETO (EXCEPTO GESTIÓN DE USUARIOS)
     ✅ Acceso: TODO el sistema (excepto gestión de usuarios)
@@ -363,11 +365,11 @@ def dashboard_cobranzas(
         }
     }
 
-router.get("/comercial")
+@router.get("/comercial")
 def dashboard_comercial(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     👔 DASHBOARD USER - SOLO SUS CLIENTES
     ⚠️ Acceso: SOLO SUS CLIENTES
@@ -535,12 +537,12 @@ def dashboard_comercial(
         ]
     }
 
-router.get("/analista")
+@router.get("/analista")
 def dashboard_analista(
     analista_id: Optional[int] = Query(None, description="ID del analista de configuración (default: usuario actual)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     👤 DASHBOARD USER - SOLO SUS CLIENTES
     ⚠️ Acceso: SOLO SUS CLIENTES
@@ -652,10 +654,10 @@ def dashboard_analista(
         ]
     }
 
-router.get("/matriz-acceso-roles")
+@router.get("/matriz-acceso-roles")
 def obtener_matriz_acceso_roles(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📋 Matriz de acceso actualizada por roles
     """
@@ -742,14 +744,14 @@ def obtener_matriz_acceso_roles(
         }
     }
 
-router.get("/por-rol")
+@router.get("/por-rol")
 def dashboard_por_rol(
     filtro_fecha: Optional[str] = Query("mes", description="dia, semana, mes, año"),
     filtro_analista: Optional[int] = Query(None, description="Filtrar por analista específico"),
     filtro_estado: Optional[str] = Query(None, description="AL_DIA, MORA, TODOS"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🎨 Dashboard adaptativo según rol del usuario actual
     IMPLEMENTA MATRIZ DE ACCESO POR ROL:
@@ -777,7 +779,7 @@ def dashboard_por_rol(
 
     return dashboard_data
 
-router.get("/datos-graficos/{tipo_grafico}")
+@router.get("/datos-graficos/{tipo_grafico}")
 def obtener_datos_grafico(
     tipo_grafico: str,
     periodo: Optional[str] = Query("mes", description="dia, semana, mes, año"),
@@ -785,7 +787,7 @@ def obtener_datos_grafico(
     filtro_modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Obtener datos específicos para gráficos interactivos
     Soporta tooltips y drill-down
@@ -857,11 +859,11 @@ def obtener_datos_grafico(
         
         raise HTTPException(status_code=400, detail="Tipo de gráfico no soportado")
 
-router.get("/configuracion-dashboard")
+@router.get("/configuracion-dashboard")
 def obtener_configuracion_dashboard(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⚙️ Configuración del dashboard interactivo
     """
@@ -899,11 +901,11 @@ def obtener_configuracion_dashboard(
         }
     }
 
-router.get("/alertas-tiempo-real")
+@router.get("/alertas-tiempo-real")
 def obtener_alertas_tiempo_real(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔔 Alertas en tiempo real para el dashboard
     """
@@ -983,7 +985,7 @@ def _get_dashboards_disponibles(is_admin: bool) -> List[str]:
 # CARACTERÍSTICAS INTERACTIVAS
 # ============================================
 
-router.get("/tabla-detalle/{componente}")
+@router.get("/tabla-detalle/{componente}")
 def obtener_detalle_tabla(
     componente: str,
     filtros: Optional[str] = Query(None, description="Filtros JSON"),
@@ -991,7 +993,7 @@ def obtener_detalle_tabla(
     page_size: int = Query(10, ge=1, le=50),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📋 Obtener detalle de tabla al hacer click en gráfico
     """
@@ -1075,14 +1077,14 @@ def obtener_detalle_tabla(
         
         raise HTTPException(status_code=400, detail="Componente no soportado")
 
-router.post("/exportar-vista")
+@router.post("/exportar-vista")
 async def exportar_vista_dashboard(
     tipo_vista: str,
     formato: str = Query("excel", description="excel, pdf, png, csv"),
     filtros: Optional[Dict[str, Any]] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📤 Exportar cualquier vista del dashboard
     """
@@ -1140,12 +1142,12 @@ async def exportar_vista_dashboard(
         
         raise HTTPException(status_code=500, detail="Dependencias de exportación no instaladas")
 
-router.get("/tiempo-real/actualizacion")
+@router.get("/tiempo-real/actualizacion")
 def obtener_actualizacion_tiempo_real(
     componentes: Optional[str] = Query(None, description="Componentes a actualizar (separados por coma)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⚡ Actualización en tiempo real de componentes específicos
     """
