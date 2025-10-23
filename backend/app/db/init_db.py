@@ -1,4 +1,8 @@
 # backend/app/db/init_db.py
+"""
+Database initialization module for the loan management system.
+This module handles database setup, migrations, and admin user creation.
+"""
 import logging
 import os
 import subprocess
