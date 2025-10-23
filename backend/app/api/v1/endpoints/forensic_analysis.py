@@ -1,15 +1,18 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Sistema Forense de Análisis de Logs y Trazas
+Sistema Forense de Análisis de Logs y Trazas
 Reconstruye la secuencia exacta de eventos que llevan al error 401
 """
 
+import logging
 import uuid
 import threading
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from collections import deque, defaultdict
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -356,12 +359,12 @@ forensic_system = ForensicTraceSystem()
 # ENDPOINTS FORENSES
 # ============================================
 
-router.post("/start-trace")
+@router.post("/start-trace")
 async def start_forensic_trace(
     trace_data: Dict[str, str],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔍 Iniciar sesión de trazado forense
     """
@@ -385,12 +388,12 @@ async def start_forensic_trace(
             "error": str(e)
         }
 
-router.post("/log-auth-event")
+@router.post("/log-auth-event")
 async def log_auth_event_endpoint(
     event_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📝 Registrar evento de autenticación para análisis forense
     """
@@ -419,12 +422,12 @@ async def log_auth_event_endpoint(
             "error": str(e)
         }
 
-router.get("/analyze-failure/{session_id}")
+@router.get("/analyze-failure/{session_id}")
 async def analyze_failure_sequence(
     session_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔍 Analizar secuencia fallida específica
     """
@@ -445,11 +448,11 @@ async def analyze_failure_sequence(
             "error": str(e)
         }
 
-router.get("/forensic-summary")
+@router.get("/forensic-summary")
 async def get_forensic_summary_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Resumen forense general
     """
@@ -470,13 +473,13 @@ async def get_forensic_summary_endpoint(
             "error": str(e)
         }
 
-router.post("/end-trace/{session_id}")
+@router.post("/end-trace/{session_id}")
 async def end_forensic_trace(
     session_id: str,
     success_data: Dict[str, bool],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ✅ Finalizar sesión de trazado forense
     """
