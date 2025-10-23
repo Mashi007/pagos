@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, relationship
 from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
 from functools import lru_cache
 
