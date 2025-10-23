@@ -361,7 +361,7 @@ async def trace_authentication_flow(
             "steps": tracer.steps
         }
 
-router.get("/analyze-correlation")
+@router.get("/analyze-correlation")
 async def analyze_request_correlation(
     request: Request,
     minutes: int = 60
@@ -451,7 +451,7 @@ async def analyze_request_correlation(
             "error": str(e)
         }
 
-router.get("/detect-anomalies")
+@router.get("/detect-anomalies")
 async def detect_authentication_anomalies():
     """
     🚨 Detección de patrones anómalos en autenticación
@@ -546,7 +546,7 @@ async def detect_authentication_anomalies():
             "error": str(e)
         }
 
-router.get("/flow-timeline")
+@router.get("/flow-timeline")
 async def get_authentication_timeline(
     minutes: int = 30,
     limit: int = 50
