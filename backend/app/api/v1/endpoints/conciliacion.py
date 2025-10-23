@@ -19,6 +19,12 @@ from app.models.user import User
 from app.models.pago import Pago
 from app.models.amortizacion import Cuota
 from app.models.conciliacion import Conciliacion
+from app.models.cliente import Cliente
+from app.models.prestamo import Prestamo
+from app.models.auditoria import Auditoria
+from app.models.notificacion import Notificacion
+from app.core.constants import TipoAccion
+from app.db.session import SessionLocal
 from app.schemas.conciliacion import (
     ConciliacionCreate,
     ConciliacionResponse,
@@ -249,7 +255,7 @@ def matching_automatico(
     movimientos: List[MovimientoBancarioExtendido],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Realizar matching automático avanzado con prioridades:
     1° Cédula + Monto exacto
@@ -377,7 +383,7 @@ def confirmar_conciliacion(
     pago_id: int,
     referencia_bancaria: str,
     db: Session = Depends(get_db)
-:
+):
     """
     Confirma manualmente la conciliación de un pago.
     """
@@ -400,7 +406,7 @@ def obtener_pendientes_conciliacion(
     fecha_inicio: Optional[date] = None,
     fecha_fin: Optional[date] = None,
     db: Session = Depends(get_db)
-:
+):
     """
     Obtiene pagos pendientes de conciliar.
     """
@@ -431,7 +437,7 @@ def reporte_conciliacion(
     mes: int,
     anio: int,
     db: Session = Depends(get_db)
-:
+):
     """
     Genera reporte mensual de conciliación.
     """
@@ -472,7 +478,7 @@ def procesar_revision_manual(
     revision: RevisionManual,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Procesar revisión manual de movimiento bancario
     """
@@ -554,7 +560,7 @@ def aplicar_conciliacion_masiva(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Aplicar conciliación masiva de movimientos
     """
@@ -620,7 +626,7 @@ def obtener_historial_conciliaciones(
     usuario: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Obtener historial de conciliaciones procesadas
     """
@@ -671,7 +677,7 @@ def obtener_tabla_resultados(
     proceso_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Obtener tabla de resultados visual como el diagrama
     """
@@ -759,7 +765,7 @@ async def flujo_completo_conciliacion(
     archivo: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🏦 FLUJO COMPLETO DE CONCILIACIÓN BANCARIA MASIVA
 
@@ -923,7 +929,7 @@ async def aplicar_coincidencias_exactas(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🚀 PASO 11a: Aplicar solo coincidencias exactas automáticamente
     """
@@ -959,7 +965,6 @@ async def aplicar_coincidencias_exactas(
                 })
 
         # Registrar en auditoría
-        , TipoAccion
         auditoria = Auditoria.registrar(
             usuario_id=current_user.id,
             accion=TipoAccion.CREAR.value,
@@ -1026,7 +1031,7 @@ def obtener_paso_flujo_conciliacion(
     proceso_id: Optional[str] = Query(None, description="ID del proceso de conciliación"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📋 INFORMACIÓN DETALLADA DE CADA PASO DEL FLUJO
     """
@@ -1181,7 +1186,7 @@ async def _generar_reporte_conciliacion_completo(
     user_id: int,
     pagos_creados: List[dict],
     total_monto: float
-:
+):
     """
     📄 PASO 13: Generar reporte PDF de conciliación
     """
@@ -1216,7 +1221,7 @@ async def _notificar_admin_conciliacion(
     usuario_proceso: str,
     pagos_aplicados: int,
     total_monto: float
-:
+):
     """
     🔔 PASO 15: Notificar a Admin sobre conciliación completada
     """
