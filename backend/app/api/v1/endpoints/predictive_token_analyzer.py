@@ -4,6 +4,7 @@ Predice problemas de autenticación antes de que ocurran
 """
 
 import logging
+import statistics
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from collections import deque, defaultdict
@@ -12,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
-from app.core.security import create_access_token
+from app.core.security import create_access_token, decode_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -260,12 +261,12 @@ predictive_analyzer = TokenPredictiveAnalyzer()
 # ENDPOINTS DE ANÁLISIS PREDICTIVO
 # ============================================
 
-router.post("/analyze-token")
+@router.post("/analyze-token")
 async def analyze_token_predictive(
     token_data: Dict[str, str],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔮 Análisis predictivo completo de un token
     """
@@ -292,11 +293,11 @@ async def analyze_token_predictive(
             "error": str(e)
         }
 
-router.get("/predict-system-failures")
+@router.get("/predict-system-failures")
 async def predict_system_failures_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔮 Predicción de fallas del sistema
     """
@@ -317,12 +318,12 @@ async def predict_system_failures_endpoint(
             "error": str(e)
         }
 
-router.get("/user-patterns/{user_id}")
+@router.get("/user-patterns/{user_id}")
 async def analyze_user_patterns(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     👤 Análisis de patrones de uso de un usuario específico
     """
@@ -363,7 +364,7 @@ async def analyze_user_patterns(
             "error": str(e)
         }
 
-router.get("/token-health-check")
+@router.get("/token-health-check")
 async def token_health_check():
     """
     🏥 Verificación de salud de tokens en el sistema
