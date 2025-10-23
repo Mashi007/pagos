@@ -82,7 +82,7 @@ def generate_cache_key(
     limit: int = 100, 
     activo: Optional[bool] = None, 
     search: Optional[str] = None
- -> str:
+) -> str:
     """
     Generar clave única para el cache basada en parámetros
 

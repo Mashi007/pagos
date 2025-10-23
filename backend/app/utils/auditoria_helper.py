@@ -27,7 +27,7 @@ def registrar_auditoria(
     user_agent: Optional[str] = None,
     resultado: str = "EXITOSO",
     mensaje_error: Optional[str] = None
- -> Auditoria:
+) -> Auditoria:
     """
     Registrar una acción en la auditoría del sistema
 

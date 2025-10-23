@@ -1,17 +1,17 @@
 # backend/app/services/whatsapp_service.py
+"""
+Servicio para envío de mensajes WhatsApp usando Meta Developers API.
+"""
+import logging
+import aiohttp
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-"
-Servicio para envío de mensajes WhatsApp usando Meta Developers API.
-"
-import aiohttp
-from typing import Dict, Any
 
 from app.db.session import SessionLocal
- EstadoNotificacion
+from app.core.config import settings
+from app.models.notificacion import EstadoNotificacion
 
 logger = logging.getLogger(__name__)
 

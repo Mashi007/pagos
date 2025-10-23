@@ -1,15 +1,16 @@
 # backend/app/services/validators_service.py
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-"
+"""
 Servicio de Validadores y Auto-Formateo
 Sistema completo para validar y corregir formatos incorrectos de datos
-"
-time, timedelta
- InvalidOperation
+"""
+import logging
+import time
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from decimal import Decimal, InvalidOperation
+from sqlalchemy.orm import Session
+from sqlalchemy import func, desc, asc
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 logger = logging.getLogger(__name__)
 

@@ -383,7 +383,7 @@ def validate_monto_vs_ingreso(
     monto_cuota: Decimal,
     ingreso_mensual: Decimal,
     max_percentage: Decimal = Decimal(str(MAX_PERCENTAGE_INGRESO))
- -> bool:
+) -> bool:
     """
     Valida que el monto de cuota no supere un porcentaje del ingreso
 

@@ -43,7 +43,7 @@ def calculate_payment_dates(
     start_date: date,
     num_payments: int,
     frequency: str = "MENSUAL"
- -> List[date]:
+) -> List[date]:
     """
     Calcula las fechas de vencimiento de pagos
 
