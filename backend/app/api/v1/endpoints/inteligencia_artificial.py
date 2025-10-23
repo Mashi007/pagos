@@ -151,7 +151,7 @@ def calcular_scoring_masivo_cartera(
         # Obtener clientes
         query = db.query(Cliente)
         if solo_activos:
-            query = query.filter(Cliente.activo )
+            query = query.filter(Cliente.activo == True)
 
         clientes = query.limit(limite).all()
 
@@ -222,19 +222,19 @@ def predecir_mora_cliente(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error prediciendo mora: {str(e)}")
 
-router.get("/clientes-riesgo")
+@router.get("/clientes-riesgo")
 def listar_clientes_alto_riesgo(
     limite: int = Query(50, ge=1, le=200),
     umbral_riesgo: float = Query(0.5, ge=0.1, le=0.9, description="Umbral de probabilidad de mora"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🚨 Listar clientes con alto riesgo de mora
     """
     try:
         clientes_activos = db.query(Cliente).filter(
-            Cliente.activo ,
+            Cliente.activo == True,
             Cliente.estado_financiero == "AL_DIA"
         ).limit(limite * 2).all()  # Obtener más para filtrar
 
@@ -296,7 +296,7 @@ def obtener_recomendaciones_cobranza(
     cliente_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     💡 Recomendaciones inteligentes de estrategia de cobranza
     """
@@ -324,7 +324,7 @@ def optimizar_condiciones_prestamo(
     ingresos_mensuales: Decimal = Query(..., gt=0, description="Ingresos mensuales"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🎯 Optimizar condiciones de préstamo basado en perfil del cliente
     """
@@ -376,7 +376,7 @@ def generar_mensaje_chatbot(
     canal: str = Query("WHATSAPP", description="WHATSAPP, EMAIL, SMS, LLAMADA"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🤖 Generar mensaje personalizado con IA para cobranza
     """
@@ -417,7 +417,7 @@ def analisis_predictivo_cartera(
     horizonte_meses: int = Query(6, ge=1, le=24, description="Meses a futuro para análisis"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📈 Análisis predictivo completo de la cartera
     """
@@ -451,7 +451,7 @@ router.get("/detectar-anomalias")
 def detectar_anomalias_sistema(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔍 Detectar anomalías y patrones inusuales en la cartera
     """
@@ -486,13 +486,13 @@ router.get("/dashboard-ia")
 def dashboard_inteligencia_artificial(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🤖 Dashboard principal de Inteligencia Artificial
     """
     try:
         # Métricas de IA en tiempo real
-        total_clientes = db.query(Cliente).filter(Cliente.activo ).count()
+        total_clientes = db.query(Cliente).filter(Cliente.activo == True).count()
 
         # Simular métricas de ML (en producción serían reales)
         metricas_ia = {
@@ -676,7 +676,7 @@ def _identificar_alertas_criticas(analisis: Dict) -> List[str]:
 router.get("/verificacion-ia")
 def verificar_sistema_ia(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔍 Verificación completa del sistema de IA implementado
     """
