@@ -168,7 +168,7 @@ async def solicitar_modificacion_pago_completo(
     archivo_evidencia: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⚠️ COBRANZAS: Solicitar modificación de pago con formulario completo
 
@@ -283,7 +283,7 @@ async def solicitar_anulacion_pago_completo(
     archivo_evidencia: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⚠️ COBRANZAS: Solicitar anulación de pago con formulario completo
     """
@@ -370,7 +370,7 @@ def solicitar_modificacion_pago(
     justificacion: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⚠️ COBRANZAS: Solicitar modificación de monto de pago
     """
@@ -417,7 +417,7 @@ def solicitar_anulacion_pago(
     revertir_amortizacion: bool = True,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⚠️ COBRANZAS: Solicitar anulación de pago
     """
@@ -465,7 +465,7 @@ def solicitar_modificacion_amortizacion(
     justificacion: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⚠️ COBRANZAS: Solicitar modificación de tabla de amortización
     """
@@ -517,7 +517,7 @@ def solicitar_edicion_cliente_comercial(
     justificacion: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⚠️ USER: Solicitar autorización para editar cliente
     """
@@ -569,7 +569,7 @@ def solicitar_edicion_cliente_propio(
     justificacion: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⚠️ USER: Solicitar autorización para editar SUS clientes asignados
     """
@@ -629,7 +629,7 @@ def listar_solicitudes_pendientes(
     page_size: int = Query(20, ge=1, le=1000),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📋 Listar solicitudes pendientes de aprobación (Solo Admin)
     """
@@ -677,7 +677,7 @@ async def aprobar_solicitud(
     comentarios: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ✅ Aprobar solicitud (Solo Admin)
     """
@@ -719,7 +719,7 @@ async def rechazar_solicitud(
     comentarios: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ❌ Rechazar solicitud (Solo Admin)
     """
@@ -757,7 +757,7 @@ def listar_mis_solicitudes(
     estado: Optional[str] = Query(None, description="PENDIENTE, APROBADA, RECHAZADA"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📋 Ver mis solicitudes enviadas
     """
@@ -840,7 +840,7 @@ def _ejecutar_accion_aprobada(solicitud: Aprobacion, db: Session) -> Dict[str, A
 def estadisticas_solicitudes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Estadísticas de solicitudes de aprobación
     """
@@ -892,7 +892,7 @@ def estadisticas_solicitudes(
 def dashboard_aprobaciones(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Dashboard visual completo del sistema de aprobaciones
     """
@@ -1037,7 +1037,7 @@ def dashboard_aprobaciones(
 @router.get("/matriz-permisos")
 def obtener_matriz_permisos_actualizada(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📋 Obtener matriz de permisos actualizada con sistema de aprobaciones
     """
@@ -1140,7 +1140,7 @@ async def _notificar_nueva_solicitud_admin(solicitud: Aprobacion, db: Session):
  **Fecha límite:** {solicitud.fecha_limite}
 
  **Justificación:**
-solicitud.justificacion}
+{solicitud.justificacion}
 
  **Acciones:**
  Ver detalles: /solicitudes/pendientes
@@ -1284,7 +1284,7 @@ async def _notificar_resultado_solicitud(solicitud: Aprobacion, db: Session):
             prioridad="ALTA",
             titulo=f"{emoji} Solicitud {solicitud.estado.lower()} - {solicitud.tipo_solicitud}",
             mensaje=f"""
-emoji} **Solicitud {solicitud.estado.lower()}**
+{emoji} **Solicitud {solicitud.estado.lower()}**
 
  **Detalles:**
  **Tipo:** {solicitud.tipo_solicitud}
@@ -1293,9 +1293,9 @@ emoji} **Solicitud {solicitud.estado.lower()}**
  **Fecha de revisión:** {solicitud.fecha_revision}
 
  **Comentarios del revisor:**
-solicitud.comentarios_revisor or 'Sin comentarios adicionales'}
+{solicitud.comentarios_revisor or 'Sin comentarios adicionales'}
 
-'🎉 **La acción solicitada ha sido ejecutada exitosamente.**' if solicitud.estado == 'APROBADA' else '⚠️ **La solicitud no fue aprobada. Revise los comentarios del revisor.**'}
+{'🎉 **La acción solicitada ha sido ejecutada exitosamente.**' if solicitud.estado == 'APROBADA' else '⚠️ **La solicitud no fue aprobada. Revise los comentarios del revisor.**'}
             """,
             extra_data=str({
                 "solicitud_id": solicitud.id,

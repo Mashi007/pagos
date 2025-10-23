@@ -629,7 +629,7 @@ def generar_reporte_personalizado(
 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔍 Generador de reportes personalizados con filtros
     """
@@ -754,9 +754,14 @@ async def reporte_mensual_cartera_pdf(
     - Proyecciones
     """
     try:
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import letter, A4
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib import colors
+        from reportlab.platypus import (
             SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         )
-        time
+        import time
 
         # Establecer período
         if not mes:
@@ -892,6 +897,11 @@ async def reporte_asesor_pdf(
     - Cartera asignada
     """
     try:
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import letter, A4
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib import colors
+        from reportlab.platypus import (
             SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         )
 
