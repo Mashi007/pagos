@@ -1,15 +1,13 @@
 # backend/app/models/amortizacion.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Modelo de Cuota/Amortización
 Representa cada cuota de un préstamo con su detalle de capital, interés y saldos
 """
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from decimal import Decimal
 from sqlalchemy import Column, Integer, String, Numeric, Date, ForeignKey, DateTime, Boolean, Table
-
+from sqlalchemy.orm import Session, relationship
 from sqlalchemy.sql import func
 
 from app.db.session import Base
@@ -215,4 +213,4 @@ pago_cuotas = Table(
     Column('aplicado_a_interes', Numeric(12, 2), default=Decimal("0.00")),
     Column('aplicado_a_mora', Numeric(12, 2), default=Decimal("0.00")),
     Column('creado_en', DateTime(timezone=True), server_default=func.now())
-
+)

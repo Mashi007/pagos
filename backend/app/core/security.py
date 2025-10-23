@@ -4,7 +4,7 @@ Sistema de seguridad: JWT, hashing de passwords, tokens y dependencias de FastAP
 import jwt
 from datetime import datetime, timedelta
 from typing import Optional, Any
-from jwt import JWTError
+from jwt import PyJWTError
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer
 from app.core.config import settings
@@ -85,14 +85,14 @@ def decode_token(token: str) -> dict:
     Decodifica y valida un token JWT
 
     Raises:
-        JWTError: Si el token es inválido o expiró
+        PyJWTError: Si el token es inválido o expiró
     """
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
         return payload
-    except JWTError as e:
-        # Re-lanza JWTError para que el manejador de excepciones de FastAPI lo capture
-        raise JWTError(f"Error decodificando token: {str(e)}")
+    except PyJWTError as e:
+        # Re-lanza PyJWTError para que el manejador de excepciones de FastAPI lo capture
+        raise PyJWTError(f"Error decodificando token: {str(e)}")
 
 # -------------------------------------------------------------
 # DEPENDENCIAS DE AUTENTICACIÓN PARA FASTAPI (ELIMINADAS - DUPLICADAS)
@@ -111,7 +111,7 @@ def verify_token_type(token: str, expected_type: str) -> bool:
     try:
         payload = decode_token(token)
         return payload.get("type") == expected_type
-    except JWTError:
+    except PyJWTError:
         return False
 
 def validate_password_strength(password: str) -> tuple[bool, str]:
@@ -160,5 +160,5 @@ def verify_password_reset_token(token: str) -> Optional[str]:
         if payload.get("type") != "password_reset":
             return None
         return payload.get("sub")
-    except JWTError:
+    except PyJWTError:
         return None
