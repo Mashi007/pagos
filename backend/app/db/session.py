@@ -2,9 +2,12 @@
 """
 SQLAlchemy configuration: Engine, SessionLocal and Base.
 """
+import logging
 from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from fastapi import HTTPException
+from app.core.config import settings
 
 # CORRECTO: Importar desde app.core.config
 
@@ -33,12 +36,14 @@ engine = create_engine(
         "application_name": "rapicredit_backend",
         "options": f"-c statement_timeout={DEFAULT_STATEMENT_TIMEOUT}"  # Timeout de queries
     }
+)
 
 # SessionLocal para crear sesiones de BD
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
     bind=engine
+)
 
 # Base para los modelos
 Base = declarative_base()
