@@ -435,7 +435,7 @@ async def generar_estado_cuenta_pdf(
 async def generar_tabla_amortizacion_pdf(
     cliente_id: int,
     db: Session = Depends(get_db)
-:
+):
     """
     2. Tabla de amortización por cliente (PDF)
     - Plan de pagos completo
@@ -546,7 +546,7 @@ async def generar_tabla_amortizacion_pdf(
 async def reporte_cobranza_diaria_pdf(
     fecha: Optional[date] = Query(None, description="Fecha del reporte (default: hoy)"),
     db: Session = Depends(get_db)
-:
+):
     """
     2. Reporte de cobranza diaria (PDF/Excel)
     - Pagos recibidos hoy
@@ -745,7 +745,7 @@ async def reporte_mensual_cartera_pdf(
     anio: Optional[int] = Query(None, description="Año"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     4. Reporte mensual de cartera (PDF)
     - KPIs del mes
@@ -882,7 +882,7 @@ async def reporte_asesor_pdf(
     fecha_fin: Optional[date] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     5. Reporte por asesor (PDF)
     - Clientes del asesor
@@ -1021,7 +1021,7 @@ async def reporte_asesor_pdf(
 @router.get("/verificacion-reportes-pdf")
 def verificar_reportes_pdf_implementados(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📋 Verificación completa de reportes PDF implementados
     """
