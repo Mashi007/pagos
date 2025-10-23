@@ -48,15 +48,15 @@ def dashboard_administrador(
 
     # KPIs PRINCIPALES (reutilizar del endpoint existente)
     cartera_total = db.query(func.sum(Cliente.total_financiamiento)).filter(
-        Cliente.activo , Cliente.total_financiamiento.isnot(None)
+        Cliente.activo == True, Cliente.total_financiamiento.isnot(None)
     ).scalar() or Decimal('0')
 
     clientes_al_dia = db.query(Cliente).filter(
-        Cliente.activo , Cliente.dias_mora == 0
+        Cliente.activo == True, Cliente.dias_mora == 0
     ).count()
 
     clientes_en_mora = db.query(Cliente).filter(
-        Cliente.activo , Cliente.dias_mora > 0
+        Cliente.activo == True, Cliente.dias_mora > 0
     ).count()
 
     tasa_morosidad = (clientes_en_mora / (clientes_al_dia + clientes_en_mora) * 100) if (clientes_al_dia + clientes_en_mora) > 0 else 0
@@ -133,7 +133,7 @@ def dashboard_administrador(
             Cliente.fecha_registro >= inicio_mes
         )
     ).filter(
-        User.is_admin ,
+        User.is_admin == True,
     ).group_by(User.id, User.nombre, User.apellido).order_by(
         func.count(Cliente.id).desc()
     ).limit(5).all()
@@ -150,7 +150,7 @@ def dashboard_administrador(
 
     # ALERTAS CRÍTICAS
     clientes_criticos = db.query(Cliente).filter(
-        Cliente.activo ,
+        Cliente.activo == True,
         Cliente.dias_mora > 30
     ).order_by(Cliente.dias_mora.desc()).limit(5).all()
 
@@ -253,7 +253,7 @@ def dashboard_cobranzas(
     ).count()
 
     clientes_mora = db.query(Cliente).filter(
-        Cliente.activo , Cliente.dias_mora > 0
+        Cliente.activo == True, Cliente.dias_mora > 0
     ).count()
 
     # COBROS DIARIOS (últimos 30 días)
@@ -275,7 +275,7 @@ def dashboard_cobranzas(
 
     # CLIENTES A CONTACTAR HOY (prioridad por días de mora)
     clientes_contactar = db.query(Cliente).filter(
-        Cliente.activo ,
+        Cliente.activo == True,
         or_(
             Cliente.dias_mora > 0,  # En mora
             and_(  # Vencen hoy
@@ -389,7 +389,7 @@ def dashboard_comercial(
     inicio_mes = hoy.replace(day=1)
 
     # Todos los usuarios tienen acceso completo
-    filtro_clientes = Cliente.activo 
+    filtro_clientes = Cliente.activo == True
 
     # KPIs - TODOS LOS CLIENTES
     mis_clientes_total = db.query(Cliente).filter(filtro_clientes).count()
@@ -430,7 +430,7 @@ def dashboard_comercial(
         func.sum(Cliente.total_financiamiento).label('monto')
     ).filter(
         Cliente.fecha_registro >= inicio_mes,
-        Cliente.activo ,
+        Cliente.activo == True,
         Cliente.modelo_vehiculo.isnot(None)
     ).group_by(Cliente.modelo_vehiculo, Cliente.marca_vehiculo).order_by(
         func.count(Cliente.id).desc()
@@ -447,7 +447,7 @@ def dashboard_comercial(
         Analista.id == Cliente.analista_id,
         Cliente.fecha_registro >= inicio_mes
     )).filter(
-        Analista.activo 
+        Analista.activo == True
     ).group_by(Analista.id, Analista.nombre, Analista.apellido).order_by(
         func.count(Cliente.id).desc()
     ).all()
@@ -464,7 +464,7 @@ def dashboard_comercial(
 
     # ÚLTIMAS VENTAS REGISTRADAS
     ultimas_ventas = db.query(Cliente).filter(
-        Cliente.activo 
+        Cliente.activo == True
     ).order_by(Cliente.fecha_registro.desc()).limit(10).all()
 
     return {
@@ -558,7 +558,7 @@ def dashboard_analista(
 
     # Dashboard general del sistema (todos los clientes)
     mis_clientes = db.query(Cliente).filter(
-        Cliente.activo 
+        Cliente.activo == True
     ).all()
 
     total_clientes = len(mis_clientes)
@@ -593,8 +593,8 @@ def dashboard_analista(
         func.count(Cliente.id).label('total_clientes'),
         func.sum(Cliente.total_financiamiento).label('monto_total')
     ).outerjoin(Cliente, Analista.id == Cliente.analista_id).filter(
-        Analista.activo ,
-        Cliente.activo 
+        Analista.activo == True,
+        Cliente.activo == True
     ).group_by(Analista.id, Analista.nombre, Analista.apellido).order_by(
         func.count(Cliente.id).desc()
     ).all()
@@ -801,7 +801,7 @@ def obtener_datos_grafico(
             mes_fecha = hoy.replace(day=1) - timedelta(days=30 * i)
             # Simulación de datos históricos
             cartera_mes = db.query(func.sum(Cliente.total_financiamiento)).filter(
-                Cliente.activo 
+                Cliente.activo == True
             ).scalar() or Decimal('0')
 
             datos.append({
@@ -817,10 +817,10 @@ def obtener_datos_grafico(
 
     elif tipo_grafico == "distribucion_mora":
         # Gráfico de dona/pie para distribución
-        al_dia = db.query(Cliente).filter(Cliente.activo , Cliente.dias_mora == 0).count()
-        mora_1_30 = db.query(Cliente).filter(Cliente.activo , Cliente.dias_mora.between(1, 30)).count()
-        mora_31_60 = db.query(Cliente).filter(Cliente.activo , Cliente.dias_mora.between(31, 60)).count()
-        mora_60_plus = db.query(Cliente).filter(Cliente.activo , Cliente.dias_mora > 60).count()
+        al_dia = db.query(Cliente).filter(Cliente.activo == True, Cliente.dias_mora == 0).count()
+        mora_1_30 = db.query(Cliente).filter(Cliente.activo == True, Cliente.dias_mora.between(1, 30)).count()
+        mora_31_60 = db.query(Cliente).filter(Cliente.activo == True, Cliente.dias_mora.between(31, 60)).count()
+        mora_60_plus = db.query(Cliente).filter(Cliente.activo == True, Cliente.dias_mora > 60).count()
 
         return {
             "tipo": "doughnut",
@@ -886,7 +886,7 @@ def obtener_configuracion_dashboard(
             "analistaes": [
                 {"id": u.id, "nombre": u.full_name}
                 for u in db.query(User).filter(
-                    User.is_active 
+                    User.is_active == True
                 ).all()
             ]
         },
@@ -929,7 +929,7 @@ def obtener_alertas_tiempo_real(
 
     # Clientes críticos (>30 días mora)
     clientes_criticos = db.query(Cliente).filter(
-        Cliente.activo ,
+        Cliente.activo == True,
         Cliente.dias_mora > 30
     ).count()
 
@@ -1043,7 +1043,7 @@ def obtener_detalle_tabla(
     elif componente == "clientes_mora":
         # Detalle de clientes en mora
         query = db.query(Cliente).filter(
-            Cliente.activo ,
+            Cliente.activo == True,
             Cliente.dias_mora > 0
         )
 
