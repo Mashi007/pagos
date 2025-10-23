@@ -123,6 +123,7 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
+)
 
 # Configurar rate limiter en app state - TEMPORALMENTE DESACTIVADO
 # app.state.limiter = limiter
