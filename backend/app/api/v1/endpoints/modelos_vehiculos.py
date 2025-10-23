@@ -90,7 +90,7 @@ def listar_modelos_activos(
     db: Session = Depends(get_db)
     # TEMPORALMENTE SIN AUTENTICACIÓN PARA DROPDOWNS
     # current_user: User = Depends(get_current_user)
-:
+):
     """
     📋 Listar solo modelos de vehículos activos (para formularios)
     """
@@ -113,7 +113,7 @@ def obtener_modelo_vehiculo(
     modelo_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔍 Obtener un modelo de vehículo por ID
     """
@@ -138,7 +138,7 @@ def crear_modelo_vehiculo(
     modelo_data: ModeloVehiculoCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ➕ Crear un nuevo modelo de vehículo
     """
@@ -181,7 +181,7 @@ def actualizar_modelo_vehiculo(
     modelo_data: ModeloVehiculoUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ✏️ Actualizar un modelo de vehículo existente
     """
@@ -232,7 +232,7 @@ def eliminar_modelo_vehiculo(
     modelo_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🗑️ Eliminar un modelo de vehículo (HARD DELETE - borrado completo de BD)
     """

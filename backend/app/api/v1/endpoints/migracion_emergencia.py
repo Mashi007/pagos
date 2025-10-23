@@ -8,11 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-router.post("/ejecutar-migracion-concesionario-analista")
+@router.post("/ejecutar-migracion-concesionario-analista")
 async def ejecutar_migracion_emergencia(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Endpoint de emergencia para ejecutar la migración de concesionario y analista
     """
@@ -20,7 +20,7 @@ async def ejecutar_migracion_emergencia(
         logger.info(f"Ejecutando migración de emergencia - Usuario: {current_user.email}")
 
         # Verificar si las columnas ya existen
-        , inspect
+        from sqlalchemy import inspect
         inspector = inspect(db.bind)
         columns = [col['name'] for col in inspector.get_columns('clientes')]
 
