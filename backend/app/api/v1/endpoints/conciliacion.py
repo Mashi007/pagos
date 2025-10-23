@@ -1230,8 +1230,8 @@ async def _notificar_admin_conciliacion(
 
         # Obtener administradores
         admins = db.query(User).filter(
-            User.is_admin ,
-            User.is_active ,
+            User.is_admin == True,
+            User.is_active == True,
             User.email.isnot(None)
         ).all()
 
