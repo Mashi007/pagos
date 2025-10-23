@@ -119,11 +119,11 @@ async def procesar_notificaciones_automaticas(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error iniciando procesamiento: {str(e)}")
 
-router.get("/estado-procesamiento")
+@router.get("/estado-procesamiento")
 def obtener_estado_procesamiento(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Obtener estado actual del procesamiento de notificaciones
     """
@@ -212,7 +212,7 @@ def obtener_historial_notificaciones(
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📋 Historial completo de notificaciones con filtros avanzados
 
@@ -322,12 +322,12 @@ def obtener_historial_notificaciones(
 # CONFIGURACIÓN DE PREFERENCIAS POR CLIENTE
 # ============================================
 
-router.get("/cliente/{cliente_id}/preferencias")
+@router.get("/cliente/{cliente_id}/preferencias")
 def obtener_preferencias_cliente(
     cliente_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🎯 Obtener preferencias de notificación de un cliente específico
     """
@@ -387,7 +387,7 @@ def actualizar_preferencias_cliente(
     canal_preferido: CanalNotificacion,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ✏️ Actualizar preferencias de notificación del cliente
 

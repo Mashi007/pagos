@@ -1,21 +1,25 @@
 # backend/app/api/v1/endpoints/scheduler_notificaciones.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Endpoints para Scheduler de Notificaciones Automáticas
+Endpoints para Scheduler de Notificaciones Automáticas
 Configuración y gestión del cron job de notificaciones
 """
 
-time, time
-from pydantic import BaseModel
+import logging
+import time
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
+
+from app.services.notification_multicanal_service import notification_scheduler
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-from app.services.notification_multicanal_service import notification_scheduler
 
 # ============================================
 # SCHEMAS PARA SCHEDULER
@@ -127,12 +131,12 @@ def configurar_scheduler(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error configurando scheduler: {str(e)}")
 
-router.get("/logs")
+@router.get("/logs")
 def obtener_logs_scheduler(
     limite: int = 100,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📋 Obtener logs del scheduler de notificaciones
     """
@@ -183,12 +187,12 @@ def obtener_logs_scheduler(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo logs: {str(e)}")
 
-router.post("/ejecutar-ahora")
+@router.post("/ejecutar-ahora")
 async def ejecutar_scheduler_manual(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ▶️ Ejecutar scheduler manualmente (fuera del horario programado)
     """
@@ -216,11 +220,11 @@ async def ejecutar_scheduler_manual(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error ejecutando scheduler: {str(e)}")
 
-router.get("/estado")
+@router.get("/estado")
 def obtener_estado_scheduler(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Obtener estado actual del scheduler
     """
@@ -317,11 +321,11 @@ def _generar_expresion_cron(config: ConfiguracionScheduler) -> str:
 # ENDPOINT DE VERIFICACIÓN
 # ============================================
 
-router.get("/verificacion-completa")
+@router.get("/verificacion-completa")
 def verificar_sistema_notificaciones_completo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔍 Verificación completa del sistema de notificaciones multicanal
     """

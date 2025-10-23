@@ -1,21 +1,18 @@
 # backend/app/services/notification_multicanal_service.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Servicio de Notificaciones Multicanal
 Sistema 100% automático de notificaciones por Email + WhatsApp
 Sin IA - Basado en templates y reglas de negocio
 """
+
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Any
-
 from enum import Enum
 
+from sqlalchemy.orm import Session
 from app.models.amortizacion import Cuota
-
+from app.models.notificacion import Notificacion
 from app.services.email_service import EmailService
 from app.services.whatsapp_service import WhatsAppService
 

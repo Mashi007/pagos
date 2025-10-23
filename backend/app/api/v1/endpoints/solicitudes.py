@@ -17,11 +17,7 @@ from sqlalchemy import func
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
-from app.models.solicitud import SolicitudAprobacion
-from app.models.pago import Pago
-from app.models.cliente import Cliente
-from app.models.prestamo import Prestamo
-from app.models.aprobacion import Aprobacion
+from app.models.aprobacion import Aprobacion as SolicitudAprobacion, Aprobacion
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
