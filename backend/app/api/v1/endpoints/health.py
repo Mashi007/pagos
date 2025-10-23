@@ -162,7 +162,6 @@ async def detailed_health_check(response: Response):
     - Alertas de umbrales críticos
     """
     start_time = time.time()
-    settings = get_settings()
 
     try:
         # Obtener métricas del sistema
@@ -245,13 +244,6 @@ async def detailed_health_check(response: Response):
             "response_time_ms": (time.time() - start_time) * 1000
         }
 
-    return {
-        "status": "healthy",
-        "app": settings.APP_NAME,
-        "version": settings.APP_VERSION,
-        "timestamp": datetime.utcnow().isoformat()
-    }
-
 @router.get("/health/full", status_code=status.HTTP_200_OK)
 async def health_check_full(response: Response):
     """
@@ -261,7 +253,6 @@ async def health_check_full(response: Response):
     - Verifica conectividad real a base de datos
     - Usar para monitoreo menos frecuente
     """
-    settings = get_settings()
 
     # Check con cache
     db_status = check_database_cached()
@@ -297,7 +288,6 @@ async def readiness_check(db: Session = Depends(get_db)):
     - Puede ser más lento
     - Usar para Kubernetes readiness probes o checks iniciales
     """
-    settings = get_settings()
 
     try:
         # Check real de DB
