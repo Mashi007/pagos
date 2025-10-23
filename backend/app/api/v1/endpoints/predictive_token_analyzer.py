@@ -1,15 +1,18 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Sistema de Análisis Predictivo para Tokens JWT
+Sistema de Análisis Predictivo para Tokens JWT
 Predice problemas de autenticación antes de que ocurran
 """
 
+import logging
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from collections import deque, defaultdict
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
- create_access_token
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
+from app.core.security import create_access_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

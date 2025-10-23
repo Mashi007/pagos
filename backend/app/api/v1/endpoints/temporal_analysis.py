@@ -1,16 +1,19 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Sistema Temporal de Análisis de Timing
+Sistema Temporal de Análisis de Timing
 Identifica problemas relacionados con tiempo y sincronización
 """
 
+import logging
 import threading
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from collections import deque, defaultdict
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
- create_access_token
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
+from app.core.security import create_access_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

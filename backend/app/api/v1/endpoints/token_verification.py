@@ -1,24 +1,26 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Endpoint de Verificación de Tokens JWT
+Endpoint de Verificación de Tokens JWT
 Sistema avanzado para diagnosticar problemas de autenticación
 """
 
+import logging
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 
- create_access_token
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
+from app.core.security import create_access_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-router.post("/verify-token")
+@router.post("/verify-token")
 async def verificar_token_detallado(
     request: Request,
     db: Session = Depends(get_db)
-:
+):
     """
     🔍 Verificación detallada de token JWT
     Analiza token sin requerir autenticación previa
