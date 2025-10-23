@@ -63,7 +63,7 @@ async def enviar_notificacion(
     notificacion: NotificacionCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
-:
+):
     """
     Enviar notificación individual.
     """
@@ -112,7 +112,7 @@ async def envio_masivo_notificaciones(
     request: EnvioMasivoRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
-:
+):
     """
     Envío masivo de notificaciones según filtros.
     """
@@ -183,7 +183,7 @@ async def envio_masivo_notificaciones(
 def historial_notificaciones(
     cliente_id: int,
     db: Session = Depends(get_db)
-:
+):
     """
     Obtener historial de notificaciones de un cliente.
     """
@@ -211,7 +211,7 @@ def historial_notificaciones(
 @router.get("/pendientes")
 def notificaciones_pendientes(
     db: Session = Depends(get_db)
-:
+):
     """
     Obtener notificaciones pendientes de envío.
     """
@@ -238,7 +238,7 @@ def notificaciones_pendientes(
 async def programar_recordatorios_automaticos(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
-:
+):
     """
     Programar recordatorios automáticos para cuotas próximas a vencer.
     """
@@ -343,7 +343,7 @@ Por favor, comuníquese con nosotros para regularizar su situación.
 async def programar_notificaciones_automaticas(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
-:
+):
     """
     Programar todas las notificaciones automáticas del sistema
     Debe ejecutarse diariamente via cron job
@@ -488,7 +488,7 @@ async def enviar_confirmacion_pago(
     pago_id: int,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
-:
+):
     """
     3. Confirmación de pago recibido (automática al registrar pago)
     """
@@ -573,7 +573,7 @@ Agradecemos su puntualidad y confianza.
 async def enviar_estados_cuenta_mensual(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
-:
+):
     """
     4. Estado de cuenta mensual (primer día de cada mes)
     """
@@ -884,7 +884,7 @@ Saludos.
 def obtener_configuracion_notificaciones(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⚙️ Obtener configuración de notificaciones
     """
@@ -936,7 +936,7 @@ def historial_completo_notificaciones(
     page_size: int = Query(20, ge=1, le=1000),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📋 Historial completo de notificaciones
     - Log completo de emails enviados
@@ -1000,7 +1000,7 @@ async def reenviar_notificacion(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     Reenvío manual de notificación fallida
     """
