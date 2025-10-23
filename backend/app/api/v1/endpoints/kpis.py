@@ -1,17 +1,21 @@
 # backend/app/api/v1/endpoints/kpis.py
+import logging
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from decimal import Decimal
+from sqlalchemy.orm import Session
+from sqlalchemy import func, case, desc, asc, or_
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi import APIRouter, Query
 
-from sqlalchemy import func, case
-time, timedelta
-
-from app.models.amortizacion import Cuota
-
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
+from app.models.cliente import Cliente
 from app.models.analista import Analista
+from app.models.amortizacion import Cuota
+from app.models.pago import Pago
+from app.models.prestamo import Prestamo
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

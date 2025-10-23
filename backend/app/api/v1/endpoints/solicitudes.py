@@ -12,10 +12,16 @@ from pathlib import Path
 
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.solicitud import SolicitudAprobacion
+from app.models.pago import Pago
+from app.models.cliente import Cliente
+from app.models.prestamo import Prestamo
+from app.models.aprobacion import Aprobacion
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

@@ -7,6 +7,7 @@ Generación de reportes de cartera, morosidad, cobranza y análisis financiero
 import logging
 import io
 import pandas as pd
+import time
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from decimal import Decimal
@@ -15,6 +16,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, asc
+
+# Imports para reportes PDF
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.colors import Color
+
+# Imports para Excel
+from openpyxl.styles import PatternFill, Font
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
