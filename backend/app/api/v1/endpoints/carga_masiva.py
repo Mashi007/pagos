@@ -1,31 +1,37 @@
 # backend/app/api/v1/endpoints/carga_masiva.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Sistema de Carga Masiva de Clientes y Pagos
+Sistema de Carga Masiva de Clientes y Pagos
 Proceso completo con validación, corrección en línea y articulación por cédula
 """
-from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks
-from fastapi.responses import StreamingResponse, FileResponse
 
-from typing import Dict, Any
-from pydantic import BaseModel
+import logging
 import io
+import pandas as pd
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from decimal import Decimal
 
+from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks, Depends, HTTPException
+from fastapi.responses import StreamingResponse, FileResponse
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
+from app.models.cliente import Cliente
+from app.models.pago import Pago
 from app.models.concesionario import Concesionario
 from app.models.analista import Analista
 from app.models.modelo_vehiculo import ModeloVehiculo
-
- TipoAccion
+from app.models.auditoria import Auditoria
+from app.core.constants import TipoAccion
 from app.services.validators_service import (
     ValidadorTelefono,
     ValidadorCedula,
     ValidadorEmail,
     ValidadorFecha,
     ValidadorMonto
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -78,13 +84,13 @@ class CorreccionRegistro(BaseModel):
 # ENDPOINT: SUBIR ARCHIVO EXCEL
 # ============================================
 
-router.post("/upload", response_model=ResultadoCargaMasiva)
+@router.post("/upload", response_model=ResultadoCargaMasiva)
 async def cargar_archivo_excel(
     archivo: UploadFile = File(...),
     tipo_carga: str = Form(..., description="clientes o pagos"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📤 PASO 1: Subir archivo Excel y analizar errores
 
@@ -153,7 +159,7 @@ async def _analizar_archivo_clientes(
     nombre_archivo: str,
     db: Session,
     usuario_id: int
- -> ResultadoCargaMasiva:
+) -> ResultadoCargaMasiva:
     """
     Analizar archivo de clientes sin guardar
     Detectar TODOS los errores y clasificarlos
@@ -651,7 +657,7 @@ async def _analizar_archivo_pagos(
     nombre_archivo: str,
     db: Session,
     usuario_id: int
- -> ResultadoCargaMasiva:
+) -> ResultadoCargaMasiva:
     """
     Analizar archivo de pagos y articular con clientes por cédula
     """
@@ -884,12 +890,12 @@ async def _analizar_archivo_pagos(
 # ENDPOINT: CORREGIR REGISTRO EN LÍNEA
 # ============================================
 
-router.post("/corregir-registro")
+@router.post("/corregir-registro")
 async def corregir_registro_en_linea(
     correccion: CorreccionRegistro,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ✏️ PASO 2: Corregir un registro con errores en línea
 
@@ -1013,13 +1019,13 @@ async def corregir_registro_en_linea(
 # ENDPOINT: GUARDAR REGISTROS CORREGIDOS
 # ============================================
 
-router.post("/guardar-registros")
+@router.post("/guardar-registros")
 async def guardar_registros_corregidos(
     registros: List[Dict[str, Any]],
     tipo_carga: str = Form(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     💾 PASO 3: Guardar registros que pasaron validación
 
@@ -1092,7 +1098,7 @@ async def _guardar_cliente_desde_carga(
     datos: Dict[str, Any],
     db: Session,
     usuario_id: int
-:
+):
     """
     Guardar cliente usando MISMO proceso que crear_cliente
     """
@@ -1210,7 +1216,7 @@ async def _guardar_pago_desde_carga(
     datos: Dict[str, Any],
     db: Session,
     usuario_id: int
-:
+):
     """
     Guardar pago articulado con cliente por cédula
     """
@@ -1272,12 +1278,12 @@ async def _guardar_pago_desde_carga(
 # ENDPOINT: DESCARGAR TEMPLATE EXCEL
 # ============================================
 
-router.get("/template-excel/{tipo}")
+@router.get("/template-excel/{tipo}")
 async def descargar_template_excel(
     tipo: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📥 Descargar template de Excel con formato establecido
 
@@ -1378,11 +1384,11 @@ async def descargar_template_excel(
 # ENDPOINT: OBTENER LISTAS DE CONFIGURACIÓN
 # ============================================
 
-router.get("/opciones-configuracion")
+@router.get("/opciones-configuracion")
 async def obtener_opciones_configuracion(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📋 Obtener listas de opciones para corrección en línea
 
@@ -1433,11 +1439,11 @@ async def obtener_opciones_configuracion(
 # ENDPOINT: DASHBOARD DE CARGA MASIVA
 # ============================================
 
-router.get("/dashboard")
+@router.get("/dashboard")
 async def dashboard_carga_masiva(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Dashboard de carga masiva
 
