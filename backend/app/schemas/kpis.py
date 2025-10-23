@@ -1,13 +1,10 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Schemas para KPIs (Key Performance Indicators)
 """
-from pydantic import BaseModel, ConfigDict
-from typing import Dict, Any, List
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from decimal import Decimal
+from pydantic import BaseModel, ConfigDict, Field
 
 class KPIBase(BaseModel):
     """Schema base para KPIs"""
@@ -120,4 +117,4 @@ __all__ = [
     "KPIConValores",
     "KPIEstadisticas",
     "DashboardKPIs",
-
+]

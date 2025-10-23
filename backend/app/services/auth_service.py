@@ -1,17 +1,15 @@
 # backend/app/services/auth_service.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Servicio de autenticación
 Lógica de negocio para login, logout, refresh tokens
 """
-
- status
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
 
 from app.schemas.auth import LoginRequest, Token
+from app.models.user import User
 from app.core.security import (
     verify_password,
     get_password_hash,
@@ -19,6 +17,8 @@ from app.core.security import (
     create_refresh_token,
     decode_token,
     validate_password_strength
+)
+import logging
 
 logger = logging.getLogger(__name__)
 
@@ -251,7 +251,7 @@ class AuthService:
         """
         try:
             # Usar is_admin directamente - evitar conflicto de nombres
-             as get_permissions
+            from app.core.permissions_simple import get_user_permissions as get_permissions
             permissions = get_permissions(user.is_admin)
             permission_strings = [perm.value for perm in permissions]
 

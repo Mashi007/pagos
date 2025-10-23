@@ -1,15 +1,12 @@
 # backend/app/schemas/user.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Schemas de usuario simplificado.
 Solo 2 roles: ADMIN (acceso completo) y USER (acceso limitado)
 Compatible con Pydantic v2.
 """
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from pydantic import BaseModel, Field, ConfigDict, EmailStr, field_validator
 
 # ============================================
 # SCHEMAS BASE

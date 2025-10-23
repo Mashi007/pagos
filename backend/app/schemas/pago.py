@@ -1,9 +1,7 @@
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, field_validator, ConfigDict
+from decimal import Decimal
+from pydantic import BaseModel, field_validator, ConfigDict, Field
 
 # Constantes de validación
 MIN_CEDULA_LENGTH = 8

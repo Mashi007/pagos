@@ -326,7 +326,7 @@ def get_age_in_days(birth_date: date, reference_date: Optional[date] = None) -> 
 def get_notification_dates(
     due_date: date,
     days_before: List[int] = [3, 1, 0]
- -> List[tuple[date, str]]:
+) -> List[tuple[date, str]]:
     """
     Calcula fechas para envío de notificaciones
 
@@ -357,7 +357,7 @@ def calculate_days_in_period(
     start_date: date,
     end_date: date,
     frequency: str = "MENSUAL"
- -> int:
+) -> int:
     """
     Calcula el número esperado de días en un período según frecuencia
 

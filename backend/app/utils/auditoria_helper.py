@@ -88,7 +88,7 @@ def registrar_login_exitoso(
     usuario: User,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None
- -> Auditoria:
+) -> Auditoria:
     """Registrar login exitoso"""
     return registrar_auditoria(
         db=db,

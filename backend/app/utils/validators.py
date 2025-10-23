@@ -1,13 +1,12 @@
 # backend/app/utils/validators.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Validadores personalizados para el sistema
 DNI, teléfonos, emails, montos, etc.
 """
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from decimal import Decimal
+import re
 
 # Constantes de validación
 MIN_DNI_LENGTH = 7
@@ -409,7 +408,7 @@ def validate_payment_amount(
     payment_amount: Decimal,
     expected_amount: Decimal,
     tolerance: Decimal = Decimal(str(DEFAULT_TOLERANCE_PAYMENT))
- -> bool:
+) -> bool:
     """
     Valida que un monto de pago sea válido con respecto al esperado
 

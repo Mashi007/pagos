@@ -1,13 +1,8 @@
 # backend/app/schemas/prestamo.py
 from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, field_validator, ConfigDict
-from typing import Annotated
- datetime
- ROUND_HALF_UP
+from typing import Optional, List, Dict, Any, Tuple, Annotated
+from decimal import Decimal, ROUND_HALF_UP
+from pydantic import BaseModel, field_validator, ConfigDict, Field
 
 # Constantes de validación
 MAX_PERCENTAGE = 100
@@ -18,10 +13,12 @@ MIN_PASSWORD_LENGTH = 8
 DecimalAmount = Annotated[
     Decimal, 
     Field(ge=0, description="Monto en formato decimal con 2 decimales")
+]
 
 DecimalPercentage = Annotated[
     Decimal,
     Field(ge=0, le=MAX_PERCENTAGE, description="Porcentaje con 2 decimales")
+]
 
 class PrestamoBase(BaseModel):
     """Schema base para Préstamo"""
