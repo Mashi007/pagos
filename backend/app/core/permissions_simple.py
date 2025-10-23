@@ -1,12 +1,9 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Sistema de permisos simplificado
 Solo 2 roles: ADMIN (acceso completo) y USER (acceso limitado)
 """
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
 from enum import Enum
 
 class Permission(str, Enum):
@@ -138,6 +135,7 @@ ADMIN_PERMISSIONS: List[Permission] = [
     Permission.VALIDADOR_READ,
     Permission.VALIDADOR_UPDATE,
     Permission.VALIDADOR_DELETE,
+]
 
 # USER solo tiene permisos básicos - ACCESO LIMITADO
 USER_PERMISSIONS: List[Permission] = [
@@ -158,6 +156,7 @@ USER_PERMISSIONS: List[Permission] = [
     Permission.PAGO_CREATE,          # ✅ Crear pagos
     Permission.PAGO_UPDATE,          # ✅ Actualizar pagos
     Permission.PAGO_DELETE,          # ✅ Eliminar pagos
+]
 
 def has_permission(user_is_admin: bool, permission: Permission) -> bool:
     """

@@ -232,7 +232,7 @@ def is_business_day(check_date: date, holidays: Optional[List[date]] = None) -> 
 def next_business_day(
     start_date: date, 
     holidays: Optional[List[date]] = None
- -> date:
+) -> date:
     """
     Obtiene el siguiente día hábil
 
@@ -254,7 +254,7 @@ def calculate_interest_days(
     start_date: date,
     end_date: date,
     day_count_convention: str = "30/360"
- -> int:
+) -> int:
     """
     Calcula días para cálculo de intereses según convención
 
