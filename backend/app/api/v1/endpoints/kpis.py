@@ -15,12 +15,12 @@ from app.models.analista import Analista
 
 router = APIRouter()
 
-router.get("/dashboard")
+@router.get("/dashboard")
 def dashboard_kpis_principales(
     fecha_corte: Optional[date] = Query(None, description="Fecha de corte (default: hoy)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     KPIs principales para el dashboard
 
@@ -124,14 +124,14 @@ def dashboard_kpis_principales(
         }
     }
 
-router.get("/financieros")
+@router.get("/financieros")
 def kpis_financieros(
     periodo: str = Query("mes", description="dia, semana, mes, año"),
     fecha_inicio: Optional[date] = Query(None),
     fecha_fin: Optional[date] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📈 KPIs Financieros
     - Cartera total
@@ -250,11 +250,11 @@ def kpis_financieros(
         }
     }
 
-router.get("/cobranza")
+@router.get("/cobranza")
 def kpis_cobranza(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     👥 KPIs de Cobranza
     - Tasa de morosidad general
@@ -365,11 +365,11 @@ def kpis_cobranza(
         "evolucion_mensual": evolucion_mensual
     }
 
-router.get("/analistaes")
+@router.get("/analistaes")
 def kpis_analistaes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🏆 KPIs de Analistaes
     - Ranking de ventas
@@ -453,11 +453,11 @@ def kpis_analistaes(
         }
     }
 
-router.get("/productos")
+@router.get("/productos")
 def kpis_productos(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🏍️ KPIs de Producto
     - Modelo más/menos vendido
@@ -524,11 +524,11 @@ def kpis_productos(
         }
     }
 
-router.get("/concesionarios")
+@router.get("/concesionarios")
 def kpis_concesionarios(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🏢 KPIs de Concesionario
     - Ventas por concesionario

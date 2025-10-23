@@ -1176,6 +1176,7 @@ _config_cache: Dict[str, Any] = {
         "moneda": "VES",
         "version_sistema": "1.0.0"
     }
+}
 
 @router.get("/general")
 def obtener_configuracion_general(

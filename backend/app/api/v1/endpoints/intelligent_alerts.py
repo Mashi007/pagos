@@ -240,10 +240,10 @@ class IntelligentAlertSystem:
 # Instancia global del sistema de alertas
 alert_system = IntelligentAlertSystem()
 
-router.post("/evaluate-alerts")
+@router.post("/evaluate-alerts")
 async def evaluate_alerts(
     db: Session = Depends(get_db)
-:
+):
     """
     🚨 Evaluar condiciones y generar alertas
     """
@@ -343,11 +343,11 @@ async def get_active_alerts():
             "error": str(e)
         }
 
-router.post("/acknowledge-alert/{alert_id}")
+@router.post("/acknowledge-alert/{alert_id}")
 async def acknowledge_alert(
     alert_id: str,
     acknowledged_by: str = "system"
-:
+):
     """
     ✅ Reconocer alerta
     """
@@ -383,11 +383,11 @@ async def acknowledge_alert(
             "error": str(e)
         }
 
-router.post("/resolve-alert/{alert_id}")
+@router.post("/resolve-alert/{alert_id}")
 async def resolve_alert(
     alert_id: str,
     resolved_by: str = "system"
-:
+):
     """
     ✅ Resolver alerta
     """
@@ -454,13 +454,13 @@ async def get_alert_rules():
             "error": str(e)
         }
 
-router.post("/update-alert-rule")
+@router.post("/update-alert-rule")
 async def update_alert_rule(
     rule_name: str,
     threshold: float = None,
     enabled: bool = None,
     cooldown_minutes: int = None
-:
+):
     """
     ⚙️ Actualizar regla de alerta
     """
