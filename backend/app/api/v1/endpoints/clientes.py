@@ -13,8 +13,7 @@ from sqlalchemy import or_
 from app.api.deps import get_db, get_current_user, require_permission, Permission
 from app.models.cliente import Cliente
 from app.models.user import User
-from app.models.auditoria import Auditoria
-from app.core.constants import TipoAccion
+from app.models.auditoria import Auditoria, TipoAccion
 from app.schemas.cliente import (
     ClienteResponse, 
     ClienteCreate, 

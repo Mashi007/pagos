@@ -1,12 +1,8 @@
 # backend/app/schemas/reportes.py
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict
-from typing import Dict, Any
- datetime
+from decimal import Decimal
+from pydantic import BaseModel, ConfigDict, Field
 
 class FiltrosReporte(BaseModel):
     """Filtros comunes para reportes"""

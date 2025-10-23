@@ -21,9 +21,8 @@ from app.models.amortizacion import Cuota
 from app.models.conciliacion import Conciliacion
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
-from app.models.auditoria import Auditoria
+from app.models.auditoria import Auditoria, TipoAccion
 from app.models.notificacion import Notificacion
-from app.core.constants import TipoAccion
 from app.db.session import SessionLocal
 from app.schemas.conciliacion import (
     ConciliacionCreate,
