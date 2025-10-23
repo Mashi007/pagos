@@ -717,7 +717,7 @@ async def _analizar_archivo_pagos(
             # VALIDACIÓN: ARTICULACIÓN CON CLIENTE
             # ============================================
                 
-                # Buscar cliente por cédula
+            # Buscar cliente por cédula
             cliente = None
             if cedula and cedula.upper() != 'ERROR':
                 cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
