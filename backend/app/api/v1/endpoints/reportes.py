@@ -106,7 +106,7 @@ def reporte_cartera(
 def reporte_morosidad(
     dias_mora_minimo: int = 1,
     db: Session = Depends(get_db)
-:
+):
     """
     Genera reporte detallado de morosidad.
     """
@@ -161,7 +161,7 @@ def reporte_cobranza(
     fecha_inicio: date,
     fecha_fin: date,
     db: Session = Depends(get_db)
-:
+):
     """
     Genera reporte de gestión de cobranza.
     """
@@ -214,7 +214,7 @@ async def exportar_excel(
     fecha_inicio: Optional[date] = None,
     fecha_fin: Optional[date] = None,
     db: Session = Depends(get_db)
-:
+):
     """
     Exporta reportes a Excel.
     """
@@ -327,7 +327,7 @@ async def exportar_excel(
 def clientes_top(
     limite: int = 10,
     db: Session = Depends(get_db)
-:
+):
     """
     Obtiene los top clientes por monto prestado.
     """
@@ -357,7 +357,7 @@ def clientes_top(
 async def generar_estado_cuenta_pdf(
     cliente_id: int,
     db: Session = Depends(get_db)
-:
+):
     """
     1. Estado de cuenta por cliente (PDF)
     - Datos del cliente
