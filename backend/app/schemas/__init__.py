@@ -17,6 +17,7 @@ from app.schemas.cliente import (
     ClienteCreate,
     ClienteUpdate,
     ClienteResponse,
+)
 
 # ============================================
 # SCHEMAS DE PRÉSTAMO
@@ -25,6 +26,7 @@ from app.schemas.prestamo import (
     PrestamoCreate,
     PrestamoUpdate,
     PrestamoResponse,
+)
 
 # ============================================
 # SCHEMAS DE PAGO

@@ -55,7 +55,7 @@ router = APIRouter()
 @router.get("/monitoreo/estado")
 def obtener_estado_monitoreo(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔍 Verificar estado del sistema de monitoreo y observabilidad
     """

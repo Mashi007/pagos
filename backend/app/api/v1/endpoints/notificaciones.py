@@ -8,7 +8,7 @@ import logging
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -676,9 +676,9 @@ PRÓXIMOS VENCIMIENTOS:
 async def enviar_resumen_diario_usuarios(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
-:
+):
     """
-    🔔 Notificaciones diarias a usuarios (8:00 AM):
+    Notificaciones diarias a usuarios (8:00 AM):
     - Resumen de vencimientos del día
     - Pagos recibidos ayer
     - Clientes que entraron en mora
@@ -777,9 +777,9 @@ Saludos.
 async def enviar_reporte_semanal_usuarios(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
-:
+):
     """
-    🔔 Notificaciones semanales (Lunes 9:00 AM):
+    Notificaciones semanales (Lunes 9:00 AM):
     - Reporte semanal de cobranza
     - Nuevos clientes de la semana
     - Evolución de la cartera

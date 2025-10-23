@@ -1,30 +1,31 @@
 # backend/app/api/v1/endpoints/dashboard.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Dashboards interactivos específicos por rol de usuario
 """
-from fastapi import APIRouter, Query
+import logging
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session
+from sqlalchemy import func, desc, asc
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from typing import Dict, Any
-from datetime import datetime, timedelta
-
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
 from app.models.amortizacion import Cuota
-
 from app.models.analista import Analista
+from app.models.cliente import Cliente
+from app.models.prestamo import Prestamo
+from app.models.pago import Pago
 
 router = APIRouter()
 
-router.get("/admin")
+@router.get("/admin")
 def dashboard_administrador(
     fecha_inicio: Optional[date] = Query(None, description="Fecha inicio para filtros"),
     fecha_fin: Optional[date] = Query(None, description="Fecha fin para filtros"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     👑 DASHBOARD ADMINISTRADOR - ACCESO COMPLETO AL SISTEMA
     ✅ Acceso: TODO el sistema

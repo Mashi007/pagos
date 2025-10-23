@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from app.api.deps import get_db
-from app.core.config import get_settings
+from app.core.config import settings
 from app.db.base import Base
 from app.db.session import engine
 

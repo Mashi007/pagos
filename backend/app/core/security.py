@@ -1,28 +1,18 @@
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-"
+"""
 Sistema de seguridad: JWT, hashing de passwords, tokens y dependencias de FastAPI
-"
- jwt
+"""
+import jwt
+from datetime import datetime, timedelta
+from typing import Optional
 from passlib.context import CryptContext
-
 from fastapi.security import OAuth2PasswordBearer
-
-# Importaciones de dependencias del proyecto
-from app.core.config import get_settings
-  # Necesario para interactuar con la DB
-    # Necesario para cargar el objeto User
+from app.core.config import settings
 
 # Constantes de seguridad
 DEFAULT_ACCESS_TOKEN_EXPIRE_MINUTES = 30
 DEFAULT_REFRESH_TOKEN_EXPIRE_DAYS = 7
 MIN_PASSWORD_LENGTH = 8
 PASSWORD_RESET_EXPIRE_HOURS = 1
-
-settings = get_settings()
 
 # Configuración de hashing de passwords
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
