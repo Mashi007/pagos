@@ -1,23 +1,23 @@
 # backend/app/api/v1/endpoints/solicitudes.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Sistema de Solicitudes de Aprobación
 Maneja solicitudes para acciones que requieren autorización
 """
-from fastapi import APIRouter, UploadFile, File
 
-from typing import Dict, Any
-time, timedelta
-from pydantic import BaseModel
+import logging
 import uuid
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
+from app.models.solicitud import SolicitudAprobacion
+
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # ============================================
@@ -162,7 +162,7 @@ async def guardar_archivo_evidencia(archivo: UploadFile) -> tuple[str, str, int]
 # SOLICITUDES DE COBRANZAS CON FORMULARIOS COMPLETOS
 # ============================================
 
-router.post("/cobranzas/modificar-pago-completo")
+@router.post("/cobranzas/modificar-pago-completo")
 async def solicitar_modificacion_pago_completo(
     formulario: FormularioModificarPago,
     archivo_evidencia: Optional[UploadFile] = File(None),
@@ -277,7 +277,7 @@ async def solicitar_modificacion_pago_completo(
         "siguiente_paso": "Esperar aprobación del administrador"
     }
 
-router.post("/cobranzas/anular-pago-completo")
+@router.post("/cobranzas/anular-pago-completo")
 async def solicitar_anulacion_pago_completo(
     formulario: FormularioAnularPago,
     archivo_evidencia: Optional[UploadFile] = File(None),
@@ -363,7 +363,7 @@ async def solicitar_anulacion_pago_completo(
     }
 
 # Mantener endpoints originales para compatibilidad
-router.post("/cobranzas/modificar-pago")
+@router.post("/cobranzas/modificar-pago")
 def solicitar_modificacion_pago(
     pago_id: int,
     nuevos_datos: Dict[str, Any],
@@ -410,7 +410,7 @@ def solicitar_modificacion_pago(
         }
     }
 
-router.post("/cobranzas/anular-pago")
+@router.post("/cobranzas/anular-pago")
 def solicitar_anulacion_pago(
     pago_id: int,
     justificacion: str,
@@ -458,7 +458,7 @@ def solicitar_anulacion_pago(
         }
     }
 
-router.post("/cobranzas/modificar-amortizacion")
+@router.post("/cobranzas/modificar-amortizacion")
 def solicitar_modificacion_amortizacion(
     prestamo_id: int,
     nuevos_parametros: Dict[str, Any],
@@ -510,7 +510,7 @@ def solicitar_modificacion_amortizacion(
 # SOLICITUDES DE USER
 # ============================================
 
-router.post("/comercial/editar-cliente")
+@router.post("/comercial/editar-cliente")
 def solicitar_edicion_cliente_comercial(
     cliente_id: int,
     nuevos_datos: Dict[str, Any],
@@ -562,7 +562,7 @@ def solicitar_edicion_cliente_comercial(
 # SOLICITUDES DE USER
 # ============================================
 
-router.post("/analista/editar-cliente-propio")
+@router.post("/analista/editar-cliente-propio")
 def solicitar_edicion_cliente_propio(
     cliente_id: int,
     nuevos_datos: Dict[str, Any],
@@ -621,7 +621,7 @@ def solicitar_edicion_cliente_propio(
 # GESTIÓN DE SOLICITUDES (ADMIN)
 # ============================================
 
-router.get("/pendientes", response_model=List[SolicitudResponse])
+@router.get("/pendientes", response_model=List[SolicitudResponse])
 def listar_solicitudes_pendientes(
     tipo_solicitud: Optional[str] = Query(None),
     solicitante_id: Optional[int] = Query(None),
@@ -671,7 +671,7 @@ def listar_solicitudes_pendientes(
 
     return resultado
 
-router.post("/aprobar/{solicitud_id}")
+@router.post("/aprobar/{solicitud_id}")
 async def aprobar_solicitud(
     solicitud_id: int,
     comentarios: Optional[str] = None,
@@ -713,7 +713,7 @@ async def aprobar_solicitud(
         "notificacion_enviada": True
     }
 
-router.post("/rechazar/{solicitud_id}")
+@router.post("/rechazar/{solicitud_id}")
 async def rechazar_solicitud(
     solicitud_id: int,
     comentarios: str,
@@ -752,7 +752,7 @@ async def rechazar_solicitud(
         "notificacion_enviada": True
     }
 
-router.get("/mis-solicitudes")
+@router.get("/mis-solicitudes")
 def listar_mis_solicitudes(
     estado: Optional[str] = Query(None, description="PENDIENTE, APROBADA, RECHAZADA"),
     db: Session = Depends(get_db),
@@ -836,7 +836,7 @@ def _ejecutar_accion_aprobada(solicitud: Aprobacion, db: Session) -> Dict[str, A
     except Exception as e:
         return {"error": f"Error ejecutando acción: {str(e)}"}
 
-router.get("/estadisticas")
+@router.get("/estadisticas")
 def estadisticas_solicitudes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -888,7 +888,7 @@ def estadisticas_solicitudes(
         }
     }
 
-router.get("/dashboard-aprobaciones")
+@router.get("/dashboard-aprobaciones")
 def dashboard_aprobaciones(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -1034,7 +1034,7 @@ def dashboard_aprobaciones(
         }
     }
 
-router.get("/matriz-permisos")
+@router.get("/matriz-permisos")
 def obtener_matriz_permisos_actualizada(
     current_user: User = Depends(get_current_user)
 :
