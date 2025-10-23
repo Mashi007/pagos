@@ -3,7 +3,8 @@ Sistema de seguridad: JWT, hashing de passwords, tokens y dependencias de FastAP
 """
 import jwt
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Any
+from jwt import JWTError
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer
 from app.core.config import settings
@@ -42,7 +43,7 @@ def create_access_token(
     subject: str | int,
     expires_delta: Optional[timedelta] = None,
     additional_claims: Optional[dict[str, Any]] = None
- -> str:
+) -> str:
     """
     Crea un token de acceso JWT
     """
