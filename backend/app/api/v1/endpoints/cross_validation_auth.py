@@ -1,16 +1,18 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Sistema de Validación Cruzada de Autenticación
+Sistema de Validación Cruzada de Autenticación
 Valida tokens desde múltiples perspectivas para detectar inconsistencias
 """
 
+import logging
 import hashlib
-
- create_access_token, verify_password
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from collections import defaultdict
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
+from app.core.security import create_access_token, decode_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -409,13 +411,13 @@ cross_validator = CrossValidationAuthChecker()
 # ENDPOINTS DE VALIDACIÓN CRUZADA
 # ============================================
 
-router.post("/cross-validate")
+@router.post("/cross-validate")
 async def cross_validate_token_endpoint(
     request: Request,
     token_data: Dict[str, str],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔄 Validación cruzada completa de un token
     """
@@ -452,11 +454,11 @@ async def cross_validate_token_endpoint(
             "error": str(e)
         }
 
-router.get("/validation-history")
+@router.get("/validation-history")
 async def get_validation_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Historial de validaciones cruzadas
     """
@@ -489,12 +491,12 @@ async def get_validation_history(
             "error": str(e)
         }
 
-router.post("/validate-user-token")
+@router.post("/validate-user-token")
 async def validate_user_token_comprehensive(
     user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     👤 Validación cruzada completa para un usuario específico
     """
