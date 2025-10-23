@@ -5,6 +5,7 @@ Identifica patrones específicos que causan fallos 401 intermitentes
 
 import logging
 import threading
+import statistics
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from collections import deque, defaultdict
@@ -333,7 +334,7 @@ async def log_successful_request_endpoint(
     request_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ✅ Registrar request exitoso para análisis intermitente
     """
@@ -359,7 +360,7 @@ async def log_failed_request_endpoint(
     request_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ❌ Registrar request fallido para análisis intermitente
     """
@@ -384,7 +385,7 @@ router.get("/intermittent-patterns")
 async def get_intermittent_patterns(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔄 Análisis de patrones intermitentes
     """
@@ -409,7 +410,7 @@ router.get("/intermittent-summary")
 async def get_intermittent_summary_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Resumen de análisis intermitente
     """
