@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_admin_user, get_current_user, get_pagination_params, PaginationParams
+from app.api.deps import get_admin_user, get_current_user, get_pagination_params, PaginationParams, get_db
 from app.core.security import get_password_hash
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserListResponse

@@ -139,13 +139,13 @@ def obtener_cuota(
 
     return cuota
 
-router.post("/prestamo/{prestamo_id}/recalcular-mora", response_model=RecalcularMoraResponse)
+@router.post("/prestamo/{prestamo_id}/recalcular-mora", response_model=RecalcularMoraResponse)
 def recalcular_mora(
     prestamo_id: int,
     request: RecalcularMoraRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
-:
+):
     """
     Recalcula la mora de todas las cuotas vencidas de un préstamo
     """

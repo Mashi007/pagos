@@ -53,12 +53,12 @@ class AprobacionResponse(BaseModel):
 # ENDPOINTS
 # ============================================
 
-router.post("/", response_model=AprobacionResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=AprobacionResponse, status_code=status.HTTP_201_CREATED)
 def crear_aprobacion(
     aprobacion_data: AprobacionCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """Crear nueva solicitud de aprobación"""
     aprobacion = Aprobacion(
         solicitante_id=current_user.id,

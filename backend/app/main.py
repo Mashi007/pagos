@@ -2,14 +2,16 @@
 """
 Aplicación principal FastAPI - Sistema de Préstamos y Cobranza.
 """
+import logging
+import sys
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
-from contextlib import asynccontextmanager
-import logging
 
-from app.db.init_db import init_db_startup, init_db_shutdown
 from app.core.config import settings
+from app.db.init_db import init_db_startup, init_db_shutdown
 
 # Rate Limiting
 
@@ -42,9 +44,7 @@ from app.api.v1.endpoints import (
     modelos_vehiculos,
     migracion_emergencia,
     impact_analysis
-
-# Configurar logging robusto
-import sys
+)
 
 # Configurar logging básico pero efectivo
 logging.basicConfig(

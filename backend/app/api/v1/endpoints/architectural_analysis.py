@@ -1,23 +1,24 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-️ Sistema Arquitectural de Análisis de Componentes
+Sistema Arquitectural de Análisis de Componentes
 Identifica fallas en componentes específicos del sistema
 """
-
+import logging
 import threading
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
+from app.core.security import create_access_token
+
 # Import condicional de psutil
 try:
-    
+    import psutil
     PSUTIL_AVAILABLE = True
 except ImportError:
     PSUTIL_AVAILABLE = False
     psutil = None
-
- create_access_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

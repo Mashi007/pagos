@@ -2,17 +2,23 @@
 Endpoints de auditoría del sistema
 Registro y consulta de acciones de usuarios
 """
+import io
+import logging
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum, asc, func
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
-import io
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
+from sqlalchemy import asc, func
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_db, get_current_user
+from app.models.auditoria import Auditoria
+from app.models.user import User
 from app.schemas.auditoria import (
     AuditoriaResponse,
     AuditoriaListResponse,
     AuditoriaStatsResponse
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -21,13 +27,16 @@ logger = logging.getLogger(__name__)
 # CRUD DE AUDITORÍA
 # ============================================
 
-router.get("/", response_model=AuditoriaListResponse, summary="Listar auditoría")
+@router.get("/", response_model=AuditoriaListResponse, summary="Listar auditoría")
 def listar_auditoria(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(50, ge=1, le=1000, description="Número de registros a retornar"),
     usuario_email: Optional[str] = Query(None, description="Filtrar por email de usuario"),
     modulo: Optional[str] = Query(None, description="Filtrar por módulo"),
     accion: Optional[str] = Query(None, description="Filtrar por acción"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     fecha_desde: Optional[datetime] = Query(None, description="Fecha desde"),
     fecha_hasta: Optional[datetime] = Query(None, description="Fecha hasta"),
     ordenar_por: str = Query("fecha", description="Campo para ordenar"),

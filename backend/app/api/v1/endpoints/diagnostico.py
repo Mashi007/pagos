@@ -1,22 +1,28 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoint de diagnóstico completo del sistema
 Verifica todos los componentes críticos
 """
+import logging
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
+from app.api.deps import get_db
+from app.core.config import settings
 from app.models.analista import Analista
+from app.models.auditoria import Auditoria
+from app.models.cliente import Cliente
 from app.models.concesionario import Concesionario
 from app.models.modelo_vehiculo import ModeloVehiculo
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-router.get("/sistema")
+@router.get("/sistema")
 def diagnostico_completo_sistema(db: Session = Depends(get_db)):
     """
     🔍 Diagnóstico completo del sistema
@@ -89,10 +95,10 @@ def diagnostico_completo_sistema(db: Session = Depends(get_db)):
 
         # 4. Verificar usuario administrador
         try:
-            admin_count = db.query(User).filter(User.is_admin ).count()
+            admin_count = db.query(User).filter(User.is_admin).count()
             admin_activo = db.query(User).filter(
-                User.is_admin , 
-                User.is_active 
+                User.is_admin,
+                User.is_active
             ).count()
 
             diagnostico["componentes"]["administradores"] = {
@@ -142,7 +148,7 @@ def diagnostico_completo_sistema(db: Session = Depends(get_db)):
             "componentes": {}
         }
 
-router.get("/endpoints")
+@router.get("/endpoints")
 def verificar_endpoints_criticos():
     """
     🔗 Verificar estado de endpoints críticos
@@ -166,7 +172,7 @@ def verificar_endpoints_criticos():
         "nota": "Usar herramientas como Postman o curl para verificar cada endpoint"
     }
 
-router.get("/configuracion")
+@router.get("/configuracion")
 def verificar_configuracion_sistema():
     """
     ⚙️ Verificar configuración del sistema
@@ -186,7 +192,7 @@ def verificar_configuracion_sistema():
         "message": "Configuración del sistema verificada"
     }
 
-router.get("/monitoreo")
+@router.get("/monitoreo")
 def monitoreo_tiempo_real(db: Session = Depends(get_db)):
     """
     📊 Monitoreo en tiempo real del sistema
