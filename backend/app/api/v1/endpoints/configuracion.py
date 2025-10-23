@@ -1,18 +1,19 @@
 # backend/app/api/v1/endpoints/configuracion.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoint para configuración administrativa del sistema.
 Gestión de parámetros, tasas, límites y ajustes generales.
 """
 
-from typing import Dict, Any, List
+import logging
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
-
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
 from app.models.configuracion_sistema import ConfiguracionSistema
 
 # Funciones auxiliares para validación y pruebas
@@ -51,7 +52,7 @@ router = APIRouter()
 # MONITOREO Y OBSERVABILIDAD
 # ============================================
 
-router.get("/monitoreo/estado")
+@router.get("/monitoreo/estado")
 def obtener_estado_monitoreo(
     current_user: User = Depends(get_current_user)
 :
@@ -65,7 +66,7 @@ def obtener_estado_monitoreo(
     from app.core.monitoring import get_monitoring_status
     return get_monitoring_status()
 
-router.post("/monitoreo/habilitar")
+@router.post("/monitoreo/habilitar")
 def habilitar_monitoreo_basico(
     current_user: User = Depends(get_current_user)
 :
@@ -113,7 +114,7 @@ def habilitar_monitoreo_basico(
 # CONFIGURACIÓN CENTRALIZADA DEL SISTEMA
 # ============================================
 
-router.get("/sistema/completa")
+@router.get("/sistema/completa")
 def obtener_configuracion_completa(
     categoria: Optional[str] = Query(None, description="Filtrar por categoría"),
     db: Session = Depends(get_db),
@@ -170,7 +171,7 @@ def obtener_configuracion_completa(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración: {str(e)}")
 
-router.get("/validadores")
+@router.get("/validadores")
 def obtener_configuracion_validadores():
     """
     🔍 Obtener configuración completa de validadores para el módulo de configuración
@@ -330,7 +331,7 @@ def obtener_configuracion_validadores():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración de validadores: {str(e)}")
 
-router.post("/validadores/probar")
+@router.post("/validadores/probar")
 def probar_validadores(
     datos_prueba: Dict[str, Any]
 :
@@ -380,7 +381,7 @@ def probar_validadores(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error probando validadores: {str(e)}")
 
-router.get("/sistema/categoria/{categoria}")
+@router.get("/sistema/categoria/{categoria}")
 def obtener_configuracion_categoria(
     categoria: str,
     db: Session = Depends(get_db),
@@ -425,7 +426,7 @@ def obtener_configuracion_categoria(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración de categoría: {str(e)}")
 
-router.post("/sistema/actualizar")
+@router.post("/sistema/actualizar")
 def actualizar_configuracion_sistema(
     configuraciones: Dict[str, Dict[str, Any]],
     db: Session = Depends(get_db),
@@ -524,7 +525,7 @@ def actualizar_configuracion_sistema(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error actualizando configuraciones: {str(e)}")
 
-router.post("/sistema/probar-integracion/{categoria}")
+@router.post("/sistema/probar-integracion/{categoria}")
 def probar_integracion(
     categoria: str,
     db: Session = Depends(get_db),
@@ -555,7 +556,7 @@ def probar_integracion(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error probando integración: {str(e)}")
 
-router.get("/sistema/estado-servicios")
+@router.get("/sistema/estado-servicios")
 def obtener_estado_servicios(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -615,7 +616,7 @@ def obtener_estado_servicios(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo estado de servicios: {str(e)}")
 
-router.post("/sistema/inicializar-defaults")
+@router.post("/sistema/inicializar-defaults")
 def inicializar_configuraciones_default(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -663,7 +664,7 @@ def inicializar_configuraciones_default(
 # CONFIGURACIÓN DE IA
 # ============================================
 
-router.get("/ia")
+@router.get("/ia")
 def obtener_configuracion_ia(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -734,7 +735,7 @@ def obtener_configuracion_ia(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración IA: {str(e)}")
 
-router.post("/ia/actualizar")
+@router.post("/ia/actualizar")
 def actualizar_configuracion_ia(
     openai_api_key: Optional[str] = None,
     openai_model: Optional[str] = None,
@@ -805,7 +806,7 @@ def actualizar_configuracion_ia(
 # CONFIGURACIÓN DE EMAIL
 # ============================================
 
-router.get("/email")
+@router.get("/email")
 def obtener_configuracion_email(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -869,7 +870,7 @@ def obtener_configuracion_email(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración email: {str(e)}")
 
-router.post("/email/actualizar")
+@router.post("/email/actualizar")
 def actualizar_configuracion_email(
     smtp_host: Optional[str] = None,
     smtp_port: Optional[int] = None,
@@ -924,7 +925,7 @@ def actualizar_configuracion_email(
 # CONFIGURACIÓN DE WHATSAPP
 # ============================================
 
-router.get("/whatsapp")
+@router.get("/whatsapp")
 def obtener_configuracion_whatsapp(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -983,7 +984,7 @@ def obtener_configuracion_whatsapp(
 # DASHBOARD DE CONFIGURACIÓN
 # ============================================
 
-router.get("/dashboard")
+@router.get("/dashboard")
 def dashboard_configuracion_sistema(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -1158,7 +1159,7 @@ _config_cache: Dict[str, Any] = {
         "version_sistema": "1.0.0"
     }
 
-router.get("/general")
+@router.get("/general")
 def obtener_configuracion_general(
     current_user: User = Depends(get_current_user)
 :
@@ -1167,7 +1168,7 @@ def obtener_configuracion_general(
     """
     return _config_cache["general"]
 
-router.put("/general")
+@router.put("/general")
 def actualizar_configuracion_general(
     config: ConfiguracionGeneral,
     current_user: User = Depends(get_current_user)
@@ -1189,7 +1190,7 @@ def actualizar_configuracion_general(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error actualizando configuración: {str(e)}")
 
-router.get("/tasas")
+@router.get("/tasas")
 def obtener_configuracion_tasas(
     current_user: User = Depends(get_current_user)
 :
@@ -1198,7 +1199,7 @@ def obtener_configuracion_tasas(
     """
     return _config_cache["tasas"]
 
-router.put("/tasas")
+@router.put("/tasas")
 def actualizar_configuracion_tasas(
     config: ConfiguracionTasas,
     current_user: User = Depends(get_current_user)
@@ -1223,7 +1224,7 @@ def actualizar_configuracion_tasas(
         "tasas": _config_cache["tasas"]
     }
 
-router.get("/limites")
+@router.get("/limites")
 def obtener_configuracion_limites(
     current_user: User = Depends(get_current_user)
 :
@@ -1232,7 +1233,7 @@ def obtener_configuracion_limites(
     """
     return _config_cache["limites"]
 
-router.put("/limites")
+@router.put("/limites")
 def actualizar_configuracion_limites(
     config: ConfiguracionLimites,
     current_user: User = Depends(get_current_user)
@@ -1272,7 +1273,7 @@ def actualizar_configuracion_limites(
         "limites": _config_cache["limites"]
     }
 
-router.get("/notificaciones")
+@router.get("/notificaciones")
 def obtener_configuracion_notificaciones(
     current_user: User = Depends(get_current_user)
 :
@@ -1281,7 +1282,7 @@ def obtener_configuracion_notificaciones(
     """
     return _config_cache["notificaciones"]
 
-router.put("/notificaciones")
+@router.put("/notificaciones")
 def actualizar_configuracion_notificaciones(
     config: ConfiguracionNotificaciones,
     current_user: User = Depends(get_current_user)
@@ -1308,7 +1309,7 @@ def actualizar_configuracion_notificaciones(
         "notificaciones": _config_cache["notificaciones"]
     }
 
-router.get("/general")
+@router.get("/general")
 def obtener_configuracion_general(
     current_user: User = Depends(get_current_user)
 :
@@ -1317,7 +1318,7 @@ def obtener_configuracion_general(
     """
     return _config_cache["general"]
 
-router.put("/general")
+@router.put("/general")
 def actualizar_configuracion_general(
     config: ConfiguracionGeneral,
     current_user: User = Depends(get_current_user)
@@ -1346,7 +1347,7 @@ def actualizar_configuracion_general(
         "configuracion": _config_cache["general"]
     }
 
-router.get("/completa")
+@router.get("/completa")
 def obtener_configuracion_cache(
     current_user: User = Depends(get_current_user)
 :
@@ -1360,7 +1361,7 @@ def obtener_configuracion_cache(
         "general": _config_cache["general"]
     }
 
-router.post("/restablecer")
+@router.post("/restablecer")
 def restablecer_configuracion_defecto(
     seccion: str,  # tasas, limites, notificaciones, general, todo
     current_user: User = Depends(get_current_user)
@@ -1425,7 +1426,7 @@ def restablecer_configuracion_defecto(
             detail=f"Sección inválida. Opciones: tasas, limites, notificaciones, general, todo"
         )
 
-router.get("/calcular-cuota")
+@router.get("/calcular-cuota")
 def calcular_cuota_ejemplo(
     monto: float,
     plazo_meses: int,
@@ -1473,7 +1474,7 @@ def calcular_cuota_ejemplo(
         "relacion_cuota_ingreso_sugerida": "< 40%"
     }
 
-router.get("/validar-limites/{cliente_id}")
+@router.get("/validar-limites/{cliente_id}")
 def validar_limites_cliente(
     cliente_id: int,
     monto_solicitado: float,
