@@ -1,17 +1,17 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Endpoint de Diagnóstico Avanzado de Autenticación
+Endpoint de Diagnóstico Avanzado de Autenticación
 Sistema de auditoría para encontrar causa raíz de problemas 401
 """
-from fastapi import APIRouter, Response
 
-from typing import List, Optional
-
- create_access_token
+import logging
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request, Response
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
+from app.core.config import settings
+from app.core.security import create_access_token, decode_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -19,11 +19,11 @@ router = APIRouter()
 # Cache para requests fallidos
 failed_requests_cache = []
 
-router.get("/auth-debug")
+@router.get("/auth-debug")
 async def debug_autenticacion(
     request: Request,
     db: Session = Depends(get_db)
-:
+):
     """
     🔍 Diagnóstico completo de autenticación
     Analiza tokens, headers, y configuración
@@ -131,11 +131,11 @@ async def debug_autenticacion(
             "error": str(e)
         }
 
-router.post("/auth-test")
+@router.post("/auth-test")
 async def test_autenticacion(
     request: Request,
     db: Session = Depends(get_db)
-:
+):
     """
     🧪 Test completo de autenticación
     Prueba login, token creation, y validación
@@ -243,7 +243,7 @@ async def test_autenticacion(
             "error": str(e)
         }
 
-router.get("/auth-logs")
+@router.get("/auth-logs")
 async def obtener_logs_autenticacion():
     """
     📝 Obtener logs de autenticación recientes
@@ -278,11 +278,11 @@ async def obtener_logs_autenticacion():
             "error": str(e)
         }
 
-router.post("/auth-fix")
+@router.post("/auth-fix")
 async def aplicar_fix_autenticacion(
     request: Request,
     db: Session = Depends(get_db)
-:
+):
     """
     🔧 Aplicar fixes automáticos de autenticación
     """
