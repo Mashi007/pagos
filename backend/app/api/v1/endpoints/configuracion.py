@@ -8,6 +8,8 @@ import logging
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from decimal import Decimal
+import json
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -16,6 +18,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.configuracion_sistema import ConfiguracionSistema
+from app.models.auditoria import Auditoria
+from app.core.constants import TipoAccion
+from app.models.prestamo import Prestamo
 
 # Funciones auxiliares para validación y pruebas
 def _validar_configuracion(config: str, valor: Any) -> Optional[str]:
@@ -129,7 +134,8 @@ def obtener_configuracion_completa(
         raise HTTPException(status_code=403, detail="Solo administradores pueden ver configuración completa")
 
     try:
-        time
+        # Obtener tiempo actual para logging
+        current_time = time.time()
 
         query = db.query(ConfiguracionSistema).filter(
             ConfiguracionSistema.visible_frontend 
@@ -340,6 +346,7 @@ def probar_validadores(
     🧪 Probar validadores con datos de ejemplo
     """
     try:
+        from app.services.validators_service import (
             ValidadorTelefono, ValidadorCedula, ValidadorFecha, ValidadorEmail
         )
 
@@ -392,7 +399,9 @@ def obtener_configuracion_categoria(
     📋 Obtener configuración de una categoría específica
     """
     try:
-
+        # Solo admin puede ver configuración de categoría
+        if not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="Solo administradores pueden ver configuración de categoría")
         configs = db.query(ConfiguracionSistema).filter(
             ConfiguracionSistema.categoria == categoria.upper(),
             ConfiguracionSistema.visible_frontend 
@@ -453,7 +462,6 @@ def actualizar_configuracion_sistema(
         raise HTTPException(status_code=403, detail="Solo administradores pueden actualizar configuración")
 
     try:
-
         actualizaciones_exitosas = []
         errores = []
 
@@ -499,7 +507,8 @@ def actualizar_configuracion_sistema(
             db.commit()
 
             # Registrar en auditoría
-            , TipoAccion
+            from app.models.auditoria import Auditoria
+            from app.core.constants import TipoAccion
             auditoria = Auditoria.registrar(
                 usuario_id=current_user.id,
                 accion=TipoAccion.ACTUALIZACION,
@@ -566,6 +575,10 @@ def obtener_estado_servicios(
     📊 Obtener estado de todos los servicios configurados
     """
     try:
+        # Solo admin puede ver estado de servicios
+        if not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="Solo administradores pueden ver estado de servicios")
+
         from app.models.configuracion_sistema import ConfigHelper
 
         estado_servicios = {
@@ -674,7 +687,9 @@ def obtener_configuracion_ia(
     🤖 Obtener configuración de Inteligencia Artificial
     """
     try:
-
+        # Solo admin puede ver configuración de IA
+        if not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="Solo administradores pueden ver configuración de IA")
         configs_ia = db.query(ConfiguracionSistema).filter(
             ConfiguracionSistema.categoria == "AI",
             ConfiguracionSistema.visible_frontend 
@@ -753,7 +768,6 @@ def actualizar_configuracion_ia(
         raise HTTPException(status_code=403, detail="Solo administradores pueden configurar IA")
 
     try:
-
         actualizaciones = []
 
         # Actualizar API Key de OpenAI
@@ -816,7 +830,9 @@ def obtener_configuracion_email(
     📧 Obtener configuración de email
     """
     try:
-
+        # Solo admin puede ver configuración de email
+        if not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="Solo administradores pueden ver configuración de email")
         configs_email = db.query(ConfiguracionSistema).filter(
             ConfiguracionSistema.categoria == "EMAIL"
         ).all()
@@ -889,7 +905,6 @@ def actualizar_configuracion_email(
         raise HTTPException(status_code=403, detail="Solo administradores pueden configurar email")
 
     try:
-
         actualizaciones = []
 
         # Mapeo de parámetros a configuraciones
@@ -935,7 +950,9 @@ def obtener_configuracion_whatsapp(
     📱 Obtener configuración de WhatsApp
     """
     try:
-
+        # Solo admin puede ver configuración de WhatsApp
+        if not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="Solo administradores pueden ver configuración de WhatsApp")
         configs_whatsapp = db.query(ConfiguracionSistema).filter(
             ConfiguracionSistema.categoria == "WHATSAPP"
         ).all()
@@ -1482,51 +1499,54 @@ def validar_limites_cliente(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Validar si un cliente puede solicitar un nuevo préstamo según límites configurados.
-    """
-    
+    try:
+        # Solo admin puede validar límites
+        if not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="Solo administradores pueden validar límites")
 
-    # Contar préstamos activos del cliente
-    prestamos_activos = db.query(Prestamo).filter(
-        Prestamo.cliente_id == cliente_id,
-        Prestamo.estado == "ACTIVO"
-    ).count()
+        # Contar préstamos activos del cliente
+        prestamos_activos = db.query(Prestamo).filter(
+            Prestamo.cliente_id == cliente_id,
+            Prestamo.estado == "ACTIVO"
+        ).count()
 
-    limite_prestamos = _config_cache["limites"]["limite_prestamos_activos"]
-    limites_monto = _config_cache["limites"]
+        limite_prestamos = _config_cache["limites"]["limite_prestamos_activos"]
+        limites_monto = _config_cache["limites"]
 
-    # Validaciones
-    validaciones = {
-        "puede_solicitar": True,
-        "mensajes": []
-    }
+        # Validaciones
+        validaciones = {
+            "puede_solicitar": True,
+            "mensajes": []
+        }
 
-    if prestamos_activos >= limite_prestamos:
-        validaciones["puede_solicitar"] = False
-        validaciones["mensajes"].append(
-            f"El cliente ya tiene {prestamos_activos} préstamos activos (límite: {limite_prestamos})"
-        )
+        if prestamos_activos >= limite_prestamos:
+            validaciones["puede_solicitar"] = False
+            validaciones["mensajes"].append(
+                f"El cliente ya tiene {prestamos_activos} préstamos activos (límite: {limite_prestamos})"
+            )
 
-    if monto_solicitado < limites_monto["monto_minimo_prestamo"]:
-        validaciones["puede_solicitar"] = False
-        validaciones["mensajes"].append(
-            f"Monto mínimo permitido: ${limites_monto['monto_minimo_prestamo']:,.2f}"
-        )
+        if monto_solicitado < limites_monto["monto_minimo_prestamo"]:
+            validaciones["puede_solicitar"] = False
+            validaciones["mensajes"].append(
+                f"Monto mínimo permitido: ${limites_monto['monto_minimo_prestamo']:,.2f}"
+            )
 
-    if monto_solicitado > limites_monto["monto_maximo_prestamo"]:
-        validaciones["puede_solicitar"] = False
-        validaciones["mensajes"].append(
-            f"Monto máximo permitido: ${limites_monto['monto_maximo_prestamo']:,.2f}"
-        )
+        if monto_solicitado > limites_monto["monto_maximo_prestamo"]:
+            validaciones["puede_solicitar"] = False
+            validaciones["mensajes"].append(
+                f"Monto máximo permitido: ${limites_monto['monto_maximo_prestamo']:,.2f}"
+            )
 
-    return {
-        "cliente_id": cliente_id,
-        "prestamos_activos": prestamos_activos,
-        "limite_prestamos": limite_prestamos,
-        "monto_solicitado": monto_solicitado,
-        **validaciones
-    }
+        return {
+            "cliente_id": cliente_id,
+            "prestamos_activos": prestamos_activos,
+            "limite_prestamos": limite_prestamos,
+            "monto_solicitado": monto_solicitado,
+            **validaciones
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error validando límites: {str(e)}")
 
 # ============================================
 # FUNCIONES AUXILIARES
