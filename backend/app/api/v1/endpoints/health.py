@@ -1,17 +1,22 @@
 # backend/app/api/v1/endpoints/health.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Health Checks con Análisis de Impacto en Performance
 Implementa monitoreo de salud del sistema con métricas de impacto
 """
-from fastapi import APIRouter, Response, status
 
- Base, engine
+import logging
+import time
+import os
+import psutil
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
+from app.api.deps import get_db
 from app.core.config import get_settings
+from app.db.base import Base
+from app.db.session import engine
 
 # Constantes de configuración
 CACHE_DURATION_SECONDS = 30
@@ -29,6 +34,7 @@ TABLES_TO_DROP = [
     "auditorias",
     "clientes",
     "users"
+]
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -41,6 +47,7 @@ _last_db_check: Dict[str, Any] = {
     "response_time_ms": 0,
     "cpu_usage": 0,
     "memory_usage": 0
+}
 
 def get_system_metrics() -> Dict[str, Any]:
     """
@@ -114,7 +121,7 @@ def check_database_cached() -> Dict[str, Any]:
 
     return _last_db_check
 
-router.get("/cors-debug")
+@router.get("/cors-debug")
 async def cors_debug():
     """Endpoint para debuggear CORS"""
     
@@ -126,8 +133,8 @@ async def cors_debug():
         "message": "CORS Debug Info"
     }
 
-router.get("/health/render")
-router.head("/health/render")
+@router.get("/health/render")
+@router.head("/health/render")
 async def render_health_check():
     """
     Health check optimizado para Render
@@ -144,7 +151,7 @@ async def render_health_check():
         "render_optimized": True
     }
 
-router.get("/health/detailed", status_code=status.HTTP_200_OK)
+@router.get("/health/detailed", status_code=status.HTTP_200_OK)
 async def detailed_health_check(response: Response):
     """
     Health check detallado con análisis de impacto en performance
@@ -245,7 +252,7 @@ async def detailed_health_check(response: Response):
         "timestamp": datetime.utcnow().isoformat()
     }
 
-router.get("/health/full", status_code=status.HTTP_200_OK)
+@router.get("/health/full", status_code=status.HTTP_200_OK)
 async def health_check_full(response: Response):
     """
     Health check COMPLETO con verificación de DB
@@ -281,7 +288,7 @@ async def health_check_full(response: Response):
         "timestamp": datetime.utcnow().isoformat()
     }
 
-router.get("/health/ready")
+@router.get("/health/ready")
 async def readiness_check(db: Session = Depends(get_db)):
     """
     Readiness probe - verifica que la app esté lista para recibir tráfico
@@ -314,7 +321,7 @@ async def readiness_check(db: Session = Depends(get_db)):
         "timestamp": datetime.utcnow().isoformat()
     }
 
-router.get("/health/live")
+@router.get("/health/live")
 async def liveness_check():
     """
     Liveness probe - verifica que la app esté viva (no colgada)
@@ -328,7 +335,7 @@ async def liveness_check():
         "timestamp": datetime.utcnow().isoformat()
     }
 
-router.post("/test/init-db")
+@router.post("/test/init-db")
 async def initialize_database(db: Session = Depends(get_db)):
     """
     Endpoint para RECREAR la base de datos
