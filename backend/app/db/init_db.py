@@ -1,11 +1,14 @@
 # backend/app/db/init_db.py
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- inspect
+import logging
+import os
+import subprocess
+import time
+import traceback
+from datetime import datetime
+from sqlalchemy import text, inspect
 from app.db.session import engine, Base, SessionLocal
+from app.core.config import settings
+from app.models.user import User
 
 
 # Constantes de configuración
@@ -51,7 +54,6 @@ def create_tables():
 def run_migrations():
     """Ejecuta las migraciones de Alembic"""
     try:
-                
         # Cambiar al directorio del backend
         backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         os.chdir(backend_dir)
@@ -82,9 +84,7 @@ def create_admin_user():
     try:
         logger.info("🔄 Verificando usuario administrador...")
 
-        
         from app.core.security import get_password_hash
-        time
 
         db = SessionLocal()
 
@@ -134,7 +134,7 @@ def create_admin_user():
         return False
     except Exception as e:
         logger.error(f"Error creando usuario admin: {e}")
-                logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return False
 
 def init_db() -> bool:
