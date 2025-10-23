@@ -1,28 +1,31 @@
+import logging
+import io
+import pandas as pd
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi import APIRouter, status, UploadFile, File
-
-
- ConciliacionResponse
-import io
-from openpyxl import Workbook
-from openpyxl.worksheet.datavalidation import DataValidation
+from sqlalchemy.orm import Session
+from sqlalchemy import and_
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
+from app.models.pago import Pago
+from app.schemas.conciliacion import ConciliacionResponse, ConciliacionCreate
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-router.get("/template-conciliacion")
+@router.get("/template-conciliacion")
 async def generar_template_conciliacion(
     current_user: User = Depends(get_current_user)
-:
+):
     """Generar template Excel para conciliación bancaria"""
     try:
         logger.info(f"Usuario {current_user.email} generando template de conciliación")
 
         # Crear workbook
+        from openpyxl import Workbook
+        from openpyxl.worksheet.datavalidation import DataValidation
+        
         wb = Workbook()
 
         # HOJA 1: INSTRUCCIONES
@@ -120,12 +123,12 @@ async def generar_template_conciliacion(
             detail=f"Error interno del servidor: {str(e)}"
         )
 
-router.post("/procesar-conciliacion")
+@router.post("/procesar-conciliacion")
 async def procesar_conciliacion(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """Procesar archivo Excel de conciliación bancaria"""
     try:
         logger.info(f"Usuario {current_user.email} procesando conciliación bancaria")
@@ -168,7 +171,7 @@ async def procesar_conciliacion(
             # Buscar pago en BD
             pago = db.query(Pago).filter(
                 and_(
-                    Pago.activo ,
+                    Pago.activo == True,
                     Pago.numero_documento == numero_documento
                 )
             ).first()
@@ -217,12 +220,12 @@ async def procesar_conciliacion(
             detail=f"Error interno del servidor: {str(e)}"
         )
 
-router.post("/desconciliar-pago", response_model=ConciliacionResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/desconciliar-pago", response_model=ConciliacionResponse, status_code=status.HTTP_201_CREATED)
 async def desconciliar_pago(
     conciliacion_data: ConciliacionCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """Desconciliar un pago ya conciliado"""
     try:
         logger.info(f"Usuario {current_user.email} desconciliando pago {conciliacion_data.numero_documento_anterior}")
@@ -230,9 +233,9 @@ async def desconciliar_pago(
         # Buscar el pago a desconciliar
         pago = db.query(Pago).filter(
             and_(
-                Pago.activo ,
+                Pago.activo == True,
                 Pago.numero_documento == conciliacion_data.numero_documento_anterior,
-                Pago.conciliado 
+                Pago.conciliado == True
             )
         ).first()
 
@@ -275,17 +278,17 @@ async def desconciliar_pago(
             detail=f"Error interno del servidor: {str(e)}"
         )
 
-router.get("/estado-conciliacion")
+@router.get("/estado-conciliacion")
 async def obtener_estado_conciliacion(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """Obtener estado general de conciliación"""
     try:
         # Estadísticas generales
-        total_pagos = db.query(Pago).filter(Pago.activo ).count()
+        total_pagos = db.query(Pago).filter(Pago.activo == True).count()
         pagos_conciliados = db.query(Pago).filter(
-            and_(Pago.activo , Pago.conciliado )
+            and_(Pago.activo == True, Pago.conciliado == True)
         ).count()
         pagos_pendientes = total_pagos - pagos_conciliados
 
