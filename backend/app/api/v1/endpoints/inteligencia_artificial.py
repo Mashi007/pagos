@@ -1,21 +1,21 @@
 # backend/app/api/v1/endpoints/inteligencia_artificial.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Endpoints de Inteligencia Artificial y Machine Learning
+Endpoints de Inteligencia Artificial y Machine Learning
 Sistema avanzado de scoring, predicción y recomendaciones
 """
-from fastapi import APIRouter, BackgroundTasks
 
-from typing import Dict, Any
-
-from pydantic import BaseModel
-
-logger = logging.getLogger(__name__)
-
+import logging
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from decimal import Decimal
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
+from pydantic import BaseModel, Field
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
+from app.models.cliente import Cliente
+from app.models.auditoria import Auditoria
+from app.core.constants import TipoAccion
 from app.services.ml_service import (
     ScoringCrediticio,
     PrediccionMora, 
@@ -25,8 +25,10 @@ from app.services.ml_service import (
     ChatbotCobranza,
     DetectorPatrones,
     AlertasInteligentes
+)
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # ============================================
 # SCHEMAS PARA IA/ML
@@ -64,12 +66,12 @@ class ResultadoScoring(BaseModel):
 # SCORING CREDITICIO
 # ============================================
 
-router.post("/scoring-crediticio", response_model=ResultadoScoring)
+@router.post("/scoring-crediticio", response_model=ResultadoScoring)
 def calcular_scoring_crediticio(
     solicitud: SolicitudScoring,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🧠 SCORING CREDITICIO INTELIGENTE (0-1000 puntos)
 
@@ -113,7 +115,8 @@ def calcular_scoring_crediticio(
         )
 
         # Registrar en auditoría
-        , TipoAccion
+        from app.models.auditoria import Auditoria
+        from app.core.constants import TipoAccion
         auditoria = Auditoria.registrar(
             usuario_id=current_user.id,
             accion=TipoAccion.CONSULTA,
@@ -129,14 +132,14 @@ def calcular_scoring_crediticio(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error calculando scoring: {str(e)}")
 
-router.get("/scoring-masivo")
+@router.get("/scoring-masivo")
 def calcular_scoring_masivo_cartera(
     background_tasks: BackgroundTasks,
     limite: int = Query(100, ge=1, le=1000, description="Límite de clientes a procesar"),
     solo_activos: bool = Query(True, description="Solo clientes activos"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Calcular scoring masivo para toda la cartera
     """
@@ -175,13 +178,13 @@ def calcular_scoring_masivo_cartera(
 # PREDICCIÓN DE MORA
 # ============================================
 
-router.get("/prediccion-mora/{cliente_id}")
+@router.get("/prediccion-mora/{cliente_id}")
 def predecir_mora_cliente(
     cliente_id: int,
     horizonte_dias: int = Query(30, ge=1, le=365, description="Días a futuro para predicción"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔮 Predicción de mora usando Machine Learning
 
