@@ -23,8 +23,7 @@ from app.models.pago import Pago
 from app.models.concesionario import Concesionario
 from app.models.analista import Analista
 from app.models.modelo_vehiculo import ModeloVehiculo
-from app.models.auditoria import Auditoria
-from app.core.constants import TipoAccion
+from app.models.auditoria import Auditoria, TipoAccion
 from app.services.validators_service import (
     ValidadorTelefono,
     ValidadorCedula,

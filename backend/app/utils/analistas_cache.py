@@ -1,14 +1,14 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Sistema de cache inteligente para analistas
 Evita consultas repetidas a la base de datos
 """
 
-logger = logging.getLogger(__name__)
+import logging
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any
+from collections import defaultdict
+
+from app.models.analista import Analista
 
 # Constantes de configuración
 DEFAULT_TTL_SECONDS = 300  # 5 minutos por defecto

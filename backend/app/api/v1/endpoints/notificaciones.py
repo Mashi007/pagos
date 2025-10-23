@@ -628,7 +628,7 @@ ESTADO ACTUAL:
  % Avance: {resumen['porcentaje_avance']}%
 
 PRÓXIMOS VENCIMIENTOS:
-""
+"""
 
         for cuota in cuotas_pendientes:
             mensaje += f"• Cuota #{cuota.numero_cuota}: {float(cuota.monto_cuota):.2f} - {cuota.fecha_vencimiento.strftime('%d/%m/%Y')}\n"

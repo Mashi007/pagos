@@ -1,21 +1,18 @@
 # backend/app/services/ml_service.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Servicio de Inteligencia Artificial y Machine Learning
 Sistema avanzado de predicción, scoring y recomendaciones para financiamiento automotriz
 """
-from datetime import datetime, timedelta
 
+import logging
+from datetime import datetime, timedelta, date
 from typing import Dict, List, Any
-
 from pathlib import Path
 
+from sqlalchemy.orm import Session
 from app.models.amortizacion import Cuota
 from app.models.analista import Analista
+from app.models.cliente import Cliente
 
 logger = logging.getLogger(__name__)
 

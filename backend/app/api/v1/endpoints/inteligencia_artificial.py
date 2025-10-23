@@ -15,7 +15,7 @@ from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.cliente import Cliente
 from app.models.auditoria import Auditoria
-from app.core.constants import TipoAccion
+from app.models.auditoria import Auditoria, TipoAccion
 from app.services.ml_service import (
     ScoringCrediticio,
     PrediccionMora, 
@@ -116,7 +116,7 @@ def calcular_scoring_crediticio(
 
         # Registrar en auditoría
         from app.models.auditoria import Auditoria
-        from app.core.constants import TipoAccion
+        from app.models.auditoria import Auditoria, TipoAccion
         auditoria = Auditoria.registrar(
             usuario_id=current_user.id,
             accion=TipoAccion.CONSULTA,

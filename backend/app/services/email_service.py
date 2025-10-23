@@ -1,20 +1,19 @@
 # backend/app/services/email_service.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Servicio para envío de emails.
 Soporta templates HTML y envío asíncrono.
 """
+
+import logging
 import aiosmtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from jinja2 import Template
+from typing import Optional, List, Dict, Any
 
+from app.core.config import settings
 from app.db.session import SessionLocal
- EstadoNotificacion
+from app.models.notificacion import EstadoNotificacion
 
 logger = logging.getLogger(__name__)
 
