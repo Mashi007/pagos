@@ -479,6 +479,34 @@ class ComparativeAnalysisSystem:
 
         return significance
 
+    def _token_focused_analysis(self) -> Dict[str, Any]:
+        """Análisis enfocado en tokens"""
+        return {
+            'token_analysis': self._analyze_token_differences(),
+            'summary': 'Análisis enfocado en diferencias de tokens'
+        }
+
+    def _user_focused_analysis(self) -> Dict[str, Any]:
+        """Análisis enfocado en usuarios"""
+        return {
+            'user_analysis': self._analyze_user_differences(),
+            'summary': 'Análisis enfocado en diferencias de usuarios'
+        }
+
+    def _timing_focused_analysis(self) -> Dict[str, Any]:
+        """Análisis enfocado en timing"""
+        return {
+            'timing_analysis': self._analyze_timing_differences(),
+            'summary': 'Análisis enfocado en diferencias de timing'
+        }
+
+    def _basic_differential_analysis(self) -> Dict[str, Any]:
+        """Análisis diferencial básico"""
+        return {
+            'summary': self._analyze_basic_statistics(),
+            'pattern_analysis': self._analyze_pattern_differences()
+        }
+
 # Instancia global del sistema comparativo
 comparative_system = ComparativeAnalysisSystem()
 
