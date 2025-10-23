@@ -1,24 +1,20 @@
 # backend/app/api/v1/endpoints/notificaciones_multicanal.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Endpoints de Notificaciones Multicanal
+Endpoints de Notificaciones Multicanal
 Sistema 100% automático de notificaciones por Email + WhatsApp
 """
-from fastapi import APIRouter, BackgroundTasks
 
+import logging
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
-from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from pydantic import BaseModel
 
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
 from app.models.amortizacion import Cuota
-
-logger = logging.getLogger(__name__)
-router = APIRouter()
-
 from app.services.notification_multicanal_service import (
     NotificacionMulticanal,
     NotificationScheduler,
@@ -28,7 +24,9 @@ from app.services.notification_multicanal_service import (
     WhatsAppTemplateManager,
     GestorReintentos,
     notification_scheduler
+)
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # ============================================

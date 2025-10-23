@@ -161,10 +161,10 @@ class PredictiveAnalyzer:
             "last_update": metrics[-1].timestamp.isoformat() if metrics else None
         }
 
-router.post("/collect-metrics")
+@router.post("/auth-metrics")
 async def collect_authentication_metrics(
     db: Session = Depends(get_db)
-:
+):
     """
     📊 Recolectar métricas actuales de autenticación
     """

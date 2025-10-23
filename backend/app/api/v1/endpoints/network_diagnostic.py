@@ -378,11 +378,11 @@ network_diagnostic = NetworkDiagnosticSystem()
 # ENDPOINTS DE DIAGNÓSTICO DE RED
 # ============================================
 
-router.get("/network-health")
+@router.get("/network-health")
 async def get_network_health(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🌐 Análisis completo de salud de red
     """

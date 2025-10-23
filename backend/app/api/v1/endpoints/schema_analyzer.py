@@ -168,11 +168,11 @@ schema_analyzer = DatabaseSchemaAnalyzer()
 # ENDPOINTS DE ANÁLISIS DE ESQUEMA
 # ============================================
 
-router.get("/schema-inconsistencies")
+@router.get("/schema-inconsistencies")
 async def get_schema_inconsistencies(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔍 Analizar inconsistencias específicas del esquema de BD
     """

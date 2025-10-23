@@ -37,11 +37,11 @@ class ConfiguracionScheduler(BaseModel):
 # CONFIGURACIÓN DEL SCHEDULER
 # ============================================
 
-router.get("/configuracion")
+@router.get("/configuracion")
 def obtener_configuracion_scheduler(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⚙️ Obtener configuración actual del scheduler de notificaciones
     """

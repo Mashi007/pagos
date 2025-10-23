@@ -271,12 +271,12 @@ real_time_monitor = RealTimeSpecificMonitor()
 # ENDPOINTS DE MONITOREO ESPECÍFICO
 # ============================================
 
-router.post("/start-monitoring")
+@router.post("/start-specific-monitoring")
 async def start_specific_monitoring_endpoint(
     monitoring_request: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔍 Iniciar monitoreo específico de fallos 401
     """

@@ -726,10 +726,10 @@ Buenos días {usuario.full_name},
 
 RESUMEN DIARIO - {hoy.strftime('%d/%m/%Y')}
 
- VENCIMIENTOS HOY: {vencimientos_hoy} cuotas
- COBRADO AYER: ${total_cobrado_ayer} ({len(pagos_ayer)} pagos)
- NUEVOS MOROSOS: {len(nuevos_morosos)} clientes
- CLIENTES CRÍTICOS: {clientes_criticos} (>30 días mora)
+📅 VENCIMIENTOS HOY: {vencimientos_hoy} cuotas
+💰 COBRADO AYER: ${total_cobrado_ayer:.2f} ({len(pagos_ayer)} pagos)
+⚠️ NUEVOS MOROSOS: {len(nuevos_morosos)} clientes
+🚨 CLIENTES CRÍTICOS: {clientes_criticos} (>30 días mora)
 
 ACCIONES RECOMENDADAS:
  Contactar clientes con vencimientos hoy
