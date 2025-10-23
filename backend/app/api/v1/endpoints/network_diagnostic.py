@@ -1,15 +1,23 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Sistema de Diagnóstico de Red y Latencia
+Sistema de Diagnóstico de Red y Latencia
 Analiza problemas de conectividad y rendimiento de red
 """
 
+import logging
 import threading
 import socket
+import time
+import statistics
+import urllib.request
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from collections import deque, defaultdict
+
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -403,11 +411,11 @@ async def get_network_health(
             "error": str(e)
         }
 
-router.post("/test-connectivity")
+@router.post("/test-connectivity")
 async def test_connectivity_now(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔍 Test inmediato de conectividad
     """
@@ -433,11 +441,11 @@ async def test_connectivity_now(
             "error": str(e)
         }
 
-router.post("/test-latency")
+@router.post("/test-latency")
 async def test_latency_now(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⚡ Test inmediato de latencia
     """
@@ -464,11 +472,11 @@ async def test_latency_now(
             "error": str(e)
         }
 
-router.get("/network-statistics")
+@router.get("/network-statistics")
 async def get_network_statistics(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Estadísticas históricas de red
     """
@@ -518,11 +526,11 @@ async def get_network_statistics(
             "error": str(e)
         }
 
-router.get("/network-trends")
+@router.get("/network-trends")
 async def get_network_trends(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📈 Análisis de tendencias de red
     """

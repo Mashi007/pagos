@@ -1,15 +1,22 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Sistema de Alertas Inteligentes para Autenticación
+Sistema de Alertas Inteligentes para Autenticación
 Sistema avanzado de monitoreo y alertas basado en patrones y umbrales
 """
 
+import logging
+import uuid
+import time
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from collections import deque, defaultdict
 from dataclasses import dataclass
 from enum import Enum
+
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -295,7 +302,7 @@ async def evaluate_alerts(
             "error": str(e)
         }
 
-router.get("/active-alerts")
+@router.get("/active-alerts")
 async def get_active_alerts():
     """
     📋 Obtener alertas activas
@@ -422,7 +429,7 @@ async def resolve_alert(
             "error": str(e)
         }
 
-router.get("/alert-rules")
+@router.get("/alert-rules")
 async def get_alert_rules():
     """
     ⚙️ Obtener reglas de alerta configuradas
@@ -501,7 +508,7 @@ async def update_alert_rule(
             "error": str(e)
         }
 
-router.get("/alert-summary")
+@router.get("/alert-summary")
 async def get_alert_summary():
     """
     📊 Resumen de alertas

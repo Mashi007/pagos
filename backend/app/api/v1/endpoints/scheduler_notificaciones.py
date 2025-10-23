@@ -99,12 +99,12 @@ def obtener_configuracion_scheduler(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración: {str(e)}")
 
-router.post("/configurar")
+@router.post("/configurar")
 def configurar_scheduler(
     configuracion: ConfiguracionScheduler,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⚙️ Configurar scheduler de notificaciones
     """

@@ -331,11 +331,11 @@ alert_system = IntelligentAlertSystem()
 # ENDPOINTS DE ALERTAS INTELIGENTES
 # ============================================
 
-router.get("/active-alerts")
+@router.get("/active-alerts")
 async def get_active_alerts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🚨 Obtener alertas activas
     """

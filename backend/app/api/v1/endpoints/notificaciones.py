@@ -260,7 +260,7 @@ async def programar_recordatorios_automaticos(
 Estimado/a {prestamo.cliente.nombres},
 
 Le recordamos que tiene una cuota próxima a vencer:
- Monto: ${prestamo.monto_cuota:.2f}
+        Monto: {prestamo.monto_cuota:.2f}
  Fecha de vencimiento: {prestamo.fecha_vencimiento.strftime('%d/%m/%Y')}
  Días restantes: {(prestamo.fecha_vencimiento - date.today()).days}
 
@@ -316,7 +316,7 @@ def _generar_mensaje_template(template: str, cliente: Cliente, db: Session) -> s
         return f"""
 Estimado/a {cliente.nombres} {cliente.apellidos},
 
-Le recordamos que tiene un saldo pendiente de ${total_deuda:.2f}.
+Le recordamos que tiene un saldo pendiente de {total_deuda:.2f}.
 
 Por favor, póngase al día con sus pagos para evitar recargos.
 
@@ -379,7 +379,7 @@ Estimado/a {cliente.nombre_completo},
 Le recordamos que tiene una cuota próxima a vencer:
 
  Cuota #: {cuota.numero_cuota}
- Monto: ${float(cuota.monto_cuota):.2f}
+        Monto: {float(cuota.monto_cuota):.2f}
  Fecha de vencimiento: {cuota.fecha_vencimiento.strftime('%d/%m/%Y')}
  Días restantes: 3
 
@@ -432,8 +432,8 @@ ALERTA: Su cuota #{cuota.numero_cuota} está VENCIDA.
 
  Fecha de vencimiento: {cuota.fecha_vencimiento.strftime('%d/%m/%Y')}
  Días de mora: {(date.today() - cuota.fecha_vencimiento).days}
- Monto adeudado: ${float(cuota.monto_pendiente_total):,.2f}
- Recargo por mora: ${float(mora_calculada):,.2f}
+        Monto adeudado: {float(cuota.monto_pendiente_total):,.2f}
+        Recargo por mora: {float(mora_calculada):,.2f}
 
 URGENTE: Regularice su pago inmediatamente para evitar:
  Incremento de mora diaria
@@ -520,18 +520,18 @@ Gracias por su pago!
 
 CONFIRMACIÓN DE PAGO RECIBIDO:
  Fecha: {pago.fecha_pago.strftime('%d/%m/%Y')}
- Monto: ${float(pago.monto_pagado):.2f}
+        Monto: {float(pago.monto_pagado):.2f}
  Cuota(s) pagada(s): #{pago.numero_cuota}
  Método: {pago.metodo_pago}
  Referencia: {pago.numero_operacion or pago.comprobante or 'N/A'}
 
 DETALLE DE APLICACIÓN:
- Capital: ${float(pago.monto_capital):.2f}
- Interés: ${float(pago.monto_interes):.2f}
- Mora: ${float(pago.monto_mora):.2f}
+        Capital: {float(pago.monto_capital):.2f}
+        Interés: {float(pago.monto_interes):.2f}
+        Mora: {float(pago.monto_mora):.2f}
 
 ESTADO ACTUAL:
- Saldo pendiente: ${float(pago.prestamo.saldo_pendiente):.2f}
+        Saldo pendiente: {float(pago.prestamo.saldo_pendiente):.2f}
  Próximo vencimiento: {proximo_vencimiento}
 
 Agradecemos su puntualidad y confianza.
@@ -542,7 +542,7 @@ Agradecemos su puntualidad y confianza.
         cliente_id=cliente.id,
         tipo="EMAIL",
         categoria="PAGO_RECIBIDO",
-        asunto=f"✅ Confirmación: Pago de ${float(pago.monto_pagado):.2f} recibido",
+        asunto=f"✅ Confirmación: Pago de {float(pago.monto_pagado):.2f} recibido",
         mensaje=mensaje,
         estado="PENDIENTE",
         programada_para=datetime.now(),
@@ -618,12 +618,12 @@ ESTADO DE CUENTA - {mes_anterior.strftime('%B %Y').upper()}
 
 RESUMEN DEL MES ANTERIOR:
  Pagos realizados: {len(pagos_mes)}
- Total pagado: ${sum(float(p.monto_pagado) for p in pagos_mes):.2f}
+        Total pagado: {sum(float(p.monto_pagado) for p in pagos_mes):.2f}
 
 ESTADO ACTUAL:
- Total financiado: ${float(resumen['total_financiado']):.2f}
- Total pagado: ${float(resumen['total_pagado']):.2f}
- Saldo pendiente: ${float(resumen['saldo_pendiente']):.2f}
+        Total financiado: {float(resumen['total_financiado']):.2f}
+        Total pagado: {float(resumen['total_pagado']):.2f}
+        Saldo pendiente: {float(resumen['saldo_pendiente']):.2f}
  Cuotas pagadas: {resumen['cuotas_pagadas']} / {resumen['cuotas_totales']}
  % Avance: {resumen['porcentaje_avance']}%
 
@@ -631,7 +631,7 @@ PRÓXIMOS VENCIMIENTOS:
 ""
 
         for cuota in cuotas_pendientes:
-            mensaje += f"• Cuota #{cuota.numero_cuota}: ${float(cuota.monto_cuota):.2f} - {cuota.fecha_vencimiento.strftime('%d/%m/%Y')}\n"
+            mensaje += f"• Cuota #{cuota.numero_cuota}: {float(cuota.monto_cuota):.2f} - {cuota.fecha_vencimiento.strftime('%d/%m/%Y')}\n"
 
         mensaje += "\nMantengase al día con sus pagos.\n\nSaludos cordiales."
 
@@ -830,9 +830,9 @@ Buenos días {usuario.full_name},
 REPORTE SEMANAL - {inicio_semana.strftime('%d/%m')} al {fin_semana.strftime('%d/%m/%Y')}
 
  COBRANZA:
- Total cobrado: ${sum(float(p.monto_pagado) for p in pagos_semana):,.2f}
+        Total cobrado: {sum(float(p.monto_pagado) for p in pagos_semana):,.2f}
  Número de pagos: {len(pagos_semana)}
- Promedio por pago: ${(sum(float(p.monto_pagado) for p in pagos_semana) / len(pagos_semana)):,.2f if pagos_semana else 0}
+        Promedio por pago: {(sum(float(p.monto_pagado) for p in pagos_semana) / len(pagos_semana)):,.2f if pagos_semana else 0}
 
  NUEVOS CLIENTES: {len(nuevos_clientes)}
 

@@ -416,11 +416,11 @@ async def calculate_authentication_health_score():
             "error": str(e)
         }
 
-router.get("/metrics-history")
+@router.get("/metrics-history")
 async def get_metrics_history(
     hours: int = 24,
     limit: int = 100
-:
+):
     """
     📈 Obtener historial de métricas
     """

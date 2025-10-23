@@ -300,12 +300,12 @@ async def start_specific_monitoring_endpoint(
             "error": str(e)
         }
 
-router.post("/stop-monitoring/{session_id}")
+@router.post("/stop-monitoring/{session_id}")
 async def stop_specific_monitoring_endpoint(
     session_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⏹️ Detener monitoreo específico
     """

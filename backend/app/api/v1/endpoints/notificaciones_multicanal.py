@@ -57,13 +57,13 @@ class EstadisticasNotificaciones(BaseModel):
 # PROCESAMIENTO AUTOMÁTICO
 # ============================================
 
-router.post("/procesar-automaticas")
+@router.post("/procesar-automaticas")
 async def procesar_notificaciones_automaticas(
     background_tasks: BackgroundTasks,
     forzar_procesamiento: bool = Query(False, description="Forzar procesamiento fuera de horario"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🤖 Procesar notificaciones automáticas (Endpoint para scheduler/cron)
 

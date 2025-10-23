@@ -193,11 +193,11 @@ async def get_schema_inconsistencies(
             "error": str(e)
         }
 
-router.get("/schema-fixes")
+@router.get("/schema-fixes")
 async def get_schema_fixes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔧 Generar fixes específicos para el esquema
     """
