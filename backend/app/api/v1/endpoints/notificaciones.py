@@ -1,19 +1,23 @@
 # backend/app/api/v1/endpoints/notificaciones.py
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoint para gestión de notificaciones del sistema.
 Soporta Email y WhatsApp (Twilio).
 """
 
+import logging
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
+from app.models.cliente import Cliente
 from app.models.amortizacion import Cuota
-
 from app.models.analista import Analista
+from app.models.notificacion import Notificacion
 
 # Servicios de notificación
 from app.services.email_service import EmailService
@@ -54,7 +58,7 @@ class EnvioMasivoRequest(BaseModel):
 email_service = EmailService()
 whatsapp_service = WhatsAppService()
 
-router.post("/enviar", response_model=NotificacionResponse)
+@router.post("/enviar", response_model=NotificacionResponse)
 async def enviar_notificacion(
     notificacion: NotificacionCreate,
     background_tasks: BackgroundTasks,
@@ -103,7 +107,7 @@ async def enviar_notificacion(
     logger.info(f"Notificación {nueva_notif.id} programada para envío por {notificacion.canal}")
     return nueva_notif
 
-router.post("/envio-masivo")
+@router.post("/envio-masivo")
 async def envio_masivo_notificaciones(
     request: EnvioMasivoRequest,
     background_tasks: BackgroundTasks,
@@ -175,7 +179,7 @@ async def envio_masivo_notificaciones(
         "ids": [n.id for n in notificaciones_creadas]
     }
 
-router.get("/historial/{cliente_id}")
+@router.get("/historial/{cliente_id}")
 def historial_notificaciones(
     cliente_id: int,
     db: Session = Depends(get_db)
@@ -204,7 +208,7 @@ def historial_notificaciones(
         ]
     }
 
-router.get("/pendientes")
+@router.get("/pendientes")
 def notificaciones_pendientes(
     db: Session = Depends(get_db)
 :
@@ -230,7 +234,7 @@ def notificaciones_pendientes(
         ]
     }
 
-router.post("/recordatorios-automaticos")
+@router.post("/recordatorios-automaticos")
 async def programar_recordatorios_automaticos(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
@@ -335,7 +339,7 @@ Por favor, comuníquese con nosotros para regularizar su situación.
 # NOTIFICACIONES AUTOMÁTICAS PROGRAMADAS
 # ============================================
 
-router.post("/programar-automaticas")
+@router.post("/programar-automaticas")
 async def programar_notificaciones_automaticas(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
@@ -479,7 +483,7 @@ Contacto inmediato: (021) 123-456
         "avisos_vencidas": len([n for n in notificaciones_programadas if n.categoria == "CUOTA_VENCIDA"])
     }
 
-router.post("/confirmar-pago-recibido/{pago_id}")
+@router.post("/confirmar-pago-recibido/{pago_id}")
 async def enviar_confirmacion_pago(
     pago_id: int,
     background_tasks: BackgroundTasks,
@@ -565,7 +569,7 @@ Agradecemos su puntualidad y confianza.
         "cliente": cliente.nombre_completo
     }
 
-router.post("/estado-cuenta-mensual")
+@router.post("/estado-cuenta-mensual")
 async def enviar_estados_cuenta_mensual(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
@@ -668,7 +672,7 @@ PRÓXIMOS VENCIMIENTOS:
 # NOTIFICACIONES A USUARIOS DEL SISTEMA
 # ============================================
 
-router.post("/usuarios/resumen-diario")
+@router.post("/usuarios/resumen-diario")
 async def enviar_resumen_diario_usuarios(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
@@ -769,7 +773,7 @@ Saludos.
         "clientes_criticos": clientes_criticos
     }
 
-router.post("/usuarios/reporte-semanal")
+@router.post("/usuarios/reporte-semanal")
 async def enviar_reporte_semanal_usuarios(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
@@ -876,7 +880,7 @@ Saludos.
 # CONFIGURACIÓN DE NOTIFICACIONES
 # ============================================
 
-router.get("/configuracion")
+@router.get("/configuracion")
 def obtener_configuracion_notificaciones(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -921,7 +925,7 @@ def obtener_configuracion_notificaciones(
         }
     }
 
-router.get("/historial-completo")
+@router.get("/historial-completo")
 def historial_completo_notificaciones(
     fecha_desde: Optional[date] = Query(None),
     fecha_hasta: Optional[date] = Query(None),
@@ -990,7 +994,7 @@ def historial_completo_notificaciones(
         }
     }
 
-router.post("/reenviar/{notificacion_id}")
+@router.post("/reenviar/{notificacion_id}")
 async def reenviar_notificacion(
     notificacion_id: int,
     background_tasks: BackgroundTasks,
