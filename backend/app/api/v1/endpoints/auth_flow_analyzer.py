@@ -1,17 +1,24 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Sistema de Análisis de Flujo de Autenticación
+Sistema de Análisis de Flujo de Autenticación
 Tracing avanzado y análisis de causa raíz para problemas de autenticación
 """
 
+import logging
+import json
+import time
 import uuid
 import hashlib
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from collections import defaultdict, deque
 
- create_access_token
+import jwt
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from sqlalchemy.orm import Session
+
+from app.core.security import create_access_token, decode_token
+from app.api.deps import get_db
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -128,11 +135,11 @@ class CorrelationAnalyzer:
             "timestamp": datetime.now().isoformat()
         }
 
-router.post("/trace-auth-flow")
+@router.post("/trace-auth-flow")
 async def trace_authentication_flow(
     request: Request,
     db: Session = Depends(get_db)
-:
+):
     """
     🔬 Trace completo del flujo de autenticación
     Analiza cada paso del proceso de autenticación
@@ -358,7 +365,7 @@ router.get("/analyze-correlation")
 async def analyze_request_correlation(
     request: Request,
     minutes: int = 60
-:
+):
     """
     🔗 Análisis de correlación entre requests
     Identifica patrones y relaciones entre requests fallidos
@@ -543,7 +550,7 @@ router.get("/flow-timeline")
 async def get_authentication_timeline(
     minutes: int = 30,
     limit: int = 50
-:
+):
     """
     📈 Timeline de flujos de autenticación
     """
