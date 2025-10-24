@@ -10,10 +10,11 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from jinja2 import Template
 from typing import Optional, List, Dict, Any
+from datetime import datetime
 
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.models.notificacion import EstadoNotificacion
+from app.models.notificacion import EstadoNotificacion, Notificacion
 
 logger = logging.getLogger(__name__)
 

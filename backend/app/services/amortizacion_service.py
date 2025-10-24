@@ -7,6 +7,7 @@ from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 import logging
 
 from app.models.amortizacion import Cuota, pago_cuotas

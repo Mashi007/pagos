@@ -206,7 +206,7 @@ def track_business_metrics(
     metric_name: str,
     value: float,
     labels: Optional[dict] = None
- -> None:
+) -> None:
     """
     Registra métricas de negocio personalizadas para financiamiento automotriz
 

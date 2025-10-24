@@ -11,6 +11,9 @@ from collections import defaultdict
 
 from app.models.analista import Analista
 
+# Configurar logger
+logger = logging.getLogger(__name__)
+
 # Constantes de configuración
 DEFAULT_TTL_SECONDS = 300  # 5 minutos por defecto
 

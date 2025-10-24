@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, relationship
 from sqlalchemy.sql import func
 
 from app.db.session import Base
-from app.schemas.aprobacion import EstadoAprobacion
+from app.core.constants import EstadoAprobacion
 
 class Aprobacion(Base):
     """
