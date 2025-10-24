@@ -248,7 +248,7 @@ def track_financial_operation(
     client_id: int,
     user_id: int,
     additional_data: Optional[dict] = None
- -> None:
+) -> None:
     """
     Trackear operaciones financieras específicas
 
@@ -275,7 +275,7 @@ def track_approval_workflow(
     request_type: str,
     user_role: str,
     processing_time_seconds: Optional[float] = None
- -> None:
+) -> None:
     """
     Trackear flujo de aprobaciones
 
@@ -301,7 +301,7 @@ def track_bulk_migration(
     failed: int,
     warnings: int,
     migration_type: str
- -> None:
+) -> None:
     """
     Trackear migraciones masivas
     """
