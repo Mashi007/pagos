@@ -7,6 +7,7 @@ from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.schemas.auth import LoginRequest, Token
 from app.models.user import User

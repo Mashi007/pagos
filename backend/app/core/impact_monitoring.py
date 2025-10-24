@@ -5,6 +5,9 @@ Implementa monitoreo avanzado con métricas de impacto en recursos del sistema
 
 import logging
 import threading
+import time
+import os
+import json
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass, asdict
@@ -12,6 +15,14 @@ from enum import Enum
 from collections import deque, defaultdict
 
 from sqlalchemy.orm import Session
+
+# Import condicional de psutil
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    psutil = None
 
 # Constantes de configuración
 MONITORING_INTERVAL_SECONDS = 30
@@ -30,7 +41,7 @@ class AlertSeverity(Enum):
     WARNING = "WARNING"
     CRITICAL = "CRITICAL"
 
-dataclass
+@dataclass
 class SystemMetrics:
     """Métricas del sistema"""
     timestamp: datetime
@@ -44,7 +55,7 @@ class SystemMetrics:
     network_bytes_sent: int
     network_bytes_recv: int
 
-dataclass
+@dataclass
 class PerformanceImpact:
     """Análisis de impacto en performance"""
     endpoint: str
@@ -54,7 +65,7 @@ class PerformanceImpact:
     impact_level: str
     timestamp: datetime
 
-dataclass
+@dataclass
 class Alert:
     """Estructura de alerta"""
     id: str
@@ -110,26 +121,41 @@ class ImpactAnalyzer:
     def _collect_metrics(self):
         """Recolectar métricas del sistema"""
         try:
-            cpu_percent = psutil.cpu_percent(interval=0.1)
-            memory = psutil.virtual_memory()
-            disk = psutil.disk_usage('/')
-            network = psutil.net_io_counters()
+            if PSUTIL_AVAILABLE:
+                cpu_percent = psutil.cpu_percent(interval=0.1)
+                memory = psutil.virtual_memory()
+                disk = psutil.disk_usage('/')
+                network = psutil.net_io_counters()
 
-            metrics = SystemMetrics(
-                timestamp=datetime.utcnow(),
-                cpu_percent=cpu_percent,
-                memory_percent=memory.percent,
-                memory_available_mb=memory.available // (1024 * 1024),
-                disk_percent=disk.percent,
-                disk_free_gb=disk.free // (1024 * 1024 * 1024),
-                process_count=len(psutil.pids()),
-                load_average=list(os.getloadavg()) if hasattr(os, 'getloadavg') else [0, 0, 0],
-                network_bytes_sent=network.bytes_sent,
-                network_bytes_recv=network.bytes_recv
-            )
+                metrics = SystemMetrics(
+                    timestamp=datetime.utcnow(),
+                    cpu_percent=cpu_percent,
+                    memory_percent=memory.percent,
+                    memory_available_mb=memory.available // (1024 * 1024),
+                    disk_percent=disk.percent,
+                    disk_free_gb=disk.free // (1024 * 1024 * 1024),
+                    process_count=len(psutil.pids()),
+                    load_average=list(os.getloadavg()) if hasattr(os, 'getloadavg') else [0, 0, 0],
+                    network_bytes_sent=network.bytes_sent,
+                    network_bytes_recv=network.bytes_recv
+                )
+            else:
+                # Métricas simuladas cuando psutil no está disponible
+                metrics = SystemMetrics(
+                    timestamp=datetime.utcnow(),
+                    cpu_percent=0.0,
+                    memory_percent=0.0,
+                    memory_available_mb=0,
+                    disk_percent=0.0,
+                    disk_free_gb=0,
+                    process_count=0,
+                    load_average=[0, 0, 0],
+                    network_bytes_sent=0,
+                    network_bytes_recv=0
+                )
 
             self.metrics_history.append(metrics)
-            logger.debug(f"Métricas recolectadas: CPU {cpu_percent:.1f}%, Memory {memory.percent:.1f}%")
+            logger.debug(f"Métricas recolectadas: CPU {metrics.cpu_percent:.1f}%, Memory {metrics.memory_percent:.1f}%")
 
         except Exception as e:
             logger.error(f"Error recolectando métricas: {e}")

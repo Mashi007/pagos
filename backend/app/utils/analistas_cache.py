@@ -4,6 +4,7 @@ Evita consultas repetidas a la base de datos
 """
 
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from collections import defaultdict

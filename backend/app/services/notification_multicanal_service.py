@@ -13,6 +13,7 @@ from enum import Enum
 from sqlalchemy.orm import Session
 from app.models.amortizacion import Cuota
 from app.models.notificacion import Notificacion
+from app.models.cliente import Cliente
 from app.services.email_service import EmailService
 from app.services.whatsapp_service import WhatsAppService
 
