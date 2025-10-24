@@ -1,13 +1,15 @@
 # backend/app/core/monitoring.py
 """
+Configuración de Monitoreo y Observabilidad
+Integración con Sentry, Prometheus y logging estructurado
+"""
+
+import logging
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-Configuración de Monitoreo y Observabilidad
-Integración con Sentry, Prometheus y logging estructurado
-"""
 
 from fastapi import FastAPI
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -15,6 +17,7 @@ import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastAPIIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from pythonjsonlogger import jsonlogger
+from app.core.config import settings
 
 def configure_sentry(app: FastAPI) -> None:
     """

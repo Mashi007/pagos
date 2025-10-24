@@ -1,14 +1,17 @@
 # backend/app/services/logging_config.py
 """
+Configuración de Logging Estructurado para Services
+Implementa normas de monitoreo y trazabilidad
+"""
+
+import logging
+import json
+import sys
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-Configuración de Logging Estructurado para Services
-Implementa normas de monitoreo y trazabilidad
-"""
-import sys
 from contextvars import ContextVar
 import uuid
 
@@ -130,7 +133,7 @@ def set_request_context(
     request_id_val: Optional[str] = None,
     user_id_val: Optional[int] = None,
     session_id_val: Optional[str] = None
-:
+):
     """
     Establecer contexto de trazabilidad para el request actual
     """
@@ -154,7 +157,7 @@ def log_service_call(
     duration_ms: Optional[float] = None,
     success: bool = True,
     error: Optional[str] = None
-:
+):
     """
     Log estructurado para llamadas a servicios
     """
@@ -191,7 +194,7 @@ def log_business_event(
     entity_id: Optional[str] = None,
     user_action: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None
-:
+):
     """
     Log de eventos de negocio para auditoría
     """
@@ -212,7 +215,7 @@ def log_performance_metric(
     value: float,
     unit: str = "ms",
     tags: Optional[Dict[str, str]] = None
-:
+):
     """
     Log de métricas de rendimiento
     """
@@ -232,7 +235,7 @@ def log_security_event(
     severity: str = "MEDIUM",
     details: Optional[Dict[str, Any]] = None,
     threat_level: str = "UNKNOWN"
-:
+):
     """
     Log de eventos de seguridad
     """

@@ -1,17 +1,21 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Sistema de Manejo de Errores con Análisis de Impacto en Performance
 Implementa manejo robusto de errores con métricas de impacto
 """
- Type
+
+import logging
+import time
+import traceback
+import psutil
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple, Callable
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from dataclasses import dataclass, asdict
 from enum import Enum
 from functools import wraps
-
+from collections import deque, defaultdict
 import threading
 
 # Constantes de configuración
@@ -30,7 +34,7 @@ class ErrorSeverity(Enum):
     HIGH = "HIGH"
     CRITICAL = "CRITICAL"
 
-dataclass
+@dataclass
 class ErrorMetrics:
     """Métricas de un error"""
     error_type: str
@@ -45,7 +49,7 @@ class ErrorMetrics:
     user_id: Optional[str] = None
     request_id: Optional[str] = None
 
-dataclass
+@dataclass
 class ErrorImpactAnalysis:
     """Análisis de impacto de errores"""
     error_rate: float

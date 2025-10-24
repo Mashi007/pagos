@@ -18,6 +18,11 @@ from app.models.cliente import Cliente
 from app.models.amortizacion import Cuota
 from app.models.analista import Analista
 from app.models.notificacion import Notificacion
+from app.models.prestamo import Prestamo
+from app.models.pago import Pago
+from sqlalchemy import func, and_
+from decimal import Decimal
+from app.core.config import settings
 
 # Servicios de notificación
 from app.services.email_service import EmailService

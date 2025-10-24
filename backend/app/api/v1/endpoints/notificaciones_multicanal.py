@@ -15,6 +15,11 @@ from pydantic import BaseModel, Field
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.amortizacion import Cuota
+from app.models.notificacion import Notificacion
+from app.models.cliente import Cliente
+from app.models.prestamo import Prestamo
+from app.db.session import SessionLocal
+from datetime import date
 from app.services.notification_multicanal_service import (
     NotificacionMulticanal,
     NotificationScheduler,

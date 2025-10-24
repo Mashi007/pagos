@@ -1,14 +1,15 @@
 # backend/app/core/security_audit.py
 """
+Security Audit Logger - Logging de eventos de seguridad críticos
+Cumple con OWASP A09:2021 - Security Logging and Monitoring Failures
+"""
+
+import logging
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-Security Audit Logger - Logging de eventos de seguridad críticos
-Cumple con OWASP A09:2021 - Security Logging and Monitoring Failures
-"""
-from typing import Dict, Any
 from enum import Enum
 
 # Configurar logger específico para auditoría de seguridad
@@ -38,7 +39,7 @@ def log_security_event(
     ip_address: Optional[str] = None,
     details: Optional[Dict[str, Any]] = None,
     success: bool = True
-:
+):
     """
     Registra un evento de seguridad
 
@@ -76,7 +77,7 @@ def log_login_attempt(
     ip_address: str,
     success: bool,
     reason: Optional[str] = None
-:
+):
     """Registra un intento de login"""
     log_security_event(
         event_type=SecurityEventType.LOGIN_SUCCESS if success else SecurityEventType.LOGIN_FAILED,
@@ -91,7 +92,7 @@ def log_password_change(
     user_id: int,
     ip_address: str,
     success: bool
-:
+):
     """Registra un cambio de contraseña"""
     log_security_event(
         event_type=SecurityEventType.PASSWORD_CHANGE,
@@ -106,7 +107,7 @@ def log_unauthorized_access(
     user_email: Optional[str],
     ip_address: str,
     reason: str
-:
+):
     """Registra un intento de acceso no autorizado"""
     log_security_event(
         event_type=SecurityEventType.UNAUTHORIZED_ACCESS,
@@ -123,7 +124,7 @@ def log_data_modification(
     resource_id: int,
     action: str,
     ip_address: str
-:
+):
     """Registra modificación de datos sensibles"""
     log_security_event(
         event_type=SecurityEventType.DATA_MODIFICATION,

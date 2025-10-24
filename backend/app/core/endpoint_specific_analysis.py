@@ -1,14 +1,16 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Decorator Específico para Análisis de Impacto por Endpoint
 Implementa análisis específico para endpoints críticos
 """
-from functools import wraps
 
+import logging
+import time
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple, Callable
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from functools import wraps
 
 from app.core.impact_monitoring import record_endpoint_performance
 from app.core.error_impact_analysis import record_error, record_success

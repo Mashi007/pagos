@@ -4,6 +4,7 @@ Machine Learning y análisis estadístico para predecir problemas de autenticaci
 """
 
 import logging
+import statistics
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass

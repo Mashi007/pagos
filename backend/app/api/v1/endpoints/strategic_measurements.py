@@ -5,6 +5,7 @@ Implementa mediciones específicas para problemas identificados
 
 import logging
 import threading
+import os
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from collections import deque, defaultdict

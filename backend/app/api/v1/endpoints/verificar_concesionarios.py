@@ -8,6 +8,7 @@ from typing import Optional, List, Dict, Any, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User

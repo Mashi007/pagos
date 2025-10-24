@@ -5,12 +5,16 @@ Sistema completo para validar y corregir formatos incorrectos de datos
 """
 import logging
 import time
+import re
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from decimal import Decimal, InvalidOperation
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, asc
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from app.models.cliente import Cliente
+from app.models.pago import Pago
 
 logger = logging.getLogger(__name__)
 

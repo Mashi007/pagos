@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
+Script de Validación de Calidad para Services
+Aplica normas de linting, formateo y trazabilidad
+"""
+
+import sys
+import json
+from pathlib import Path
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-Script de Validación de Calidad para Services
-Aplica normas de linting, formateo y trazabilidad
-"""
-import sys
-from pathlib import Path
 
 # Agregar el directorio del proyecto al path
 sys.path.append(str(Path(__file__).parent.parent.parent))

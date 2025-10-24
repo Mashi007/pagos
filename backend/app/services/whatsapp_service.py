@@ -4,6 +4,7 @@ Servicio para envío de mensajes WhatsApp usando Meta Developers API.
 """
 import logging
 import aiohttp
+import re
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session
@@ -11,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.db.session import SessionLocal
 from app.core.config import settings
-from app.models.notificacion import EstadoNotificacion
+from app.models.notificacion import EstadoNotificacion, Notificacion
 
 logger = logging.getLogger(__name__)
 
