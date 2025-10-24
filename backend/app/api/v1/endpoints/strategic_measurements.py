@@ -1,17 +1,23 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Sistema de Mediciones Estratégicas
+Sistema de Mediciones Estratégicas
 Implementa mediciones específicas para problemas identificados
 """
 
+import logging
 import threading
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from collections import deque, defaultdict
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
+
 # Import condicional de psutil
 try:
-    
+    import psutil
     PSUTIL_AVAILABLE = True
 except ImportError:
     PSUTIL_AVAILABLE = False
@@ -402,11 +408,11 @@ strategic_measurements = StrategicMeasurements()
 # ENDPOINTS DE MEDICIONES ESTRATÉGICAS
 # ============================================
 
-router.get("/deployment-health")
+@router.get("/deployment-health")
 async def get_deployment_health(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🚀 Medir salud del despliegue
     """
@@ -427,11 +433,11 @@ async def get_deployment_health(
             "error": str(e)
         }
 
-router.get("/schema-consistency")
+@router.get("/schema-consistency")
 async def get_schema_consistency(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Medir consistencia del esquema
     """
@@ -452,11 +458,11 @@ async def get_schema_consistency(
             "error": str(e)
         }
 
-router.get("/frontend-stability")
+@router.get("/frontend-stability")
 async def get_frontend_stability(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🎨 Medir estabilidad del frontend
     """
@@ -477,11 +483,11 @@ async def get_frontend_stability(
             "error": str(e)
         }
 
-router.get("/system-performance")
+@router.get("/system-performance")
 async def get_system_performance(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⚡ Medir rendimiento del sistema
     """
@@ -502,11 +508,11 @@ async def get_system_performance(
             "error": str(e)
         }
 
-router.get("/measurement-summary")
+@router.get("/measurement-summary")
 async def get_measurement_summary_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📋 Resumen de mediciones estratégicas
     """

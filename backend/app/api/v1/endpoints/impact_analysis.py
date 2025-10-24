@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
-from app.core.impact_monitoring import get_impact_analyzer, get_error_analyzer
+from app.core.impact_monitoring import get_impact_analyzer
 
 
 router = APIRouter()

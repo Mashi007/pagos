@@ -1,14 +1,20 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Sistema de Monitoreo en Tiempo Real Específico
+Sistema de Monitoreo en Tiempo Real Específico
 Monitorea específicamente los momentos cuando ocurren fallos 401 intermitentes
 """
 
+import logging
 import threading
+import time
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from collections import deque, defaultdict
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -360,11 +366,11 @@ async def capture_auth_event_endpoint(
             "error": str(e)
         }
 
-router.get("/failure-moments-analysis")
+@router.get("/failure-moments-analysis")
 async def get_failure_moments_analysis(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔍 Análisis de momentos específicos de fallo
     """
@@ -385,11 +391,11 @@ async def get_failure_moments_analysis(
             "error": str(e)
         }
 
-router.get("/real-time-status")
+@router.get("/real-time-status")
 async def get_real_time_status_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Estado del monitoreo en tiempo real
     """
@@ -410,12 +416,12 @@ async def get_real_time_status_endpoint(
             "error": str(e)
         }
 
-router.get("/monitoring-session/{session_id}")
+@router.get("/monitoring-session/{session_id}")
 async def get_monitoring_session_details_endpoint(
     session_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📋 Detalles de sesión de monitoreo específica
     """

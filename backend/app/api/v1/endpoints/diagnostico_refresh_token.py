@@ -8,7 +8,7 @@ from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
-from jwt import JWTError
+from jwt import PyJWTError
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.core.config import settings
@@ -79,7 +79,7 @@ async def diagnosticar_refresh_token(
             payload_verified = decode_token(refresh_token)
             token_info["verificacion_firma"] = "SUCCESS"
             token_info["payload_verificado"] = payload_verified
-        except JWTError as e:
+        except PyJWTError as e:
             token_info["verificacion_firma"] = "FAILED"
             token_info["error_verificacion"] = str(e)
 

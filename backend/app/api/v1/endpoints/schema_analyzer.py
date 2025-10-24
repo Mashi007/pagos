@@ -1,14 +1,19 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Sistema de Análisis de Esquema de Base de Datos
+Sistema de Análisis de Esquema de Base de Datos
 Identifica inconsistencias específicas entre modelos y esquema real
 """
 
+import logging
 import threading
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from collections import deque, defaultdict
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -218,11 +223,11 @@ async def get_schema_fixes(
             "error": str(e)
         }
 
-router.get("/schema-monitoring")
+@router.get("/schema-monitoring")
 async def get_schema_monitoring(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Monitorear estado actual del esquema
     """

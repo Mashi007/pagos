@@ -1,21 +1,25 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 Endpoint temporal para verificar datos de concesionarios
 """
 
+import logging
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-router.get("/verificar-concesionarios")
+@router.get("/verificar-concesionarios")
 def verificar_datos_concesionarios(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔍 Verificar los datos reales de concesionarios en la base de datos
     """
