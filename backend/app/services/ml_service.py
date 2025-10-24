@@ -13,6 +13,10 @@ from sqlalchemy.orm import Session
 from app.models.amortizacion import Cuota
 from app.models.analista import Analista
 from app.models.cliente import Cliente
+from app.models.pago import Pago
+from app.models.prestamo import Prestamo
+from app.models.user import User
+from sqlalchemy import func, case
 
 logger = logging.getLogger(__name__)
 

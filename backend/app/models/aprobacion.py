@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, relationship
 from sqlalchemy.sql import func
 
 from app.db.session import Base
+from app.schemas.aprobacion import EstadoAprobacion
 
 class Aprobacion(Base):
     """
@@ -105,7 +106,6 @@ class Aprobacion(Base):
     @property
     def esta_pendiente(self) -> bool:
         """Verifica si la aprobación está pendiente"""
-        from app.core.constants import EstadoAprobacion
         return self.estado == EstadoAprobacion.PENDIENTE.value
 
     @property

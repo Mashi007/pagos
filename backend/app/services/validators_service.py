@@ -1170,11 +1170,8 @@ class ServicioCorreccionDatos:
         Detectar datos incorrectos en la base de datos masivamente
         """
         try:
-            
-            
-
             # Obtener clientes con posibles errores
-            clientes = db.query(Cliente).filter(Cliente.activo ).limit(limite).all()
+            clientes = db.query(Cliente).filter(Cliente.activo.is_(True)).limit(limite).all()
 
             clientes_con_errores = []
             tipos_errores = {

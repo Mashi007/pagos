@@ -14,8 +14,12 @@ from sqlalchemy.orm import Session
 from app.models.amortizacion import Cuota
 from app.models.notificacion import Notificacion
 from app.models.cliente import Cliente
+from app.models.prestamo import Prestamo
+from app.models.user import User
 from app.services.email_service import EmailService
 from app.services.whatsapp_service import WhatsAppService
+from sqlalchemy import func
+from datetime import date
 
 logger = logging.getLogger(__name__)
 

@@ -6,6 +6,7 @@ Centraliza todas las configuraciones del sistema para fácil gestión desde el f
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 import logging
+import json
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON, Text
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy.sql import func
