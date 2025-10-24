@@ -9,7 +9,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 import jwt
-from jwt import JWTError
+from jwt import PyJWTError
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
@@ -122,7 +122,7 @@ async def verificar_token_detallado(
                 "verified": True,
                 "payload": verified_payload
             }
-        except JWTError as e:
+        except PyJWTError as e:
             verification_result = {
                 "status": "error",
                 "verified": False,

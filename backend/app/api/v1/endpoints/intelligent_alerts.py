@@ -35,7 +35,7 @@ class AlertStatus(Enum):
     RESOLVED = "resolved"
     SUPPRESSED = "suppressed"
 
-dataclass
+@dataclass
 class AlertRule:
     """Regla de alerta"""
     name: str
@@ -45,7 +45,7 @@ class AlertRule:
     cooldown_minutes: int = 15
     enabled: bool = True
 
-dataclass
+@dataclass
 class Alert:
     """Alerta generada"""
     id: str

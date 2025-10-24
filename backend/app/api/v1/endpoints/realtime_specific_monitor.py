@@ -326,12 +326,12 @@ async def stop_specific_monitoring_endpoint(
             "error": str(e)
         }
 
-router.post("/capture-auth-event")
+@router.post("/capture-auth-event")
 async def capture_auth_event_endpoint(
     event_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📡 Capturar evento de autenticación en tiempo real
     """

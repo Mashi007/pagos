@@ -1,19 +1,24 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Sistema de Análisis Predictivo de Autenticación
+Sistema de Análisis Predictivo de Autenticación
 Machine Learning y análisis estadístico para predecir problemas de autenticación
 """
 
+import logging
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass
+from collections import deque, defaultdict
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-dataclass
+@dataclass
 class AuthMetrics:
     """Métricas de autenticación"""
     timestamp: datetime

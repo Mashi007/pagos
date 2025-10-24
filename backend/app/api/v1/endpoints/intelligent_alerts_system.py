@@ -1,16 +1,21 @@
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
- Sistema de Alertas Inteligentes para Autenticación
+Sistema de Alertas Inteligentes para Autenticación
 Detecta y alerta sobre problemas de autenticación en tiempo real
 """
 
-
-from enum import Enum
+import logging
 import threading
+import time
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Tuple
+from enum import Enum
+from collections import deque, defaultdict
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -357,11 +362,11 @@ async def get_active_alerts(
             "error": str(e)
         }
 
-router.get("/alert-statistics")
+@router.get("/alert-statistics")
 async def get_alert_statistics(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Estadísticas de alertas
     """
@@ -382,13 +387,13 @@ async def get_alert_statistics(
             "error": str(e)
         }
 
-router.post("/resolve-alert/{alert_id}")
+@router.post("/resolve-alert/{alert_id}")
 async def resolve_alert_endpoint(
     alert_id: str,
     resolution_data: Dict[str, str],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ✅ Resolver alerta manualmente
     """
@@ -415,12 +420,12 @@ async def resolve_alert_endpoint(
             "error": str(e)
         }
 
-router.post("/add-metric")
+@router.post("/add-metric")
 async def add_metric_endpoint(
     metric_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📈 Agregar métrica para análisis de alertas
     """
@@ -450,12 +455,12 @@ async def add_metric_endpoint(
             "error": str(e)
         }
 
-router.get("/alert-history")
+@router.get("/alert-history")
 async def get_alert_history(
     limit: int = 50,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📜 Historial de alertas
     """
@@ -478,12 +483,12 @@ async def get_alert_history(
             "error": str(e)
         }
 
-router.post("/configure-alert-rule")
+@router.post("/configure-alert-rule")
 async def configure_alert_rule(
     rule_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     ⚙️ Configurar regla de alerta
     """

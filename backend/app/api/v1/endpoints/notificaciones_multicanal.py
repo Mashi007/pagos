@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
@@ -449,10 +449,10 @@ def actualizar_preferencias_cliente(
 # GESTIÓN DE TEMPLATES WHATSAPP
 # ============================================
 
-router.get("/whatsapp/templates")
+@router.get("/whatsapp/templates")
 def listar_templates_whatsapp(
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📝 Listar templates de WhatsApp disponibles
 
@@ -487,11 +487,11 @@ def listar_templates_whatsapp(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listando templates: {str(e)}")
 
-router.post("/whatsapp/templates/{template_name}/aprobar")
+@router.post("/whatsapp/templates/{template_name}/aprobar")
 def enviar_template_para_aprobacion(
     template_name: str,
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📤 Enviar template de WhatsApp a Meta para aprobación
     """
@@ -529,12 +529,12 @@ def enviar_template_para_aprobacion(
 # REINTENTOS Y RECUPERACIÓN
 # ============================================
 
-router.post("/procesar-reintentos")
+@router.post("/procesar-reintentos")
 async def procesar_reintentos_fallidas(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔄 Procesar reintentos de notificaciones fallidas
 
@@ -575,12 +575,12 @@ async def procesar_reintentos_fallidas(
 # DASHBOARD DE NOTIFICACIONES MULTICANAL
 # ============================================
 
-router.get("/dashboard")
+@router.get("/dashboard")
 def dashboard_notificaciones_multicanal(
     periodo: str = Query("hoy", description="hoy, semana, mes"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     📊 Dashboard completo de notificaciones multicanal
     """
@@ -707,14 +707,14 @@ def dashboard_notificaciones_multicanal(
 # TESTING Y PRUEBAS
 # ============================================
 
-router.post("/probar-envio")
+@router.post("/probar-envio")
 async def probar_envio_notificacion(
     cliente_id: int,
     tipo_notificacion: TipoNotificacionCliente,
     canal: CanalNotificacion = CanalNotificacion.AMBOS,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🧪 Probar envío de notificación a cliente específico
     """
@@ -846,11 +846,11 @@ def _agrupar_por_campo(lista: List[Dict], extractor) -> Dict[str, int]:
 # ENDPOINT DE VERIFICACIÓN
 # ============================================
 
-router.get("/verificacion-sistema")
+@router.get("/verificacion-sistema")
 def verificar_sistema_notificaciones_multicanal(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-:
+):
     """
     🔍 Verificación completa del sistema de notificaciones multicanal
     """
