@@ -45,9 +45,7 @@ def add_cors_headers(request: Request, response: Response) -> None:
     """
     origin = request.headers.get("origin")
     logger.info(f"CORS Debug - Origin recibido: {origin}")
-    logger.info(f"CORS Debug - Origins permitidos: {settings.CORS_ORIGINS}")
 
-    # Manejar casos especiales de origin
     if origin is None or origin == "null":
         # Para requests sin origin (como desde scripts o herramientas)
         origin = "null"
@@ -76,7 +74,6 @@ def add_cors_headers(request: Request, response: Response) -> None:
     response.headers["Access-Control-Allow-Credentials"] = "true"
 
 
-@router.post("/login", response_model=LoginResponse)
 async def login(
     request: Request,
     response: Response,
@@ -118,7 +115,6 @@ async def login(
         # Generar refresh token nuevo
         refresh_token = create_refresh_token(subject=user.id)
 
-        logger.info(f"Login exitoso para: {login_data.email}")
 
         # Convertir usuario a diccionario
         user_dict = UserMeResponse.model_validate(user).model_dump()
@@ -163,7 +159,6 @@ async def get_current_user_info(
         )
 
 
-@router.post("/logout")
 async def logout(
     request: Request,
     response: Response,
@@ -176,9 +171,7 @@ async def logout(
         # Agregar headers CORS
         add_cors_headers(request, response)
 
-        logger.info(f"Logout exitoso para: {current_user.email}")
 
-        return {"message": "Logout exitoso"}
 
     except Exception as e:
         logger.error(f"Error en logout: {e}")
@@ -188,7 +181,6 @@ async def logout(
         )
 
 
-@router.post("/refresh", response_model=Token)
 async def refresh_token(
     request: Request,
     response: Response,
@@ -221,7 +213,6 @@ async def refresh_token(
         )
 
 
-@router.post("/change-password")
 async def change_password(
     request: Request,
     response: Response,
@@ -261,7 +252,6 @@ async def change_password(
 
         logger.info(f"Contraseña cambiada para: {current_user.email}")
 
-        return {"message": "Contraseña cambiada exitosamente"}
 
     except HTTPException:
         raise

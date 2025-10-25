@@ -1,5 +1,4 @@
 ﻿"""Helper para registrar acciones de auditoría
-Integración automática con todos los módulos
 """
 
 import logging
@@ -21,8 +20,6 @@ def registrar_auditoria(
     tabla: str,
     registro_id: Optional[int] = None,
     descripcion: Optional[str] = None,
-    datos_anteriores: Optional[Dict[str, Any]] = None,
-    datos_nuevos: Optional[Dict[str, Any]] = None,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None,
     resultado: str = "EXITOSO",
@@ -32,15 +29,12 @@ def registrar_auditoria(
     Registrar una acción en la auditoría del sistema
 
     Args:
-        db: Sesión de base de datos
         usuario: Usuario que realizó la acción
         accion: Tipo de acción (CREAR, ACTUALIZAR, ELIMINAR, LOGIN, etc.)
         modulo: Módulo del sistema (USUARIOS, CLIENTES, PRESTAMOS, etc.)
         tabla: Tabla afectada
         registro_id: ID del registro afectado
         descripcion: Descripción de la acción
-        datos_anteriores: Estado anterior (dict)
-        datos_nuevos: Estado nuevo (dict)
         ip_address: IP del usuario
         user_agent: User agent del navegador
         resultado: Resultado de la acción
@@ -52,7 +46,7 @@ def registrar_auditoria(
     # Validar que el usuario no sea None
     if usuario is None:
         logger.warning(
-            f"Intento de registrar auditoría sin"
+            "Intento de registrar auditoría sin"
             + f"usuario válido: {accion} - {modulo}"
         )
         raise ValueError(
@@ -68,8 +62,6 @@ def registrar_auditoria(
             tabla=tabla,
             registro_id=registro_id,
             descripcion=descripcion,
-            datos_anteriores=datos_anteriores,
-            datos_nuevos=datos_nuevos,
             ip_address=ip_address,
             user_agent=user_agent,
             resultado=resultado,
@@ -90,21 +82,17 @@ def registrar_auditoria(
         raise
 
 
-def registrar_login_exitoso(
     db: Session,
     usuario: User,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> Auditoria:
-    """Registrar login exitoso"""
     return registrar_auditoria(
         db=db,
         usuario=usuario,
         accion="LOGIN",
         modulo="AUTH",
-        tabla="usuarios",
         registro_id=usuario.id,
-        descripcion=f"Inicio de sesión exitoso para {usuario.email}",
         ip_address=ip_address,
         user_agent=user_agent,
         resultado="EXITOSO",
@@ -123,7 +111,6 @@ def registrar_logout(
         usuario=usuario,
         accion="LOGOUT",
         modulo="AUTH",
-        tabla="usuarios",
         registro_id=usuario.id,
         descripcion=f"Cierre de sesión para {usuario.email}",
         ip_address=ip_address,
@@ -139,7 +126,6 @@ def registrar_creacion(
     tabla: str,
     registro_id: int,
     descripcion: str,
-    datos_nuevos: Optional[Dict[str, Any]] = None,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> Auditoria:
@@ -152,7 +138,6 @@ def registrar_creacion(
         tabla=tabla,
         registro_id=registro_id,
         descripcion=descripcion,
-        datos_nuevos=datos_nuevos,
         ip_address=ip_address,
         user_agent=user_agent,
         resultado="EXITOSO",
@@ -166,8 +151,6 @@ def registrar_actualizacion(
     tabla: str,
     registro_id: int,
     descripcion: str,
-    datos_anteriores: Optional[Dict[str, Any]] = None,
-    datos_nuevos: Optional[Dict[str, Any]] = None,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> Auditoria:
@@ -180,8 +163,6 @@ def registrar_actualizacion(
         tabla=tabla,
         registro_id=registro_id,
         descripcion=descripcion,
-        datos_anteriores=datos_anteriores,
-        datos_nuevos=datos_nuevos,
         ip_address=ip_address,
         user_agent=user_agent,
         resultado="EXITOSO",
@@ -195,7 +176,6 @@ def registrar_eliminacion(
     tabla: str,
     registro_id: int,
     descripcion: str,
-    datos_anteriores: Optional[Dict[str, Any]] = None,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> Auditoria:
@@ -208,7 +188,6 @@ def registrar_eliminacion(
         tabla=tabla,
         registro_id=registro_id,
         descripcion=descripcion,
-        datos_anteriores=datos_anteriores,
         ip_address=ip_address,
         user_agent=user_agent,
         resultado="EXITOSO",

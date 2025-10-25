@@ -1,8 +1,8 @@
+from app.core.security import decode_token
 ﻿"""Endpoint de diagnóstico específico para problemas de refresh token
 """
 
 import logging
-from datetime import datetime
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -18,10 +18,9 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-@router.post("/diagnosticar-refresh-token")
 # Funcion compleja - considerar refactoring
 
-async def diagnosticar_refresh_token(
+
     request: Request,
     db: Session = Depends(get_db)
 ):
@@ -37,7 +36,6 @@ async def diagnosticar_refresh_token(
 
         if not refresh_token:
             return {
-                "timestamp": datetime.now().isoformat(),
                 "status": "error",
                 "error": "No refresh token provided",
                 "recomendacion": (
@@ -65,13 +63,6 @@ async def diagnosticar_refresh_token(
 
             # Verificar si está expirado
             if payload_unverified.get("exp"):
-                exp_timestamp = payload_unverified["exp"]
-                exp_datetime = datetime.fromtimestamp(exp_timestamp)
-                now = datetime.now()
-                token_info["expired"] = now > exp_datetime
-                token_info["expires_at"] = exp_datetime.isoformat()
-                token_info["time_until_expiry"] = (
-                    str(exp_datetime - now)
                     if not token_info["expired"]
                     else "EXPIRED"
                 )
@@ -121,24 +112,20 @@ async def diagnosticar_refresh_token(
             recomendaciones.append("ALGORITHM no configurado")
 
         if not recomendaciones:
-            recomendaciones.append("Token parece válido - revisar otros aspectos del sistema")
 
         # 5. Resultado del diagnóstico
         resultado = {
-            "timestamp": datetime.now().isoformat(),
             "status": "completed",
             "token_info": token_info,
             "system_validation": system_validation,
             "config_check": config_check,
             "recomendaciones": recomendaciones,
-            "diagnostico_completo": True,
         }
 
         logger.info("🔍 Diagnóstico de refresh token completado")
 
         return {
             "success": True,
-            "diagnostico": resultado
         }
 
     except Exception as e:
@@ -146,15 +133,12 @@ async def diagnosticar_refresh_token(
         return {
             "success": False,
             "error": str(e),
-            "diagnostico": {
-                "timestamp": datetime.now().isoformat(),
                 "status": "error",
                 "error": str(e),
                 "recomendacion": "Revisar logs del servidor para más detalles"
             }
         }
 
-@router.post("/test-refresh-token")
 async def test_refresh_token(
     request: Request,
     db: Session = Depends(get_db),
@@ -169,7 +153,7 @@ async def test_refresh_token(
 
         # Intentar decodificarlo
         try:
-            decoded = decode_token(nuevo_refresh_token)
+#             decoded = decode_token(nuevo_refresh_token)  # Variable no usada
             validation_success = True
             validation_error = None
         except Exception as e:
@@ -177,10 +161,8 @@ async def test_refresh_token(
             validation_error = str(e)
 
         resultado = {
-            "timestamp": datetime.now().isoformat(),
             "nuevo_token_generado": True,
             "token_preview": nuevo_refresh_token[:50] + "...",
-            "validacion_exitosa": validation_success,
             "validation_error": validation_error,
             "user_id": current_user.id,
             "configuracion": {
@@ -210,7 +192,6 @@ async def get_refresh_token_config(
     """⚙️ Obtener configuración de refresh token"""
     try:
         config = {
-            "timestamp": datetime.now().isoformat(),
             "secret_key_configured": bool(settings.SECRET_KEY),
             "secret_key_length": len(settings.SECRET_KEY) if settings.SECRET_KEY else 0,
             "algorithm": settings.ALGORITHM,

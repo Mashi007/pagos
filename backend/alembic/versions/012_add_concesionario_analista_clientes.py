@@ -1,4 +1,3 @@
-"""Agregar campos concesionario y analista a tabla clientes
 
 Revision ID: 012_add_concesionario_analista_clientes
 Revises: 011_fix_admin_users_final
@@ -18,7 +17,6 @@ depends_on = None
 
 
 def upgrade():
-    """Agregar campos concesionario y analista a tabla clientes"""
 
     # Verificar si las columnas ya existen
     inspector = inspect(op.get_bind())
@@ -44,7 +42,6 @@ def upgrade():
 
 
 def downgrade():
-    """Eliminar campos concesionario y analista de tabla clientes"""
 
     # Verificar si las columnas existen antes de eliminarlas
     inspector = inspect(op.get_bind())

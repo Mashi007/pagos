@@ -40,7 +40,6 @@ class Settings(BaseSettings):
     # ============================================
     # APLICACIÓN
     # ============================================
-    APP_NAME: str = "Sistema de Préstamos y Cobranza"
     APP_VERSION: str = "1.0.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = False
@@ -53,12 +52,9 @@ class Settings(BaseSettings):
     PORT: int = 8080
 
     # ============================================
-    # CORS (Cross-Origin Resource Sharing)
     # ============================================
     CORS_ORIGINS: List[str] = [
-        "http://localhost:3000",  # ✅ Desarrollo local
         "https://rapicredit.onrender.com",  # ✅ Frontend en Render
-        "https://pagos-f2qf.onrender.com",  # ✅ Backend en Render
         "null",  # ✅ Para requests sin origin (scripts, herramientas)
         "*",  # ✅ Temporalmente permisivo para debugging
     ]
@@ -116,7 +112,6 @@ class Settings(BaseSettings):
         if self.ENVIRONMENT == "production" and "*" in self.CORS_ORIGINS:
             raise ValueError(
                 "⚠️ CRÍTICO: CORS con wildcard (*) detectado en producción. "
-                "Configure CORS_ORIGINS con dominios específicos: "
                 "CORS_ORIGINS='[\"https://tu-dominio.com\"]'"
             )
         return True
@@ -179,7 +174,7 @@ class Settings(BaseSettings):
     # ============================================
     MAX_UPLOAD_SIZE: int = DEFAULT_MAX_UPLOAD_SIZE  # 10 MB
     ALLOWED_UPLOAD_EXTENSIONS: List[str] = [
-        ".pdf",
+        ".pd",
         ".jpg",
         ".jpeg",
         ".png",
@@ -286,14 +281,12 @@ class Settings(BaseSettings):
 
 
     def validate_loan_amount(self, amount: float) -> bool:
-        """Valida que el monto esté dentro de los límites"""
         return (
             self.MONTO_MINIMO_PRESTAMO <= amount <= self.MONTO_MAXIMO_PRESTAMO
         )
 
 
     def validate_loan_term(self, months: int) -> bool:
-        """Valida que el plazo esté dentro de los límites"""
         return self.PLAZO_MINIMO_MESES <= months <= self.PLAZO_MAXIMO_MESES
 
 

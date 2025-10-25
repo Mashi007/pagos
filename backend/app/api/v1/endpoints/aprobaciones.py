@@ -2,7 +2,6 @@
 Sistema de workflow para solicitudes que requieren aprobación
 """
 
-from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -27,12 +26,10 @@ class AprobacionCreate(BaseModel):
     entidad: str
     entidad_id: int
     justificacion: str
-    datos_solicitados: Optional[str] = None
 
 
 class AprobacionUpdate(BaseModel):
     estado: str
-    comentarios_revisor: Optional[str] = None
 
 
 class AprobacionResponse(BaseModel):
@@ -43,9 +40,6 @@ class AprobacionResponse(BaseModel):
     entidad: str
     entidad_id: int
     justificacion: str
-    comentarios_revisor: Optional[str]
-    fecha_solicitud: datetime
-    fecha_revision: Optional[datetime]
     solicitante_id: int
     revisor_id: Optional[int]
 
@@ -57,7 +51,6 @@ class AprobacionResponse(BaseModel):
 # ENDPOINTS
 # ============================================
 
-@router.post(
     "/", response_model=AprobacionResponse, status_code=status.HTTP_201_CREATED
 )
 
@@ -76,7 +69,6 @@ def crear_aprobacion(
         entidad=aprobacion_data.entidad,
         entidad_id=aprobacion_data.entidad_id,
         justificacion=aprobacion_data.justificacion,
-        datos_solicitados=aprobacion_data.datos_solicitados,
     )
     db.add(aprobacion)
     db.commit()
@@ -92,7 +84,6 @@ def listar_aprobaciones(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Listar aprobaciones con filtros"""
     query = db.query(Aprobacion)
     if estado:
         query = query.filter(Aprobacion.estado == estado)
@@ -142,16 +133,12 @@ def actualizar_aprobacion(
     # Actualizar según el estado
     if aprobacion_update.estado == EstadoAprobacion.APROBADA.value:
         aprobacion.aprobar(
-            current_user.id, aprobacion_update.comentarios_revisor
         )
     elif aprobacion_update.estado == EstadoAprobacion.RECHAZADA.value:
-        if not aprobacion_update.comentarios_revisor:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Los comentarios son obligatorios al rechazar",
             )
         aprobacion.rechazar(
-            current_user.id, aprobacion_update.comentarios_revisor
         )
     elif aprobacion_update.estado == EstadoAprobacion.CANCELADA.value:
         aprobacion.cancelar()

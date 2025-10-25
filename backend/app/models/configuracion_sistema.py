@@ -7,7 +7,6 @@ el frontend
 
 import json
 import logging
-from datetime import datetime
 from typing import Any, Dict, Optional
 from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text
 from sqlalchemy.sql import func
@@ -19,7 +18,6 @@ logger = logging.getLogger(__name__)
 class ConfiguracionSistema(Base):
     """
     Configuración centralizada del sistema
-    Permite configurar desde el frontend todos los aspectos del sistema
     """
     __tablename__ = "configuracion_sistema"
 
@@ -36,7 +34,6 @@ class ConfiguracionSistema(Base):
     valor = Column(Text, nullable=True)  # Valor de la configuración
     valor_json = Column(JSON, nullable=True)  # Para configuraciones complejas
 
-    # Metadatos
     descripcion = Column(Text, nullable=True)
     tipo_dato = Column(
         String(20), default="STRING"
@@ -135,7 +132,6 @@ class ConfiguracionSistema(Base):
         else:
             self.valor = str(nuevo_valor)
 
-        self.actualizado_en = datetime.utcnow()
         if usuario:
             self.actualizado_por = usuario
 
@@ -327,20 +323,17 @@ class ConfiguracionPorDefecto:
         "ROLES": {
             "ROLES_ACTIVOS": {
                 "valor_json": ["USER"],
-                "descripcion": "Roles activos en el sistema",
                 "tipo_dato": "JSON",
                 "requerido": True,
                 "visible_frontend": True,
             },
             "REGISTRO_USUARIOS_ABIERTO": {
                 "valor": "false",
-                "descripcion": "Permitir registro abierto de usuarios",
                 "tipo_dato": "BOOLEAN",
                 "requerido": False,
             },
             "REQUIERE_APROBACION_USUARIOS": {
                 "valor": "true",
-                "descripcion": "Nuevos usuarios requieren aprobación de admin",
                 "tipo_dato": "BOOLEAN",
                 "requerido": False,
             },
@@ -404,7 +397,6 @@ class ConfiguracionPorDefecto:
         "NOTIFICACIONES": {
             "RECORDATORIOS_HABILITADOS": {
                 "valor": "true",
-                "descripcion": "Habilitar recordatorios automáticos",
                 "tipo_dato": "BOOLEAN",
                 "requerido": False,
             },
@@ -452,7 +444,6 @@ class ConfiguracionPorDefecto:
             },
             "INTENTOS_LOGIN_MAXIMOS": {
                 "valor": "5",
-                "descripcion": "Intentos máximos de login antes de bloqueo",
                 "tipo_dato": "INTEGER",
                 "valor_minimo": "3",
                 "valor_maximo": "10",
@@ -460,7 +451,6 @@ class ConfiguracionPorDefecto:
             },
             "BLOQUEO_DURACION_MINUTOS": {
                 "valor": "30",
-                "descripcion": "Duración del bloqueo en minutos",
                 "tipo_dato": "INTEGER",
                 "valor_minimo": "5",
                 "valor_maximo": "1440",
@@ -523,7 +513,6 @@ class ConfiguracionPorDefecto:
             },
             "REPORTES_AUTOMATICOS": {
                 "valor": "true",
-                "descripcion": "Generar reportes automáticos",
                 "tipo_dato": "BOOLEAN",
                 "requerido": False,
             },
@@ -547,13 +536,11 @@ class ConfiguracionPorDefecto:
             },
             "PASARELA_PAGOS_ENABLED": {
                 "valor": "false",
-                "descripcion": "Habilitar pasarela de pagos online",
                 "tipo_dato": "BOOLEAN",
                 "requerido": False,
             },
             "PASARELA_PAGOS_PROVIDER": {
                 "valor": "STRIPE",
-                "descripcion": "Proveedor de pasarela de pagos",
                 "tipo_dato": "STRING",
                 "opciones_validas": [
                     "STRIPE",
@@ -620,7 +607,6 @@ class ConfiguracionPorDefecto:
                 "requerido": False,
             },
             "MENSAJE_MANTENIMIENTO": {
-                "valor": "Sistema en mantenimiento. Vuelva en unos minutos.",
                 "descripcion": "Mensaje durante mantenimiento",
                 "tipo_dato": "TEXT",
                 "requerido": False,
@@ -688,7 +674,6 @@ class ConfiguracionPorDefecto:
                         db.add(nueva_config)
             db.commit()
             logger = logging.getLogger(__name__)
-            logger.info("Configuraciones por defecto creadas exitosamente")
         except Exception as e:
             db.rollback()
             logger = logging.getLogger(__name__)
@@ -720,9 +705,7 @@ class ConfigHelper:
     @staticmethod
     def is_email_configured(db) -> bool:
         """Verificar si email está configurado"""
-        smtp_host = ConfigHelper.get_config(db, "EMAIL", "SMTP_HOST")
         smtp_user = ConfigHelper.get_config(db, "EMAIL", "SMTP_USERNAME")
-        return bool(smtp_host and smtp_user)
 
     @staticmethod
     def is_whatsapp_enabled(db) -> bool:
@@ -756,7 +739,6 @@ class ConfigHelper:
     def get_notification_config(db) -> Dict:
         """Obtener configuración de notificaciones"""
         return {
-            "recordatorios": ConfigHelper.get_config(
                 db, "NOTIFICACIONES", "RECORDATORIOS_HABILITADOS", True
             ),
             "dias_antes": ConfigHelper.get_config(

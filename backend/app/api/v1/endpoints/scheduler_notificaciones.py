@@ -1,26 +1,15 @@
 # backend/app/api/v1/endpoints/scheduler_notificaciones.py"""Endpoints para Scheduler de Notificaciones
-# AutomáticasConfiguración y gestión del cron job de notificaciones"""\nimport logging\nfrom datetime \nimport datetime,
-# timedelta\nfrom fastapi \nimport APIRouter, BackgroundTasks, Depends, HTTPException\nfrom pydantic \nimport BaseModel,
 # Field\nfrom sqlalchemy.orm \nimport Session\nfrom app.api.deps \nimport get_current_user, get_db\nfrom app.models.user
 # \nimport User\nfrom app.services.notification_multicanal_service \nimport notification_schedulerlogger =
 # logging.getLogger(__name__)router = APIRouter()# ============================================# SCHEMAS PARA SCHEDULER#
 # ============================================\nclass ConfiguracionScheduler(BaseModel):\n """Configuración del scheduler de
-# notificaciones""" habilitado:\n bool = Field( True, description="Habilitar scheduler automático" ) frecuencia_minutos:\n
-# int = Field( 60, ge=5, le=1440, description="Frecuencia en minutos" ) hora_inicio:\n str = Field("06:\n00",
 # description="Hora de inicio (HH:\nMM)") hora_fin:\n str = Field("22:\n00", description="Hora de fin (HH:\nMM)")
-# dias_activos:\n list[str] = Field( ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO"], description="Días
-# activos para envío", ) reporte_diario_hora:\n str = Field( "18:\n00", description="Hora del reporte diario" )#
 # ============================================# CONFIGURACIÓN DEL SCHEDULER#
 # ============================================@router.get("/configuracion")\ndef obtener_configuracion_scheduler( db:\n
 # Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ ⚙️ Obtener configuración actual del
-# scheduler de notificaciones """ if not current_user.is_admin:\n raise HTTPException( status_code=403, detail="Sin permisos
 # para ver configuración del scheduler", ) try:\n # Configuración actual (simulada - en producción sería de BD)
-# configuracion_actual = { "habilitado":\n True, "frecuencia_minutos":\n 60, "hora_inicio":\n "06:\n00", "hora_fin":\n
-# "22:\n00", "dias_activos":\n [ "LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", ], "reporte_diario_hora":\n
 # "18:\n00", } return { "titulo":\n "⏰ CONFIGURACIÓN DEL SCHEDULER DE NOTIFICACIONES", "configuracion_actual":\n
-# configuracion_actual, "estado_scheduler":\n { "activo":\n True, # Placeholder "ejecutandose":\n
 # notification_scheduler.is_running, "ultima_ejecucion":\n "Simulado - cada hora", "proxima_ejecucion":\n "En la próxima
-# hora", "total_ejecuciones_hoy":\n 18, # Placeholder }, "horarios_notificacion":\n { "recordatorio_3_dias":\n "09:\n00 AM",
 # "recordatorio_1_dia":\n "09:\n00 AM", "dia_vencimiento":\n "08:\n00 AM", "mora_1_dia":\n "10:\n00 AM", "mora_3_dias":\n
 # "10:\n00 AM", "mora_5_dias":\n "10:\n00 AM", "confirmacion_pago":\n "INMEDIATO", }, "configuracion_cron":\n {
 # "expresion_actual":\n "0 * * * *", # Cada hora "descripcion":\n "Se ejecuta cada hora durante horario laboral",
@@ -28,90 +17,48 @@
 # "instrucciones_setup":\n { "paso_1":\n "Configurar cron job en el servidor", "paso_2":\n ( "Usar endpoint:\n POST
 # /api/v1/notificaciones-multicanal/procesar-automaticas" ), "paso_3":\n "Monitorear logs en:\n GET /api/v1/scheduler/logs",
 # "comando_cron":\n ( "0 * 6-22 * * 1-6 curl -X POST
-# 'https:\n//pagos-f2qf.onrender.com/api/v1/notificaciones-multicanal/procesar-automaticas' -H 'Authorization:\n Bearer
 # TOKEN'" ), }, } except Exception as e:\n raise HTTPException( status_code=500, detail=f"Error obteniendo configuración:\n
-# {str(e)}" )@router.post("/configurar")\ndef configurar_scheduler( configuracion:\n ConfiguracionScheduler, db:\n Session =
 # Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ ⚙️ Configurar scheduler de notificaciones """ if
 # not current_user.is_admin:\n raise HTTPException( status_code=403, detail="Solo administradores pueden configurar el
 # scheduler", ) try:\n # En producción, guardar configuración en BD # Por ahora, simular guardado return { "mensaje":\n "✅
-# Configuración del scheduler actualizada exitosamente", "configuracion_aplicada":\n configuracion.dict(),
-# "expresion_cron_generada":\n _generar_expresion_cron(configuracion), "fecha_actualizacion":\n datetime.now().isoformat(),
 # "actualizado_por":\n current_user.full_name, "siguiente_paso":\n "Aplicar configuración en el servidor cron", } except
 # Exception as e:\n raise HTTPException( status_code=500, detail=f"Error configurando scheduler:\n {str(e)}"
 # )@router.get("/logs")\ndef obtener_logs_scheduler( limite:\n int = 100, db:\n Session = Depends(get_db), current_user:\n
 # User = Depends(get_current_user),):\n """ 📋 Obtener logs del scheduler de notificaciones """ try:\n # En producción,
-# obtener logs reales # Por ahora, simular logs logs_simulados = [ { "timestamp":\n datetime.now().isoformat(), "nivel":\n
-# "INFO", "mensaje":\n "✅ Ciclo de notificaciones completado:\n 45 exitosas, 2 fallidas", "detalles":\n {
-# "total_procesadas":\n 47, "exitosas":\n 45, "fallidas":\n 2, "tiempo_ejecucion":\n "2.3 segundos", }, }, { "timestamp":\n
-# (datetime.now() - timedelta(hours=1)).isoformat(), "nivel":\n "INFO", "mensaje":\n "🔔 Iniciando ciclo automático de
-# notificaciones", "detalles":\n {"clientes_objetivo":\n 47, "tipos_notificacion":\n 4}, }, { "timestamp":\n (datetime.now()
-# - timedelta(hours=2)).isoformat(), "nivel":\n "WARNING", "mensaje":\n "⚠️ 2 notificaciones fallaron - programando
-# reintentos", "detalles":\n { "notificaciones_fallidas":\n 2, "proximo_reintento":\n "30 minutos", }, }, ] return {
-# "titulo":\n "📋 LOGS DEL SCHEDULER DE NOTIFICACIONES", "total_logs":\n len(logs_simulados), "logs":\n
-# logs_simulados[:\nlimite], "filtros_disponibles":\n ["INFO", "WARNING", "ERROR"], "actualizacion_tiempo_real":\n "Los logs
 # se actualizan cada ejecución del scheduler", } except Exception as e:\n raise HTTPException( status_code=500,
-# detail=f"Error obteniendo logs:\n {str(e)}" )@router.post("/ejecutar-ahora")async \ndef ejecutar_scheduler_manual(
 # background_tasks:\n BackgroundTasks, db:\n Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n
 # """ ▶️ Ejecutar scheduler manualmente (fuera del horario programado) """ if not current_user.is_admin:\n raise
-# HTTPException( status_code=403, detail="Sin permisos para ejecutar scheduler manual", ) try:\n # Verificar si ya está
-# ejecutándose if notification_scheduler.is_running:\n raise HTTPException( status_code=400, detail="Scheduler ya está
-# ejecutándose" ) # Ejecutar en background background_tasks.add_task( _ejecutar_scheduler_manual, db, current_user.id )
-# return { "mensaje":\n "✅ Scheduler ejecutándose manualmente en background", "ejecutado_por":\n current_user.full_name,
-# "timestamp":\n datetime.now().isoformat(), "estimacion_tiempo":\n "2-5 minutos", "seguimiento":\n "GET
 # /api/v1/scheduler/estado", } except HTTPException:\n raise except Exception as e:\n raise HTTPException( status_code=500,
 # detail=f"Error ejecutando scheduler:\n {str(e)}" )@router.get("/estado")\ndef obtener_estado_scheduler( db:\n Session =
 # Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 📊 Obtener estado actual del scheduler """ try:\n
-# return { "titulo":\n "📊 ESTADO DEL SCHEDULER DE NOTIFICACIONES", "fecha_consulta":\n datetime.now().isoformat(),
-# "estado_actual":\n { "ejecutandose":\n notification_scheduler.is_running, "habilitado":\n True, # Placeholder
-# "ultima_ejecucion":\n "Hace 30 minutos", # Placeholder "proxima_ejecucion":\n "En 30 minutos", # Placeholder
 # "total_ejecuciones_hoy":\n 18, # Placeholder }, "configuracion_activa":\n { "frecuencia":\n "Cada hora",
-# "horario_activo":\n "06:\n00 - 22:\n00", "dias_activos":\n "Lunes a Sábado", "reporte_diario":\n "18:\n00 (6 PM)", },
-# "metricas_rendimiento":\n { "tiempo_promedio_ejecucion":\n "2.3 segundos", "notificaciones_por_minuto":\n "~20",
 # "tasa_exito_promedio":\n "95.7%", "memoria_utilizada":\n "< 50MB", }, "alertas_sistema":\n [ "✅ Scheduler funcionando
-# correctamente", "✅ Servicios de email y WhatsApp disponibles", "✅ Sin errores críticos en las últimas 24 horas", ], }
 # except Exception as e:\n raise HTTPException( status_code=500, detail=f"Error obteniendo estado:\n {str(e)}" )#
 # ============================================# FUNCIONES AUXILIARES# ============================================async \ndef
 # _ejecutar_scheduler_manual(db:\n Session, user_id:\n int):\n """Ejecutar scheduler manualmente en background""" try:\n
 # \nfrom app.db.session \nimport SessionLocal db_local = SessionLocal() # Ejecutar ciclo de notificaciones resultado = await
-# notification_scheduler.ejecutar_ciclo_notificaciones( db_local ) logger.info(f"📧 Scheduler manual ejecutado por usuario
-# {user_id}") logger.info(f"📊 Resultados:\n {resultado}") db_local.close() except Exception as e:\n logger.error(f"Error en
+# notification_scheduler.ejecutar_ciclo_notificaciones( db_local ) logger.info("📧 Scheduler manual ejecutado por usuario
 # scheduler manual:\n {e}")\ndef _generar_expresion_cron(config:\n ConfiguracionScheduler) -> str:\n """Generar expresión
-# cron basada en configuración""" try:\n # Convertir frecuencia a expresión cron if config.frecuencia_minutos == 60:\n minuto
-# = "0" elif config.frecuencia_minutos == 30:\n minuto = "0,30" elif config.frecuencia_minutos == 15:\n minuto = "0,15,30,45"
-# else:\n minuto = f"*/{config.frecuencia_minutos}" # Convertir horas hora_inicio = int(config.hora_inicio.split(":\n")[0])
 # hora_fin = int(config.hora_fin.split(":\n")[0]) hora = f"{hora_inicio}-{hora_fin}" # Convertir días dias_map = { "LUNES":\n
 # "1", "MARTES":\n "2", "MIERCOLES":\n "3", "JUEVES":\n "4", "VIERNES":\n "5", "SABADO":\n "6", "DOMINGO":\n "0", }
-# dias_numeros = [ dias_map[dia] for dia in config.dias_activos if dia in dias_map ] dias = ",".join(dias_numeros) if
-# dias_numeros else "*" return f"{minuto} {hora} * * {dias}" except Exception:\n return "0 * * * *" # Por defecto cada hora#
 # ============================================# ENDPOINT DE VERIFICACIÓN#
 # ============================================@router.get("/verificacion-completa")\ndef
 # verificar_sistema_notificaciones_completo( db:\n Session = Depends(get_db), current_user:\n User =
 # Depends(get_current_user),):\n """ 🔍 Verificación completa del sistema de notificaciones multicanal """ return {
 # "titulo":\n "🔔 SISTEMA DE NOTIFICACIONES MULTICANAL - VERIFICACIÓN COMPLETA", "fecha_verificacion":\n
-# datetime.now().isoformat(), "cumplimiento_especificaciones":\n { "notificaciones_duales":\n "✅ Email + WhatsApp
 # simultáneo", "procesamiento_automatico":\n "✅ Scheduler cada hora", "sin_ia":\n "✅ Sistema basado en templates y reglas",
-# "7_tipos_notificacion":\n "✅ Todos implementados", "historial_completo":\n "✅ Con filtros avanzados",
 # "preferencias_cliente":\n "✅ Configuración individual", "limites_antispam":\n "✅ 3 por día, intervalo 2h",
-# "reintentos_automaticos":\n "✅ Hasta 2 reintentos", "reporte_diario":\n "✅ A equipo de cobranzas", },
 # "proveedores_whatsapp":\n { "twilio":\n { "implementado":\n True, "descripcion":\n "Proveedor principal recomendado",
-# "costo":\n "$0.005 por mensaje", "configuracion":\n ["ACCOUNT_SID", "AUTH_TOKEN", "FROM_NUMBER"], }, "360dialog":\n {
-# "implementado":\n True, "descripcion":\n "Alternativa europea", "costo":\n "$0.004 por mensaje", "configuracion":\n
 # ["API_KEY", "CLIENT_ID"], }, "meta_cloud_api":\n { "implementado":\n True, "descripcion":\n "API oficial de Meta",
-# "costo":\n "$0.003 por mensaje", "configuracion":\n ["ACCESS_TOKEN", "PHONE_NUMBER_ID"], }, },
 # "flujo_automatico_implementado":\n { "paso_1":\n "✅ Scheduler se ejecuta cada hora", "paso_2":\n "✅ Busca clientes con
 # cuotas que requieren notificación", "paso_3":\n "✅ Verifica preferencias por cliente", "paso_4":\n "✅ Carga plantilla
-# correspondiente", "paso_5":\n "✅ Reemplaza variables con datos reales", "paso_6":\n "✅ Envía por Email (si aplica)",
-# "paso_7":\n "✅ Envía por WhatsApp (si aplica)", "paso_8":\n "✅ Registra en historial", "paso_9":\n "✅ Procesa reintentos en
 # caso de error", "paso_10":\n "✅ Notifica a Admin si fallo crítico", "paso_11":\n "✅ Genera reporte diario a Cobranzas", },
 # "templates_whatsapp":\n { "total_templates":\n 7, "estado_aprobacion":\n "PENDIENTE_CONFIGURACION", "proceso_aprobacion":\n
 # "1-2 días hábiles con Meta", "templates_disponibles":\n [ "recordatorio_3_dias", "recordatorio_1_dia", "dia_vencimiento",
-# "mora_1_dia", "mora_3_dias", "mora_5_dias", "confirmacion_pago", ], }, "endpoints_implementados":\n { "procesamiento":\n
 # "/api/v1/notificaciones-multicanal/procesar-automaticas", "historial":\n "/api/v1/notificaciones-multicanal/historial",
 # "dashboard":\n "/api/v1/notificaciones-multicanal/dashboard", "preferencias":\n "/api/v1/notificaciones-multicanal/cliente/
 # \ {id}/preferencias", "templates":\n "/api/v1/notificaciones-multicanal/whatsapp/templates", "scheduler":\n
 # "/api/v1/scheduler/configuracion", "pruebas":\n "/api/v1/notificaciones-multicanal/probar-envio", },
 # "configuracion_requerida":\n { "email":\n "✅ Configurado en /api/v1/configuracion/email", "whatsapp":\n "⚠️ Configurar en
 # /api/v1/configuracion/whatsapp", "cron_job":\n "⚠️ Configurar en servidor", "templates_meta":\n "⚠️ Aprobar templates con
-# Meta", }, "beneficios_sistema":\n [ "📧 Notificaciones duales aumentan tasa de respuesta 40%", "⏰ Automatización reduce
 # trabajo manual 80%", "🎯 Personalización mejora experiencia del cliente", "📊 Historial completo para análisis y auditoría",
-# "🔄 Reintentos automáticos aseguran entrega", "📈 Reportes diarios para seguimiento de efectividad", ], }

@@ -43,7 +43,6 @@ class WhatsAppService:
             to_number: Número de teléfono destinatario
             message: Mensaje a enviar
             template_name: Nombre del template (opcional)
-            template_params: Parámetros del template (opcional)
 
         Returns:
             Dict con resultado del envío
@@ -109,7 +108,6 @@ class WhatsAppService:
 
             # Enviar mensaje
             async with aiohttp.ClientSession() as session:
-                async with session.post(
                     url, headers=headers, json=payload
                 ) as response:
                     response_data = await response.json()

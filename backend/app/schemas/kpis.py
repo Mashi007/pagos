@@ -1,6 +1,5 @@
 ﻿"""Schemas para KPIs (Key Performance Indicators)"""
 
-from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -49,8 +48,6 @@ class KPIResponse(KPIBase):
     valor_objetivo: Optional[Decimal] = None
     periodicidad: str
     activo: bool
-    created_at: datetime
-    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -59,7 +56,6 @@ class KPIValorBase(BaseModel):
     """Schema base para valores de KPI"""
     kpi_id: int = Field(..., description="ID del KPI")
     valor: Decimal = Field(..., description="Valor medido del KPI")
-    fecha_medicion: datetime = Field(..., description="Fecha de la medición")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -77,7 +73,6 @@ class KPIValorCreate(KPIValorBase):
 class KPIValorUpdate(BaseModel):
     """Schema para actualizar un valor de KPI"""
     valor: Optional[Decimal] = None
-    fecha_medicion: Optional[datetime] = None
     notas: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
 
@@ -89,16 +84,12 @@ class KPIValorResponse(KPIValorBase):
     id: int
     notas: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
-    created_at: datetime
-    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class KPIConValores(KPIResponse):
-    """Schema de KPI con sus valores históricos"""
     valores: List[KPIValorResponse] = Field(
-        default_factory=list, description="Valores históricos del KPI"
     )
 
 
@@ -123,16 +114,13 @@ class KPIEstadisticas(BaseModel):
 
 class DashboardKPIs(BaseModel):
     """Schema para dashboard con múltiples KPIs"""
-    fecha_consulta: datetime = Field(default_factory=datetime.now)
     total_kpis: int
-    kpis_activos: int
     kpis: List[KPIConValores]
     estadisticas_generales: Optional[Dict[str, Any]] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
-# Exportar todos los schemas
 __all__ = [
     "KPIBase",
     "KPICreate",

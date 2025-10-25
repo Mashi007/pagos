@@ -1,5 +1,4 @@
 # backend/app/models/modelo_vehiculo.py
-"""Modelo SQLAlchemy para modelos de vehículos configurables"""
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.sql import func
@@ -7,16 +6,13 @@ from app.db.session import Base
 
 
 class ModeloVehiculo(Base):
-    __tablename__ = "modelos_vehiculos"
 
     id = Column(Integer, primary_key=True, index=True)
     modelo = Column(String(100), nullable=False, unique=True, index=True)
     activo = Column(Boolean, nullable=False, default=True, index=True)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
 

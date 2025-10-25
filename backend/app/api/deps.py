@@ -1,6 +1,4 @@
 """
-Dependencias comunes para los endpoints
-Incluye autenticación, permisos, y paginación
 """
 
 import logging
@@ -28,7 +26,6 @@ def get_current_user(
     Obtiene el usuario actual desde el token JWT
 
     Args:
-        db: Sesión de base de datos
         credentials: Credenciales HTTP Bearer (JWT)
 
     Returns:
@@ -52,7 +49,6 @@ def get_current_user(
 
         payload = decode_token(token)
         logger.info(
-            f"Token decodificado exitosamente - "
             f"Payload keys: {list(payload.keys())}"
         )
 
@@ -87,7 +83,6 @@ def get_current_user(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo"
         )
 
-    logger.info(f"Usuario autenticado exitosamente - Email: {user.email}")
     return user
 
 
@@ -142,16 +137,13 @@ def require_role(require_admin: bool = True):
 
 def require_permission(*required_permissions: Permission):
     """
-    Dependency para requerir uno o más permisos específicos
 
     Args:
-        required_permissions: Permisos requeridos
 
     Returns:
         Función de dependencia
 
     Usage:
-        @app.post("/clientes",
                 dependencies=[Depends(require_permission(Permission.CLIENTE_CREATE))])
     """
 
@@ -159,7 +151,6 @@ def require_permission(*required_permissions: Permission):
     def permission_checker(
         current_user: User = Depends(get_current_user),
     ) -> User:
-        # Obtener permisos del usuario basado en is_admin
         user_permissions = get_user_permissions(current_user.is_admin)
 
         # Verificar cada permiso requerido
@@ -185,7 +176,6 @@ def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
     if not current_user.is_admin:  # Cambio clave: rol → is_admin
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo los administradores pueden acceder a este recurso",
         )
     return current_user
 
@@ -194,7 +184,6 @@ def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
 
 
 class PaginationParams:
-    """Parámetros de paginación comunes"""
 
 
     def __init__(
@@ -222,14 +211,12 @@ def get_pagination_params(
     page: int = 1, page_size: int = 10
 ) -> PaginationParams:
     """
-    Dependency para obtener parámetros de paginación
 
     Args:
         page: Número de página (default: 1)
         page_size: Tamaño de página (default: 10, max: 100)
 
     Returns:
-        Parámetros de paginación
 
     Usage:
         @app.get("/items")

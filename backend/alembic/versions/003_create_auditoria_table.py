@@ -1,4 +1,3 @@
-"""Crear tabla de auditoría con campos actualizados
 
 Revision ID: 003_create_auditoria_table
 Revises: 002_add_cliente_foreignkeys
@@ -8,7 +7,6 @@ Create Date: 2025-01-15 10:00:00.000000
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = "003_create_auditoria_table"
@@ -30,10 +28,8 @@ def upgrade():
         sa.Column("registro_id", sa.Integer(), nullable=True),
         sa.Column("descripcion", sa.Text(), nullable=True),
         sa.Column(
-            "datos_anteriores", postgresql.JSON(astext_type=sa.Text()), nullable=True
         ),
         sa.Column(
-            "datos_nuevos", postgresql.JSON(astext_type=sa.Text()), nullable=True
         ),
         sa.Column("ip_address", sa.String(length=45), nullable=True),
         sa.Column("user_agent", sa.String(length=255), nullable=True),
@@ -41,11 +37,9 @@ def upgrade():
         sa.Column("mensaje_error", sa.Text(), nullable=True),
         sa.Column(
             "fecha",
-            sa.DateTime(timezone=True),
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(["usuario_id"], ["usuarios.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
 

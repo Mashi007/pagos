@@ -1,17 +1,14 @@
 """
 Sistema de cache inteligente para analistas
-Evita consultas repetidas a la base de datos
 """
 
 import logging
-import time
 from typing import Any, Dict, Optional
 
 # Configurar logger
 logger = logging.getLogger(__name__)
 
 # Constantes de configuración
-DEFAULT_TTL_SECONDS = 300  # 5 minutos por defecto
 
 
 class AnalistasCache:
@@ -23,10 +20,8 @@ class AnalistasCache:
 
 
     def get(self, key: str) -> Optional[Dict[str, Any]]:
-        """Obtener datos del cache si no han expirado"""
         if key in self.cache:
             data = self.cache[key]
-            if time.time() - data["timestamp"] < self.ttl:
                 logger.info(f"Cache hit para key: {key}")
                 return data["data"]
             else:
@@ -37,9 +32,6 @@ class AnalistasCache:
 
 
     def set(self, key: str, data: Dict[str, Any]) -> None:
-        """Guardar datos en el cache"""
-        self.cache[key] = {"data": data, "timestamp": time.time()}
-        logger.info(f"Datos guardados en cache para key: {key}")
 
 
     def clear(self) -> None:
@@ -62,14 +54,12 @@ analistas_cache = AnalistasCache(ttl_seconds=DEFAULT_TTL_SECONDS)
 
 
 def cache_analistas(key_func):
-    """Decorator para cachear resultados de analistas"""
 
 
     def decorator(func):
 
 
         def wrapper(*args, **kwargs):
-            # Generar clave del cache basada en parámetros
             cache_key = key_func(*args, **kwargs)
 
             # Intentar obtener del cache
@@ -96,11 +86,8 @@ def generate_cache_key(
     search: Optional[str] = None,
 ) -> str:
     """
-    Generar clave única para el cache basada en parámetros
 
     Args:
-        skip: Número de registros a omitir
-        limit: Límite de registros
         activo: Filtro de estado activo
         search: Término de búsqueda
 

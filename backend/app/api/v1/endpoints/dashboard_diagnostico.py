@@ -1,10 +1,11 @@
+from collections import deque
+import statistics
 ﻿"""Dashboard de Diagnóstico en Tiempo Real
 Sistema de monitoreo y auditoría para problemas de autenticación
 """
 
 import logging
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
 from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, Request, Response, HTTPException, status
 from sqlalchemy.orm import Session
@@ -14,7 +15,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Almacenamiento en memoria para auditoría
-audit_logs = deque(maxlen=1000)  # Mantener últimos 1000 logs
 error_patterns = defaultdict(int)
 request_stats = defaultdict(int)
 
@@ -30,15 +30,12 @@ class AuditLogger:
         error: str = None,
     ):
         """Registrar request en auditoría"""
-        timestamp = datetime.now()
         log_entry = {
-            "timestamp": timestamp.isoformat(),
             "method": request.method,
             "url": str(request.url),
             "status_code": response.status_code,
             "user_id": user_id,
             "user_agent": request.headers.get("user-agent", "unknown"),
-            "ip": request.client.host if request.client else "unknown",
             "error": error,
             "auth_header_present": "authorization" in request.headers,
             "auth_header_type": (
@@ -59,7 +56,7 @@ class AuditLogger:
         # Log específico para errores 401
         if response.status_code == 401:
             logger.warning(
-                f"🔒 401 Unauthorized - "
+                "🔒 401 Unauthorized - "
                 + f"{request.method} {request.url} "
                 + f"- Error: {error}"
             )
@@ -67,10 +64,8 @@ class AuditLogger:
     @staticmethod
     def get_recent_logs(minutes: int = 60) -> List[Dict[str, Any]]:
         """Obtener logs recientes"""
-        cutoff = datetime.now() - timedelta(minutes=minutes)
         return [
             log for log in audit_logs
-            if datetime.fromisoformat(log["timestamp"]) > cutoff
         ]
 
     @staticmethod
@@ -83,7 +78,6 @@ class AuditLogger:
             "recent_401_errors": [
                 log for log in audit_logs
                 if log["status_code"] == 401
-            ][-10:],  # Últimos 10 errores 401
         }
 
 # ============================================
@@ -108,7 +102,6 @@ async def get_dashboard_overview(
         auth_requests = len([log for log in recent_logs if log["auth_header_present"]])
 
         overview = {
-            "timestamp": datetime.now().isoformat(),
             "metrics": {
                 "total_requests_last_hour": total_requests,
                 "error_requests_last_hour": error_requests,
@@ -145,7 +138,6 @@ async def get_recent_activity(
         activity = []
         for log in recent_logs:
             activity.append({
-                "timestamp": log["timestamp"],
                 "method": log["method"],
                 "url": log["url"],
                 "status_code": log["status_code"],
@@ -159,7 +151,6 @@ async def get_recent_activity(
             "success": True,
             "activity": activity,
             "total_events": len(activity),
-            "time_range_minutes": minutes
         }
 
     except Exception as e:
@@ -179,7 +170,6 @@ async def get_error_analysis(
 
         # Analizar patrones de error
         error_analysis = {
-            "timestamp": datetime.now().isoformat(),
             "error_patterns": audit_summary["error_patterns"],
             "request_statistics": audit_summary["request_stats"],
             "recent_401_errors": audit_summary["recent_401_errors"],
@@ -189,12 +179,10 @@ async def get_error_analysis(
         # Generar recomendaciones basadas en patrones
         if error_patterns.get("Invalid token", 0) > 10:
             error_analysis["recommendations"].append(
-                "Alto número de tokens inválidos - revisar configuración de JWT"
             )
 
         if error_patterns.get("Token expired", 0) > 5:
             error_analysis["recommendations"].append(
-                "Tokens expirados frecuentes - considerar aumentar tiempo de vida"
             )
 
         if not error_analysis["recommendations"]:
@@ -214,7 +202,6 @@ async def get_error_analysis(
             detail=f"Error interno: {str(e)}"
         )
 
-@router.post("/dashboard/log-event")
 async def log_dashboard_event(
     event_data: Dict[str, Any],
     request: Request,
@@ -237,7 +224,6 @@ async def log_dashboard_event(
 
         return {
             "success": True,
-            "message": "Evento registrado exitosamente"
         }
 
     except Exception as e:
@@ -265,7 +251,6 @@ async def get_system_health(
         error_rate = len([log for log in recent_logs if log["status_code"] >= 400]) / max(len(recent_logs), 1) * 100
 
         health_status = {
-            "timestamp": datetime.now().isoformat(),
             "overall_status": "healthy" if error_rate < 10 and db_status == "connected" else "degraded",
             "components": {
                 "database": db_status,
@@ -275,7 +260,6 @@ async def get_system_health(
             "metrics": {
                 "error_rate_percent": round(error_rate, 2),
                 "total_requests_last_hour": len(recent_logs),
-                "uptime": "operational"
             },
             "alerts": []
         }
@@ -291,7 +275,6 @@ async def get_system_health(
         if db_status == "disconnected":
             health_status["alerts"].append({
                 "type": "database_disconnected",
-                "message": "Conexión a base de datos perdida",
                 "severity": "critical"
             })
 

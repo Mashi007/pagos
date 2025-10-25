@@ -1,7 +1,4 @@
-# backend/app/core/security_audit.py"""Security Audit Logger - Logging de eventos de seguridad críticosCumple con OWASP
-# A09:2021 - Security Logging and Monitoring Failures"""import loggingfrom datetime import datetimefrom enum import Enumfrom
 # typing import Any, Dict, Optional# Configurar logger específico para auditoría de seguridadsecurity_audit_logger =
-# logging.getLogger("security_audit")class SecurityEventType(str, Enum): """Tipos de eventos de seguridad""" LOGIN_SUCCESS =
 # "LOGIN_SUCCESS" LOGIN_FAILED = "LOGIN_FAILED" LOGOUT = "LOGOUT" PASSWORD_CHANGE = "PASSWORD_CHANGE" PASSWORD_RESET =
 # "PASSWORD_RESET" TOKEN_REFRESH = "TOKEN_REFRESH" UNAUTHORIZED_ACCESS = "UNAUTHORIZED_ACCESS" RATE_LIMIT_EXCEEDED =
 # "RATE_LIMIT_EXCEEDED" DATA_MODIFICATION = "DATA_MODIFICATION" ADMIN_ACTION = "ADMIN_ACTION" SUSPICIOUS_ACTIVITY =
@@ -10,7 +7,6 @@
 # user_id: Optional[int] = None, ip_address: Optional[str] = None, details: Optional[Dict[str, Any]] = None, success: bool =
 # True,): """ Registra un evento de seguridad Args: event_type: Tipo de evento de seguridad user_email: Email del usuario (si
 # aplica) user_id: ID del usuario (si aplica) ip_address: Dirección IP de origen details: Detalles adicionales del evento
-# success: Si la acción fue exitosa o no """ event_data = { "timestamp": datetime.utcnow().isoformat(), "event_type":
 # event_type.value, "user_email": user_email, "user_id": user_id, "ip_address": ip_address, "success": success, "details":
 # details or {}, } # Nivel de log según tipo de evento if not success or event_type in [ SecurityEventType.LOGIN_FAILED,
 # SecurityEventType.UNAUTHORIZED_ACCESS, SecurityEventType.RATE_LIMIT_EXCEEDED, SecurityEventType.SUSPICIOUS_ACTIVITY, ]:
@@ -24,6 +20,5 @@
 # Optional[str], ip_address: str, reason: str): """Registra un intento de acceso no autorizado""" log_security_event(
 # event_type=SecurityEventType.UNAUTHORIZED_ACCESS, user_email=user_email, ip_address=ip_address, details={"endpoint":
 # endpoint, "reason": reason}, success=False, )def log_data_modification( user_email: str, user_id: int, resource: str,
-# resource_id: int, action: str, ip_address: str,): """Registra modificación de datos sensibles""" log_security_event(
 # event_type=SecurityEventType.DATA_MODIFICATION, user_email=user_email, user_id=user_id, ip_address=ip_address, details={
 # "resource": resource, "resource_id": resource_id, "action": action, }, )

@@ -1,12 +1,11 @@
+from collections import deque
 ﻿"""Sistema de Monitoreo en Tiempo Real para Autenticación
 Análisis continuo de tokens, requests y patrones de error
 """
 
 import logging
 import threading
-import time
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
 from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, Request
 from app.api.deps import get_current_user, get_db
@@ -45,10 +44,8 @@ class RealTimeMonitor:
                 try:
                     self._analyze_recent_activity()
                     self._detect_anomalies()
-                    time.sleep(60)  # Monitorear cada minuto
                 except Exception as e:
                     logger.error(f"Error en monitoreo tiempo real: {e}")
-                    time.sleep(120)
 
         thread = threading.Thread(target=monitoring_loop, daemon=True)
         thread.start()
@@ -58,11 +55,8 @@ class RealTimeMonitor:
     def _analyze_recent_activity(self):
         """Analizar actividad reciente"""
         with self.lock:
-            # Analizar requests de los últimos 5 minutos
-            cutoff_time = datetime.now() - timedelta(minutes=5)
             recent_requests = [
                 req for req in self.request_logs
-                if req["timestamp"] >= cutoff_time
             ]
 
             # Analizar patrones de éxito y error
@@ -100,18 +94,15 @@ class RealTimeMonitor:
         method: str,
         status_code: int,
         user_id: str = None,
-        response_time_ms: float = None,
         details: Dict[str, Any] = None
     ):
         """Registrar un request"""
         with self.lock:
             request_log = {
-                "timestamp": datetime.now(),
                 "endpoint": endpoint,
                 "method": method,
                 "status_code": status_code,
                 "user_id": user_id,
-                "response_time_ms": response_time_ms,
                 "details": details or {},
             }
             self.request_logs.append(request_log)
@@ -121,7 +112,6 @@ class RealTimeMonitor:
         """Analizar un token"""
         try:
             payload = decode_token(token)
-            current_time = datetime.now().timestamp()
 
             analysis = {
                 "token_valid": True,
@@ -129,8 +119,6 @@ class RealTimeMonitor:
                 "token_type": payload.get("type"),
                 "issued_at": payload.get("iat"),
                 "expires_at": payload.get("exp"),
-                "time_to_expiry": payload.get("exp", 0) - current_time,
-                "analysis_timestamp": datetime.now().isoformat(),
             }
 
             # Agregar al análisis de tokens
@@ -144,11 +132,9 @@ class RealTimeMonitor:
             return {
                 "token_valid": False,
                 "error": str(e),
-                "analysis_timestamp": datetime.now().isoformat(),
             }
 
 
-    def get_realtime_stats(self) -> Dict[str, Any]:
         """Obtener estadísticas en tiempo real"""
         with self.lock:
             return {
@@ -156,43 +142,32 @@ class RealTimeMonitor:
                 "total_token_analyses": len(self.token_analytics),
                 "error_patterns": dict(self.error_patterns),
                 "success_patterns": dict(self.success_patterns),
-                "last_update": datetime.now().isoformat(),
             }
 
 # Instancia global del monitor tiempo real
-realtime_monitor = RealTimeMonitor()
 
 # ============================================
 # ENDPOINTS DEL MONITOR TIEMPO REAL
 # ============================================
 
-@router.post("/realtime/log-request", status_code=201)
 async def log_request(
     endpoint: str,
     method: str,
     status_code: int,
     user_id: str = None,
-    response_time_ms: float = None,
     details: Dict[str, Any] = None,
     current_user: User = Depends(get_current_user),
 ):
     """Registrar un request"""
-    realtime_monitor.log_request(
-        endpoint, method, status_code, user_id, response_time_ms, details
     )
     return {"message": "Request registrado"}
 
-@router.post("/realtime/analyze-token", response_model=Dict[str, Any])
 async def analyze_token(
     token: str,
     current_user: User = Depends(get_current_user),
 ):
     """Analizar un token"""
-    return realtime_monitor.analyze_token(token)
 
-@router.get("/realtime/stats", response_model=Dict[str, Any])
-async def get_realtime_stats(
     current_user: User = Depends(get_current_user),
 ):
     """Obtener estadísticas en tiempo real"""
-    return realtime_monitor.get_realtime_stats()

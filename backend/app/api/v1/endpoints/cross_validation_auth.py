@@ -1,3 +1,4 @@
+from app.core.security import decode_token
 ﻿"""Sistema de Validación Cruzada de Autenticación
 Valida tokens desde múltiples perspectivas para detectar inconsistencias
 """
@@ -5,7 +6,6 @@ Valida tokens desde múltiples perspectivas para detectar inconsistencias
 import hashlib
 import logging
 from collections import defaultdict
-from datetime import datetime
 from typing import Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, Request
 from app.api.deps import get_current_user, get_db
@@ -19,24 +19,20 @@ router = APIRouter()
 # ============================================
 
 
-class CrossValidationAuthChecker:
     """Validador cruzado de autenticación"""
 
 
     def __init__(self):
         self.validation_cache = {}  # Cache de validaciones
-        self.failed_validations = defaultdict(list)  # Historial de fallos
         self.validation_patterns = defaultdict(int)  # Patrones de validación
 
 
-    def cross_validate_token(
         self,
         token: str,
         request_context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Validación cruzada completa de un token"""
         validation_results = {
-            "timestamp": datetime.now().isoformat(),
             "token_id": self._generate_token_id(token),
             "validations": {},
             "overall_status": "unknown",
@@ -60,8 +56,6 @@ class CrossValidationAuthChecker:
             validation_results["validations"]["request_context"] = context_validation
 
             # 4. Validación de tiempo
-            time_validation = self._validate_timing(token)
-            validation_results["validations"]["timing"] = time_validation
 
             # 5. Validación de usuario
             user_validation = self._validate_user_consistency(
@@ -104,7 +98,6 @@ class CrossValidationAuthChecker:
         validation = {"status": "unknown", "details": {}, "score": 0.0}
 
         try:
-            # Verificar formato básico (3 partes separadas por puntos)
             parts = token.split(".")
             if len(parts) != 3:
                 validation["status"] = "invalid"
@@ -144,7 +137,6 @@ class CrossValidationAuthChecker:
                 validation["details"]["error"] = "Token no válido o expirado"
                 return validation
 
-            # Verificar campos requeridos
             required_fields = ["sub", "exp", "iat"]
             missing_fields = []
 
@@ -214,26 +206,18 @@ class CrossValidationAuthChecker:
                 validation["status"] = "invalid"
                 return validation
 
-            current_time = datetime.now().timestamp()
-            exp_time = decoded_token.get("exp", 0)
-            iat_time = decoded_token.get("iat", 0)
 
             # Verificar si el token ha expirado
-            if exp_time < current_time:
                 validation["status"] = "expired"
-                validation["details"]["expired_at"] = exp_time
-                validation["details"]["current_time"] = current_time
                 return validation
 
             # Verificar si el token es del futuro (iat)
-            if iat_time > current_time + 300:  # 5 minutos de tolerancia
                 validation["status"] = "invalid"
                 validation["details"]["future_token"] = True
                 return validation
 
             validation["status"] = "valid"
             validation["score"] = 1.0
-            validation["details"]["expires_in"] = exp_time - current_time
 
         except Exception as e:
             validation["status"] = "error"
@@ -262,8 +246,6 @@ class CrossValidationAuthChecker:
                 validation["details"]["error"] = "No se encontró user_id en el token"
                 return validation
 
-            # Aquí se podría validar contra la base de datos
-            # Por ahora solo verificamos que existe
             validation["status"] = "valid"
             validation["score"] = 0.9
             validation["details"]["user_id"] = user_id
@@ -291,7 +273,6 @@ class CrossValidationAuthChecker:
                 validation["score"] = 0.3
                 return validation
 
-            # Verificar patrones sospechosos
             suspicious_patterns = ["admin", "test", "123456"]
             token_lower = token.lower()
 
@@ -348,18 +329,14 @@ class CrossValidationAuthChecker:
         return validation_results
 
 # Instancia global del validador
-auth_checker = CrossValidationAuthChecker()
 
 # ============================================
 # ENDPOINTS DE VALIDACIÓN CRUZADA
 # ============================================
 
-@router.post("/cross-validate-token")
-async def cross_validate_token_endpoint(
     request: Request,
     current_user: User = Depends(get_current_user),
 ):
-    """Validar token con múltiples métodos"""
     try:
         # Obtener token del header
         authorization = request.headers.get("Authorization")
@@ -373,13 +350,10 @@ async def cross_validate_token_endpoint(
 
         # Obtener contexto de la petición
         context = {
-            "client_ip": request.client.host if request.client else None,
             "user_agent": request.headers.get("User-Agent"),
-            "timestamp": datetime.now().isoformat()
         }
 
         # Realizar validación cruzada
-        result = auth_checker.cross_validate_token(token, context)
 
         return {
             "success": True,
@@ -408,7 +382,6 @@ async def get_validation_history(
             "success": True,
             "data": {
                 "total_failed_validations": len(history),
-                "recent_failures": history[-20:]  # Últimos 20
             }
         }
     except Exception as e:

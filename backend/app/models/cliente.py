@@ -3,7 +3,6 @@ from sqlalchemy.sql import func
 
 from app.db.session import Base
 
-# Constantes de longitud de campos
 CEDULA_LENGTH = 20
 NAME_LENGTH = 100
 PHONE_LENGTH = 15
@@ -26,9 +25,7 @@ class Cliente(Base):
     # misma cédula
     cedula = Column(String(CEDULA_LENGTH), nullable=False, index=True)
 
-    # Datos personales - OBLIGATORIOS
     nombres = Column(String(NAME_LENGTH), nullable=False)  # 1-2 palabras máximo
-    apellidos = Column(
         String(NAME_LENGTH), nullable=False
     )  # 1-2 palabras máximo
     telefono = Column(
@@ -46,7 +43,6 @@ class Cliente(Base):
     # ============================================
     # DATOS DEL VEHÍCULO Y FINANCIAMIENTO - OBLIGATORIOS
     # ============================================
-    # Campos de configuración necesarios para formulario y Excel
     modelo_vehiculo = Column(
         String(VEHICLE_MODEL_LENGTH), nullable=False, index=True
     )  # Configuración
@@ -83,9 +79,7 @@ class Cliente(Base):
     # NOTA: Todas las relaciones comentadas porque
     # las tablas son solo plantillas vacías
     # asesor_config_rel = relationship("Analista", back_populates="clientes")
-    # prestamos = relationship("Prestamo", back_populates="cliente",
     #                          cascade="all, delete-orphan")
 
 
     def __repr__(self):
-        return f"<Cliente(id={self.id}, cedula='{self.cedula}', nombres='{self.nombres}', apellidos='{self.apellidos}')>"

@@ -1,13 +1,7 @@
 # backend/app/schemas/__init__.py
-"""Schemas centralizados para la API.
 
-Incluye todos los modelos de datos para validación y serialización.
 
-Schemas organizados por módulo:
 - Cliente: Gestión de clientes
-- Préstamo: Gestión de préstamos
-- Pago: Gestión de pagos
-# User: Gestión de usuarios y autenticación (SIMPLIFICADO - solo is_admin)
 - Conciliación: Conciliación bancaria
 - KPIs: Métricas e indicadores
 """
@@ -21,8 +15,6 @@ from app.schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
 # SCHEMAS DE USUARIO Y AUTENTICACIÓN
 # ============================================
 # NOTA: UserRole eliminado - ahora se usa is_admin boolean
-# Los schemas de usuario están en app.schemas.user pero NO se importan aquí
-# para evitar conflictos con la migración de roles
 
 # ============================================
 # SCHEMAS DE CONCILIACIÓN BANCARIA
@@ -68,7 +60,6 @@ from app.schemas.kpis import (
 # SCHEMAS DE PAGO
 # ============================================
 from app.schemas.pago import (
-    KPIsPagos,
     PagoCreate,
     PagoListResponse,
     PagoResponse,
@@ -102,11 +93,9 @@ __all__ = [
     "PagoUpdate",
     "PagoResponse",
     "PagoListResponse",
-    "KPIsPagos",
     "ResumenCliente",
     # ========== USUARIO ==========
     # NOTA: UserRole eliminado - ahora se usa is_admin boolean
-    # Los schemas de usuario
     # están disponibles directamente desde app.schemas.user
     # ========== CONCILIACIÓN ==========
     "EstadoConciliacion",
@@ -143,7 +132,6 @@ __all__ = [
 # INFORMACIÓN DEL MÓDULO
 # ============================================
 __version__ = "1.0.0"
-__author__ = "Sistema de Gestión de Préstamos"
 __description__ = (
     "Schemas Pydantic v2 para validación de API - SIMPLIFICADO (sin UserRole)"
 )

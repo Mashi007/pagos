@@ -2,10 +2,8 @@
 """Modelo de Cuota/Amortización
 
 Representa cada cuota de un préstamo con su detalle de capital, interés
-y saldos
 """
 
-from datetime import date
 from decimal import Decimal
 from sqlalchemy import (
     Boolean,
@@ -33,7 +31,6 @@ class Cuota(Base):
     id = Column(Integer, primary_key=True, index=True)
     prestamo_id = Column(
         Integer,
-        ForeignKey("prestamos.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -43,12 +40,10 @@ class Cuota(Base):
     fecha_vencimiento = Column(Date, nullable=False, index=True)
     fecha_pago = Column(Date, nullable=True)  # Fecha real de pago
 
-    # Montos originales (plan de amortización)
     monto_cuota = Column(Numeric(12, 2), nullable=False)
     monto_capital = Column(Numeric(12, 2), nullable=False)
     monto_interes = Column(Numeric(12, 2), nullable=False)
 
-    # Saldos
     saldo_capital_inicial = Column(
         Numeric(12, 2), nullable=False
     )  # Saldo al inicio del período
@@ -56,13 +51,11 @@ class Cuota(Base):
         Numeric(12, 2), nullable=False
     )  # Saldo al fin del período
 
-    # Pagos realizados
     capital_pagado = Column(Numeric(12, 2), default=Decimal("0.00"))
     interes_pagado = Column(Numeric(12, 2), default=Decimal("0.00"))
     mora_pagada = Column(Numeric(12, 2), default=Decimal("0.00"))
     total_pagado = Column(Numeric(12, 2), default=Decimal("0.00"))
 
-    # Saldos pendientes
     capital_pendiente = Column(
         Numeric(12, 2), nullable=False
     )  # Capital que falta pagar de esta cuota
@@ -86,21 +79,16 @@ class Cuota(Base):
     observaciones = Column(String(500), nullable=True)
     es_cuota_especial = Column(
         Boolean, default=False
-    )  # Para cuotas con montos diferentes
 
     # Auditoría
-    creado_en = Column(DateTime(timezone=True), server_default=func.now())
-    actualizado_en = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relaciones
     # prestamo = relationship("Prestamo", back_populates="cuotas")
     # # COMENTADO: Solo plantilla vacía
-    # pagos = relationship(
     #     "Pago",
     #     secondary="pago_cuotas",
     #     back_populates="cuotas",
     #     overlaps="cuotas,pago"
-    # )  # COMENTADO: Temporalmente hasta implementar módulo préstamos
 
 
     def __repr__(self):
@@ -207,7 +195,6 @@ class Cuota(Base):
 
 
     def actualizar_estado(self):
-        """Actualiza el estado de la cuota según los pagos realizados"""
         if self.capital_pendiente <= 0 and self.interes_pendiente <= 0:
             self.estado = "PAGADA"
             if not self.fecha_pago:
@@ -223,7 +210,6 @@ class Cuota(Base):
 # ============================================
 # ALIAS PARA COMPATIBILIDAD
 # ============================================
-# Algunos endpoints/services pueden referenciar "Amortizacion"
 Amortizacion = Cuota
 
 
@@ -236,7 +222,6 @@ pago_cuotas = Table(
     Column(
         "pago_id",
         Integer,
-        ForeignKey("pagos.id", ondelete="CASCADE"),
         primary_key=True,
     ),
     Column(
@@ -249,5 +234,4 @@ pago_cuotas = Table(
     Column("aplicado_a_capital", Numeric(12, 2), default=Decimal("0.00")),
     Column("aplicado_a_interes", Numeric(12, 2), default=Decimal("0.00")),
     Column("aplicado_a_mora", Numeric(12, 2), default=Decimal("0.00")),
-    Column("creado_en", DateTime(timezone=True), server_default=func.now()),
 )

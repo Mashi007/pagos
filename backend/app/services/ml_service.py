@@ -1,7 +1,6 @@
 # backend/app/services/ml_service.py
 """Servicio de Machine Learning
 
-Modelos y predicciones para el sistema de financiamiento
 """
 
 import logging
@@ -29,19 +28,15 @@ class MLService:
         Entrenar modelo de evaluación de riesgo
 
         Args:
-            data: Datos de entrenamiento
 
         Returns:
-            Dict con resultados del entrenamiento
         """
         try:
             if not data:
                 return {
                     "success": False,
-                    "error": "No hay datos para entrenar"
                 }
 
-            # Preparar datos
             X = []
             y = []
 
@@ -58,7 +53,6 @@ class MLService:
             X = np.array(X)
             y = np.array(y)
 
-            # Dividir datos
             X_train, X_test, y_train, y_test = train_test_split(
                 X, y, test_size=0.2, random_state=42
             )
@@ -85,7 +79,6 @@ class MLService:
             return {
                 "success": True,
                 "accuracy": accuracy,
-                "message": "Modelo entrenado exitosamente"
             }
 
         except Exception as e:
@@ -101,7 +94,6 @@ class MLService:
         Predecir nivel de riesgo de un cliente
 
         Args:
-            client_data: Datos del cliente
 
         Returns:
             Dict con predicción de riesgo
@@ -161,7 +153,6 @@ class MLService:
 
 
     def get_model_status(self) -> Dict[str, any]:
-        """Obtener estado de los modelos"""
         return {
             "is_trained": self.is_trained,
             "models_available": list(self.models.keys()),

@@ -4,7 +4,6 @@ Sistema completo de gestión de clientes con validaciones y auditoría
 """
 
 import logging
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
@@ -35,7 +34,6 @@ def listar_clientes(
     search: Optional[str] = Query(
         None, description="Buscar en nombre, cédula o móvil"
     ),
-    # Filtros específicos
     estado: Optional[str] = Query(
         None, description="ACTIVO, INACTIVO, FINALIZADO"
     ),
@@ -43,7 +41,6 @@ def listar_clientes(
     current_user: User = Depends(get_current_user),
 ):
     """
-    📋 Listar clientes con paginación y filtros
     """
     try:
         logger.info(f"Listar clientes - Usuario: {current_user.email}")
@@ -51,13 +48,11 @@ def listar_clientes(
         # Query base
         query = db.query(Cliente)
 
-        # Aplicar filtros
         if search:
             search_pattern = f"%{search}%"
             query = query.filter(
                 or_(
                     Cliente.nombres.ilike(search_pattern),
-                    Cliente.apellidos.ilike(search_pattern),
                     Cliente.cedula.ilike(search_pattern),
                     Cliente.telefono.ilike(search_pattern),
                 )
@@ -84,7 +79,6 @@ def listar_clientes(
                     "id": cliente.id,
                     "cedula": cliente.cedula,
                     "nombres": cliente.nombres,
-                    "apellidos": cliente.apellidos,
                     "telefono": cliente.telefono,
                     "email": cliente.email,
                     "direccion": cliente.direccion,
@@ -166,8 +160,6 @@ def obtener_cliente(
         )
 
 
-@router.post("", response_model=ClienteResponse, status_code=201)
-@router.post("/", response_model=ClienteResponse, status_code=201)
 def crear_cliente(
     cliente_data: ClienteCreate,
     db: Session = Depends(get_db),
@@ -183,7 +175,6 @@ def crear_cliente(
         nuevo_cliente = Cliente(
             cedula=cliente_data.cedula,
             nombres=cliente_data.nombres,
-            apellidos=cliente_data.apellidos,
             telefono=cliente_data.telefono,
             email=cliente_data.email,
             direccion=cliente_data.direccion,
@@ -195,15 +186,12 @@ def crear_cliente(
             estado=cliente_data.estado,
             notas=cliente_data.notas or "NA",
             usuario_registro=current_user.email,
-            fecha_registro=datetime.now(),
-            fecha_actualizacion=datetime.now(),
         )
 
         db.add(nuevo_cliente)
         db.commit()
         db.refresh(nuevo_cliente)
 
-        logger.info(f"Cliente creado exitosamente: {nuevo_cliente.id}")
         return ClienteResponse.model_validate(nuevo_cliente)
 
     except Exception as e:
@@ -235,19 +223,16 @@ def actualizar_cliente(
                 status_code=404, detail="Cliente no encontrado"
             )
 
-        # Actualizar campos
         update_data = cliente_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             if hasattr(cliente, field):
                 setattr(cliente, field, value)
 
         # Actualizar fecha de actualización automáticamente
-        cliente.fecha_actualizacion = datetime.now()
 
         db.commit()
         db.refresh(cliente)
 
-        logger.info(f"Cliente actualizado exitosamente: {cliente_id}")
         return ClienteResponse.model_validate(cliente)
 
     except HTTPException:
@@ -284,8 +269,6 @@ def eliminar_cliente(
         db.delete(cliente)
         db.commit()
 
-        logger.info(f"Cliente eliminado exitosamente: {cliente_id}")
-        return {"message": "Cliente eliminado exitosamente"}
 
     except HTTPException:
         raise

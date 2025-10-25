@@ -5,18 +5,14 @@ from app.db.session import Base
 
 
 class Concesionario(Base):
-    __tablename__ = "concesionarios"
 
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(255), nullable=False, index=True)
     activo = Column(Boolean, default=True, nullable=False)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    fecha_eliminacion = Column(DateTime(timezone=True), nullable=True)
 
 
     def __repr__(self):

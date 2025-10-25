@@ -1,5 +1,3 @@
-# backend/app/api/v1/endpoints/carga_masiva.py"""Sistema de Carga Masiva de Clientes y PagosProceso completo con validación,
-# corrección en línea y articulación por cédula"""\nimport io\nimport logging\nfrom datetime \nimport datetime\nfrom decimal
 # \nimport Decimal\nfrom typing \nimport Any, Dict, List, Optional\nimport pandas as pd\nfrom fastapi \nimport APIRouter,
 # Depends, File, Form, HTTPException, UploadFile\nfrom fastapi.responses \nimport StreamingResponse\nfrom pydantic \nimport
 # BaseModel\nfrom sqlalchemy.orm \nimport Session\nfrom app.api.deps \nimport get_current_user, get_db\nfrom
@@ -12,27 +10,13 @@
 # encontrado en carga masiva""" fila:\n int cedula:\n str campo:\n str valor_original:\n str error:\n str tipo_error:\n str #
 # CRITICO, ADVERTENCIA, DATO_VACIO puede_corregirse:\n bool sugerencia:\n Optional[str] = None\nclass
 # RegistroCargaMasiva(BaseModel):\n """Registro procesado en carga masiva""" fila:\n int cedula:\n str nombre_completo:\n str
-# estado:\n str # PROCESADO, ERROR, PENDIENTE_CORRECCION errores:\n List[ErrorCargaMasiva] datos:\n Dict[str, Any]\nclass
-# ResultadoCargaMasiva(BaseModel):\n """Resultado del proceso de carga masiva""" total_registros:\n int
-# registros_procesados:\n int registros_con_errores:\n int registros_pendientes:\n int errores_criticos:\n int
-# errores_advertencia:\n int datos_vacios:\n int registros:\n List[RegistroCargaMasiva] archivo:\n str fecha_carga:\n
-# datetime usuario_id:\n int\nclass CorreccionRegistro(BaseModel):\n """Corrección de un registro con errores""" fila:\n int
 # cedula:\n str correcciones:\n Dict[str, str]# ============================================# ENDPOINT:\n SUBIR ARCHIVO
-# EXCEL# ============================================@router.post("/upload", response_model=ResultadoCargaMasiva)async \ndef
-# cargar_archivo_excel( archivo:\n UploadFile = File(...), tipo_carga:\n str = Form(..., description="clientes o pagos"),
 # db:\n Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 📤 PASO 1:\n Subir archivo Excel
-# y analizar errores Proceso:\n 1. Leer archivo Excel 2. Validar TODOS los registros 3. Clasificar errores (CRÍTICO,
 # ADVERTENCIA, DATO_VACÍO) 4. NO guardar nada aún 5. Retornar dashboard con errores para corrección """ try:\n # Validar tipo
 # de archivo if not archivo.filename.endswith((".xlsx", ".xls")):\n raise HTTPException( status_code=400, detail="Solo se
-# permiten archivos Excel (.xlsx, .xls)", ) # Leer contenido contenido = await archivo.read() # Procesar según tipo if
 # tipo_carga == "clientes":\n resultado = await _analizar_archivo_clientes( contenido, archivo.filename, db, current_user.id
-# ) elif tipo_carga == "pagos":\n resultado = await _analizar_archivo_pagos( contenido, archivo.filename, db, current_user.id
-# ) else:\n raise HTTPException( status_code=400, detail="Tipo de carga inválido. Use 'clientes' o 'pagos'", ) # Registrar en
 # auditoría auditoria = Auditoria.registrar( usuario_id=current_user.id, accion=TipoAccion.CREAR, tabla="CargaMasiva",
-# descripcion=f"Análisis de carga" + f"masiva:\n {archivo.filename} \ ({tipo_carga})", datos_nuevos={ "archivo":\n
-# archivo.filename, "tipo":\n tipo_carga, "total_registros":\n resultado.total_registros, "errores":\n
-# resultado.registros_con_errores, }, resultado="EXITOSO", ) db.add(auditoria) db.commit() return resultado except
-# HTTPException:\n raise except Exception as e:\n raise HTTPException( status_code=500, detail=f"Error al procesar archivo:\n
+# HTTPException:\n raise except Exception as e:\n raise HTTPException( status_code=500, detail="Error al procesar archivo:\n
 # {str(e)}", )# ============================================# FUNCIÓN:\n ANALIZAR ARCHIVO DE CLIENTES#
 # ============================================\ndef _mapear_columnas(df:\n pd.DataFrame) -> pd.DataFrame:\n """Mapear
 # columnas del Excel al sistema""" mapeo_columnas = { "CEDULA IDENTIDAD":\n "cedula", "CEDULA IDENT":\n "cedula", "CEDULA":\n
@@ -45,9 +29,7 @@
 # "fecha_entrega", "ENTREGA":\n "fecha_entrega", "USER":\n "asesor", "USER ASIGNADO":\n "asesor", } return
 # df.rename(columns=mapeo_columnas)\ndef _validar_columnas_requeridas(df:\n pd.DataFrame) -> None:\n """Validar que existan
 # las columnas requeridas""" columnas_requeridas = ["cedula", "nombre"] columnas_faltantes = [ col for col in
-# columnas_requeridas if col not in df.columns ] if columnas_faltantes:\n raise HTTPException( status_code=400, detail=f"❌
-# Faltan columnas requeridas:\n {', '.join(columnas_faltantes)}", )\ndef _extraer_datos_fila( row:\n pd.Series, index:\n int)
-# -> tuple[ str, str, str, str, str, str, str, str, str, str, str, str, str, str]:\n """Extraer y limpiar datos de una fila
+# columnas_requeridas if col not in df.columns ] if columnas_faltantes:\n raise HTTPException( status_code=400, detail="❌
 # del DataFrame""" fila_numero = index + 2 # +2 porque Excel empieza en 1 y tiene header cedula = str(row.get("cedula",
 # "")).strip() nombre = str(row.get("nombre", "")).strip() apellido = ( str(row.get("apellido", "")).strip() if "apellido" in
 # row else "" ) movil = str(row.get("movil", "")).strip() email = str(row.get("email", "")).strip() direccion =
@@ -59,8 +41,6 @@
 # apellido and nombre:\n partes_nombre = nombre.split(" ", 1) if len(partes_nombre) > 1:\n nombre = partes_nombre[0] apellido
 # = partes_nombre[1] return ( fila_numero, cedula, nombre, apellido, movil, email, direccion, modelo_vehiculo, concesionario,
 # total_financiamiento, cuota_inicial, numero_amortizaciones, modalidad_pago, fecha_entrega, asesor, )\ndef
-# _validar_campos_criticos( fila_numero:\n int, cedula:\n str, nombre:\n str, total_financiamiento:\n str,
-# numero_amortizaciones:\n str, fecha_entrega:\n str,) -> list[ErrorCargaMasiva]:\n """Validar campos críticos y retornar
 # errores""" errores = [] # Cédula (CRÍTICO) if not cedula or cedula.upper() == "ERROR":\n errores.append( ErrorCargaMasiva(
 # fila=fila_numero, cedula=cedula or "VACÍO", campo="cedula", valor_original=cedula, error="Cédula vacía o marcada como
 # ERROR", tipo_error="CRITICO", puede_corregirse=True, sugerencia="Ingrese cédula válida (ej:\n V12345678)", ) ) # Nombre
@@ -79,17 +59,9 @@
 # campo="fecha_entrega", valor_original=fecha_entrega, error="Fecha de entrega vacía o marcada como ERROR",
 # tipo_error="CRITICO", puede_corregirse=True, sugerencia="Ingrese fecha de entrega (ej:\n 2025-01-15)", ) ) return
 # erroresasync \ndef _analizar_archivo_clientes( contenido:\n bytes, nombre_archivo:\n str, db:\n Session, usuario_id:\n int)
-# -> ResultadoCargaMasiva:\n """ Analizar archivo de clientes sin guardar Detectar TODOS los errores y clasificarlos """
 # try:\n # Leer Excel df = pd.read_excel(io.BytesIO(contenido)) # Mapear columnas df = _mapear_columnas(df) # Validar
 # columnas requeridas _validar_columnas_requeridas(df) # ============================================ # PROCESAR CADA
-# REGISTRO # ============================================ registros_procesados = [] total_registros = len(df)
-# registros_con_errores = 0 errores_criticos = 0 errores_advertencia = 0 datos_vacios = 0 for index, row in df.iterrows():\n
-# # Extraer datos de la fila ( fila_numero, cedula, nombre, apellido, movil, email, direccion, modelo_vehiculo,
 # concesionario, total_financiamiento, cuota_inicial, numero_amortizaciones, modalidad_pago, fecha_entrega, asesor, ) =
-# _extraer_datos_fila(row, index) errores_registro = [] # Validar campos críticos errores_criticos_registro =
-# _validar_campos_criticos( fila_numero, cedula, nombre, total_financiamiento, numero_amortizaciones, fecha_entrega, )
-# errores_registro.extend(errores_criticos_registro) # Contar errores críticos errores_criticos += len( [ e for e in
-# errores_criticos_registro if e.tipo_error == "CRITICO" ] ) datos_vacios += len( [ e for e in errores_criticos_registro if
 # e.tipo_error == "DATO_VACIO" ] ) # ============================================ # VALIDACIÓN 2:\n CAMPOS DE ADVERTENCIA
 # VACÍOS # ============================================ # Móvil (ADVERTENCIA) if not movil or movil.upper() == "ERROR":\n
 # errores_registro.append( ErrorCargaMasiva( fila=fila_numero, cedula=cedula, campo="movil", valor_original=movil,
@@ -100,26 +72,20 @@
 # (ej:\n cliente@ejemplo.com)", ) ) errores_advertencia += 1 # Concesionario (DATO_VACIO) if not concesionario:\n
 # errores_registro.append( ErrorCargaMasiva( fila=fila_numero, cedula=cedula, campo="concesionario", valor_original="",
 # error="Concesionario vacío", tipo_error="DATO_VACIO", puede_corregirse=True, sugerencia="Seleccione un concesionario de la
-# lista", ) ) datos_vacios += 1 # Modelo de Vehículo (DATO_VACIO) if not modelo_vehiculo:\n errores_registro.append(
 # ErrorCargaMasiva( fila=fila_numero, cedula=cedula, campo="modelo_vehiculo", valor_original="", error="Modelo de vehículo
-# vacío", tipo_error="DATO_VACIO", puede_corregirse=True, sugerencia="Seleccione un modelo de la lista", ) ) datos_vacios +=
 # 1 # Analista (DATO_VACIO) if not asesor:\n errores_registro.append( ErrorCargaMasiva( fila=fila_numero, cedula=cedula,
 # campo="asesor", valor_original="", error="Analista vacío", tipo_error="DATO_VACIO", puede_corregirse=True,
-# sugerencia="Seleccione un asesor de la lista", ) ) datos_vacios += 1 # Modalidad de Pago (DATO_VACIO) if not
 # modalidad_pago:\n errores_registro.append( ErrorCargaMasiva( fila=fila_numero, cedula=cedula, campo="modalidad_pago",
 # valor_original="", error="Modalidad de pago vacía", tipo_error="DATO_VACIO", puede_corregirse=True,
-# sugerencia="Seleccione:\n SEMANAL, QUINCENAL o MENSUAL", ) ) datos_vacios += 1 #
 # ============================================ # VALIDACIÓN 3:\n FORMATO DE DATOS #
 # ============================================ # Validar cédula con validador del sistema if cedula and cedula.upper() !=
 # "ERROR":\n resultado_cedula = ValidadorCedula.validar_y_formatear_cedula( cedula, "VENEZUELA" ) if not
 # resultado_cedula.get("valido"):\n errores_registro.append( ErrorCargaMasiva( fila=fila_numero, cedula=cedula,
 # campo="cedula", valor_original=cedula, error=resultado_cedula.get( "mensaje", "Formato inválido" ), tipo_error="CRITICO",
-# puede_corregirse=True, sugerencia="Formato:\n V/E/J + 7-10 dígitos (ej:\n V12345678)", ) ) errores_criticos += 1 # Validar
 # móvil con validador del sistema if movil and movil.upper() != "ERROR":\n resultado_movil = (
 # ValidadorTelefono.validar_y_formatear_telefono( movil, "VENEZUELA" ) ) if not resultado_movil.get("valido"):\n
 # errores_registro.append( ErrorCargaMasiva( fila=fila_numero, cedula=cedula, campo="movil", valor_original=movil,
 # error=resultado_movil.get( "mensaje", "Formato inválido" ), tipo_error="ADVERTENCIA", puede_corregirse=True,
-# sugerencia="Formato:\n +58 XXXXXXXXXX (10 dígitos)", ) ) errores_advertencia += 1 # Validar email con validador del sistema
 # if email and email.upper() != "ERROR":\n resultado_email = ValidadorEmail.validar_email(email) if not
 # resultado_email.get("valido"):\n errores_registro.append( ErrorCargaMasiva( fila=fila_numero, cedula=cedula, campo="email",
 # valor_original=email, error=resultado_email.get( "mensaje", "Formato inválido" ), tipo_error="ADVERTENCIA",
@@ -128,60 +94,35 @@
 # fecha_entrega ) if not resultado_fecha.get("valido"):\n errores_registro.append( ErrorCargaMasiva( fila=fila_numero,
 # cedula=cedula, campo="fecha_entrega", valor_original=fecha_entrega, error=resultado_fecha.get( "mensaje", "Formato
 # inválido" ), tipo_error="CRITICO", puede_corregirse=True, sugerencia="Formato:\n DD/MM/YYYY o YYYY-MM-DD", ) )
-# errores_criticos += 1 # Validar monto de financiamiento if ( total_financiamiento and total_financiamiento.upper() !=
 # "ERROR" ):\n resultado_monto = ValidadorMonto.validar_y_formatear_monto( total_financiamiento ) if not
 # resultado_monto.get("valido"):\n errores_registro.append( ErrorCargaMasiva( fila=fila_numero, cedula=cedula,
 # campo="total_financiamiento", valor_original=total_financiamiento, error=resultado_monto.get( "mensaje", "Formato inválido"
-# ), tipo_error="CRITICO", puede_corregirse=True, sugerencia="Ingrese monto numérico (ej:\n 50000.00)", ) ) errores_criticos
 # += 1 # ============================================ # VALIDACIÓN 4:\n EXISTENCIA EN BD #
 # ============================================ # Verificar si concesionario existe if concesionario:\n concesionario_obj = (
 # db.query(Concesionario) .filter( Concesionario.nombre.ilike(f"%{concesionario}%"), Concesionario.activo, ) .first() ) if
 # not concesionario_obj:\n errores_registro.append( ErrorCargaMasiva( fila=fila_numero, cedula=cedula, campo="concesionario",
-# valor_original=concesionario, error=f'Concesionario "{concesionario}" no existe en la base de datos',
 # tipo_error="DATO_VACIO", puede_corregirse=True, sugerencia="Seleccione un concesionario existente o créelo primero en
-# Configuración", ) ) datos_vacios += 1 # Verificar si modelo de vehículo existe if modelo_vehiculo:\n modelo_obj = (
 # db.query(ModeloVehiculo) .filter( ModeloVehiculo.modelo.ilike(f"%{modelo_vehiculo}%"), ModeloVehiculo.activo, ) .first() )
 # if not modelo_obj:\n errores_registro.append( ErrorCargaMasiva( fila=fila_numero, cedula=cedula, campo="modelo_vehiculo",
-# valor_original=modelo_vehiculo, error=f'Modelo "{modelo_vehiculo}" no existe en la base de datos', tipo_error="DATO_VACIO",
-# puede_corregirse=True, sugerencia="Seleccione un modelo existente o créelo primero en Configuración", ) ) datos_vacios += 1
 # # Verificar si asesor existe if asesor:\n asesor_obj = ( db.query(Analista) .filter( Analista.nombre.ilike(f"%{asesor}%"),
 # Analista.activo ) .first() ) if not asesor_obj:\n errores_registro.append( ErrorCargaMasiva( fila=fila_numero,
-# cedula=cedula, campo="asesor", valor_original=asesor, error=f'Analista "{asesor}" no existe en la base de datos',
 # tipo_error="DATO_VACIO", puede_corregirse=True, sugerencia="Seleccione un asesor existente o créelo primero en
-# Configuración", ) ) datos_vacios += 1 # Validar modalidad de pago if modalidad_pago:\n modalidades_validas = [ "SEMANAL",
 # "QUINCENAL", "MENSUAL", "BIMENSUAL", ] if modalidad_pago.upper() not in modalidades_validas:\n errores_registro.append(
 # ErrorCargaMasiva( fila=fila_numero, cedula=cedula, campo="modalidad_pago", valor_original=modalidad_pago, error=f'Modalidad
 # "{modalidad_pago}" no es válida', tipo_error="CRITICO", puede_corregirse=True, sugerencia=f'Use:\n {",
-# ".join(modalidades_validas)}', ) ) errores_criticos += 1 # ============================================ # DETERMINAR ESTADO
-# DEL REGISTRO # ============================================ tiene_errores_criticos = any( e.tipo_error == "CRITICO" for e
-# in errores_registro ) tiene_datos_vacios = any( e.tipo_error == "DATO_VACIO" for e in errores_registro ) if
-# tiene_errores_criticos:\n estado = "ERROR" registros_con_errores += 1 elif tiene_datos_vacios:\n estado =
-# "PENDIENTE_CORRECCION" registros_con_errores += 1 elif errores_registro:\n estado = "ADVERTENCIA" registros_con_errores +=
-# 1 else:\n estado = "LISTO" # Agregar registro procesado registros_procesados.append( RegistroCargaMasiva( fila=fila_numero,
-# cedula=cedula or "VACÍO", nombre_completo=f"{nombre} {apellido}".strip(), estado=estado, errores=errores_registro, datos={
 # "cedula":\n cedula, "nombre":\n nombre, "apellido":\n apellido, "movil":\n movil, "email":\n email, "direccion":\n
 # direccion, "modelo_vehiculo":\n modelo_vehiculo, "concesionario":\n concesionario, "total_financiamiento":\n
 # total_financiamiento, "cuota_inicial":\n cuota_inicial, "numero_amortizaciones":\n numero_amortizaciones,
 # "modalidad_pago":\n modalidad_pago or "MENSUAL", "fecha_entrega":\n fecha_entrega, "asesor":\n asesor, }, ) ) #
 # ============================================ # RETORNAR RESULTADO PARA DASHBOARD #
-# ============================================ return ResultadoCargaMasiva( total_registros=total_registros,
-# registros_procesados=len( [r for r in registros_procesados if r.estado == "LISTO"] ),
-# registros_con_errores=registros_con_errores, registros_pendientes=len( [ r for r in registros_procesados if r.estado ==
-# "PENDIENTE_CORRECCION" ] ), errores_criticos=errores_criticos, errores_advertencia=errores_advertencia,
-# datos_vacios=datos_vacios, registros=registros_procesados, archivo=nombre_archivo, fecha_carga=datetime.utcnow(),
-# usuario_id=usuario_id, ) except Exception as e:\n raise HTTPException( status_code=500, detail=f"Error analizando archivo
+# usuario_id=usuario_id, ) except Exception as e:\n raise HTTPException( status_code=500, detail="Error analizando archivo
 # de clientes:\n {str(e)}", )# ============================================# FUNCIÓN:\n ANALIZAR ARCHIVO DE PAGOS#
-# ============================================async \ndef _analizar_archivo_pagos( contenido:\n bytes, nombre_archivo:\n str,
-# db:\n Session, usuario_id:\n int) -> ResultadoCargaMasiva:\n """ Analizar archivo de pagos y articular con clientes por
-# cédula """ try:\n # Leer Excel df = pd.read_excel(io.BytesIO(contenido)) # Mapeo de columnas para pagos mapeo_columnas = {
 # "CEDULA IDENTIDAD":\n "cedula", "CEDULA":\n "cedula", "FECHA PAGO":\n "fecha_pago", "FECHA":\n "fecha_pago", "MONTO
 # PAGADO":\n "monto_pagado", "MONTO":\n "monto_pagado", "NUMERO CUOTA":\n "numero_cuota", "CUOTA":\n "numero_cuota",
 # "DOCUMENTO PAGO":\n "documento_pago", "DOCUMENTO":\n "documento_pago", "REFERENCIA":\n "documento_pago", "METODO PAGO":\n
 # "metodo_pago", "METODO":\n "metodo_pago", } df = df.rename(columns=mapeo_columnas) # Validar columnas requeridas
 # columnas_requeridas = ["cedula", "fecha_pago", "monto_pagado"] columnas_faltantes = [ col for col in columnas_requeridas if
-# col not in df.columns ] if columnas_faltantes:\n raise HTTPException( status_code=400, detail=f"❌ Faltan columnas
-# requeridas:\n {', '.join(columnas_faltantes)}", ) # Procesar cada pago registros_procesados = [] total_registros = len(df)
-# registros_con_errores = 0 errores_criticos = 0 errores_advertencia = 0 datos_vacios = 0 for index, row in df.iterrows():\n
+# col not in df.columns ] if columnas_faltantes:\n raise HTTPException( status_code=400, detail="❌ Faltan columnas
 # fila_numero = index + 2 errores_registro = [] cedula = str(row.get("cedula", "")).strip() fecha_pago =
 # str(row.get("fecha_pago", "")).strip() monto_pagado = str(row.get("monto_pagado", "")).strip() numero_cuota =
 # str(row.get("numero_cuota", "")).strip() documento_pago = str(row.get("documento_pago", "")).strip() metodo_pago =
@@ -189,46 +130,28 @@
 # CLIENTE # ============================================ # Buscar cliente por cédula cliente = None if cedula and
 # cedula.upper() != "ERROR":\n cliente = ( db.query(Cliente).filter(Cliente.cedula == cedula).first() ) if not cliente:\n
 # errores_registro.append( ErrorCargaMasiva( fila=fila_numero, cedula=cedula, campo="cedula", valor_original=cedula,
-# error=f'Cliente con cédula "{cedula}" NO existe en la base de datos', tipo_error="CRITICO", puede_corregirse=False,
-# sugerencia="Debe crear el cliente primero antes de cargar pagos", ) ) errores_criticos += 1 else:\n
 # errores_registro.append( ErrorCargaMasiva( fila=fila_numero, cedula=cedula or "VACÍO", campo="cedula",
 # valor_original=cedula, error="Cédula vacía o marcada como ERROR", tipo_error="CRITICO", puede_corregirse=True,
-# sugerencia="Ingrese cédula del cliente", ) ) errores_criticos += 1 # Validar fecha de pago if not fecha_pago or
 # fecha_pago.upper() == "ERROR":\n errores_registro.append( ErrorCargaMasiva( fila=fila_numero, cedula=cedula,
 # campo="fecha_pago", valor_original=fecha_pago, error="Fecha de pago vacía o marcada como ERROR", tipo_error="CRITICO",
-# puede_corregirse=True, sugerencia="Ingrese fecha del pago (ej:\n 15/01/2025)", ) ) errores_criticos += 1 else:\n
 # resultado_fecha = ValidadorFecha.validar_y_formatear_fecha( fecha_pago ) if not resultado_fecha.get("valido"):\n
 # errores_registro.append( ErrorCargaMasiva( fila=fila_numero, cedula=cedula, campo="fecha_pago", valor_original=fecha_pago,
 # error=resultado_fecha.get( "mensaje", "Formato inválido" ), tipo_error="CRITICO", puede_corregirse=True,
-# sugerencia="Formato:\n DD/MM/YYYY o YYYY-MM-DD", ) ) errores_criticos += 1 # Validar monto pagado if not monto_pagado or
 # monto_pagado.upper() == "ERROR":\n errores_registro.append( ErrorCargaMasiva( fila=fila_numero, cedula=cedula,
 # campo="monto_pagado", valor_original=monto_pagado, error="Monto pagado vacío o marcado como ERROR", tipo_error="CRITICO",
-# puede_corregirse=True, sugerencia="Ingrese monto del pago (ej:\n 5000.00)", ) ) errores_criticos += 1 else:\n
 # resultado_monto = ValidadorMonto.validar_y_formatear_monto( monto_pagado ) if not resultado_monto.get("valido"):\n
 # errores_registro.append( ErrorCargaMasiva( fila=fila_numero, cedula=cedula, campo="monto_pagado",
 # valor_original=monto_pagado, error=resultado_monto.get( "mensaje", "Formato inválido" ), tipo_error="CRITICO",
-# puede_corregirse=True, sugerencia="Ingrese monto numérico (ej:\n 5000.00)", ) ) errores_criticos += 1 # Documento de pago
 # (ADVERTENCIA si vacío) if not documento_pago or documento_pago.upper() == "ERROR":\n errores_registro.append(
 # ErrorCargaMasiva( fila=fila_numero, cedula=cedula, campo="documento_pago", valor_original=documento_pago, error="Documento
 # de pago vacío", tipo_error="ADVERTENCIA", puede_corregirse=True, sugerencia="Ingrese número de referencia o documento", ) )
 # errores_advertencia += 1 # Método de pago (DATO_VACIO si vacío) if not metodo_pago:\n errores_registro.append(
 # ErrorCargaMasiva( fila=fila_numero, cedula=cedula, campo="metodo_pago", valor_original="", error="Método de pago vacío",
 # tipo_error="DATO_VACIO", puede_corregirse=True, sugerencia="Seleccione:\n TRANSFERENCIA, EFECTIVO, CHEQUE, etc.", ) )
-# datos_vacios += 1 # Determinar estado tiene_errores_criticos = any( e.tipo_error == "CRITICO" for e in errores_registro )
-# tiene_datos_vacios = any( e.tipo_error == "DATO_VACIO" for e in errores_registro ) if tiene_errores_criticos:\n estado =
-# "ERROR" registros_con_errores += 1 elif tiene_datos_vacios:\n estado = "PENDIENTE_CORRECCION" registros_con_errores += 1
-# elif errores_registro:\n estado = "ADVERTENCIA" registros_con_errores += 1 else:\n estado = "LISTO" # Agregar registro
-# registros_procesados.append( RegistroCargaMasiva( fila=fila_numero, cedula=cedula or "VACÍO", nombre_completo=(
-# cliente.nombre_completo if cliente else "Cliente no encontrado" ), estado=estado, errores=errores_registro, datos={
 # "cedula":\n cedula, "fecha_pago":\n fecha_pago, "monto_pagado":\n monto_pagado, "numero_cuota":\n numero_cuota,
 # "documento_pago":\n documento_pago, "metodo_pago":\n metodo_pago, "cliente_id":\n cliente.id if cliente else None,
 # "cliente_nombre":\n ( cliente.nombre_completo if cliente else None ), }, ) ) return ResultadoCargaMasiva(
-# total_registros=total_registros, registros_procesados=len( [r for r in registros_procesados if r.estado == "LISTO"] ),
-# registros_con_errores=registros_con_errores, registros_pendientes=len( [ r for r in registros_procesados if r.estado ==
-# "PENDIENTE_CORRECCION" ] ), errores_criticos=errores_criticos, errores_advertencia=errores_advertencia,
-# datos_vacios=datos_vacios, registros=registros_procesados, archivo=nombre_archivo, fecha_carga=datetime.utcnow(),
-# usuario_id=usuario_id, ) except Exception as e:\n raise HTTPException( status_code=500, detail=f"Error analizando archivo
-# de pagos:\n {str(e)}", )# ============================================# ENDPOINT:\n CORREGIR REGISTRO EN LÍNEA#
+# usuario_id=usuario_id, ) except Exception as e:\n raise HTTPException( status_code=500, detail="Error analizando archivo
 # ============================================\ndef _validar_correccion_cedula(valor:\n str) -> tuple[bool, str, str]:\n
 # """Validar corrección de cédula""" resultado = ValidadorCedula.validar_y_formatear_cedula(valor, "VENEZUELA") if not
 # resultado.get("valido"):\n return False, f"Cédula:\n {resultado.get('mensaje')}", "" return True, "",
@@ -239,10 +162,10 @@
 # corrección de email""" resultado = ValidadorEmail.validar_email(valor) if not resultado.get("valido"):\n return False,
 # f"Email:\n {resultado.get('mensaje')}", "" return True, "", resultado.get("valor_formateado")\ndef
 # _validar_correccion_fecha(valor:\n str) -> tuple[bool, str, str]:\n """Validar corrección de fecha""" resultado =
-# ValidadorFecha.validar_y_formatear_fecha(valor) if not resultado.get("valido"):\n return False, f"Fecha:\n
+# ValidadorFecha.validar_y_formatear_fecha(valor) if not resultado.get("valido"):\n return False, "Fecha:\n
 # {resultado.get('mensaje')}", "" return True, "", resultado.get("valor_formateado")\ndef _validar_correccion_monto(valor:\n
 # str) -> tuple[bool, str, str]:\n """Validar corrección de monto""" resultado =
-# ValidadorMonto.validar_y_formatear_monto(valor) if not resultado.get("valido"):\n return False, f"Monto:\n
+# ValidadorMonto.validar_y_formatear_monto(valor) if not resultado.get("valido"):\n return False, "Monto:\n
 # {resultado.get('mensaje')}", "" return True, "", resultado.get("valor_formateado")\ndef _validar_correccion_concesionario(
 # valor:\n str, db:\n Session) -> tuple[bool, str, str, int]:\n """Validar corrección de concesionario""" concesionario = (
 # db.query(Concesionario) .filter(Concesionario.nombre.ilike(f"%{valor}%"), Concesionario.activo) .first() ) if not
@@ -258,156 +181,52 @@
 # "QUINCENAL", "MENSUAL", "BIMENSUAL"] if valor.upper() not in modalidades_validas:\n return ( False, f"Modalidad '{valor}'
 # no es válida. Use:\n " f"{', '.join(modalidades_validas)}", "", ) return True, "", valor.upper()\ndef
 # _procesar_correccion_campo( campo:\n str, valor:\n str, db:\n Session) -> tuple[bool, str, dict]:\n """Procesar corrección
-# de un campo específico""" datos_corregidos = {} if campo == "cedula":\n valido, error, valor_formateado =
-# _validar_correccion_cedula(valor) if valido:\n datos_corregidos[campo] = valor_formateado return valido, error,
-# datos_corregidos elif campo == "movil":\n valido, error, valor_formateado = _validar_correccion_movil(valor) if valido:\n
-# datos_corregidos[campo] = valor_formateado return valido, error, datos_corregidos elif campo == "email":\n valido, error,
-# valor_formateado = _validar_correccion_email(valor) if valido:\n datos_corregidos[campo] = valor_formateado return valido,
-# error, datos_corregidos elif campo in ["fecha_entrega", "fecha_pago"]:\n valido, error, valor_formateado =
-# _validar_correccion_fecha(valor) if valido:\n datos_corregidos[campo] = valor_formateado return valido, error,
-# datos_corregidos elif campo in ["total_financiamiento", "cuota_inicial", "monto_pagado"]:\n valido, error, valor_formateado
-# = _validar_correccion_monto(valor) if valido:\n datos_corregidos[campo] = valor_formateado return valido, error,
-# datos_corregidos elif campo == "concesionario":\n valido, error, valor_formateado, concesionario_id = (
-# _validar_correccion_concesionario(valor, db) ) if valido:\n datos_corregidos[campo] = valor_formateado
-# datos_corregidos["concesionario_id"] = concesionario_id return valido, error, datos_corregidos elif campo ==
 # "modelo_vehiculo":\n valido, error, valor_formateado, modelo_id = ( _validar_correccion_modelo_vehiculo(valor, db) ) if
-# valido:\n datos_corregidos[campo] = valor_formateado datos_corregidos["modelo_vehiculo_id"] = modelo_id return valido,
-# error, datos_corregidos elif campo == "asesor":\n valido, error, valor_formateado, asesor_id = (
-# _validar_correccion_asesor(valor, db) ) if valido:\n datos_corregidos[campo] = valor_formateado
-# datos_corregidos["asesor_id"] = asesor_id return valido, error, datos_corregidos elif campo == "modalidad_pago":\n valido,
-# error, valor_formateado = _validar_correccion_modalidad_pago( valor ) if valido:\n datos_corregidos[campo] =
-# valor_formateado return valido, error, datos_corregidos else:\n # Otros campos sin validación especial
-# datos_corregidos[campo] = valor return True, "", datos_corregidos@router.post("/corregir-registro")async \ndef
 # corregir_registro_en_linea( correccion:\n CorreccionRegistro, db:\n Session = Depends(get_db), current_user:\n User =
 # Depends(get_current_user),):\n """ ✏️ PASO 2:\n Corregir un registro con errores en línea (VERSIÓN REFACTORIZADA)
 # Proceso:\n 1. Recibir correcciones del usuario 2. Validar con validadores del sistema 3. Si pasa validación, marcar como
-# LISTO 4. Retornar estado actualizado """ try:\n errores_validacion = [] datos_corregidos = {} # Validar cada corrección for
-# campo, valor in correccion.correcciones.items():\n valido, error, datos_campo = _procesar_correccion_campo( campo, valor,
-# db ) if not valido:\n errores_validacion.append(error) else:\n datos_corregidos.update(datos_campo) # Si hay errores,
 # retornar sin guardar if errores_validacion:\n return { "success":\n False, "errores":\n errores_validacion,
-# "datos_corregidos":\n datos_corregidos, } # Si todo está OK, retornar éxito return { "success":\n True, "mensaje":\n "✅
-# Correcciones validadas correctamente", "datos_corregidos":\n datos_corregidos, "puede_guardarse":\n True, } except
 # Exception as e:\n raise HTTPException( status_code=500, detail=f"Error corrigiendo registro:\n {str(e)}", )#
 # ============================================# ENDPOINT:\n GUARDAR REGISTROS CORREGIDOS#
-# ============================================@router.post("/guardar-registros")async \ndef guardar_registros_corregidos(
-# registros:\n List[Dict[str, Any]], tipo_carga:\n str = Form(...), db:\n Session = Depends(get_db), current_user:\n User =
-# Depends(get_current_user),):\n """ 💾 PASO 3:\n Guardar registros que pasaron validación Proceso:\n 1. Recibir solo
-# registros con estado LISTO 2. Usar MISMO proceso que crear_cliente o crear_pago 3. Mapear nombres a ForeignKeys 4. Guardar
-# en base de datos 5. Retornar resumen final """ try:\n registros_guardados = 0 errores_guardado = [] for registro in
-# registros:\n try:\n if tipo_carga == "clientes":\n # Usar MISMO proceso que crear_cliente await
-# _guardar_cliente_desde_carga( registro, db, current_user.id ) registros_guardados += 1 elif tipo_carga == "pagos":\n # Usar
-# MISMO proceso que crear_pago await _guardar_pago_desde_carga( registro, db, current_user.id ) registros_guardados += 1
 # except Exception as e:\n errores_guardado.append( {"cedula":\n registro.get("cedula"), "error":\n str(e)} ) db.commit() #
 # Registrar en auditoría auditoria = Auditoria.registrar( usuario_id=current_user.id, accion=TipoAccion.CREAR,
-# tabla="CargaMasiva", descripcion=f"Guardado de carga masiva:\n {registros_guardados} " f"registros ({tipo_carga})",
-# datos_nuevos={ "tipo":\n tipo_carga, "registros_guardados":\n registros_guardados, "errores":\n len(errores_guardado), },
-# resultado="EXITOSO", ) db.add(auditoria) db.commit() return { "success":\n True, "mensaje":\n f"✅ {registros_guardados}
-# registros guardados exitosamente", "registros_guardados":\n registros_guardados, "errores":\n errores_guardado, } except
-# Exception as e:\n db.rollback() raise HTTPException( status_code=500, detail=f"Error guardando registros:\n {str(e)}", )#
 # ============================================# FUNCIÓN:\n GUARDAR CLIENTE DESDE CARGA MASIVA#
-# ============================================\ndef _buscar_concesionario_id( datos:\n Dict[str, Any], db:\n Session) ->
-# Optional[int]:\n """Buscar ID del concesionario por nombre""" if not datos.get("concesionario"):\n return None
-# concesionario_obj = ( db.query(Concesionario) .filter( Concesionario.nombre.ilike(f"%{datos['concesionario']}%"),
 # Concesionario.activo, ) .first() ) return concesionario_obj.id if concesionario_obj else None\ndef
-# _buscar_modelo_vehiculo_id( datos:\n Dict[str, Any], db:\n Session) -> Optional[int]:\n """Buscar ID del modelo de vehículo
-# por nombre""" if not datos.get("modelo_vehiculo"):\n return None modelo_obj = ( db.query(ModeloVehiculo) .filter(
-# ModeloVehiculo.modelo.ilike(f"%{datos['modelo_vehiculo']}%"), ModeloVehiculo.activo, ) .first() ) return modelo_obj.id if
-# modelo_obj else None\ndef _buscar_asesor_id(datos:\n Dict[str, Any], db:\n Session) -> Optional[int]:\n """Buscar ID del
-# asesor por nombre""" if not datos.get("asesor"):\n return None asesor_obj = ( db.query(Analista)
-# .filter(Analista.nombre.ilike(f"%{datos['asesor']}%"), Analista.activo) .first() ) return asesor_obj.id if asesor_obj else
-# None\ndef _crear_datos_cliente( datos:\n Dict[str, Any], concesionario_id:\n Optional[int], modelo_vehiculo_id:\n
-# Optional[int], asesor_id:\n Optional[int], usuario_id:\n int,) -> Dict[str, Any]:\n """Crear diccionario de datos del
-# cliente""" return { "cedula":\n datos["cedula"], "nombres":\n datos["nombre"], "apellidos":\n datos.get("apellido", ""),
-# "telefono":\n datos.get("movil", ""), "email":\n datos.get("email", ""), "direccion":\n datos.get("direccion", ""), #
 # ForeignKeys "concesionario_id":\n concesionario_id, "modelo_vehiculo_id":\n modelo_vehiculo_id, "asesor_id":\n asesor_id, #
-# Campos legacy (mantener por compatibilidad) "concesionario":\n datos.get("concesionario", ""), "modelo_vehiculo":\n
-# datos.get("modelo_vehiculo", ""), "marca_vehiculo":\n ( datos.get("modelo_vehiculo", "").split(" ")[0] if
-# datos.get("modelo_vehiculo") else "" ), # Financiamiento "total_financiamiento":\n (
-# Decimal(str(datos.get("total_financiamiento", 0))) if datos.get("total_financiamiento") else None ), "cuota_inicial":\n (
-# Decimal(str(datos.get("cuota_inicial", 0))) if datos.get("cuota_inicial") else None ), "numero_amortizaciones":\n (
-# int(datos.get("numero_amortizaciones", 12)) if datos.get("numero_amortizaciones") else None ), "modalidad_pago":\n
-# datos.get("modalidad_pago", "MENSUAL").upper(), "fecha_entrega":\n ( datetime.strptime(datos["fecha_entrega"],
-# "%Y-%m-%d").date() if datos.get("fecha_entrega") else None ), # Estado "estado":\n "ACTIVO", "activo":\n True,
-# "fecha_registro":\n datetime.utcnow(), "usuario_registro":\n f"CARGA_MASIVA_USER_{usuario_id}", }\ndef
-# _guardar_o_actualizar_cliente( cliente_data:\n Dict[str, Any], datos:\n Dict[str, Any], db:\n Session) -> Cliente:\n
 # """Guardar nuevo cliente o actualizar existente""" cliente_existente = ( db.query(Cliente).filter(Cliente.cedula ==
-# datos["cedula"]).first() ) if cliente_existente:\n # Actualizar cliente existente for key, value in cliente_data.items():\n
 # if key not in ["cedula", "fecha_registro"]:\n setattr(cliente_existente, key, value) cliente_existente.fecha_actualizacion
-# = datetime.utcnow() logger.info(f"Cliente actualizado:\n {datos['cedula']}") return cliente_existente else:\n # Crear nuevo
-# cliente nuevo_cliente = Cliente(**cliente_data) db.add(nuevo_cliente) db.flush() logger.info( f"Cliente creado:\n
-# {datos['cedula']} (ID:\n {nuevo_cliente.id})" ) return nuevo_cliente\ndef _registrar_auditoria_cliente( cliente:\n Cliente,
-# datos:\n Dict[str, Any], cliente_data:\n Dict[str, Any], usuario_id:\n int, es_actualizacion:\n bool, db:\n Session,):\n
+# cliente nuevo_cliente = Cliente(**cliente_data) db.add(nuevo_cliente) db.flush() logger.info( "Cliente creado:\n
 # """Registrar operación en auditoría""" auditoria = Auditoria.registrar( usuario_id=usuario_id, accion=TipoAccion.ACTUALIZAR
 # if es_actualizacion else TipoAccion.CREAR, tabla="Cliente", registro_id=cliente.id, descripcion=f"Cliente {'actualizado' if
-# es_actualizacion else 'creado'} desde carga masiva:\n {datos['cedula']}", datos_nuevos=cliente_data, resultado="EXITOSO", )
-# db.add(auditoria)async \ndef _guardar_cliente_desde_carga( datos:\n Dict[str, Any], db:\n Session, usuario_id:\n int):\n
 # """ Guardar cliente usando MISMO proceso que crear_cliente (VERSIÓN REFACTORIZADA) """ try:\n # 1. Buscar ForeignKeys
-# concesionario_id = _buscar_concesionario_id(datos, db) modelo_vehiculo_id = _buscar_modelo_vehiculo_id(datos, db) asesor_id
-# = _buscar_asesor_id(datos, db) # 2. Crear datos del cliente cliente_data = _crear_datos_cliente( datos, concesionario_id,
 # modelo_vehiculo_id, asesor_id, usuario_id ) # 3. Verificar si existe y guardar/actualizar cliente_existente = (
-# db.query(Cliente).filter(Cliente.cedula == datos["cedula"]).first() ) cliente = _guardar_o_actualizar_cliente(cliente_data,
-# datos, db) # 4. Registrar en auditoría _registrar_auditoria_cliente( cliente, datos, cliente_data, usuario_id,
-# bool(cliente_existente), db, ) except Exception as e:\n raise Exception( f"Error guardando cliente {datos.get('cedula')}:\n
 # {str(e)}" )# ============================================# FUNCIÓN:\n GUARDAR PAGO DESDE CARGA MASIVA#
-# ============================================async \ndef _guardar_pago_desde_carga( datos:\n Dict[str, Any], db:\n Session,
 # usuario_id:\n int):\n """ Guardar pago articulado con cliente por cédula """ try:\n #
 # ============================================ # ARTICULACIÓN:\n Buscar cliente por cédula #
 # ============================================ cliente = ( db.query(Cliente).filter(Cliente.cedula ==
-# datos["cedula"]).first() ) if not cliente:\n raise Exception(f"Cliente con cédula {datos['cedula']} no existe") # Verificar
-# que el cliente tenga préstamo activo if not cliente.prestamos or len(cliente.prestamos) == 0:\n raise Exception( f"Cliente
-# {datos['cedula']} no tiene préstamos activos" ) # Usar el primer préstamo activo prestamo = cliente.prestamos[0] #
 # ============================================ # CREAR PAGO # ============================================ pago_data = {
-# "prestamo_id":\n prestamo.id, "monto":\n Decimal(str(datos["monto_pagado"])), "fecha_pago":\n (
-# datetime.strptime(datos["fecha_pago"], "%Y-%m-%d").date() if isinstance(datos["fecha_pago"], str) else datos["fecha_pago"]
-# ), "numero_cuota":\n ( int(datos.get("numero_cuota", 1)) if datos.get("numero_cuota") else None ), "referencia":\n
-# datos.get("documento_pago", ""), "metodo_pago":\n datos.get("metodo_pago", "TRANSFERENCIA").upper(), "estado":\n
-# "CONFIRMADO", "registrado_por":\n usuario_id, "fecha_registro":\n datetime.utcnow(), } nuevo_pago = Pago(**pago_data)
-# db.add(nuevo_pago) db.flush() logger.info( f"Pago creado para cliente {datos['cedula']}:\n ${datos['monto_pagado']}" ) #
 # Registrar en auditoría auditoria = Auditoria.registrar( usuario_id=usuario_id, accion=TipoAccion.CREAR, tabla="Pago",
-# registro_id=nuevo_pago.id, descripcion=f"Pago creado desde carga masiva para cliente {datos['cedula']}",
-# datos_nuevos=pago_data, resultado="EXITOSO", ) db.add(auditoria) except Exception as e:\n raise Exception( f"Error
-# guardando pago para {datos.get('cedula')}:\n {str(e)}" )# ============================================# ENDPOINT:\n
 # DESCARGAR TEMPLATE EXCEL# ============================================@router.get("/template-excel/{tipo}")async \ndef
 # descargar_template_excel( tipo:\n str, db:\n Session = Depends(get_db), current_user:\n User =
-# Depends(get_current_user),):\n """ 📥 Descargar template de Excel con formato establecido Tipos:\n - clientes:\n Template
-# para carga de clientes - pagos:\n Template para carga de pagos """ try:\n if tipo == "clientes":\n # Crear DataFrame con
 # columnas requeridas df = pd.DataFrame( columns=[ "CEDULA IDENTIDAD", "NOMBRE", "APELLIDO", "MOVIL", "CORREO ELECTRONICO",
 # "DIRECCION", "MODELO VEHICULO", "CONCESIONARIO", "TOTAL FINANCIAMIENTO", "CUOTA INICIAL", "NUMERO AMORTIZACIONES",
 # "MODALIDAD PAGO", "FECHA ENTREGA", "USER", ] ) # Agregar fila de ejemplo df.loc[0] = [ "V12345678", "Juan", "Pérez",
 # "4241234567", "juan.perez@ejemplo.com", "Av. Principal, Caracas", "Toyota Corolla", "AutoCenter Caracas", "50000.00",
 # "10000.00", "24", "MENSUAL", "2025-01-15", "Roberto Martínez", ] nombre_archivo = "template_clientes.xlsx" elif tipo ==
-# "pagos":\n # Crear DataFrame para pagos df = pd.DataFrame( columns=[ "CEDULA IDENTIDAD", "FECHA PAGO", "MONTO PAGADO",
 # "NUMERO CUOTA", "DOCUMENTO PAGO", "METODO PAGO", ] ) # Agregar fila de ejemplo df.loc[0] = [ "V12345678", "2025-01-15",
-# "2083.33", "1", "REF-001234", "TRANSFERENCIA", ] nombre_archivo = "template_pagos.xlsx" else:\n raise HTTPException(
-# status_code=400, detail="Tipo inválido. Use 'clientes' o 'pagos'", ) # Guardar en buffer output = io.BytesIO() with
-# pd.ExcelWriter(output, engine="openpyxl") as writer:\n df.to_excel(writer, index=False, sheet_name="Datos") output.seek(0)
 # return StreamingResponse( output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={
-# "Content-Disposition":\n f"attachment;\n filename={nombre_archivo}" }, ) except Exception as e:\n raise HTTPException(
 # status_code=500, detail=f"Error generando template:\n {str(e)}", )# ============================================#
 # ENDPOINT:\n OBTENER LISTAS DE CONFIGURACIÓN#
 # ============================================@router.get("/opciones-configuracion")async \ndef
 # obtener_opciones_configuracion( db:\n Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """
-# 📋 Obtener listas de opciones para corrección en línea Retorna:\n - Concesionarios activos - Analistaes activos - Modelos de
-# vehículos activos - Modalidades de pago configurables """ try:\n # Obtener concesionarios activos concesionarios = (
-# db.query(Concesionario).filter(Concesionario.activo).all() ) # Obtener asesores activos asesores =
-# db.query(Analista).filter(Analista.activo).all() # Obtener modelos de vehículos activos modelos =
 # db.query(ModeloVehiculo).filter(ModeloVehiculo.activo).all() # Modalidades de pago configurables modalidades_pago = [
 # {"value":\n "SEMANAL", "label":\n "Semanal"}, {"value":\n "QUINCENAL", "label":\n "Quincenal"}, {"value":\n "MENSUAL",
-# "label":\n "Mensual"}, {"value":\n "BIMENSUAL", "label":\n "Bimensual"}, ] return { "concesionarios":\n [ {"id":\n c.id,
-# "nombre":\n c.nombre} for c in concesionarios ], "asesores":\n [ {"id":\n a.id, "nombre":\n a.nombre_completo} for a in
-# asesores ], "modelos_vehiculos":\n [ {"id":\n m.id, "modelo":\n m.modelo} for m in modelos ], "modalidades_pago":\n
 # modalidades_pago, } except Exception as e:\n raise HTTPException( status_code=500, detail=f"Error obteniendo opciones:\n
 # {str(e)}", )# ============================================# ENDPOINT:\n DASHBOARD DE CARGA MASIVA#
 # ============================================@router.get("/dashboard")async \ndef dashboard_carga_masiva( db:\n Session =
 # Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 📊 Dashboard de carga masiva Muestra:\n -
-# Historial de cargas - Estadísticas de errores - Registros pendientes de corrección """ try:\n # Obtener últimas cargas del
 # usuario auditorias = ( db.query(Auditoria) .filter( Auditoria.usuario_id == current_user.id, Auditoria.tabla ==
 # "CargaMasiva", ) .order_by(Auditoria.fecha.desc()) .limit(10) .all() ) return { "titulo":\n "📊 Dashboard de Carga Masiva",
 # "usuario":\n f"{current_user.nombre} {current_user.apellido}".strip(), "historial_cargas":\n [ { "fecha":\n a.fecha,
-# "descripcion":\n a.descripcion, "resultado":\n a.resultado, "datos":\n a.datos_nuevos, } for a in auditorias ],
 # "instrucciones":\n { "paso_1":\n "📤 Subir archivo Excel con formato establecido", "paso_2":\n "🔍 Revisar dashboard de
-# errores", "paso_3":\n "✏️ Corregir errores en línea", "paso_4":\n "💾 Guardar registros corregidos en base de datos", },
-# "tipos_carga":\n [ { "tipo":\n "clientes", "descripcion":\n "Carga masiva de clientes con financiamiento", "template":\n
-# "/api/v1/carga-masiva/template-excel/clientes", }, { "tipo":\n "pagos", "descripcion":\n "Carga masiva de pagos
-# (articulados por cédula)", "template":\n "/api/v1/carga-masiva/template-excel/pagos", }, ], } except Exception as e:\n
 # raise HTTPException( status_code=500, detail=f"Error obteniendo dashboard:\n {str(e)}", )

@@ -1,5 +1,4 @@
 """
-Aplicación principal FastAPI - Sistema de Préstamos y Cobranza.
 """
 import logging
 import sys
@@ -18,7 +17,6 @@ from app.api.v1.endpoints import (
     auth,
     carga_masiva,
     clientes,
-    concesionarios,
     conciliacion,
     conciliacion_bancaria,
     configuracion,
@@ -28,11 +26,8 @@ from app.api.v1.endpoints import (
     inteligencia_artificial,
     kpis,
     migracion_emergencia,
-    modelos_vehiculos,
     notificaciones,
     notificaciones_multicanal,
-    pagos,
-    prestamos,
     reportes,
     scheduler_notificaciones,
     solicitudes,
@@ -47,7 +42,6 @@ from app.db.init_db import init_db_shutdown, init_db_startup
 # Configurar logging básico pero efectivo
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),  # Asegurar que vaya a stdout
     ],
@@ -56,7 +50,6 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# Configurar loggers específicos para asegurar que funcionen
 app_logger = logging.getLogger("app")
 app_logger.setLevel(getattr(logging, settings.LOG_LEVEL))
 app_logger.handlers.clear()
@@ -64,7 +57,6 @@ app_logger.addHandler(logging.StreamHandler(sys.stdout))
 
 # Log de inicio
 logger.info(
-    "Iniciando aplicación FastAPI - Sistema de Préstamos y Cobranza"
 )
 logger.info(
     f"Configuración: Environment={settings.ENVIRONMENT}, "
@@ -96,8 +88,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
 
-        # Headers básicos de seguridad (menos restrictivos)
-        response.headers["X-Content-Type-Options"] = "nosniff"
 
         # Permitir iframe para desarrollo
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
@@ -136,7 +126,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="API para gestión de préstamos y cobranza",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -154,9 +143,7 @@ app = FastAPI(
 app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS - MIDDLEWARE SIMPLE PARA OPTIONS
-logger.info(f"CORS Origins configurados: {settings.CORS_ORIGINS}")
 logger.info(
-    "CORS: Middleware simple para OPTIONS + Headers directos en POST"
 )
 
 # MIDDLEWARE CORS CENTRALIZADO - USANDO CONFIGURACIÓN DE SETTINGS
@@ -183,8 +170,6 @@ app.include_router(
 )
 app.include_router(
     users.router,
-    prefix=f"{settings.API_V1_PREFIX}/usuarios",
-    tags=["Usuarios"],
 )
 app.include_router(
     clientes.router,
@@ -192,12 +177,8 @@ app.include_router(
     tags=["Clientes"],
 )
 app.include_router(
-    prestamos.router,
-    prefix=f"{settings.API_V1_PREFIX}/prestamos",
-    tags=["Prestamos"],
 )
 app.include_router(
-    pagos.router, prefix=f"{settings.API_V1_PREFIX}/pagos", tags=["Pagos"]
 )
 app.include_router(
     conciliacion_bancaria.router,
@@ -278,9 +259,6 @@ app.include_router(
     tags=["Validadores"],
 )
 app.include_router(
-    concesionarios.router,
-    prefix=f"{settings.API_V1_PREFIX}/concesionarios",
-    tags=["Concesionarios"],
 )
 app.include_router(
     analistas.router,
@@ -288,9 +266,6 @@ app.include_router(
     tags=["Analistas"],
 )
 app.include_router(
-    modelos_vehiculos.router,
-    prefix=f"{settings.API_V1_PREFIX}/modelos-vehiculos",
-    tags=["Modelos Vehiculos"],
 )
 app.include_router(
     migracion_emergencia.router,
@@ -304,19 +279,16 @@ app.include_router(
 )
 
 # app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock",
-#                   tags=["Mock Data"])  # Removido - se usarán datos reales
 
 
 @app.get("/", include_in_schema=False)
 async def root():
     return {
-        "message": "Sistema de Préstamos y Cobranza API v1.0.0",
         "cors_fixed": True,
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "status": "running",
         "docs": "/docs",
-        "deploy_timestamp": (
             "2025-10-25T04:30:00Z"
         ),  # Fix main.py deployment error
         "real_data_ready": True,

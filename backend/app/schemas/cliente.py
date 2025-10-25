@@ -1,6 +1,5 @@
 # backend/app/schemas/cliente.py
 
-from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
 
@@ -24,7 +23,6 @@ MAX_COMMENTS_LENGTH = 500
 
 
 class ClienteBase(BaseModel):
-    # Datos personales - OBLIGATORIOS
     cedula: str = Field(
         ...,
         min_length=MIN_CEDULA_LENGTH,
@@ -37,7 +35,6 @@ class ClienteBase(BaseModel):
         max_length=MAX_NAME_LENGTH,
         description="1-2 palabras máximo",
     )
-    apellidos: str = Field(
         ...,
         min_length=MIN_NAME_LENGTH,
         max_length=MAX_NAME_LENGTH,
@@ -48,7 +45,6 @@ class ClienteBase(BaseModel):
         min_length=MIN_PHONE_LENGTH,
         max_length=MAX_PHONE_LENGTH,
         pattern=r"^\+58[1-9]\d{9}$",
-        description="Teléfono venezolano: +58 + 10 dígitos",
     )
     email: EmailStr = Field(..., description="Validado por validadores")
     direccion: str = Field(
@@ -65,7 +61,6 @@ class ClienteBase(BaseModel):
         description="Texto libre",
     )
 
-    # Datos del vehículo - OBLIGATORIOS
     modelo_vehiculo: str = Field(
         ...,
         min_length=1,
@@ -97,10 +92,8 @@ class ClienteBase(BaseModel):
         "NA", max_length=MAX_NOTES_LENGTH, description="Si no llena 'NA'"
     )
 
-    @field_validator("nombres", "apellidos", mode="after")
     @classmethod
     def validate_name_words(cls, v):
-        """Validar que nombres/apellidos tengan exactamente 2 palabras"""
         words = v.strip().split()
         words = [word for word in words if word]  # Filtrar palabras vacías
 
@@ -114,7 +107,6 @@ class ClienteBase(BaseModel):
     @field_validator("notas", "direccion", mode="before")
     @classmethod
     def sanitize_html_fields(cls, v):
-        """Sanitizar campos de texto para prevenir XSS"""
         if v is None or v == "":
             return "NA" if v is None else v
         return sanitize_html(v)
@@ -129,9 +121,7 @@ class ClienteBase(BaseModel):
 
 
 class ClienteCreate(ClienteBase):
-    """Schema para crear cliente - todos los campos son obligatorios"""
 
-    # Campo para confirmación de duplicados
     confirm_duplicate: bool = Field(
         False, description="Indica si el usuario confirma crear un duplicado"
     )
@@ -144,20 +134,15 @@ class ClienteCreateWithConfirmation(BaseModel):
     confirmacion: bool = Field(
         True, description="Confirmación del operador"
     )
-    comentarios: str = Field(
         "",
         max_length=MAX_COMMENTS_LENGTH,
-        description="Comentarios del operador sobre la confirmación",
     )
 
 
 class ClienteUpdate(BaseModel):
-    """Schema para actualizar cliente - campos opcionales para actualización parcial"""
 
-    # Datos personales
     cedula: Optional[str] = Field(None, min_length=8, max_length=20)
     nombres: Optional[str] = Field(None, min_length=2, max_length=100)
-    apellidos: Optional[str] = Field(None, min_length=2, max_length=100)
     telefono: Optional[str] = Field(
         None, min_length=13, max_length=13, pattern=r"^\+58[1-9]\d{9}$"
     )
@@ -166,7 +151,6 @@ class ClienteUpdate(BaseModel):
     fecha_nacimiento: Optional[date] = None
     ocupacion: Optional[str] = Field(None, min_length=2, max_length=100)
 
-    # Datos del vehículo
     modelo_vehiculo: Optional[str] = Field(None, min_length=1, max_length=100)
     concesionario: Optional[str] = Field(None, min_length=1, max_length=100)
     analista: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -180,10 +164,8 @@ class ClienteUpdate(BaseModel):
     # Notas
     notas: Optional[str] = Field(None, max_length=1000)
 
-    @field_validator("nombres", "apellidos", mode="after")
     @classmethod
     def validate_name_words(cls, v):
-        """Validar que nombres/apellidos tengan exactamente 2 palabras"""
         if v:
             words = v.strip().split()
             words = [word for word in words if word]  # Filtrar palabras vacías
@@ -198,7 +180,6 @@ class ClienteUpdate(BaseModel):
     @field_validator("notas", "direccion", mode="before")
     @classmethod
     def sanitize_text_fields(cls, v):
-        """Sanitiza campos de texto libre para prevenir XSS"""
         if v:
             return sanitize_html(v)
         return v
@@ -209,8 +190,6 @@ class ClienteResponse(ClienteBase):
 
     id: int
     activo: bool
-    fecha_registro: datetime
-    fecha_actualizacion: Optional[datetime] = None
     usuario_registro: str  # Email del usuario que registró
 
     model_config = ConfigDict(from_attributes=True)
@@ -229,14 +208,12 @@ class ClienteList(BaseModel):
 
 
 class ClienteSearchFilters(BaseModel):
-    """Filtros avanzados para búsqueda de clientes"""
 
     # Búsqueda de texto
     search_text: Optional[str] = Field(
         None, description="Búsqueda en nombre, cédula o móvil"
     )
 
-    # Filtros específicos
     estado: Optional[str] = Field(
         None, pattern="^(ACTIVO|INACTIVO|FINALIZADO)$"
     )
@@ -245,13 +222,11 @@ class ClienteSearchFilters(BaseModel):
     concesionario: Optional[str] = None
     modelo_vehiculo: Optional[str] = None
 
-    # Filtros de fecha
     fecha_registro_desde: Optional[date] = None
     fecha_registro_hasta: Optional[date] = None
 
     # Ordenamiento
     order_by: Optional[str] = Field(
-        None, pattern="^(nombres|apellidos|cedula|fecha_registro|estado)$"
     )
     order_direction: Optional[str] = Field("asc", pattern="^(asc|desc)$")
 
@@ -263,8 +238,6 @@ class ClienteDetallado(ClienteResponse):
     analista_nombre: Optional[str] = None
 
     # Estadísticas
-    total_prestamos: int = 0
-    prestamos_activos: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -272,9 +245,7 @@ class ClienteDetallado(ClienteResponse):
 class ClienteCreateWithLoan(ClienteBase):
     """Schema para crear cliente con préstamo automático"""
 
-    # Heredar todos los campos de ClienteBase
 
-    # Campos obligatorios para financiamiento
     total_financiamiento: Decimal = Field(
         ..., gt=0, description="Total del financiamiento"
     )

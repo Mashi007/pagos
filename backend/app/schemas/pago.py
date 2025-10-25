@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -15,7 +14,6 @@ MAX_NOTA_LENGTH = 1000
 
 
 class PagoBase(BaseModel):
-    """Schema base para pagos"""
 
     cedula_cliente: str = Field(
         ...,
@@ -23,7 +21,6 @@ class PagoBase(BaseModel):
         max_length=MAX_CEDULA_LENGTH,
         description="Cédula del cliente",
     )
-    fecha_pago: datetime = Field(..., description="Fecha del pago")
     monto_pagado: float = Field(..., gt=0, description="Monto pagado")
     numero_documento: str = Field(
         ...,
@@ -56,7 +53,6 @@ class PagoBase(BaseModel):
     def validate_cedula(cls, v):
         if not v or len(v.strip()) < MIN_CEDULA_LENGTH:
             raise ValueError(
-                f"Cédula debe tener al menos {MIN_CEDULA_LENGTH} caracteres"
             )
         return v.strip().upper()
 
@@ -82,7 +78,6 @@ class PagoCreate(PagoBase):
 class PagoUpdate(BaseModel):
     """Schema para actualizar un pago"""
 
-    fecha_pago: Optional[datetime] = None
     monto_pagado: Optional[float] = Field(None, gt=0)
     numero_documento: Optional[str] = Field(None, min_length=1, max_length=100)
     documento_nombre: Optional[str] = Field(None, max_length=255)
@@ -98,18 +93,13 @@ class PagoResponse(PagoBase):
 
     id: int
     conciliado: bool
-    fecha_conciliacion: Optional[datetime]
     activo: bool
-    fecha_registro: datetime
-    fecha_actualizacion: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class PagoListResponse(BaseModel):
-    """Schema para lista de pagos"""
 
-    pagos: List[PagoResponse]
     total: int
     pagina: int
     por_pagina: int
@@ -134,31 +124,22 @@ class ConciliacionResponse(ConciliacionBase):
     """Schema para respuesta de conciliación"""
 
     id: int
-    fecha: datetime
     responsable: str
     pago_id: int
 
     model_config = ConfigDict(from_attributes=True)
 
 
-class KPIsPagos(BaseModel):
-    """Schema para KPIs de pagos"""
 
-    total_pagos: int
     total_dolares: float
-    numero_pagos: int
     cantidad_conciliada: int
     cantidad_no_conciliada: int
-    fecha_actualizacion: datetime
 
 
 class ResumenCliente(BaseModel):
-    """Schema para resumen de pagos por cliente"""
 
     cedula_cliente: str
     total_pagado: float
     total_conciliado: float
     total_pendiente: float
-    numero_pagos: int
-    ultimo_pago: Optional[datetime]
     estado_conciliacion: str  # CONCILIADO, PENDIENTE, PARCIAL

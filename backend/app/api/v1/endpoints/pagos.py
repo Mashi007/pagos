@@ -1,11 +1,8 @@
 """
-Endpoints de gestión de pagos
-Sistema completo de pagos con validaciones y auditoría
 """
 
 import logging
 import uuid
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -25,15 +22,12 @@ from app.api.deps import get_current_user, get_db
 from app.models.pago import Pago
 from app.models.user import User
 from app.schemas.pago import (
-    KPIsPagos,
     PagoCreate,
     PagoListResponse,
     PagoResponse,
     ResumenCliente,
 )
 
-# Constantes de configuración de archivos
-UPLOAD_DIR = Path("uploads/pagos")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".pdf"}
 MAX_FILE_SIZE_MB = 5
@@ -43,7 +37,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post(
     "/crear", response_model=PagoResponse, status_code=status.HTTP_201_CREATED
 )
 
@@ -78,7 +71,6 @@ async def crear_pago(
         db.commit()
         db.refresh(nuevo_pago)
 
-        logger.info(f"Pago creado exitosamente con ID {nuevo_pago.id}")
         return nuevo_pago
 
     except Exception as e:
@@ -90,7 +82,6 @@ async def crear_pago(
         )
 
 
-@router.post("/subir-documento", status_code=status.HTTP_200_OK)
 async def subir_documento(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -143,10 +134,8 @@ async def subir_documento(
 
 
 @router.get("/listar", response_model=PagoListResponse)
-async def listar_pagos(
     pagina: int = Query(1, ge=1, description="Número de página"),
     por_pagina: int = Query(
-        20, ge=1, le=1000, description="Elementos por página"
     ),
     cedula: Optional[str] = Query(None, description="Filtrar por cédula"),
     conciliado: Optional[bool] = Query(
@@ -155,11 +144,9 @@ async def listar_pagos(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Listar pagos con filtros"""
     try:
         query = db.query(Pago).filter(Pago.activo)
 
-        # Aplicar filtros
         if cedula:
             query = query.filter(Pago.cedula_cliente.ilike(f"%{cedula}%"))
         if conciliado is not None:
@@ -170,7 +157,6 @@ async def listar_pagos(
 
         # Paginación
         offset = (pagina - 1) * por_pagina
-        pagos = (
             query.order_by(desc(Pago.fecha_registro))
             .offset(offset)
             .limit(por_pagina)
@@ -180,7 +166,6 @@ async def listar_pagos(
         total_paginas = (total + por_pagina - 1) // por_pagina
 
         return PagoListResponse(
-            pagos=pagos,
             total=total,
             pagina=pagina,
             por_pagina=por_pagina,
@@ -188,41 +173,29 @@ async def listar_pagos(
         )
 
     except Exception as e:
-        logger.error(f"Error listando pagos: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error interno del servidor: {str(e)}",
         )
 
 
-@router.get("/kpis", response_model=KPIsPagos)
-async def obtener_kpis_pagos(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Obtener KPIs de pagos"""
     try:
-        # KPIs básicos
-        total_pagos = db.query(Pago).filter(Pago.activo).count()
         total_dolares = (
             db.query(func.sum(Pago.monto_pagado)).filter(Pago.activo).scalar()
             or 0
         )
-        numero_pagos = total_pagos  # Mismo valor para consistencia
 
         # KPIs de conciliación
         cantidad_conciliada = (
             db.query(Pago).filter(and_(Pago.activo, Pago.conciliado)).count()
         )
-        cantidad_no_conciliada = total_pagos - cantidad_conciliada
 
-        return KPIsPagos(
-            total_pagos=total_pagos,
             total_dolares=float(total_dolares),
-            numero_pagos=numero_pagos,
             cantidad_conciliada=cantidad_conciliada,
             cantidad_no_conciliada=cantidad_no_conciliada,
-            fecha_actualizacion=datetime.now(),
         )
 
     except Exception as e:
@@ -239,31 +212,22 @@ async def obtener_resumen_cliente(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Obtener resumen de pagos por cliente"""
     try:
-        # Filtrar pagos del cliente
-        pagos_cliente = (
             db.query(Pago)
             .filter(and_(Pago.activo, Pago.cedula_cliente == cedula.upper()))
             .all()
         )
 
-        if not pagos_cliente:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No se encontraron pagos para la cédula {cedula}",
             )
 
         # Calcular resumen
-        total_pagado = sum(pago.monto_pagado for pago in pagos_cliente)
         total_conciliado = sum(
-            pago.monto_pagado for pago in pagos_cliente if pago.conciliado
         )
         total_pendiente = total_pagado - total_conciliado
-        numero_pagos = len(pagos_cliente)
 
         # Último pago
-        ultimo_pago = max(pagos_cliente, key=lambda p: p.fecha_pago).fecha_pago
 
         # Estado de conciliación
         if total_conciliado == total_pagado:
@@ -278,7 +242,6 @@ async def obtener_resumen_cliente(
             total_pagado=total_pagado,
             total_conciliado=total_conciliado,
             total_pendiente=total_pendiente,
-            numero_pagos=numero_pagos,
             ultimo_pago=ultimo_pago,
             estado_conciliacion=estado_conciliacion,
         )
@@ -313,7 +276,7 @@ async def descargar_documento(
             ".png": "image/png",
             ".jpg": "image/jpeg",
             ".jpeg": "image/jpeg",
-            ".pdf": "application/pdf",
+            ".pd": "application/pd",
         }
         content_type = content_type_map.get(
             file_extension, "application/octet-stream"
@@ -323,7 +286,6 @@ async def descargar_documento(
             "success": True,
             "filename": filename,
             "content_type": content_type,
-            "download_url": f"/api/v1/pagos/descargar-documento/{filename}",
         }
 
     except HTTPException:

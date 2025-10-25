@@ -30,20 +30,16 @@ engine = create_engine(
     pool_pre_ping=True,  # Verifica conexión antes de usar
     pool_size=DEFAULT_POOL_SIZE,  # Conexiones permanentes
     max_overflow=DEFAULT_MAX_OVERFLOW,  # Conexiones adicionales
-    pool_timeout=DEFAULT_POOL_TIMEOUT,  # Timeout de pool
     pool_recycle=DEFAULT_POOL_RECYCLE,  # Reciclar conexiones
     echo=settings.DB_ECHO,
     connect_args={
-        "connect_timeout": DEFAULT_CONNECT_TIMEOUT,  # Timeout de conexión
         "application_name": "rapicredit_backend",
-        "options": f"-c statement_timeout={DEFAULT_STATEMENT_TIMEOUT}",  # Timeout de queries
     },
 )
 
 # SessionLocal para crear sesiones de BD
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base para los modelos
 Base = declarative_base()
 
 
@@ -52,13 +48,11 @@ Base = declarative_base()
 
 def get_db():
     """
-    Dependency que proporciona una sesión de base de datos.
     Se cierra automáticamente después de cada request.
     Si hay problemas de conexión, levanta HTTPException apropiada.
     """
     db = None
     try:
-        # Crear sesión de base de datos
         db = SessionLocal()
         # Test básico de conexión (sin logging excesivo)
         db.execute(text("SELECT 1"))
@@ -70,35 +64,28 @@ def get_db():
         auth_errors = [
             "401",
             "Not authenticated",
-            "Email o contraseña incorrectos",
         ]
         if any(auth_error in error_str for auth_error in auth_errors):
             # Re-lanzar errores de autenticación sin modificar
             raise e
 
         # CORRECCIÓN CRÍTICA: NO sobrescribir HTTPException
-        # que ya tienen mensajes específicos
         if isinstance(e, HTTPException):
             # Re-lanzar HTTPException sin modificar (preservar mensaje)
             raise e
 
         # Solo manejar errores reales de DB - usar logger estructurado
-        logger.error(f"Error real de base de datos: {e}")
         logger.error(f"Tipo de error: {type(e).__name__}")
 
         # Solo para errores que NO son HTTPException
         raise HTTPException(
             status_code=503,
-            detail="Servicio de base de datos temporalmente no disponible",
         )
     finally:
         if db:
             try:
-                db.close()
             except Exception:
                 pass  # Ignorar errores al cerrar
 
 
-def close_db_connections():
     """Cierra todas las conexiones de la pool al shutdown"""
-    engine.dispose()

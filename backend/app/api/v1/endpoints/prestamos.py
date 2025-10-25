@@ -1,13 +1,7 @@
-# app/api/v1/endpoints/prestamos.py"""Endpoints de gestión de préstamosSistema completo de préstamos con cálculos
-# automáticos"""\nfrom datetime \nimport datetime, timedelta\nfrom typing \nimport List\nfrom fastapi \nimport APIRouter,
 # Depends, HTTPException, Query\nfrom sqlalchemy.orm \nimport Session\nfrom app.api.deps \nimport get_current_user,
 # get_db\nfrom app.models.cliente \nimport Cliente\nfrom app.models.prestamo \nimport Prestamo\nfrom app.models.user \nimport
 # User\nfrom app.schemas.prestamo \nimport ( PrestamoCreate, PrestamoResponse, PrestamoUpdate,)# Constantes de cálculo de
 # fechasDAYS_PER_WEEK = 7DAYS_PER_QUINCENA = 15DAYS_PER_MONTH = 30router = APIRouter()\ndef calcular_proxima_fecha_pago(
-# fecha_inicio:\n datetime, modalidad:\n str, cuotas_pagadas:\n int) -> datetime:\n """Calcula la próxima fecha de pago según
-# la modalidad""" if modalidad == "SEMANAL":\n return fecha_inicio + timedelta(weeks=cuotas_pagadas + 1) elif modalidad ==
-# "QUINCENAL":\n return fecha_inicio + timedelta( days=DAYS_PER_QUINCENA * (cuotas_pagadas + 1) ) else:\n # MENSUAL return
-# fecha_inicio + timedelta( days=DAYS_PER_MONTH * (cuotas_pagadas + 1) )@router.post("/", response_model=PrestamoResponse,
 # status_code=201)\ndef crear_prestamo( prestamo:\n PrestamoCreate, db:\n Session = Depends(get_db), current_user:\n User =
 # Depends(get_current_user),):\n """Crear un nuevo préstamo""" # Verificar que el cliente existe cliente = (
 # db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first() ) if not cliente:\n raise
@@ -15,32 +9,14 @@
 # calcular_proxima_fecha_pago( prestamo.fecha_inicio, prestamo.modalidad.value, 0 ) # ✅ CORRECCIÓN:\n usar model_dump() en
 # lugar de dict() db_prestamo = Prestamo( **prestamo.model_dump(), saldo_pendiente=prestamo.monto_total, cuotas_pagadas=0,
 # proxima_fecha_pago=proxima_fecha, ) db.add(db_prestamo) db.commit() db.refresh(db_prestamo) return
-# db_prestamo@router.get("/", response_model=List[PrestamoResponse])\ndef listar_prestamos( skip:\n int = Query(0, ge=0),
 # limit:\n int = Query(20, ge=1, le=1000), cliente_id:\n int = Query(None), estado:\n str = Query(None), db:\n Session =
-# Depends(get_db),):\n """Listar préstamos con filtros""" query = db.query(Prestamo) if cliente_id:\n query =
-# query.filter(Prestamo.cliente_id == cliente_id) if estado:\n query = query.filter(Prestamo.estado == estado) prestamos =
-# query.offset(skip).limit(limit).all() return prestamos@router.get("/{prestamo_id}", response_model=PrestamoResponse)\ndef
 # obtener_prestamo(prestamo_id:\n int, db:\n Session = Depends(get_db)):\n """Obtener un préstamo por ID""" prestamo =
 # db.query(Prestamo).filter(Prestamo.id == prestamo_id).first() if not prestamo:\n raise HTTPException(status_code=404,
 # detail="Préstamo no encontrado") return prestamo@router.put("/{prestamo_id}", response_model=PrestamoResponse)\ndef
 # actualizar_prestamo( prestamo_id:\n int, prestamo_data:\n PrestamoUpdate, db:\n Session = Depends(get_db),):\n
-# """Actualizar datos de un préstamo""" prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first() if not
 # prestamo:\n raise HTTPException(status_code=404, detail="Préstamo no encontrado") # ✅ CORRECCIÓN:\n usar model_dump() en
 # lugar de dict() for field, value in prestamo_data.model_dump(exclude_unset=True).items():\n setattr(prestamo, field, value)
 # db.commit() db.refresh(prestamo) return prestamo# TEMPORALMENTE COMENTADO PARA EVITAR ERROR 503# @router.get("/stats")#
-# \ndef obtener_estadisticas_prestamos(db:\n Session = Depends(get_db)):\n# """Obtener estadísticas de préstamos"""# try:\n#
-# # Contar préstamos por estado# total_prestamos = db.query(Prestamo).count()# prestamos_activos =
-# db.query(Prestamo).filter(# Prestamo.estado == "ACTIVO").count()# prestamos_pendientes = db.query(Prestamo).filter(#
-# Prestamo.estado == "PENDIENTE").count()# prestamos_completados = db.query(Prestamo).filter(# Prestamo.estado ==
-# "COMPLETADO").count()# prestamos_en_mora = db.query(Prestamo).filter(# Prestamo.estado == "EN_MORA").count()## # Calcular
-# montos# \nfrom sqlalchemy \nimport func# monto_total_prestado = db.query(# func.sum(Prestamo.monto_total)).scalar() or 0#
-# monto_total_pendiente = db.query(# func.sum(Prestamo.saldo_pendiente)).scalar() or 0## return {# "total_prestamos":\n
-# total_prestamos,# "prestamos_activos":\n prestamos_activos,# "prestamos_pendientes":\n prestamos_pendientes,#
-# "prestamos_completados":\n prestamos_completados,# "prestamos_en_mora":\n prestamos_en_mora,# "monto_total_prestado":\n
 # float(monto_total_prestado),# "monto_total_pendiente":\n float(monto_total_pendiente)# }# except Exception as e:\n# raise
 # HTTPException(# status_code=500, detail=f"Error:\n {str(e)}")# ENDPOINT TEMPORAL CON DATOS MOCK PARA EVITAR ERROR
-# 503@router.get("/stats")\ndef obtener_estadisticas_prestamos(db:\n Session = Depends(get_db)):\n """Obtener estadísticas de
-# préstamos - DATOS MOCK TEMPORALES""" try:\n # Datos mock temporales hasta que se resuelva el problema de BD return {
-# "total_prestamos":\n 0, "prestamos_activos":\n 0, "prestamos_pendientes":\n 0, "prestamos_completados":\n 0,
-# "prestamos_en_mora":\n 0, "monto_total_prestado":\n 0.0, "monto_total_pendiente":\n 0.0, } except Exception as e:\n raise
 # HTTPException( status_code=500, detail=f"Error al obtener estadísticas:\n {str(e)}", )

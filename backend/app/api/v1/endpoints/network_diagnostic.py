@@ -1,10 +1,8 @@
-# backend/app/api/v1/endpoints/network_diagnostic.py
+from collections import deque
 """Sistema de diagnóstico de red y latencia"""
 
 import threading
-import time
 from collections import defaultdict, deque
-from datetime import datetime
 from typing import Any, Dict, List
 
 import httpx
@@ -17,7 +15,6 @@ from app.models.user import User
 router = APIRouter()
 
 
-class NetworkDiagnostic:
     """Sistema de diagnóstico de red y latencia"""
 
 
@@ -40,17 +37,14 @@ class NetworkDiagnostic:
                 try:
                     self._test_connectivity()
                     self._measure_latency()
-                    time.sleep(300)  # Monitorear cada 5 minutos
                 except Exception as e:
                     print(f"Error en monitoreo de red: {e}")
-                    time.sleep(60)
 
         monitor_thread = threading.Thread(target=monitoring_loop, daemon=True)
         monitor_thread.start()
 
 
     def _test_connectivity(self):
-        """Probar conectividad a servicios externos"""
         test_urls = [
             "https://www.google.com",
             "https://www.cloudflare.com",
@@ -59,15 +53,10 @@ class NetworkDiagnostic:
 
         for url in test_urls:
             try:
-                start_time = time.time()
-                response = httpx.get(url, timeout=10)
-                end_time = time.time()
 
                 test_result = {
                     "url": url,
                     "status_code": response.status_code,
-                    "response_time": round((end_time - start_time) * 1000, 2),
-                    "timestamp": datetime.now(),
                     "success": response.status_code == 200
                 }
 
@@ -78,8 +67,6 @@ class NetworkDiagnostic:
                 test_result = {
                     "url": url,
                     "status_code": None,
-                    "response_time": None,
-                    "timestamp": datetime.now(),
                     "success": False,
                     "error": str(e)
                 }
@@ -91,16 +78,11 @@ class NetworkDiagnostic:
     def _measure_latency(self):
         """Medir latencia de red"""
         try:
-            start_time = time.time()
             # Simular medición de latencia
-            time.sleep(0.001)  # 1ms de simulación
-            end_time = time.time()
 
-            latency = (end_time - start_time) * 1000  # Convertir a ms
 
             measurement = {
                 "latency_ms": round(latency, 2),
-                "timestamp": datetime.now(),
                 "source": "internal"
             }
 
@@ -115,7 +97,6 @@ class NetworkDiagnostic:
         """Obtener estado de la red"""
         with self.lock:
             # Calcular estadísticas de conectividad
-            recent_tests = list(self.connectivity_tests)[-10:]  # Últimos 10 tests
             success_rate = sum(1 for test in recent_tests if test["success"]) / len(recent_tests) * 100 if recent_tests else 0
 
             # Calcular latencia promedio
@@ -140,31 +121,23 @@ class NetworkDiagnostic:
     def test_endpoint_connectivity(self, endpoint: str) -> Dict[str, Any]:
         """Probar conectividad a un endpoint específico"""
         try:
-            start_time = time.time()
-            response = httpx.get(endpoint, timeout=10)
-            end_time = time.time()
 
             return {
                 "endpoint": endpoint,
                 "status_code": response.status_code,
-                "response_time_ms": round((end_time - start_time) * 1000, 2),
                 "success": response.status_code == 200,
-                "timestamp": datetime.now().isoformat()
             }
 
         except Exception as e:
             return {
                 "endpoint": endpoint,
                 "status_code": None,
-                "response_time_ms": None,
                 "success": False,
                 "error": str(e),
-                "timestamp": datetime.now().isoformat()
             }
 
 
 # Instancia global del diagnóstico de red
-network_diagnostic = NetworkDiagnostic()
 
 
 @router.get("/network-status")
@@ -174,17 +147,14 @@ async def get_network_status(
 ):
     """Obtener estado de la red"""
     try:
-        status = network_diagnostic.get_network_status()
         return {
             "status": "success",
             "data": status,
-            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener estado de red: {str(e)}")
 
 
-@router.post("/test-connectivity")
 async def test_connectivity(
     endpoint: str,
     current_user: User = Depends(get_current_user),
@@ -192,7 +162,6 @@ async def test_connectivity(
 ):
     """Probar conectividad a un endpoint específico"""
     try:
-        result = network_diagnostic.test_endpoint_connectivity(endpoint)
         return {
             "status": "success",
             "data": result

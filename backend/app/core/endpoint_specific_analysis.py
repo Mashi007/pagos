@@ -1,10 +1,7 @@
 ﻿"""Decorator Específico para Análisis de Impacto por Endpoint
-Implementa análisis específico para endpoints críticos
 """
 
 import logging
-import time
-from datetime import datetime
 from functools import wraps
 from typing import Any, Callable, Dict, Optional
 
@@ -16,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 class EndpointSpecificAnalyzer:
     """
-    Analizador específico para endpoints críticos
     """
 
 
@@ -35,7 +31,6 @@ class EndpointSpecificAnalyzer:
             self.business_metrics[endpoint][metric_name] = []
 
         self.business_metrics[endpoint][metric_name].append(
-            {"value": value, "timestamp": datetime.utcnow()}
         )
 
 
@@ -51,7 +46,6 @@ class EndpointSpecificAnalyzer:
 
         for metric_name, values in metrics.items():
             if values:
-                recent_values = values[-10:]  # Últimos 10 valores
                 analysis[metric_name] = {
                     "current": recent_values[-1]["value"],
                     "average": sum(v["value"] for v in recent_values)
@@ -89,17 +83,13 @@ def endpoint_impact_analysis(
     def decorator(func: Callable):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            start_time = time.time()
             try:
                 # Ejecutar función
                 result = func(*args, **kwargs)
 
                 # Calcular tiempo de respuesta
-                response_time = (time.time() - start_time) * 1000
 
                 # Registrar métricas genéricas
-                record_endpoint_performance(endpoint_name, response_time)
-                record_success(endpoint_name, response_time)
 
                 # Registrar métricas específicas si se proporcionan
                 if business_metrics and result:
@@ -121,8 +111,6 @@ def endpoint_impact_analysis(
 
                 return result
             except Exception as e:
-                response_time = (time.time() - start_time) * 1000
-                record_error(e, endpoint_name, response_time)
                 raise e
         return wrapper
     return decorator
@@ -132,7 +120,6 @@ def _extract_metric_value(data: Any, path: str) -> Any:
     """Extraer valor de métrica usando path (ej: 'data.total', etc.)"""
     try:
         if "." in path:
-            # Path con puntos (ej: 'data.total')
             parts = path.split(".")
             value = data
             for part in parts:
@@ -154,17 +141,14 @@ def _extract_metric_value(data: Any, path: str) -> Any:
         return None
 
 
-# Decorators específicos para endpoints críticos
 
 
 def auth_endpoint_analysis(func: Callable):
     """Decorator específico para endpoints de autenticación"""
     @wraps(func)
     def wrapper(*args, **kwargs):
-        start_time = time.time()
         try:
             result = func(*args, **kwargs)
-            response_time = (time.time() - start_time) * 1000
 
             # Métricas específicas de autenticación
             if result and hasattr(result, "access_token"):
@@ -177,14 +161,10 @@ def auth_endpoint_analysis(func: Callable):
                     "auth", "auth_success", 1
                 )
 
-            record_endpoint_performance("auth", response_time)
-            record_success("auth", response_time)
             return result
         except Exception as e:
-            response_time = (time.time() - start_time) * 1000
             # Métricas de error de autenticación
             endpoint_analyzer.record_business_metric("auth", "auth_failed", 1)
-            record_error(e, "auth", response_time)
             raise e
     return wrapper
 
@@ -193,42 +173,27 @@ def carga_masiva_endpoint_analysis(func: Callable):
     """Decorator específico para endpoints de carga masiva"""
     @wraps(func)
     def wrapper(*args, **kwargs):
-        start_time = time.time()
         try:
             result = func(*args, **kwargs)
-            response_time = (time.time() - start_time) * 1000
 
             # Métricas específicas de carga masiva
             if result and isinstance(result, dict):
-                if "total_registros" in result:
                     endpoint_analyzer.record_business_metric(
                         "carga_masiva",
-                        "registros_procesados",
-                        result["total_registros"],
                     )
-                if "registros_exitosos" in result:
                     endpoint_analyzer.record_business_metric(
                         "carga_masiva",
-                        "registros_exitosos",
-                        result["registros_exitosos"],
                     )
-                if "registros_con_errores" in result:
                     endpoint_analyzer.record_business_metric(
                         "carga_masiva",
-                        "registros_con_errores",
-                        result["registros_con_errores"],
                     )
 
-            record_endpoint_performance("carga_masiva", response_time)
-            record_success("carga_masiva", response_time)
             return result
         except Exception as e:
-            response_time = (time.time() - start_time) * 1000
             # Métricas de error de carga masiva
             endpoint_analyzer.record_business_metric(
                 "carga_masiva", "carga_failed", 1
             )
-            record_error(e, "carga_masiva", response_time)
             raise e
     return wrapper
 
@@ -237,66 +202,45 @@ def clientes_endpoint_analysis(func: Callable):
     """Decorator específico para endpoints de clientes"""
     @wraps(func)
     def wrapper(*args, **kwargs):
-        start_time = time.time()
         try:
             result = func(*args, **kwargs)
-            response_time = (time.time() - start_time) * 1000
 
             # Métricas específicas de clientes
             if result:
                 if hasattr(result, "__len__"):
                     endpoint_analyzer.record_business_metric(
-                        "clientes", "registros_devueltos", len(result)
                     )
                 elif isinstance(result, dict) and "total" in result:
                     endpoint_analyzer.record_business_metric(
-                        "clientes", "registros_devueltos", result["total"]
                     )
 
-            record_endpoint_performance("clientes", response_time)
-            record_success("clientes", response_time)
             return result
         except Exception as e:
-            response_time = (time.time() - start_time) * 1000
             # Métricas de error de clientes
             endpoint_analyzer.record_business_metric(
                 "clientes", "clientes_failed", 1
             )
-            record_error(e, "clientes", response_time)
             raise e
     return wrapper
 
 
-def pagos_endpoint_analysis(func: Callable):
-    """Decorator específico para endpoints de pagos"""
     @wraps(func)
     def wrapper(*args, **kwargs):
-        start_time = time.time()
         try:
             result = func(*args, **kwargs)
-            response_time = (time.time() - start_time) * 1000
 
-            # Métricas específicas de pagos
             if result:
                 if isinstance(result, dict) and "monto_total" in result:
                     endpoint_analyzer.record_business_metric(
-                        "pagos", "monto_procesado", result["monto_total"]
                     )
                 elif hasattr(result, "monto_pagado"):
                     endpoint_analyzer.record_business_metric(
-                        "pagos", "monto_procesado", result.monto_pagado
                     )
 
-            record_endpoint_performance("pagos", response_time)
-            record_success("pagos", response_time)
             return result
         except Exception as e:
-            response_time = (time.time() - start_time) * 1000
-            # Métricas de error de pagos
             endpoint_analyzer.record_business_metric(
-                "pagos", "pagos_failed", 1
             )
-            record_error(e, "pagos", response_time)
             raise e
     return wrapper
 
@@ -315,12 +259,8 @@ if __name__ == "__main__":
     @carga_masiva_endpoint_analysis
     def carga_masiva_example():
         return {
-            "total_registros": 100,
-            "registros_exitosos": 95,
-            "registros_con_errores": 5,
         }
 
-    # Ejecutar ejemplos
     login_result = login_example()
     carga_result = carga_masiva_example()
 

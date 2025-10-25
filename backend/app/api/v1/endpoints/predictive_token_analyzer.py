@@ -1,10 +1,10 @@
+from collections import deque
 ﻿"""Sistema de Análisis Predictivo para Tokens JWT
 Predice problemas de autenticación antes de que ocurran
 """
 
 import logging
 from collections import defaultdict, deque
-from datetime import datetime
 from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException
 from app.api.deps import get_current_user, get_db
@@ -25,10 +25,8 @@ class TokenPredictiveAnalyzer:
 
     def __init__(self):
         self.token_history = deque(maxlen=10000)  # Historial de tokens
-        self.prediction_models = {}  # Modelos de predicción
         self.accuracy_metrics = defaultdict(list)  # Métricas de precisión
         self.prediction_thresholds = {
-            "expiry_warning": 300,  # 5 minutos antes de expirar
             "usage_anomaly": 0.8,  # 80% de probabilidad de anomalía
             "security_risk": 0.9,  # 90% de probabilidad de riesgo
         }
@@ -38,16 +36,11 @@ class TokenPredictiveAnalyzer:
         """Analizar el ciclo de vida de un token"""
         try:
             payload = decode_token(token)
-            current_time = datetime.now().timestamp()
 
             # Calcular tiempo hasta expiración
-            exp_time = payload.get("exp", 0)
-            time_to_expiry = exp_time - current_time
 
             # Análisis predictivo
             predictions = {
-                "will_expire_soon": time_to_expiry < self.prediction_thresholds["expiry_warning"],
-                "time_to_expiry_seconds": time_to_expiry,
                 "usage_pattern": self._analyze_usage_pattern(token),
                 "security_risk_score": self._calculate_security_risk(token),
                 "recommendations": [],
@@ -90,7 +83,6 @@ class TokenPredictiveAnalyzer:
         # Analizar frecuencia de uso
         recent_events = [
             event for event in token_events
-            if (datetime.now() - event["timestamp"]).total_seconds() < 3600
         ]
 
         usage_frequency = len(recent_events)
@@ -111,19 +103,14 @@ class TokenPredictiveAnalyzer:
 
             # Verificar tiempo de emisión
             iat = payload.get("iat", 0)
-            current_time = datetime.now().timestamp()
-            token_age = current_time - iat
 
-            # Tokens muy antiguos tienen mayor riesgo
             if token_age > 86400:  # Más de 24 horas
                 risk_score += 0.3
 
             # Verificar tiempo hasta expiración
             exp = payload.get("exp", 0)
-            time_to_expiry = exp - current_time
 
             # Tokens que expiran muy pronto tienen mayor riesgo
-            if time_to_expiry < 300:  # Menos de 5 minutos
                 risk_score += 0.4
 
             # Verificar tipo de token
@@ -140,7 +127,6 @@ class TokenPredictiveAnalyzer:
     def log_token_event(self, token: str, event_type: str, details: Dict[str, Any] = None):
         """Registrar evento relacionado con token"""
         event = {
-            "timestamp": datetime.now(),
             "token_hash": hash(token),
             "event_type": event_type,
             "details": details or {},
@@ -153,7 +139,6 @@ class TokenPredictiveAnalyzer:
         return {
             "total_predictions": len(self.token_history),
             "accuracy_by_type": dict(self.accuracy_metrics),
-            "last_update": datetime.now().isoformat(),
         }
 
 # Instancia global del analizador predictivo
@@ -163,7 +148,6 @@ predictive_analyzer = TokenPredictiveAnalyzer()
 # ENDPOINTS DEL ANÁLISIS PREDICTIVO
 # ============================================
 
-@router.post("/predictive/analyze-token", response_model=Dict[str, Any])
 async def analyze_token_predictive(
     token: str,
     current_user: User = Depends(get_current_user),
@@ -172,7 +156,6 @@ async def analyze_token_predictive(
     analysis = predictive_analyzer.analyze_token_lifecycle(token)
     return analysis
 
-@router.post("/predictive/log-token-event", status_code=201)
 async def log_token_event(
     token: str,
     event_type: str,

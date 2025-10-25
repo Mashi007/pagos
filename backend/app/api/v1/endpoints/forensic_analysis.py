@@ -1,12 +1,11 @@
+from collections import deque
 ﻿"""Sistema Forense de Análisis de Logs y Trazas
-Reconstruye la secuencia exacta de eventos que llevan al error 401
 """
 
 import logging
 import threading
 import uuid
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
 from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, Request, HTTPException
 from app.api.deps import get_current_user, get_db
@@ -25,7 +24,6 @@ class ForensicAnalyzer:
 
 
     def __init__(self):
-        self.event_timeline = deque(maxlen=10000)
         self.user_sessions = defaultdict(list)
         self.error_sequences = defaultdict(list)
         self.lock = threading.Lock()
@@ -43,7 +41,6 @@ class ForensicAnalyzer:
 
         event = {
             "event_id": event_id,
-            "timestamp": datetime.now(),
             "event_type": event_type,
             "user_id": user_id,
             "details": details,
@@ -51,7 +48,6 @@ class ForensicAnalyzer:
         }
 
         with self.lock:
-            self.event_timeline.append(event)
             self.user_sessions[user_id].append(event)
 
             # Si es un error, agregarlo a la secuencia de errores
@@ -66,16 +62,12 @@ class ForensicAnalyzer:
         self,
         user_id: str,
         error_event_id: str,
-        time_window_minutes: int = 30
     ) -> Dict[str, Any]:
-        """Reconstruir secuencia de eventos que llevaron al error"""
         reconstruction = {
             "error_event_id": error_event_id,
             "user_id": user_id,
-            "time_window_minutes": time_window_minutes,
             "events_sequence": [],
             "analysis": {},
-            "timeline": [],
             "recommendations": []
         }
 
@@ -83,7 +75,6 @@ class ForensicAnalyzer:
             with self.lock:
                 # Encontrar el evento de error
                 error_event = None
-                for event in self.event_timeline:
                     if event["event_id"] == error_event_id:
                         error_event = event
                         break
@@ -93,21 +84,14 @@ class ForensicAnalyzer:
                     return reconstruction
 
                 # Obtener ventana de tiempo
-                start_time = error_event["timestamp"] - timedelta(minutes=time_window_minutes)
 
-                # Filtrar eventos del usuario en la ventana de tiempo
                 user_events = [
                     event for event in self.user_sessions[user_id]
-                    if start_time <= event["timestamp"] <= error_event["timestamp"]
                 ]
 
-                # Ordenar por timestamp
-                user_events.sort(key=lambda x: x["timestamp"])
 
                 reconstruction["events_sequence"] = user_events
-                reconstruction["timeline"] = [
                     {
-                        "timestamp": event["timestamp"].isoformat(),
                         "event_type": event["event_type"],
                         "details": event["details"]
                     }
@@ -134,12 +118,10 @@ class ForensicAnalyzer:
         events: List[Dict[str, Any]],
         error_event: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Analizar secuencia de eventos"""
         analysis = {
             "total_events": len(events),
             "error_patterns": [],
             "suspicious_activities": [],
-            "timeline_anomalies": [],
             "user_behavior_changes": [],
             "security_indicators": []
         }
@@ -149,13 +131,11 @@ class ForensicAnalyzer:
         analysis["error_patterns"] = [
             {
                 "event_type": e["event_type"],
-                "timestamp": e["timestamp"].isoformat(),
                 "details": e["details"]
             }
             for e in error_events
         ]
 
-        # Detectar actividades sospechosas
         suspicious_events = []
         for event in events:
             event_type = event["event_type"].lower()
@@ -165,7 +145,6 @@ class ForensicAnalyzer:
         analysis["suspicious_activities"] = [
             {
                 "event_type": e["event_type"],
-                "timestamp": e["timestamp"].isoformat(),
                 "details": e["details"]
             }
             for e in suspicious_events
@@ -173,16 +152,11 @@ class ForensicAnalyzer:
 
         # Detectar anomalías en la línea de tiempo
         if len(events) > 1:
-            time_gaps = []
             for i in range(1, len(events)):
-                gap = events[i]["timestamp"] - events[i-1]["timestamp"]
-                if gap.total_seconds() > 300:  # Más de 5 minutos
-                    time_gaps.append({
                         "gap_seconds": gap.total_seconds(),
                         "between_events": [events[i-1]["event_type"], events[i]["event_type"]]
                     })
 
-            analysis["timeline_anomalies"] = time_gaps
 
         return analysis
 
@@ -196,15 +170,11 @@ class ForensicAnalyzer:
             recommendations.append("Revisar configuración de autenticación")
             recommendations.append("Verificar logs del sistema de autenticación")
 
-        # Recomendaciones basadas en actividades sospechosas
         if analysis["suspicious_activities"]:
             recommendations.append("Implementar monitoreo adicional de seguridad")
             recommendations.append("Revisar políticas de acceso")
 
         # Recomendaciones basadas en anomalías temporales
-        if analysis["timeline_anomalies"]:
-            recommendations.append("Investigar períodos de inactividad inusuales")
-            recommendations.append("Verificar integridad de los logs")
 
         # Recomendaciones generales
         if not recommendations:
@@ -231,12 +201,9 @@ class ForensicAnalyzer:
             # Calcular métricas
             total_events = len(user_events)
             error_count = len(self.error_sequences.get(user_id, []))
-            last_activity = max(event["timestamp"] for event in user_events)
 
             # Duración de sesión (desde el primer evento hasta el último)
             if len(user_events) > 1:
-                session_start = min(event["timestamp"] for event in user_events)
-                session_end = max(event["timestamp"] for event in user_events)
                 session_duration = (session_end - session_start).total_seconds()
             else:
                 session_duration = 0
@@ -250,9 +217,7 @@ class ForensicAnalyzer:
                 "recent_events": [
                     {
                         "event_type": event["event_type"],
-                        "timestamp": event["timestamp"].isoformat()
                     }
-                    for event in user_events[-10:]  # Últimos 10 eventos
                 ]
             }
 
@@ -263,7 +228,6 @@ forensic_analyzer = ForensicAnalyzer()
 # ENDPOINTS FORENSES
 # ============================================
 
-@router.post("/log-event")
 async def log_forensic_event(
     event_data: Dict[str, Any],
     request: Request,
@@ -277,7 +241,6 @@ async def log_forensic_event(
 
         # Obtener contexto de la petición
         request_context = {
-            "client_ip": request.client.host if request.client else None,
             "user_agent": request.headers.get("User-Agent"),
             "endpoint": str(request.url),
             "method": request.method
@@ -291,7 +254,6 @@ async def log_forensic_event(
         return {
             "success": True,
             "event_id": event_id,
-            "message": "Evento registrado exitosamente"
         }
 
     except Exception as e:
@@ -301,26 +263,21 @@ async def log_forensic_event(
             detail=f"Error interno: {str(e)}"
         )
 
-@router.post("/reconstruct-error-sequence")
 async def reconstruct_error_sequence_endpoint(
     reconstruction_data: Dict[str, Any],
     current_user: User = Depends(get_current_user),
 ):
-    """Reconstruir secuencia de eventos de error"""
     try:
         user_id = reconstruction_data.get("user_id")
         error_event_id = reconstruction_data.get("error_event_id")
-        time_window = reconstruction_data.get("time_window_minutes", 30)
 
         if not user_id or not error_event_id:
             raise HTTPException(
                 status_code=400,
-                detail="user_id y error_event_id son requeridos"
             )
 
         # Reconstruir secuencia
         reconstruction = forensic_analyzer.reconstruct_error_sequence(
-            user_id, error_event_id, time_window
         )
 
         return {
@@ -358,20 +315,15 @@ async def get_user_session_summary(
             detail=f"Error interno: {str(e)}"
         )
 
-@router.get("/forensic-timeline")
-async def get_forensic_timeline(
     limit: int = 100,
     current_user: User = Depends(get_current_user),
 ):
     """Obtener línea de tiempo forense"""
     try:
         with forensic_analyzer.lock:
-            recent_events = list(forensic_analyzer.event_timeline)[-limit:]
 
-        timeline = [
             {
                 "event_id": event["event_id"],
-                "timestamp": event["timestamp"].isoformat(),
                 "event_type": event["event_type"],
                 "user_id": event["user_id"],
                 "details": event["details"]
@@ -381,8 +333,6 @@ async def get_forensic_timeline(
 
         return {
             "success": True,
-            "timeline": timeline,
-            "total_events": len(timeline)
         }
 
     except Exception as e:

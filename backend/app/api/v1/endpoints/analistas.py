@@ -1,7 +1,6 @@
 """Endpoints de gestión de analistas - CRUD completo para analistas"""
 
 import logging
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -72,14 +71,12 @@ def cache_stats():
         stats = analistas_cache.get_stats()
         return {
             "cache_stats": stats,
-            "timestamp": datetime.now().isoformat(),
             "message": "Estadísticas del cache obtenidas",
         }
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas del cache: {str(e)}")
         return {
             "error": str(e),
-            "timestamp": datetime.now().isoformat(),
             "message": "Error obteniendo estadísticas del cache",
         }
 
@@ -93,13 +90,11 @@ def clear_cache():
         analistas_cache.clear()
         return {
             "message": "Cache limpiado exitosamente",
-            "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
         logger.error(f"Error limpiando cache: {str(e)}")
         return {
             "error": str(e),
-            "timestamp": datetime.now().isoformat(),
             "message": "Error limpiando cache",
         }
 
@@ -110,7 +105,6 @@ def health_check_analistas(db: Session = Depends(get_db)):
     Health check específico para el módulo de analistas
     """
     try:
-        # Verificar conexión a base de datos
         result = db.execute(text("SELECT COUNT(*) FROM analistas"))
         total = result.fetchone()[0]
 
@@ -118,7 +112,6 @@ def health_check_analistas(db: Session = Depends(get_db)):
             "status": "healthy",
             "module": "analistas",
             "total_records": total,
-            "timestamp": datetime.now().isoformat(),
             "message": "Módulo de analistas funcionando correctamente",
         }
     except Exception as e:
@@ -127,16 +120,13 @@ def health_check_analistas(db: Session = Depends(get_db)):
             "status": "unhealthy",
             "module": "analistas",
             "error": str(e),
-            "timestamp": datetime.now().isoformat(),
             "message": "Error en módulo de analistas",
         }
 
 
 @router.get("/backup1")
 def analistas_backup1(
-    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(
-        100, ge=1, le=1000, description="Número máximo de registros a retornar"
     ),
     activo: Optional[bool] = Query(
         None, description="Filtrar por estado activo"
@@ -160,7 +150,6 @@ def analistas_backup1(
         count_query = "SELECT COUNT(*) FROM analistas"
         where_conditions = []
 
-        # Aplicar filtros
         if activo is not None:
             where_conditions.append(f"activo = {activo}")
         if search:
@@ -243,9 +232,7 @@ def analistas_backup1(
 
 @router.get("/backup2")
 def analistas_backup2(
-    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(
-        100, ge=1, le=1000, description="Número máximo de registros a retornar"
     ),
     activo: Optional[bool] = Query(
         None, description="Filtrar por estado activo"
@@ -265,7 +252,6 @@ def analistas_backup2(
         total_result = db.execute(text(count_query))
         total = total_result.fetchone()[0]
 
-        # Obtener datos
         result = db.execute(text(query), (skip, limit))
         rows = result.fetchall()
 
@@ -324,9 +310,7 @@ def analistas_backup2(
 
 @router.get("/emergency")
 def analistas_emergency(
-    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(
-        100, ge=1, le=1000, description="Número máximo de registros a retornar"
     ),
     activo: Optional[bool] = Query(
         None, description="Filtrar por estado activo"
@@ -344,7 +328,6 @@ def analistas_emergency(
         count_query = "SELECT COUNT(*) FROM analistas"
         where_conditions = []
 
-        # Aplicar filtros
         if activo is not None:
             where_conditions.append(f"activo = {activo}")
         if search:
@@ -423,9 +406,7 @@ def analistas_emergency(
 
 @router.get("/")
 def listar_analistas(
-    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(
-        100, ge=1, le=1000, description="Número máximo de registros a retornar"
     ),
     activo: Optional[bool] = Query(
         None, description="Filtrar por estado activo"
@@ -440,7 +421,6 @@ def listar_analistas(
     try:
         query = db.query(Analista)
 
-        # Aplicar filtros
         if activo is not None:
             query = query.filter(Analista.activo == activo)
         if search:
@@ -486,7 +466,6 @@ def listar_analistas(
             "page": (skip // limit) + 1,
             "size": limit,
             "pages": pages,
-            "message": "Analistas obtenidos exitosamente",
         }
 
     except Exception as e:
@@ -499,9 +478,7 @@ def listar_analistas(
 
 @router.get("/list-no-auth")
 def listar_analistas_no_auth(
-    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(
-        100, ge=1, le=1000, description="Número máximo de registros a retornar"
     ),
     activo: Optional[bool] = Query(
         None, description="Filtrar por estado activo"
@@ -515,7 +492,6 @@ def listar_analistas_no_auth(
     try:
         query = db.query(Analista)
 
-        # Aplicar filtros
         if activo is not None:
             query = query.filter(Analista.activo == activo)
         if search:
@@ -547,15 +523,11 @@ def listar_analistas_no_auth(
         )
 
 
-@router.get("/activos")
-def listar_asesores_activos(
     db: Session = Depends(get_db),
     # TEMPORALMENTE SIN AUTENTICACIÓN PARA DROPDOWNS
     # current_user: User = Depends(get_current_user)
 ):
     """
-    Listar solo asesores activos (para formularios)
-    Simplificado: Sin filtros adicionales, solo asesores activos
     """
     try:
         query = db.query(Analista).filter(Analista.activo)
@@ -564,7 +536,6 @@ def listar_asesores_activos(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error al listar asesores activos: {str(e)}",
         )
 
 
@@ -583,7 +554,6 @@ def obtener_asesor(
     return AnalistaResponse.model_validate(asesor)
 
 
-@router.post("/crear", response_model=AnalistaResponse)
 def crear_asesor(
     asesor_data: AnalistaCreate,
     db: Session = Depends(get_db),
@@ -662,7 +632,6 @@ def actualizar_asesor(
                     detail="Ya existe un asesor con este email",
                 )
 
-        # Actualizar campos
         update_data = asesor_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(asesor, field, value)
@@ -696,11 +665,9 @@ def eliminar_asesor(
                 status_code=404, detail="Analista no encontrado"
             )
 
-        # HARD DELETE - eliminar completamente de la base de datos
         db.delete(asesor)
         db.commit()
         return {
-            "message": "Analista eliminado completamente de la base de datos"
         }
 
     except HTTPException:

@@ -18,7 +18,6 @@ from sqlalchemy.sql import func
 
 from app.db.session import Base
 
-# Constantes de longitud de campos
 CODIGO_LENGTH = 20
 NUMERIC_PRECISION = 12
 NUMERIC_SCALE = 2
@@ -31,7 +30,6 @@ ESTADO_LENGTH = 20
 
 
 class EstadoPrestamo(str, Enum):
-    """Estados posibles de un préstamo."""
     PENDIENTE = "PENDIENTE"  # Solicitud inicial
     EN_APROBACION = (
         "EN_APROBACION"  # <== AÑADIDO: Usado por el endpoint de aprobaciones
@@ -55,16 +53,13 @@ class ModalidadPago(str, Enum):
 
 
 class Prestamo(Base):
-    __tablename__ = "prestamos"
 
     id = Column(Integer, primary_key=True, index=True)
 
-    # CORREGIDO: Usamos "clientes.id" para referenciar correctamente al modelo
     # Cliente
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False)
     codigo_prestamo = Column(String(CODIGO_LENGTH), unique=True, index=True)
 
-    # Montos
     monto_total = Column(
         Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False
     )
@@ -89,7 +84,6 @@ class Prestamo(Base):
     # Fechas
     fecha_aprobacion = Column(
         Date, nullable=True
-    )  # Hacemos nullable, ya que solo se llena al ser APROBADO
     fecha_desembolso = Column(Date)
     fecha_primer_vencimiento = Column(Date, nullable=False)
     fecha_ultimo_vencimiento = Column(Date)
@@ -129,9 +123,6 @@ class Prestamo(Base):
 
     # Relaciones
     # CORREGIDO: Relación correcta con el modelo Cliente
-    # cliente = relationship("Cliente", back_populates="prestamos")
-    # # COMENTADO: Tabla prestamos vacía
     # cuotas = relationship("Cuota", back_populates="prestamo",
     # cascade="all, delete-orphan")  # COMENTADO: Solo plantilla vacía
-    # pagos = relationship("Pago", back_populates="prestamo")  # COMENTADO:
     # Solo plantilla vacía

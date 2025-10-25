@@ -1,10 +1,8 @@
 # backend/app/utils/date_helpers.py
 """Utilidades para manejo de fechas
-Cálculos de vencimientos, períodos, días hábiles, etc.
 """
 
 import calendar
-from datetime import date, timedelta
 from typing import List, Optional
 from dateutil.relativedelta import relativedelta
 
@@ -30,17 +28,14 @@ def add_weeks(start_date: date, weeks: int) -> date:
     Returns:
         date: Nueva fecha
     """
-    return start_date + timedelta(weeks=weeks)
 
 
 def calculate_payment_dates(
     start_date: date, num_payments: int, frequency: str = "MENSUAL"
 ) -> List[date]:
     """
-    Calcula las fechas de vencimiento de pagos
     Args:
         start_date: Fecha del primer pago
-        num_payments: Número de pagos
         frequency: Frecuencia (SEMANAL, QUINCENAL, MENSUAL, BIMENSUAL)
     Returns:
         List[date]: Lista de fechas de vencimiento
@@ -70,7 +65,6 @@ def calculate_payment_dates(
 
 def days_between(date1: date, date2: date) -> int:
     """
-    Calcula los días entre dos fechas
     Args:
         date1: Primera fecha
         date2: Segunda fecha
@@ -96,7 +90,6 @@ def is_overdue(due_date: date, reference_date: Optional[date] = None) -> bool:
 
 def days_overdue(due_date: date, reference_date: Optional[date] = None) -> int:
     """
-    Calcula cuántos días está vencida una fecha
     Args:
         due_date: Fecha de vencimiento
         reference_date: Fecha de referencia (por defecto, hoy)
@@ -200,7 +193,6 @@ def is_business_day(
     check_date: date, holidays: Optional[List[date]] = None
 ) -> bool:
     """
-    Verifica si una fecha es día hábil (lunes a viernes, excluyendo feriados)
     Args:
         check_date: Fecha a verificar
         holidays: Lista de fechas feriadas
@@ -229,9 +221,7 @@ def next_business_day(
     Returns:
         date: Siguiente día hábil
     """
-    next_day = start_date + timedelta(days=1)
     while not is_business_day(next_day, holidays):
-        next_day += timedelta(days=1)
     return next_day
 
 
@@ -284,7 +274,6 @@ def format_date_es(date_obj: date) -> str:
         5: "mayo",
         6: "junio",
         7: "julio",
-        8: "agosto",
         9: "septiembre",
         10: "octubre",
         11: "noviembre",
@@ -325,7 +314,6 @@ def get_notification_dates(
     notification_dates = []
 
     for days in sorted(days_before, reverse=True):
-        notification_date = due_date - timedelta(days=days)
 
         if days > 1:
             notification_type = f"RECORDATORIO_{days}D"

@@ -2,7 +2,6 @@
 """
 
 Base declarativa de SQLAlchemy.
-Solo exporta Base - los modelos se importan directamente donde se necesiten.
 """
 from app.db.session import Base
 

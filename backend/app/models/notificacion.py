@@ -4,7 +4,6 @@
 Sistema de notificaciones por email, SMS o WhatsApp
 """
 
-from datetime import datetime
 from enum import Enum as PyEnum
 from sqlalchemy import (
     JSON,
@@ -25,7 +24,6 @@ from app.db.session import Base
 
 
 class EstadoNotificacion(str, PyEnum):
-    """Estados posibles de una notificación"""
     PENDIENTE = "PENDIENTE"
     ENVIADA = "ENVIADA"
     FALLIDA = "FALLIDA"
@@ -33,7 +31,6 @@ class EstadoNotificacion(str, PyEnum):
 
 
 class TipoNotificacion(str, PyEnum):
-    """Tipos de notificación disponibles"""
     EMAIL = "EMAIL"
     SMS = "SMS"
     WHATSAPP = "WHATSAPP"
@@ -62,7 +59,6 @@ class PrioridadNotificacion(str, PyEnum):
 
 class Notificacion(Base):
     """
-    Modelo de Notificación para comunicaciones con usuarios/clientes
     """
     __tablename__ = "notificaciones"
 
@@ -72,7 +68,6 @@ class Notificacion(Base):
     # Destinatario (puede ser un User o un Cliente por email/teléfono)
     user_id = Column(
         Integer,
-        ForeignKey("usuarios.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
     )
@@ -103,7 +98,6 @@ class Notificacion(Base):
     asunto = Column(String(255), nullable=True)
     mensaje = Column(Text, nullable=False)
 
-    # Datos adicionales (JSON) - Renombrado de 'metadata' a 'extra_data' para
     # evitar conflicto con SQLAlchemy
     extra_data = Column(JSON, nullable=True)
 
@@ -115,16 +109,10 @@ class Notificacion(Base):
         index=True,
     )
 
-    # Intentos de envío
-    intentos = Column(Integer, default=0)
-    max_intentos = Column(Integer, default=3)
 
     # Fechas
     programada_para = Column(
-        DateTime(timezone=True), nullable=True, index=True
     )  # Para notificaciones programadas
-    enviada_en = Column(DateTime(timezone=True), nullable=True)
-    leida_en = Column(DateTime(timezone=True), nullable=True)
 
     # Respuesta del servicio de envío
     respuesta_servicio = Column(Text, nullable=True)
@@ -138,8 +126,6 @@ class Notificacion(Base):
     )
 
     # Auditoría
-    creado_en = Column(DateTime(timezone=True), server_default=func.now())
-    actualizado_en = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relaciones
     user = relationship("User", back_populates="notificaciones")
@@ -170,13 +156,11 @@ class Notificacion(Base):
     @property
     def puede_reintentar(self) -> bool:
         """Verifica si se puede reintentar el envío"""
-        return self.intentos < self.max_intentos and self.fallo
 
 
     def marcar_enviada(self, respuesta: str = None):
         """Marca la notificación como enviada"""
         self.estado = EstadoNotificacion.ENVIADA
-        self.enviada_en = datetime.utcnow()
         self.respuesta_servicio = respuesta
 
 
@@ -184,13 +168,11 @@ class Notificacion(Base):
         """Marca la notificación como fallida"""
         self.estado = EstadoNotificacion.FALLIDA
         self.error_mensaje = error
-        self.intentos += 1
 
 
     def marcar_leida(self):
         """Marca la notificación como leída"""
         if self.estado == EstadoNotificacion.ENVIADA:
-            self.leida_en = datetime.utcnow()
 
     @classmethod
     def crear_recordatorio_pago(
@@ -198,7 +180,6 @@ class Notificacion(Base):
         cliente_id: int,
         tipo: TipoNotificacion,
         mensaje: str,
-        programada_para: datetime = None,
     ):
         """
         Helper para crear notificaciones de recordatorio de pago

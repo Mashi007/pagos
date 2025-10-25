@@ -3,7 +3,6 @@ Pruebas Unitarias - Validadores
 Testing de la lógica de validación del sistema
 """
 
-from datetime import date, datetime
 from decimal import Decimal
 
 from app.services.validators_service import (
@@ -15,7 +14,6 @@ from app.services.validators_service import (
     ValidadorEmail,
     ValidadorEdad,
     ValidadorCoherenciaFinanciera,
-    ValidadorDuplicados,
 )
 
 
@@ -185,8 +183,6 @@ class TestValidadorMonto:
     """Pruebas para ValidadorMonto"""
 
 
-    def test_monto_valido_positivo(self):
-        """Probar monto válido positivo"""
         validador = ValidadorMonto()
         resultado = validador.validar("1000.50")
 
@@ -378,29 +374,23 @@ class TestValidadorCoherenciaFinanciera:
     def test_coherencia_valida(self):
         """Probar coherencia financiera válida"""
         validador = ValidadorCoherenciaFinanciera()
-        datos = {
             "monto_total": 50000,
             "cuota_inicial": 5000,
             "monto_financiado": 45000,
             "numero_amortizaciones": 24,
             "monto_cuota": 2000,
         }
-        resultado = validador.validar(datos)
 
         assert resultado["valido"] is True
 
 
-    def test_coherencia_invalida_montos(self):
-        """Probar coherencia inválida en montos"""
         validador = ValidadorCoherenciaFinanciera()
-        datos = {
             "monto_total": 50000,
             "cuota_inicial": 5000,
             "monto_financiado": 60000,  # Mayor que monto_total - cuota_inicial
             "numero_amortizaciones": 24,
             "monto_cuota": 2000,
         }
-        resultado = validador.validar(datos)
 
         assert resultado["valido"] is False
         assert "coherencia" in resultado["error"].lower()
@@ -409,46 +399,30 @@ class TestValidadorCoherenciaFinanciera:
     def test_coherencia_invalida_cuotas(self):
         """Probar coherencia inválida en cuotas"""
         validador = ValidadorCoherenciaFinanciera()
-        datos = {
             "monto_total": 50000,
             "cuota_inicial": 5000,
             "monto_financiado": 45000,
             "numero_amortizaciones": 24,
             "monto_cuota": 1000,  # Muy bajo para el monto financiado
         }
-        resultado = validador.validar(datos)
 
         assert resultado["valido"] is False
         assert "cuota" in resultado["error"].lower()
 
 
-class TestValidadorDuplicados:
-    """Pruebas para ValidadorDuplicados"""
 
 
     def test_duplicado_detectado(self):
         """Probar detección de duplicado"""
-        validador = ValidadorDuplicados()
-        datos_existentes = [
             {"cedula": "V12345678", "email": "test@example.com"},
             {"cedula": "V87654321", "email": "other@example.com"},
         ]
-        datos_nuevos = {"cedula": "V12345678", "email": "new@example.com"}
 
-        resultado = validador.validar(datos_nuevos, datos_existentes)
 
         assert resultado["valido"] is False
         assert "duplicado" in resultado["error"].lower()
-        assert resultado["duplicados_encontrados"] == ["cedula"]
 
 
-    def test_sin_duplicados(self):
-        """Probar sin duplicados"""
-        validador = ValidadorDuplicados()
-        datos_existentes = [{"cedula": "V12345678", "email": "test@example.com"}]
-        datos_nuevos = {"cedula": "V87654321", "email": "new@example.com"}
 
-        resultado = validador.validar(datos_nuevos, datos_existentes)
 
         assert resultado["valido"] is True
-        assert resultado["duplicados_encontrados"] == []

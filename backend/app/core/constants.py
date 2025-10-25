@@ -1,5 +1,4 @@
 # backend/app/core/constants.py
-"""Constantes y enumeraciones del sistema de préstamos y cobranza."""
 
 from enum import Enum
 
@@ -10,14 +9,12 @@ from enum import Enum
 
 
 class EstadoUsuario(str, Enum):
-    """Estados de usuario"""
     ACTIVO = "ACTIVO"
     INACTIVO = "INACTIVO"
     SUSPENDIDO = "SUSPENDIDO"
 
 
 class EstadoCliente(str, Enum):
-    """Estados de cliente"""
     ACTIVO = "ACTIVO"
     INACTIVO = "INACTIVO"
     MOROSO = "MOROSO"
@@ -25,7 +22,6 @@ class EstadoCliente(str, Enum):
 
 
 class EstadoPrestamo(str, Enum):
-    """Estados posibles de un préstamo"""
     PENDIENTE = "PENDIENTE"
     APROBADO = "APROBADO"
     RECHAZADO = "RECHAZADO"
@@ -36,14 +32,12 @@ class EstadoPrestamo(str, Enum):
 
 
 class EstadoPago(str, Enum):
-    """Estados posibles de un pago"""
     PENDIENTE = "PENDIENTE"
     CONFIRMADO = "CONFIRMADO"
     RECHAZADO = "RECHAZADO"
 
 
 class TipoPrestamo(str, Enum):
-    """Tipos de préstamo"""
     FRANCES = "FRANCES"  # Cuota fija
     ALEMAN = "ALEMAN"  # Amortización fija
 
@@ -56,21 +50,18 @@ class FrecuenciaPago(str, Enum):
 
 
 class TipoNotificacion(str, Enum):
-    """Tipos de notificación"""
     EMAIL = "EMAIL"
     WHATSAPP = "WHATSAPP"
     SMS = "SMS"
 
 
 class EstadoNotificacion(str, Enum):
-    """Estados de notificación"""
     PENDIENTE = "PENDIENTE"
     ENVIADA = "ENVIADA"
     FALLIDA = "FALLIDA"
 
 
 class TipoMovimiento(str, Enum):
-    """Tipos de movimiento para auditoría"""
     CREATE = "CREATE"
     UPDATE = "UPDATE"
     DELETE = "DELETE"
@@ -81,7 +72,6 @@ class TipoMovimiento(str, Enum):
 
 
 class EstadoAprobacion(str, Enum):
-    """Estados de aprobación"""
     PENDIENTE = "PENDIENTE"
     APROBADA = "APROBADA"
     RECHAZADA = "RECHAZADA"
@@ -89,7 +79,6 @@ class EstadoAprobacion(str, Enum):
 
 
 class TipoPago(str, Enum):
-    """Tipos de pago"""
     EFECTIVO = "EFECTIVO"
     TRANSFERENCIA = "TRANSFERENCIA"
     CHEQUE = "CHEQUE"
@@ -99,7 +88,6 @@ class TipoPago(str, Enum):
 
 
 class MetodoPago(str, Enum):
-    """Métodos de pago (alias de TipoPago para compatibilidad)"""
     EFECTIVO = "EFECTIVO"
     TRANSFERENCIA = "TRANSFERENCIA"
     CHEQUE = "CHEQUE"
@@ -107,20 +95,17 @@ class MetodoPago(str, Enum):
 
 
 class TipoDocumento(str, Enum):
-    """Tipos de documento de identidad"""
     CEDULA = "CEDULA"
     RUC = "RUC"
     PASAPORTE = "PASAPORTE"
 
 
 class TipoInteres(str, Enum):
-    """Tipos de interés"""
     SIMPLE = "SIMPLE"
     COMPUESTO = "COMPUESTO"
 
 
 class EstadoConciliacion(str, Enum):
-    """Estados de conciliación bancaria"""
     PENDIENTE = "PENDIENTE"
     CONCILIADO = "CONCILIADO"
     DESCUADRADO = "DESCUADRADO"

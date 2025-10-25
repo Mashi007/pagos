@@ -1,9 +1,8 @@
+from app.core.security import decode_token
 """Endpoint de Verificación de Tokens JWT
-Sistema avanzado para diagnosticar problemas de autenticación
 """
 
 import logging
-from datetime import datetime
 
 import jwt
 from fastapi import APIRouter, Depends, Request
@@ -23,7 +22,6 @@ def _extraer_token_del_header(request: Request) -> tuple[str, dict]:
     auth_header = request.headers.get("authorization")
     if not auth_header:
         return None, {
-            "timestamp": datetime.now().isoformat(),
             "status": "error",
             "error": "No Authorization header found",
             "recommendation": "Verificar que el frontend esté enviando el header Authorization",
@@ -31,7 +29,6 @@ def _extraer_token_del_header(request: Request) -> tuple[str, dict]:
 
     if not auth_header.startswith("Bearer "):
         return None, {
-            "timestamp": datetime.now().isoformat(),
             "status": "error",
             "error": "Invalid Authorization header format",
             "expected_format": "Bearer <token>",
@@ -55,7 +52,6 @@ def _analizar_estructura_token(token: str) -> tuple[dict, dict]:
     # Verificar estructura JWT
     if token.count(".") != 2:
         return token_analysis, {
-            "timestamp": datetime.now().isoformat(),
             "status": "error",
             "error": "Invalid JWT structure",
             "expected_dots": 2,
@@ -86,7 +82,6 @@ def _decodificar_token_sin_verificar(token: str) -> tuple[dict, dict]:
 
     except Exception as e:
         return {}, {
-            "timestamp": datetime.now().isoformat(),
             "status": "error",
             "error": f"Error decodificando token: {str(e)}",
         }
@@ -94,16 +89,9 @@ def _decodificar_token_sin_verificar(token: str) -> tuple[dict, dict]:
 
 def _verificar_expiracion_token(payload_decoded: dict) -> dict:
     """Verificar expiración del token"""
-    exp_timestamp = payload_decoded.get("exp")
-    if exp_timestamp:
-        exp_datetime = datetime.fromtimestamp(exp_timestamp)
-        is_expired = datetime.now() > exp_datetime
 
         return {
-            "exp_datetime": exp_datetime.isoformat(),
             "is_expired": is_expired,
-            "time_until_expiry": (
-                str(exp_datetime - datetime.now()) if not is_expired else "EXPIRED"
             ),
         }
     else:
@@ -136,7 +124,6 @@ def _verificar_token_con_secret(token: str) -> dict:
 
 
 def _verificar_usuario_en_bd(verification_result: dict, db: Session) -> dict:
-    """Verificar usuario en base de datos"""
     if not verification_result.get("verified"):
         return {"status": "skipped", "reason": "Token not verified"}
 
@@ -183,7 +170,6 @@ def _generar_recomendaciones(
 
     if not user_verification.get("user_found"):
         recommendations.append(
-            "👤 Usuario no encontrado en BD - Verificar datos de usuario"
         )
 
     if not user_verification.get("user_active"):
@@ -195,7 +181,6 @@ def _generar_recomendaciones(
     return recommendations
 
 
-@router.post("/verify-token")
 async def verificar_token_detallado(
     request: Request, db: Session = Depends(get_db)
 ):
@@ -238,7 +223,6 @@ async def verificar_token_detallado(
         )
 
         return {
-            "timestamp": datetime.now().isoformat(),
             "status": "analysis_complete",
             "token_analysis": token_analysis,
             "verification": verification_result,
@@ -254,7 +238,6 @@ async def verificar_token_detallado(
     except Exception as e:
         logger.error(f"Error en verificación de token: {e}")
         return {
-            "timestamp": datetime.now().isoformat(),
             "status": "error",
             "error": str(e),
         }
@@ -269,7 +252,6 @@ async def obtener_info_token(request: Request, db: Session = Depends(get_db)):
         auth_header = request.headers.get("authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
             return {
-                "timestamp": datetime.now().isoformat(),
                 "status": "no_token",
                 "message": "No valid token provided",
             }
@@ -293,7 +275,6 @@ async def obtener_info_token(request: Request, db: Session = Depends(get_db)):
                     }
 
             return {
-                "timestamp": datetime.now().isoformat(),
                 "status": "success",
                 "token_info": {
                     "user_id": user_id,
@@ -306,20 +287,17 @@ async def obtener_info_token(request: Request, db: Session = Depends(get_db)):
 
         except Exception as e:
             return {
-                "timestamp": datetime.now().isoformat(),
                 "status": "error",
                 "error": f"Error decoding token: {str(e)}",
             }
 
     except Exception as e:
         return {
-            "timestamp": datetime.now().isoformat(),
             "status": "error",
             "error": str(e),
         }
 
 
-@router.post("/generate-test-token")
 async def generar_token_prueba(db: Session = Depends(get_db)):
     """
     🧪 Generar token de prueba para testing
@@ -329,7 +307,6 @@ async def generar_token_prueba(db: Session = Depends(get_db)):
         admin_user = db.query(User).filter(User.is_admin).first()
         if not admin_user:
             return {
-                "timestamp": datetime.now().isoformat(),
                 "status": "error",
                 "error": "No admin user found",
             }
@@ -340,7 +317,6 @@ async def generar_token_prueba(db: Session = Depends(get_db)):
         )
 
         return {
-            "timestamp": datetime.now().isoformat(),
             "status": "success",
             "test_token": test_token,
             "user_info": {
@@ -355,7 +331,6 @@ async def generar_token_prueba(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error generando token de prueba: {e}")
         return {
-            "timestamp": datetime.now().isoformat(),
             "status": "error",
             "error": str(e),
         }

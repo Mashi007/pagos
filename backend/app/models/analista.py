@@ -14,8 +14,6 @@ class Analista(Base):
     activo = Column(Boolean, default=True, nullable=False)
 
     # Timestamps
-    updated_at = Column(DateTime(timezone=True), server_default=func.now())
-    fecha_eliminacion = Column(DateTime(timezone=True), nullable=True)
 
     # Relaciones
     # clientes = relationship("Cliente", back_populates="asesor_config_rel")

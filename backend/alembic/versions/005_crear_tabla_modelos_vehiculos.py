@@ -1,4 +1,3 @@
-"""Crear tabla de modelos de vehículos configurables
 
 Revision ID: 005
 Revises: 004
@@ -17,11 +16,8 @@ depends_on = None
 
 
 def upgrade():
-    """Crear tabla de modelos de vehículos"""
 
-    # Crear tabla modelos_vehiculos
     op.create_table(
-        "modelos_vehiculos",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("marca", sa.String(50), nullable=False),
         sa.Column("modelo", sa.String(100), nullable=False),
@@ -46,14 +42,9 @@ def upgrade():
     )
 
     # Crear índices
-    op.create_index("idx_modelos_vehiculos_marca", "modelos_vehiculos", ["marca"])
     op.create_index(
-        "idx_modelos_vehiculos_categoria", "modelos_vehiculos", ["categoria"]
     )
-    op.create_index("idx_modelos_vehiculos_activo", "modelos_vehiculos", ["activo"])
 
-    # Insertar datos iniciales
-    modelos_iniciales = [
         # Toyota
         {
             "marca": "Toyota",
@@ -259,12 +250,9 @@ def upgrade():
         },
     ]
 
-    # Insertar modelos
-    for modelo in modelos_iniciales:
         op.execute(
             sa.text(
                 """
-                INSERT INTO modelos_vehiculos (marca, modelo, nombre_completo, categoria, precio_base, activo, created_at, updated_at)
                 VALUES (:marca, :modelo, :nombre_completo, :categoria, :precio_base, true, now(), now())
                 ON CONFLICT (nombre_completo) DO NOTHING
             """
@@ -273,5 +261,3 @@ def upgrade():
 
 
 def downgrade():
-    """Eliminar tabla de modelos de vehículos"""
-    op.drop_table("modelos_vehiculos")

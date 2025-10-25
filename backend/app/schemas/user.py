@@ -5,7 +5,6 @@ Solo 2 roles: ADMIN (acceso completo) y USER (acceso limitado)
 Compatible con Pydantic v2.
 """
 
-from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -15,7 +14,6 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class UserBase(BaseModel):
-    """Schema base de usuario (campos comunes)."""
     email: EmailStr
     nombre: str = Field(..., min_length=1, max_length=100)
     apellido: str = Field(..., min_length=1, max_length=100)
@@ -49,7 +47,6 @@ class UserUpdate(BaseModel):
         if v is not None and v.strip() != "":
             if len(v) < 8:
                 raise ValueError(
-                    "La contraseña debe tener al menos 8 caracteres"
                 )
         return v
 
@@ -61,9 +58,6 @@ class UserUpdate(BaseModel):
 class UserResponse(UserBase):
     """Schema de respuesta de usuario."""
     id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    last_login: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -74,7 +68,6 @@ class UserResponse(UserBase):
 
 
 class UserListResponse(BaseModel):
-    """Schema para lista de usuarios."""
     items: list[UserResponse]
     total: int
     page: int

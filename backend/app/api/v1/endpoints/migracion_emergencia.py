@@ -12,7 +12,6 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-@router.post("/ejecutar-migracion-concesionario-analista")
 async def ejecutar_migracion_emergencia(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -60,7 +59,6 @@ async def ejecutar_migracion_emergencia(
         else:
             logger.info("ℹ️ Columna 'analista' ya existe")
 
-        # Confirmar cambios
         db.commit()
 
         # Verificar estructura final
@@ -72,7 +70,6 @@ async def ejecutar_migracion_emergencia(
 
         return {
             "success": True,
-            "message": "Migración de emergencia ejecutada exitosamente",
             "columns_added": [
                 col for col in ["concesionario", "analista"]
                 if col not in columns

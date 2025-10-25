@@ -1,9 +1,9 @@
+from app.core.security import decode_token
 """
 Sistema de seguridad: JWT, hashing de passwords, tokens y dependencias de
 FastAPI
 """
 
-from datetime import datetime, timedelta
 from typing import Any, Optional
 
 import jwt
@@ -48,16 +48,13 @@ def get_password_hash(password: str) -> str:
 
 def create_access_token(
     subject: str | int,
-    expires_delta: Optional[timedelta] = None,
     additional_claims: Optional[dict[str, Any]] = None,
 ) -> str:
     """
     Crea un token de acceso JWT
     """
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
             minutes=ACCESS_TOKEN_EXPIRE_MINUTES
         )
 
@@ -77,7 +74,6 @@ def create_refresh_token(subject: str | int) -> str:
     """
     Crea un token de refresh JWT
     """
-    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
     encoded_jwt = jwt.encode(
         to_encode, settings.SECRET_KEY, algorithm=ALGORITHM
@@ -108,7 +104,6 @@ def decode_token(token: str) -> dict:
 # -------------------------------------------------------------
 # Las funciones get_current_user y
 # get_current_active_user están definidas en app/api/deps.py
-# para evitar duplicación y conflictos de importación
 # -------------------------------------------------------------
 # [Resto de funciones originales]
 # -------------------------------------------------------------
@@ -130,22 +125,17 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
     Valida la fortaleza de una contraseña
     """
     if len(password) < MIN_PASSWORD_LENGTH:
-        return False, "La contraseña debe tener al menos 8 caracteres"
 
     if not any(c.isupper() for c in password):
-        return False, "La contraseña debe contener al menos una mayúscula"
 
     if not any(c.islower() for c in password):
-        return False, "La contraseña debe contener al menos una minúscula"
 
     if not any(c.isdigit() for c in password):
-        return False, "La contraseña debe contener al menos un número"
 
     special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
     if not any(c in special_chars for c in password):
         return (
             False,
-            "La contraseña debe contener al menos un carácter especial",
         )
 
     return True, "Contraseña válida"
@@ -155,7 +145,6 @@ def generate_password_reset_token(email: str) -> str:
     """
     Genera un token para reset de contraseña
     """
-    expire = datetime.utcnow() + timedelta(
         hours=PASSWORD_RESET_EXPIRE_HOURS
     )  # Expira en 1 hora
     to_encode = {"exp": expire, "sub": email, "type": "password_reset"}

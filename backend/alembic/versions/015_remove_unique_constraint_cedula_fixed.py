@@ -18,7 +18,6 @@ depends_on = None
 
 def upgrade():
     """Remove ALL unique constraints from cedula column in clientes table"""
-    # Drop ALL possible unique constraints on cedula column
     try:
         op.drop_constraint("clientes_cedula_key", "clientes", type_="unique")
     except Exception:

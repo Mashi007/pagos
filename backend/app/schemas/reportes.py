@@ -1,13 +1,10 @@
 # backend/app/schemas/reportes.py
 
-from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict
 
 
-class FiltrosReporte(BaseModel):
-    """Filtros comunes para reportes"""
     fecha_inicio: Optional[date] = None
     fecha_fin: Optional[date] = None
     cliente_id: Optional[int] = None
@@ -16,7 +13,6 @@ class FiltrosReporte(BaseModel):
 
 
 class DistribucionMonto(BaseModel):
-    """Distribución por rango de montos"""
     rango: str
     cantidad: int
     monto: Decimal
@@ -32,10 +28,6 @@ class ReporteCartera(BaseModel):
     cartera_total: Decimal
     capital_pendiente: Decimal
     intereses_pendientes: Decimal
-    total_prestamos_activos: int
-    total_prestamos_mora: int
-    tasa_morosidad: float
-    distribucion_montos: List[Dict[str, Any]]
 
 
     class Config:
@@ -43,8 +35,6 @@ class ReporteCartera(BaseModel):
         json_encoders = {Decimal: lambda v: float(v)}
 
 
-class RangoMorosidad(BaseModel):
-    """Detalle por rango de morosidad"""
     rango: str
     cantidad: int
     monto_total: Decimal
@@ -52,10 +42,7 @@ class RangoMorosidad(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class ReporteMorosidad(BaseModel):
-    """Esquema para reporte de morosidad"""
     fecha_reporte: date
-    total_prestamos_mora: int
     monto_total_mora: Decimal
     detalle_por_rango: List[Dict[str, Any]]
 
@@ -66,7 +53,6 @@ class ReporteMorosidad(BaseModel):
 
 
 class DetalleConcepto(BaseModel):
-    """Detalle de pagos por concepto"""
     concepto: str
     cantidad: int
     monto: Decimal
@@ -81,7 +67,6 @@ class ReporteCobranza(BaseModel):
     fecha_inicio: date
     fecha_fin: date
     total_recaudado: Decimal
-    cantidad_pagos: int
     promedio_pago: Decimal
     detalle_por_concepto: List[Dict[str, Any]]
     eficiencia_cobranza: float
@@ -92,7 +77,6 @@ class ReporteCobranza(BaseModel):
         json_encoders = {Decimal: lambda v: float(v)}
 
 
-class ReporteVencimientos(BaseModel):
     """Reporte de cuotas por vencer"""
     fecha_inicio: date
     fecha_fin: date
@@ -112,8 +96,6 @@ class ReporteRendimiento(BaseModel):
     total_recuperado: Decimal
     tasa_recuperacion: float
     roi: float
-    prestamos_otorgados: int
-    prestamos_liquidados: int
 
 
     class Config:
@@ -125,7 +107,6 @@ class ClienteTop(BaseModel):
     """Cliente top por volumen"""
     cliente_id: int
     nombre: str
-    total_prestamos: int
     monto_total: Decimal
     promedio_pago: float
     calificacion: Optional[str] = None

@@ -21,7 +21,6 @@ from app.utils.date_helpers import (
     validate_email,
     validate_percentage,
     validate_phone,
-    validate_positive_amount,
     validate_ruc,
 )
 
@@ -40,7 +39,6 @@ __all__ = [
     "validate_phone",
     "validate_email",
     "validate_ruc",
-    "validate_positive_amount",
     "validate_percentage",
     "format_dni",
     "format_phone",

@@ -1,10 +1,9 @@
+from collections import deque
 # backend/app/api/v1/endpoints/temporal_analysis.py
 """Sistema temporal para análisis de timing y sincronización"""
 
 import statistics
 import threading
-import time
-from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -21,9 +20,6 @@ class TemporalAnalysisSystem:
 
 
     def __init__(self):
-        self.timing_events = deque(maxlen=10000)  # Eventos de timing
-        self.clock_sync_data = deque(maxlen=1000)  # Datos de sincronización de reloj
-        self.token_lifecycle_data = deque(maxlen=5000)  # Datos de ciclo de vida de tokens
         self.timing_correlations = {}  # Correlaciones temporales
         self.lock = threading.Lock()
 
@@ -40,22 +36,16 @@ class TemporalAnalysisSystem:
                 try:
                     self._collect_timing_data()
                     self._analyze_timing_patterns()
-                    time.sleep(60)  # Monitorear cada minuto
                 except Exception as e:
                     print(f"Error en monitoreo temporal: {e}")
-                    time.sleep(60)
 
         monitor_thread = threading.Thread(target=monitoring_loop, daemon=True)
         monitor_thread.start()
 
 
     def _collect_timing_data(self):
-        """Recopilar datos de timing"""
-        current_time = datetime.now()
 
-        # Simular recopilación de datos de timing
         timing_event = {
-            "timestamp": current_time,
             "event_type": "system_check",
             "duration_ms": 5.2,
             "source": "temporal_monitor"
@@ -72,7 +62,6 @@ class TemporalAnalysisSystem:
                 return
 
             # Analizar patrones de duración
-            recent_events = list(self.timing_events)[-100:]  # Últimos 100 eventos
             durations = [event.get("duration_ms", 0) for event in recent_events]
 
             if durations:
@@ -92,7 +81,6 @@ class TemporalAnalysisSystem:
         """Registrar un evento de timing"""
         with self.lock:
             event = {
-                "timestamp": datetime.now(),
                 "event_type": event_data.get("event_type", "unknown"),
                 "duration_ms": event_data.get("duration_ms", 0),
                 "source": event_data.get("source", "manual"),
@@ -106,7 +94,6 @@ class TemporalAnalysisSystem:
         """Registrar ciclo de vida de token"""
         with self.lock:
             lifecycle_event = {
-                "timestamp": datetime.now(),
                 "token_id": token_data.get("token_id"),
                 "action": token_data.get("action"),  # created, used, expired
                 "duration_ms": token_data.get("duration_ms", 0),
@@ -142,13 +129,10 @@ class TemporalAnalysisSystem:
         """Obtener estadísticas de timing"""
         with self.lock:
             if not self.timing_events:
-                return {"error": "No hay datos de timing disponibles"}
 
-            recent_events = list(self.timing_events)[-100:]  # Últimos 100 eventos
             durations = [event.get("duration_ms", 0) for event in recent_events]
 
             if not durations:
-                return {"error": "No hay datos de duración disponibles"}
 
             return {
                 "sample_size": len(durations),
@@ -175,7 +159,6 @@ async def get_temporal_analysis(
         return {
             "status": "success",
             "data": analysis,
-            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en análisis temporal: {str(e)}")
@@ -192,13 +175,11 @@ async def get_timing_statistics(
         return {
             "status": "success",
             "data": stats,
-            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener estadísticas: {str(e)}")
 
 
-@router.post("/log-timing-event")
 async def log_timing_event(
     event_data: Dict[str, Any],
     current_user: User = Depends(get_current_user),
@@ -209,14 +190,11 @@ async def log_timing_event(
         temporal_system.log_timing_event(event_data)
         return {
             "status": "success",
-            "message": "Evento de timing registrado exitosamente",
-            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al registrar evento: {str(e)}")
 
 
-@router.post("/log-token-lifecycle")
 async def log_token_lifecycle(
     token_data: Dict[str, Any],
     current_user: User = Depends(get_current_user),
@@ -227,8 +205,6 @@ async def log_token_lifecycle(
         temporal_system.log_token_lifecycle(token_data)
         return {
             "status": "success",
-            "message": "Ciclo de vida de token registrado exitosamente",
-            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al registrar ciclo de vida: {str(e)}")

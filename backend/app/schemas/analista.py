@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -48,8 +47,6 @@ class AnalistaResponse(AnalistaBase):
     id: int
     nombre_completo: str
     primer_nombre: str
-    updated_at: Optional[datetime] = None
-    fecha_eliminacion: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -1,10 +1,8 @@
 """Endpoints de auditoría del sistema
-Registro y consulta de acciones de usuarios
 """
 
 import io
 import logging
-from datetime import datetime, timedelta
 from typing import Optional
 
 import pandas as pd
@@ -29,10 +27,8 @@ logger = logging.getLogger(__name__)
 # ============================================
 
 
-def _aplicar_filtros_auditoria(
     query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
 ):
-    """Aplicar filtros a la query de auditoría"""
     if usuario_email:
         query = query.filter(
             Auditoria.usuario_email.ilike(f"%{usuario_email}%")
@@ -77,33 +73,25 @@ def _calcular_paginacion_auditoria(total, limit, skip):
 
 
 def listar_auditoria(
-    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(
-        50, ge=1, le=1000, description="Número de registros a retornar"
     ),
     usuario_email: Optional[str] = Query(
         None, description="Filtrar por email de usuario"
     ),
     modulo: Optional[str] = Query(None, description="Filtrar por módulo"),
     accion: Optional[str] = Query(None, description="Filtrar por acción"),
-    fecha_desde: Optional[datetime] = Query(None, description="Fecha desde"),
-    fecha_hasta: Optional[datetime] = Query(None, description="Fecha hasta"),
     ordenar_por: str = Query("fecha", description="Campo para ordenar"),
     orden: str = Query("desc", description="Orden: asc o desc"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    📋 Listar registros de auditoría con filtros y paginación (VERSIÓN \
     REFACTORIZADA)
-    Todos los usuarios pueden ver auditoría
     """
     try:
         # Construir query base
         query = db.query(Auditoria)
 
-        # Aplicar filtros
-        query = _aplicar_filtros_auditoria(
             query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
         )
 
@@ -147,7 +135,6 @@ def obtener_estadisticas_auditoria(
 ):
     """
     📊 Obtener estadísticas de auditoría
-    Todos los usuarios pueden ver estadísticas
     """
     try:
         # Total de acciones
@@ -155,31 +142,24 @@ def obtener_estadisticas_auditoria(
 
         # Acciones por módulo
         acciones_por_modulo = {}
-        modulos = (
             db.query(Auditoria.modulo, func.count(Auditoria.id))
             .group_by(Auditoria.modulo)
             .all()
         )
-        for modulo, count in modulos:
             acciones_por_modulo[modulo] = count
 
         # Acciones por usuario (top 10)
         acciones_por_usuario = {}
-        usuarios = (
             db.query(Auditoria.usuario_email, func.count(Auditoria.id))
             .group_by(Auditoria.usuario_email)
             .order_by(func.count(Auditoria.id).desc())
             .limit(10)
             .all()
         )
-        for email, count in usuarios:
             if email:  # Solo si tiene email
                 acciones_por_usuario[email] = count
 
         # Acciones por período
-        hoy = datetime.now().date()
-        esta_semana = hoy - timedelta(days=7)
-        este_mes = hoy - timedelta(days=30)
 
         acciones_hoy = (
             db.query(Auditoria)
@@ -213,7 +193,6 @@ def obtener_estadisticas_auditoria(
 
 
 def _crear_dataframe_auditoria(auditorias):
-    """Crear DataFrame a partir de registros de auditoría"""
     data = []
     for auditoria in auditorias:
         data.append(
@@ -227,7 +206,6 @@ def _crear_dataframe_auditoria(auditorias):
                 "Descripción": auditoria.descripcion or "N/A",
                 "IP Address": auditoria.ip_address or "N/A",
                 "Resultado": auditoria.resultado,
-                "Fecha": auditoria.fecha.strftime("%Y-%m-%d %H:%M:%S"),
                 "Mensaje Error": auditoria.mensaje_error or "N/A",
             }
         )
@@ -249,37 +227,27 @@ def exportar_auditoria_excel(
     ),
     modulo: Optional[str] = Query(None, description="Filtrar por módulo"),
     accion: Optional[str] = Query(None, description="Filtrar por acción"),
-    fecha_desde: Optional[datetime] = Query(None, description="Fecha desde"),
-    fecha_hasta: Optional[datetime] = Query(None, description="Fecha hasta"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     📊 Exportar auditoría a Excel (SOLO ADMIN)
-    Solo los administradores pueden exportar auditoría
     """
     try:
-        # Verificar permisos - solo ADMIN puede exportar
         if not current_user.is_admin:
             raise HTTPException(
                 status_code=403,
-                detail="Solo los administradores pueden exportar auditoría",
             )
 
-        # Construir query y aplicar filtros
         query = db.query(Auditoria)
-        query = _aplicar_filtros_auditoria(
             query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
         )
 
-        # Obtener registros y crear DataFrame
         auditorias = query.order_by(desc(Auditoria.fecha)).all()
         df = _crear_dataframe_auditoria(auditorias)
 
         # Crear Excel y generar respuesta
         output = _crear_excel_auditoria(df)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"auditoria_{timestamp}.xlsx"
 
         # Registrar la exportación
         logger.info(
@@ -291,7 +259,6 @@ def exportar_auditoria_excel(
             media_type="application/vnd.openxmlformats-officedocument. \
             spreadsheetml.sheet",
             headers={
-                "Content-Disposition": f"attachment; filename={filename}"
             },
         )
     except HTTPException:
@@ -316,7 +283,6 @@ def obtener_auditoria(
 ):
     """
     🔍 Obtener un registro de auditoría por ID
-    Todos los usuarios pueden ver detalles de auditoría
     """
     try:
         auditoria = (

@@ -38,7 +38,6 @@ class EmailService:
         Enviar email
 
         Args:
-            to_emails: Lista de emails destinatarios
             subject: Asunto del email
             body: Cuerpo del email
             is_html: Si el cuerpo es HTML
@@ -68,10 +67,8 @@ class EmailService:
             server.sendmail(self.from_email, to_emails, text)
             server.quit()
 
-            logger.info(f"Email enviado exitosamente a {to_emails}")
             return {
                 "success": True,
-                "message": "Email enviado exitosamente",
                 "recipients": to_emails
             }
 
@@ -96,7 +93,6 @@ class EmailService:
         Args:
             to_email: Email destinatario
             notification_type: Tipo de notificación
-            data: Datos para el template
 
         Returns:
             Dict con resultado del envío
@@ -105,25 +101,21 @@ class EmailService:
             # Generar contenido basado en tipo
             if notification_type == "payment_reminder":
                 subject = "Recordatorio de Pago"
-                body = f"""
+                body = """
                 Estimado/a {data.get('client_name', 'Cliente')},
 
-                Le recordamos que tiene un pago pendiente por el monto de ${data.get('amount', '0')}.
                 Fecha de vencimiento: {data.get('due_date', 'N/A')}
 
-                Por favor, realice su pago a la brevedad posible.
 
-                Saludos cordiales,
                 Equipo de Financiamiento
                 """
             else:
                 subject = "Notificación del Sistema"
-                body = f"""
+                body = """
                 Estimado/a {data.get('client_name', 'Cliente')},
 
                 {data.get('message', 'Tiene una nueva notificación del sistema.')}
 
-                Saludos cordiales,
                 Equipo de Financiamiento
                 """
 

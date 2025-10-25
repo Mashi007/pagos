@@ -1,7 +1,5 @@
 # backend/app/schemas/prestamo.py
-"""Schemas para el módulo de préstamos"""
 
-from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated, Optional
 
@@ -12,7 +10,6 @@ MAX_PERCENTAGE = 100
 DECIMAL_PRECISION = 2
 MIN_PASSWORD_LENGTH = 8
 
-# Definir constraints personalizados para Decimal
 DecimalAmount = Annotated[
     Decimal,
     Field(ge=0, description="Monto en formato decimal con 2 decimales"),
@@ -66,7 +63,6 @@ class PrestamoBase(BaseModel):
     )
     @classmethod
     def validate_decimal_places(cls, v):
-        """Validar y normalizar decimales a 2 posiciones"""
         if v is None:
             return v
         if not isinstance(v, Decimal):
@@ -94,7 +90,6 @@ class PrestamoUpdate(BaseModel):
     @field_validator("monto_total", "tasa_interes", mode="before")
     @classmethod
     def validate_decimal_places(cls, v):
-        """Validar y normalizar decimales a 2 posiciones"""
         if v is None:
             return v
         if not isinstance(v, Decimal):
@@ -114,8 +109,6 @@ class PrestamoResponse(PrestamoBase):
     categoria: str
     cuotas_pagadas: int
     cuotas_pendientes: Optional[int] = None
-    creado_en: datetime
-    actualizado_en: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -128,7 +121,6 @@ class PrestamoResponse(PrestamoBase):
     )
     @classmethod
     def validate_decimal_places(cls, v):
-        """Validar y normalizar decimales a 2 posiciones"""
         if v is None:
             return Decimal("0.00")
         if not isinstance(v, Decimal):

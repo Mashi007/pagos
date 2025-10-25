@@ -1,6 +1,4 @@
-"""Crear tabla pagos
 
-Revision ID: 013_create_pagos_table
 Revises: 012_add_concesionario_analista_clientes
 Create Date: 2025-10-19 10:30:00.000000
 
@@ -11,25 +9,19 @@ import sqlalchemy as sa
 from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
-revision = "013_create_pagos_table"
 down_revision = "012_add_concesionario_analista_clientes"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
-    """Crear tabla pagos con todos los campos necesarios"""
     conn = op.get_bind()
     inspector = inspect(conn)
 
     # Verificar si la tabla ya existe
-    if "pagos" in inspector.get_table_names():
-        print("Tabla 'pagos' ya existe")
         return
 
-    # Crear tabla pagos
     op.create_table(
-        "pagos",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("cedula_cliente", sa.String(length=20), nullable=False),
         sa.Column("fecha_pago", sa.DateTime(), nullable=False),
@@ -59,17 +51,7 @@ def upgrade() -> None:
     )
 
     # Crear índices
-    op.create_index("idx_pagos_cedula_cliente", "pagos", ["cedula_cliente"])
-    op.create_index("idx_pagos_numero_documento", "pagos", ["numero_documento"])
-    op.create_index("idx_pagos_fecha_pago", "pagos", ["fecha_pago"])
-    op.create_index("idx_pagos_conciliado", "pagos", ["conciliado"])
-    op.create_index("idx_pagos_activo", "pagos", ["activo"])
 
-    print("Tabla 'pagos' creada exitosamente")
-    print("Índices creados para optimización de consultas")
 
 
 def downgrade() -> None:
-    """Eliminar tabla pagos"""
-    op.drop_table("pagos")
-    print("Tabla 'pagos' eliminada")

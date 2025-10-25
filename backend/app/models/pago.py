@@ -11,7 +11,6 @@ from sqlalchemy.sql import func
 
 from app.db.session import Base
 
-# Constantes de longitud de campos
 CEDULA_LENGTH = 20
 DOCUMENTO_LENGTH = 100
 DOCUMENTO_NOMBRE_LENGTH = 255
@@ -22,9 +21,7 @@ NUMERIC_SCALE = 2
 
 
 class Pago(Base):
-    """Modelo para gestionar pagos de clientes"""
 
-    __tablename__ = "pagos"
 
     id = Column(Integer, primary_key=True, index=True)
 
@@ -60,9 +57,7 @@ class Pago(Base):
         DateTime, default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    # RELACIONES (pendientes hasta desarrollar otros módulos)
     # cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True)
-    # cliente = relationship("Cliente", back_populates="pagos")
 
 
     def __repr__(self):

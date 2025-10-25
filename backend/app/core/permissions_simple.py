@@ -1,5 +1,4 @@
 """
-Sistema de permisos simplificado
 Solo 2 roles: ADMIN (acceso completo) y USER (acceso limitado)
 """
 
@@ -8,12 +7,10 @@ from typing import List
 
 
 class Permission(str, Enum):
-    """Permisos del sistema - COMPLETO"""
 
     # Dashboard
     VIEW_DASHBOARD = "dashboard:view"
 
-    # Usuarios
     USER_CREATE = "user:create"
     USER_READ = "user:read"
     USER_UPDATE = "user:update"
@@ -25,14 +22,12 @@ class Permission(str, Enum):
     CLIENTE_UPDATE = "cliente:update"
     CLIENTE_DELETE = "cliente:delete"
 
-    # Préstamos
     PRESTAMO_CREATE = "prestamo:create"
     PRESTAMO_READ = "prestamo:read"
     PRESTAMO_UPDATE = "prestamo:update"
     PRESTAMO_DELETE = "prestamo:delete"
     PRESTAMO_APPROVE = "prestamo:approve"
 
-    # Pagos
     PAGO_CREATE = "pago:create"
     PAGO_READ = "pago:read"
     PAGO_UPDATE = "pago:update"
@@ -55,13 +50,11 @@ class Permission(str, Enum):
     ANALISTA_UPDATE = "analista:update"
     ANALISTA_DELETE = "analista:delete"
 
-    # Concesionarios
     CONCESIONARIO_CREATE = "concesionario:create"
     CONCESIONARIO_READ = "concesionario:read"
     CONCESIONARIO_UPDATE = "concesionario:update"
     CONCESIONARIO_DELETE = "concesionario:delete"
 
-    # Modelos de Vehículos
     MODELO_CREATE = "modelo:create"
     MODELO_READ = "modelo:read"
     MODELO_UPDATE = "modelo:update"
@@ -74,12 +67,10 @@ class Permission(str, Enum):
     VALIDADOR_DELETE = "validador:delete"
 
 
-# ADMIN tiene TODOS los permisos - ACCESO COMPLETO
 ADMIN_PERMISSIONS: List[Permission] = [
     # Dashboard
     Permission.VIEW_DASHBOARD,
 
-    # Usuarios - Gestión completa
     Permission.USER_CREATE,
     Permission.USER_READ,
     Permission.USER_UPDATE,
@@ -91,14 +82,12 @@ ADMIN_PERMISSIONS: List[Permission] = [
     Permission.CLIENTE_UPDATE,
     Permission.CLIENTE_DELETE,
 
-    # Préstamos - Gestión completa
     Permission.PRESTAMO_CREATE,
     Permission.PRESTAMO_READ,
     Permission.PRESTAMO_UPDATE,
     Permission.PRESTAMO_DELETE,
     Permission.PRESTAMO_APPROVE,
 
-    # Pagos - Gestión completa
     Permission.PAGO_CREATE,
     Permission.PAGO_READ,
     Permission.PAGO_UPDATE,
@@ -121,13 +110,11 @@ ADMIN_PERMISSIONS: List[Permission] = [
     Permission.ANALISTA_UPDATE,
     Permission.ANALISTA_DELETE,
 
-    # Concesionarios - Gestión completa
     Permission.CONCESIONARIO_CREATE,
     Permission.CONCESIONARIO_READ,
     Permission.CONCESIONARIO_UPDATE,
     Permission.CONCESIONARIO_DELETE,
 
-    # Modelos de Vehículos - Gestión completa
     Permission.MODELO_CREATE,
     Permission.MODELO_READ,
     Permission.MODELO_UPDATE,
@@ -141,26 +128,18 @@ ADMIN_PERMISSIONS: List[Permission] = [
 ]
 
 
-# USER solo tiene permisos básicos - ACCESO LIMITADO
 USER_PERMISSIONS: List[Permission] = [
     # Dashboard básico
     Permission.VIEW_DASHBOARD,
 
-    # Solo lectura de datos básicos
     Permission.CLIENTE_READ,
     Permission.PRESTAMO_READ,
     Permission.PAGO_READ,
     Permission.REPORTE_READ,
 
-    # PERMISOS OPERATIVOS AGREGADOS - Usuarios regulares pueden gestionar
     # operaciones básicas
     Permission.CLIENTE_CREATE,  # ✅ Crear clientes
     Permission.CLIENTE_UPDATE,  # ✅ Actualizar clientes
-    Permission.PRESTAMO_CREATE,  # ✅ Crear préstamos
-    Permission.PRESTAMO_UPDATE,  # ✅ Actualizar préstamos
-    Permission.PAGO_CREATE,  # ✅ Crear pagos
-    Permission.PAGO_UPDATE,  # ✅ Actualizar pagos
-    Permission.PAGO_DELETE,  # ✅ Eliminar pagos
 ]
 
 
@@ -183,13 +162,11 @@ def has_permission(user_is_admin: bool, permission: Permission) -> bool:
 
 def get_user_permissions(user_is_admin: bool) -> List[Permission]:
     """
-    Obtener todos los permisos de un usuario
 
     Args:
         user_is_admin: True si es admin, False si es user
 
     Returns:
-        Lista de permisos del usuario
     """
     if user_is_admin:
         return ADMIN_PERMISSIONS

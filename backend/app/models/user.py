@@ -9,7 +9,6 @@ from sqlalchemy.sql import func
 
 from app.db.session import Base
 
-# Constantes de longitud de campos
 EMAIL_LENGTH = 255
 NAME_LENGTH = 100
 PASSWORD_LENGTH = 255
@@ -18,7 +17,6 @@ PASSWORD_LENGTH = 255
 class User(Base):
     """Modelo de Usuario Simplificado"""
 
-    __tablename__ = "usuarios"
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(
@@ -37,10 +35,7 @@ class User(Base):
 
     # Timestamps
     created_at = Column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    last_login = Column(DateTime(timezone=True))
 
     # Relaciones
     aprobaciones_solicitadas = relationship(
@@ -54,7 +49,6 @@ class User(Base):
         back_populates="revisor",
     )
 
-    # Relación removida: Los préstamos pertenecen a Cliente, no a User
     auditorias = relationship("Auditoria", back_populates="usuario")
     notificaciones = relationship("Notificacion", back_populates="user")
 

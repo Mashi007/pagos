@@ -1,12 +1,9 @@
 ﻿"""Sistema de Mediciones Estratégicas
-Implementa mediciones específicas para problemas identificados
 """
 
 import logging
-import os
 import threading
 from collections import deque
-from datetime import datetime
 from typing import Any, Dict
 from fastapi import APIRouter, Depends
 from app.api.deps import get_current_user, get_db
@@ -36,7 +33,6 @@ class StrategicMeasurements:
         self.measurements = deque(maxlen=1000)  # Mediciones almacenadas
         self.lock = threading.Lock()
         self.measurement_intervals = {
-            "cpu_usage": 30,  # Cada 30 segundos
             "memory_usage": 30,
             "disk_usage": 60,  # Cada minuto
             "network_io": 30,
@@ -47,7 +43,6 @@ class StrategicMeasurements:
     def collect_system_metrics(self) -> Dict[str, Any]:
         """Recopilar métricas del sistema"""
         metrics = {
-            "timestamp": datetime.now().isoformat(),
             "cpu_usage": self._get_cpu_usage(),
             "memory_usage": self._get_memory_usage(),
             "disk_usage": self._get_disk_usage(),
@@ -159,7 +154,6 @@ class StrategicMeasurements:
             return {
                 "measurements": recent_measurements,
                 "total_count": len(self.measurements),
-                "last_update": datetime.now().isoformat(),
             }
 
 # Instancia global del sistema de mediciones

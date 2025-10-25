@@ -1,49 +1,28 @@
 # backend/app/api/v1/endpoints/health.py"""Health Checks con Análisis de Impacto en PerformanceImplementa monitoreo de salud
-# del sistema con métricas de impacto"""\nimport logging\nimport os\nimport time\nfrom datetime \nimport datetime\nfrom
 # typing \nimport Any, Dict\nimport psutil\nfrom fastapi \nimport APIRouter, Depends, Response, status\nfrom sqlalchemy
 # \nimport text\nfrom sqlalchemy.orm \nimport Session\nfrom app.api.deps \nimport get_db\nfrom app.core.config \nimport
 # settings\nfrom app.db.base \nimport Base\nfrom app.db.session \nimport engine# Constantes de
 # configuraciónCACHE_DURATION_SECONDS = 30HEALTH_CHECK_TIMEOUT = 5MAX_RESPONSE_TIME_MS = 100CPU_THRESHOLD_PERCENT =
-# 80MEMORY_THRESHOLD_PERCENT = 85DISK_THRESHOLD_PERCENT = 90TABLES_TO_DROP = [ "pagos", "prestamos", "notificaciones",
 # "aprobaciones", "auditorias", "clientes", "users",]router = APIRouter()logger = logging.getLogger(__name__)# Cache para
-# health checks con métricas de impacto_last_db_check:\n Dict[str, Any] = { "timestamp":\n None, "status":\n True,
-# "cache_duration":\n CACHE_DURATION_SECONDS, "response_time_ms":\n 0, "cpu_usage":\n 0, "memory_usage":\n 0,}\ndef
 # get_system_metrics() -> Dict[str, Any]:\n """ Obtiene métricas del sistema para análisis de impacto """ try:\n cpu_percent
 # = psutil.cpu_percent(interval=0.1) memory = psutil.virtual_memory() disk = psutil.disk_usage("/") return { "cpu_percent":\n
 # cpu_percent, "memory_percent":\n memory.percent, "memory_available_mb":\n memory.available // (1024 * 1024),
 # "disk_percent":\n disk.percent, "disk_free_gb":\n disk.free // (1024 * 1024 * 1024), "process_count":\n len(psutil.pids()),
-# "load_average":\n ( os.getloadavg() if hasattr(os, "getloadavg") else [0, 0, 0] ), } except Exception as e:\n
 # logger.warning(f"Error obteniendo métricas del sistema:\n {e}") return { "cpu_percent":\n 0, "memory_percent":\n 0,
 # "memory_available_mb":\n 0, "disk_percent":\n 0, "disk_free_gb":\n 0, "process_count":\n 0, "load_average":\n [0, 0, 0],
 # }\ndef check_database_cached() -> Dict[str, Any]:\n """ Verifica la DB con cache para reducir carga y análisis de impacto
-# Solo hace check real cada 30 segundos """ start_time = time.time() now = datetime.utcnow() # Si no hay cache o expiró,
-# hacer check real if ( _last_db_check["timestamp"] is None or (now - _last_db_check["timestamp"]).total_seconds() >
 # _last_db_check["cache_duration"] ):\n try:\n \nfrom app.db.init_db \nimport check_database_connection db_status =
-# check_database_connection() response_time = (time.time() - start_time) * 1000 # Convertir a ms system_metrics =
-# get_system_metrics() _last_db_check.update( { "timestamp":\n now, "status":\n db_status, "response_time_ms":\n
-# response_time, "cpu_usage":\n system_metrics["cpu_percent"], "memory_usage":\n system_metrics["memory_percent"],
-# "system_metrics":\n system_metrics, } ) logger.info( f"DB Check realizado:\n" + f"{db_status}, Response time:\n \
-# {response_time:\n.2f}ms" ) except Exception as e:\n response_time = (time.time() - start_time) * 1000 logger.error( f"Error
-# en DB check:\n {e}, Response time:\n {response_time:\n.2f}ms" ) _last_db_check.update( { "timestamp":\n now, "status":\n
-# False, "response_time_ms":\n response_time, "cpu_usage":\n 0, "memory_usage":\n 0, } ) return
 # _last_db_check@router.get("/cors-debug")async \ndef cors_debug():\n """Endpoint para debuggear CORS""" return {
 # "cors_origins":\n settings.CORS_ORIGINS, "cors_origins_type":\n str(type(settings.CORS_ORIGINS)), "cors_origins_list":\n
 # list(settings.CORS_ORIGINS), "environment":\n settings.ENVIRONMENT, "message":\n "CORS Debug Info",
 # }@router.get("/health/render")@router.head("/health/render")async \ndef render_health_check():\n """ Health check
 # optimizado para Render - Respuesta ultra rápida - Acepta tanto GET como HEAD - Sin verificaciones de DB para evitar
-# timeouts - Ideal para health checks frecuentes de Render """ return { "status":\n "ok", "service":\n "pagos-backend",
-# "timestamp":\n datetime.utcnow().isoformat(), "render_optimized":\n True, }@router.get("/health/detailed",
 # status_code=status.HTTP_200_OK)async \ndef detailed_health_check(response:\n Response):\n """ Health check detallado con
 # análisis de impacto en performance - Verifica DB con métricas de respuesta - Incluye métricas del sistema - Análisis de
-# impacto en recursos - Alertas de umbrales críticos """ start_time = time.time() try:\n # Obtener métricas del sistema
 # system_metrics = get_system_metrics() # Verificar DB con cache db_check = check_database_cached() # Calcular tiempo total
-# de respuesta total_response_time = (time.time() - start_time) * 1000 # Análisis de impacto impact_analysis = {
-# "health_check_overhead":\n { "response_time_ms":\n total_response_time, "cpu_usage_percent":\n
 # system_metrics["cpu_percent"], "memory_usage_percent":\n system_metrics["memory_percent"], "impact_level":\n ( "LOW" if
-# total_response_time < MAX_RESPONSE_TIME_MS else "MEDIUM" ), }, "system_status":\n { "cpu_healthy":\n
 # system_metrics["cpu_percent"] < CPU_THRESHOLD_PERCENT, "memory_healthy":\n system_metrics["memory_percent"] <
 # MEMORY_THRESHOLD_PERCENT, "disk_healthy":\n system_metrics["disk_percent"] < DISK_THRESHOLD_PERCENT, }, "alerts":\n [], } #
-# Generar alertas si hay umbrales excedidos if system_metrics["cpu_percent"] > CPU_THRESHOLD_PERCENT:\n
 # impact_analysis["alerts"].append( { "type":\n "CPU_HIGH", "message":\n ( f"CPU usage
 # {system_metrics['cpu_percent']:\n.1f}%" + f"exceeds threshold {CPU_THRESHOLD_PERCENT}%" ), "severity":\n "WARNING", } ) if
 # system_metrics["memory_percent"] > MEMORY_THRESHOLD_PERCENT:\n impact_analysis["alerts"].append( { "type":\n "MEMORY_HIGH",
@@ -52,39 +31,18 @@
 # impact_analysis["alerts"].append( { "type":\n "DISK_HIGH", "message":\n ( f"Disk usage
 # {system_metrics['disk_percent']:\n.1f}% exceeds threshold {DISK_THRESHOLD_PERCENT}%" ), "severity":\n "CRITICAL", } ) #
 # Determinar estado general overall_status = "healthy" if not db_check["status"]:\n overall_status = "unhealthy" elif
-# impact_analysis["alerts"]:\n overall_status = "degraded" return { "status":\n overall_status, "service":\n "pagos-backend",
-# "timestamp":\n datetime.utcnow().isoformat(), "database":\n { "status":\n ( "connected" if db_check["status"] else
-# "disconnected" ), "response_time_ms":\n db_check.get("response_time_ms", 0), "last_check":\n db_check.get( "timestamp",
-# datetime.utcnow() ).isoformat(), }, "system_metrics":\n system_metrics, "impact_analysis":\n impact_analysis,
 # "environment":\n settings.ENVIRONMENT, "version":\n settings.APP_VERSION, } except Exception as e:\n logger.error(f"Error
 # en health check detallado:\n {e}") response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE return { "status":\n
-# "unhealthy", "service":\n "pagos-backend", "timestamp":\n datetime.utcnow().isoformat(), "error":\n str(e),
-# "response_time_ms":\n (time.time() - start_time) * 1000, }@router.get("/health/full", status_code=status.HTTP_200_OK)async
 # \ndef health_check_full(response:\n Response):\n """ Health check COMPLETO con verificación de DB - Usa cache de 30
-# segundos para reducir carga - Verifica conectividad real a base de datos - Usar para monitoreo menos frecuente """ # Check
 # con cache db_status = check_database_cached() # Si DB está caída, devolver 503 if not db_status:\n response.status_code =
 # status.HTTP_503_SERVICE_UNAVAILABLE return { "status":\n "unhealthy", "app":\n settings.APP_NAME, "version":\n
-# settings.APP_VERSION, "environment":\n settings.ENVIRONMENT, "database":\n "disconnected", "timestamp":\n
-# datetime.utcnow().isoformat(), } return { "status":\n "healthy", "app":\n settings.APP_NAME, "version":\n
 # settings.APP_VERSION, "environment":\n settings.ENVIRONMENT, "database":\n "connected", "database_last_check":\n (
-# _last_db_check["timestamp"].isoformat() if _last_db_check["timestamp"] else None ), "timestamp":\n
-# datetime.utcnow().isoformat(), }@router.get("/health/ready")async \ndef readiness_check(db:\n Session = Depends(get_db)):\n
 # """ Readiness probe - verifica que la app esté lista para recibir tráfico - Verifica DB en tiempo real - Puede ser más
 # lento - Usar para Kubernetes readiness probes o checks iniciales """ try:\n # Check real de DB db.execute(text("SELECT 1"))
 # db_status = True except Exception as e:\n logger.error(f"❌ Readiness check failed:\n {e}") db_status = False if not
 # db_status:\n return Response( content='{"status":\n "not_ready"}', status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
 # media_type="application/json", ) return { "status":\n "ready", "app":\n settings.APP_NAME, "database":\n "connected",
-# "timestamp":\n datetime.utcnow().isoformat(), }@router.get("/health/live")async \ndef liveness_check():\n """ Liveness
-# probe - verifica que la app esté viva (no colgada) - Respuesta instantánea - No hace checks externos - Usar para Kubernetes
-# liveness probes """ return {"status":\n "alive", "timestamp":\n
-# datetime.utcnow().isoformat()}@router.post("/test/init-db")async \ndef initialize_database(db:\n Session =
-# Depends(get_db)):\n """ Endpoint para RECREAR la base de datos ⚠️ ELIMINA todas las tablas y las vuelve a crear """ try:\n
 # # PASO 1:\n Eliminar tablas logger.info("🗑️ Eliminando tablas...") tables_to_drop = TABLES_TO_DROP for table in
-# tables_to_drop:\n try:\n db.execute( text(f"DROP TABLE IF EXISTS pagos_sistema.{table} CASCADE") ) logger.info(f" ✅
 # Eliminada:\n {table}") except Exception as e:\n logger.warning(f" ⚠️ Error eliminando {table}:\n {e}") db.commit()
-# logger.info("✅ Tablas eliminadas") # PASO 2:\n Recrear tablas logger.info("🔄 Recreando tablas...") # Importar modelos #
-# Crear tablas Base.metadata.create_all(bind=engine) logger.info("✅ Tablas recreadas exitosamente") # Invalidar cache de DB
-# check _last_db_check["timestamp"] = None return { "status":\n "success", "message":\n "✅ Base de datos recreada
-# exitosamente", "tables_dropped":\n len(tables_to_drop), "tables_created":\n len(Base.metadata.tables), } except Exception
 # as e:\n db.rollback() logger.error(f"❌ Error:\n {str(e)}") return {"status":\n "error", "message":\n f"❌ Error:\n
 # {str(e)}"}

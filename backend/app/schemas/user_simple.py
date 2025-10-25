@@ -1,7 +1,5 @@
 # backend/app/schemas/user_simple.py"""Schemas de usuario simplificado.Solo 2 roles: ADMIN (acceso completo) y USER (acceso
-# limitado)Compatible con Pydantic v2."""from datetime import datetimefrom typing import Optionalfrom pydantic import
 # BaseModel, ConfigDict, EmailStr, Field# ============================================# SCHEMAS BASE#
-# ============================================class UserBase(BaseModel): """Schema base de usuario (campos comunes)."""
 # email: EmailStr nombre: str = Field(..., min_length=1, max_length=100) apellido: str = Field(..., min_length=1,
 # max_length=100) cargo: Optional[str] = Field(None, max_length=100) is_admin: bool = Field(default=False) # Cambio clave:
 # rol → is_admin is_active: bool = Field(default=True)class UserCreate(UserBase): """Schema para crear usuario.""" password:
@@ -10,10 +8,7 @@
 # min_length=1, max_length=100) cargo: Optional[str] = Field(None, max_length=100) is_admin: Optional[bool] = None # Cambio
 # clave: rol → is_admin is_active: Optional[bool] = None password: Optional[str] = Field(None, min_length=8)#
 # ============================================# SCHEMAS DE RESPUESTA# ============================================class
-# UserResponse(UserBase): """Schema de respuesta de usuario.""" id: int created_at: datetime updated_at: Optional[datetime] =
-# None last_login: Optional[datetime] = None model_config = ConfigDict(from_attributes=True) @property def full_name(self) ->
 # str: """Nombre completo del usuario.""" return f"{self.nombre} {self.apellido}"class UserListResponse(BaseModel): """Schema
-# para lista de usuarios.""" items: list[UserResponse] total: int page: int page_size: int#
 # ============================================# SCHEMAS DE AUTENTICACIÓN# ============================================class
 # LoginRequest(BaseModel): """Schema para login.""" email: EmailStr password: str remember_me: bool =
 # Field(default=False)class LoginResponse(BaseModel): """Schema de respuesta de login.""" access_token: str token_type: str =

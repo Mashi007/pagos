@@ -1,11 +1,8 @@
-﻿"""Sistema de Análisis de Esquema de Base de Datos
-Identifica inconsistencias específicas entre modelos y esquema real
 """
 
 import logging
 import threading
 from collections import deque
-from datetime import datetime
 from typing import Any, Dict
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -27,7 +24,6 @@ class DatabaseSchemaAnalyzer:
     def __init__(self):
         self.schema_inconsistencies = deque(maxlen=1000)
         self.model_vs_schema_analysis = {}
-        self.critical_tables = ["analistas", "clientes", "users", "usuarios"]
         self.expected_columns = {
             "analistas": [
                 "id",
@@ -40,14 +36,12 @@ class DatabaseSchemaAnalyzer:
                 "id",
                 "cedula",
                 "nombres",
-                "apellidos",
                 "estado",
                 "created_at",
                 "updated_at",
                 "fecha_registro",
             ],
             "users": ["id", "email", "is_active", "created_at", "updated_at"],
-            "usuarios": [
                 "id",
                 "email",
                 "is_active",
@@ -62,7 +56,6 @@ class DatabaseSchemaAnalyzer:
         """Analizar inconsistencias específicas del esquema"""
         with self.lock:
             analysis = {
-                "timestamp": datetime.now().isoformat(),
                 "critical_issues": [],
                 "schema_analysis": {},
                 "recommendations": [],
@@ -90,7 +83,6 @@ class DatabaseSchemaAnalyzer:
             SELECT column_name, data_type, is_nullable, column_default
             FROM information_schema.columns
             WHERE table_schema = 'public' AND table_name = %s
-            ORDER BY ordinal_position
             """
             result = db.execute(query, (table_name,))
             real_columns = [row[0] for row in result.fetchall()]
@@ -151,9 +143,7 @@ class DatabaseSchemaAnalyzer:
 
 
     def generate_schema_fixes(self, db: Session) -> Dict[str, Any]:
-        """Generar fixes específicos para el esquema"""
         fixes = {
-            "timestamp": datetime.now().isoformat(),
             "sql_fixes": [],
             "model_fixes": [],
             "priority": "high",
@@ -179,7 +169,6 @@ class DatabaseSchemaAnalyzer:
                 "file": "app/models/analista.py",
                 "fix_type": "add_column",
                 "description": "Agregar campo created_at al modelo Analista",
-                "code": "created_at = Column(DateTime, default=datetime.utcnow)",
                 "priority": "critical",
             }
         )
@@ -190,7 +179,6 @@ class DatabaseSchemaAnalyzer:
     def validate_schema_consistency(self, db: Session) -> Dict[str, Any]:
         """Validar consistencia general del esquema"""
         validation = {
-            "timestamp": datetime.now().isoformat(),
             "overall_status": "unknown",
             "table_validations": {},
             "critical_errors": [],
@@ -239,7 +227,6 @@ async def analyze_database_schema(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Analizar esquema de base de datos"""
     try:
         analysis = schema_analyzer.analyze_schema_inconsistencies(db)
 

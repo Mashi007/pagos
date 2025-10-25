@@ -30,11 +30,9 @@ def upgrade():
                 "ix_auditorias_usuario_id", ["usuario_id"], unique=False
             )
 
-            # Agregar foreign key constraint si la tabla usuarios existe
             try:
                 batch_op.create_foreign_key(
                     "fk_auditorias_usuario_id",
-                    "usuarios",
                     ["usuario_id"],
                     ["id"],
                     ondelete="SET NULL",

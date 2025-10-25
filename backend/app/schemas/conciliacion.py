@@ -1,7 +1,6 @@
 # backend/app/schemas/conciliacion.py
 """Schemas para el módulo de conciliación bancaria"""
 
-from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -16,7 +15,6 @@ DECIMAL_ZERO = Decimal("0.00")
 
 
 class EstadoConciliacion(str, Enum):
-    """Estados posibles de conciliación"""
     PENDIENTE = "PENDIENTE"
     CONCILIADO = "CONCILIADO"
     CONCILIADO_MANUAL = "CONCILIADO_MANUAL"
@@ -25,7 +23,6 @@ class EstadoConciliacion(str, Enum):
 
 
 class TipoMatch(str, Enum):
-    """Tipos de match en conciliación"""
     REFERENCIA = "referencia"
     MONTO_FECHA = "monto_fecha"
     MANUAL = "manual"
@@ -82,14 +79,12 @@ class ConciliacionCreate(BaseModel):
     """Schema para crear una conciliación"""
     fecha_inicio: date
     fecha_fin: date
-    movimientos: List[MovimientoBancario]
 
     @field_validator("fecha_fin")
     @classmethod
     def validar_fechas(cls, v, info):
         if "fecha_inicio" in info.data and v < info.data["fecha_inicio"]:
             raise ValueError(
-                "La fecha fin debe ser posterior a la fecha inicio"
             )
         return v
 
@@ -117,28 +112,19 @@ class ConciliacionMatch(BaseModel):
 
 class ResultadoConciliacion(BaseModel):
     """Resultado del proceso de conciliación"""
-    total_movimientos: int
-    total_pagos: int
-    conciliados: int
     sin_conciliar_banco: int
     sin_conciliar_sistema: int
     porcentaje_conciliacion: float = 0.0
-    detalle_conciliados: List[Dict[str, Any]] = []
     detalle_sin_conciliar_banco: List[MovimientoBancario] = []
     detalle_sin_conciliar_sistema: List[Dict[str, Any]] = []
-    fecha_proceso: datetime = Field(default_factory=datetime.now)
 
     @field_validator("porcentaje_conciliacion")
     @classmethod
     def calcular_porcentaje(cls, v, info):
         if (
-            "total_movimientos" in info.data
-            and info.data["total_movimientos"] > 0
         ):
             return round(
                 (
-                    info.data.get("conciliados", 0)
-                    / info.data["total_movimientos"]
                 )
                 * 100,
                 2,
@@ -147,7 +133,6 @@ class ResultadoConciliacion(BaseModel):
 
 
     class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 class ConciliacionResponse(BaseModel):
@@ -155,16 +140,12 @@ class ConciliacionResponse(BaseModel):
     id: int
     fecha_inicio: date
     fecha_fin: date
-    total_movimientos: int
-    total_conciliados: int
     estado: EstadoConciliacion
-    created_at: datetime
 
     model_config = ConfigDict(
         from_attributes=True,
         json_encoders={
             date: lambda v: v.isoformat(),
-            datetime: lambda v: v.isoformat(),
         },
     )
 
@@ -195,11 +176,9 @@ class ConfirmacionResponse(BaseModel):
     message: str
     pago_id: int
     referencia_bancaria: str
-    fecha_conciliacion: datetime
 
 
     class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 # ============================================
@@ -211,8 +190,6 @@ class ReporteConciliacionMensual(BaseModel):
     """Reporte mensual de conciliación"""
     mes: int = Field(ge=1, le=12)
     anio: int = Field(ge=MIN_YEAR, le=MAX_YEAR)
-    total_pagos: int
-    conciliados: int
     pendientes: int
     porcentaje_conciliacion: float
     monto_total: Decimal = DECIMAL_ZERO
@@ -224,7 +201,6 @@ class ReporteConciliacionMensual(BaseModel):
 
 
 class FiltroConciliacion(BaseModel):
-    """Filtros para búsqueda de conciliaciones"""
     fecha_inicio: Optional[date] = None
     fecha_fin: Optional[date] = None
     estado: Optional[EstadoConciliacion] = None
@@ -289,8 +265,6 @@ class ValidacionExtracto(BaseModel):
     valido: bool
     errores: List[str] = []
     advertencias: List[str] = []
-    total_movimientos: int = 0
-    movimientos_validos: int = 0
 
 
 # ============================================
@@ -337,17 +311,13 @@ class ValidacionArchivoBancario(BaseModel):
     filas_validas: int
     errores: List[str] = []
     advertencias: List[str] = []
-    duplicados_encontrados: List[dict] = []
     cedulas_no_registradas: List[str] = []
     vista_previa: List[MovimientoBancarioExtendido] = []
 
 
 class ConciliacionMasiva(BaseModel):
     """Schema para conciliación masiva"""
-    movimientos_a_aplicar: List[int] = Field(
-        ..., description="IDs de movimientos a aplicar"
     )
-    aplicar_exactos: bool = Field(
         True, description="Aplicar coincidencias exactas automáticamente"
     )
     aplicar_parciales: bool = Field(
@@ -358,17 +328,12 @@ class ConciliacionMasiva(BaseModel):
 
 class ResultadoConciliacionMasiva(BaseModel):
     """Resultado de conciliación masiva"""
-    total_procesados: int
-    exitosos: int
-    fallidos: int
-    pagos_creados: List[int]
     errores: List[dict] = []
     resumen_financiero: dict
     reporte_generado: bool = True
 
 
     class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 class RevisionManual(BaseModel):
@@ -384,15 +349,11 @@ class RevisionManual(BaseModel):
 class HistorialConciliacion(BaseModel):
     """Historial de conciliaciones"""
     id: int
-    fecha_proceso: datetime
     usuario_proceso: str
     archivo_original: str
-    total_movimientos: int
-    total_aplicados: int
     tasa_exito: float
     estado: EstadoConciliacion
     observaciones: Optional[str] = None
 
     model_config = ConfigDict(
-        from_attributes=True, json_encoders={datetime: lambda v: v.isoformat()}
     )

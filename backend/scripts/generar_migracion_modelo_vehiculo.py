@@ -3,42 +3,33 @@
 Script para generar migración de Alembic para agregar columna modelo_vehiculo
 """
 
-import os
 import sys
 import logging
-from datetime import datetime
 
 # Constantes de configuración
 MODELO_VEHICULO_LENGTH = 100
 
 # Configurar logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 # Agregar el directorio del proyecto al path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def generar_migracion():
     """Generar migración para agregar columna modelo_vehiculo"""
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"backend/alembic/versions/{timestamp}_add_modelo_vehiculo_column.py"
 
     migracion_content = f'''"""Add modelo_vehiculo column to clientes table
 
-Revision ID: {timestamp}
 Revises:
-Create Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 """
 from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '{timestamp}'
 down_revision = None  # Cambiar por la revisión anterior
 branch_labels = None
 depends_on = None
@@ -77,7 +68,6 @@ def downgrade():
             f.write(migracion_content)
 
         logger.info(f"Migración generada: {filename}")
-        logger.info("Próximos pasos:")
         logger.info("1. Ejecutar: alembic upgrade head")
         logger.info("2. Verificar que la columna se agregó correctamente")
 

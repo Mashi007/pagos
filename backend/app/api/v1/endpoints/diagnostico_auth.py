@@ -3,7 +3,6 @@ Sistema de auditoría para encontrar causa raíz de problemas 401
 """
 
 import logging
-from datetime import datetime, timedelta
 from typing import Dict, List, Any
 from fastapi import APIRouter, Depends, Request, HTTPException
 from app.api.deps import get_current_user, get_db
@@ -17,8 +16,6 @@ router = APIRouter()
 # ============================================
 
 
-class AuthenticationDiagnostic:
-    """Diagnosticador avanzado de problemas de autenticación"""
 
 
     def __init__(self):
@@ -35,7 +32,6 @@ class AuthenticationDiagnostic:
     ) -> Dict[str, Any]:
         """Analizar fallo de autenticación específico"""
         analysis = {
-            "timestamp": datetime.now().isoformat(),
             "user_id": user_id,
             "error_type": error_details.get("error_type", "unknown"),
             "analysis_results": {},
@@ -109,14 +105,11 @@ class AuthenticationDiagnostic:
             ]
         elif "permission_denied" in error_type:
             pattern["common_causes"] = [
-                "Permisos insuficientes",
                 "Rol incorrecto",
                 "Recurso protegido"
             ]
             pattern["suggested_fixes"] = [
-                "Verificar permisos del usuario",
                 "Asignar rol correcto",
-                "Verificar configuración de recursos"
             ]
 
         return pattern
@@ -134,12 +127,10 @@ class AuthenticationDiagnostic:
             "recent_failures": 0,
             "ip_addresses": [],
             "user_agents": [],
-            "time_patterns": [],
             "risk_score": 0.0
         }
 
         # Aquí se implementaría la lógica para analizar el comportamiento
-        # Por ahora retornamos datos básicos
 
         client_ip = request_context.get("client_ip")
         if client_ip:
@@ -158,7 +149,6 @@ class AuthenticationDiagnostic:
     def _analyze_system_context(self, request_context: Dict[str, Any]) -> Dict[str, Any]:
         """Analizar contexto del sistema"""
         context = {
-            "timestamp": request_context.get("timestamp", datetime.now().isoformat()),
             "client_ip": request_context.get("client_ip"),
             "user_agent": request_context.get("user_agent"),
             "system_load": "normal",
@@ -167,7 +157,6 @@ class AuthenticationDiagnostic:
         }
 
         # Aquí se implementaría la lógica para analizar el estado del sistema
-        # Por ahora retornamos estado básico
 
         return context
 
@@ -186,7 +175,6 @@ class AuthenticationDiagnostic:
             "threat_level": "low"
         }
 
-        # Análisis básico de patrones sospechosos
         error_type = error_details.get("error_type", "").lower()
 
         if "invalid_credentials" in error_type:
@@ -236,14 +224,11 @@ class AuthenticationDiagnostic:
         else:
             return "medium"
 
-# Instancia global del diagnosticador
-auth_diagnostic = AuthenticationDiagnostic()
 
 # ============================================
 # ENDPOINTS DE DIAGNÓSTICO
 # ============================================
 
-@router.post("/analyze-auth-failure")
 async def analyze_authentication_failure(
     error_data: Dict[str, Any],
     request: Request,
@@ -256,13 +241,10 @@ async def analyze_authentication_failure(
 
         # Obtener contexto de la petición
         request_context = {
-            "client_ip": request.client.host if request.client else None,
             "user_agent": request.headers.get("User-Agent"),
-            "timestamp": datetime.now().isoformat()
         }
 
         # Realizar análisis
-        analysis = auth_diagnostic.analyze_authentication_failure(
             user_id, error_details, request_context
         )
 
@@ -278,16 +260,10 @@ async def analyze_authentication_failure(
             detail=f"Error interno: {str(e)}"
         )
 
-@router.get("/diagnostic-summary")
-async def get_diagnostic_summary(
     current_user: User = Depends(get_current_user),
 ):
-    """Obtener resumen de diagnósticos"""
     try:
         summary = {
-            "timestamp": datetime.now().isoformat(),
-            "total_analyses": len(auth_diagnostic.error_patterns),
-            "common_error_types": list(auth_diagnostic.error_patterns.keys()),
             "system_status": "operational"
         }
 
@@ -297,7 +273,6 @@ async def get_diagnostic_summary(
         }
 
     except Exception as e:
-        logger.error(f"Error obteniendo resumen de diagnósticos: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Error interno: {str(e)}"
@@ -310,7 +285,6 @@ async def get_user_behavior_analysis(
 ):
     """Obtener análisis de comportamiento de usuario específico"""
     try:
-        behavior = auth_diagnostic.user_behavior.get(user_id, {})
 
         return {
             "success": True,

@@ -1,3 +1,5 @@
+from collections import deque
+import statistics
 ﻿"""Sistema de Alertas Inteligentes para Autenticación
 Sistema avanzado de monitoreo y alertas basado en patrones y umbrales
 """
@@ -5,7 +7,6 @@ Sistema avanzado de monitoreo y alertas basado en patrones y umbrales
 import logging
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Request, HTTPException
@@ -42,11 +43,9 @@ class Alert:
     severity: AlertSeverity
     title: str
     description: str
-    timestamp: datetime
     user_id: Optional[str]
     metadata: Dict[str, Any]
     resolved: bool = False
-    resolved_at: Optional[datetime] = None
 
 # ============================================
 # SISTEMA DE ALERTAS INTELIGENTES
@@ -69,7 +68,6 @@ class IntelligentAlertSystem:
         })
         self.system_metrics = {
             "error_rate": deque(maxlen=100),
-            "response_time": deque(maxlen=100),
             "active_users": deque(maxlen=100)
         }
 
@@ -84,7 +82,6 @@ class IntelligentAlertSystem:
         metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Agregar una nueva alerta"""
-        alert_id = f"alert_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(self.alerts)}"
 
         alert = Alert(
             alert_id=alert_id,
@@ -92,7 +89,6 @@ class IntelligentAlertSystem:
             severity=severity,
             title=title,
             description=description,
-            timestamp=datetime.now(),
             user_id=user_id,
             metadata=metadata or {}
         )
@@ -117,9 +113,7 @@ class IntelligentAlertSystem:
             user_metrics = self.user_metrics[user_id]
 
             if success:
-                user_metrics["successful_logins"].append(datetime.now())
             else:
-                user_metrics["failed_attempts"].append(datetime.now())
 
             # Actualizar información de contexto
             client_ip = request_context.get("client_ip")
@@ -130,7 +124,6 @@ class IntelligentAlertSystem:
             if user_agent:
                 user_metrics["user_agents"].add(user_agent)
 
-            user_metrics["last_activity"] = datetime.now()
 
             # Analizar patrones y generar alertas
             alerts = self._check_authentication_patterns(user_id, success, request_context)
@@ -152,23 +145,18 @@ class IntelligentAlertSystem:
         alerts = []
         user_metrics = self.user_metrics[user_id]
 
-        # Verificar intentos de fuerza bruta
         if not success:
             recent_failures = [
                 attempt for attempt in user_metrics["failed_attempts"]
-                if datetime.now() - attempt < timedelta(minutes=15)
             ]
 
             if len(recent_failures) >= 5:
                 alert_id = self.add_alert(
                     AlertType.BRUTE_FORCE_ATTACK,
                     AlertSeverity.HIGH,
-                    "Posible ataque de fuerza bruta",
-                    f"Usuario {user_id} ha tenido {len(recent_failures)} intentos fallidos en 15 minutos",
                     user_id=user_id,
                     metadata={
                         "failed_attempts": len(recent_failures),
-                        "time_window": "15 minutes",
                         "client_ip": request_context.get("client_ip")
                     }
                 )
@@ -191,12 +179,10 @@ class IntelligentAlertSystem:
                 )
                 alerts.append(alert_id)
 
-        # Verificar actividad sospechosa
         if len(user_metrics["user_agents"]) > 3:
             alert_id = self.add_alert(
                 AlertType.SUSPICIOUS_ACTIVITY,
                 AlertSeverity.MEDIUM,
-                "Actividad sospechosa detectada",
                 f"Usuario {user_id} usando múltiples user agents",
                 user_id=user_id,
                 metadata={
@@ -215,7 +201,6 @@ class IntelligentAlertSystem:
         alert_type: Optional[AlertType] = None,
         user_id: Optional[str] = None
     ) -> List[Alert]:
-        """Obtener alertas activas con filtros opcionales"""
         filtered_alerts = []
 
         for alert in self.alerts:
@@ -233,7 +218,6 @@ class IntelligentAlertSystem:
 
             filtered_alerts.append(alert)
 
-        return sorted(filtered_alerts, key=lambda x: x.timestamp, reverse=True)
 
 
     def resolve_alert(self, alert_id: str) -> bool:
@@ -241,7 +225,6 @@ class IntelligentAlertSystem:
         for alert in self.alerts:
             if alert.alert_id == alert_id:
                 alert.resolved = True
-                alert.resolved_at = datetime.now()
                 logger.info(f"Alerta resuelta: {alert_id}")
                 return True
 
@@ -280,7 +263,6 @@ alert_system = IntelligentAlertSystem()
 # ENDPOINTS DE ALERTAS
 # ============================================
 
-@router.post("/analyze-auth-event")
 async def analyze_authentication_event(
     event_data: Dict[str, Any],
     request: Request,
@@ -293,9 +275,7 @@ async def analyze_authentication_event(
 
         # Obtener contexto de la petición
         request_context = {
-            "client_ip": request.client.host if request.client else None,
             "user_agent": request.headers.get("User-Agent"),
-            "timestamp": datetime.now().isoformat()
         }
 
         # Analizar evento
@@ -357,7 +337,6 @@ async def get_active_alerts(
                 "severity": alert.severity.value,
                 "title": alert.title,
                 "description": alert.description,
-                "timestamp": alert.timestamp.isoformat(),
                 "user_id": alert.user_id,
                 "metadata": alert.metadata
             }
@@ -379,7 +358,6 @@ async def get_active_alerts(
             detail=f"Error interno: {str(e)}"
         )
 
-@router.post("/resolve-alert/{alert_id}")
 async def resolve_alert(
     alert_id: str,
     current_user: User = Depends(get_current_user),
@@ -391,7 +369,6 @@ async def resolve_alert(
         if success:
             return {
                 "success": True,
-                "message": f"Alerta {alert_id} resuelta exitosamente"
             }
         else:
             raise HTTPException(
@@ -409,7 +386,6 @@ async def resolve_alert(
         )
 
 @router.get("/alert-statistics")
-async def get_alert_statistics(
     current_user: User = Depends(get_current_user),
 ):
     """Obtener estadísticas de alertas"""

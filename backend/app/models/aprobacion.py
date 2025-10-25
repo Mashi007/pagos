@@ -3,7 +3,6 @@
 Sistema de workflow para solicitudes que requieren aprobación
 """
 
-from datetime import date, datetime
 from sqlalchemy import (
     Boolean,
     Column,
@@ -31,7 +30,6 @@ class Aprobacion(Base):
     # Identificación
     id = Column(Integer, primary_key=True, index=True)
 
-    # Estado - Valores posibles: PENDIENTE, APROBADA, RECHAZADA, CANCELADA
     estado = Column(
         String(20), nullable=False, default="PENDIENTE", index=True
     )
@@ -39,13 +37,11 @@ class Aprobacion(Base):
     # Solicitante y revisor
     solicitante_id = Column(
         Integer,
-        ForeignKey("usuarios.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
     revisor_id = Column(
         Integer,
-        ForeignKey("usuarios.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -59,18 +55,12 @@ class Aprobacion(Base):
     )  # Cliente, Prestamo, Pago, etc.
     entidad_id = Column(Integer, nullable=False, index=True)
 
-    # Justificación y comentarios
     justificacion = Column(Text, nullable=False)
-    comentarios_revisor = Column(Text, nullable=True)
 
-    # Datos de la solicitud (JSON serializado como string)
-    datos_solicitados = Column(Text, nullable=True)
 
     # Fechas
     fecha_solicitud = Column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    fecha_revision = Column(DateTime(timezone=True), nullable=True)
 
     # NUEVOS CAMPOS PARA SISTEMA COMPLETO DE APROBACIONES
     archivo_evidencia = Column(
@@ -92,16 +82,12 @@ class Aprobacion(Base):
         Boolean, default=True
     )  # Si está bloqueado el registro
 
-    # Campos de seguimiento
     visto_por_admin = Column(Boolean, default=False)
-    fecha_visto = Column(DateTime(timezone=True), nullable=True)
     tiempo_respuesta_horas = Column(
         Integer, nullable=True
     )  # Tiempo que tomó responder
 
     # Auditoría
-    creado_en = Column(DateTime(timezone=True), server_default=func.now())
-    actualizado_en = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relaciones
     solicitante = relationship(
@@ -135,20 +121,14 @@ class Aprobacion(Base):
         return self.estado == EstadoAprobacion.RECHAZADA.value
 
 
-    def aprobar(self, revisor_id: int, comentarios: str = None):
         """Marca la aprobación como aprobada"""
         self.estado = EstadoAprobacion.APROBADA.value
         self.revisor_id = revisor_id
-        self.comentarios_revisor = comentarios
-        self.fecha_revision = datetime.utcnow()
 
 
-    def rechazar(self, revisor_id: int, comentarios: str):
         """Marca la aprobación como rechazada"""
         self.estado = EstadoAprobacion.RECHAZADA.value
         self.revisor_id = revisor_id
-        self.comentarios_revisor = comentarios
-        self.fecha_revision = datetime.utcnow()
         self.bloqueado_temporalmente = False  # Desbloquear
         self._calcular_tiempo_respuesta()
 
@@ -161,7 +141,6 @@ class Aprobacion(Base):
     def marcar_como_visto(self, admin_id: int):
         """Marcar solicitud como vista por admin"""
         self.visto_por_admin = True
-        self.fecha_visto = datetime.utcnow()
 
 
     def adjuntar_archivo(self, archivo_path: str, tipo: str, tamaño: int):
@@ -206,7 +185,6 @@ class Aprobacion(Base):
         """Días que lleva pendiente la solicitud"""
         if self.estado != "PENDIENTE":
             return 0
-        delta = datetime.utcnow() - self.fecha_solicitud
         return delta.days
 
     @property

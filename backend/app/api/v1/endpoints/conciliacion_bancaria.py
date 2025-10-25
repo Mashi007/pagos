@@ -1,10 +1,8 @@
 ﻿"""Sistema de Conciliación Bancaria
-Permite conciliar pagos bancarios con la base de datos del sistema
 """
 
 import io
 import logging
-from datetime import datetime
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import and_
@@ -43,16 +41,12 @@ async def generar_template_conciliacion(
             [""],
             ["1. FORMATO DE ARCHIVO:"],
             ["   - Archivo Excel (.xlsx)"],
-            ["   - Primera fila: encabezados de columnas"],
-            ["   - Datos desde la segunda fila"],
-            ["   - Máximo 100 registros por archivo"],
             [""],
             ["2. COLUMNAS REQUERIDAS:"],
             ["   - fecha: Fecha real del pago (formato YYYY-MM-DD)"],
             ["   - numero_documento: Número de documento del pago"],
             [""],
             ["3. PROCESO DE CONCILIACIÓN:"],
-            ["   - El sistema compara el número de documento con la base de datos"],
             ["   - Si hay coincidencia EXACTA: se marca como CONCILIADO"],
             ["   - Si NO hay coincidencia: se marca como PENDIENTE"],
             [""],
@@ -69,12 +63,9 @@ async def generar_template_conciliacion(
             ["   - No eliminar las columnas"],
             ["   - No cambiar el orden de las columnas"],
             ["   - Usar solo caracteres ASCII"],
-            ["   - Verificar que los números de documento sean exactos"],
             ["   - Un archivo por vez"],
             [""],
             ["7. RESULTADO:"],
-            ["   - Los pagos conciliados aparecerán en el resumen"],
-            ["   - Los pendientes requerirán revisión manual"],
             [""],
             ["8. DESCONCILIACIÓN:"],
             ["   - Se puede desconciliar un pago ya conciliado"],
@@ -83,7 +74,6 @@ async def generar_template_conciliacion(
             [""],
             [
                 "FECHA DE GENERACIÓN: "
-                + datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             ],
             ["GENERADO POR: " + current_user.email],
         ]
@@ -95,12 +85,8 @@ async def generar_template_conciliacion(
         # HOJA 2: TEMPLATE VACÍA
         ws_template = wb.create_sheet("Template_Conciliacion")
 
-        # Encabezados
-        encabezados = ["fecha", "numero_documento"]
-        for i, encabezado in enumerate(encabezados, 1):
             ws_template.cell(row=1, column=i, value=encabezado)
 
-        # Ejemplo de datos
         ejemplo = ["2024-01-15", "DOC001234"]
         for i, valor in enumerate(ejemplo, 1):
             ws_template.cell(row=2, column=i, value=valor)
@@ -118,12 +104,9 @@ async def generar_template_conciliacion(
         wb.save(output)
         output.seek(0)
 
-        logger.info("Template de conciliación generado exitosamente")
 
         return {
             "success": True,
-            "message": "Template generado exitosamente",
-            "filename": f"Template_Conciliacion_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
             "content": output.getvalue(),
         }
 
@@ -135,7 +118,6 @@ async def generar_template_conciliacion(
         )
 
 
-@router.post("/procesar-conciliacion")
 async def procesar_conciliacion(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -168,16 +150,12 @@ async def procesar_conciliacion(
                 detail=f"Columnas requeridas: {required_columns}",
             )
 
-        # Validar límite de registros
         if len(df) > 100:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Máximo 100 registros por archivo",
             )
 
         # Procesar cada registro
-        resultados = []
-        conciliados = 0
         pendientes = 0
 
         for index, row in df.iterrows():
@@ -198,14 +176,11 @@ async def procesar_conciliacion(
             if pago:
                 # Marcar como conciliado
                 pago.conciliado = True
-                pago.fecha_conciliacion = datetime.now()
-                conciliados += 1
                 estado = "CONCILIADO"
             else:
                 pendientes += 1
                 estado = "PENDIENTE"
 
-            resultados.append(
                 {
                     "fila": index + 2,  # +2 porque Excel es 1-indexed y primera fila es encabezado
                     "fecha": str(fecha),
@@ -215,23 +190,16 @@ async def procesar_conciliacion(
                 }
             )
 
-        # Guardar cambios
         db.commit()
 
         logger.info(
-            f"Conciliación procesada: {conciliados} "
-            f"conciliados, {pendientes} pendientes"
         )
 
         return {
             "success": True,
-            "message": "Conciliación procesada exitosamente",
             "resumen": {
-                "total_registros": len(df),
-                "conciliados": conciliados,
                 "pendientes": pendientes,
             },
-            "resultados": resultados,
         }
 
     except HTTPException:
@@ -245,7 +213,6 @@ async def procesar_conciliacion(
         )
 
 
-@router.post(
     "/desconciliar-pago",
     response_model=ConciliacionResponse,
     status_code=status.HTTP_201_CREATED,
@@ -296,7 +263,6 @@ async def desconciliar_pago(
             "numero_documento_nuevo": conciliacion_data.numero_documento_nuevo,
             "cedula_nueva": conciliacion_data.cedula_nueva,
             "nota": conciliacion_data.nota,
-            "fecha": datetime.now(),
             "responsable": current_user.email,
             "pago_id": pago.id,
         }
@@ -305,7 +271,6 @@ async def desconciliar_pago(
 
         logger.info(
             f"Pago {conciliacion_data.numero_documento_anterior} "
-            f"desconciliado exitosamente"
         )
 
         return conciliacion_record
@@ -329,26 +294,18 @@ async def obtener_estado_conciliacion(
     """Obtener estado general de conciliación"""
     try:
         # Estadísticas generales
-        total_pagos = db.query(Pago).filter(Pago.activo).count()
-        pagos_conciliados = (
             db.query(Pago).filter(and_(Pago.activo, Pago.conciliado)).count()
         )
-        pagos_pendientes = total_pagos - pagos_conciliados
 
         # Porcentaje de conciliación
         porcentaje_conciliacion = (
-            (pagos_conciliados / total_pagos * 100) if total_pagos > 0 else 0
         )
 
         return {
             "success": True,
             "estadisticas": {
-                "total_pagos": total_pagos,
-                "pagos_conciliados": pagos_conciliados,
-                "pagos_pendientes": pagos_pendientes,
                 "porcentaje_conciliacion": round(porcentaje_conciliacion, 2),
             },
-            "fecha_actualizacion": datetime.now(),
         }
 
     except Exception as e:

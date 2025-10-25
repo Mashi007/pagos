@@ -1,4 +1,3 @@
-"""Expandir modelo Cliente con campos de financiamiento vehicular
 
 Revision ID: 001_cliente_vehicular
 Revises:
@@ -19,9 +18,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Aplicar cambios a la base de datos."""
 
-    # Agregar nuevos campos al modelo Cliente
     op.add_column(
         "clientes", sa.Column("modelo_vehiculo", sa.String(100), nullable=True)
     )
@@ -65,7 +62,6 @@ def upgrade() -> None:
     op.create_foreign_key(
         "fk_clientes_asesor_id",
         "clientes",
-        "usuarios",
         ["asesor_id"],
         ["id"],
         ondelete="SET NULL",
@@ -73,7 +69,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Revertir cambios de la base de datos."""
 
     # Eliminar foreign key
     op.drop_constraint("fk_clientes_asesor_id", "clientes", type_="foreignkey")

@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-import os
 
 from app.main import app
 from app.db.session import get_db, Base
@@ -17,7 +16,6 @@ from app.models.user import User
 from app.core.security import get_password_hash
 
 
-# Configuración de base de datos de prueba
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 
 engine = create_engine(
@@ -34,12 +32,10 @@ def event_loop():
     """Crear event loop para pruebas asíncronas"""
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
-    loop.close()
 
 
 @pytest.fixture(scope="function")
 def test_db():
-    """Crear base de datos de prueba temporal"""
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
@@ -47,16 +43,13 @@ def test_db():
 
 @pytest.fixture(scope="function")
 def db_session(test_db):
-    """Crear sesión de base de datos para pruebas"""
     connection = engine.connect()
     transaction = connection.begin()
     session = TestingSessionLocal(bind=connection)
 
     yield session
 
-    session.close()
     transaction.rollback()
-    connection.close()
 
 
 @pytest.fixture(scope="function")
@@ -115,7 +108,6 @@ def test_admin_user(db_session):
 @pytest.fixture(scope="function")
 def auth_headers(test_client, test_user):
     """Crear headers de autenticación para pruebas"""
-    response = test_client.post(
         "/api/v1/auth/login",
         data={"username": test_user.email, "password": "testpassword123"},
     )
@@ -126,7 +118,6 @@ def auth_headers(test_client, test_user):
 @pytest.fixture(scope="function")
 def admin_headers(test_client, test_admin_user):
     """Crear headers de autenticación para admin"""
-    response = test_client.post(
         "/api/v1/auth/login",
         data={"username": test_admin_user.email, "password": "adminpassword123"},
     )
@@ -136,11 +127,9 @@ def admin_headers(test_client, test_admin_user):
 
 @pytest.fixture(scope="function")
 def sample_cliente_data():
-    """Datos de ejemplo para cliente"""
     return {
         "cedula": "V12345678",
         "nombres": "Juan",
-        "apellidos": "Pérez",
         "telefono": "+58412123456",
         "email": "juan.perez@example.com",
         "direccion": "Caracas, Venezuela",
@@ -156,7 +145,6 @@ def sample_cliente_data():
 
 @pytest.fixture(scope="function")
 def sample_pago_data():
-    """Datos de ejemplo para pago"""
     return {
         "cedula_cliente": "V12345678",
         "fecha_pago": "2025-01-01T10:00:00",
@@ -170,7 +158,6 @@ def sample_pago_data():
 
 @pytest.fixture(scope="function")
 def sample_prestamo_data():
-    """Datos de ejemplo para préstamo"""
     return {
         "cliente_id": 1,
         "monto_total": 50000.00,
@@ -192,14 +179,9 @@ def sample_prestamo_data():
 def setup_test_environment():
     """Configurar entorno de prueba"""
     # Configurar variables de entorno para testing
-    os.environ["ENVIRONMENT"] = "testing"
-    os.environ["DEBUG"] = "true"
-    os.environ["LOG_LEVEL"] = "DEBUG"
 
     yield
 
     # Limpiar variables de entorno después de las pruebas
     test_env_vars = ["ENVIRONMENT", "DEBUG", "LOG_LEVEL"]
     for var in test_env_vars:
-        if var in os.environ:
-            del os.environ[var]

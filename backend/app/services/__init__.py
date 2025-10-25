@@ -1,5 +1,4 @@
 # backend/app/services/__init__.py
-"""Servicios del sistema de financiamiento"""
 
 from .auth_service import AuthService
 from .email_service import EmailService

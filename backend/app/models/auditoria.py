@@ -21,7 +21,6 @@ from app.db.session import Base
 
 class TipoAccion(str, Enum):
     """
-    Enum para los tipos de acciones de auditoría
     """
     CREAR = "CREAR"
     ACTUALIZAR = "ACTUALIZAR"
@@ -48,7 +47,6 @@ class Auditoria(Base):
     # Usuario que realizó la acción
     usuario_id = Column(
         Integer,
-        ForeignKey("usuarios.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -76,9 +74,6 @@ class Auditoria(Base):
     # Descripción de la acción
     descripcion = Column(Text, nullable=True)
 
-    # Datos relevantes (JSON)
-    datos_anteriores = Column(JSON, nullable=True)  # Estado antes del cambio
-    datos_nuevos = Column(JSON, nullable=True)  # Estado después del cambio
 
     # Metadata
     ip_address = Column(String(45), nullable=True)  # IPv4 o IPv6
@@ -93,7 +88,6 @@ class Auditoria(Base):
 
     # Timestamp
     fecha = Column(
-        DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
         index=True,
@@ -116,15 +110,12 @@ class Auditoria(Base):
         tabla: str,
         registro_id: int = None,
         descripcion: str = None,
-        datos_anteriores: dict = None,
-        datos_nuevos: dict = None,
         ip_address: str = None,
         user_agent: str = None,
         resultado: str = "EXITOSO",
         mensaje_error: str = None,
     ):
         """
-        Método helper para crear registros de auditoría
 
         Args:
             usuario_id: ID del usuario que realizó la acción
@@ -134,8 +125,6 @@ class Auditoria(Base):
             tabla: Tipo de entidad afectada
             registro_id: ID de la entidad afectada
             descripcion: Descripción de la acción
-            datos_anteriores: Estado anterior (dict)
-            datos_nuevos: Estado nuevo (dict)
             ip_address: IP del usuario
             user_agent: User agent del navegador
             resultado: Resultado de la acción
@@ -152,8 +141,6 @@ class Auditoria(Base):
             tabla=tabla,
             registro_id=registro_id,
             descripcion=descripcion,
-            datos_anteriores=datos_anteriores,
-            datos_nuevos=datos_nuevos,
             ip_address=ip_address,
             user_agent=user_agent,
             resultado=resultado,

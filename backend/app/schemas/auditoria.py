@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict
@@ -12,8 +11,6 @@ class AuditoriaBase(BaseModel):
     tabla: str
     registro_id: Optional[int] = None
     descripcion: Optional[str] = None
-    datos_anteriores: Optional[Dict[str, Any]] = None
-    datos_nuevos: Optional[Dict[str, Any]] = None
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
     resultado: str = "EXITOSO"
@@ -26,7 +23,6 @@ class AuditoriaCreate(AuditoriaBase):
 
 class AuditoriaResponse(AuditoriaBase):
     id: int
-    fecha: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
