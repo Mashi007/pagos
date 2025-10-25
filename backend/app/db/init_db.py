@@ -64,7 +64,7 @@ def create_admin_user() -> None:
                 email="admin@example.com",
                 hashed_password=get_password_hash("admin123"),
                 is_admin=True,
-                activo=True,
+                is_active=True,
                 nombre="Administrador",
                 apellido="Sistema"
             )
