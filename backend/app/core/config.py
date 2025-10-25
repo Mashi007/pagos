@@ -43,7 +43,12 @@ class Settings(BaseSettings):
     # CORS
     # ============================================
     CORS_ORIGINS: List[str] = Field(
-        default=["http://localhost:3000", "http://localhost:5173"], env="CORS_ORIGINS"
+        default=[
+            "http://localhost:3000", 
+            "http://localhost:5173",
+            "https://rapicredit.onrender.com"  # Frontend en producción
+        ], 
+        env="CORS_ORIGINS"
     )
     CORS_ALLOW_CREDENTIALS: bool = True
     CORS_ALLOW_METHODS: List[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
