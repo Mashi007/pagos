@@ -47,7 +47,7 @@ def _validar_columnas_requeridas(df: pd.DataFrame) -> None:
     """Validar que existan las columnas requeridas"""
     columnas_requeridas = ["cedula", "nombre"]
     columnas_faltantes = [col for col in columnas_requeridas if col not in df.columns]
-    
+
     if columnas_faltantes:
         raise HTTPException(
             status_code=400,
@@ -102,7 +102,7 @@ def _validar_campos_criticos(datos: Dict[str, str]) -> Tuple[List[ErrorCargaMasi
     """Validar campos críticos y generar errores"""
     errores = []
     errores_criticos = 0
-    
+
     # Cédula (CRÍTICO)
     if not datos["cedula"] or datos["cedula"].upper() == "ERROR":
         errores.append(
@@ -181,21 +181,21 @@ async def _analizar_archivo_clientes_refactored(
 
         for index, row in df.iterrows():
             fila_numero = index + 2  # +2 porque Excel empieza en 1 y tiene header
-            
+
             # Extraer datos de la fila
             datos = _extraer_datos_fila(row, fila_numero)
-            
+
             # Validar campos críticos
             errores_registro, criticos = _validar_campos_criticos(datos)
             errores_criticos += criticos
-            
+
             # TODO: Agregar más validaciones aquí...
             # - Validación de formato de cédula
             # - Validación de email
             # - Validación de teléfono
             # - Validación de montos
             # - Validación de fechas
-            
+
             if errores_registro:
                 registros_con_errores += 1
                 todos_los_errores.extend(errores_registro)
