@@ -4,6 +4,7 @@ Solución temporal para resolver error 503
 """
 
 import logging
+from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.orm import Session
 
@@ -76,7 +77,7 @@ async def login(
         access_token = create_access_token(subject=user.id)
 
         # Generar refresh token nuevo
-        refresh_token = create_access_token(subject=user.id, expires_delta_minutes=1440)
+        refresh_token = create_access_token(subject=user.id, expires_delta=timedelta(minutes=1440))
 
         logger.info(f"Login exitoso para: {login_data.email}")
 
@@ -142,7 +143,7 @@ async def refresh_token(
         # Generar nuevo access token
         new_access_token = create_access_token(subject=user.id)
         new_refresh_token = create_access_token(
-            subject=user.id, expires_delta_minutes=1440
+            subject=user.id, expires_delta=timedelta(minutes=1440)
         )
 
         # Convertir usuario a diccionario
