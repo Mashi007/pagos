@@ -1,353 +1,173 @@
 #!/usr/bin/env python3
 """
-Script avanzado para corregir los errores E501 restantes
+Script avanzado para corregir errores E501 (línea demasiado larga)
+Maneja casos más complejos que el script anterior
 """
 
 import os
 import re
-import subprocess
 import sys
+from pathlib import Path
 
-def get_e501_errors():
-    """Obtener lista de errores E501"""
-    try:
-        result = subprocess.run(
-            ["py", "-m", "flake8", "backend/app/", "--count", "--select=E501"],
-            capture_output=True,
-            text=True,
-            cwd="."
-        )
-        
-        if result.returncode == 0:
-            return []
-        
-        lines = result.stdout.strip().split('\n')
-        errors = []
-        
-        for line in lines:
-            if ': E501' in line:
-                parts = line.split(':')
-                if len(parts) >= 3:
-                    file_path = parts[0]
-                    line_num = int(parts[1])
-                    error_msg = parts[2].strip()
-                    errors.append((file_path, line_num, error_msg))
-        
-        return errors
-    except Exception as e:
-        print(f"Error obteniendo errores E501: {e}")
-        return []
+def fix_long_line(line, max_length=79):
+    """Corrige una línea larga usando diferentes estrategias"""
+    original_line = line
+    line = line.rstrip()
+    
+    # Si ya está dentro del límite, no hacer nada
+    if len(line) <= max_length:
+        return line
+    
+    # Estrategia 1: Dividir en operadores binarios
+    if any(op in line for op in [' and ', ' or ', ' + ', ' - ', ' * ', ' / ', ' == ', ' != ', ' <= ', ' >= ']):
+        # Buscar el último operador antes del límite
+        for op in [' and ', ' or ', ' + ', ' - ', ' * ', ' / ', ' == ', ' != ', ' <= ', ' >= ']:
+            if op in line:
+                parts = line.split(op)
+                if len(parts) > 1:
+                    # Intentar dividir en el último operador
+                    for i in range(len(parts) - 1, 0, -1):
+                        left_part = op.join(parts[:i])
+                        right_part = op.join(parts[i:])
+                        if len(left_part) <= max_length - 4:  # 4 para "op "
+                            return f"{left_part}{op}\n    {right_part}"
+    
+    # Estrategia 2: Dividir en comas (para argumentos de función)
+    if ',' in line and '(' in line:
+        # Buscar la última coma antes del límite
+        comma_pos = line.rfind(',', 0, max_length - 4)
+        if comma_pos > 0:
+            left_part = line[:comma_pos + 1]
+            right_part = line[comma_pos + 1:].lstrip()
+            return f"{left_part}\n    {right_part}"
+    
+    # Estrategia 3: Dividir en paréntesis
+    if '(' in line and ')' in line:
+        paren_pos = line.find('(')
+        if paren_pos > 0 and paren_pos < max_length - 4:
+            left_part = line[:paren_pos]
+            right_part = line[paren_pos:]
+            return f"{left_part}\n    {right_part}"
+    
+    # Estrategia 4: Dividir en strings largos
+    if 'f"' in line or "f'" in line:
+        # Buscar strings f largos
+        f_string_pattern = r'f["\']([^"\']*)["\']'
+        matches = list(re.finditer(f_string_pattern, line))
+        for match in matches:
+            if len(match.group()) > max_length - 20:  # Margen para el resto de la línea
+                start, end = match.span()
+                before = line[:start]
+                after = line[end:]
+                f_content = match.group(1)
+                
+                # Dividir el contenido del f-string
+                if len(f_content) > 50:
+                    mid_point = len(f_content) // 2
+                    # Buscar un punto de división natural
+                    for i in range(mid_point, len(f_content)):
+                        if f_content[i] in ' .':
+                            f_content1 = f_content[:i+1]
+                            f_content2 = f_content[i+1:]
+                            return f"{before}f\"{f_content1}\"\n    f\"{f_content2}\"{after}"
+    
+    # Estrategia 5: Dividir en comentarios largos
+    if line.strip().startswith('#'):
+        if len(line) > max_length:
+            # Dividir el comentario
+            comment_content = line.strip()[1:].strip()
+            if len(comment_content) > max_length - 4:
+                mid_point = len(comment_content) // 2
+                # Buscar un punto de división natural
+                for i in range(mid_point, len(comment_content)):
+                    if comment_content[i] in ' .':
+                        part1 = comment_content[:i+1]
+                        part2 = comment_content[i+1:]
+                        return f"# {part1}\n# {part2}"
+    
+    # Estrategia 6: Dividir en asignaciones largas
+    if ' = ' in line:
+        equal_pos = line.find(' = ')
+        if equal_pos > 0 and equal_pos < max_length - 4:
+            left_part = line[:equal_pos + 3]
+            right_part = line[equal_pos + 3:].lstrip()
+            return f"{left_part}\n    {right_part}"
+    
+    # Estrategia 7: Dividir en el último espacio antes del límite
+    last_space = line.rfind(' ', 0, max_length - 4)
+    if last_space > 0:
+        left_part = line[:last_space]
+        right_part = line[last_space + 1:]
+        return f"{left_part}\n    {right_part}"
+    
+    # Si no se puede dividir de manera inteligente, dividir por caracteres
+    if len(line) > max_length:
+        return f"{line[:max_length-3]}\n    {line[max_length-3:]}"
+    
+    return original_line
 
-def fix_line_length_advanced(file_path, line_num, error_msg):
-    """Corregir una línea específica usando estrategias avanzadas"""
+def process_file(file_path):
+    """Procesa un archivo para corregir errores E501"""
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
         
-        if line_num > len(lines):
-            return False
+        modified = False
+        new_lines = []
         
-        line = lines[line_num - 1]
-        original_line = line.rstrip('\n')
-        
-        # Si la línea ya está corregida, saltar
-        if len(original_line) <= 79:
-            return False
-        
-        # Estrategias avanzadas de corrección
-        fixed_line = apply_advanced_fixes(original_line, file_path)
-        
-        if fixed_line != original_line:
-            lines[line_num - 1] = fixed_line + '\n'
+        for i, line in enumerate(lines):
+            original_line = line
+            new_line = fix_long_line(line)
             
+            if new_line != original_line:
+                modified = True
+                # Si la línea se dividió en múltiples líneas
+                if '\n' in new_line:
+                    split_lines = new_line.split('\n')
+                    new_lines.extend(split_lines)
+                    # Asegurar que todas las líneas divididas terminen con \n
+                    for j in range(len(split_lines) - 1):
+                        if not split_lines[j].endswith('\n'):
+                            split_lines[j] += '\n'
+                else:
+                    new_lines.append(new_line)
+            else:
+                new_lines.append(line)
+        
+        if modified:
             with open(file_path, 'w', encoding='utf-8') as f:
-                f.writelines(lines)
-            
-            print(f"Corregido: {file_path}:{line_num}")
+                f.writelines(new_lines)
             return True
         
         return False
-        
+    
     except Exception as e:
-        print(f"Error corrigiendo {file_path}:{line_num}: {e}")
+        print(f"Error procesando {file_path}: {e}")
         return False
 
-def apply_advanced_fixes(line, file_path):
-    """Aplicar estrategias avanzadas para acortar líneas"""
-    
-    # 1. Dividir strings muy largos en múltiples líneas
-    if 'f"' in line and len(line) > 100:
-        line = split_long_f_string(line)
-    
-    # 2. Dividir llamadas de función con muchos argumentos
-    if line.count(',') > 4 and '(' in line and ')' in line:
-        line = split_function_with_many_args(line)
-    
-    # 3. Dividir diccionarios largos
-    if '{' in line and '}' in line and line.count(',') > 3:
-        line = split_long_dict(line)
-    
-    # 4. Dividir listas largas
-    if '[' in line and ']' in line and line.count(',') > 3:
-        line = split_long_list(line)
-    
-    # 5. Dividir operaciones de concatenación
-    if ' + ' in line and len(line) > 90:
-        line = split_concatenation(line)
-    
-    # 6. Dividir condiciones complejas
-    if any(op in line for op in [' and ', ' or ', ' && ', ' || ']) and len(line) > 90:
-        line = split_complex_condition(line)
-    
-    # 7. Dividir imports largos
-    if line.strip().startswith(('import ', 'from ')) and len(line) > 90:
-        line = split_long_import(line)
-    
-    # 8. Dividir comentarios largos
-    if line.strip().startswith('#') and len(line) > 90:
-        line = split_long_comment(line)
-    
-    # 9. Dividir URLs o paths largos
-    if ('http' in line or 'www.' in line or '/api/' in line) and len(line) > 90:
-        line = split_long_url(line)
-    
-    # 10. Usar continuación de línea básica como último recurso
-    if len(line) > 79:
-        line = smart_line_continuation(line)
-    
-    return line
-
-def split_long_f_string(line):
-    """Dividir f-strings muy largos"""
-    # Buscar f-strings largos
-    pattern = r'f"([^"]{50,})"'
-    matches = list(re.finditer(pattern, line))
-    
-    for match in reversed(matches):
-        f_content = match.group(1)
-        if len(f_content) > 50:
-            # Dividir el contenido en partes más pequeñas
-            words = f_content.split()
-            if len(words) > 4:
-                mid = len(words) // 2
-                first_part = ' '.join(words[:mid])
-                second_part = ' '.join(words[mid:])
-                
-                new_f_string = f'f"{first_part}" + f"{second_part}"'
-                line = line[:match.start()] + new_f_string + line[match.end():]
-    
-    return line
-
-def split_function_with_many_args(line):
-    """Dividir funciones con muchos argumentos"""
-    if '(' in line and ')' in line:
-        paren_start = line.find('(')
-        paren_end = line.rfind(')')
-        
-        if paren_start > 0 and paren_end > paren_start:
-            func_name = line[:paren_start].strip()
-            args_content = line[paren_start+1:paren_end]
-            
-            if len(args_content) > 60:
-                # Dividir argumentos
-                args = [arg.strip() for arg in args_content.split(',')]
-                if len(args) > 3:
-                    indent = ' ' * (len(line) - len(line.lstrip()))
-                    
-                    # Crear múltiples líneas
-                    new_line = func_name + '(\n'
-                    for i, arg in enumerate(args):
-                        if i == len(args) - 1:
-                            new_line += indent + '    ' + arg + '\n'
-                        else:
-                            new_line += indent + '    ' + arg + ',\n'
-                    new_line += indent + ')'
-                    return new_line
-    
-    return line
-
-def split_long_dict(line):
-    """Dividir diccionarios largos"""
-    if '{' in line and '}' in line:
-        brace_start = line.find('{')
-        brace_end = line.rfind('}')
-        
-        if brace_start > 0 and brace_end > brace_start:
-            prefix = line[:brace_start]
-            dict_content = line[brace_start+1:brace_end]
-            
-            if len(dict_content) > 50:
-                # Dividir elementos del diccionario
-                items = [item.strip() for item in dict_content.split(',')]
-                if len(items) > 2:
-                    indent = ' ' * (len(line) - len(line.lstrip()))
-                    
-                    new_line = prefix + '{\n'
-                    for i, item in enumerate(items):
-                        if i == len(items) - 1:
-                            new_line += indent + '    ' + item + '\n'
-                        else:
-                            new_line += indent + '    ' + item + ',\n'
-                    new_line += indent + '}'
-                    return new_line
-    
-    return line
-
-def split_long_list(line):
-    """Dividir listas largas"""
-    if '[' in line and ']' in line:
-        bracket_start = line.find('[')
-        bracket_end = line.rfind(']')
-        
-        if bracket_start > 0 and bracket_end > bracket_start:
-            prefix = line[:bracket_start]
-            list_content = line[bracket_start+1:bracket_end]
-            
-            if len(list_content) > 50:
-                # Dividir elementos de la lista
-                items = [item.strip() for item in list_content.split(',')]
-                if len(items) > 2:
-                    indent = ' ' * (len(line) - len(line.lstrip()))
-                    
-                    new_line = prefix + '[\n'
-                    for i, item in enumerate(items):
-                        if i == len(items) - 1:
-                            new_line += indent + '    ' + item + '\n'
-                        else:
-                            new_line += indent + '    ' + item + ',\n'
-                    new_line += indent + ']'
-                    return new_line
-    
-    return line
-
-def split_concatenation(line):
-    """Dividir operaciones de concatenación"""
-    if ' + ' in line:
-        parts = line.split(' + ')
-        if len(parts) == 2:
-            indent = ' ' * (len(line) - len(line.lstrip()))
-            new_line = parts[0] + ' + \\\n' + indent + parts[1]
-            return new_line
-    
-    return line
-
-def split_complex_condition(line):
-    """Dividir condiciones complejas"""
-    for op in [' and ', ' or ']:
-        if op in line:
-            parts = line.split(op)
-            if len(parts) == 2:
-                indent = ' ' * (len(line) - len(line.lstrip()))
-                new_line = parts[0] + op + '\\\n' + indent + parts[1]
-                return new_line
-    
-    return line
-
-def split_long_import(line):
-    """Dividir imports largos"""
-    if 'from ' in line and ' import ' in line:
-        parts = line.split(' import ')
-        if len(parts) == 2:
-            from_part = parts[0]
-            import_part = parts[1]
-            
-            if len(import_part) > 50:
-                imports = [imp.strip() for imp in import_part.split(',')]
-                if len(imports) > 1:
-                    indent = ' ' * (len(line) - len(line.lstrip()))
-                    new_line = from_part + ' import (\n'
-                    for imp in imports:
-                        new_line += indent + '    ' + imp + ',\n'
-                    new_line += indent + ')'
-                    return new_line
-    
-    return line
-
-def split_long_comment(line):
-    """Dividir comentarios largos"""
-    if line.strip().startswith('#'):
-        comment_text = line.strip()[1:]
-        if len(comment_text) > 70:
-            words = comment_text.split()
-            if len(words) > 8:
-                mid = len(words) // 2
-                first_part = ' '.join(words[:mid])
-                second_part = ' '.join(words[mid:])
-                
-                indent = ' ' * (len(line) - len(line.lstrip()))
-                new_line = indent + '# ' + first_part + '\n' + indent + '# ' + second_part
-                return new_line
-    
-    return line
-
-def split_long_url(line):
-    """Dividir URLs o paths largos"""
-    # Buscar URLs o paths largos
-    url_patterns = [
-        r'https?://[^\s]+',
-        r'/api/[^\s]+',
-        r'www\.[^\s]+'
-    ]
-    
-    for pattern in url_patterns:
-        matches = list(re.finditer(pattern, line))
-        for match in reversed(matches):
-            url = match.group(0)
-            if len(url) > 60:
-                # Dividir URL en partes más pequeñas
-                parts = url.split('/')
-                if len(parts) > 3:
-                    mid = len(parts) // 2
-                    first_part = '/'.join(parts[:mid])
-                    second_part = '/'.join(parts[mid:])
-                    
-                    new_url = first_part + '/\\\n    ' + second_part
-                    line = line[:match.start()] + new_url + line[match.end():]
-    
-    return line
-
-def smart_line_continuation(line):
-    """Continuación inteligente de línea"""
-    if len(line) > 79:
-        # Buscar el mejor punto de división
-        best_pos = 70
-        for i in range(70, 79):
-            if line[i] in [' ', ',', '(', '[', '{', '=']:
-                best_pos = i
-                break
-        
-        if best_pos < 79:
-            indent = ' ' * (len(line) - len(line.lstrip()))
-            new_line = line[:best_pos] + ' \\\n' + indent + line[best_pos:].lstrip()
-            return new_line
-        
-        # Si no hay buen punto, dividir en 70 caracteres
-        indent = ' ' * (len(line) - len(line.lstrip()))
-        new_line = line[:70] + ' \\\n' + indent + line[70:].lstrip()
-        return new_line
-    
-    return line
-
 def main():
-    print("Iniciando corrección avanzada de errores E501...")
+    """Función principal"""
+    backend_dir = Path("backend/app")
     
-    errors = get_e501_errors()
-    if not errors:
-        print("No se encontraron errores E501.")
+    if not backend_dir.exists():
+        print("Error: No se encontró el directorio backend/app")
         return
     
-    print(f"Encontrados {len(errors)} errores E501.")
+    # Obtener todos los archivos Python
+    python_files = list(backend_dir.rglob("*.py"))
     
-    fixed_count = 0
-    for file_path, line_num, error_msg in errors:
-        if fix_line_length_advanced(file_path, line_num, error_msg):
-            fixed_count += 1
+    print(f"Procesando {len(python_files)} archivos Python...")
     
-    print(f"Corregidos {fixed_count} errores E501.")
+    modified_files = []
     
-    # Verificar errores restantes
-    remaining_errors = get_e501_errors()
-    print(f"Errores E501 restantes: {len(remaining_errors)}")
+    for file_path in python_files:
+        if process_file(file_path):
+            modified_files.append(str(file_path))
+            print(f"Modificado: {file_path}")
+    
+    print(f"\nArchivos modificados: {len(modified_files)}")
+    for file_path in modified_files:
+        print(f"  - {file_path}")
 
 if __name__ == "__main__":
     main()
