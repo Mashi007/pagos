@@ -156,7 +156,93 @@ class CorrelationAnalyzer:
         }
 
 
-@router.post("/trace-auth-flow")
+def _analizar_request_info(request: Request) -> dict:
+    """Analizar información del request"""
+    auth_header = request.headers.get("authorization")
+    user_agent = request.headers.get("user-agent", "unknown")
+    ip = request.client.host if request.client else "unknown"
+    
+    return {
+        "has_auth_header": bool(auth_header),
+        "auth_header_type": auth_header.split(" ")[0] if auth_header else None,
+        "user_agent": user_agent[:50] + "..." if len(user_agent) > 50 else user_agent,
+        "client_ip": ip,
+    }
+
+
+def _validar_headers_auth(auth_header: str) -> tuple[bool, str]:
+    """Validar headers de autorización"""
+    if not auth_header:
+        return False, "Missing Authorization header"
+    
+    if not auth_header.startswith("Bearer "):
+        return False, "Invalid Authorization format"
+    
+    return True, ""
+
+
+def _extraer_y_analizar_token(auth_header: str) -> tuple[bool, str, str]:
+    """Extraer y analizar estructura del token"""
+    token = auth_header.split(" ")[1]
+    token_parts = token.split(".")
+    
+    if len(token_parts) != 3:
+        return False, "Invalid JWT structure", ""
+    
+    return True, "", token
+
+
+def _decodificar_token(token: str) -> tuple[bool, str, dict]:
+    """Decodificar token JWT sin verificar"""
+    try:
+        unverified_payload = jwt.decode(token, options={"verify_signature": False})
+        return True, "", unverified_payload
+    except Exception as e:
+        return False, f"Token decoding failed: {str(e)}", {}
+
+
+def _verificar_expiracion_token(unverified_payload: dict) -> tuple[bool, str]:
+    """Verificar si el token ha expirado"""
+    exp_timestamp = unverified_payload.get("exp")
+    if not exp_timestamp:
+        return True, "No expiration found in token"
+    
+    exp_datetime = datetime.fromtimestamp(exp_timestamp)
+    is_expired = datetime.now() > exp_datetime
+    
+    if is_expired:
+        return False, "Token expired"
+    
+    return True, ""
+
+
+def _verificar_firma_token(token: str) -> tuple[bool, str, dict]:
+    """Verificar firma del token con SECRET_KEY"""
+    try:
+        verified_payload = decode_token(token)
+        return True, "", verified_payload
+    except Exception as e:
+        return False, f"Signature verification failed: {str(e)}", {}
+
+
+def _verificar_usuario_en_bd(user_id: str, db: Session) -> tuple[bool, str, any]:
+    """Verificar que el usuario existe en la base de datos"""
+    try:
+        if not user_id:
+            return False, "No user_id in token", None
+        
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        if not user:
+            return False, f"User {user_id} not found", None
+        
+        if not user.is_active:
+            return False, "User inactive", None
+        
+        return True, "", user
+    except Exception as e:
+        return False, f"User verification failed: {str(e)}", None
+
+
 async def trace_authentication_flow(request: Request, db: Session = Depends(get_db)):
     """
     🔬 Trace completo del flujo de autenticación
@@ -167,45 +253,21 @@ async def trace_authentication_flow(request: Request, db: Session = Depends(get_
     try:
         # Paso 1: Análisis del request
         tracer.add_step("request_analysis", "started")
-
-        # Extraer información del request
-        auth_header = request.headers.get("authorization")
-        user_agent = request.headers.get("user-agent", "unknown")
-        ip = request.client.host if request.client else "unknown"
-
-        tracer.add_step(
-            "request_analysis",
-            "completed",
-            {
-                "has_auth_header": bool(auth_header),
-                "auth_header_type": auth_header.split(" ")[0] if auth_header else None,
-                "user_agent": user_agent[:50] + "..." if len(user_agent) > 50 else user_agent,
-                "client_ip": ip,
-            },
-        )
+        request_info = _analizar_request_info(request)
+        tracer.add_step("request_analysis", "completed", request_info)
 
         # Paso 2: Validación de headers
         tracer.add_step("header_validation", "started")
-
-        if not auth_header:
-            tracer.add_step("header_validation", "failed", {"error": "No Authorization header"})
-            tracer.finalize("failed", "Missing Authorization header")
+        auth_header = request.headers.get("authorization")
+        is_valid, error_msg = _validar_headers_auth(auth_header)
+        
+        if not is_valid:
+            tracer.add_step("header_validation", "failed", {"error": error_msg})
+            tracer.finalize("failed", error_msg)
             return {
                 "trace_id": tracer.trace_id,
                 "status": "failed",
-                "error": "Missing Authorization header",
-                "steps": tracer.steps,
-            }
-
-        if not auth_header.startswith("Bearer "):
-            tracer.add_step(
-                "header_validation", "failed", {"error": "Invalid Authorization format"}
-            )
-            tracer.finalize("failed", "Invalid Authorization format")
-            return {
-                "trace_id": tracer.trace_id,
-                "status": "failed",
-                "error": "Invalid Authorization format",
+                "error": error_msg,
                 "steps": tracer.steps,
             }
 
@@ -220,170 +282,122 @@ async def trace_authentication_flow(request: Request, db: Session = Depends(get_
 
         # Paso 3: Extracción y análisis del token
         tracer.add_step("token_extraction", "started")
-
-        token = auth_header.split(" ")[1]
-
-        # Análisis básico del token
-        token_parts = token.split(".")
-        if len(token_parts) != 3:
-            tracer.add_step("token_extraction", "failed", {"error": "Invalid JWT structure"})
-            tracer.finalize("failed", "Invalid JWT structure")
+        is_valid, error_msg, token = _extraer_y_analizar_token(auth_header)
+        
+        if not is_valid:
+            tracer.add_step("token_extraction", "failed", {"error": error_msg})
+            tracer.finalize("failed", error_msg)
             return {
                 "trace_id": tracer.trace_id,
                 "status": "failed",
-                "error": "Invalid JWT structure",
+                "error": error_msg,
                 "steps": tracer.steps,
             }
 
         tracer.add_step(
             "token_extraction",
             "completed",
-            {"token_parts": len(token_parts), "token_length": len(token)},
+            {"token_parts": 3, "token_length": len(token)},
         )
 
         # Paso 4: Decodificación del token
         tracer.add_step("token_decoding", "started")
-
-        try:
-
-            # Decodificar sin verificar primero para análisis
-            unverified_payload = jwt.decode(token, options={"verify_signature": False})
-
-            tracer.add_step(
-                "token_decoding",
-                "completed",
-                {
-                    "payload_keys": list(unverified_payload.keys()),
-                    "user_id": unverified_payload.get("sub"),
-                    "token_type": unverified_payload.get("type"),
-                    "exp": unverified_payload.get("exp"),
-                    "iat": unverified_payload.get("iat"),
-                },
-            )
-
-        except Exception as e:
-            tracer.add_step("token_decoding", "failed", {"error": str(e)})
-            tracer.finalize("failed", f"Token decoding failed: {str(e)}")
+        is_valid, error_msg, unverified_payload = _decodificar_token(token)
+        
+        if not is_valid:
+            tracer.add_step("token_decoding", "failed", {"error": error_msg})
+            tracer.finalize("failed", error_msg)
             return {
                 "trace_id": tracer.trace_id,
                 "status": "failed",
-                "error": f"Token decoding failed: {str(e)}",
+                "error": error_msg,
                 "steps": tracer.steps,
             }
 
+        tracer.add_step(
+            "token_decoding",
+            "completed",
+            {
+                "payload_keys": list(unverified_payload.keys()),
+                "user_id": unverified_payload.get("sub"),
+                "token_type": unverified_payload.get("type"),
+                "exp": unverified_payload.get("exp"),
+                "iat": unverified_payload.get("iat"),
+            },
+        )
+
         # Paso 5: Verificación de expiración
         tracer.add_step("expiration_check", "started")
+        is_valid, error_msg = _verificar_expiracion_token(unverified_payload)
+        
+        if not is_valid:
+            tracer.add_step("expiration_check", "failed", {"error": error_msg})
+            tracer.finalize("failed", error_msg)
+            return {
+                "trace_id": tracer.trace_id,
+                "status": "failed",
+                "error": error_msg,
+                "steps": tracer.steps,
+            }
 
         exp_timestamp = unverified_payload.get("exp")
         if exp_timestamp:
             exp_datetime = datetime.fromtimestamp(exp_timestamp)
-            is_expired = datetime.now() > exp_datetime
-
             tracer.add_step(
                 "expiration_check",
-                "completed" if not is_expired else "failed",
+                "completed",
                 {
                     "exp_datetime": exp_datetime.isoformat(),
-                    "is_expired": is_expired,
-                    "time_until_expiry": (
-                        str(exp_datetime - datetime.now()) if not is_expired else "EXPIRED"
-                    ),
+                    "is_expired": False,
+                    "time_until_expiry": str(exp_datetime - datetime.now()),
                 },
-            )
-
-            if is_expired:
-                tracer.finalize("failed", "Token expired")
-                return {
-                    "trace_id": tracer.trace_id,
-                    "status": "failed",
-                    "error": "Token expired",
-                    "steps": tracer.steps,
-                }
-        else:
-            tracer.add_step(
-                "expiration_check", "warning", {"error": "No expiration found in token"}
             )
 
         # Paso 6: Verificación con SECRET_KEY
         tracer.add_step("signature_verification", "started")
-
-        try:
-            verified_payload = decode_token(token)
-            tracer.add_step(
-                "signature_verification",
-                "completed",
-                {"verified": True, "user_id": verified_payload.get("sub")},
-            )
-        except Exception as e:
-            tracer.add_step("signature_verification", "failed", {"error": str(e)})
-            tracer.finalize("failed", f"Signature verification failed: {str(e)}")
+        is_valid, error_msg, verified_payload = _verificar_firma_token(token)
+        
+        if not is_valid:
+            tracer.add_step("signature_verification", "failed", {"error": error_msg})
+            tracer.finalize("failed", error_msg)
             return {
                 "trace_id": tracer.trace_id,
                 "status": "failed",
-                "error": f"Signature verification failed: {str(e)}",
+                "error": error_msg,
                 "steps": tracer.steps,
             }
+
+        tracer.add_step(
+            "signature_verification",
+            "completed",
+            {"verified": True, "user_id": verified_payload.get("sub")},
+        )
 
         # Paso 7: Verificación de usuario en BD
         tracer.add_step("user_verification", "started")
-
         user_id = verified_payload.get("sub")
-        if not user_id:
-            tracer.add_step("user_verification", "failed", {"error": "No user_id in token"})
-            tracer.finalize("failed", "No user_id in token")
+        is_valid, error_msg, user = _verificar_usuario_en_bd(user_id, db)
+        
+        if not is_valid:
+            tracer.add_step("user_verification", "failed", {"error": error_msg})
+            tracer.finalize("failed", error_msg)
             return {
                 "trace_id": tracer.trace_id,
                 "status": "failed",
-                "error": "No user_id in token",
+                "error": error_msg,
                 "steps": tracer.steps,
             }
 
-        try:
-            user = db.query(User).filter(User.id == int(user_id)).first()
-            if not user:
-                tracer.add_step(
-                    "user_verification",
-                    "failed",
-                    {"error": f"User {user_id} not found"},
-                )
-                tracer.finalize("failed", f"User {user_id} not found")
-                return {
-                    "trace_id": tracer.trace_id,
-                    "status": "failed",
-                    "error": f"User {user_id} not found",
-                    "steps": tracer.steps,
-                }
-
-            if not user.is_active:
-                tracer.add_step("user_verification", "failed", {"error": "User inactive"})
-                tracer.finalize("failed", "User inactive")
-                return {
-                    "trace_id": tracer.trace_id,
-                    "status": "failed",
-                    "error": "User inactive",
-                    "steps": tracer.steps,
-                }
-
-            tracer.add_step(
-                "user_verification",
-                "completed",
-                {
-                    "user_id": user.id,
-                    "user_email": user.email,
-                    "user_active": user.is_active,
-                    "user_admin": user.is_admin,
-                },
-            )
-
-        except Exception as e:
-            tracer.add_step("user_verification", "failed", {"error": str(e)})
-            tracer.finalize("failed", f"User verification failed: {str(e)}")
-            return {
-                "trace_id": tracer.trace_id,
-                "status": "failed",
-                "error": f"User verification failed: {str(e)}",
-                "steps": tracer.steps,
-            }
+        tracer.add_step(
+            "user_verification",
+            "completed",
+            {
+                "user_id": user.id,
+                "user_email": user.email,
+                "user_active": user.is_active,
+                "user_admin": user.is_admin,
+            },
+        )
 
         # Éxito completo
         tracer.finalize("success")
