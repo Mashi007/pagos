@@ -6,12 +6,11 @@ from app.utils.date_helpers import (
     add_weeks,
     calculate_payment_dates,
     days_between,
-    is_overdue,
     days_overdue,
     format_date_es,
     get_notification_dates,
+    is_overdue,
 )
-
 from app.utils.validators import (
     format_dni,
     format_phone,

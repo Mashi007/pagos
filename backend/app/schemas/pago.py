@@ -1,8 +1,7 @@
+from datetime import date
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-from datetime import date
 
 # Constantes de validación
 MIN_CEDULA_LENGTH = 8

@@ -1,9 +1,9 @@
+from datetime import date
+
 from sqlalchemy import TIMESTAMP, Boolean, Column, Date, Integer, String, Text
 from sqlalchemy.sql import func
 
 from app.db.session import Base
-
-from datetime import date
 
 CEDULA_LENGTH = 20
 NAME_LENGTH = 100

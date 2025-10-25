@@ -4,7 +4,8 @@ Servicio de WhatsApp
 
 import logging
 import re
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 import httpx
 
 from app.core.config import settings

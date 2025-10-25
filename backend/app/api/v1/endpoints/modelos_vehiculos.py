@@ -1,6 +1,6 @@
+import logging
 from typing import List, Optional
 
-import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session

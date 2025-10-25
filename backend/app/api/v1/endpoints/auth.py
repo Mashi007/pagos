@@ -5,14 +5,15 @@ Solución temporal para resolver error 503
 
 import logging
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.config import settings
-from app.core.security import create_access_token, verify_password, get_password_hash
+from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models.user import User
-from app.schemas.auth import LoginRequest, TokenResponse, ChangePasswordRequest
+from app.schemas.auth import ChangePasswordRequest, LoginRequest, TokenResponse
 from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
 from app.utils.validators import validate_password_strength

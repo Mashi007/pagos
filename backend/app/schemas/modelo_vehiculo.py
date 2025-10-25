@@ -4,6 +4,7 @@ from datetime import date
 """Schemas para ModeloVehiculo"""
 
 from typing import Optional
+
 from pydantic import BaseModel, ConfigDict, Field
 
 

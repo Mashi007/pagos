@@ -1,9 +1,5 @@
-from datetime import date, datetime
-
-# Endpoints de gestion de clientes - VERSION CON AUDITORIA AUTOMATICA
-# Sistema completo de gestion de clientes con validaciones y auditoria
-
 import logging
+from datetime import date, datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
@@ -14,6 +10,10 @@ from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
 from app.models.user import User
 from app.schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
+
+# Endpoints de gestion de clientes - VERSION CON AUDITORIA AUTOMATICA
+# Sistema completo de gestion de clientes con validaciones y auditoria
+
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -6,6 +6,7 @@ Sincronizado con el endpoint de aprobaciones.
 
 from datetime import date
 from enum import Enum
+
 from sqlalchemy import (
     Boolean,
     Column,

@@ -5,8 +5,10 @@ Analiza inconsistencias entre modelos SQLAlchemy y esquema real de BD
 
 import logging
 from typing import Any, Dict
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 

@@ -4,8 +4,9 @@ Lógica de negocio para generación y gestión de tablas de amortización
 """
 
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import List, Optional
+
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 

@@ -1,14 +1,14 @@
+import logging
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 
 # Imports para Excel
 from openpyxl.styles import Font, PatternFill
+from pydantic import BaseModel
 from reportlab.lib.pagesizes import A4, letter
 
 # Imports para reportes PDF

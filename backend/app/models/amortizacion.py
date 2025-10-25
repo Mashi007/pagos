@@ -3,6 +3,7 @@ Modelo de Amortización - Tabla de cuotas de préstamos
 """
 
 from decimal import Decimal
+
 from sqlalchemy import (
     Boolean,
     Column,

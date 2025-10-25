@@ -2,6 +2,7 @@
 """Schemas de autenticación: Login, Token, Register"""
 
 from typing import Any, Dict, Optional
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 # Constantes de validación

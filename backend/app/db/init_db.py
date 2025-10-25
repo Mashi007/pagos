@@ -11,9 +11,9 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.security import get_password_hash
 from app.db.session import SessionLocal
 from app.models.user import User
-from app.core.security import get_password_hash
 
 logger = logging.getLogger(__name__)
 

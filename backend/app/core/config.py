@@ -4,6 +4,7 @@ Configuración de la aplicación
 
 import os
 from typing import List, Optional
+
 from pydantic import Field
 from pydantic_settings import BaseSettings
 

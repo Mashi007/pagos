@@ -4,6 +4,7 @@ Helper para registrar acciones de auditoría
 
 import logging
 from typing import Optional
+
 from sqlalchemy.orm import Session
 
 from app.models.auditoria import Auditoria

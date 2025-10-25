@@ -1,7 +1,7 @@
+import logging
 from datetime import date, datetime
 from typing import Optional
 
-import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func

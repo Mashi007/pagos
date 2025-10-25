@@ -3,7 +3,8 @@ Endpoint de diagnóstico completo del sistema
 """
 
 import logging
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session

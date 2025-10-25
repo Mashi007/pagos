@@ -10,14 +10,14 @@ from app.models.amortizacion import Cuota
 from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.schemas.amortizacion import (
-    TablaAmortizacionRequest,
-    TablaAmortizacionResponse,
     CuotaResponse,
-    RecalcularMoraRequest,
-    RecalcularMoraResponse,
     EstadoCuentaResponse,
     ProyeccionPagoRequest,
     ProyeccionPagoResponse,
+    RecalcularMoraRequest,
+    RecalcularMoraResponse,
+    TablaAmortizacionRequest,
+    TablaAmortizacionResponse,
 )
 from app.services.amortizacion_service import AmortizacionService
 

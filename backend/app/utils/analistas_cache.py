@@ -3,9 +3,9 @@ Sistema de cache inteligente para analistas
 """
 
 import logging
-from typing import Optional, Dict, Any
-from functools import wraps
 from datetime import datetime, timedelta
+from functools import wraps
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 

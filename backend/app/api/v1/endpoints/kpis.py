@@ -1,7 +1,7 @@
+import logging
 from decimal import Decimal
 from typing import Optional
 
-import logging
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session

@@ -4,9 +4,10 @@ Servicio de Machine Learning
 
 import logging
 import pickle
-import numpy as np
-from typing import Dict, Any, Optional
 from pathlib import Path
+from typing import Any, Dict, Optional
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 

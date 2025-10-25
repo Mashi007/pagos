@@ -5,7 +5,8 @@ Configuración centralizada del sistema
 
 from datetime import datetime
 from typing import Any, Dict, Optional
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, JSON
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text
 from sqlalchemy.sql import func
 
 from app.db.session import Base
