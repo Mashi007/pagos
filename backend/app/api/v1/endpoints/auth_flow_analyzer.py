@@ -804,9 +804,8 @@ def _generate_correlation_recommendations(
     if step_failures:
         most_failed_step = max(step_failures.items(), key=lambda x: x[1])
         recommendations.append(
-            f"🔧 Paso más problemático: '{
-                most_failed_step[0]}' ({
-                most_failed_step[1]} fallos)"
+            f"🔧 Paso más problemático: '{most_failed_step[0]}' "
+            f"({most_failed_step[1]} fallos)"
         )
 
     # Recomendaciones basadas en patrones temporales
