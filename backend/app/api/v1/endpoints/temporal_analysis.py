@@ -25,7 +25,7 @@ router = APIRouter()
 class TemporalAnalysisSystem:
     """Sistema temporal para análisis de timing y sincronización"""
     
-def __init__(self):
+    def __init__(self):
         self.timing_events = deque(maxlen=10000)  # Eventos de timing
         self.clock_sync_data = deque(maxlen=1000)  # Datos de sincronización de reloj
         self.token_lifecycle_data = deque(maxlen=5000)  # Datos de ciclo de vida de tokens

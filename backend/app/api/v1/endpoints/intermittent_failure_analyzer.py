@@ -23,7 +23,7 @@ router = APIRouter()
 class IntermittentFailureAnalyzer:
     """Analizador de fallos intermitentes específicos"""
     
-def __init__(self):
+    def __init__(self):
         self.successful_requests = deque(maxlen=1000)  # Requests exitosos
         self.failed_requests = deque(maxlen=1000)  # Requests fallidos
         self.intermittent_patterns = {}  # Patrones intermitentes

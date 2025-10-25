@@ -23,7 +23,7 @@ router = APIRouter()
 class TokenPredictiveAnalyzer:
     """Analizador predictivo para tokens JWT"""
     
-def __init__(self):
+    def __init__(self):
         self.token_history = deque(maxlen=10000)  # Historial de tokens
         self.prediction_models = {}  # Modelos de predicción
         self.accuracy_metrics = defaultdict(list)  # Métricas de precisión

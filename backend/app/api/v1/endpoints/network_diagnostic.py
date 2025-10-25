@@ -26,7 +26,7 @@ router = APIRouter()
 class NetworkDiagnostic:
     """Sistema de diagnóstico de red y latencia"""
     
-def __init__(self):
+    def __init__(self):
         self.latency_measurements = deque(maxlen=1000)  # Mediciones de latencia
         self.connectivity_tests = deque(maxlen=500)  # Pruebas de conectividad
         self.network_stats = defaultdict(list)  # Estadísticas de red

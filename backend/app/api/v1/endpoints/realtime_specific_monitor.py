@@ -23,7 +23,7 @@ router = APIRouter()
 class RealTimeSpecificMonitor:
     """Monitor específico para fallos 401 intermitentes"""
     
-def __init__(self):
+    def __init__(self):
         self.realtime_events = deque(maxlen=5000)  # Eventos en tiempo real
         self.failure_patterns = defaultdict(list)  # Patrones de fallo
         self.success_patterns = defaultdict(list)  # Patrones de éxito

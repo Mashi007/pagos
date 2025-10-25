@@ -54,7 +54,7 @@ class Alert:
 class IntelligentAlertSystem:
     """Sistema inteligente de alertas"""    
     
-def __init__(self):
+    def __init__(self):
         self.alerts = deque(maxlen=1000)
         self.alert_rules = {}
         self.user_metrics = defaultdict(lambda: {

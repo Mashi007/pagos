@@ -23,7 +23,7 @@ router = APIRouter()
 class ForensicAnalyzer:
     """Analizador forense de logs y trazas"""
     
-def __init__(self):
+    def __init__(self):
         self.event_timeline = deque(maxlen=10000)
         self.user_sessions = defaultdict(list)
         self.error_sequences = defaultdict(list)

@@ -24,7 +24,7 @@ router = APIRouter()
 class RealTimeMonitor:
     """Monitor en tiempo real para autenticación"""
     
-def __init__(self):
+    def __init__(self):
         self.request_logs = deque(maxlen=10000)  # Logs de requests
         self.token_analytics = deque(maxlen=5000)  # Análisis de tokens
         self.error_patterns = defaultdict(int)  # Patrones de error
