@@ -468,7 +468,8 @@ async def _analizar_archivo_clientes(
                         tipo_error="ADVERTENCIA",
                         puede_corregirse=True,
                         sugerencia="Ingrese email válido (ej: cliente@ejemplo.com)",
-                    ))
+                    )
+                )
                 errores_advertencia += 1
 
             # Concesionario (DATO_VACIO)
@@ -552,12 +553,13 @@ async def _analizar_archivo_clientes(
                             campo="cedula",
                             valor_original=cedula,
                             error=resultado_cedula.get(
-                                "mensaje",
-                                "Formato inválido"),
+                                "mensaje", "Formato inválido"
+                            ),
                             tipo_error="CRITICO",
                             puede_corregirse=True,
                             sugerencia="Formato: V/E/J + 7-10 dígitos (ej: V12345678)",
-                        ))
+                        )
+                    )
                     errores_criticos += 1
 
             # Validar móvil con validador del sistema
@@ -677,7 +679,8 @@ async def _analizar_archivo_clientes(
                             tipo_error="DATO_VACIO",
                             puede_corregirse=True,
                             sugerencia="Seleccione un concesionario existente o créelo primero en Configuración",
-                        ))
+                        )
+                    )
                     datos_vacios += 1
 
             # Verificar si modelo de vehículo existe
@@ -702,7 +705,8 @@ async def _analizar_archivo_clientes(
                             tipo_error="DATO_VACIO",
                             puede_corregirse=True,
                             sugerencia="Seleccione un modelo existente o créelo primero en Configuración",
-                        ))
+                        )
+                    )
                     datos_vacios += 1
 
             # Verificar si asesor existe
@@ -726,7 +730,8 @@ async def _analizar_archivo_clientes(
                             tipo_error="DATO_VACIO",
                             puede_corregirse=True,
                             sugerencia="Seleccione un asesor existente o créelo primero en Configuración",
-                        ))
+                        )
+                    )
                     datos_vacios += 1
 
             # Validar modalidad de pago
@@ -922,7 +927,8 @@ async def _analizar_archivo_pagos(
                             tipo_error="CRITICO",
                             puede_corregirse=False,
                             sugerencia="Debe crear el cliente primero antes de cargar pagos",
-                        ))
+                        )
+                    )
                     errores_criticos += 1
             else:
                 errores_registro.append(
@@ -1039,7 +1045,8 @@ async def _analizar_archivo_pagos(
                         tipo_error="DATO_VACIO",
                         puede_corregirse=True,
                         sugerencia="Seleccione: TRANSFERENCIA, EFECTIVO, CHEQUE, etc.",
-                    ))
+                    )
+                )
                 datos_vacios += 1
 
             # Determinar estado
@@ -1813,7 +1820,8 @@ async def descargar_template_excel(
             output,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={
-                "Content-Disposition": f"attachment; filename={nombre_archivo}"},
+                "Content-Disposition": f"attachment; filename={nombre_archivo}"
+            },
         )
 
     except Exception as e:
@@ -1913,28 +1921,37 @@ async def dashboard_carga_masiva(
             .all()
         )
 
-        return {"titulo": "📊 Dashboard de Carga Masiva",
-                "usuario": f"{current_user.nombre} {current_user.apellido}".strip(),
-                "historial_cargas": [{"fecha": a.fecha,
-                                      "descripcion": a.descripcion,
-                                      "resultado": a.resultado,
-                                      "datos": a.datos_nuevos,
-                                      } for a in auditorias],
-                "instrucciones": {"paso_1": "📤 Subir archivo Excel con formato establecido",
-                                  "paso_2": "🔍 Revisar dashboard de errores",
-                                  "paso_3": "✏️ Corregir errores en línea",
-                                  "paso_4": "💾 Guardar registros corregidos en base de datos",
-                                  },
-                "tipos_carga": [{"tipo": "clientes",
-                                 "descripcion": "Carga masiva de clientes con financiamiento",
-                                 "template": "/api/v1/carga-masiva/template-excel/clientes",
-                                 },
-                                {"tipo": "pagos",
-                                 "descripcion": "Carga masiva de pagos (articulados por cédula)",
-                                 "template": "/api/v1/carga-masiva/template-excel/pagos",
-                                 },
-                                ],
+        return {
+            "titulo": "📊 Dashboard de Carga Masiva",
+            "usuario": f"{current_user.nombre} {current_user.apellido}".strip(),
+            "historial_cargas": [
+                {
+                    "fecha": a.fecha,
+                    "descripcion": a.descripcion,
+                    "resultado": a.resultado,
+                    "datos": a.datos_nuevos,
                 }
+                for a in auditorias
+            ],
+            "instrucciones": {
+                "paso_1": "📤 Subir archivo Excel con formato establecido",
+                "paso_2": "🔍 Revisar dashboard de errores",
+                "paso_3": "✏️ Corregir errores en línea",
+                "paso_4": "💾 Guardar registros corregidos en base de datos",
+            },
+            "tipos_carga": [
+                {
+                    "tipo": "clientes",
+                    "descripcion": "Carga masiva de clientes con financiamiento",
+                    "template": "/api/v1/carga-masiva/template-excel/clientes",
+                },
+                {
+                    "tipo": "pagos",
+                    "descripcion": "Carga masiva de pagos (articulados por cédula)",
+                    "template": "/api/v1/carga-masiva/template-excel/pagos",
+                },
+            ],
+        }
 
     except Exception as e:
         raise HTTPException(

@@ -171,7 +171,8 @@ class NotificacionMulticanal:
                 await self._generar_reporte_diario(resultados)
 
             logger.info(
-                f"✅ Procesamiento completado: {resultados['exitosas']} exitosas, {resultados['fallidas']} fallidas")
+                f"✅ Procesamiento completado: {resultados['exitosas']} exitosas, {resultados['fallidas']} fallidas"
+            )
 
             return resultados
 
@@ -229,7 +230,8 @@ class NotificacionMulticanal:
 
                 except Exception as e:
                     logger.error(
-                        f"Error enviando notificación a cliente {cliente_data.get('cliente_id')}: {e}")
+                        f"Error enviando notificación a cliente {cliente_data.get('cliente_id')}: {e}"
+                    )
                     resultado["fallidas"] += 1
 
             return resultado
@@ -793,7 +795,8 @@ Financiamiento Automotriz"""
 
             if notificaciones_hoy >= self.LIMITE_NOTIFICACIONES_DIA:
                 logger.warning(
-                    f"Cliente {cliente_id} alcanzó límite diario de notificaciones")
+                    f"Cliente {cliente_id} alcanzó límite diario de notificaciones"
+                )
                 return False
 
             # Verificar intervalo mínimo
@@ -981,11 +984,14 @@ class NotificationScheduler:
 
             # Log de resultados
             logger.info(
-                f"✅ Ciclo completado:" f"{resultados.get(
+                f"✅ Ciclo completado:"
+                f"{resultados.get(
                         'exitosas',
-                        0)}" f"exitosas, {resultados.get(
+                        0)}"
+                f"exitosas, {resultados.get(
                         'fallidas',
-                        0)} fallidas")
+                        0)} fallidas"
+            )
 
             return {
                 "mensaje": "✅ Ciclo de notificaciones completado exitosamente",
@@ -1095,7 +1101,8 @@ class GestorReintentos:
 
                 except Exception as e:
                     logger.error(
-                        f"Error en reintento de notificación {notificacion.id}: {e}")
+                        f"Error en reintento de notificación {notificacion.id}: {e}"
+                    )
                     resultados["fallidos"] += 1
 
             return resultados

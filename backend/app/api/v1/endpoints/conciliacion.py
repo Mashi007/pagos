@@ -1437,31 +1437,38 @@ def obtener_paso_flujo_conciliacion(
         }
 
     elif paso == 12:
-        return {"paso": 12,
-                "titulo": "Sistema EJECUTA EN LOTE",
-                "acciones_automaticas": [{"orden": 1,
-                                          "accion": "Registrar cada pago en BD",
-                                          "descripcion": "Crea registro en tabla 'pagos' con todos los detalles",
-                                          },
-                                         {"orden": 2,
-                                          "accion": "Actualizar amortizaciones",
-                                          "descripcion": "Actualiza estados y saldos de cuotas afectadas",
-                                          },
-                                         {"orden": 3,
-                                          "accion": "Actualizar estados de clientes",
-                                          "descripcion": "Recalcula días de mora y estado financiero",
-                                          },
-                                         {"orden": 4,
-                                          "accion": "Registrar en auditoría",
-                                          "descripcion": "Guarda log completo del proceso masivo",
-                                          },
-                                         {"orden": 5,
-                                          "accion": "Enviar emails de confirmación",
-                                          "descripcion": "Notifica a cada cliente sobre su pago (background)",
-                                          },
-                                         ],
-                "siguiente_paso": "Generar reporte PDF",
-                }
+        return {
+            "paso": 12,
+            "titulo": "Sistema EJECUTA EN LOTE",
+            "acciones_automaticas": [
+                {
+                    "orden": 1,
+                    "accion": "Registrar cada pago en BD",
+                    "descripcion": "Crea registro en tabla 'pagos' con todos los detalles",
+                },
+                {
+                    "orden": 2,
+                    "accion": "Actualizar amortizaciones",
+                    "descripcion": "Actualiza estados y saldos de cuotas afectadas",
+                },
+                {
+                    "orden": 3,
+                    "accion": "Actualizar estados de clientes",
+                    "descripcion": "Recalcula días de mora y estado financiero",
+                },
+                {
+                    "orden": 4,
+                    "accion": "Registrar en auditoría",
+                    "descripcion": "Guarda log completo del proceso masivo",
+                },
+                {
+                    "orden": 5,
+                    "accion": "Enviar emails de confirmación",
+                    "descripcion": "Notifica a cada cliente sobre su pago (background)",
+                },
+            ],
+            "siguiente_paso": "Generar reporte PDF",
+        }
 
     elif paso == 13:
         return {
@@ -1644,4 +1651,5 @@ Saludos.
     except Exception as e:
         logger = logging.getLogger(__name__)
         logger.error(
-            f"Error notificando admin sobre conciliación {proceso_id}: {str(e)}")
+            f"Error notificando admin sobre conciliación {proceso_id}: {str(e)}"
+        )
