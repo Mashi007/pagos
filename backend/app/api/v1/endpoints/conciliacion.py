@@ -47,6 +47,186 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _detectar_formato_archivo(filename: str) -> str:
+    """Detectar formato del archivo"""
+    filename_lower = filename.lower()
+    if filename_lower.endswith((".xlsx", ".xls")):
+        return "EXCEL"
+    elif filename_lower.endswith(".csv"):
+        return "CSV"
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se aceptan archivos Excel (.xlsx, .xls) o CSV",
+        )
+
+
+def _leer_archivo_excel(contenido: bytes) -> pd.DataFrame:
+    """Leer archivo Excel y mapear columnas"""
+    df = pd.read_excel(io.BytesIO(contenido))
+
+    # Mapear columnas esperadas
+    columnas_esperadas = {
+        0: "fecha",
+        1: "monto",
+        2: "referencia",
+        3: "cedula_pagador",
+        4: "descripcion",
+        5: "cuenta_origen",
+    }
+
+    # Renombrar columnas
+    df.columns = [columnas_esperadas.get(i, f"col_{i}") for i in range(len(df.columns))]
+    return df
+
+
+def _leer_archivo_csv(contenido: bytes) -> pd.DataFrame:
+    """Leer archivo CSV"""
+    return pd.read_csv(io.StringIO(contenido.decode("utf-8")))
+
+
+def _validar_columnas_requeridas(df: pd.DataFrame) -> list:
+    """Validar que existan las columnas requeridas"""
+    columnas_requeridas = ["fecha", "monto", "referencia", "cedula_pagador"]
+    errores = []
+
+    for col in columnas_requeridas:
+        if col not in df.columns:
+            errores.append(f"Columna requerida '{col}' no encontrada")
+
+    return errores
+
+
+def _validar_fecha(fila: pd.Series, index: int) -> tuple[date, list]:
+    """Validar fecha de una fila"""
+    advertencias = []
+
+    if pd.isna(fila["fecha"]):
+        advertencias.append(f"Fila {index + 1}: Fecha vacía")
+        return None, advertencias
+
+    fecha_str = str(fila["fecha"])
+    try:
+        if "/" in fecha_str:
+            fecha = datetime.strptime(fecha_str, "%d/%m/%Y").date()
+        else:
+            fecha = pd.to_datetime(fila["fecha"]).date()
+        return fecha, advertencias
+    except Exception:
+        advertencias.append(f"Fila {index + 1}: Formato de fecha inválido")
+        return None, advertencias
+
+
+def _validar_monto(fila: pd.Series, index: int) -> tuple[Decimal, list]:
+    """Validar monto de una fila"""
+    advertencias = []
+
+    try:
+        monto = Decimal(str(fila["monto"]))
+        if monto <= 0:
+            advertencias.append(f"Fila {index + 1}: Monto inválido")
+            return None, advertencias
+        return monto, advertencias
+    except Exception:
+        advertencias.append(f"Fila {index + 1}: Formato de monto inválido")
+        return None, advertencias
+
+
+def _validar_referencia(fila: pd.Series, index: int, referencias_vistas: set) -> tuple[str, list, list]:
+    """Validar referencia de una fila"""
+    advertencias = []
+    duplicados = []
+
+    referencia = str(fila["referencia"]).strip()
+    if not referencia or referencia == "nan":
+        advertencias.append(f"Fila {index + 1}: Referencia vacía")
+        return None, advertencias, duplicados
+
+    # Detectar duplicados
+    if referencia in referencias_vistas:
+        duplicados.append({
+            "fila": index + 1,
+            "referencia": referencia,
+            "monto": float(fila["monto"]),
+        })
+        return None, advertencias, duplicados
+
+    referencias_vistas.add(referencia)
+    return referencia, advertencias, duplicados
+
+
+def _buscar_matching_automatico(cedula: str, monto: Decimal, db: Session) -> dict:
+    """Buscar matching automático para vista previa"""
+    if not cedula or cedula == "nan":
+        return {}
+
+    cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
+    if not cliente:
+        return {}
+
+    # Buscar cuotas pendientes del cliente
+    cuotas_pendientes = (
+        db.query(Cuota)
+        .join(Prestamo)
+        .filter(
+            Prestamo.cliente_id == cliente.id,
+            Cuota.estado.in_(["PENDIENTE", "VENCIDA", "PARCIAL"]),
+            Cuota.monto_cuota == monto,  # Monto exacto
+        )
+        .first()
+    )
+
+    if cuotas_pendientes:
+        return {
+            "tipo_match": TipoMatch.MONTO_FECHA,
+            "confianza_match": 95.0,
+            "cliente_encontrado": {
+                "id": cliente.id,
+                "nombre": cliente.nombre_completo,
+                "cedula": cliente.cedula,
+            },
+            "pago_sugerido": {
+                "cuota_id": cuotas_pendientes.id,
+                "numero_cuota": cuotas_pendientes.numero_cuota,
+                "monto_cuota": float(cuotas_pendientes.monto_cuota),
+            },
+        }
+
+    # Buscar con tolerancia ±2%
+    tolerancia = monto * Decimal("0.02")
+    cuota_aproximada = (
+        db.query(Cuota)
+        .join(Prestamo)
+        .filter(
+            Prestamo.cliente_id == cliente.id,
+            Cuota.estado.in_(["PENDIENTE", "VENCIDA", "PARCIAL"]),
+            Cuota.monto_cuota >= (monto - tolerancia),
+            Cuota.monto_cuota <= (monto + tolerancia),
+        )
+        .first()
+    )
+
+    if cuota_aproximada:
+        return {
+            "tipo_match": TipoMatch.MONTO_FECHA,
+            "confianza_match": 75.0,
+            "requiere_revision": True,
+            "cliente_encontrado": {
+                "id": cliente.id,
+                "nombre": cliente.nombre_completo,
+                "cedula": cliente.cedula,
+            },
+            "pago_sugerido": {
+                "cuota_id": cuota_aproximada.id,
+                "numero_cuota": cuota_aproximada.numero_cuota,
+                "monto_cuota": float(cuota_aproximada.monto_cuota),
+                "diferencia": float(abs(cuota_aproximada.monto_cuota - monto)),
+            },
+        }
+
+    return {}
+
+
 @router.post("/validar-archivo", response_model=ValidacionArchivoBancario)
 async def validar_archivo_bancario(
     archivo: UploadFile = File(...),
@@ -54,7 +234,7 @@ async def validar_archivo_bancario(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Validar archivo bancario (Excel/CSV) y mostrar vista previa
+    Validar archivo bancario (Excel/CSV) y mostrar vista previa (VERSIÓN REFACTORIZADA)
 
     Formato requerido (Excel):
     - Columna A: Fecha de transacción
@@ -65,54 +245,19 @@ async def validar_archivo_bancario(
     - Columna F: Nº Cuenta origen
     """
     try:
-        # Detectar formato
-        filename = archivo.filename.lower()
-        if filename.endswith((".xlsx", ".xls")):
-            formato = "EXCEL"
-        elif filename.endswith(".csv"):
-            formato = "CSV"
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail="Solo se aceptan archivos Excel (.xlsx, .xls) o CSV",
-            )
+        # 1. Detectar formato
+        formato = _detectar_formato_archivo(archivo.filename)
 
-        # Leer archivo
+        # 2. Leer archivo
         contenido = await archivo.read()
 
         if formato == "EXCEL":
-            # Leer Excel
-            df = pd.read_excel(io.BytesIO(contenido))
-
-            # Mapear columnas esperadas
-            columnas_esperadas = {
-                0: "fecha",
-                1: "monto",
-                2: "referencia",
-                3: "cedula_pagador",
-                4: "descripcion",
-                5: "cuenta_origen",
-            }
-
-            # Renombrar columnas
-            df.columns = [columnas_esperadas.get(i, f"col_{i}") for i in range(len(df.columns))]
-
+            df = _leer_archivo_excel(contenido)
         else:  # CSV
-            df = pd.read_csv(io.StringIO(contenido.decode("utf-8")))
+            df = _leer_archivo_csv(contenido)
 
-        # Validaciones
-        errores = []
-        advertencias = []
-        movimientos_validos = []
-        duplicados = []
-        cedulas_no_registradas = []
-
-        # Verificar columnas requeridas
-        columnas_requeridas = ["fecha", "monto", "referencia", "cedula_pagador"]
-        for col in columnas_requeridas:
-            if col not in df.columns:
-                errores.append(f"Columna requerida '{col}' no encontrada")
-
+        # 3. Validar columnas requeridas
+        errores = _validar_columnas_requeridas(df)
         if errores:
             return ValidacionArchivoBancario(
                 archivo_valido=False,
@@ -123,54 +268,40 @@ async def validar_archivo_bancario(
                 vista_previa=[],
             )
 
-        # Procesar cada fila
+        # 4. Procesar cada fila
+        advertencias = []
+        movimientos_validos = []
+        duplicados = []
+        cedulas_no_registradas = []
         referencias_vistas = set()
 
         for index, fila in df.iterrows():
             try:
                 # Validar fecha
-                if pd.isna(fila["fecha"]):
-                    advertencias.append(f"Fila {index + 1}: Fecha vacía")
+                fecha, fecha_advertencias = _validar_fecha(fila, index)
+                advertencias.extend(fecha_advertencias)
+                if fecha is None:
                     continue
 
-                fecha_str = str(fila["fecha"])
-                if "/" in fecha_str:
-                    fecha = datetime.strptime(fecha_str, "%d/%m/%Y").date()
-                else:
-                    fecha = pd.to_datetime(fila["fecha"]).date()
-
                 # Validar monto
-                monto = Decimal(str(fila["monto"]))
-                if monto <= 0:
-                    advertencias.append(f"Fila {index + 1}: Monto inválido")
+                monto, monto_advertencias = _validar_monto(fila, index)
+                advertencias.extend(monto_advertencias)
+                if monto is None:
                     continue
 
                 # Validar referencia
-                referencia = str(fila["referencia"]).strip()
-                if not referencia or referencia == "nan":
-                    advertencias.append(f"Fila {index + 1}: Referencia vacía")
+                referencia, ref_advertencias, ref_duplicados = _validar_referencia(fila, index, referencias_vistas)
+                advertencias.extend(ref_advertencias)
+                duplicados.extend(ref_duplicados)
+                if referencia is None:
                     continue
-
-                # Detectar duplicados
-                if referencia in referencias_vistas:
-                    duplicados.append(
-                        {
-                            "fila": index + 1,
-                            "referencia": referencia,
-                            "monto": float(monto),
-                        }
-                    )
-                    continue
-                referencias_vistas.add(referencia)
 
                 # Validar cédula
                 cedula = str(fila["cedula_pagador"]).strip()
                 if cedula and cedula != "nan":
-                    # Verificar si la cédula existe en el sistema
                     cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
-                    if not cliente:
-                        if cedula not in cedulas_no_registradas:
-                            cedulas_no_registradas.append(cedula)
+                    if not cliente and cedula not in cedulas_no_registradas:
+                        cedulas_no_registradas.append(cedula)
 
                 # Crear movimiento
                 movimiento = MovimientoBancarioExtendido(
@@ -179,71 +310,18 @@ async def validar_archivo_bancario(
                     monto=monto,
                     cedula_pagador=cedula if cedula != "nan" else None,
                     descripcion=str(fila.get("descripcion", "")),
-                    cuenta_origen=(
-                        str(fila.get("cuenta_origen", "")) if "cuenta_origen" in fila else None
-                    ),
+                    cuenta_origen=str(fila.get("cuenta_origen", "")) if "cuenta_origen" in fila else None,
                     id=len(movimientos_validos) + 1,
                 )
 
-                # Intentar matching automático para vista previa
-                if cedula and cedula != "nan":
-                    cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
-                    if cliente:
-                        # Buscar cuotas pendientes del cliente
-                        cuotas_pendientes = (
-                            db.query(Cuota)
-                            .join(Prestamo)
-                            .filter(
-                                Prestamo.cliente_id == cliente.id,
-                                Cuota.estado.in_(["PENDIENTE", "VENCIDA", "PARCIAL"]),
-                                Cuota.monto_cuota == monto,  # Monto exacto
-                            )
-                            .first()
-                        )
-
-                        if cuotas_pendientes:
-                            movimiento.tipo_match = TipoMatch.MONTO_FECHA
-                            movimiento.confianza_match = 95.0
-                            movimiento.cliente_encontrado = {
-                                "id": cliente.id,
-                                "nombre": cliente.nombre_completo,
-                                "cedula": cliente.cedula,
-                            }
-                            movimiento.pago_sugerido = {
-                                "cuota_id": cuotas_pendientes.id,
-                                "numero_cuota": cuotas_pendientes.numero_cuota,
-                                "monto_cuota": float(cuotas_pendientes.monto_cuota),
-                            }
-                        else:
-                            # Buscar con tolerancia ±2%
-                            tolerancia = monto * Decimal("0.02")
-                            cuota_aproximada = (
-                                db.query(Cuota)
-                                .join(Prestamo)
-                                .filter(
-                                    Prestamo.cliente_id == cliente.id,
-                                    Cuota.estado.in_(["PENDIENTE", "VENCIDA", "PARCIAL"]),
-                                    Cuota.monto_cuota >= (monto - tolerancia),
-                                    Cuota.monto_cuota <= (monto + tolerancia),
-                                )
-                                .first()
-                            )
-
-                            if cuota_aproximada:
-                                movimiento.tipo_match = TipoMatch.MONTO_FECHA
-                                movimiento.confianza_match = 75.0
-                                movimiento.requiere_revision = True
-                                movimiento.cliente_encontrado = {
-                                    "id": cliente.id,
-                                    "nombre": cliente.nombre_completo,
-                                    "cedula": cliente.cedula,
-                                }
-                                movimiento.pago_sugerido = {
-                                    "cuota_id": cuota_aproximada.id,
-                                    "numero_cuota": cuota_aproximada.numero_cuota,
-                                    "monto_cuota": float(cuota_aproximada.monto_cuota),
-                                    "diferencia": float(abs(cuota_aproximada.monto_cuota - monto)),
-                                }
+                # Buscar matching automático
+                matching_data = _buscar_matching_automatico(cedula, monto, db)
+                if matching_data:
+                    movimiento.tipo_match = matching_data.get("tipo_match")
+                    movimiento.confianza_match = matching_data.get("confianza_match")
+                    movimiento.requiere_revision = matching_data.get("requiere_revision", False)
+                    movimiento.cliente_encontrado = matching_data.get("cliente_encontrado")
+                    movimiento.pago_sugerido = matching_data.get("pago_sugerido")
 
                 movimientos_validos.append(movimiento)
 
