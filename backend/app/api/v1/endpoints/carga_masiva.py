@@ -165,6 +165,164 @@ async def cargar_archivo_excel(
 # ============================================
 
 
+def _mapear_columnas(df: pd.DataFrame) -> pd.DataFrame:
+    """Mapear columnas del Excel al sistema"""
+    mapeo_columnas = {
+        "CEDULA IDENTIDAD": "cedula",
+        "CEDULA IDENT": "cedula",
+        "CEDULA": "cedula",
+        "NOMBRE": "nombre",
+        "APELLIDO": "apellido",
+        "MOVIL": "movil",
+        "TELEFONO": "movil",
+        "CORREO ELECTRONICO": "email",
+        "EMAIL": "email",
+        "DIRECCION": "direccion",
+        "MODELO VEHICULO": "modelo_vehiculo",
+        "MODELO": "modelo_vehiculo",
+        "CONCESIONARIO": "concesionario",
+        "TOTAL FINANCIAMIENTO": "total_financiamiento",
+        "MONTO FINANCIAMIENTO": "total_financiamiento",
+        "CUOTA INICIAL": "cuota_inicial",
+        "INICIAL": "cuota_inicial",
+        "NUMERO AMORTIZACIONES": "numero_amortizaciones",
+        "AMORTIZACIONES": "numero_amortizaciones",
+        "CUOTAS": "numero_amortizaciones",
+        "MODALIDAD PAGO": "modalidad_pago",
+        "MODALIDAD": "modalidad_pago",
+        "FECHA ENTREGA": "fecha_entrega",
+        "ENTREGA": "fecha_entrega",
+        "USER": "asesor",
+        "USER ASIGNADO": "asesor",
+    }
+    return df.rename(columns=mapeo_columnas)
+
+
+def _validar_columnas_requeridas(df: pd.DataFrame) -> None:
+    """Validar que existan las columnas requeridas"""
+    columnas_requeridas = ["cedula", "nombre"]
+    columnas_faltantes = [col for col in columnas_requeridas if col not in df.columns]
+
+    if columnas_faltantes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"❌ Faltan columnas requeridas: {', '.join(columnas_faltantes)}",
+        )
+
+
+def _extraer_datos_fila(row: pd.Series, index: int) -> tuple[str, str, str, str, str, str, str, str, str, str, str, str, str, str]:
+    """Extraer y limpiar datos de una fila del DataFrame"""
+    fila_numero = index + 2  # +2 porque Excel empieza en 1 y tiene header
+    
+    cedula = str(row.get("cedula", "")).strip()
+    nombre = str(row.get("nombre", "")).strip()
+    apellido = str(row.get("apellido", "")).strip() if "apellido" in row else ""
+    movil = str(row.get("movil", "")).strip()
+    email = str(row.get("email", "")).strip()
+    direccion = str(row.get("direccion", "")).strip()
+    modelo_vehiculo = str(row.get("modelo_vehiculo", "")).strip()
+    concesionario = str(row.get("concesionario", "")).strip()
+    total_financiamiento = str(row.get("total_financiamiento", "")).strip()
+    cuota_inicial = str(row.get("cuota_inicial", "")).strip()
+    numero_amortizaciones = str(row.get("numero_amortizaciones", "")).strip()
+    modalidad_pago = str(row.get("modalidad_pago", "")).strip()
+    fecha_entrega = str(row.get("fecha_entrega", "")).strip()
+    asesor = str(row.get("asesor", "")).strip()
+
+    # Si no hay apellido separado, intentar split del nombre
+    if not apellido and nombre:
+        partes_nombre = nombre.split(" ", 1)
+        if len(partes_nombre) > 1:
+            nombre = partes_nombre[0]
+            apellido = partes_nombre[1]
+
+    return fila_numero, cedula, nombre, apellido, movil, email, direccion, modelo_vehiculo, concesionario, total_financiamiento, cuota_inicial, numero_amortizaciones, modalidad_pago, fecha_entrega, asesor
+
+
+def _validar_campos_criticos(fila_numero: int, cedula: str, nombre: str, total_financiamiento: str, numero_amortizaciones: str, fecha_entrega: str) -> list[ErrorCargaMasiva]:
+    """Validar campos críticos y retornar errores"""
+    errores = []
+    
+    # Cédula (CRÍTICO)
+    if not cedula or cedula.upper() == "ERROR":
+        errores.append(
+            ErrorCargaMasiva(
+                fila=fila_numero,
+                cedula=cedula or "VACÍO",
+                campo="cedula",
+                valor_original=cedula,
+                error="Cédula vacía o marcada como ERROR",
+                tipo_error="CRITICO",
+                puede_corregirse=True,
+                sugerencia="Ingrese cédula válida (ej: V12345678)",
+            )
+        )
+
+    # Nombre (CRÍTICO)
+    if not nombre or nombre.upper() == "ERROR":
+        errores.append(
+            ErrorCargaMasiva(
+                fila=fila_numero,
+                cedula=cedula or "VACÍO",
+                campo="nombre",
+                valor_original=nombre,
+                error="Nombre vacío o marcado como ERROR",
+                tipo_error="CRITICO",
+                puede_corregirse=True,
+                sugerencia="Ingrese nombre completo del cliente",
+            )
+        )
+
+    # Total Financiamiento (CRÍTICO si se quiere financiamiento)
+    if not total_financiamiento or total_financiamiento.upper() == "ERROR":
+        errores.append(
+            ErrorCargaMasiva(
+                fila=fila_numero,
+                cedula=cedula,
+                campo="total_financiamiento",
+                valor_original=total_financiamiento,
+                error="Total financiamiento vacío o marcado como ERROR",
+                tipo_error="DATO_VACIO",
+                puede_corregirse=True,
+                sugerencia="Ingrese monto del financiamiento (ej: 50000)",
+            )
+        )
+
+    # Número de Amortizaciones (CRÍTICO si hay financiamiento)
+    if total_financiamiento and (
+        not numero_amortizaciones or numero_amortizaciones.upper() == "ERROR"
+    ):
+        errores.append(
+            ErrorCargaMasiva(
+                fila=fila_numero,
+                cedula=cedula,
+                campo="numero_amortizaciones",
+                valor_original=numero_amortizaciones,
+                error="Número de amortizaciones vacío o marcado como ERROR",
+                tipo_error="DATO_VACIO",
+                puede_corregirse=True,
+                sugerencia="Ingrese número de cuotas (ej: 12, 24, 36)",
+            )
+        )
+
+    # Fecha Entrega (CRÍTICO si hay financiamiento)
+    if total_financiamiento and (not fecha_entrega or fecha_entrega.upper() == "ERROR"):
+        errores.append(
+            ErrorCargaMasiva(
+                fila=fila_numero,
+                cedula=cedula,
+                campo="fecha_entrega",
+                valor_original=fecha_entrega,
+                error="Fecha de entrega vacía o marcada como ERROR",
+                tipo_error="CRITICO",
+                puede_corregirse=True,
+                sugerencia="Ingrese fecha de entrega (ej: 2025-01-15)",
+            )
+        )
+
+    return errores
+
+
 async def _analizar_archivo_clientes(
     contenido: bytes, nombre_archivo: str, db: Session, usuario_id: int
 ) -> ResultadoCargaMasiva:
@@ -176,52 +334,11 @@ async def _analizar_archivo_clientes(
         # Leer Excel
         df = pd.read_excel(io.BytesIO(contenido))
 
-        # ============================================
-        # MAPEO DE COLUMNAS EXCEL → SISTEMA
-        # ============================================
-        mapeo_columnas = {
-            "CEDULA IDENTIDAD": "cedula",
-            "CEDULA IDENT": "cedula",
-            "CEDULA": "cedula",
-            "NOMBRE": "nombre",
-            "APELLIDO": "apellido",
-            "MOVIL": "movil",
-            "TELEFONO": "movil",
-            "CORREO ELECTRONICO": "email",
-            "EMAIL": "email",
-            "DIRECCION": "direccion",
-            "MODELO VEHICULO": "modelo_vehiculo",
-            "MODELO": "modelo_vehiculo",
-            "CONCESIONARIO": "concesionario",
-            "TOTAL FINANCIAMIENTO": "total_financiamiento",
-            "MONTO FINANCIAMIENTO": "total_financiamiento",
-            "CUOTA INICIAL": "cuota_inicial",
-            "INICIAL": "cuota_inicial",
-            "NUMERO AMORTIZACIONES": "numero_amortizaciones",
-            "AMORTIZACIONES": "numero_amortizaciones",
-            "CUOTAS": "numero_amortizaciones",
-            "MODALIDAD PAGO": "modalidad_pago",
-            "MODALIDAD": "modalidad_pago",
-            "FECHA ENTREGA": "fecha_entrega",
-            "ENTREGA": "fecha_entrega",
-            "USER": "asesor",
-            "USER ASIGNADO": "asesor",
-        }
+        # Mapear columnas
+        df = _mapear_columnas(df)
 
-        # Renombrar columnas
-        df = df.rename(columns=mapeo_columnas)
-
-        # ============================================
-        # VALIDAR COLUMNAS REQUERIDAS
-        # ============================================
-        columnas_requeridas = ["cedula", "nombre"]
-        columnas_faltantes = [col for col in columnas_requeridas if col not in df.columns]
-
-        if columnas_faltantes:
-            raise HTTPException(
-                status_code=400,
-                detail=f"❌ Faltan columnas requeridas: {', '.join(columnas_faltantes)}",
-            )
+        # Validar columnas requeridas
+        _validar_columnas_requeridas(df)
 
         # ============================================
         # PROCESAR CADA REGISTRO
@@ -234,119 +351,18 @@ async def _analizar_archivo_clientes(
         datos_vacios = 0
 
         for index, row in df.iterrows():
-            fila_numero = index + 2  # +2 porque Excel empieza en 1 y tiene header
+            # Extraer datos de la fila
+            fila_numero, cedula, nombre, apellido, movil, email, direccion, modelo_vehiculo, concesionario, total_financiamiento, cuota_inicial, numero_amortizaciones, modalidad_pago, fecha_entrega, asesor = _extraer_datos_fila(row, index)
+            
             errores_registro = []
 
-            # ============================================
-            # EXTRAER DATOS DE LA FILA
-            # ============================================
-            cedula = str(row.get("cedula", "")).strip()
-            nombre = str(row.get("nombre", "")).strip()
-            apellido = str(row.get("apellido", "")).strip() if "apellido" in row else ""
-            movil = str(row.get("movil", "")).strip()
-            email = str(row.get("email", "")).strip()
-            direccion = str(row.get("direccion", "")).strip()
-            modelo_vehiculo = str(row.get("modelo_vehiculo", "")).strip()
-            concesionario = str(row.get("concesionario", "")).strip()
-            total_financiamiento = str(row.get("total_financiamiento", "")).strip()
-            cuota_inicial = str(row.get("cuota_inicial", "")).strip()
-            numero_amortizaciones = str(row.get("numero_amortizaciones", "")).strip()
-            modalidad_pago = str(row.get("modalidad_pago", "")).strip()
-            fecha_entrega = str(row.get("fecha_entrega", "")).strip()
-            asesor = str(row.get("asesor", "")).strip()
-
-            # Si no hay apellido separado, intentar split del nombre
-            if not apellido and nombre:
-                partes_nombre = nombre.split(" ", 1)
-                if len(partes_nombre) > 1:
-                    nombre = partes_nombre[0]
-                    apellido = partes_nombre[1]
-
-            # ============================================
-            # VALIDACIÓN 1: CAMPOS CRÍTICOS VACÍOS
-            # ============================================
-
-            # Cédula (CRÍTICO)
-            if not cedula or cedula.upper() == "ERROR":
-                errores_registro.append(
-                    ErrorCargaMasiva(
-                        fila=fila_numero,
-                        cedula=cedula or "VACÍO",
-                        campo="cedula",
-                        valor_original=cedula,
-                        error="Cédula vacía o marcada como ERROR",
-                        tipo_error="CRITICO",
-                        puede_corregirse=True,
-                        sugerencia="Ingrese cédula válida (ej: V12345678)",
-                    )
-                )
-                errores_criticos += 1
-
-            # Nombre (CRÍTICO)
-            if not nombre or nombre.upper() == "ERROR":
-                errores_registro.append(
-                    ErrorCargaMasiva(
-                        fila=fila_numero,
-                        cedula=cedula or "VACÍO",
-                        campo="nombre",
-                        valor_original=nombre,
-                        error="Nombre vacío o marcado como ERROR",
-                        tipo_error="CRITICO",
-                        puede_corregirse=True,
-                        sugerencia="Ingrese nombre completo del cliente",
-                    )
-                )
-                errores_criticos += 1
-
-            # Total Financiamiento (CRÍTICO si se quiere financiamiento)
-            if not total_financiamiento or total_financiamiento.upper() == "ERROR":
-                errores_registro.append(
-                    ErrorCargaMasiva(
-                        fila=fila_numero,
-                        cedula=cedula,
-                        campo="total_financiamiento",
-                        valor_original=total_financiamiento,
-                        error="Total financiamiento vacío o marcado como ERROR",
-                        tipo_error="DATO_VACIO",
-                        puede_corregirse=True,
-                        sugerencia="Ingrese monto del financiamiento (ej: 50000)",
-                    )
-                )
-                datos_vacios += 1
-
-            # Número de Amortizaciones (CRÍTICO si hay financiamiento)
-            if total_financiamiento and (
-                not numero_amortizaciones or numero_amortizaciones.upper() == "ERROR"
-            ):
-                errores_registro.append(
-                    ErrorCargaMasiva(
-                        fila=fila_numero,
-                        cedula=cedula,
-                        campo="numero_amortizaciones",
-                        valor_original=numero_amortizaciones,
-                        error="Número de amortizaciones vacío o marcado como ERROR",
-                        tipo_error="DATO_VACIO",
-                        puede_corregirse=True,
-                        sugerencia="Ingrese número de cuotas (ej: 12, 24, 36)",
-                    )
-                )
-                datos_vacios += 1
-
-            # Fecha Entrega (CRÍTICO si hay financiamiento)
-            if total_financiamiento and (not fecha_entrega or fecha_entrega.upper() == "ERROR"):
-                errores_registro.append(
-                    ErrorCargaMasiva(
-                        fila=fila_numero,
-                        cedula=cedula,
-                        campo="fecha_entrega",
-                        valor_original=fecha_entrega,
-                        error="Fecha de entrega vacía o marcada como ERROR",
-                        tipo_error="CRITICO",
-                        puede_corregirse=True,
-                        sugerencia="Ingrese fecha de entrega (ej: 2025-01-15)",
-                    )
-                )
-                errores_criticos += 1
+            # Validar campos críticos
+            errores_criticos_registro = _validar_campos_criticos(fila_numero, cedula, nombre, total_financiamiento, numero_amortizaciones, fecha_entrega)
+            errores_registro.extend(errores_criticos_registro)
+            
+            # Contar errores críticos
+            errores_criticos += len([e for e in errores_criticos_registro if e.tipo_error == "CRITICO"])
+            datos_vacios += len([e for e in errores_criticos_registro if e.tipo_error == "DATO_VACIO"])
 
             # ============================================
             # VALIDACIÓN 2: CAMPOS DE ADVERTENCIA VACÍOS
