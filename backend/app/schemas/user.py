@@ -36,8 +36,11 @@ class UserUpdate(BaseModel):
     cargo: Optional[str] = Field(None, max_length=100)
     is_admin: Optional[bool] = None  # Cambio clave: rol → is_admin
     is_active: Optional[bool] = None
-    password: Optional[str] = Field
+    password: Optional[str] = Field(
+        None,
+        min_length=8,
         description="Nueva contraseña (opcional, solo se valida si se provee)",
+    )
 
     @field_validator("password")
     @classmethod
@@ -45,7 +48,7 @@ class UserUpdate(BaseModel):
         """Validar contraseña solo si se proporciona un valor no vacío"""
         if v is not None and v.strip() != "":
             if len(v) < 8:
-                raise ValueError
+                raise ValueError("La contraseña debe tener al menos 8 caracteres")
         return v
 
 # ============================================

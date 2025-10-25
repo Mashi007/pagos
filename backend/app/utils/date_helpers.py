@@ -169,13 +169,11 @@ def get_quarter_range
 
 
 def get_year_range(year: Optional[int] = None) -> tuple[date, date]:
-    """"""
-    Obtiene el rango de fechas del año
-    Args:
-        year: Año (por defecto, año actual)
-    Returns:
-        tuple[date, date]: (primer_día_año, último_día_año)
-    """"""
+    # Obtiene el rango de fechas del año
+    # Args:
+    #     year: Año (por defecto, año actual)
+    # Returns:
+    #     tuple[date, date]: (primer_día_año, último_día_año)
     if year is None:
         year = date.today().year
 
@@ -185,15 +183,12 @@ def get_year_range(year: Optional[int] = None) -> tuple[date, date]:
     return first_day, last_day
 
 
-def is_business_day
-) -> bool:
-    """"""
-    Args:
-        check_date: Fecha a verificar
-        holidays: Lista de fechas feriadas
-    Returns:
-        bool: True si es día hábil
-    """"""
+def is_business_day(check_date: date, holidays: List[date] = None) -> bool:
+    # Args:
+    #     check_date: Fecha a verificar
+    #     holidays: Lista de fechas feriadas
+    # Returns:
+    #     bool: True si es día hábil
     # Verificar si es fin de semana (sábado=5, domingo=6)
     if check_date.weekday() >= 5:
         return False
@@ -205,39 +200,36 @@ def is_business_day
     return True
 
 
-def next_business_day
-) -> date:
-    """"""
-    Obtiene el siguiente día hábil
-    Args:
-        start_date: Fecha inicial
-        holidays: Lista de fechas feriadas
-    Returns:
-        date: Siguiente día hábil
-    """"""
+def next_business_day(start_date: date, holidays: List[date] = None) -> date:
+    # Obtiene el siguiente día hábil
+    # Args:
+    #     start_date: Fecha inicial
+    #     holidays: Lista de fechas feriadas
+    # Returns:
+    #     date: Siguiente día hábil
+    next_day = start_date + timedelta(days=1)
     while not is_business_day(next_day, holidays):
+        next_day += timedelta(days=1)
     return next_day
 
 
-def calculate_interest_days
-) -> int:
-    """"""
-    Calcula días para cálculo de intereses según convención
-    Args:
-        start_date: Fecha inicial
-        end_date: Fecha final
-        day_count_convention: Convención (30/360, ACT/360, ACT/365)
-    Returns:
-        int: Número de días según convención
-    """"""
+def calculate_interest_days(start_date: date, end_date: date, day_count_convention: str = "ACT/365") -> int:
+    # Calcula días para cálculo de intereses según convención
+    # Args:
+    #     start_date: Fecha inicial
+    #     end_date: Fecha final
+    #     day_count_convention: Convención (30/360, ACT/360, ACT/365)
+    # Returns:
+    #     int: Número de días según convención
     if day_count_convention == "30/360":
         # Convención 30/360 (cada mes tiene 30 días)
         d1 = min(start_date.day, 30)
         d2 = min(end_date.day, 30)
-        days = 
+        days = (
             (end_date.year - start_date.year) * 360
             + (end_date.month - start_date.month) * 30
             + (d2 - d1)
+        )
         return days
     elif day_count_convention == "ACT/360":
         # Días reales / 360
@@ -251,48 +243,45 @@ def calculate_interest_days
 
 
 def format_date_es(date_obj: date) -> str:
-    """"""
-    Formatea fecha en español
-    Args:
-        date_obj: Fecha a formatear
-    Returns:
-        str: Fecha formateada (ej: "15 de enero de 2024")
-    """"""
-    months_es = 
+    # Formatea fecha en español
+    # Args:
+    #     date_obj: Fecha a formatear
+    # Returns:
+    #     str: Fecha formateada (ej: "15 de enero de 2024")
+    months_es = {
+        1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
+        5: "mayo", 6: "junio", 7: "julio", 8: "agosto",
+        9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"
+    }
 
     return f"{date_obj.day} de {months_es[date_obj.month]} de {date_obj.year}"
 
 
-def get_age_in_days
-) -> int:
-    """"""
-    Calcula la edad en días
-    Args:
-        birth_date: Fecha de nacimiento
-        reference_date: Fecha de referencia (por defecto, hoy)
-    Returns:
-        int: Edad en días
-    """"""
+def get_age_in_days(birth_date: date, reference_date: date = None) -> int:
+    # Calcula la edad en días
+    # Args:
+    #     birth_date: Fecha de nacimiento
+    #     reference_date: Fecha de referencia (por defecto, hoy)
+    # Returns:
+    #     int: Edad en días
     if reference_date is None:
         reference_date = date.today()
 
     return (reference_date - birth_date).days
 
 
-def get_notification_dates
-) -> List[tuple[date, str]]:
-    """"""
-    Calcula fechas para envío de notificaciones
-    Args:
-        due_date: Fecha de vencimiento
-        days_before: Lista de días antes del vencimiento para notificar
-    Returns:
-        List[tuple[date, str]]: Lista de (fecha_notificación, tipo)
-    """"""
+def get_notification_dates(due_date: date, days_before: List[int]) -> List[tuple[date, str]]:
+    # Calcula fechas para envío de notificaciones
+    # Args:
+    #     due_date: Fecha de vencimiento
+    #     days_before: Lista de días antes del vencimiento para notificar
+    # Returns:
+    #     List[tuple[date, str]]: Lista de (fecha_notificación, tipo)
     notification_dates = []
 
     for days in sorted(days_before, reverse=True):
-
+        notification_date = due_date - timedelta(days=days)
+        
         if days > 1:
             notification_type = f"RECORDATORIO_{days}D"
         elif days == 1:
@@ -305,17 +294,8 @@ def get_notification_dates
     return notification_dates
 
 
-def calculate_days_in_period
-) -> int:
-    """"""
-    Calcula el número esperado de días en un período según frecuencia
-    Args:
-        start_date: Fecha inicial
-        end_date: Fecha final
-        frequency: Frecuencia del período
-    Returns:
-        int: Número de días en el período
-    """"""
+def calculate_days_in_period(start_date: date, end_date: date, frequency: str) -> int:
+    # Calcula el numero esperado de dias en un periodo segun frecuencia
     if frequency == "SEMANAL":
         return 7
     elif frequency == "QUINCENAL":
@@ -327,5 +307,4 @@ def calculate_days_in_period
     elif frequency == "TRIMESTRAL":
         return 90
     else:
-        # Calcular días reales
         return (end_date - start_date).days

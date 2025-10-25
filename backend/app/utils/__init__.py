@@ -2,8 +2,18 @@ from datetime import date
 # backend/app/utils/__init__.py
 """Utilidades del sistema"""
 
-from app.utils.date_helpers import 
+from app.utils.date_helpers import (
+    add_months,
+    add_weeks,
+    calculate_payment_dates,
+    days_between,
+    is_overdue,
+    days_overdue,
+    format_date_es,
+    get_notification_dates,
+)
 
+from app.utils.validators import (
     format_dni,
     format_phone,
     normalize_text,
@@ -14,6 +24,7 @@ from app.utils.date_helpers import
     validate_percentage,
     validate_phone,
     validate_ruc,
+)
 
 __all__ = [
     # Date helpers
@@ -36,6 +47,4 @@ __all__ = [
     "sanitize_string",
     "sanitize_html",
     "normalize_text",
-
-"""
-""""""
+]
