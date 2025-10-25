@@ -29,6 +29,7 @@ ESTADO_LENGTH = 20
 
 # --- Enumeraciones ---
 
+
 class EstadoPrestamo(str, Enum):
     """Estados posibles de un préstamo."""
     PENDIENTE = "PENDIENTE"  # Solicitud inicial

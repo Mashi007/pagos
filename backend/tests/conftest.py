@@ -9,13 +9,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-import tempfile
 import os
-from typing import Generator
 
 from app.main import app
 from app.db.session import get_db, Base
-from app.core.config import get_settings
 from app.models.user import User
 from app.core.security import get_password_hash
 
@@ -65,6 +62,7 @@ def db_session(test_db):
 @pytest.fixture(scope="function")
 def test_client(db_session):
     """Crear cliente de prueba FastAPI"""
+
 
     def override_get_db():
         try:

@@ -47,10 +47,10 @@ def listar_clientes(
     """
     try:
         logger.info(f"Listar clientes - Usuario: {current_user.email}")
-        
+
         # Query base
         query = db.query(Cliente)
-        
+
         # Aplicar filtros
         if search:
             search_pattern = f"%{search}%"
@@ -62,20 +62,20 @@ def listar_clientes(
                     Cliente.telefono.ilike(search_pattern),
                 )
             )
-        
+
         if estado:
             query = query.filter(Cliente.estado == estado)
-        
+
         # Ordenamiento
         query = query.order_by(Cliente.id.desc())
-        
+
         # Contar total
         total = query.count()
-        
+
         # Paginación
         offset = (page - 1) * per_page
         clientes = query.offset(offset).limit(per_page).all()
-        
+
         # Serialización segura
         clientes_dict = []
         for cliente in clientes:
@@ -116,10 +116,10 @@ def listar_clientes(
             except Exception as e:
                 logger.error(f"Error serializando cliente {cliente.id}: {e}")
                 continue
-        
+
         # Calcular páginas
         total_pages = (total + per_page - 1) // per_page
-        
+
         return {
             "clientes": clientes_dict,
             "paginacion": {
@@ -178,7 +178,7 @@ def crear_cliente(
     """
     try:
         logger.info(f"Crear cliente - Usuario: {current_user.email}")
-        
+
         # Crear nuevo cliente
         nuevo_cliente = Cliente(
             cedula=cliente_data.cedula,
@@ -198,14 +198,14 @@ def crear_cliente(
             fecha_registro=datetime.now(),
             fecha_actualizacion=datetime.now(),
         )
-        
+
         db.add(nuevo_cliente)
         db.commit()
         db.refresh(nuevo_cliente)
-        
+
         logger.info(f"Cliente creado exitosamente: {nuevo_cliente.id}")
         return ClienteResponse.model_validate(nuevo_cliente)
-        
+
     except Exception as e:
         logger.error(f"Error en crear_cliente: {e}")
         db.rollback()
@@ -228,28 +228,28 @@ def actualizar_cliente(
         logger.info(
             f"Actualizar cliente {cliente_id} - Usuario: {current_user.email}"
         )
-        
+
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
         if not cliente:
             raise HTTPException(
                 status_code=404, detail="Cliente no encontrado"
             )
-        
+
         # Actualizar campos
         update_data = cliente_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             if hasattr(cliente, field):
                 setattr(cliente, field, value)
-        
+
         # Actualizar fecha de actualización automáticamente
         cliente.fecha_actualizacion = datetime.now()
-        
+
         db.commit()
         db.refresh(cliente)
-        
+
         logger.info(f"Cliente actualizado exitosamente: {cliente_id}")
         return ClienteResponse.model_validate(cliente)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -273,20 +273,20 @@ def eliminar_cliente(
         logger.info(
             f"Eliminar cliente {cliente_id} - Usuario: {current_user.email}"
         )
-        
+
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
         if not cliente:
             raise HTTPException(
                 status_code=404, detail="Cliente no encontrado"
             )
-        
+
         # Hard delete - eliminar físicamente de la BD
         db.delete(cliente)
         db.commit()
-        
+
         logger.info(f"Cliente eliminado exitosamente: {cliente_id}")
         return {"message": "Cliente eliminado exitosamente"}
-        
+
     except HTTPException:
         raise
     except Exception as e:

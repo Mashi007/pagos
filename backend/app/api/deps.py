@@ -26,14 +26,14 @@ def get_current_user(
 ) -> User:
     """
     Obtiene el usuario actual desde el token JWT
-    
+
     Args:
         db: Sesión de base de datos
         credentials: Credenciales HTTP Bearer (JWT)
-    
+
     Returns:
         Usuario actual
-    
+
     Raises:
         HTTPException: Si el token es inválido o el usuario no existe
     """
@@ -42,36 +42,36 @@ def get_current_user(
         detail="No se pudieron validar las credenciales",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
+
     # Logging detallado para diagnóstico
     logger = logging.getLogger(__name__)
-    
+
     try:
         token = credentials.credentials
         logger.info(f"Validando token JWT - Longitud: {len(token)}")
-        
+
         payload = decode_token(token)
         logger.info(
             f"Token decodificado exitosamente - "
             f"Payload keys: {list(payload.keys())}"
         )
-        
+
         # Verificar que sea un access token
         if payload.get("type") != "access":
             logger.warning(f"Token tipo incorrecto: {payload.get('type')}")
             raise credentials_exception
-        
+
         user_id: str = payload.get("sub")
         if user_id is None:
             logger.warning("Token sin user_id (sub)")
             raise credentials_exception
-        
+
         logger.info(f"Buscando usuario con ID: {user_id}")
-        
+
     except JWTError as e:
         logger.error(f"Error decodificando JWT: {e}")
         raise credentials_exception
-    
+
     # Buscar usuario en BD
     user = db.query(User).filter(User.id == int(user_id)).first()
     if user is None:
@@ -80,13 +80,13 @@ def get_current_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Usuario no encontrado",
         )
-    
+
     if not user.is_active:
         logger.warning(f"Usuario inactivo - Email: {user.email}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo"
         )
-    
+
     logger.info(f"Usuario autenticado exitosamente - Email: {user.email}")
     return user
 
@@ -96,13 +96,13 @@ def get_current_active_user(
 ) -> User:
     """
     Obtiene el usuario actual y verifica que esté activo
-    
+
     Args:
         current_user: Usuario actual
-    
+
     Returns:
         Usuario activo
-    
+
     Raises:
         HTTPException: Si el usuario está inactivo
     """
@@ -116,17 +116,19 @@ def get_current_active_user(
 def require_role(require_admin: bool = True):
     """
     Dependency para requerir rol de administrador
-    
+
     Args:
         require_admin: Si True, requiere admin.
-                      Si False, cualquier usuario activo.
-    
+                    Si False, cualquier usuario activo.
+
     Returns:
         Función de dependencia
-    
+
     Usage:
         @app.get("/admin", dependencies=[Depends(require_role(True))])
     """
+
+
     def role_checker(current_user: User = Depends(get_current_user)) -> User:
         if require_admin and not current_user.is_admin:
             raise HTTPException(
@@ -134,30 +136,32 @@ def require_role(require_admin: bool = True):
                 detail="Se requiere rol de administrador",
             )
         return current_user
-    
+
     return role_checker
 
 
 def require_permission(*required_permissions: Permission):
     """
     Dependency para requerir uno o más permisos específicos
-    
+
     Args:
         required_permissions: Permisos requeridos
-    
+
     Returns:
         Función de dependencia
-    
+
     Usage:
         @app.post("/clientes",
-                 dependencies=[Depends(require_permission(Permission.CLIENTE_CREATE))])
+                dependencies=[Depends(require_permission(Permission.CLIENTE_CREATE))])
     """
+
+
     def permission_checker(
         current_user: User = Depends(get_current_user),
     ) -> User:
         # Obtener permisos del usuario basado en is_admin
         user_permissions = get_user_permissions(current_user.is_admin)
-        
+
         # Verificar cada permiso requerido
         for perm in required_permissions:
             if perm not in user_permissions:
@@ -165,16 +169,16 @@ def require_permission(*required_permissions: Permission):
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Permiso requerido: {perm.value}",
                 )
-        
+
         return current_user
-    
+
     return permission_checker
 
 
 def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
     """
     Dependency para endpoints que requieren usuario administrador
-    
+
     Returns:
         Usuario con is_admin = True
     """
@@ -187,9 +191,12 @@ def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
 
 
 # Dependency para paginación
+
+
 class PaginationParams:
     """Parámetros de paginación comunes"""
-    
+
+
     def __init__(
         self,
         page: int = 1,
@@ -204,7 +211,7 @@ class PaginationParams:
             page_size = 10
         if page_size > 100:
             page_size = 100
-        
+
         self.page = page
         self.page_size = page_size
         self.skip = skip if skip is not None else (page - 1) * page_size
@@ -216,14 +223,14 @@ def get_pagination_params(
 ) -> PaginationParams:
     """
     Dependency para obtener parámetros de paginación
-    
+
     Args:
         page: Número de página (default: 1)
         page_size: Tamaño de página (default: 10, max: 100)
-    
+
     Returns:
         Parámetros de paginación
-    
+
     Usage:
         @app.get("/items")
         def get_items(

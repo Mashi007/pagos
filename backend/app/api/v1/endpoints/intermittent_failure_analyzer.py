@@ -19,13 +19,15 @@ router = APIRouter()
 
 class IntermittentFailureAnalyzer:
     """Analizador de fallos intermitentes específicos"""
-    
+
+
     def __init__(self):
         self.successful_requests = deque(maxlen=1000)  # Requests exitosos
         self.failed_requests = deque(maxlen=1000)  # Requests fallidos
         self.intermittent_patterns = {}  # Patrones intermitentes
         self.lock = threading.Lock()
-    
+
+
     def log_request(self, request_data: Dict[str, Any], success: bool):
         """Registrar un request"""
         with self.lock:
@@ -36,12 +38,13 @@ class IntermittentFailureAnalyzer:
                 "token_length": len(request_data.get("token", "")),
                 "success": success,
             }
-            
+
             if success:
                 self.successful_requests.append(request_entry)
             else:
                 self.failed_requests.append(request_entry)
-    
+
+
     def analyze_intermittent_patterns(self) -> Dict[str, Any]:
         """Analizar patrones intermitentes"""
         with self.lock:
@@ -51,43 +54,44 @@ class IntermittentFailureAnalyzer:
                 "patterns": {},
                 "recommendations": [],
         }
-        
+
         if len(self.successful_requests) == 0 and len(self.failed_requests) == 0:
                 analysis["patterns"]["no_data"] = "No hay datos suficientes para análisis"
                 return analysis
-        
+
         # Analizar patrones por endpoint
         endpoint_patterns = self._analyze_endpoint_patterns()
         analysis["patterns"]["endpoints"] = endpoint_patterns
-        
+
         # Analizar patrones por usuario
         user_patterns = self._analyze_user_patterns()
         analysis["patterns"]["users"] = user_patterns
-        
+
         # Analizar patrones temporales
         temporal_patterns = self._analyze_temporal_patterns()
         analysis["patterns"]["temporal"] = temporal_patterns
-        
+
         # Analizar patrones de token
         token_patterns = self._analyze_token_patterns()
         analysis["patterns"]["tokens"] = token_patterns
-        
+
         # Generar recomendaciones
         analysis["recommendations"] = self._generate_recommendations(analysis["patterns"])
-        
+
         return analysis
-    
+
+
     def _analyze_endpoint_patterns(self) -> Dict[str, Any]:
         """Analizar patrones por endpoint"""
         endpoint_stats = defaultdict(lambda: {"successful": 0, "failed": 0})
-        
+
         # Contar por endpoint
         for request in self.successful_requests:
             endpoint_stats[request["endpoint"]]["successful"] += 1
-        
+
         for request in self.failed_requests:
             endpoint_stats[request["endpoint"]]["failed"] += 1
-        
+
         # Calcular tasas de éxito
         endpoint_analysis = {}
         for endpoint, stats in endpoint_stats.items():
@@ -101,22 +105,23 @@ class IntermittentFailureAnalyzer:
                     "failed": stats["failed"],
                     "intermittent": 20 < success_rate < 80,  # Considerar intermitente si está entre 20-80%
                 }
-        
+
         return endpoint_analysis
-    
+
+
     def _analyze_user_patterns(self) -> Dict[str, Any]:
         """Analizar patrones por usuario"""
         user_stats = defaultdict(lambda: {"successful": 0, "failed": 0})
-        
+
         # Contar por usuario
         for request in self.successful_requests:
             if request["user_id"]:
                 user_stats[request["user_id"]]["successful"] += 1
-        
+
         for request in self.failed_requests:
             if request["user_id"]:
                 user_stats[request["user_id"]]["failed"] += 1
-        
+
         # Calcular tasas de éxito por usuario
         user_analysis = {}
         for user_id, stats in user_stats.items():
@@ -130,22 +135,23 @@ class IntermittentFailureAnalyzer:
                     "failed": stats["failed"],
                     "problematic": success_rate < 50,  # Usuario problemático si éxito < 50%
                 }
-        
+
         return user_analysis
-    
+
+
     def _analyze_temporal_patterns(self) -> Dict[str, Any]:
         """Analizar patrones temporales"""
         # Agrupar por hora del día
         hourly_stats = defaultdict(lambda: {"successful": 0, "failed": 0})
-        
+
         for request in self.successful_requests:
             hour = request["timestamp"].hour
             hourly_stats[hour]["successful"] += 1
-        
+
         for request in self.failed_requests:
             hour = request["timestamp"].hour
             hourly_stats[hour]["failed"] += 1
-        
+
         # Calcular tasas por hora
         hourly_analysis = {}
         for hour, stats in hourly_stats.items():
@@ -157,16 +163,17 @@ class IntermittentFailureAnalyzer:
                     "total_requests": total,
                     "peak_hour": total > 10,  # Hora pico si más de 10 requests
                 }
-        
+
         return hourly_analysis
-    
+
+
     def _analyze_token_patterns(self) -> Dict[str, Any]:
         """Analizar patrones de token"""
         token_lengths_successful = [r["token_length"] for r in self.successful_requests if r["token_length"]]
         token_lengths_failed = [r["token_length"] for r in self.failed_requests if r["token_length"]]
-        
+
         analysis = {}
-        
+
         if token_lengths_successful:
             analysis["successful_tokens"] = {
                 "avg_length": round(statistics.mean(token_lengths_successful), 2),
@@ -174,7 +181,7 @@ class IntermittentFailureAnalyzer:
                 "max_length": max(token_lengths_successful),
                 "count": len(token_lengths_successful),
             }
-        
+
         if token_lengths_failed:
             analysis["failed_tokens"] = {
                 "avg_length": round(statistics.mean(token_lengths_failed), 2),
@@ -182,41 +189,42 @@ class IntermittentFailureAnalyzer:
                 "max_length": max(token_lengths_failed),
                 "count": len(token_lengths_failed),
             }
-        
+
         # Comparar longitudes
         if token_lengths_successful and token_lengths_failed:
             avg_successful = statistics.mean(token_lengths_successful)
             avg_failed = statistics.mean(token_lengths_failed)
-            
+
             analysis["comparison"] = {
                 "length_difference": round(abs(avg_successful - avg_failed), 2),
                 "successful_longer": avg_successful > avg_failed,
             }
-        
+
         return analysis
-    
+
+
     def _generate_recommendations(self, patterns: Dict[str, Any]) -> List[str]:
         """Generar recomendaciones basadas en patrones"""
         recommendations = []
-        
+
         # Recomendaciones por endpoint
         if "endpoints" in patterns:
             for endpoint, data in patterns["endpoints"].items():
                 if data.get("intermittent"):
                     recommendations.append(f"Endpoint {endpoint} muestra comportamiento intermitente")
-        
+
         # Recomendaciones por usuario
         if "users" in patterns:
             for user_id, data in patterns["users"].items():
                 if data.get("problematic"):
                     recommendations.append(f"Usuario {user_id} tiene alta tasa de fallos")
-        
+
         # Recomendaciones por token
         if "tokens" in patterns and "comparison" in patterns["tokens"]:
             comparison = patterns["tokens"]["comparison"]
             if comparison["length_difference"] > 10:
                 recommendations.append("Diferencia significativa en longitud de tokens entre éxitos y fallos")
-        
+
         return recommendations
 
 
@@ -251,7 +259,7 @@ async def log_request(
     try:
         success = request_data.get("success", True)
         analyzer.log_request(request_data, success)
-        
+
         return {
             "status": "success",
             "message": "Request registrado exitosamente",

@@ -8,7 +8,7 @@ from .whatsapp_service import WhatsAppService
 
 __all__ = [
     "AuthService",
-    "EmailService", 
+    "EmailService",
     "MLService",
     "WhatsAppService",
 ]

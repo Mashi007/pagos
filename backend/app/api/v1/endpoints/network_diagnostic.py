@@ -1,7 +1,6 @@
 # backend/app/api/v1/endpoints/network_diagnostic.py
 """Sistema de diagnóstico de red y latencia"""
 
-import asyncio
 import threading
 import time
 from collections import defaultdict, deque
@@ -20,18 +19,22 @@ router = APIRouter()
 
 class NetworkDiagnostic:
     """Sistema de diagnóstico de red y latencia"""
-    
+
+
     def __init__(self):
         self.latency_measurements = deque(maxlen=1000)  # Mediciones de latencia
         self.connectivity_tests = deque(maxlen=500)  # Pruebas de conectividad
         self.network_stats = defaultdict(list)  # Estadísticas de red
         self.lock = threading.Lock()
-        
+
         # Iniciar monitoreo de red en background
         self._start_network_monitoring()
-    
+
+
     def _start_network_monitoring(self):
-        """Iniciar monitoreo de red en background"""        
+        """Iniciar monitoreo de red en background"""
+
+
         def monitoring_loop():
             while True:
                 try:
@@ -41,10 +44,11 @@ class NetworkDiagnostic:
                 except Exception as e:
                     print(f"Error en monitoreo de red: {e}")
                     time.sleep(60)
-        
+
         monitor_thread = threading.Thread(target=monitoring_loop, daemon=True)
         monitor_thread.start()
-    
+
+
     def _test_connectivity(self):
         """Probar conectividad a servicios externos"""
         test_urls = [
@@ -52,13 +56,13 @@ class NetworkDiagnostic:
             "https://www.cloudflare.com",
             "https://httpbin.org/get",
         ]
-        
+
         for url in test_urls:
             try:
                 start_time = time.time()
                 response = httpx.get(url, timeout=10)
                 end_time = time.time()
-                
+
                 test_result = {
                     "url": url,
                     "status_code": response.status_code,
@@ -66,10 +70,10 @@ class NetworkDiagnostic:
                     "timestamp": datetime.now(),
                     "success": response.status_code == 200
                 }
-                
+
                 with self.lock:
                     self.connectivity_tests.append(test_result)
-                    
+
             except Exception as e:
                 test_result = {
                     "url": url,
@@ -79,10 +83,11 @@ class NetworkDiagnostic:
                     "success": False,
                     "error": str(e)
                 }
-                
+
                 with self.lock:
                     self.connectivity_tests.append(test_result)
-    
+
+
     def _measure_latency(self):
         """Medir latencia de red"""
         try:
@@ -90,32 +95,33 @@ class NetworkDiagnostic:
             # Simular medición de latencia
             time.sleep(0.001)  # 1ms de simulación
             end_time = time.time()
-            
+
             latency = (end_time - start_time) * 1000  # Convertir a ms
-            
+
             measurement = {
                 "latency_ms": round(latency, 2),
                 "timestamp": datetime.now(),
                 "source": "internal"
             }
-            
+
             with self.lock:
                 self.latency_measurements.append(measurement)
-                
+
         except Exception as e:
             print(f"Error en medición de latencia: {e}")
-    
+
+
     def get_network_status(self) -> Dict[str, Any]:
         """Obtener estado de la red"""
         with self.lock:
             # Calcular estadísticas de conectividad
             recent_tests = list(self.connectivity_tests)[-10:]  # Últimos 10 tests
             success_rate = sum(1 for test in recent_tests if test["success"]) / len(recent_tests) * 100 if recent_tests else 0
-            
+
             # Calcular latencia promedio
             recent_latency = list(self.latency_measurements)[-10:]  # Últimas 10 mediciones
             avg_latency = sum(m["latency_ms"] for m in recent_latency) / len(recent_latency) if recent_latency else 0
-            
+
             return {
                 "connectivity": {
                     "success_rate": round(success_rate, 2),
@@ -129,14 +135,15 @@ class NetworkDiagnostic:
                 },
                 "status": "healthy" if success_rate > 80 and avg_latency < 1000 else "degraded"
             }
-    
+
+
     def test_endpoint_connectivity(self, endpoint: str) -> Dict[str, Any]:
         """Probar conectividad a un endpoint específico"""
         try:
             start_time = time.time()
             response = httpx.get(endpoint, timeout=10)
             end_time = time.time()
-            
+
             return {
                 "endpoint": endpoint,
                 "status_code": response.status_code,
@@ -144,7 +151,7 @@ class NetworkDiagnostic:
                 "success": response.status_code == 200,
                 "timestamp": datetime.now().isoformat()
             }
-            
+
         except Exception as e:
             return {
                 "endpoint": endpoint,

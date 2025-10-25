@@ -9,7 +9,6 @@ from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 
@@ -20,21 +19,26 @@ router = APIRouter()
 # SISTEMA DE MONITOREO EN TIEMPO REAL ESPECÍFICO
 # ============================================
 
+
 class RealTimeSpecificMonitor:
     """Monitor específico para fallos 401 intermitentes"""
-    
+
+
     def __init__(self):
         self.realtime_events = deque(maxlen=5000)  # Eventos en tiempo real
         self.failure_patterns = defaultdict(list)  # Patrones de fallo
         self.success_patterns = defaultdict(list)  # Patrones de éxito
         self.correlation_matrix = {}  # Matriz de correlación
         self.lock = threading.Lock()
-        
+
         # Iniciar monitoreo en tiempo real
         self._start_realtime_monitoring()
-    
+
+
     def _start_realtime_monitoring(self):
         """Iniciar monitoreo en tiempo real"""
+
+
         def monitoring_loop():
             while True:
                 try:
@@ -44,43 +48,45 @@ class RealTimeSpecificMonitor:
                 except Exception as e:
                     logger.error(f"Error en monitoreo tiempo real: {e}")
                     time.sleep(60)
-        
+
         thread = threading.Thread(target=monitoring_loop, daemon=True)
         thread.start()
         logger.info("🔍 Monitor tiempo real específico iniciado")
-    
+
+
     def _analyze_realtime_patterns(self):
         """Analizar patrones en tiempo real"""
         with self.lock:
             if len(self.realtime_events) < 10:
                 return
-            
+
             # Analizar eventos recientes (últimos 5 minutos)
             cutoff_time = datetime.now() - timedelta(minutes=5)
             recent_events = [
                 event for event in self.realtime_events
                 if event["timestamp"] >= cutoff_time
             ]
-            
+
             # Separar eventos exitosos y fallidos
             successful_events = [e for e in recent_events if e["status"] == "success"]
             failed_events = [e for e in recent_events if e["status"] == "failure"]
-            
+
             # Analizar patrones
             self._analyze_success_patterns(successful_events)
             self._analyze_failure_patterns(failed_events)
-    
+
+
     def _analyze_success_patterns(self, events: List[Dict[str, Any]]):
         """Analizar patrones de eventos exitosos"""
         if not events:
             return
-        
+
         # Agrupar por características comunes
         patterns = defaultdict(int)
         for event in events:
             pattern_key = f"{event['endpoint']}_{event['method']}_{event['user_type']}"
             patterns[pattern_key] += 1
-        
+
         # Actualizar patrones de éxito
         for pattern, count in patterns.items():
             self.success_patterns[pattern].append({
@@ -88,18 +94,19 @@ class RealTimeSpecificMonitor:
                 "count": count,
                 "events": events[:count]
             })
-    
+
+
     def _analyze_failure_patterns(self, events: List[Dict[str, Any]]):
         """Analizar patrones de eventos fallidos"""
         if not events:
             return
-        
+
         # Agrupar por características comunes
         patterns = defaultdict(int)
         for event in events:
             pattern_key = f"{event['endpoint']}_{event['method']}_{event['error_type']}"
             patterns[pattern_key] += 1
-        
+
         # Actualizar patrones de fallo
         for pattern, count in patterns.items():
             self.failure_patterns[pattern].append({
@@ -107,7 +114,8 @@ class RealTimeSpecificMonitor:
                 "count": count,
                 "events": events[:count]
             })
-    
+
+
     def _detect_intermittent_failures(self):
         """Detectar fallos intermitentes específicos"""
         with self.lock:
@@ -116,14 +124,15 @@ class RealTimeSpecificMonitor:
                 if pattern_key in self.success_patterns:
                     failure_count = len(self.failure_patterns[pattern_key])
                     success_count = len(self.success_patterns[pattern_key])
-                    
+
                     # Si hay tanto éxitos como fallos, es intermitente
                     if failure_count > 0 and success_count > 0:
                         logger.warning(
                             f"⚠️ Patrón intermitente detectado: {pattern_key} "
                             f"(Éxitos: {success_count}, Fallos: {failure_count})"
                         )
-    
+
+
     def log_realtime_event(
         self,
         endpoint: str,
@@ -145,7 +154,8 @@ class RealTimeSpecificMonitor:
                 "details": details or {},
             }
             self.realtime_events.append(event)
-    
+
+
     def get_realtime_analysis(self) -> Dict[str, Any]:
         """Obtener análisis en tiempo real"""
         with self.lock:

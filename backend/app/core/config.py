@@ -33,9 +33,10 @@ DEFAULT_UVICORN_WORKERS = 1
 DEFAULT_UVICORN_TIMEOUT_KEEP_ALIVE = 120
 DEFAULT_UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN = 30
 
+
 class Settings(BaseSettings):
     """Configuración centralizada de la aplicación"""
-    
+
     # ============================================
     # APLICACIÓN
     # ============================================
@@ -44,13 +45,13 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = False
     API_V1_PREFIX: str = "/api/v1"
-    
+
     # ============================================
     # SERVIDOR
     # ============================================
     HOST: str = "0.0.0.0"
     PORT: int = 8080
-    
+
     # ============================================
     # CORS (Cross-Origin Resource Sharing)
     # ============================================
@@ -61,19 +62,19 @@ class Settings(BaseSettings):
         "null",  # ✅ Para requests sin origin (scripts, herramientas)
         "*",  # ✅ Temporalmente permisivo para debugging
     ]
-    
+
     # ============================================
     # BASE DE DATOS
     # ============================================
     DATABASE_URL: str
-    
+
     # Pool de Conexiones
     DB_POOL_SIZE: int = 5
     DB_MAX_OVERFLOW: int = 10
     DB_POOL_TIMEOUT: int = 30
     DB_POOL_RECYCLE: int = 3600
     DB_ECHO: bool = False
-    
+
     # ============================================
     # SEGURIDAD Y AUTENTICACIÓN
     # ============================================
@@ -81,7 +82,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = DEFAULT_TOKEN_EXPIRE_MINUTES
     REFRESH_TOKEN_EXPIRE_DAYS: int = DEFAULT_REFRESH_TOKEN_EXPIRE_DAYS
-    
+
     # ============================================
     # USUARIO ADMINISTRADOR INICIAL
     # ============================================
@@ -89,10 +90,12 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: str = Field(
         default="R@pi_2025**", env="ADMIN_PASSWORD"
     )  # ✅ Variable de entorno
-    
+
     # ============================================
     # VALIDACIÓN DE CONFIGURACIÓN
     # ============================================
+
+
     def validate_admin_credentials(self) -> bool:
         """Valida que las credenciales de admin estén configuradas"""
         if not self.ADMIN_EMAIL or not self.ADMIN_PASSWORD:
@@ -106,7 +109,8 @@ class Settings(BaseSettings):
                 "Configure ADMIN_PASSWORD"
             )
         return True
-    
+
+
     def validate_cors_origins(self) -> bool:
         """Valida que CORS no esté abierto en producción"""
         if self.ENVIRONMENT == "production" and "*" in self.CORS_ORIGINS:
@@ -116,7 +120,7 @@ class Settings(BaseSettings):
                 "CORS_ORIGINS='[\"https://tu-dominio.com\"]'"
             )
         return True
-    
+
     # ============================================
     # AMORTIZACIÓN Y REGLAS DE NEGOCIO
     # ============================================
@@ -132,13 +136,13 @@ class Settings(BaseSettings):
     PLAZO_MAXIMO_MESES: int = DEFAULT_PLAZO_MAXIMO_MESES
     MAX_LOAN_TERM: int = DEFAULT_MAX_LOAN_TERM
     AMORTIZATION_METHODS: List[str] = ["FRANCES", "ALEMAN", "AMERICANO"]
-    
+
     # ============================================
     # NOTIFICACIONES
     # ============================================
     DIAS_PREVIOS_RECORDATORIO: int = DEFAULT_DIAS_PREVIOS_RECORDATORIO
     DIAS_MORA_ALERTA: int = DEFAULT_DIAS_MORA_ALERTA
-    
+
     # EMAIL
     EMAIL_ENABLED: bool = True
     SMTP_HOST: str = "smtp.gmail.com"
@@ -151,7 +155,7 @@ class Settings(BaseSettings):
     SMTP_FROM_NAME: Optional[str] = "RapiCredit"
     SMTP_USE_TLS: bool = True
     SMTP_USE_SSL: bool = False
-    
+
     # WHATSAPP (Meta Developers API)
     WHATSAPP_ENABLED: bool = True
     WHATSAPP_API_URL: str = "https://graph.facebook.com/v18.0"
@@ -159,17 +163,17 @@ class Settings(BaseSettings):
     WHATSAPP_PHONE_NUMBER_ID: Optional[str] = None
     WHATSAPP_BUSINESS_ACCOUNT_ID: Optional[str] = None
     WHATSAPP_WEBHOOK_VERIFY_TOKEN: Optional[str] = None
-    
+
     # SMS - NO USADO (solo Email y WhatsApp vía Meta)
     # SMS_ENABLED: bool = False
-    
+
     # ============================================
     # REPORTES
     # ============================================
     REPORTS_DIR: str = "/tmp/reports"
     REPORTS_CACHE_ENABLED: bool = True
     REPORTS_CACHE_TTL: int = 1800
-    
+
     # ============================================
     # FILE UPLOADS
     # ============================================
@@ -183,31 +187,31 @@ class Settings(BaseSettings):
         ".xls",
     ]
     UPLOAD_DIR: str = "/tmp/uploads"
-    
+
     # ============================================
     # CONCILIACIÓN BANCARIA
     # ============================================
     TOLERANCIA_CONCILIACION: float = DEFAULT_TOLERANCIA_CONCILIACION
-    
+
     # ============================================
     # CACHE
     # ============================================
     REDIS_URL: Optional[str] = None
     CACHE_EXPIRE_SECONDS: int = DEFAULT_CACHE_EXPIRE_SECONDS
     HEALTH_CHECK_CACHE_DURATION: int = DEFAULT_HEALTH_CHECK_CACHE_DURATION
-    
+
     # ============================================
     # PAGINACIÓN
     # ============================================
     DEFAULT_PAGE_SIZE: int = DEFAULT_PAGE_SIZE
     MAX_PAGE_SIZE: int = DEFAULT_MAX_PAGE_SIZE
-    
+
     # ============================================
     # LOGGING
     # ============================================
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "standard"
-    
+
     # ============================================
     # SCHEDULER (Tareas Programadas)
     # ============================================
@@ -216,14 +220,14 @@ class Settings(BaseSettings):
     CRON_NOTIFY_VENCIMIENTOS: str = "0 8 * * *"
     CRON_CALCULAR_MORA: str = "0 1 * * *"
     CRON_BACKUP_DB: str = "0 3 * * *"
-    
+
     # ============================================
     # MONITOREO (Opcional)
     # ============================================
     SENTRY_DSN: Optional[str] = None
     SENTRY_TRACES_SAMPLE_RATE: float = DEFAULT_SENTRY_TRACES_SAMPLE_RATE
     PROMETHEUS_ENABLED: bool = False
-    
+
     # ============================================
     # FEATURE FLAGS
     # ============================================
@@ -231,13 +235,13 @@ class Settings(BaseSettings):
     FEATURE_REPORTES_PDF: bool = True
     FEATURE_DASHBOARD_KPIS: bool = True
     FEATURE_EXPORT_EXCEL: bool = True
-    
+
     # ============================================
     # BUILD
     # ============================================
     PYTHONUNBUFFERED: int = 1
     NIXPACKS_NO_CACHE: int = 0
-    
+
     # ============================================
     # UVICORN
     # ============================================
@@ -246,27 +250,28 @@ class Settings(BaseSettings):
     UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN: int = (
         DEFAULT_UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN
     )
-    
+
     # ============================================
     # MÉTODOS DE UTILIDAD
     # ============================================
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT.lower() == "production"
-    
+
     @property
     def is_development(self) -> bool:
         return self.ENVIRONMENT.lower() == "development"
-    
+
     @property
     def is_staging(self) -> bool:
         return self.ENVIRONMENT.lower() == "staging"
-    
+
+
     def get_database_url(self, hide_password: bool = False) -> str:
         """Retorna DATABASE_URL, opcionalmente ocultando password"""
         if not hide_password:
             return self.DATABASE_URL
-        
+
         if "@" in self.DATABASE_URL:
             parts = self.DATABASE_URL.split("@")
             user_part = parts[0].split("://")
@@ -276,23 +281,26 @@ class Settings(BaseSettings):
                 if ":" in credentials:
                     user = credentials.split(":")[0]
                     return f"{protocol}://{user}:***@{parts[1]}"
-        
+
         return self.DATABASE_URL
-    
+
+
     def validate_loan_amount(self, amount: float) -> bool:
         """Valida que el monto esté dentro de los límites"""
         return (
             self.MONTO_MINIMO_PRESTAMO <= amount <= self.MONTO_MAXIMO_PRESTAMO
         )
-    
+
+
     def validate_loan_term(self, months: int) -> bool:
         """Valida que el plazo esté dentro de los límites"""
         return self.PLAZO_MINIMO_MESES <= months <= self.PLAZO_MAXIMO_MESES
-    
+
+
     def calculate_max_cuota(self, ingreso_mensual: float) -> float:
         """Calcula la cuota máxima según el ingreso"""
         return (ingreso_mensual * self.MAX_CUOTA_PERCENTAGE) / 100
-    
+
     # ✅ CRÍTICO: Usar model_config para Pydantic V2
     model_config = SettingsConfigDict(
         env_file=".env",

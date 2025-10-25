@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 # SCHEMAS BASE
 # ============================================
 
+
 class UserBase(BaseModel):
     """Schema base de usuario (campos comunes)."""
     email: EmailStr
@@ -40,7 +41,7 @@ class UserUpdate(BaseModel):
         None,
         description="Nueva contraseña (opcional, solo se valida si se provee)",
     )
-    
+
     @field_validator("password")
     @classmethod
     def validate_password(cls, v):
@@ -56,15 +57,16 @@ class UserUpdate(BaseModel):
 # SCHEMAS DE RESPUESTA
 # ============================================
 
+
 class UserResponse(UserBase):
     """Schema de respuesta de usuario."""
     id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
     last_login: Optional[datetime] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     @property
     def full_name(self) -> str:
         """Nombre completo del usuario."""
@@ -81,6 +83,7 @@ class UserListResponse(BaseModel):
 # ============================================
 # SCHEMAS DE AUTENTICACIÓN
 # ============================================
+
 
 class LoginRequest(BaseModel):
     """Schema para login."""
@@ -99,7 +102,7 @@ class LoginResponse(BaseModel):
 class UserMeResponse(UserResponse):
     """Schema para respuesta de usuario actual (/me endpoint)."""
     permissions: list[str] = Field(default_factory=list)
-    
+
     @property
     def rol(self) -> str:
         """Propiedad para compatibilidad hacia atrás."""

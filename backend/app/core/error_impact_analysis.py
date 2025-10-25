@@ -29,6 +29,7 @@ CIRCUIT_BREAKER_TIMEOUT = 60  # segundos
 
 logger = logging.getLogger(__name__)
 
+
 class ErrorSeverity(Enum):
     """Severidad de errores"""
     LOW = "LOW"
@@ -61,10 +62,13 @@ class ErrorImpactAnalysis:
     circuit_breaker_status: str
     recommendations: list
 
+
 class CircuitBreaker:
     """
     Circuit Breaker para prevenir cascadas de errores
     """
+
+
     def __init__(
         self,
         failure_threshold: int = MAX_CONSECUTIVE_ERRORS,
@@ -76,6 +80,7 @@ class CircuitBreaker:
         self.last_failure_time = None
         self.state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
 
+
     def call(self, func: Callable, *args, **kwargs):
         """Ejecutar función con circuit breaker"""
         if self.state == "OPEN":
@@ -83,7 +88,7 @@ class CircuitBreaker:
                 self.state = "HALF_OPEN"
             else:
                 raise Exception("Circuit breaker is OPEN")
-        
+
         try:
             result = func(*args, **kwargs)
             self._on_success()
@@ -92,10 +97,12 @@ class CircuitBreaker:
             self._on_failure()
             raise e
 
+
     def _on_success(self):
         """Manejar éxito"""
         self.failure_count = 0
         self.state = "CLOSED"
+
 
     def _on_failure(self):
         """Manejar fallo"""
@@ -104,10 +111,13 @@ class CircuitBreaker:
         if self.failure_count >= self.failure_threshold:
             self.state = "OPEN"
 
+
 class ErrorImpactAnalyzer:
     """
     Analizador de impacto de errores en el sistema
     """
+
+
     def __init__(self):
         self.error_history: deque = deque(maxlen=MAX_ERROR_HISTORY)
         self.endpoint_errors: Dict[str, deque] = defaultdict(
@@ -117,6 +127,7 @@ class ErrorImpactAnalyzer:
         self.error_counts: Dict[str, int] = defaultdict(int)
         self.total_requests = 0
         self.lock = threading.Lock()
+
 
     def record_error(
         self,
@@ -131,10 +142,10 @@ class ErrorImpactAnalyzer:
             # Obtener métricas del sistema
             cpu_usage = psutil.cpu_percent() if PSUTIL_AVAILABLE else 0.0
             memory_usage = psutil.virtual_memory().percent if PSUTIL_AVAILABLE else 0.0
-            
+
             # Determinar severidad
             severity = self._determine_severity(error, response_time_ms)
-            
+
             # Crear métricas de error
             error_metrics = ErrorMetrics(
                 error_type=type(error).__name__,
@@ -149,19 +160,20 @@ class ErrorImpactAnalyzer:
                 user_id=user_id,
                 request_id=request_id,
             )
-            
+
             # Registrar error
             self.error_history.append(error_metrics)
             self.endpoint_errors[endpoint].append(error_metrics)
             self.error_counts[type(error).__name__] += 1
             self.total_requests += 1
-            
+
             # Actualizar circuit breaker
             self._update_circuit_breaker(endpoint, error)
-            
+
             logger.error(
                 f"Error registrado: {error_metrics.error_type} en {endpoint} - {severity.value}"
             )
+
 
     def record_success(self, endpoint: str, response_time_ms: float):
         """Registrar request exitoso"""
@@ -171,39 +183,42 @@ class ErrorImpactAnalyzer:
             if endpoint in self.circuit_breakers:
                 self.circuit_breakers[endpoint]._on_success()
 
+
     def _determine_severity(
         self, error: Exception, response_time_ms: float
     ) -> ErrorSeverity:
         """Determinar severidad del error"""
         error_type = type(error).__name__
-        
+
         # Errores críticos del sistema
         if error_type in ["DatabaseError", "ConnectionError", "TimeoutError"]:
             return ErrorSeverity.CRITICAL
-        
+
         # Errores de autenticación/autorización
         if error_type in ["AuthenticationError", "AuthorizationError"]:
             return ErrorSeverity.HIGH
-        
+
         # Errores de validación
         if error_type in ["ValidationError", "ValueError"]:
             return ErrorSeverity.MEDIUM
-        
+
         # Errores de tiempo de respuesta
         if response_time_ms > 5000:  # 5 segundos
             return ErrorSeverity.HIGH
         elif response_time_ms > 2000:  # 2 segundos
             return ErrorSeverity.MEDIUM
-        
+
         return ErrorSeverity.LOW
+
 
     def _update_circuit_breaker(self, endpoint: str, error: Exception):
         """Actualizar circuit breaker para el endpoint"""
         if endpoint not in self.circuit_breakers:
             self.circuit_breakers[endpoint] = CircuitBreaker()
-        
+
         circuit_breaker = self.circuit_breakers[endpoint]
         circuit_breaker._on_failure()
+
 
     def get_error_impact_analysis(self) -> ErrorImpactAnalysis:
         """Obtener análisis de impacto de errores"""
@@ -217,10 +232,10 @@ class ErrorImpactAnalyzer:
                     circuit_breaker_status="NO_DATA",
                     recommendations=["No hay datos de errores disponibles"],
                 )
-            
+
             # Calcular tasa de error
             error_rate = len(self.error_history) / max(self.total_requests, 1)
-            
+
             # Calcular tiempo promedio de respuesta
             response_times = [e.response_time_ms for e in self.error_history]
             avg_response_time = (
@@ -228,14 +243,14 @@ class ErrorImpactAnalyzer:
                 if response_times
                 else 0
             )
-            
+
             # Determinar nivel de impacto del sistema
             system_impact_level = "LOW"
             if error_rate > ERROR_RATE_THRESHOLD:
                 system_impact_level = "HIGH"
             elif error_rate > ERROR_RATE_THRESHOLD / 2:
                 system_impact_level = "MEDIUM"
-            
+
             # Contar errores consecutivos
             consecutive_errors = 0
             if self.error_history:
@@ -247,7 +262,7 @@ class ErrorImpactAnalyzer:
                         consecutive_errors += 1
                     else:
                         break
-            
+
             # Estado de circuit breakers
             open_circuits = sum(
                 1
@@ -255,12 +270,12 @@ class ErrorImpactAnalyzer:
                 if cb.state == "OPEN"
             )
             circuit_breaker_status = f"{open_circuits} circuitos abiertos de {len(self.circuit_breakers)}"
-            
+
             # Generar recomendaciones
             recommendations = self._generate_recommendations(
                 error_rate, avg_response_time, consecutive_errors
             )
-            
+
             return ErrorImpactAnalysis(
                 error_rate=error_rate,
                 avg_response_time_ms=avg_response_time,
@@ -270,6 +285,7 @@ class ErrorImpactAnalyzer:
                 recommendations=recommendations,
             )
 
+
     def _generate_recommendations(
         self,
         error_rate: float,
@@ -278,7 +294,7 @@ class ErrorImpactAnalyzer:
     ) -> list:
         """Generar recomendaciones basadas en el análisis"""
         recommendations = []
-        
+
         if error_rate > ERROR_RATE_THRESHOLD:
             recommendations.append(
                 "Implementar retry logic con exponential backoff"
@@ -286,23 +302,24 @@ class ErrorImpactAnalyzer:
             recommendations.append(
                 "Revisar configuración de recursos del sistema"
             )
-        
+
         if avg_response_time > 2000:
             recommendations.append("Optimizar queries de base de datos")
             recommendations.append("Implementar caching para endpoints lentos")
-        
+
         if consecutive_errors > MAX_CONSECUTIVE_ERRORS:
             recommendations.append(
                 "Activar circuit breakers para endpoints problemáticos"
             )
             recommendations.append("Implementar graceful degradation")
-        
+
         if not recommendations:
             recommendations.append(
                 "Sistema funcionando dentro de parámetros normales"
             )
-        
+
         return recommendations
+
 
     def get_endpoint_error_summary(self) -> Dict[str, Any]:
         """Obtener resumen de errores por endpoint"""
@@ -311,17 +328,17 @@ class ErrorImpactAnalyzer:
             for endpoint, errors in self.endpoint_errors.items():
                 if not errors:
                     continue
-                
+
                 error_types = [e.error_type for e in errors]
                 error_counts = {
                     error_type: error_types.count(error_type)
                     for error_type in set(error_types)
                 }
-                
+
                 avg_response_time = sum(
                     e.response_time_ms for e in errors
                 ) / len(errors)
-                
+
                 summary[endpoint] = {
                     "total_errors": len(errors),
                     "error_types": error_counts,
@@ -335,8 +352,9 @@ class ErrorImpactAnalyzer:
                         errors[-1].timestamp.isoformat() if errors else None
                     ),
                 }
-            
+
             return summary
+
 
     def get_recent_errors(self, limit: int = 10) -> list:
         """Obtener errores recientes"""
@@ -347,10 +365,13 @@ class ErrorImpactAnalyzer:
 # Instancia global del analizador
 error_analyzer = ErrorImpactAnalyzer()
 
+
 def error_handler(endpoint: str):
     """
     Decorator para manejo de errores con análisis de impacto
     """
+
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -367,19 +388,22 @@ def error_handler(endpoint: str):
         return wrapper
     return decorator
 
+
 def circuit_breaker_call(endpoint: str, func: Callable, *args, **kwargs):
     """
     Ejecutar función con circuit breaker
     """
     if endpoint not in error_analyzer.circuit_breakers:
         error_analyzer.circuit_breakers[endpoint] = CircuitBreaker()
-    
+
     circuit_breaker = error_analyzer.circuit_breakers[endpoint]
     return circuit_breaker.call(func, *args, **kwargs)
+
 
 def get_error_analyzer() -> ErrorImpactAnalyzer:
     """Obtener instancia del analizador de errores"""
     return error_analyzer
+
 
 def record_error(
     error: Exception,
@@ -392,6 +416,7 @@ def record_error(
     error_analyzer.record_error(
         error, endpoint, response_time_ms, user_id, request_id
     )
+
 
 def record_success(endpoint: str, response_time_ms: float):
     """Registrar request exitoso"""

@@ -95,7 +95,6 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.db.session import Base
-from app.models import *  # Importar todos los modelos
 
 # Configurar logging
 config = context.config

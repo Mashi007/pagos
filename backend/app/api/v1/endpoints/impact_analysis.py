@@ -25,7 +25,7 @@ async def get_health_impact_analysis_public():
     try:
         analyzer = get_impact_analyzer()
         status_data = analyzer.get_current_status()
-        
+
         return {
             "status": "success",
             "data": status_data,
@@ -51,7 +51,7 @@ async def get_health_impact_analysis(
     try:
         analyzer = get_impact_analyzer()
         status_data = analyzer.get_current_status()
-        
+
         return {
             "status": "success",
             "data": status_data,
@@ -77,7 +77,7 @@ async def get_performance_impact_analysis(
     try:
         analyzer = get_impact_analyzer()
         report = analyzer.get_performance_report()
-        
+
         return {
             "status": "success",
             "data": report,
@@ -103,7 +103,7 @@ async def get_error_impact_analysis(
     try:
         error_analyzer = get_error_analyzer()
         error_report = error_analyzer.get_error_impact_report()
-        
+
         return {
             "status": "success",
             "data": error_report,
@@ -129,7 +129,7 @@ async def get_resource_usage_impact(
     try:
         analyzer = get_impact_analyzer()
         resource_report = analyzer.get_resource_usage_report()
-        
+
         return {
             "status": "success",
             "data": resource_report,
@@ -155,7 +155,7 @@ async def get_endpoints_impact_analysis(
     try:
         analyzer = get_impact_analyzer()
         endpoints_report = analyzer.get_endpoints_impact_report()
-        
+
         return {
             "status": "success",
             "data": endpoints_report,
@@ -181,11 +181,11 @@ async def get_impact_summary(
     try:
         analyzer = get_impact_analyzer()
         error_analyzer = get_error_analyzer()
-        
+
         # Obtener datos de ambos analizadores
         performance_data = analyzer.get_current_status()
         error_data = error_analyzer.get_error_impact_report()
-        
+
         # Crear resumen consolidado
         summary = {
             "timestamp": time.time(),
@@ -195,26 +195,26 @@ async def get_impact_summary(
             "recommendations": [],
             "critical_issues": [],
         }
-        
+
         # Generar recomendaciones basadas en los datos
         if performance_data.get("avg_response_time", 0) > 2000:
             summary["recommendations"].append(
                 "Tiempo de respuesta alto - considerar optimización"
             )
-        
+
         if error_data.get("error_rate", 0) > 5:
             summary["critical_issues"].append(
                 "Tasa de error alta - requiere atención inmediata"
             )
-        
+
         if not summary["recommendations"]:
             summary["recommendations"].append("Sistema funcionando dentro de parámetros normales")
-        
+
         return {
             "status": "success",
             "data": summary,
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo resumen de impacto: {e}")
         raise HTTPException(

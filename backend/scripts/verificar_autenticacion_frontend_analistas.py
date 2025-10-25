@@ -4,7 +4,6 @@ VERIFICAR AUTENTICACIÓN EN FRONTEND PARA ANALISTAS
 Verificar que el frontend esté enviando la autenticación correctamente
 """
 import os
-import sys
 import logging
 import requests
 import json
@@ -24,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 
 class VerificarAutenticacionFrontendAnalistas:
+
+
     def __init__(self):
         self.backend_url = "https://pagos-f2qf.onrender.com"
         self.frontend_url = "https://rapicredit.onrender.com"
@@ -32,6 +33,7 @@ class VerificarAutenticacionFrontendAnalistas:
             "password": "R@pi_2025**",
             "remember": True,
         }
+
 
     def hacer_login(self) -> Dict[str, Any]:
         """Hacer login y obtener token"""
@@ -70,6 +72,7 @@ class VerificarAutenticacionFrontendAnalistas:
         except Exception as e:
             logger.error(f"   ❌ Error en login: {e}")
             return {"status": "error", "error": str(e)}
+
 
     def probar_endpoint_principal_con_auth(self, access_token: str) -> Dict[str, Any]:
         """Probar endpoint principal analistas con autenticación"""
@@ -121,6 +124,7 @@ class VerificarAutenticacionFrontendAnalistas:
             logger.error(f"   ❌ ERROR: Endpoint principal - {e}")
             return {"status": "error", "error": str(e)}
 
+
     def probar_endpoint_sin_auth(self) -> Dict[str, Any]:
         """Probar endpoint principal analistas sin autenticación"""
         logger.info("🔍 PROBANDO ENDPOINT PRINCIPAL SIN AUTENTICACIÓN")
@@ -161,6 +165,7 @@ class VerificarAutenticacionFrontendAnalistas:
             logger.error(f"   ❌ ERROR: Endpoint sin auth - {e}")
             return {"status": "error", "error": str(e)}
 
+
     def verificar_frontend_url(self) -> Dict[str, Any]:
         """Verificar que el frontend esté disponible"""
         logger.info("🌐 VERIFICANDO FRONTEND")
@@ -182,6 +187,7 @@ class VerificarAutenticacionFrontendAnalistas:
         except Exception as e:
             logger.error(f"   ❌ Error verificando frontend: {e}")
             return {"status": "error", "error": str(e)}
+
 
     def ejecutar_verificacion_autenticacion_frontend(self):
         """Ejecutar verificación completa de autenticación frontend"""

@@ -20,6 +20,7 @@ router = APIRouter()
 # SCHEMAS PYDANTIC
 # ============================================
 
+
 class AprobacionCreate(BaseModel):
     tipo_solicitud: str
     nivel: Optional[str] = None
@@ -28,9 +29,11 @@ class AprobacionCreate(BaseModel):
     justificacion: str
     datos_solicitados: Optional[str] = None
 
+
 class AprobacionUpdate(BaseModel):
     estado: str
     comentarios_revisor: Optional[str] = None
+
 
 class AprobacionResponse(BaseModel):
     id: int
@@ -46,6 +49,7 @@ class AprobacionResponse(BaseModel):
     solicitante_id: int
     revisor_id: Optional[int]
 
+
     class Config:
         from_attributes = True
 
@@ -56,6 +60,8 @@ class AprobacionResponse(BaseModel):
 @router.post(
     "/", response_model=AprobacionResponse, status_code=status.HTTP_201_CREATED
 )
+
+
 def crear_aprobacion(
     aprobacion_data: AprobacionCreate,
     db: Session = Depends(get_db),

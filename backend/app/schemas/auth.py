@@ -38,7 +38,7 @@ class LoginRequest(BaseModel):
         min_length=MIN_PASSWORD_LENGTH,
         description="Contraseña del usuario",
     )
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {"email": "admin@sistema.com", "password": "Admin123!"}
@@ -64,7 +64,7 @@ class ChangePasswordRequest(BaseModel):
         min_length=MIN_PASSWORD_LENGTH,
         description="Confirmar nueva contraseña",
     )
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {

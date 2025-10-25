@@ -19,20 +19,23 @@ router = APIRouter()
 # SISTEMA DE MONITOREO DE ERRORES CRÍTICOS
 # ============================================
 
+
 class CriticalErrorMonitor:
     """Monitor de errores críticos del sistema"""
-    
+
+
     def __init__(self):
         self.error_patterns = defaultdict(int)
         self.critical_errors = deque(maxlen=1000)
         self.deployment_failures = deque(maxlen=100)
         self.service_503_errors = deque(maxlen=200)
         self.lock = threading.Lock()
-    
+
+
     def log_critical_error(
-        self, 
-        error_type: str, 
-        error_message: str, 
+        self,
+        error_type: str,
+        error_message: str,
         context: Dict[str, Any]
     ) -> None:
         """Registrar un error crítico"""
@@ -45,16 +48,17 @@ class CriticalErrorMonitor:
                 "context": context,
                 "severity": self._calculate_severity(error_type, context)
             }
-            
+
             self.critical_errors.append(error_record)
             self.error_patterns[error_type] += 1
-            
+
             # Log específico para errores críticos
             logger.error(
                 f"🚨 ERROR CRÍTICO: {error_type} - {error_message}",
                 extra={"context": context, "timestamp": timestamp}
             )
-    
+
+
     def _calculate_severity(self, error_type: str, context: Dict[str, Any]) -> str:
         """Calcular severidad del error"""
         if "503" in error_type or "deployment" in error_type.lower():
@@ -65,7 +69,8 @@ class CriticalErrorMonitor:
             return "HIGH"
         else:
             return "MEDIUM"
-    
+
+
     def get_error_summary(self) -> Dict[str, Any]:
         """Obtener resumen de errores críticos"""
         with self.lock:
@@ -76,12 +81,14 @@ class CriticalErrorMonitor:
                 "deployment_failures": len(self.deployment_failures),
                 "service_503_errors": len(self.service_503_errors)
             }
-    
+
+
     def get_deployment_failures(self) -> List[Dict[str, Any]]:
         """Obtener fallos de despliegue"""
         with self.lock:
             return list(self.deployment_failures)
-    
+
+
     def get_503_errors(self) -> List[Dict[str, Any]]:
         """Obtener errores 503"""
         with self.lock:
@@ -171,7 +178,7 @@ async def log_critical_error(
             error_message=error_message,
             context=context or {}
         )
-        
+
         return {
             "success": True,
             "message": "Error crítico registrado",
@@ -189,7 +196,7 @@ async def critical_errors_health():
     """Verificar salud del sistema de monitoreo de errores críticos"""
     try:
         summary = critical_monitor.get_error_summary()
-        
+
         # Determinar estado de salud
         total_errors = summary["total_critical_errors"]
         if total_errors == 0:
@@ -198,7 +205,7 @@ async def critical_errors_health():
             health_status = "WARNING"
         else:
             health_status = "CRITICAL"
-        
+
         return {
             "success": True,
             "health_status": health_status,

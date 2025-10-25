@@ -3,7 +3,6 @@ Pruebas Unitarias - Validadores
 Testing de la lógica de validación del sistema
 """
 
-import pytest
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -23,6 +22,7 @@ from app.services.validators_service import (
 class TestValidadorTelefono:
     """Pruebas para ValidadorTelefono"""
 
+
     def test_telefono_valido_venezuela(self):
         """Probar teléfono válido de Venezuela"""
         validador = ValidadorTelefono()
@@ -32,6 +32,7 @@ class TestValidadorTelefono:
         assert resultado["valor_formateado"] == "+58412123456"
         assert resultado["pais"] == "VENEZUELA"
 
+
     def test_telefono_invalido_formato(self):
         """Probar teléfono con formato inválido"""
         validador = ValidadorTelefono()
@@ -40,6 +41,7 @@ class TestValidadorTelefono:
         assert resultado["valido"] is False
         assert "formato" in resultado["error"].lower()
 
+
     def test_telefono_corto(self):
         """Probar teléfono muy corto"""
         validador = ValidadorTelefono()
@@ -47,6 +49,7 @@ class TestValidadorTelefono:
 
         assert resultado["valido"] is False
         assert "longitud" in resultado["error"].lower()
+
 
     def test_telefono_vacio(self):
         """Probar teléfono vacío"""
@@ -60,6 +63,7 @@ class TestValidadorTelefono:
 class TestValidadorCedula:
     """Pruebas para ValidadorCedula"""
 
+
     def test_cedula_valida_venezolana(self):
         """Probar cédula venezolana válida"""
         validador = ValidadorCedula()
@@ -70,6 +74,7 @@ class TestValidadorCedula:
         assert resultado["pais"] == "VENEZUELA"
         assert resultado["tipo"] == "Venezolano"
 
+
     def test_cedula_valida_extranjera(self):
         """Probar cédula de extranjero válida"""
         validador = ValidadorCedula()
@@ -78,6 +83,7 @@ class TestValidadorCedula:
         assert resultado["valido"] is True
         assert resultado["valor_formateado"] == "E12345678"
         assert resultado["tipo"] == "Extranjero"
+
 
     def test_cedula_valida_juridica(self):
         """Probar cédula jurídica válida"""
@@ -88,6 +94,7 @@ class TestValidadorCedula:
         assert resultado["valor_formateado"] == "J12345678"
         assert resultado["tipo"] == "Jurídica"
 
+
     def test_cedula_invalida_prefijo(self):
         """Probar cédula con prefijo inválido"""
         validador = ValidadorCedula()
@@ -96,6 +103,7 @@ class TestValidadorCedula:
         assert resultado["valido"] is False
         assert "prefijo" in resultado["error"].lower()
 
+
     def test_cedula_corta(self):
         """Probar cédula muy corta"""
         validador = ValidadorCedula()
@@ -103,6 +111,7 @@ class TestValidadorCedula:
 
         assert resultado["valido"] is False
         assert "longitud" in resultado["error"].lower()
+
 
     def test_cedula_vacia(self):
         """Probar cédula vacía"""
@@ -116,6 +125,7 @@ class TestValidadorCedula:
 class TestValidadorFecha:
     """Pruebas para ValidadorFecha"""
 
+
     def test_fecha_valida_formato_dd_mm_yyyy(self):
         """Probar fecha válida en formato DD/MM/YYYY"""
         validador = ValidadorFecha()
@@ -125,6 +135,7 @@ class TestValidadorFecha:
         assert resultado["valor_formateado"] == "01/01/1990"
         assert resultado["fecha_parseada"] == date(1990, 1, 1)
 
+
     def test_fecha_invalida_formato(self):
         """Probar fecha con formato inválido"""
         validador = ValidadorFecha()
@@ -132,6 +143,7 @@ class TestValidadorFecha:
 
         assert resultado["valido"] is False
         assert "formato" in resultado["error"].lower()
+
 
     def test_fecha_invalida_dia(self):
         """Probar fecha con día inválido"""
@@ -141,6 +153,7 @@ class TestValidadorFecha:
         assert resultado["valido"] is False
         assert "día" in resultado["error"].lower()
 
+
     def test_fecha_invalida_mes(self):
         """Probar fecha con mes inválido"""
         validador = ValidadorFecha()
@@ -149,6 +162,7 @@ class TestValidadorFecha:
         assert resultado["valido"] is False
         assert "mes" in resultado["error"].lower()
 
+
     def test_fecha_futura(self):
         """Probar fecha futura"""
         validador = ValidadorFecha()
@@ -156,6 +170,7 @@ class TestValidadorFecha:
 
         assert resultado["valido"] is False
         assert "futura" in resultado["error"].lower()
+
 
     def test_fecha_muy_antigua(self):
         """Probar fecha muy antigua"""
@@ -169,6 +184,7 @@ class TestValidadorFecha:
 class TestValidadorMonto:
     """Pruebas para ValidadorMonto"""
 
+
     def test_monto_valido_positivo(self):
         """Probar monto válido positivo"""
         validador = ValidadorMonto()
@@ -177,6 +193,7 @@ class TestValidadorMonto:
         assert resultado["valido"] is True
         assert resultado["valor_formateado"] == "1000.50"
         assert resultado["monto_numerico"] == Decimal("1000.50")
+
 
     def test_monto_valido_entero(self):
         """Probar monto válido entero"""
@@ -187,6 +204,7 @@ class TestValidadorMonto:
         assert resultado["valor_formateado"] == "1000.00"
         assert resultado["monto_numerico"] == Decimal("1000.00")
 
+
     def test_monto_negativo(self):
         """Probar monto negativo"""
         validador = ValidadorMonto()
@@ -194,6 +212,7 @@ class TestValidadorMonto:
 
         assert resultado["valido"] is False
         assert "negativo" in resultado["error"].lower()
+
 
     def test_monto_cero(self):
         """Probar monto cero"""
@@ -203,6 +222,7 @@ class TestValidadorMonto:
         assert resultado["valido"] is False
         assert "cero" in resultado["error"].lower()
 
+
     def test_monto_invalido_formato(self):
         """Probar monto con formato inválido"""
         validador = ValidadorMonto()
@@ -210,6 +230,7 @@ class TestValidadorMonto:
 
         assert resultado["valido"] is False
         assert "formato" in resultado["error"].lower()
+
 
     def test_monto_muy_grande(self):
         """Probar monto muy grande"""
@@ -223,6 +244,7 @@ class TestValidadorMonto:
 class TestValidadorAmortizaciones:
     """Pruebas para ValidadorAmortizaciones"""
 
+
     def test_amortizaciones_validas(self):
         """Probar número de amortizaciones válido"""
         validador = ValidadorAmortizaciones()
@@ -232,6 +254,7 @@ class TestValidadorAmortizaciones:
         assert resultado["valor_formateado"] == "24"
         assert resultado["numero_amortizaciones"] == 24
 
+
     def test_amortizaciones_cero(self):
         """Probar amortizaciones cero"""
         validador = ValidadorAmortizaciones()
@@ -239,6 +262,7 @@ class TestValidadorAmortizaciones:
 
         assert resultado["valido"] is False
         assert "cero" in resultado["error"].lower()
+
 
     def test_amortizaciones_negativas(self):
         """Probar amortizaciones negativas"""
@@ -248,6 +272,7 @@ class TestValidadorAmortizaciones:
         assert resultado["valido"] is False
         assert "negativo" in resultado["error"].lower()
 
+
     def test_amortizaciones_muy_grandes(self):
         """Probar amortizaciones muy grandes"""
         validador = ValidadorAmortizaciones()
@@ -255,6 +280,7 @@ class TestValidadorAmortizaciones:
 
         assert resultado["valido"] is False
         assert "límite" in resultado["error"].lower()
+
 
     def test_amortizaciones_decimales(self):
         """Probar amortizaciones con decimales"""
@@ -268,6 +294,7 @@ class TestValidadorAmortizaciones:
 class TestValidadorEmail:
     """Pruebas para ValidadorEmail"""
 
+
     def test_email_valido(self):
         """Probar email válido"""
         validador = ValidadorEmail()
@@ -275,6 +302,7 @@ class TestValidadorEmail:
 
         assert resultado["valido"] is True
         assert resultado["valor_formateado"] == "test@example.com"
+
 
     def test_email_invalido_formato(self):
         """Probar email con formato inválido"""
@@ -284,6 +312,7 @@ class TestValidadorEmail:
         assert resultado["valido"] is False
         assert "formato" in resultado["error"].lower()
 
+
     def test_email_sin_arroba(self):
         """Probar email sin @"""
         validador = ValidadorEmail()
@@ -291,6 +320,7 @@ class TestValidadorEmail:
 
         assert resultado["valido"] is False
         assert "formato" in resultado["error"].lower()
+
 
     def test_email_vacio(self):
         """Probar email vacío"""
@@ -304,6 +334,7 @@ class TestValidadorEmail:
 class TestValidadorEdad:
     """Pruebas para ValidadorEdad"""
 
+
     def test_edad_valida(self):
         """Probar edad válida"""
         validador = ValidadorEdad()
@@ -311,6 +342,7 @@ class TestValidadorEdad:
 
         assert resultado["valido"] is True
         assert resultado["edad"] == 25
+
 
     def test_edad_menor_18(self):
         """Probar edad menor a 18"""
@@ -320,6 +352,7 @@ class TestValidadorEdad:
         assert resultado["valido"] is False
         assert "menor" in resultado["error"].lower()
 
+
     def test_edad_mayor_100(self):
         """Probar edad mayor a 100"""
         validador = ValidadorEdad()
@@ -327,6 +360,7 @@ class TestValidadorEdad:
 
         assert resultado["valido"] is False
         assert "mayor" in resultado["error"].lower()
+
 
     def test_edad_negativa(self):
         """Probar edad negativa"""
@@ -339,6 +373,7 @@ class TestValidadorEdad:
 
 class TestValidadorCoherenciaFinanciera:
     """Pruebas para ValidadorCoherenciaFinanciera"""
+
 
     def test_coherencia_valida(self):
         """Probar coherencia financiera válida"""
@@ -354,6 +389,7 @@ class TestValidadorCoherenciaFinanciera:
 
         assert resultado["valido"] is True
 
+
     def test_coherencia_invalida_montos(self):
         """Probar coherencia inválida en montos"""
         validador = ValidadorCoherenciaFinanciera()
@@ -368,6 +404,7 @@ class TestValidadorCoherenciaFinanciera:
 
         assert resultado["valido"] is False
         assert "coherencia" in resultado["error"].lower()
+
 
     def test_coherencia_invalida_cuotas(self):
         """Probar coherencia inválida en cuotas"""
@@ -388,6 +425,7 @@ class TestValidadorCoherenciaFinanciera:
 class TestValidadorDuplicados:
     """Pruebas para ValidadorDuplicados"""
 
+
     def test_duplicado_detectado(self):
         """Probar detección de duplicado"""
         validador = ValidadorDuplicados()
@@ -402,6 +440,7 @@ class TestValidadorDuplicados:
         assert resultado["valido"] is False
         assert "duplicado" in resultado["error"].lower()
         assert resultado["duplicados_encontrados"] == ["cedula"]
+
 
     def test_sin_duplicados(self):
         """Probar sin duplicados"""

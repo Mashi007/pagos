@@ -46,6 +46,8 @@ router = APIRouter()
 @router.post(
     "/crear", response_model=PagoResponse, status_code=status.HTTP_201_CREATED
 )
+
+
 async def crear_pago(
     pago_data: PagoCreate,
     db: Session = Depends(get_db),
@@ -57,7 +59,7 @@ async def crear_pago(
             f"Usuario {current_user.email} creando pago para "
             f"cédula {pago_data.cedula_cliente}"
         )
-        
+
         # Crear el pago
         nuevo_pago = Pago(
             cedula_cliente=pago_data.cedula_cliente,
@@ -71,14 +73,14 @@ async def crear_pago(
             notas=pago_data.notas,
             conciliado=False,  # Por defecto no conciliado
         )
-        
+
         db.add(nuevo_pago)
         db.commit()
         db.refresh(nuevo_pago)
-        
+
         logger.info(f"Pago creado exitosamente con ID {nuevo_pago.id}")
         return nuevo_pago
-        
+
     except Exception as e:
         db.rollback()
         logger.error(f"Error creando pago: {e}")
@@ -103,7 +105,7 @@ async def subir_documento(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Tipo de archivo no permitido. Solo PNG, JPG, JPEG, PDF",
             )
-        
+
         # Validar tamaño
         file_content = await file.read()
         if len(file_content) > MAX_FILE_SIZE_BYTES:
@@ -111,15 +113,15 @@ async def subir_documento(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Archivo demasiado grande. Máximo 5MB",
             )
-        
+
         # Generar nombre único
         unique_filename = f"{uuid.uuid4()}{file_extension}"
         file_path = UPLOAD_DIR / unique_filename
-        
+
         # Guardar archivo
         with open(file_path, "wb") as buffer:
             buffer.write(file_content)
-        
+
         logger.info(f"Documento subido: {unique_filename}")
         return {
             "success": True,
@@ -129,7 +131,7 @@ async def subir_documento(
             "type": file_extension[1:].upper(),
             "path": str(file_path),
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -156,16 +158,16 @@ async def listar_pagos(
     """Listar pagos con filtros"""
     try:
         query = db.query(Pago).filter(Pago.activo)
-        
+
         # Aplicar filtros
         if cedula:
             query = query.filter(Pago.cedula_cliente.ilike(f"%{cedula}%"))
         if conciliado is not None:
             query = query.filter(Pago.conciliado == conciliado)
-        
+
         # Contar total
         total = query.count()
-        
+
         # Paginación
         offset = (pagina - 1) * por_pagina
         pagos = (
@@ -174,9 +176,9 @@ async def listar_pagos(
             .limit(por_pagina)
             .all()
         )
-        
+
         total_paginas = (total + por_pagina - 1) // por_pagina
-        
+
         return PagoListResponse(
             pagos=pagos,
             total=total,
@@ -184,7 +186,7 @@ async def listar_pagos(
             por_pagina=por_pagina,
             total_paginas=total_paginas,
         )
-        
+
     except Exception as e:
         logger.error(f"Error listando pagos: {e}")
         raise HTTPException(
@@ -207,13 +209,13 @@ async def obtener_kpis_pagos(
             or 0
         )
         numero_pagos = total_pagos  # Mismo valor para consistencia
-        
+
         # KPIs de conciliación
         cantidad_conciliada = (
             db.query(Pago).filter(and_(Pago.activo, Pago.conciliado)).count()
         )
         cantidad_no_conciliada = total_pagos - cantidad_conciliada
-        
+
         return KPIsPagos(
             total_pagos=total_pagos,
             total_dolares=float(total_dolares),
@@ -222,7 +224,7 @@ async def obtener_kpis_pagos(
             cantidad_no_conciliada=cantidad_no_conciliada,
             fecha_actualizacion=datetime.now(),
         )
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo KPIs: {e}")
         raise HTTPException(
@@ -245,13 +247,13 @@ async def obtener_resumen_cliente(
             .filter(and_(Pago.activo, Pago.cedula_cliente == cedula.upper()))
             .all()
         )
-        
+
         if not pagos_cliente:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"No se encontraron pagos para la cédula {cedula}",
             )
-        
+
         # Calcular resumen
         total_pagado = sum(pago.monto_pagado for pago in pagos_cliente)
         total_conciliado = sum(
@@ -259,10 +261,10 @@ async def obtener_resumen_cliente(
         )
         total_pendiente = total_pagado - total_conciliado
         numero_pagos = len(pagos_cliente)
-        
+
         # Último pago
         ultimo_pago = max(pagos_cliente, key=lambda p: p.fecha_pago).fecha_pago
-        
+
         # Estado de conciliación
         if total_conciliado == total_pagado:
             estado_conciliacion = "CONCILIADO"
@@ -270,7 +272,7 @@ async def obtener_resumen_cliente(
             estado_conciliacion = "PARCIAL"
         else:
             estado_conciliacion = "PENDIENTE"
-        
+
         return ResumenCliente(
             cedula_cliente=cedula.upper(),
             total_pagado=total_pagado,
@@ -280,7 +282,7 @@ async def obtener_resumen_cliente(
             ultimo_pago=ultimo_pago,
             estado_conciliacion=estado_conciliacion,
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -298,13 +300,13 @@ async def descargar_documento(
     """Descargar documento de pago"""
     try:
         file_path = UPLOAD_DIR / filename
-        
+
         if not file_path.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Archivo no encontrado",
             )
-        
+
         # Determinar tipo de contenido
         file_extension = file_path.suffix.lower()
         content_type_map = {
@@ -316,14 +318,14 @@ async def descargar_documento(
         content_type = content_type_map.get(
             file_extension, "application/octet-stream"
         )
-        
+
         return {
             "success": True,
             "filename": filename,
             "content_type": content_type,
             "download_url": f"/api/v1/pagos/descargar-documento/{filename}",
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:

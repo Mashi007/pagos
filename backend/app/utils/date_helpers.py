@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from typing import List, Optional
 from dateutil.relativedelta import relativedelta
 
+
 def add_months(start_date: date, months: int) -> date:
     """
     Suma meses a una fecha
@@ -19,6 +20,7 @@ def add_months(start_date: date, months: int) -> date:
     """
     return start_date + relativedelta(months=months)
 
+
 def add_weeks(start_date: date, weeks: int) -> date:
     """
     Suma semanas a una fecha
@@ -29,6 +31,7 @@ def add_weeks(start_date: date, weeks: int) -> date:
         date: Nueva fecha
     """
     return start_date + timedelta(weeks=weeks)
+
 
 def calculate_payment_dates(
     start_date: date, num_payments: int, frequency: str = "MENSUAL"
@@ -44,10 +47,10 @@ def calculate_payment_dates(
     """
     payment_dates = []
     current_date = start_date
-    
+
     for i in range(num_payments):
         payment_dates.append(current_date)
-        
+
         if frequency == "SEMANAL":
             current_date = add_weeks(current_date, 1)
         elif frequency == "QUINCENAL":
@@ -61,8 +64,9 @@ def calculate_payment_dates(
         else:
             # Por defecto, mensual
             current_date = add_months(current_date, 1)
-    
+
     return payment_dates
+
 
 def days_between(date1: date, date2: date) -> int:
     """
@@ -74,6 +78,7 @@ def days_between(date1: date, date2: date) -> int:
         int: Número de días (puede ser negativo si date2 < date1)
     """
     return (date2 - date1).days
+
 
 def is_overdue(due_date: date, reference_date: Optional[date] = None) -> bool:
     """
@@ -88,6 +93,7 @@ def is_overdue(due_date: date, reference_date: Optional[date] = None) -> bool:
         reference_date = date.today()
     return reference_date > due_date
 
+
 def days_overdue(due_date: date, reference_date: Optional[date] = None) -> int:
     """
     Calcula cuántos días está vencida una fecha
@@ -99,9 +105,10 @@ def days_overdue(due_date: date, reference_date: Optional[date] = None) -> int:
     """
     if reference_date is None:
         reference_date = date.today()
-    
+
     days = days_between(due_date, reference_date)
     return max(0, days)
+
 
 def get_last_day_of_month(year: int, month: int) -> date:
     """
@@ -115,6 +122,7 @@ def get_last_day_of_month(year: int, month: int) -> date:
     last_day = calendar.monthrange(year, month)[1]
     return date(year, month, last_day)
 
+
 def get_first_day_of_month(year: int, month: int) -> date:
     """
     Obtiene el primer día del mes
@@ -125,6 +133,7 @@ def get_first_day_of_month(year: int, month: int) -> date:
         date: Primer día del mes
     """
     return date(year, month, 1)
+
 
 def get_month_range(
     reference_date: Optional[date] = None,
@@ -138,13 +147,14 @@ def get_month_range(
     """
     if reference_date is None:
         reference_date = date.today()
-    
+
     first_day = get_first_day_of_month(
         reference_date.year, reference_date.month
     )
     last_day = get_last_day_of_month(reference_date.year, reference_date.month)
-    
+
     return first_day, last_day
+
 
 def get_quarter_range(
     reference_date: Optional[date] = None,
@@ -158,15 +168,16 @@ def get_quarter_range(
     """
     if reference_date is None:
         reference_date = date.today()
-    
+
     quarter = (reference_date.month - 1) // 3 + 1
     first_month = (quarter - 1) * 3 + 1
     last_month = first_month + 2
-    
+
     first_day = get_first_day_of_month(reference_date.year, first_month)
     last_day = get_last_day_of_month(reference_date.year, last_month)
-    
+
     return first_day, last_day
+
 
 def get_year_range(year: Optional[int] = None) -> tuple[date, date]:
     """
@@ -178,11 +189,12 @@ def get_year_range(year: Optional[int] = None) -> tuple[date, date]:
     """
     if year is None:
         year = date.today().year
-    
+
     first_day = date(year, 1, 1)
     last_day = date(year, 12, 31)
-    
+
     return first_day, last_day
+
 
 def is_business_day(
     check_date: date, holidays: Optional[List[date]] = None
@@ -198,12 +210,13 @@ def is_business_day(
     # Verificar si es fin de semana (sábado=5, domingo=6)
     if check_date.weekday() >= 5:
         return False
-    
+
     # Verificar si es feriado
     if holidays and check_date in holidays:
         return False
-    
+
     return True
+
 
 def next_business_day(
     start_date: date, holidays: Optional[List[date]] = None
@@ -220,6 +233,7 @@ def next_business_day(
     while not is_business_day(next_day, holidays):
         next_day += timedelta(days=1)
     return next_day
+
 
 def calculate_interest_days(
     start_date: date, end_date: date, day_count_convention: str = "30/360"
@@ -253,6 +267,7 @@ def calculate_interest_days(
         # Por defecto, días reales
         return (end_date - start_date).days
 
+
 def format_date_es(date_obj: date) -> str:
     """
     Formatea fecha en español
@@ -275,8 +290,9 @@ def format_date_es(date_obj: date) -> str:
         11: "noviembre",
         12: "diciembre",
     }
-    
+
     return f"{date_obj.day} de {months_es[date_obj.month]} de {date_obj.year}"
+
 
 def get_age_in_days(
     birth_date: date, reference_date: Optional[date] = None
@@ -291,8 +307,9 @@ def get_age_in_days(
     """
     if reference_date is None:
         reference_date = date.today()
-    
+
     return (reference_date - birth_date).days
+
 
 def get_notification_dates(
     due_date: date, days_before: List[int] = [3, 1, 0]
@@ -306,20 +323,21 @@ def get_notification_dates(
         List[tuple[date, str]]: Lista de (fecha_notificación, tipo)
     """
     notification_dates = []
-    
+
     for days in sorted(days_before, reverse=True):
         notification_date = due_date - timedelta(days=days)
-        
+
         if days > 1:
             notification_type = f"RECORDATORIO_{days}D"
         elif days == 1:
             notification_type = "RECORDATORIO_1D"
         else:
             notification_type = "VENCIMIENTO_HOY"
-        
+
         notification_dates.append((notification_date, notification_type))
-    
+
     return notification_dates
+
 
 def calculate_days_in_period(
     start_date: date, end_date: date, frequency: str = "MENSUAL"

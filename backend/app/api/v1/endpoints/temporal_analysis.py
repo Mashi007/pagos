@@ -4,7 +4,6 @@
 import statistics
 import threading
 import time
-from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
@@ -19,19 +18,23 @@ router = APIRouter()
 
 class TemporalAnalysisSystem:
     """Sistema temporal para análisis de timing y sincronización"""
-    
+
+
     def __init__(self):
         self.timing_events = deque(maxlen=10000)  # Eventos de timing
         self.clock_sync_data = deque(maxlen=1000)  # Datos de sincronización de reloj
         self.token_lifecycle_data = deque(maxlen=5000)  # Datos de ciclo de vida de tokens
         self.timing_correlations = {}  # Correlaciones temporales
         self.lock = threading.Lock()
-        
+
         # Iniciar monitoreo temporal en background
         self._start_temporal_monitoring()
-    
+
+
     def _start_temporal_monitoring(self):
-        """Iniciar monitoreo temporal en background"""        
+        """Iniciar monitoreo temporal en background"""
+
+
         def monitoring_loop():
             while True:
                 try:
@@ -41,14 +44,15 @@ class TemporalAnalysisSystem:
                 except Exception as e:
                     print(f"Error en monitoreo temporal: {e}")
                     time.sleep(60)
-        
+
         monitor_thread = threading.Thread(target=monitoring_loop, daemon=True)
         monitor_thread.start()
-    
+
+
     def _collect_timing_data(self):
         """Recopilar datos de timing"""
         current_time = datetime.now()
-        
+
         # Simular recopilación de datos de timing
         timing_event = {
             "timestamp": current_time,
@@ -56,32 +60,34 @@ class TemporalAnalysisSystem:
             "duration_ms": 5.2,
             "source": "temporal_monitor"
         }
-        
+
         with self.lock:
             self.timing_events.append(timing_event)
-    
+
+
     def _analyze_timing_patterns(self):
         """Analizar patrones temporales"""
         with self.lock:
             if len(self.timing_events) < 10:
                 return
-            
+
             # Analizar patrones de duración
             recent_events = list(self.timing_events)[-100:]  # Últimos 100 eventos
             durations = [event.get("duration_ms", 0) for event in recent_events]
-            
+
             if durations:
                 avg_duration = statistics.mean(durations)
                 max_duration = max(durations)
                 min_duration = min(durations)
-                
+
                 self.timing_correlations["duration_stats"] = {
                     "average_ms": round(avg_duration, 2),
                     "max_ms": round(max_duration, 2),
                     "min_ms": round(min_duration, 2),
                     "sample_size": len(durations)
                 }
-    
+
+
     def log_timing_event(self, event_data: Dict[str, Any]):
         """Registrar un evento de timing"""
         with self.lock:
@@ -92,9 +98,10 @@ class TemporalAnalysisSystem:
                 "source": event_data.get("source", "manual"),
                 "metadata": event_data.get("metadata", {})
             }
-            
+
             self.timing_events.append(event)
-    
+
+
     def log_token_lifecycle(self, token_data: Dict[str, Any]):
         """Registrar ciclo de vida de token"""
         with self.lock:
@@ -105,9 +112,10 @@ class TemporalAnalysisSystem:
                 "duration_ms": token_data.get("duration_ms", 0),
                 "user_id": token_data.get("user_id")
             }
-            
+
             self.token_lifecycle_data.append(lifecycle_event)
-    
+
+
     def get_temporal_analysis(self) -> Dict[str, Any]:
         """Obtener análisis temporal completo"""
         with self.lock:
@@ -126,21 +134,22 @@ class TemporalAnalysisSystem:
                     "recent_measurements": list(self.clock_sync_data)[-5:]
                 }
             }
-            
+
             return analysis
-    
+
+
     def get_timing_statistics(self) -> Dict[str, Any]:
         """Obtener estadísticas de timing"""
         with self.lock:
             if not self.timing_events:
                 return {"error": "No hay datos de timing disponibles"}
-            
+
             recent_events = list(self.timing_events)[-100:]  # Últimos 100 eventos
             durations = [event.get("duration_ms", 0) for event in recent_events]
-            
+
             if not durations:
                 return {"error": "No hay datos de duración disponibles"}
-            
+
             return {
                 "sample_size": len(durations),
                 "average_duration_ms": round(statistics.mean(durations), 2),

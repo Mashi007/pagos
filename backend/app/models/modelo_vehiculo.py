@@ -19,11 +19,13 @@ class ModeloVehiculo(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+
     def __repr__(self):
         return (
             f"<ModeloVehiculo(id={self.id}, modelo='{self.modelo}', "
             f"activo={self.activo})>"
         )
+
 
     def to_dict(self):
         return {

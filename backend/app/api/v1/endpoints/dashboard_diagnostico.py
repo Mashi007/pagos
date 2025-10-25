@@ -9,8 +9,6 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, Request, Response, HTTPException, status
 from sqlalchemy.orm import Session
 from app.api.deps import get_db
-from app.core.config import settings
-from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -20,9 +18,10 @@ audit_logs = deque(maxlen=1000)  # Mantener últimos 1000 logs
 error_patterns = defaultdict(int)
 request_stats = defaultdict(int)
 
+
 class AuditLogger:
     """Logger especializado para auditoría de autenticación"""
-    
+
     @staticmethod
     def log_request(
         request: Request,
@@ -48,15 +47,15 @@ class AuditLogger:
                 else None
             ),
         }
-        
+
         # Agregar al log
         audit_logs.append(log_entry)
-        
+
         # Actualizar estadísticas
         request_stats[f"status_{response.status_code}"] += 1
         if error:
             error_patterns[error] += 1
-        
+
         # Log específico para errores 401
         if response.status_code == 401:
             logger.warning(
@@ -64,7 +63,7 @@ class AuditLogger:
                 + f"{request.method} {request.url} "
                 + f"- Error: {error}"
             )
-    
+
     @staticmethod
     def get_recent_logs(minutes: int = 60) -> List[Dict[str, Any]]:
         """Obtener logs recientes"""
@@ -73,7 +72,7 @@ class AuditLogger:
             log for log in audit_logs
             if datetime.fromisoformat(log["timestamp"]) > cutoff
         ]
-    
+
     @staticmethod
     def get_error_summary() -> Dict[str, Any]:
         """Obtener resumen de errores"""
@@ -99,15 +98,15 @@ async def get_dashboard_overview(
     try:
         # Obtener estadísticas de auditoría
         audit_summary = AuditLogger.get_error_summary()
-        
+
         # Obtener logs recientes
         recent_logs = AuditLogger.get_recent_logs(60)
-        
+
         # Calcular métricas básicas
         total_requests = len(recent_logs)
         error_requests = len([log for log in recent_logs if log["status_code"] >= 400])
         auth_requests = len([log for log in recent_logs if log["auth_header_present"]])
-        
+
         overview = {
             "timestamp": datetime.now().isoformat(),
             "metrics": {
@@ -120,12 +119,12 @@ async def get_dashboard_overview(
             "system_status": "operational",
             "database_status": "connected",
         }
-        
+
         return {
             "success": True,
             "overview": overview
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo vista general: {e}")
         raise HTTPException(
@@ -141,7 +140,7 @@ async def get_recent_activity(
     """Obtener actividad reciente"""
     try:
         recent_logs = AuditLogger.get_recent_logs(minutes)
-        
+
         # Procesar logs para actividad
         activity = []
         for log in recent_logs:
@@ -155,14 +154,14 @@ async def get_recent_activity(
                 "error": log["error"],
                 "auth_required": log["auth_header_present"]
             })
-        
+
         return {
             "success": True,
             "activity": activity,
             "total_events": len(activity),
             "time_range_minutes": minutes
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo actividad reciente: {e}")
         raise HTTPException(
@@ -177,7 +176,7 @@ async def get_error_analysis(
     """Obtener análisis de errores"""
     try:
         audit_summary = AuditLogger.get_error_summary()
-        
+
         # Analizar patrones de error
         error_analysis = {
             "timestamp": datetime.now().isoformat(),
@@ -186,28 +185,28 @@ async def get_error_analysis(
             "recent_401_errors": audit_summary["recent_401_errors"],
             "recommendations": []
         }
-        
+
         # Generar recomendaciones basadas en patrones
         if error_patterns.get("Invalid token", 0) > 10:
             error_analysis["recommendations"].append(
                 "Alto número de tokens inválidos - revisar configuración de JWT"
             )
-        
+
         if error_patterns.get("Token expired", 0) > 5:
             error_analysis["recommendations"].append(
                 "Tokens expirados frecuentes - considerar aumentar tiempo de vida"
             )
-        
+
         if not error_analysis["recommendations"]:
             error_analysis["recommendations"].append(
                 "Sistema funcionando normalmente"
             )
-        
+
         return {
             "success": True,
             "error_analysis": error_analysis
         }
-        
+
     except Exception as e:
         logger.error(f"Error analizando errores: {e}")
         raise HTTPException(
@@ -227,7 +226,7 @@ async def log_dashboard_event(
         from fastapi import Response
         response = Response()
         response.status_code = event_data.get("status_code", 200)
-        
+
         # Registrar evento
         AuditLogger.log_request(
             request=request,
@@ -235,12 +234,12 @@ async def log_dashboard_event(
             user_id=event_data.get("user_id"),
             error=event_data.get("error")
         )
-        
+
         return {
             "success": True,
             "message": "Evento registrado exitosamente"
         }
-        
+
     except Exception as e:
         logger.error(f"Error registrando evento: {e}")
         raise HTTPException(
@@ -260,11 +259,11 @@ async def get_system_health(
             db.execute("SELECT 1")
         except Exception:
             db_status = "disconnected"
-        
+
         # Obtener métricas del sistema
         recent_logs = AuditLogger.get_recent_logs(60)
         error_rate = len([log for log in recent_logs if log["status_code"] >= 400]) / max(len(recent_logs), 1) * 100
-        
+
         health_status = {
             "timestamp": datetime.now().isoformat(),
             "overall_status": "healthy" if error_rate < 10 and db_status == "connected" else "degraded",
@@ -280,7 +279,7 @@ async def get_system_health(
             },
             "alerts": []
         }
-        
+
         # Agregar alertas si es necesario
         if error_rate > 20:
             health_status["alerts"].append({
@@ -288,19 +287,19 @@ async def get_system_health(
                 "message": f"Tasa de error alta: {error_rate:.1f}%",
                 "severity": "warning"
             })
-        
+
         if db_status == "disconnected":
             health_status["alerts"].append({
                 "type": "database_disconnected",
                 "message": "Conexión a base de datos perdida",
                 "severity": "critical"
             })
-        
+
         return {
             "success": True,
             "health_status": health_status
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo estado de salud: {e}")
         raise HTTPException(

@@ -38,7 +38,7 @@ def upgrade() -> None:
         result = connection.execute(
             sa.text(
                 f"""
-            UPDATE usuarios 
+            UPDATE usuarios
             SET is_admin = TRUE, updated_at = NOW()
             WHERE email = '{email}' AND is_active = TRUE
         """
@@ -64,7 +64,7 @@ def upgrade() -> None:
             sa.text(
                 """
             INSERT INTO usuarios (
-                email, nombre, apellido, hashed_password, 
+                email, nombre, apellido, hashed_password,
                 is_admin, is_active, created_at
             ) VALUES (
                 'admin@rapicredit.com',
@@ -94,9 +94,9 @@ def upgrade() -> None:
     admins = connection.execute(
         sa.text(
             """
-        SELECT email, nombre, apellido, is_active 
-        FROM usuarios 
-        WHERE is_admin = TRUE 
+        SELECT email, nombre, apellido, is_active
+        FROM usuarios
+        WHERE is_admin = TRUE
         ORDER BY email
     """
         )
@@ -128,7 +128,7 @@ def downgrade() -> None:
         connection.execute(
             sa.text(
                 f"""
-            UPDATE usuarios 
+            UPDATE usuarios
             SET is_admin = FALSE, updated_at = NOW()
             WHERE email = '{email}'
         """

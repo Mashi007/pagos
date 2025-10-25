@@ -25,9 +25,9 @@ def upgrade():
     result = connection.execute(
         sa.text(
             """
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_name = 'usuarios' 
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'usuarios'
         AND column_name = 'cargo'
     """
         )
@@ -51,9 +51,9 @@ def downgrade():
     result = connection.execute(
         sa.text(
             """
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_name = 'usuarios' 
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'usuarios'
         AND column_name = 'cargo'
     """
         )

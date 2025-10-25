@@ -7,9 +7,7 @@ import pytest
 import time
 import psutil
 import os
-from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
 # Constantes de testing
 TEST_TIMEOUT_SECONDS = 30
@@ -23,10 +21,12 @@ class PerformanceImpactAnalyzer:
     Analizador de impacto en performance para tests
     """
 
+
     def __init__(self):
         self.start_metrics = {}
         self.end_metrics = {}
         self.test_duration = 0
+
 
     def start_measurement(self):
         """Iniciar medición de métricas del sistema"""
@@ -37,6 +37,7 @@ class PerformanceImpactAnalyzer:
             "memory_available_mb": psutil.virtual_memory().available // (1024 * 1024),
             "process_count": len(psutil.pids()),
         }
+
 
     def end_measurement(self):
         """Finalizar medición de métricas del sistema"""
@@ -49,6 +50,7 @@ class PerformanceImpactAnalyzer:
             "memory_available_mb": psutil.virtual_memory().available // (1024 * 1024),
             "process_count": len(psutil.pids()),
         }
+
 
     def get_impact_analysis(self) -> dict:
         """Obtener análisis de impacto en performance"""
@@ -87,6 +89,7 @@ class PerformanceImpactAnalyzer:
             "performance_score": self._calculate_performance_score(),
         }
 
+
     def _calculate_performance_score(self) -> float:
         """Calcular score de performance (0-100)"""
         cpu_impact = abs(
@@ -118,6 +121,7 @@ def test_client():
 class TestHealthCheckImpact:
     """Tests de impacto de health checks"""
 
+
     def test_health_check_performance_impact(self, test_client, performance_analyzer):
         """Test de impacto en performance del health check básico"""
         performance_analyzer.start_measurement()
@@ -136,6 +140,7 @@ class TestHealthCheckImpact:
         assert impact_analysis["cpu_impact"]["impact_level"] in ["LOW", "MEDIUM"]
         assert impact_analysis["memory_impact"]["impact_level"] in ["LOW", "MEDIUM"]
         assert impact_analysis["performance_score"] > 80  # Score mínimo aceptable
+
 
     def test_detailed_health_check_performance_impact(
         self, test_client, performance_analyzer
@@ -160,6 +165,7 @@ class TestHealthCheckImpact:
         )  # Debe ser razonablemente rápido
         assert impact_analysis["performance_score"] > 70  # Score mínimo aceptable
 
+
     def test_health_check_memory_leak(self, test_client, performance_analyzer):
         """Test para detectar memory leaks en health checks"""
         initial_memory = psutil.virtual_memory().available
@@ -179,6 +185,7 @@ class TestHealthCheckImpact:
 class TestEndpointPerformanceImpact:
     """Tests de impacto en performance de endpoints"""
 
+
     def test_client_endpoint_performance_impact(
         self, test_client, performance_analyzer
     ):
@@ -194,6 +201,7 @@ class TestEndpointPerformanceImpact:
         # Verificaciones de impacto
         assert impact_analysis["test_duration_seconds"] < 5.0  # Timeout razonable
         assert impact_analysis["performance_score"] > 60  # Score mínimo aceptable
+
 
     def test_auth_endpoint_performance_impact(self, test_client, performance_analyzer):
         """Test de impacto en performance del endpoint de autenticación"""
@@ -214,6 +222,7 @@ class TestEndpointPerformanceImpact:
 class TestDatabaseImpact:
     """Tests de impacto en performance de operaciones de base de datos"""
 
+
     def test_database_connection_performance(self, test_client, performance_analyzer):
         """Test de impacto en performance de conexión a base de datos"""
         performance_analyzer.start_measurement()
@@ -232,14 +241,15 @@ class TestDatabaseImpact:
 class TestConcurrentLoadImpact:
     """Tests de impacto en performance bajo carga concurrente"""
 
+
     def test_concurrent_health_checks_performance(
         self, test_client, performance_analyzer
     ):
         """Test de impacto en performance con múltiples health checks concurrentes"""
-        import threading
         import concurrent.futures
 
         performance_analyzer.start_measurement()
+
 
         def make_request():
             return test_client.get("/api/v1/health")
@@ -269,6 +279,7 @@ class TestConcurrentLoadImpact:
 class TestPerformanceBenchmarks:
     """Tests de benchmarks de performance"""
 
+
     def test_health_check_benchmark(self, test_client):
         """Benchmark de health check básico"""
         times = []
@@ -290,6 +301,7 @@ class TestPerformanceBenchmarks:
         assert max_time < 200  # Máximo menor a 200ms
 
         print(f"Health check benchmark - Avg: {avg_time:.2f}ms, Max: {max_time:.2f}ms")
+
 
     def test_detailed_health_check_benchmark(self, test_client):
         """Benchmark de health check detallado"""

@@ -64,5 +64,6 @@ class Pago(Base):
     # cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True)
     # cliente = relationship("Cliente", back_populates="pagos")
 
+
     def __repr__(self):
         return f"<Pago(id={self.id}, cedula={self.cedula_cliente}, monto={self.monto_pagado}, conciliado={self.conciliado})>"

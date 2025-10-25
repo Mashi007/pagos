@@ -20,6 +20,7 @@ MAX_PASSWORD_LENGTH = 128
 MIN_CUENTA_LENGTH = 8
 MAX_CUENTA_LENGTH = 20
 
+
 def validate_dni(dni: str) -> bool:
     """
     Valida formato de DNI/Cédula
@@ -30,18 +31,19 @@ def validate_dni(dni: str) -> bool:
     """
     if not dni:
         return False
-    
+
     # Remover espacios y guiones
     dni_clean = dni.replace(" ", "").replace("-", "")
-    
+
     # Debe tener entre MIN_DNI_LENGTH y MAX_DNI_LENGTH dígitos
     if not dni_clean.isdigit():
         return False
-    
+
     if len(dni_clean) < MIN_DNI_LENGTH or len(dni_clean) > MAX_DNI_LENGTH:
         return False
-    
+
     return True
+
 
 def validate_phone(phone: str) -> bool:
     """
@@ -55,14 +57,15 @@ def validate_phone(phone: str) -> bool:
     """
     if not phone:
         return False
-    
+
     # Remover espacios, guiones y paréntesis
     phone_clean = re.sub(r"[\s\-\(\)]", "", phone)
-    
-    # Patrón para números venezolanos: +58 + 
+
+    # Patrón para números venezolanos: +58 +
     # 10 dígitos (no puede empezar por 0)
     pattern = r"^\+58[1-9]\d{9}$"
     return bool(re.match(pattern, phone_clean))
+
 
 def validate_email(email: str) -> bool:
     """
@@ -74,9 +77,10 @@ def validate_email(email: str) -> bool:
     """
     if not email:
         return False
-    
+
     pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
     return bool(re.match(pattern, email))
+
 
 def validate_ruc(ruc: str) -> bool:
     """
@@ -89,18 +93,19 @@ def validate_ruc(ruc: str) -> bool:
     """
     if not ruc:
         return False
-    
+
     # Remover espacios
     ruc_clean = ruc.replace(" ", "")
-    
+
     # Patrón: 8 dígitos, guión, 1 dígito
     pattern = r"^\d{8}-\d$"
     if not re.match(pattern, ruc_clean):
         return False
-    
+
     # NOTA: Implementar algoritmo de validación de dígito verificador
     # Por ahora solo validamos formato
     return True
+
 
 def validate_positive_amount(amount: Decimal) -> bool:
     """
@@ -112,8 +117,9 @@ def validate_positive_amount(amount: Decimal) -> bool:
     """
     if amount is None:
         return False
-    
+
     return amount > Decimal("0")
+
 
 def validate_percentage(percentage: Decimal) -> bool:
     """
@@ -125,8 +131,9 @@ def validate_percentage(percentage: Decimal) -> bool:
     """
     if percentage is None:
         return False
-    
+
     return Decimal("0") <= percentage <= Decimal("100")
+
 
 def validate_date_range(start_date: date, end_date: date) -> bool:
     """
@@ -139,8 +146,9 @@ def validate_date_range(start_date: date, end_date: date) -> bool:
     """
     if not start_date or not end_date:
         return False
-    
+
     return start_date <= end_date
+
 
 def validate_future_date(check_date: date) -> bool:
     """
@@ -152,8 +160,9 @@ def validate_future_date(check_date: date) -> bool:
     """
     if not check_date:
         return False
-    
+
     return check_date > date.today()
+
 
 def validate_past_date(check_date: date) -> bool:
     """
@@ -165,8 +174,9 @@ def validate_past_date(check_date: date) -> bool:
     """
     if not check_date:
         return False
-    
+
     return check_date < date.today()
+
 
 def validate_date_not_future(check_date: date) -> bool:
     """
@@ -178,8 +188,9 @@ def validate_date_not_future(check_date: date) -> bool:
     """
     if not check_date:
         return False
-    
+
     return check_date <= date.today()
+
 
 def validate_cuotas(numero_cuotas: int) -> bool:
     """
@@ -191,8 +202,9 @@ def validate_cuotas(numero_cuotas: int) -> bool:
     """
     if numero_cuotas is None:
         return False
-    
+
     return 1 <= numero_cuotas <= MAX_CUOTAS
+
 
 def validate_tasa_interes(tasa: Decimal) -> bool:
     """
@@ -204,8 +216,9 @@ def validate_tasa_interes(tasa: Decimal) -> bool:
     """
     if tasa is None:
         return False
-    
+
     return Decimal("0") <= tasa <= Decimal(str(MAX_TASA_INTERES))
+
 
 def sanitize_string(text: Optional[str]) -> Optional[str]:
     """
@@ -217,11 +230,12 @@ def sanitize_string(text: Optional[str]) -> Optional[str]:
     """
     if not text:
         return None
-    
+
     # Remover caracteres de control y espacios extras
     text = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", text)
     text = " ".join(text.split())
     return text.strip()
+
 
 def sanitize_html(text: Optional[str]) -> Optional[str]:
     """
@@ -234,23 +248,24 @@ def sanitize_html(text: Optional[str]) -> Optional[str]:
     """
     if not text:
         return None
-    
+
     import html
-    
+
     # Escapar caracteres HTML
     text = html.escape(text)
-    
+
     # Remover caracteres peligrosos adicionales
     text = re.sub(r"[<>]", "", text)
-    
+
     # Remover scripts obvios
     text = re.sub(
         r"<script.*?>.*?</script>", "", text, flags=re.IGNORECASE | re.DOTALL
     )
     text = re.sub(r"javascript:", "", text, flags=re.IGNORECASE)
     text = re.sub(r"on\w+\s*=", "", text, flags=re.IGNORECASE)
-    
+
     return text.strip()
+
 
 def format_dni(dni: str) -> str:
     """
@@ -263,9 +278,9 @@ def format_dni(dni: str) -> str:
     """
     if not dni:
         return dni
-    
+
     dni_clean = dni.replace(".", "").replace("-", "").strip()
-    
+
     if len(dni_clean) >= 7:
         # Formatear con puntos y guión
         formatted = ""
@@ -273,11 +288,12 @@ def format_dni(dni: str) -> str:
             if i > 0 and (len(dni_clean) - i - 1) % 3 == 0:
                 formatted += "."
             formatted += char
-        
+
         formatted += "-" + dni_clean[-1]
         return formatted
-    
+
     return dni_clean
+
 
 def format_phone(phone: str) -> str:
     """
@@ -290,9 +306,9 @@ def format_phone(phone: str) -> str:
     """
     if not phone:
         return phone
-    
+
     phone_clean = re.sub(r"[\s\-\(\)]", "", phone)
-    
+
     if phone_clean.startswith("+595"):
         # +595 981 234567
         phone_clean = phone_clean[4:]
@@ -304,6 +320,7 @@ def format_phone(phone: str) -> str:
         # 981 234567
         return f"{phone_clean[:3]} {phone_clean[3:6]}-{phone_clean[6:]}"
 
+
 def validate_cuenta_bancaria(cuenta: str) -> bool:
     """
     Valida formato de cuenta bancaria
@@ -314,21 +331,22 @@ def validate_cuenta_bancaria(cuenta: str) -> bool:
     """
     if not cuenta:
         return False
-    
+
     # Remover espacios y guiones
     cuenta_clean = cuenta.replace(" ", "").replace("-", "")
-    
+
     # Debe tener entre MIN_CUENTA_LENGTH y MAX_CUENTA_LENGTH dígitos
     if not cuenta_clean.isdigit():
         return False
-    
+
     if (
         len(cuenta_clean) < MIN_CUENTA_LENGTH
         or len(cuenta_clean) > MAX_CUENTA_LENGTH
     ):
         return False
-    
+
     return True
+
 
 def validate_codigo_prestamo(codigo: str) -> bool:
     """
@@ -341,9 +359,10 @@ def validate_codigo_prestamo(codigo: str) -> bool:
     """
     if not codigo:
         return False
-    
+
     pattern = r"^PREST-\d{8}-\d{4}$"
     return bool(re.match(pattern, codigo))
+
 
 def validate_monto_vs_ingreso(
     monto_cuota: Decimal,
@@ -361,12 +380,13 @@ def validate_monto_vs_ingreso(
     """
     if not monto_cuota or not ingreso_mensual:
         return False
-    
+
     if ingreso_mensual <= 0:
         return False
-    
+
     percentage = (monto_cuota / ingreso_mensual) * Decimal("100")
     return percentage <= max_percentage
+
 
 def validate_payment_amount(
     payment_amount: Decimal,
@@ -384,30 +404,32 @@ def validate_payment_amount(
     """
     if not payment_amount or not expected_amount:
         return False
-    
+
     difference = abs(payment_amount - expected_amount)
     return difference <= tolerance or payment_amount >= expected_amount
+
 
 def _validate_password_length(password: str) -> tuple[bool, str]:
     """Validar longitud de contraseña"""
     if not password:
         return False, "La contraseña es requerida"
-    
+
     if len(password) < MIN_PASSWORD_LENGTH:
         return (
             False,
             f"La contraseña debe tener al menos {MIN_PASSWORD_LENGTH} "
             "caracteres",
         )
-    
+
     if len(password) > MAX_PASSWORD_LENGTH:
         return (
             False,
             f"La contraseña no puede tener más de "
             f"{MAX_PASSWORD_LENGTH} caracteres",
         )
-    
+
     return True, ""
+
 
 def _validate_password_patterns(password: str) -> tuple[bool, str]:
     """Validar patrones requeridos en contraseña"""
@@ -417,30 +439,31 @@ def _validate_password_patterns(password: str) -> tuple[bool, str]:
             False,
             "La contraseña debe contener al menos una letra minúscula",
         )
-    
+
     # Verificar que tenga al menos una letra mayúscula
     if not re.search(r"[A-Z]", password):
         return (
             False,
             "La contraseña debe contener al menos una letra mayúscula",
         )
-    
+
     # Verificar que tenga al menos un dígito
     if not re.search(r"\d", password):
         return False, "La contraseña debe contener al menos un número"
-    
+
     # Verificar que tenga al menos un carácter especial
     if not re.search(r'[!@#$%^&*()_+\-=\[\]{};:"\\|,.<>\/?]', password):
         return (
             False,
             "La contraseña debe contener al menos un carácter especial",
         )
-    
+
     # Verificar que no contenga espacios
     if " " in password:
         return False, "La contraseña no puede contener espacios"
-    
+
     return True, ""
+
 
 def _validate_password_weak_patterns(password: str) -> tuple[bool, str]:
     """Validar patrones débiles comunes"""
@@ -451,13 +474,14 @@ def _validate_password_weak_patterns(password: str) -> tuple[bool, str]:
         r"password",  # Palabra común
         r"qwerty",  # Teclado
     ]
-    
+
     password_lower = password.lower()
     for pattern in weak_patterns:
         if re.search(pattern, password_lower):
             return False, "La contraseña contiene patrones débiles comunes"
-    
+
     return True, ""
+
 
 def validate_password_strength(password: str) -> tuple[bool, str]:
     """
@@ -471,18 +495,19 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
     is_valid, message = _validate_password_length(password)
     if not is_valid:
         return is_valid, message
-    
+
     # Validar patrones requeridos
     is_valid, message = _validate_password_patterns(password)
     if not is_valid:
         return is_valid, message
-    
+
     # Validar patrones débiles
     is_valid, message = _validate_password_weak_patterns(password)
     if not is_valid:
         return is_valid, message
-    
+
     return True, "Contraseña válida"
+
 
 def normalize_text(text: str) -> str:
     """
@@ -495,10 +520,10 @@ def normalize_text(text: str) -> str:
     """
     if not text:
         return ""
-    
+
     # Convertir a minúsculas
     text = text.lower()
-    
+
     # Remover acentos
     replacements = {
         "á": "a",
@@ -509,14 +534,14 @@ def normalize_text(text: str) -> str:
         "ñ": "n",
         "ü": "u",
     }
-    
+
     for old, new in replacements.items():
         text = text.replace(old, new)
-    
+
     # Remover caracteres especiales excepto espacios
     text = re.sub(r"[^a-z0-9\s]", "", text)
-    
+
     # Normalizar espacios
     text = " ".join(text.split())
-    
+
     return text

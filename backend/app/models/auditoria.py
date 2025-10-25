@@ -102,6 +102,7 @@ class Auditoria(Base):
     # Relaciones
     usuario = relationship("User", back_populates="auditorias")
 
+
     def __repr__(self):
         return f"<Auditoria {self.accion} - {self.tabla} - {self.fecha}>"
 
@@ -124,7 +125,7 @@ class Auditoria(Base):
     ):
         """
         Método helper para crear registros de auditoría
-        
+
         Args:
             usuario_id: ID del usuario que realizó la acción
             usuario_email: Email del usuario (para ordenamiento)
@@ -139,7 +140,7 @@ class Auditoria(Base):
             user_agent: User agent del navegador
             resultado: Resultado de la acción
             mensaje_error: Mensaje de error si falló
-            
+
         Returns:
             Auditoria: Instancia del registro de auditoría
         """

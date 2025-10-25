@@ -60,8 +60,10 @@ class ConfiguracionSistema(Base):
     )
     actualizado_por = Column(String(100), nullable=True)
 
+
     def __repr__(self):
         return f"<ConfiguracionSistema({self.categoria}.{self.clave}={self.valor})>"
+
 
     def _procesar_valor_boolean(self) -> bool:
         """Procesar valor de tipo BOOLEAN"""
@@ -71,12 +73,14 @@ class ConfiguracionSistema(Base):
             else False
         )
 
+
     def _procesar_valor_integer(self) -> int:
         """Procesar valor de tipo INTEGER"""
         try:
             return int(self.valor) if self.valor else 0
         except (ValueError, TypeError):
             return 0
+
 
     def _procesar_valor_decimal(self) -> float:
         """Procesar valor de tipo DECIMAL"""
@@ -85,12 +89,14 @@ class ConfiguracionSistema(Base):
         except (ValueError, TypeError):
             return 0.0
 
+
     def _procesar_valor_json(self) -> dict:
         """Procesar valor de tipo JSON"""
         try:
             return json.loads(self.valor) if self.valor else {}
         except (json.JSONDecodeError, TypeError):
             return self.valor_json or {}
+
 
     def _procesar_valor_string(self) -> str:
         """Procesar valor de tipo STRING"""
@@ -109,6 +115,7 @@ class ConfiguracionSistema(Base):
             return self._procesar_valor_json()
         else:
             return self._procesar_valor_string()
+
 
     def actualizar_valor(self, nuevo_valor: Any, usuario: str = None):
         """Actualizar valor con validación"""
@@ -691,6 +698,8 @@ class ConfiguracionPorDefecto:
 # ============================================
 # HELPER PARA ACCESO RÁPIDO A CONFIGURACIONES
 # ============================================
+
+
 class ConfigHelper:
     """
     Helper para acceso rápido a configuraciones

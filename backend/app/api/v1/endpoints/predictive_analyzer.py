@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from fastapi import APIRouter, Depends, Request, HTTPException
-from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 
@@ -45,9 +44,11 @@ class UserBehaviorPattern:
 # SISTEMA DE ANÁLISIS PREDICTIVO
 # ============================================
 
+
 class PredictiveAnalyzer:
     """Analizador predictivo de autenticación"""
-    
+
+
     def __init__(self):
         self.user_data = defaultdict(lambda: {
             "login_attempts": deque(maxlen=1000),
@@ -60,10 +61,11 @@ class PredictiveAnalyzer:
         })
         self.predictions = deque(maxlen=1000)
         self.model_accuracy = {}
-        
+
+
     def record_authentication_event(
-        self, 
-        user_id: str, 
+        self,
+        user_id: str,
         success: bool,
         request_context: Dict[str, Any],
         session_duration: Optional[float] = None
@@ -71,7 +73,7 @@ class PredictiveAnalyzer:
         """Registrar evento de autenticación para análisis"""
         user_data = self.user_data[user_id]
         timestamp = datetime.now()
-        
+
         # Registrar intento de login
         user_data["login_attempts"].append({
             "timestamp": timestamp,
@@ -79,56 +81,57 @@ class PredictiveAnalyzer:
             "ip": request_context.get("client_ip"),
             "user_agent": request_context.get("user_agent")
         })
-        
+
         if success:
             user_data["successful_logins"].append(timestamp)
             if session_duration:
                 user_data["session_durations"].append(session_duration)
         else:
             user_data["failed_logins"].append(timestamp)
-        
+
         # Registrar información de contexto
         client_ip = request_context.get("client_ip")
         if client_ip:
             user_data["ip_addresses"].append(client_ip)
-        
+
         user_agent = request_context.get("user_agent")
         if user_agent:
             user_data["user_agents"].append(user_agent)
-        
+
         user_data["login_times"].append(timestamp.hour)
-        
+
         logger.debug(f"Evento de autenticación registrado para usuario {user_id}")
-    
+
+
     def predict_authentication_failure(
-        self, 
-        user_id: str, 
+        self,
+        user_id: str,
         time_horizon: str = "short"
     ) -> PredictionResult:
         """Predecir probabilidad de fallo de autenticación"""
         prediction_id = f"pred_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{user_id}"
-        
+
         try:
             user_data = self.user_data[user_id]
-            
+
             # Calcular métricas históricas
             recent_failures = self._get_recent_failures(user_data, time_horizon)
             failure_rate = self._calculate_failure_rate(user_data, time_horizon)
             time_pattern_risk = self._analyze_time_patterns(user_data)
             location_risk = self._analyze_location_patterns(user_data)
             device_risk = self._analyze_device_patterns(user_data)
-            
+
             # Calcular score de confianza y predicción
             confidence_score = self._calculate_confidence_score(user_data, time_horizon)
             predicted_failure_probability = self._calculate_failure_probability(
                 failure_rate, time_pattern_risk, location_risk, device_risk
             )
-            
+
             # Identificar factores de riesgo
             risk_factors = self._identify_risk_factors(
                 failure_rate, time_pattern_risk, location_risk, device_risk
             )
-            
+
             prediction = PredictionResult(
                 prediction_id=prediction_id,
                 user_id=user_id,
@@ -139,10 +142,10 @@ class PredictiveAnalyzer:
                 timestamp=datetime.now(),
                 time_horizon=time_horizon
             )
-            
+
             self.predictions.append(prediction)
             return prediction
-            
+
         except Exception as e:
             logger.error(f"Error prediciendo fallo de autenticación: {e}")
             # Retornar predicción por defecto en caso de error
@@ -156,7 +159,8 @@ class PredictiveAnalyzer:
                 timestamp=datetime.now(),
                 time_horizon=time_horizon
             )
-    
+
+
     def _get_recent_failures(self, user_data: Dict, time_horizon: str) -> int:
         """Obtener fallos recientes según el horizonte temporal"""
         if time_horizon == "short":
@@ -165,14 +169,15 @@ class PredictiveAnalyzer:
             cutoff = datetime.now() - timedelta(days=7)
         else:  # long
             cutoff = datetime.now() - timedelta(days=30)
-        
+
         recent_failures = [
             attempt for attempt in user_data["login_attempts"]
             if attempt["timestamp"] > cutoff and not attempt["success"]
         ]
-        
+
         return len(recent_failures)
-    
+
+
     def _calculate_failure_rate(self, user_data: Dict, time_horizon: str) -> float:
         """Calcular tasa de fallo"""
         recent_attempts = self._get_recent_failures(user_data, time_horizon)
@@ -180,18 +185,19 @@ class PredictiveAnalyzer:
             attempt for attempt in user_data["login_attempts"]
             if attempt["timestamp"] > datetime.now() - timedelta(days=30)
         ])
-        
+
         if total_attempts == 0:
             return 0.0
-        
+
         return recent_attempts / total_attempts
-    
+
+
     def _analyze_time_patterns(self, user_data: Dict) -> float:
         """Analizar patrones temporales de riesgo"""
         login_times = list(user_data["login_times"])
         if not login_times:
             return 0.0
-        
+
         # Calcular desviación estándar de horas de login
         try:
             std_dev = statistics.stdev(login_times)
@@ -199,45 +205,48 @@ class PredictiveAnalyzer:
             return min(std_dev / 12.0, 1.0)  # Normalizar a 0-1
         except statistics.StatisticsError:
             return 0.0
-    
+
+
     def _analyze_location_patterns(self, user_data: Dict) -> float:
         """Analizar patrones de ubicación"""
         ip_addresses = list(user_data["ip_addresses"])
         if not ip_addresses:
             return 0.0
-        
+
         # Calcular diversidad de IPs
         unique_ips = len(set(ip_addresses))
         total_ips = len(ip_addresses)
-        
+
         if total_ips == 0:
             return 0.0
-        
+
         # Mayor diversidad = mayor riesgo
         diversity_ratio = unique_ips / total_ips
         return diversity_ratio
-    
+
+
     def _analyze_device_patterns(self, user_data: Dict) -> float:
         """Analizar patrones de dispositivos"""
         user_agents = list(user_data["user_agents"])
         if not user_agents:
             return 0.0
-        
+
         # Calcular diversidad de user agents
         unique_agents = len(set(user_agents))
         total_agents = len(user_agents)
-        
+
         if total_agents == 0:
             return 0.0
-        
+
         # Mayor diversidad = mayor riesgo
         diversity_ratio = unique_agents / total_agents
         return diversity_ratio
-    
+
+
     def _calculate_confidence_score(self, user_data: Dict, time_horizon: str) -> float:
         """Calcular score de confianza de la predicción"""
         total_attempts = len(user_data["login_attempts"])
-        
+
         # Más datos = mayor confianza
         if total_attempts < 10:
             return 0.3
@@ -247,12 +256,13 @@ class PredictiveAnalyzer:
             return 0.8
         else:
             return 0.9
-    
+
+
     def _calculate_failure_probability(
-        self, 
-        failure_rate: float, 
-        time_risk: float, 
-        location_risk: float, 
+        self,
+        failure_rate: float,
+        time_risk: float,
+        location_risk: float,
         device_risk: float
     ) -> float:
         """Calcular probabilidad de fallo"""
@@ -263,61 +273,63 @@ class PredictiveAnalyzer:
             "location_risk": 0.2,
             "device_risk": 0.2
         }
-        
+
         probability = (
             failure_rate * weights["failure_rate"] +
             time_risk * weights["time_risk"] +
             location_risk * weights["location_risk"] +
             device_risk * weights["device_risk"]
         )
-        
+
         return min(max(probability, 0.0), 1.0)  # Clamp entre 0 y 1
-    
+
+
     def _identify_risk_factors(
-        self, 
-        failure_rate: float, 
-        time_risk: float, 
-        location_risk: float, 
+        self,
+        failure_rate: float,
+        time_risk: float,
+        location_risk: float,
         device_risk: float
     ) -> List[str]:
         """Identificar factores de riesgo"""
         factors = []
-        
+
         if failure_rate > 0.3:
             factors.append("Alta tasa de fallos recientes")
-        
+
         if time_risk > 0.7:
             factors.append("Patrones temporales irregulares")
-        
+
         if location_risk > 0.7:
             factors.append("Múltiples ubicaciones de acceso")
-        
+
         if device_risk > 0.7:
             factors.append("Múltiples dispositivos o navegadores")
-        
+
         if not factors:
             factors.append("Patrones normales de acceso")
-        
+
         return factors
-    
+
+
     def get_user_behavior_pattern(self, user_id: str) -> UserBehaviorPattern:
         """Obtener patrón de comportamiento del usuario"""
         user_data = self.user_data[user_id]
-        
+
         # Calcular métricas de comportamiento
         login_frequency = self._calculate_login_frequency(user_data)
         failure_rate = self._calculate_failure_rate(user_data, "medium")
         time_patterns = self._analyze_time_patterns(user_data)
         location_patterns = dict(Counter(user_data["ip_addresses"]))
         device_patterns = dict(Counter(user_data["user_agents"]))
-        
+
         # Calcular score de riesgo general
         risk_score = self._calculate_failure_probability(
-            failure_rate, time_patterns, 
+            failure_rate, time_patterns,
             len(set(user_data["ip_addresses"])) / max(len(user_data["ip_addresses"]), 1),
             len(set(user_data["user_agents"])) / max(len(user_data["user_agents"]), 1)
         )
-        
+
         return UserBehaviorPattern(
             user_id=user_id,
             login_frequency=login_frequency,
@@ -327,21 +339,22 @@ class PredictiveAnalyzer:
             device_patterns=device_patterns,
             risk_score=risk_score
         )
-    
+
+
     def _calculate_login_frequency(self, user_data: Dict) -> float:
         """Calcular frecuencia de login (logins por día)"""
         successful_logins = list(user_data["successful_logins"])
         if not successful_logins:
             return 0.0
-        
+
         # Calcular días entre primer y último login
         if len(successful_logins) == 1:
             return 1.0
-        
+
         first_login = min(successful_logins)
         last_login = max(successful_logins)
         days = (last_login - first_login).days + 1
-        
+
         return len(successful_logins) / days
 
 # Instancia global del analizador predictivo
@@ -362,24 +375,24 @@ async def record_authentication_event(
         user_id = event_data.get("user_id", current_user.id)
         success = event_data.get("success", False)
         session_duration = event_data.get("session_duration")
-        
+
         # Obtener contexto de la petición
         request_context = {
             "client_ip": request.client.host if request.client else None,
             "user_agent": request.headers.get("User-Agent"),
             "timestamp": datetime.now().isoformat()
         }
-        
+
         # Registrar evento
         predictive_analyzer.record_authentication_event(
             user_id, success, request_context, session_duration
         )
-        
+
         return {
             "success": True,
             "message": "Evento de autenticación registrado exitosamente"
         }
-        
+
     except Exception as e:
         logger.error(f"Error registrando evento de autenticación: {e}")
         raise HTTPException(
@@ -396,19 +409,19 @@ async def predict_authentication_failure(
     try:
         user_id = prediction_data.get("user_id", current_user.id)
         time_horizon = prediction_data.get("time_horizon", "short")
-        
+
         # Validar horizonte temporal
         if time_horizon not in ["short", "medium", "long"]:
             raise HTTPException(
                 status_code=400,
                 detail="time_horizon debe ser 'short', 'medium' o 'long'"
             )
-        
+
         # Realizar predicción
         prediction = predictive_analyzer.predict_authentication_failure(
             user_id, time_horizon
         )
-        
+
         # Convertir a formato serializable
         prediction_data = {
             "prediction_id": prediction.prediction_id,
@@ -420,12 +433,12 @@ async def predict_authentication_failure(
             "timestamp": prediction.timestamp.isoformat(),
             "time_horizon": prediction.time_horizon
         }
-        
+
         return {
             "success": True,
             "prediction": prediction_data
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -443,7 +456,7 @@ async def get_user_behavior_pattern(
     """Obtener patrón de comportamiento del usuario"""
     try:
         behavior_pattern = predictive_analyzer.get_user_behavior_pattern(user_id)
-        
+
         # Convertir a formato serializable
         behavior_data = {
             "user_id": behavior_pattern.user_id,
@@ -454,12 +467,12 @@ async def get_user_behavior_pattern(
             "device_patterns": behavior_pattern.device_patterns,
             "risk_score": behavior_pattern.risk_score
         }
-        
+
         return {
             "success": True,
             "behavior_pattern": behavior_data
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo patrón de comportamiento: {e}")
         raise HTTPException(
@@ -476,14 +489,14 @@ async def get_prediction_history(
     """Obtener historial de predicciones"""
     try:
         predictions = list(predictive_analyzer.predictions)
-        
+
         # Filtrar por usuario si se especifica
         if user_id:
             predictions = [p for p in predictions if p.user_id == user_id]
-        
+
         # Limitar resultados
         predictions = predictions[-limit:]
-        
+
         # Convertir a formato serializable
         predictions_data = [
             {
@@ -498,13 +511,13 @@ async def get_prediction_history(
             }
             for p in predictions
         ]
-        
+
         return {
             "success": True,
             "predictions": predictions_data,
             "total_count": len(predictions_data)
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo historial de predicciones: {e}")
         raise HTTPException(
@@ -520,7 +533,7 @@ async def get_model_accuracy(
     try:
         # Calcular precisión básica basada en predicciones recientes
         recent_predictions = list(predictive_analyzer.predictions)[-100:]
-        
+
         if not recent_predictions:
             return {
                 "success": True,
@@ -530,11 +543,11 @@ async def get_model_accuracy(
                     "confidence_distribution": {}
                 }
             }
-        
+
         # Calcular distribución de confianza
         confidence_scores = [p.confidence_score for p in recent_predictions]
         avg_confidence = statistics.mean(confidence_scores) if confidence_scores else 0.0
-        
+
         return {
             "success": True,
             "accuracy": {
@@ -547,7 +560,7 @@ async def get_model_accuracy(
                 }
             }
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo precisión del modelo: {e}")
         raise HTTPException(

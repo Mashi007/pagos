@@ -30,7 +30,7 @@ def registrar_auditoria(
 ) -> Auditoria:
     """
     Registrar una acción en la auditoría del sistema
-    
+
     Args:
         db: Sesión de base de datos
         usuario: Usuario que realizó la acción
@@ -45,7 +45,7 @@ def registrar_auditoria(
         user_agent: User agent del navegador
         resultado: Resultado de la acción
         mensaje_error: Mensaje de error si falló
-    
+
     Returns:
         Auditoria: Registro de auditoría creado
     """

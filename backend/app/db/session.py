@@ -48,6 +48,8 @@ Base = declarative_base()
 
 
 # Dependency para FastAPI
+
+
 def get_db():
     """
     Dependency que proporciona una sesión de base de datos.

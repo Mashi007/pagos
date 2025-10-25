@@ -102,6 +102,7 @@ class Cuota(Base):
     #     overlaps="cuotas,pago"
     # )  # COMENTADO: Temporalmente hasta implementar módulo préstamos
 
+
     def __repr__(self):
         return f"<Cuota {self.numero_cuota} - Préstamo {self.prestamo_id} - {self.estado}>"
 
@@ -126,6 +127,7 @@ class Cuota(Base):
             return Decimal("0")
         return (self.total_pagado / self.monto_cuota) * Decimal("100")
 
+
     def calcular_mora(self, tasa_mora_diaria: Decimal) -> Decimal:
         """
         Calcula el monto de mora acumulado
@@ -136,11 +138,11 @@ class Cuota(Base):
         """
         if self.estado == "PAGADA" or not self.esta_vencida:
             return Decimal("0.00")
-        
+
         dias_mora = (date.today() - self.fecha_vencimiento).days
         if dias_mora <= 0:
             return Decimal("0.00")
-        
+
         # Mora sobre el capital pendiente
         mora = (
             self.capital_pendiente
@@ -148,6 +150,7 @@ class Cuota(Base):
             * Decimal(dias_mora)
         )
         return mora.quantize(Decimal("0.01"))
+
 
     def aplicar_pago(self, monto_pago: Decimal) -> dict:
         """
@@ -201,6 +204,7 @@ class Cuota(Base):
         # Actualizar estado
         self.actualizar_estado()
         return detalle
+
 
     def actualizar_estado(self):
         """Actualiza el estado de la cuota según los pagos realizados"""

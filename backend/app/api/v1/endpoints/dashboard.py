@@ -35,12 +35,12 @@ def dashboard_administrador(
     👑 DASHBOARD ADMINISTRADOR - ACCESO COMPLETO AL SISTEMA
     ✅ Acceso: TODO el sistema
     ✅ Vista Dashboard:
-       • KPIs principales (tarjetas con números grandes)
-       • Gráfico de mora vs al día
-       • Tabla de pagos recientes
-       • Alertas de pagos vencidos hoy
-       • Acceso a TODOS los clientes
-       • Estadísticas globales
+    • KPIs principales (tarjetas con números grandes)
+    • Gráfico de mora vs al día
+    • Tabla de pagos recientes
+    • Alertas de pagos vencidos hoy
+    • Acceso a TODOS los clientes
+    • Estadísticas globales
     """
     # Verificar permisos
     if not current_user.is_admin:
@@ -295,12 +295,12 @@ def dashboard_cobranzas(
     💰 DASHBOARD COBRANZAS - ACCESO COMPLETO (EXCEPTO GESTIÓN DE USUARIOS)
     ✅ Acceso: TODO el sistema (excepto gestión de usuarios)
     ✅ Vista Dashboard:
-       • KPIs principales (tarjetas con números grandes)
-       • Gráfico de mora vs al día
-       • Tabla de pagos recientes
-       • Alertas de pagos vencidos hoy
-       • Acceso a TODOS los clientes
-       • Estadísticas globales
+    • KPIs principales (tarjetas con números grandes)
+    • Gráfico de mora vs al día
+    • Tabla de pagos recientes
+    • Alertas de pagos vencidos hoy
+    • Acceso a TODOS los clientes
+    • Estadísticas globales
     """
     # Verificar permisos
     if not current_user.is_admin:
@@ -480,11 +480,11 @@ def dashboard_comercial(
     👔 DASHBOARD USER - SOLO SUS CLIENTES
     ⚠️ Acceso: SOLO SUS CLIENTES
     ✅ Vista Dashboard:
-       • KPIs de sus clientes únicamente
-       • Gráfico de mora vs al día (solo sus clientes)
-       • Lista de sus clientes
-       • Estadísticas de sus clientes
-       • NO ve datos de otros analistaes/comerciales
+    • KPIs de sus clientes únicamente
+    • Gráfico de mora vs al día (solo sus clientes)
+    • Lista de sus clientes
+    • Estadísticas de sus clientes
+    • NO ve datos de otros analistaes/comerciales
     """
     # Verificar permisos
     if not current_user.is_admin:
@@ -692,11 +692,11 @@ def dashboard_analista(
     👤 DASHBOARD USER - SOLO SUS CLIENTES
     ⚠️ Acceso: SOLO SUS CLIENTES
     ✅ Vista Dashboard:
-       • KPIs de sus clientes únicamente
-       • Gráfico de mora vs al día (solo sus clientes)
-       • Lista de sus clientes
-       • Estadísticas de sus clientes
-       • NO ve datos de otros analistaes/comerciales
+    • KPIs de sus clientes únicamente
+    • Gráfico de mora vs al día (solo sus clientes)
+    • Lista de sus clientes
+    • Estadísticas de sus clientes
+    • NO ve datos de otros analistaes/comerciales
     """
     # NOTA: Este endpoint necesita rediseño - Los Users no son Analistaes de configuración
     # Por ahora, mostrar dashboard general
@@ -1221,6 +1221,7 @@ def obtener_alertas_tiempo_real(
 # ============================================
 # FUNCIONES AUXILIARES
 # ============================================
+
 
 def _get_dashboards_disponibles(is_admin: bool) -> List[str]:
     """Obtener dashboards disponibles según rol"""

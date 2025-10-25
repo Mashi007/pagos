@@ -17,15 +17,17 @@ logger = logging.getLogger(__name__)
 class WhatsAppService:
     """Servicio para gestión de WhatsApp usando Meta Developers API"""
 
+
     def __init__(self):
         # Configuración de Meta Developers API
         self.api_url = getattr(settings, 'WHATSAPP_API_URL', 'https://graph.facebook.com/v18.0')
         self.access_token = getattr(settings, 'WHATSAPP_ACCESS_TOKEN', None)
         self.phone_number_id = getattr(settings, 'WHATSAPP_PHONE_NUMBER_ID', None)
-        
+
         # Verificar configuración
         if not self.access_token or not self.phone_number_id:
             logger.warning("Credenciales de Meta Developers no configuradas")
+
 
     async def send_message(
         self,
@@ -36,13 +38,13 @@ class WhatsAppService:
     ) -> Dict[str, Any]:
         """
         Enviar mensaje WhatsApp usando Meta Developers API
-        
+
         Args:
             to_number: Número de teléfono destinatario
             message: Mensaje a enviar
             template_name: Nombre del template (opcional)
             template_params: Parámetros del template (opcional)
-            
+
         Returns:
             Dict con resultado del envío
         """
@@ -58,7 +60,7 @@ class WhatsAppService:
             clean_number = (
                 to_number.replace("+", "").replace(" ", "").replace("-", "")
             )
-            
+
             if not clean_number.isdigit():
                 return {
                     "success": False,
@@ -111,10 +113,10 @@ class WhatsAppService:
                     url, headers=headers, json=payload
                 ) as response:
                     response_data = await response.json()
-                    
+
                     if response.status == 200:
                         message_id = response_data.get("messages", [{}])[0].get("id")
-                        
+
                         logger.info(f"Mensaje WhatsApp enviado: {message_id}")
                         return {
                             "success": True,
@@ -136,13 +138,14 @@ class WhatsAppService:
             logger.error(error_msg)
             return {"success": False, "error": error_msg, "message_id": None}
 
+
     def validate_phone_number(self, phone_number: str) -> bool:
         """
         Validar formato de número de teléfono
-        
+
         Args:
             phone_number: Número a validar
-            
+
         Returns:
             True si es válido
         """
@@ -150,10 +153,11 @@ class WhatsAppService:
         pattern = r"^\+\d{10,15}$"
         return bool(re.match(pattern, phone_number))
 
+
     def validate_meta_configuration(self) -> Dict[str, Any]:
         """
         Validar configuración de Meta Developers
-        
+
         Returns:
             Dict con estado de la configuración
         """
@@ -163,8 +167,8 @@ class WhatsAppService:
             "api_url": self.api_url,
         }
         config_status["ready"] = all([
-            config_status["access_token"], 
+            config_status["access_token"],
             config_status["phone_number_id"]
         ])
-        
+
         return config_status

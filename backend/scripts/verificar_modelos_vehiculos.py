@@ -28,7 +28,7 @@ def verificar_modelos_vehiculos():
                 text(
                     """
                 SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
+                    SELECT FROM information_schema.tables
                     WHERE table_name = 'modelos_vehiculos'
                 );
             """

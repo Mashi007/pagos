@@ -115,6 +115,7 @@ class Aprobacion(Base):
         back_populates="aprobaciones_revisadas",
     )
 
+
     def __repr__(self):
         return f"<Aprobacion {self.tipo_solicitud} - {self.estado}>"
 
@@ -133,12 +134,14 @@ class Aprobacion(Base):
         """Verifica si la aprobación fue rechazada"""
         return self.estado == EstadoAprobacion.RECHAZADA.value
 
+
     def aprobar(self, revisor_id: int, comentarios: str = None):
         """Marca la aprobación como aprobada"""
         self.estado = EstadoAprobacion.APROBADA.value
         self.revisor_id = revisor_id
         self.comentarios_revisor = comentarios
         self.fecha_revision = datetime.utcnow()
+
 
     def rechazar(self, revisor_id: int, comentarios: str):
         """Marca la aprobación como rechazada"""
@@ -149,14 +152,17 @@ class Aprobacion(Base):
         self.bloqueado_temporalmente = False  # Desbloquear
         self._calcular_tiempo_respuesta()
 
+
     def cancelar(self):
         """Cancela la solicitud de aprobación"""
         self.estado = EstadoAprobacion.CANCELADA.value
+
 
     def marcar_como_visto(self, admin_id: int):
         """Marcar solicitud como vista por admin"""
         self.visto_por_admin = True
         self.fecha_visto = datetime.utcnow()
+
 
     def adjuntar_archivo(self, archivo_path: str, tipo: str, tamaño: int):
         """Adjuntar archivo de evidencia"""
@@ -164,19 +170,23 @@ class Aprobacion(Base):
         self.tipo_archivo = tipo
         self.tamaño_archivo = tamaño
 
+
     def establecer_prioridad(self, prioridad: str):
         """Establecer prioridad de la solicitud"""
         prioridades_validas = ["BAJA", "NORMAL", "ALTA", "URGENTE"]
         if prioridad in prioridades_validas:
             self.prioridad = prioridad
 
+
     def marcar_notificado_admin(self):
         """Marcar que se notificó al admin"""
         self.notificado_admin = True
 
+
     def marcar_notificado_solicitante(self):
         """Marcar que se notificó al solicitante"""
         self.notificado_solicitante = True
+
 
     def _calcular_tiempo_respuesta(self):
         """Calcular tiempo de respuesta en horas"""

@@ -79,6 +79,8 @@ logger.info(f"Database URL configurada: {bool(settings.DATABASE_URL)}")
 # ============================================
 # SECURITY HEADERS MIDDLEWARE - TEMPORALMENTE PERMISIVO
 # ============================================
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
     Middleware para agregar security headers según OWASP
@@ -89,6 +91,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     - X-XSS-Protection
     - Referrer-Policy
     """
+
 
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)

@@ -5,7 +5,6 @@ import logging
 from datetime import datetime
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request
-from jwt import PyJWTError
 from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.core.config import settings
@@ -20,8 +19,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.post("/diagnosticar-refresh-token")
+# Funcion compleja - considerar refactoring
+
 async def diagnosticar_refresh_token(
-    request: Request, 
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -29,11 +30,11 @@ async def diagnosticar_refresh_token(
     """
     try:
         logger.info("🔍 Iniciando diagnóstico de refresh token")
-        
+
         # Obtener refresh token del body
         body = await request.json()
         refresh_token = body.get("refresh_token")
-        
+
         if not refresh_token:
             return {
                 "timestamp": datetime.now().isoformat(),
@@ -44,9 +45,9 @@ async def diagnosticar_refresh_token(
                     "correctamente"
                 ),
             }
-        
+
         logger.info(f"🔍 Refresh token recibido: {refresh_token[:20]}...")
-        
+
         # 1. Verificar formato del token
         try:
             # Decodificar sin verificar para obtener información básica
@@ -61,7 +62,7 @@ async def diagnosticar_refresh_token(
                 "exp": payload_unverified.get("exp"),
                 "iat": payload_unverified.get("iat"),
             }
-            
+
             # Verificar si está expirado
             if payload_unverified.get("exp"):
                 exp_timestamp = payload_unverified["exp"]
@@ -74,13 +75,13 @@ async def diagnosticar_refresh_token(
                     if not token_info["expired"]
                     else "EXPIRED"
                 )
-                
+
         except Exception as e:
             token_info = {
                 "formato_valido": False,
                 "error": str(e),
             }
-        
+
         # 2. Verificar con la función decode_token del sistema
         try:
             decoded_payload = decode_token(refresh_token)
@@ -93,35 +94,35 @@ async def diagnosticar_refresh_token(
                 "valido_segun_sistema": False,
                 "error": str(e),
             }
-        
+
         # 3. Verificar configuración JWT
         config_check = {
             "secret_key_configurado": bool(settings.SECRET_KEY),
             "algorithm_configurado": bool(settings.ALGORITHM),
             "algorithm": settings.ALGORITHM,
         }
-        
+
         # 4. Generar recomendaciones
         recomendaciones = []
-        
+
         if not token_info.get("formato_valido"):
             recomendaciones.append("Token malformado - verificar formato JWT")
-        
+
         if token_info.get("expired"):
             recomendaciones.append("Token expirado - solicitar nuevo refresh token")
-        
+
         if not system_validation.get("valido_segun_sistema"):
             recomendaciones.append("Token inválido según sistema - verificar configuración")
-        
+
         if not config_check["secret_key_configurado"]:
             recomendaciones.append("SECRET_KEY no configurado")
-        
+
         if not config_check["algorithm_configurado"]:
             recomendaciones.append("ALGORITHM no configurado")
-        
+
         if not recomendaciones:
             recomendaciones.append("Token parece válido - revisar otros aspectos del sistema")
-        
+
         # 5. Resultado del diagnóstico
         resultado = {
             "timestamp": datetime.now().isoformat(),
@@ -132,14 +133,14 @@ async def diagnosticar_refresh_token(
             "recomendaciones": recomendaciones,
             "diagnostico_completo": True,
         }
-        
+
         logger.info("🔍 Diagnóstico de refresh token completado")
-        
+
         return {
             "success": True,
             "diagnostico": resultado
         }
-        
+
     except Exception as e:
         logger.error(f"🔍 Error en diagnóstico de refresh token: {e}")
         return {
@@ -162,10 +163,10 @@ async def test_refresh_token(
     """🧪 Probar generación y validación de refresh token"""
     try:
         logger.info("🧪 Iniciando test de refresh token")
-        
+
         # Generar nuevo refresh token
         nuevo_refresh_token = create_refresh_token(data={"sub": current_user.id})
-        
+
         # Intentar decodificarlo
         try:
             decoded = decode_token(nuevo_refresh_token)
@@ -174,7 +175,7 @@ async def test_refresh_token(
         except Exception as e:
             validation_success = False
             validation_error = str(e)
-        
+
         resultado = {
             "timestamp": datetime.now().isoformat(),
             "nuevo_token_generado": True,
@@ -187,14 +188,14 @@ async def test_refresh_token(
                 "algorithm": settings.ALGORITHM,
             }
         }
-        
+
         logger.info("🧪 Test de refresh token completado")
-        
+
         return {
             "success": True,
             "test_result": resultado
         }
-        
+
     except Exception as e:
         logger.error(f"🧪 Error en test de refresh token: {e}")
         return {
@@ -216,25 +217,25 @@ async def get_refresh_token_config(
             "access_token_expire_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
             "recommendations": []
         }
-        
+
         # Generar recomendaciones
         if not settings.SECRET_KEY:
             config["recommendations"].append("Configurar SECRET_KEY")
-        
+
         if not settings.ALGORITHM:
             config["recommendations"].append("Configurar ALGORITHM")
-        
+
         if settings.ACCESS_TOKEN_EXPIRE_MINUTES < 15:
             config["recommendations"].append("Considerar aumentar tiempo de expiración del token")
-        
+
         if not config["recommendations"]:
             config["recommendations"].append("Configuración parece correcta")
-        
+
         return {
             "success": True,
             "config": config
         }
-        
+
     except Exception as e:
         logger.error(f"⚙️ Error obteniendo configuración: {e}")
         return {

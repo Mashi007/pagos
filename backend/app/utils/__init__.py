@@ -12,7 +12,6 @@ from app.utils.date_helpers import (
     is_overdue,
 )
 
-from app.utils.validators import (
     format_dni,
     format_phone,
     normalize_text,

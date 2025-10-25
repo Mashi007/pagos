@@ -58,6 +58,7 @@ class User(Base):
     auditorias = relationship("Auditoria", back_populates="usuario")
     notificaciones = relationship("Notificacion", back_populates="user")
 
+
     def __repr__(self):
         return (
             f"<User(id={self.id}, email='{self.email}', "

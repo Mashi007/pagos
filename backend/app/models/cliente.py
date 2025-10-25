@@ -86,5 +86,6 @@ class Cliente(Base):
     # prestamos = relationship("Prestamo", back_populates="cliente",
     #                          cascade="all, delete-orphan")
 
+
     def __repr__(self):
         return f"<Cliente(id={self.id}, cedula='{self.cedula}', nombres='{self.nombres}', apellidos='{self.apellidos}')>"

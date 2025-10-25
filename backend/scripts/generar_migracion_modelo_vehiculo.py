@@ -30,7 +30,7 @@ def generar_migracion():
     migracion_content = f'''"""Add modelo_vehiculo column to clientes table
 
 Revision ID: {timestamp}
-Revises: 
+Revises:
 Create Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 """
@@ -42,6 +42,7 @@ revision = '{timestamp}'
 down_revision = None  # Cambiar por la revisión anterior
 branch_labels = None
 depends_on = None
+
 
 def upgrade():
     """Agregar columna modelo_vehiculo a la tabla clientes"""
@@ -55,6 +56,7 @@ def upgrade():
         logger.info("Columna modelo_vehiculo agregada a la tabla clientes")
     else:
         logger.info("Columna modelo_vehiculo ya existe en la tabla clientes")
+
 
 def downgrade():
     """Eliminar columna modelo_vehiculo de la tabla clientes"""

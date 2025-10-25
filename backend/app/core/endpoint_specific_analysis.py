@@ -18,11 +18,13 @@ class EndpointSpecificAnalyzer:
     """
     Analizador específico para endpoints críticos
     """
-    
+
+
     def __init__(self):
         self.endpoint_metrics = {}
         self.business_metrics = {}
-    
+
+
     def record_business_metric(
         self, endpoint: str, metric_name: str, value: Any
     ):
@@ -31,39 +33,40 @@ class EndpointSpecificAnalyzer:
             self.business_metrics[endpoint] = {}
         if metric_name not in self.business_metrics[endpoint]:
             self.business_metrics[endpoint][metric_name] = []
-        
+
         self.business_metrics[endpoint][metric_name].append(
             {"value": value, "timestamp": datetime.utcnow()}
         )
-    
+
+
     def get_endpoint_analysis(self, endpoint: str) -> Dict[str, Any]:
         """Obtener análisis específico del endpoint"""
         if endpoint not in self.business_metrics:
             return {
                 "message": "No hay métricas específicas para este endpoint"
             }
-        
+
         metrics = self.business_metrics[endpoint]
         analysis = {}
-        
+
         for metric_name, values in metrics.items():
             if values:
                 recent_values = values[-10:]  # Últimos 10 valores
                 analysis[metric_name] = {
                     "current": recent_values[-1]["value"],
-                    "average": sum(v["value"] for v in recent_values) 
+                    "average": sum(v["value"] for v in recent_values)
                     / len(recent_values),
                     "max": max(v["value"] for v in recent_values),
                     "min": min(v["value"] for v in recent_values),
                     "trend": (
                         "increasing"
                         if len(recent_values) > 1
-                        and recent_values[-1]["value"] 
+                        and recent_values[-1]["value"]
                         > recent_values[0]["value"]
                         else "stable"
                     ),
                 }
-        
+
         return analysis
 
 
@@ -76,11 +79,13 @@ def endpoint_impact_analysis(
 ):
     """
     Decorator para análisis de impacto específico por endpoint
-    
+
     Args:
         endpoint_name: Nombre del endpoint para métricas
         business_metrics: Diccionario de métricas de negocio a capturar
     """
+
+
     def decorator(func: Callable):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -88,14 +93,14 @@ def endpoint_impact_analysis(
             try:
                 # Ejecutar función
                 result = func(*args, **kwargs)
-                
+
                 # Calcular tiempo de respuesta
                 response_time = (time.time() - start_time) * 1000
-                
+
                 # Registrar métricas genéricas
                 record_endpoint_performance(endpoint_name, response_time)
                 record_success(endpoint_name, response_time)
-                
+
                 # Registrar métricas específicas si se proporcionan
                 if business_metrics and result:
                     for (
@@ -113,7 +118,7 @@ def endpoint_impact_analysis(
                             logger.warning(
                                 f"Error extrayendo métrica {metric_name}: {e}"
                             )
-                
+
                 return result
             except Exception as e:
                 response_time = (time.time() - start_time) * 1000
@@ -151,6 +156,7 @@ def _extract_metric_value(data: Any, path: str) -> Any:
 
 # Decorators específicos para endpoints críticos
 
+
 def auth_endpoint_analysis(func: Callable):
     """Decorator específico para endpoints de autenticación"""
     @wraps(func)
@@ -159,7 +165,7 @@ def auth_endpoint_analysis(func: Callable):
         try:
             result = func(*args, **kwargs)
             response_time = (time.time() - start_time) * 1000
-            
+
             # Métricas específicas de autenticación
             if result and hasattr(result, "access_token"):
                 endpoint_analyzer.record_business_metric(
@@ -170,7 +176,7 @@ def auth_endpoint_analysis(func: Callable):
                 endpoint_analyzer.record_business_metric(
                     "auth", "auth_success", 1
                 )
-            
+
             record_endpoint_performance("auth", response_time)
             record_success("auth", response_time)
             return result
@@ -191,7 +197,7 @@ def carga_masiva_endpoint_analysis(func: Callable):
         try:
             result = func(*args, **kwargs)
             response_time = (time.time() - start_time) * 1000
-            
+
             # Métricas específicas de carga masiva
             if result and isinstance(result, dict):
                 if "total_registros" in result:
@@ -212,7 +218,7 @@ def carga_masiva_endpoint_analysis(func: Callable):
                         "registros_con_errores",
                         result["registros_con_errores"],
                     )
-            
+
             record_endpoint_performance("carga_masiva", response_time)
             record_success("carga_masiva", response_time)
             return result
@@ -235,7 +241,7 @@ def clientes_endpoint_analysis(func: Callable):
         try:
             result = func(*args, **kwargs)
             response_time = (time.time() - start_time) * 1000
-            
+
             # Métricas específicas de clientes
             if result:
                 if hasattr(result, "__len__"):
@@ -246,7 +252,7 @@ def clientes_endpoint_analysis(func: Callable):
                     endpoint_analyzer.record_business_metric(
                         "clientes", "registros_devueltos", result["total"]
                     )
-            
+
             record_endpoint_performance("clientes", response_time)
             record_success("clientes", response_time)
             return result
@@ -269,7 +275,7 @@ def pagos_endpoint_analysis(func: Callable):
         try:
             result = func(*args, **kwargs)
             response_time = (time.time() - start_time) * 1000
-            
+
             # Métricas específicas de pagos
             if result:
                 if isinstance(result, dict) and "monto_total" in result:
@@ -280,7 +286,7 @@ def pagos_endpoint_analysis(func: Callable):
                     endpoint_analyzer.record_business_metric(
                         "pagos", "monto_procesado", result.monto_pagado
                     )
-            
+
             record_endpoint_performance("pagos", response_time)
             record_success("pagos", response_time)
             return result
@@ -305,7 +311,7 @@ if __name__ == "__main__":
     @auth_endpoint_analysis
     def login_example():
         return {"access_token": "token123", "user": "test"}
-    
+
     @carga_masiva_endpoint_analysis
     def carga_masiva_example():
         return {
@@ -313,15 +319,15 @@ if __name__ == "__main__":
             "registros_exitosos": 95,
             "registros_con_errores": 5,
         }
-    
+
     # Ejecutar ejemplos
     login_result = login_example()
     carga_result = carga_masiva_example()
-    
+
     # Obtener análisis
     analyzer = get_endpoint_analyzer()
     auth_analysis = analyzer.get_endpoint_analysis("auth")
     carga_analysis = analyzer.get_endpoint_analysis("carga_masiva")
-    
+
     print("Análisis de auth:", auth_analysis)
     print("Análisis de carga masiva:", carga_analysis)

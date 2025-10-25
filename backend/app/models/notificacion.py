@@ -22,6 +22,8 @@ from app.db.session import Base
 
 
 # Enums para mejor validación y tipado
+
+
 class EstadoNotificacion(str, PyEnum):
     """Estados posibles de una notificación"""
     PENDIENTE = "PENDIENTE"
@@ -143,6 +145,7 @@ class Notificacion(Base):
     user = relationship("User", back_populates="notificaciones")
     # cliente = relationship("Cliente", back_populates="notificaciones")  # COMENTADO: Tabla notificaciones vacía
 
+
     def __repr__(self):
         return (
             f"<Notificacion {self.tipo.value} -"
@@ -169,17 +172,20 @@ class Notificacion(Base):
         """Verifica si se puede reintentar el envío"""
         return self.intentos < self.max_intentos and self.fallo
 
+
     def marcar_enviada(self, respuesta: str = None):
         """Marca la notificación como enviada"""
         self.estado = EstadoNotificacion.ENVIADA
         self.enviada_en = datetime.utcnow()
         self.respuesta_servicio = respuesta
 
+
     def marcar_fallida(self, error: str):
         """Marca la notificación como fallida"""
         self.estado = EstadoNotificacion.FALLIDA
         self.error_mensaje = error
         self.intentos += 1
+
 
     def marcar_leida(self):
         """Marca la notificación como leída"""
@@ -196,13 +202,13 @@ class Notificacion(Base):
     ):
         """
         Helper para crear notificaciones de recordatorio de pago
-        
+
         Args:
             cliente_id: ID del cliente
             tipo: TipoNotificacion (EMAIL, SMS o WHATSAPP)
             mensaje: Mensaje de la notificación
             programada_para: Fecha/hora programada (opcional)
-            
+
         Returns:
             Notificacion: Instancia de notificación
         """

@@ -33,10 +33,10 @@ def test_concesionarios_no_auth(db: Session = Depends(get_db)):
         total_concesionarios = db.query(Concesionario).count()
         concesionarios = db.query(Concesionario).limit(5).all()
         concesionarios_data = []
-        
+
         for concesionario in concesionarios:
             concesionarios_data.append({"id": concesionario.id})
-        
+
         return {
             "success": True,
             "total_concesionarios": total_concesionarios,
@@ -63,10 +63,10 @@ def test_concesionarios_simple(db: Session = Depends(get_db)):
         total_concesionarios = db.query(Concesionario).count()
         concesionarios = db.query(Concesionario).limit(5).all()
         concesionarios_data = []
-        
+
         for concesionario in concesionarios:
             concesionarios_data.append({"id": concesionario.id})
-        
+
         return {
             "success": True,
             "total_concesionarios": total_concesionarios,
@@ -124,22 +124,22 @@ def listar_concesionarios_no_auth(
     """
     try:
         query = db.query(Concesionario)
-        
+
         # Aplicar filtros
         if activo is not None:
             query = query.filter(Concesionario.activo == activo)
         if search:
             query = query.filter(Concesionario.nombre.ilike(f"%{search}%"))
-        
+
         # Obtener total
         total = query.count()
-        
+
         # Aplicar paginación
         concesionarios = query.offset(skip).limit(limit).all()
-        
+
         # Calcular páginas
         pages = (total + limit - 1) // limit
-        
+
         return {
             "items": [
                 ConcesionarioResponse.model_validate(c) for c in concesionarios
@@ -173,22 +173,22 @@ def listar_concesionarios(
     """
     try:
         query = db.query(Concesionario)
-        
+
         # Aplicar filtros
         if activo is not None:
             query = query.filter(Concesionario.activo == activo)
         if search:
             query = query.filter(Concesionario.nombre.ilike(f"%{search}%"))
-        
+
         # Obtener total
         total = query.count()
-        
+
         # Aplicar paginación
         concesionarios = query.offset(skip).limit(limit).all()
-        
+
         # Calcular páginas
         pages = (total + limit - 1) // limit
-        
+
         return ConcesionarioListResponse(
             items=[
                 ConcesionarioResponse.model_validate(c) for c in concesionarios
@@ -261,14 +261,14 @@ def crear_concesionario(
             nombre=concesionario_data.nombre,
             activo=concesionario_data.activo,
         )
-        
+
         db.add(concesionario)
         db.commit()
         db.refresh(concesionario)
-        
+
         logger.info(f"Concesionario creado: ID={concesionario.id}")
         return ConcesionarioResponse.model_validate(concesionario)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -300,7 +300,7 @@ def actualizar_concesionario(
             raise HTTPException(
                 status_code=404, detail="Concesionario no encontrado"
             )
-        
+
         # Verificar nombre único si se está cambiando
         if (
             concesionario_data.nombre
@@ -319,16 +319,16 @@ def actualizar_concesionario(
                     status_code=400,
                     detail="Ya existe un concesionario con este nombre",
                 )
-        
+
         # Actualizar campos
         update_data = concesionario_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(concesionario, field, value)
-        
+
         db.commit()
         db.refresh(concesionario)
         return ConcesionarioResponse.model_validate(concesionario)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -358,15 +358,15 @@ def eliminar_concesionario(
             raise HTTPException(
                 status_code=404, detail="Concesionario no encontrado"
             )
-        
+
         # HARD DELETE - eliminar completamente de la base de datos
         db.delete(concesionario)
         db.commit()
-        
+
         return {
             "message": "Concesionario eliminado completamente de la base de datos"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:

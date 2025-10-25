@@ -20,7 +20,8 @@ class DistribucionMonto(BaseModel):
     rango: str
     cantidad: int
     monto: Decimal
-    
+
+
     class Config:
         from_attributes = True
 
@@ -35,7 +36,8 @@ class ReporteCartera(BaseModel):
     total_prestamos_mora: int
     tasa_morosidad: float
     distribucion_montos: List[Dict[str, Any]]
-    
+
+
     class Config:
         from_attributes = True
         json_encoders = {Decimal: lambda v: float(v)}
@@ -46,7 +48,7 @@ class RangoMorosidad(BaseModel):
     rango: str
     cantidad: int
     monto_total: Decimal
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -56,7 +58,8 @@ class ReporteMorosidad(BaseModel):
     total_prestamos_mora: int
     monto_total_mora: Decimal
     detalle_por_rango: List[Dict[str, Any]]
-    
+
+
     class Config:
         from_attributes = True
         json_encoders = {Decimal: lambda v: float(v)}
@@ -67,7 +70,8 @@ class DetalleConcepto(BaseModel):
     concepto: str
     cantidad: int
     monto: Decimal
-    
+
+
     class Config:
         from_attributes = True
 
@@ -81,7 +85,8 @@ class ReporteCobranza(BaseModel):
     promedio_pago: Decimal
     detalle_por_concepto: List[Dict[str, Any]]
     eficiencia_cobranza: float
-    
+
+
     class Config:
         from_attributes = True
         json_encoders = {Decimal: lambda v: float(v)}
@@ -94,7 +99,8 @@ class ReporteVencimientos(BaseModel):
     total_cuotas: int
     monto_total: Decimal
     detalle: List[Dict[str, Any]]
-    
+
+
     class Config:
         from_attributes = True
 
@@ -108,7 +114,8 @@ class ReporteRendimiento(BaseModel):
     roi: float
     prestamos_otorgados: int
     prestamos_liquidados: int
-    
+
+
     class Config:
         from_attributes = True
         json_encoders = {Decimal: lambda v: float(v)}
@@ -122,7 +129,8 @@ class ClienteTop(BaseModel):
     monto_total: Decimal
     promedio_pago: float
     calificacion: Optional[str] = None
-    
+
+
     class Config:
         from_attributes = True
 
@@ -132,6 +140,7 @@ class ReporteClientesTop(BaseModel):
     fecha_reporte: date
     criterio: str  # 'monto', 'cantidad', 'puntualidad'
     top_clientes: List[ClienteTop]
-    
+
+
     class Config:
         from_attributes = True

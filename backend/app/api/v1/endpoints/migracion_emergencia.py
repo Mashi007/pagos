@@ -22,12 +22,12 @@ async def ejecutar_migracion_emergencia(
     """
     try:
         logger.info(f"Ejecutando migración de emergencia - Usuario: {current_user.email}")
-        
+
         # Verificar si las columnas ya existen
         inspector = inspect(db.bind)
         columns = [col["name"] for col in inspector.get_columns("clientes")]
         logger.info(f"Columnas actuales en clientes: {columns}")
-        
+
         # Agregar concesionario si no existe
         if "concesionario" not in columns:
             logger.info("Agregando columna 'concesionario'")
@@ -44,7 +44,7 @@ async def ejecutar_migracion_emergencia(
             logger.info("✅ Columna 'concesionario' agregada")
         else:
             logger.info("ℹ️ Columna 'concesionario' ya existe")
-        
+
         # Agregar analista si no existe
         if "analista" not in columns:
             logger.info("Agregando columna 'analista'")
@@ -59,27 +59,27 @@ async def ejecutar_migracion_emergencia(
             logger.info("✅ Columna 'analista' agregada")
         else:
             logger.info("ℹ️ Columna 'analista' ya existe")
-        
+
         # Confirmar cambios
         db.commit()
-        
+
         # Verificar estructura final
         inspector = inspect(db.bind)
         final_columns = [
             col["name"] for col in inspector.get_columns("clientes")
         ]
         logger.info(f"Columnas finales en clientes: {final_columns}")
-        
+
         return {
             "success": True,
             "message": "Migración de emergencia ejecutada exitosamente",
             "columns_added": [
-                col for col in ["concesionario", "analista"] 
+                col for col in ["concesionario", "analista"]
                 if col not in columns
             ],
             "final_columns": final_columns,
         }
-        
+
     except Exception as e:
         db.rollback()
         logger.error(f"Error en migración de emergencia: {e}")

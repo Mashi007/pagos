@@ -3,13 +3,12 @@ Pruebas de Integración - Endpoints
 Testing de endpoints completos del sistema
 """
 
-import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
 
 class TestAuthEndpoints:
     """Pruebas para endpoints de autenticación"""
+
 
     def test_login_exitoso(self, test_client: TestClient, test_user):
         """Probar login exitoso"""
@@ -23,6 +22,7 @@ class TestAuthEndpoints:
         assert "access_token" in data
         assert data["token_type"] == "bearer"
 
+
     def test_login_credenciales_invalidas(self, test_client: TestClient):
         """Probar login con credenciales inválidas"""
         response = test_client.post(
@@ -32,6 +32,7 @@ class TestAuthEndpoints:
 
         assert response.status_code == 401
         assert "incorrectos" in response.json()["detail"].lower()
+
 
     def test_login_password_incorrecta(self, test_client: TestClient, test_user):
         """Probar login con password incorrecta"""
@@ -43,6 +44,7 @@ class TestAuthEndpoints:
         assert response.status_code == 401
         assert "incorrectos" in response.json()["detail"].lower()
 
+
     def test_get_current_user(self, test_client: TestClient, auth_headers):
         """Probar obtener usuario actual"""
         response = test_client.get("/api/v1/auth/me", headers=auth_headers)
@@ -53,6 +55,7 @@ class TestAuthEndpoints:
         assert "nombre" in data
         assert "apellido" in data
 
+
     def test_get_current_user_sin_token(self, test_client: TestClient):
         """Probar obtener usuario sin token"""
         response = test_client.get("/api/v1/auth/me")
@@ -62,6 +65,7 @@ class TestAuthEndpoints:
 
 class TestClientesEndpoints:
     """Pruebas para endpoints de clientes"""
+
 
     def test_crear_cliente_exitoso(
         self, test_client: TestClient, auth_headers, sample_cliente_data
@@ -76,6 +80,7 @@ class TestClientesEndpoints:
         assert data["cedula"] == sample_cliente_data["cedula"]
         assert data["nombres"] == sample_cliente_data["nombres"]
         assert data["apellidos"] == sample_cliente_data["apellidos"]
+
 
     def test_crear_cliente_cedula_duplicada(
         self, test_client: TestClient, auth_headers, sample_cliente_data, db_session
@@ -95,6 +100,7 @@ class TestClientesEndpoints:
         assert response2.status_code == 503
         assert "duplicate" in response2.json()["detail"].lower()
 
+
     def test_listar_clientes(self, test_client: TestClient, auth_headers):
         """Probar listado de clientes"""
         response = test_client.get("/api/v1/clientes/", headers=auth_headers)
@@ -105,6 +111,7 @@ class TestClientesEndpoints:
         assert "total" in data
         assert "page" in data
         assert "per_page" in data
+
 
     def test_obtener_cliente_por_id(
         self, test_client: TestClient, auth_headers, sample_cliente_data, db_session
@@ -126,12 +133,14 @@ class TestClientesEndpoints:
         assert data["id"] == cliente_id
         assert data["cedula"] == sample_cliente_data["cedula"]
 
+
     def test_obtener_cliente_no_existe(self, test_client: TestClient, auth_headers):
         """Probar obtener cliente que no existe"""
         response = test_client.get("/api/v1/clientes/99999", headers=auth_headers)
 
         assert response.status_code == 404
         assert "no encontrado" in response.json()["detail"].lower()
+
 
     def test_actualizar_cliente(
         self, test_client: TestClient, auth_headers, sample_cliente_data, db_session
@@ -157,6 +166,7 @@ class TestClientesEndpoints:
         assert data["nombres"] == "Juan Carlos"
         assert data["apellidos"] == "Pérez González"
 
+
     def test_eliminar_cliente(
         self, test_client: TestClient, auth_headers, sample_cliente_data, db_session
     ):
@@ -179,6 +189,7 @@ class TestClientesEndpoints:
 class TestValidadoresEndpoints:
     """Pruebas para endpoints de validadores"""
 
+
     def test_endpoint_test_validadores(self, test_client: TestClient):
         """Probar endpoint de test de validadores"""
         response = test_client.get("/api/v1/validadores/test")
@@ -187,6 +198,7 @@ class TestValidadoresEndpoints:
         data = response.json()
         assert data["status"] == "ok"
         assert "funcionando" in data["message"].lower()
+
 
     def test_endpoint_info_validadores(self, test_client: TestClient):
         """Probar endpoint de información de validadores"""
@@ -198,6 +210,7 @@ class TestValidadoresEndpoints:
         assert "endpoints" in data
         assert "status" in data
 
+
     def test_validar_cedula_valida(self, test_client: TestClient):
         """Probar validación de cédula válida"""
         response = test_client.get("/api/v1/validadores/test-cedula/V12345678")
@@ -206,6 +219,7 @@ class TestValidadoresEndpoints:
         data = response.json()
         assert data["resultado"]["valido"] is True
         assert data["resultado"]["pais"] == "VENEZUELA"
+
 
     def test_validar_cedula_invalida(self, test_client: TestClient):
         """Probar validación de cédula inválida"""
@@ -220,6 +234,7 @@ class TestValidadoresEndpoints:
 class TestHealthEndpoints:
     """Pruebas para endpoints de health check"""
 
+
     def test_health_check_render(self, test_client: TestClient):
         """Probar health check optimizado para Render"""
         response = test_client.get("/api/v1/health/render")
@@ -229,6 +244,7 @@ class TestHealthEndpoints:
         assert data["status"] == "ok"
         assert data["service"] == "pagos-backend"
         assert data["render_optimized"] is True
+
 
     def test_health_check_detailed(self, test_client: TestClient):
         """Probar health check detallado"""
@@ -240,6 +256,7 @@ class TestHealthEndpoints:
         assert "service" in data
         assert "database" in data
         assert "system_metrics" in data
+
 
     def test_root_endpoint(self, test_client: TestClient):
         """Probar endpoint raíz"""
@@ -255,6 +272,7 @@ class TestHealthEndpoints:
 class TestCargaMasivaEndpoints:
     """Pruebas para endpoints de carga masiva"""
 
+
     def test_upload_archivo_invalido(self, test_client: TestClient, auth_headers):
         """Probar upload de archivo inválido"""
         # Crear archivo de prueba vacío
@@ -268,6 +286,7 @@ class TestCargaMasivaEndpoints:
         assert response.status_code == 400
         assert "formato" in response.json()["detail"].lower()
 
+
     def test_upload_sin_archivo(self, test_client: TestClient, auth_headers):
         """Probar upload sin archivo"""
         data = {"tipo_carga": "clientes"}
@@ -277,6 +296,7 @@ class TestCargaMasivaEndpoints:
         )
 
         assert response.status_code == 422  # Validation error
+
 
     def test_upload_tipo_carga_invalido(self, test_client: TestClient, auth_headers):
         """Probar upload con tipo de carga inválido"""
@@ -300,6 +320,7 @@ class TestCargaMasivaEndpoints:
 class TestConcesionariosEndpoints:
     """Pruebas para endpoints de concesionarios"""
 
+
     def test_listar_concesionarios(self, test_client: TestClient, auth_headers):
         """Probar listado de concesionarios"""
         response = test_client.get("/api/v1/concesionarios/", headers=auth_headers)
@@ -308,6 +329,7 @@ class TestConcesionariosEndpoints:
         data = response.json()
         assert "data" in data
         assert "total" in data
+
 
     def test_crear_concesionario(self, test_client: TestClient, auth_headers):
         """Probar creación de concesionario"""
@@ -332,6 +354,7 @@ class TestConcesionariosEndpoints:
 class TestAnalistasEndpoints:
     """Pruebas para endpoints de analistas"""
 
+
     def test_listar_analistas(self, test_client: TestClient, auth_headers):
         """Probar listado de analistas"""
         response = test_client.get("/api/v1/analistas/", headers=auth_headers)
@@ -340,6 +363,7 @@ class TestAnalistasEndpoints:
         data = response.json()
         assert "data" in data
         assert "total" in data
+
 
     def test_crear_analista(self, test_client: TestClient, auth_headers):
         """Probar creación de analista"""

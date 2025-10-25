@@ -21,6 +21,7 @@ class Analista(Base):
     # clientes = relationship("Cliente", back_populates="asesor_config_rel")
     # # COMENTADO: Solo plantilla vacía
 
+
     def __repr__(self):
         return (
             f"<Analista(id={self.id}, nombre='{self.nombre}', "
@@ -49,6 +50,7 @@ class Analista(Base):
             if len(partes) > 0:
                 return partes[0]
         return ""
+
 
     def to_dict(self):
         return {

@@ -3,12 +3,10 @@ Predice problemas de autenticación antes de que ocurran
 """
 
 import logging
-import statistics
 from collections import defaultdict, deque
 from datetime import datetime
 from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.core.security import decode_token
 from app.models.user import User
@@ -20,9 +18,11 @@ router = APIRouter()
 # SISTEMA DE ANÁLISIS PREDICTIVO
 # ============================================
 
+
 class TokenPredictiveAnalyzer:
     """Analizador predictivo para tokens JWT"""
-    
+
+
     def __init__(self):
         self.token_history = deque(maxlen=10000)  # Historial de tokens
         self.prediction_models = {}  # Modelos de predicción
@@ -32,17 +32,18 @@ class TokenPredictiveAnalyzer:
             "usage_anomaly": 0.8,  # 80% de probabilidad de anomalía
             "security_risk": 0.9,  # 90% de probabilidad de riesgo
         }
-    
+
+
     def analyze_token_lifecycle(self, token: str) -> Dict[str, Any]:
         """Analizar el ciclo de vida de un token"""
         try:
             payload = decode_token(token)
             current_time = datetime.now().timestamp()
-            
+
             # Calcular tiempo hasta expiración
             exp_time = payload.get("exp", 0)
             time_to_expiry = exp_time - current_time
-            
+
             # Análisis predictivo
             predictions = {
                 "will_expire_soon": time_to_expiry < self.prediction_thresholds["expiry_warning"],
@@ -51,88 +52,91 @@ class TokenPredictiveAnalyzer:
                 "security_risk_score": self._calculate_security_risk(token),
                 "recommendations": [],
             }
-            
+
             # Generar recomendaciones
             if predictions["will_expire_soon"]:
                 predictions["recommendations"].append(
                     "Token expirará pronto. Considerar renovación."
                 )
-            
+
             if predictions["security_risk_score"] > self.prediction_thresholds["security_risk"]:
                 predictions["recommendations"].append(
                     "Alto riesgo de seguridad detectado. Considerar revocación."
                 )
-            
+
             return predictions
-            
+
         except Exception as e:
             logger.error(f"Error analizando token: {e}")
             return {
                 "error": str(e),
                 "recommendations": ["Token inválido o corrupto"],
             }
-    
+
+
     def _analyze_usage_pattern(self, token: str) -> Dict[str, Any]:
         """Analizar patrón de uso del token"""
         token_hash = hash(token)
-        
+
         # Buscar historial del token
         token_events = [
             event for event in self.token_history
             if event.get("token_hash") == token_hash
         ]
-        
+
         if not token_events:
             return {"pattern": "new_token", "confidence": 0.5}
-        
+
         # Analizar frecuencia de uso
         recent_events = [
             event for event in token_events
             if (datetime.now() - event["timestamp"]).total_seconds() < 3600
         ]
-        
+
         usage_frequency = len(recent_events)
-        
+
         if usage_frequency > 100:
             return {"pattern": "high_frequency", "confidence": 0.9}
         elif usage_frequency > 50:
             return {"pattern": "medium_frequency", "confidence": 0.7}
         else:
             return {"pattern": "low_frequency", "confidence": 0.3}
-    
+
+
     def _calculate_security_risk(self, token: str) -> float:
         """Calcular puntuación de riesgo de seguridad"""
         try:
             payload = decode_token(token)
             risk_score = 0.0
-            
+
             # Verificar tiempo de emisión
             iat = payload.get("iat", 0)
             current_time = datetime.now().timestamp()
             token_age = current_time - iat
-            
+
             # Tokens muy antiguos tienen mayor riesgo
             if token_age > 86400:  # Más de 24 horas
                 risk_score += 0.3
-            
+
             # Verificar tiempo hasta expiración
             exp = payload.get("exp", 0)
             time_to_expiry = exp - current_time
-            
+
             # Tokens que expiran muy pronto tienen mayor riesgo
             if time_to_expiry < 300:  # Menos de 5 minutos
                 risk_score += 0.4
-            
+
             # Verificar tipo de token
             token_type = payload.get("type", "")
             if token_type != "access":
                 risk_score += 0.2
-            
+
             return min(risk_score, 1.0)  # Máximo 1.0
-            
+
         except Exception:
             return 1.0  # Máximo riesgo si no se puede decodificar
-    
+
+
     def log_token_event(self, token: str, event_type: str, details: Dict[str, Any] = None):
         """Registrar evento relacionado con token"""
         event = {
@@ -142,7 +146,8 @@ class TokenPredictiveAnalyzer:
             "details": details or {},
         }
         self.token_history.append(event)
-    
+
+
     def get_prediction_accuracy(self) -> Dict[str, Any]:
         """Obtener métricas de precisión de predicciones"""
         return {

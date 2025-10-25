@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 # CRUD DE AUDITORÍA
 # ============================================
 
+
 def _aplicar_filtros_auditoria(
     query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
 ):
@@ -46,6 +47,7 @@ def _aplicar_filtros_auditoria(
         query = query.filter(Auditoria.fecha <= fecha_hasta)
     return query
 
+
 def _aplicar_ordenamiento_auditoria(query, ordenar_por, orden):
     """Aplicar ordenamiento a la query de auditoría"""
     if ordenar_por == "usuario_email":
@@ -62,6 +64,7 @@ def _aplicar_ordenamiento_auditoria(query, ordenar_por, orden):
     else:
         return query.order_by(desc(order_field))
 
+
 def _calcular_paginacion_auditoria(total, limit, skip):
     """Calcular información de paginación"""
     total_pages = (total + limit - 1) // limit
@@ -71,6 +74,8 @@ def _calcular_paginacion_auditoria(total, limit, skip):
 @router.get(
     "/", response_model=AuditoriaListResponse, summary="Listar auditoría"
 )
+
+
 def listar_auditoria(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(
@@ -134,6 +139,8 @@ def listar_auditoria(
     response_model=AuditoriaStatsResponse,
     summary="Estadísticas de auditoría",
 )
+
+
 def obtener_estadisticas_auditoria(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -204,6 +211,7 @@ def obtener_estadisticas_auditoria(
             status_code=500, detail="Error interno del servidor"
         )
 
+
 def _crear_dataframe_auditoria(auditorias):
     """Crear DataFrame a partir de registros de auditoría"""
     data = []
@@ -224,6 +232,7 @@ def _crear_dataframe_auditoria(auditorias):
             }
         )
     return pd.DataFrame(data)
+
 
 def _crear_excel_auditoria(df):
     """Crear archivo Excel en memoria"""
@@ -298,6 +307,8 @@ def exportar_auditoria_excel(
     response_model=AuditoriaResponse,
     summary="Obtener auditoría",
 )
+
+
 def obtener_auditoria(
     auditoria_id: int,
     db: Session = Depends(get_db),
