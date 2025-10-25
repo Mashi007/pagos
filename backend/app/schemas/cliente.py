@@ -1,7 +1,4 @@
 from datetime import date
-
-# backend/app/schemas/cliente.py
-
 from decimal import Decimal
 from typing import List, Optional
 

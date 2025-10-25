@@ -1,21 +1,13 @@
-from datetime import date
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import logging
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.aprobacion import Aprobacion
-from app.models.cliente import Cliente
-from app.models.notificacion import Notificacion
-from app.models.pago import Pago
-from app.models.prestamo import Prestamo
 from app.models.user import User
-from app.services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
