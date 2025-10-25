@@ -1,166 +1,164 @@
-from datetime import date, timedelta as delta
-# backend/app/models/aprobacion.py
-"""Modelo de Aprobación"""
-Sistema de workflow para solicitudes que requieren aprobación
-""""""
+"""
+Modelo de Aprobación
+"""
 
-# from sqlalchemy import  # TODO: Agregar imports específicos
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from datetime import date, datetime
+from enum import Enum
+from sqlalchemy import (
+    Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text
+)
 
-from app.core.constants import EstadoAprobacion
 from app.db.session import Base
 
 
+class EstadoAprobacion(str, Enum):
+    """Estados posibles de una aprobación"""
+    PENDIENTE = "PENDIENTE"
+    APROBADA = "APROBADA"
+    RECHAZADA = "RECHAZADA"
+    CANCELADA = "CANCELADA"
+
+
+class TipoSolicitud(str, Enum):
+    """Tipos de solicitud que requieren aprobación"""
+    PRESTAMO = "PRESTAMO"
+    MODIFICACION_MONTO = "MODIFICACION_MONTO"
+    ANULACION = "ANULACION"
+    REFINANCIAMIENTO = "REFINANCIAMIENTO"
+    PRORROGA = "PRORROGA"
+
+
+class Prioridad(str, Enum):
+    """Niveles de prioridad para aprobaciones"""
+    BAJA = "BAJA"
+    NORMAL = "NORMAL"
+    ALTA = "ALTA"
+    URGENTE = "URGENTE"
+
+
 class Aprobacion(Base):
-    """"""
-    Modelo de Aprobación para workflow de solicitudes
-    """"""
+    """
+    Modelo para solicitudes de aprobación
+    Maneja el flujo de aprobaciones para diferentes tipos de solicitudes
+    """
     __tablename__ = "aprobaciones"
-    __table_args__ = {"extend_existing": True}
 
-    # Identificación
     id = Column(Integer, primary_key=True, index=True)
-
-    estado = Column
-        String(20), nullable=False, default="PENDIENTE", index=True
-
-    # Solicitante y revisor
-    solicitante_id = Column
-    revisor_id = Column
+    
+    # Usuarios involucrados
+    solicitante_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    revisor_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
     # Detalles de la solicitud
-    tipo_solicitud = Column
+    tipo_solicitud = Column(
         String(50), nullable=False, index=True
     )  # PRESTAMO, MODIFICACION_MONTO, ANULACION, etc.
-    entidad = Column
+    entidad = Column(
         String(50), nullable=False
     )  # Cliente, Prestamo, Pago, etc.
     entidad_id = Column(Integer, nullable=False, index=True)
 
     justificacion = Column(Text, nullable=False)
 
+    # Estado y resultado
+    estado = Column(
+        String(20), nullable=False, default="PENDIENTE", index=True
+    )
+    resultado = Column(Text, nullable=True)  # Comentarios del revisor
+    fecha_aprobacion = Column(DateTime, nullable=True)
 
     # Fechas
-    fecha_solicitud = Column
+    fecha_solicitud = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    # NUEVOS CAMPOS PARA SISTEMA COMPLETO DE APROBACIONES
-    archivo_evidencia = Column
+    # Archivos y evidencia
+    archivo_evidencia = Column(
         String(255), nullable=True
     )  # Path del archivo adjunto
     tipo_archivo = Column(String(50), nullable=True)  # PDF, IMG, DOC, etc.
     tamaño_archivo = Column(Integer, nullable=True)  # Tamaño en bytes
-    prioridad = Column
+
+    # Configuración de la solicitud
+    prioridad = Column(
         String(20), default="NORMAL"
     )  # BAJA, NORMAL, ALTA, URGENTE
     fecha_limite = Column(Date, nullable=True)  # Fecha límite para respuesta
-    notificado_admin = Column
-    )  # Si ya se notificó al admin
-    notificado_solicitante = Column
-    )  # Si ya se notificó resultado
-    bloqueado_temporalmente = Column
-    )  # Si está bloqueado el registro
 
+    # Notificaciones
+    notificado_admin = Column(Boolean, default=False)  # Si ya se notificó al admin
+    notificado_solicitante = Column(Boolean, default=False)  # Si ya se notificó resultado
     visto_por_admin = Column(Boolean, default=False)
-    tiempo_respuesta_horas = Column
-    )  # Tiempo que tomó responder
+
+    # Control de bloqueo
+    bloqueado_temporalmente = Column(Boolean, default=False)  # Si está bloqueado el registro
+
+    # Métricas
+    tiempo_respuesta_horas = Column(Integer, nullable=True)  # Tiempo que tomó responder
 
     # Auditoría
-
-    # Relaciones
-    solicitante = relationship
-    revisor = relationship
-
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     def __repr__(self):
-        return f"<Aprobacion {self.tipo_solicitud} - {self.estado}>"
-
-    @property
-    def esta_pendiente(self) -> bool:
-        """Verifica si la aprobación está pendiente"""
-        return self.estado == EstadoAprobacion.PENDIENTE.value
-
-    @property
-    def esta_aprobada(self) -> bool:
-        """Verifica si la aprobación fue aprobada"""
-        return self.estado == EstadoAprobacion.APROBADA.value
-
-    @property
-    def esta_rechazada(self) -> bool:
-        """Verifica si la aprobación fue rechazada"""
-        return self.estado == EstadoAprobacion.RECHAZADA.value
-
-
-        """Marca la aprobación como aprobada"""
-        self.estado = EstadoAprobacion.APROBADA.value
-        self.revisor_id = revisor_id
-
-
-        """Marca la aprobación como rechazada"""
-        self.estado = EstadoAprobacion.RECHAZADA.value
-        self.revisor_id = revisor_id
-        self.bloqueado_temporalmente = False  # Desbloquear
-        self._calcular_tiempo_respuesta()
-
-
-    def cancelar(self):
-        """Cancela la solicitud de aprobación"""
-        self.estado = EstadoAprobacion.CANCELADA.value
-
-
-    def marcar_como_visto(self, admin_id: int):
-        """Marcar solicitud como vista por admin"""
-        self.visto_por_admin = True
-
-
-    def adjuntar_archivo(self, archivo_path: str, tipo: str, tamaño: int):
-        """Adjuntar archivo de evidencia"""
-        self.archivo_evidencia = archivo_path
-        self.tipo_archivo = tipo
-        self.tamaño_archivo = tamaño
-
-
-    def establecer_prioridad(self, prioridad: str):
-        """Establecer prioridad de la solicitud"""
-        prioridades_validas = ["BAJA", "NORMAL", "ALTA", "URGENTE"]
-        if prioridad in prioridades_validas:
-            self.prioridad = prioridad
-
-
-    def marcar_notificado_admin(self):
-        """Marcar que se notificó al admin"""
-        self.notificado_admin = True
-
-
-    def marcar_notificado_solicitante(self):
-        """Marcar que se notificó al solicitante"""
-        self.notificado_solicitante = True
-
-
-    def _calcular_tiempo_respuesta(self):
-        """Calcular tiempo de respuesta en horas"""
-        if self.fecha_revision and self.fecha_solicitud:
-            delta = self.fecha_revision - self.fecha_solicitud
-            self.tiempo_respuesta_horas = int(delta.total_seconds() / 3600)
+        return f"<Aprobacion(id={self.id}, tipo={self.tipo_solicitud}, estado={self.estado})>"
 
     @property
     def esta_vencida(self) -> bool:
-        """Verificar si la solicitud está vencida"""
-        if not self.fecha_limite:
-            return False
-        return date.today() > self.fecha_limite
+        """Verifica si la solicitud está vencida"""
+        if self.fecha_limite:
+            return date.today() > self.fecha_limite and self.estado == "PENDIENTE"
+        return False
 
     @property
     def dias_pendiente(self) -> int:
-        """Días que lleva pendiente la solicitud"""
-        if self.estado != "PENDIENTE":
-            return 0
-        return delta.days
+        """Calcula los días que lleva pendiente"""
+        if self.estado == "PENDIENTE":
+            return (datetime.utcnow() - self.fecha_solicitud).days
+        return 0
 
-    @property
-    def requiere_atencion_urgente(self) -> bool:
-        """Si requiere atención urgente"""
-        return 
+    def calcular_tiempo_respuesta(self):
+        """Calcula el tiempo de respuesta en horas"""
+        if self.fecha_aprobacion and self.fecha_solicitud:
+            delta = self.fecha_aprobacion - self.fecha_solicitud
+            self.tiempo_respuesta_horas = int(delta.total_seconds() / 3600)
 
-"""
-""""""
+    def aprobar(self, revisor_id: int, resultado: str = None):
+        """Marca la solicitud como aprobada"""
+        self.estado = "APROBADA"
+        self.revisor_id = revisor_id
+        self.resultado = resultado
+        self.fecha_aprobacion = datetime.utcnow()
+        self.calcular_tiempo_respuesta()
+
+    def rechazar(self, revisor_id: int, resultado: str):
+        """Marca la solicitud como rechazada"""
+        self.estado = "RECHAZADA"
+        self.revisor_id = revisor_id
+        self.resultado = resultado
+        self.fecha_aprobacion = datetime.utcnow()
+        self.calcular_tiempo_respuesta()
+
+    def cancelar(self, solicitante_id: int):
+        """Cancela la solicitud"""
+        self.estado = "CANCELADA"
+        self.fecha_aprobacion = datetime.utcnow()
+
+    def to_dict(self):
+        """Convierte la aprobación a diccionario"""
+        return {
+            "id": self.id,
+            "solicitante_id": self.solicitante_id,
+            "revisor_id": self.revisor_id,
+            "tipo_solicitud": self.tipo_solicitud,
+            "entidad": self.entidad,
+            "entidad_id": self.entidad_id,
+            "justificacion": self.justificacion,
+            "estado": self.estado,
+            "resultado": self.resultado,
+            "fecha_solicitud": self.fecha_solicitud.isoformat() if self.fecha_solicitud else None,
+            "fecha_aprobacion": self.fecha_aprobacion.isoformat() if self.fecha_aprobacion else None,
+            "prioridad": self.prioridad,
+            "fecha_limite": self.fecha_limite.isoformat() if self.fecha_limite else None,
+            "dias_pendiente": self.dias_pendiente,
+            "esta_vencida": self.esta_vencida,
+            "tiempo_respuesta_horas": self.tiempo_respuesta_horas
+        }

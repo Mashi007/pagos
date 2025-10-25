@@ -1,60 +1,72 @@
-from app.core.security import decode_token
-from datetime import date, timedelta as delta
-""""""
-Sistema de seguridad: JWT, hashing de passwords, tokens y dependencias de
-FastAPI
-""""""
+"""
+Módulo de seguridad para autenticación JWT
+Maneja creación, validación y decodificación de tokens
+"""
 
-from typing import Any, Optional
+import os
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional, Union
 
-import jwt
-from fastapi.security import OAuth2PasswordBearer
-from jwt import PyJWTError
+from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-from app.core.config import settings
-
-# Constantes de seguridad
-DEFAULT_ACCESS_TOKEN_EXPIRE_MINUTES = 30
-DEFAULT_REFRESH_TOKEN_EXPIRE_DAYS = 7
-MIN_PASSWORD_LENGTH = 8
-PASSWORD_RESET_EXPIRE_HOURS = 1
-
-# Configuración de hashing de passwords
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# Configuración JWT
+# Configuración de seguridad
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = DEFAULT_ACCESS_TOKEN_EXPIRE_MINUTES
-REFRESH_TOKEN_EXPIRE_DAYS = DEFAULT_REFRESH_TOKEN_EXPIRE_DAYS
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
 
-# Esquema OAuth2 para FastAPI, que define dónde esperar el token
-# (Authorization: Bearer <token>)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
+# Contexto para hashing de contraseñas
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """"""
-    Verifica si una contraseña en texto plano coincide con el hash
-    """"""
+    """
+    Verifica una contraseña contra su hash
+    
+    Args:
+        plain_password: Contraseña en texto plano
+        hashed_password: Hash de la contraseña
+        
+    Returns:
+        True si la contraseña es correcta, False en caso contrario
+    """
     return pwd_context.verify(plain_password, hashed_password)
 
 
 def get_password_hash(password: str) -> str:
-    """"""
+    """
     Genera un hash de una contraseña
-    """"""
+    
+    Args:
+        password: Contraseña en texto plano
+        
+    Returns:
+        Hash de la contraseña
+    """
     return pwd_context.hash(password)
 
 
-def create_access_token
+def create_access_token(
+    subject: Union[str, int],
+    expires_delta: Optional[timedelta] = None,
+    additional_claims: Optional[Dict[str, Any]] = None
 ) -> str:
-    """"""
+    """
     Crea un token de acceso JWT
-    """"""
+    
+    Args:
+        subject: ID del usuario (subject del token)
+        expires_delta: Tiempo de expiración personalizado
+        additional_claims: Claims adicionales para el token
+        
+    Returns:
+        Token JWT codificado
+    """
     if expires_delta:
+        expire = datetime.utcnow() + expires_delta
     else:
-            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
     to_encode = {"exp": expire, "sub": str(subject), "type": "access"}
 
@@ -62,94 +74,114 @@ def create_access_token
     if additional_claims:
         to_encode.update(additional_claims)
 
-    encoded_jwt = jwt.encode
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
-def create_refresh_token(subject: str | int) -> str:
-    """"""
+def create_refresh_token(subject: Union[str, int]) -> str:
+    """
     Crea un token de refresh JWT
-    """"""
+    
+    Args:
+        subject: ID del usuario
+        
+    Returns:
+        Token de refresh JWT codificado
+    """
+    expire = datetime.utcnow() + timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES)
     to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
-    encoded_jwt = jwt.encode
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
-def decode_token(token: str) -> dict:
-    """"""
+def decode_token(token: str) -> Dict[str, Any]:
+    """
     Decodifica y valida un token JWT
-
+    
+    Args:
+        token: Token JWT a decodificar
+        
+    Returns:
+        Payload del token decodificado
+        
     Raises:
-        PyJWTError: Si el token es inválido o expiró
-    """"""
+        JWTError: Si el token es inválido o expiró
+    """
     try:
-        payload = jwt.decode
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
-    except PyJWTError as e:
-        # Re-lanza PyJWTError para que el manejador de excepciones de FastAPI
+    except JWTError as e:
+        # Re-lanza JWTError para que el manejador de excepciones de FastAPI
         # lo capture
-        raise PyJWTError(f"Error decodificando token: {str(e)}")
-
-
-# -------------------------------------------------------------
-# DEPENDENCIAS DE AUTENTICACIÓN PARA FASTAPI (ELIMINADAS - DUPLICADAS)
-# -------------------------------------------------------------
-# Las funciones get_current_user y
-# get_current_active_user están definidas en app/api/deps.py
-# -------------------------------------------------------------
-# [Resto de funciones originales]
-# -------------------------------------------------------------
+        raise JWTError(f"Error decodificando token: {str(e)}")
 
 
 def verify_token_type(token: str, expected_type: str) -> bool:
-    """"""
-    Verifica que el token sea del tipo esperado (access o refresh)
-    """"""
+    """
+    Verifica que un token sea del tipo esperado
+    
+    Args:
+        token: Token JWT
+        expected_type: Tipo esperado ("access" o "refresh")
+        
+    Returns:
+        True si el token es del tipo esperado, False en caso contrario
+    """
     try:
         payload = decode_token(token)
         return payload.get("type") == expected_type
-    except PyJWTError:
+    except JWTError:
         return False
 
 
-def validate_password_strength(password: str) -> tuple[bool, str]:
-    """"""
-    Valida la fortaleza de una contraseña
-    """"""
-    if len(password) < MIN_PASSWORD_LENGTH:
-
-    if not any(c.isupper() for c in password):
-
-    if not any(c.islower() for c in password):
-
-    if not any(c.isdigit() for c in password):
-
-    special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
-    if not any(c in special_chars for c in password):
-        return 
-
-    return True, "Contraseña válida"
-
-
-def generate_password_reset_token(email: str) -> str:
-    """"""
-    Genera un token para reset de contraseña
-    """"""
-        hours=PASSWORD_RESET_EXPIRE_HOURS
-    )  # Expira en 1 hora
-    to_encode = {"exp": expire, "sub": email, "type": "password_reset"}
-    encoded_jwt = jwt.encode
-    return encoded_jwt
-
-
-def verify_password_reset_token(token: str) -> Optional[str]:
-    """"""
-    Verifica un token de reset de contraseña y retorna el email
-    """"""
+def get_token_subject(token: str) -> Optional[str]:
+    """
+    Obtiene el subject (ID del usuario) de un token
+    
+    Args:
+        token: Token JWT
+        
+    Returns:
+        ID del usuario o None si el token es inválido
+    """
     try:
         payload = decode_token(token)
-        if payload.get("type") != "password_reset":
-            return None
         return payload.get("sub")
-    except PyJWTError:
+    except JWTError:
         return None
+
+
+def is_token_expired(token: str) -> bool:
+    """
+    Verifica si un token ha expirado
+    
+    Args:
+        token: Token JWT
+        
+    Returns:
+        True si el token ha expirado, False en caso contrario
+    """
+    try:
+        payload = decode_token(token)
+        exp = payload.get("exp")
+        if exp:
+            return datetime.utcnow() > datetime.fromtimestamp(exp)
+        return True
+    except JWTError:
+        return True
+
+
+def create_token_pair(subject: Union[str, int]) -> Dict[str, str]:
+    """
+    Crea un par de tokens (access + refresh)
+    
+    Args:
+        subject: ID del usuario
+        
+    Returns:
+        Diccionario con access_token y refresh_token
+    """
+    return {
+        "access_token": create_access_token(subject),
+        "refresh_token": create_refresh_token(subject)
+    }

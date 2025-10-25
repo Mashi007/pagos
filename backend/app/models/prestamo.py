@@ -1,8 +1,9 @@
 from datetime import date
-"""Modelo de Préstamo"""
+"""
+Modelo de Préstamo
 Define la estructura básica de un préstamo.
 Sincronizado con el endpoint de aprobaciones.
-""""""
+"""
 
 from enum import Enum
 # from sqlalchemy import  # TODO: Agregar imports específicos
@@ -105,5 +106,17 @@ class Prestamo(Base):
     # cascade="all, delete-orphan")  # COMENTADO: Solo plantilla vacía
     # Solo plantilla vacía
 
-"""
-""""""
+    def to_dict(self):
+        """Convierte el préstamo a diccionario"""
+        return {
+            "id": self.id,
+            "cliente_id": self.cliente_id,
+            "monto_solicitado": float(self.monto_solicitado) if self.monto_solicitado else None,
+            "monto_aprobado": float(self.monto_aprobado) if self.monto_aprobado else None,
+            "tasa_interes_anual": float(self.tasa_interes_anual) if self.tasa_interes_anual else None,
+            "plazo_meses": self.plazo_meses,
+            "fecha_solicitud": self.fecha_solicitud.isoformat() if self.fecha_solicitud else None,
+            "fecha_aprobacion": self.fecha_aprobacion.isoformat() if self.fecha_aprobacion else None,
+            "estado": self.estado,
+            "observaciones": self.observaciones
+        }

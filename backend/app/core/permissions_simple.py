@@ -1,10 +1,11 @@
 from datetime import date
-""""""
+"""
 Solo 2 roles: ADMIN (acceso completo) y USER (acceso limitado)
-""""""
+"""
 
 from enum import Enum
 from typing import List
+from sqlalchemy.orm import Session
 
 
 class Permission(str, Enum):
@@ -126,6 +127,7 @@ ADMIN_PERMISSIONS: List[Permission] = [
     Permission.VALIDADOR_READ,
     Permission.VALIDADOR_UPDATE,
     Permission.VALIDADOR_DELETE,
+]
 
 
 USER_PERMISSIONS: List[Permission] = [
@@ -140,10 +142,11 @@ USER_PERMISSIONS: List[Permission] = [
     # operaciones básicas
     Permission.CLIENTE_CREATE,  # ✅ Crear clientes
     Permission.CLIENTE_UPDATE,  # ✅ Actualizar clientes
+]
 
 
 def has_permission(user_is_admin: bool, permission: Permission) -> bool:
-    """"""
+    """
     Verificar si un usuario tiene un permiso específico
 
     Args:
@@ -152,22 +155,29 @@ def has_permission(user_is_admin: bool, permission: Permission) -> bool:
 
     Returns:
         True si tiene el permiso, False en caso contrario
-    """"""
+    """
     if user_is_admin:
         return permission in ADMIN_PERMISSIONS
     else:
         return permission in USER_PERMISSIONS
 
 
-def get_user_permissions(user_is_admin: bool) -> List[Permission]:
-    """"""
+def get_user_permissions(db: Session, user_id: int) -> List[Permission]:
+    """
+    Obtener permisos de un usuario específico
 
     Args:
-        user_is_admin: True si es admin, False si es user
+        db: Sesión de base de datos
+        user_id: ID del usuario
 
     Returns:
-    """"""
-    if user_is_admin:
+        Lista de permisos del usuario
+    """
+    # Por simplicidad, asumimos que si el usuario existe es admin
+    # En una implementación real, esto vendría de la base de datos
+    from app.models.user import User
+    user = db.query(User).filter(User.id == user_id).first()
+    if user and user.is_admin:
         return ADMIN_PERMISSIONS
     else:
         return USER_PERMISSIONS
