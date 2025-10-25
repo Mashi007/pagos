@@ -36,9 +36,9 @@ class NetworkDiagnostic:
         self._start_network_monitoring()
     
     def _start_network_monitoring(self):
-        """Iniciar monitoreo de red en background"""        
+        """Iniciar monitoreo de red en background"""
 def monitoring_loop():
-            while True:
+        while True:
                 try:
                     self._test_connectivity()
                     self._measure_latency()
@@ -54,13 +54,13 @@ def monitoring_loop():
     def _test_connectivity(self):
         """Probar conectividad a servicios externos"""
         test_urls = [
-            "https://www.google.com",
-            "https://www.github.com",
-            "https://httpbin.org/status/200",
+        "https://www.google.com",
+        "https://www.github.com",
+        "https://httpbin.org/status/200",
         ]
         
         for url in test_urls:
-            try:
+        try:
                 start_time = time.time()
                 response = urllib.request.urlopen(url, timeout=10)
                 end_time = time.time()
@@ -76,7 +76,7 @@ def monitoring_loop():
                 with self.lock:
                     self.connectivity_tests.append(connectivity_test)
                 
-            except Exception as e:
+        except Exception as e:
                 connectivity_test = {
                     "timestamp": datetime.now(),
                     "url": url,
@@ -90,77 +90,77 @@ def monitoring_loop():
     def _measure_latency(self):
         """Medir latencia de red"""
         try:
-            # Medir latencia a DNS
-            start_time = time.time()
-            socket.gethostbyname("www.google.com")
-            dns_latency = (time.time() - start_time) * 1000
-            
-            latency_measurement = {
+        # Medir latencia a DNS
+        start_time = time.time()
+        socket.gethostbyname("www.google.com")
+        dns_latency = (time.time() - start_time) * 1000
+        
+        latency_measurement = {
                 "timestamp": datetime.now(),
                 "dns_latency_ms": dns_latency,
                 "network_status": "ok" if dns_latency < 100 else "slow",
-            }
-            
-            with self.lock:
+        }
+        
+        with self.lock:
                 self.latency_measurements.append(latency_measurement)
                 
         except Exception as e:
-            logger.error(f"Error midiendo latencia: {e}")
+        logger.error(f"Error midiendo latencia: {e}")
     
     def test_endpoint_connectivity(self, endpoint: str) -> Dict[str, Any]:
         """Probar conectividad a un endpoint específico"""
         try:
-            start_time = time.time()
-            response = urllib.request.urlopen(endpoint, timeout=10)
-            end_time = time.time()
-            
-            return {
+        start_time = time.time()
+        response = urllib.request.urlopen(endpoint, timeout=10)
+        end_time = time.time()
+        
+        return {
                 "endpoint": endpoint,
                 "status_code": response.getcode(),
                 "response_time_ms": (end_time - start_time) * 1000,
                 "success": True,
                 "timestamp": datetime.now().isoformat(),
-            }
-            
+        }
+        
         except Exception as e:
-            return {
+        return {
                 "endpoint": endpoint,
                 "error": str(e),
                 "success": False,
                 "timestamp": datetime.now().isoformat(),
-            }
+        }
     
     def get_network_health(self) -> Dict[str, Any]:
         """Obtener estado de salud de la red"""
         with self.lock:
-            # Analizar pruebas de conectividad recientes
-            recent_tests = [
+        # Analizar pruebas de conectividad recientes
+        recent_tests = [
                 test for test in self.connectivity_tests
                 if (datetime.now() - test["timestamp"]).total_seconds() < 3600
-            ]
-            
-            successful_tests = [test for test in recent_tests if test["success"]]
-            success_rate = len(successful_tests) / len(recent_tests) if recent_tests else 0
-            
-            # Analizar mediciones de latencia recientes
-            recent_latencies = [
+        ]
+        
+        successful_tests = [test for test in recent_tests if test["success"]]
+        success_rate = len(successful_tests) / len(recent_tests) if recent_tests else 0
+        
+        # Analizar mediciones de latencia recientes
+        recent_latencies = [
                 measurement for measurement in self.latency_measurements
                 if (datetime.now() - measurement["timestamp"]).total_seconds() < 3600
-            ]
-            
-            avg_latency = 0
-            if recent_latencies:
+        ]
+        
+        avg_latency = 0
+        if recent_latencies:
                 latencies = [m["dns_latency_ms"] for m in recent_latencies]
                 avg_latency = statistics.mean(latencies)
-            
-            return {
+        
+        return {
                 "connectivity_success_rate": success_rate,
                 "average_latency_ms": avg_latency,
                 "total_tests": len(recent_tests),
                 "total_latency_measurements": len(recent_latencies),
                 "network_status": "healthy" if success_rate > 0.8 and avg_latency < 200 else "degraded",
                 "last_update": datetime.now().isoformat(),
-            }
+        }
 
 # Instancia global del diagnóstico de red
 network_diagnostic = NetworkDiagnostic()
@@ -193,7 +193,7 @@ async def get_latency_history(
         recent_measurements = list(network_diagnostic.latency_measurements)[-100:]
         
         return {
-            "latency_measurements": recent_measurements,
-            "total_count": len(network_diagnostic.latency_measurements),
-            "last_update": datetime.now().isoformat(),
+        "latency_measurements": recent_measurements,
+        "total_count": len(network_diagnostic.latency_measurements),
+        "last_update": datetime.now().isoformat(),
         }

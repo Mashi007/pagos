@@ -36,9 +36,9 @@ class TemporalAnalysisSystem:
         self._start_temporal_monitoring()
     
 def _start_temporal_monitoring(self):
-        """Iniciar monitoreo temporal en background"""        
+        """Iniciar monitoreo temporal en background"""
 def monitoring_loop():
-            while True:
+        while True:
                 try:
                     self._collect_timing_data()
                     self._analyze_timing_patterns()
@@ -54,10 +54,10 @@ def monitoring_loop():
 def _collect_timing_data(self):
         """Recopilar datos de timing del sistema"""
         with self.lock:
-            current_time = datetime.now()
-            
-            # Datos de sincronización de reloj
-            clock_data = {
+        current_time = datetime.now()
+        
+        # Datos de sincronización de reloj
+        clock_data = {
                 "timestamp": current_time,
                 "system_time": time.time(),
                 "datetime_now": current_time.isoformat(),
@@ -66,11 +66,11 @@ def _collect_timing_data(self):
                     if current_time.utcoffset()
                     else 0
                 ),
-            }
-            self.clock_sync_data.append(clock_data)
-            
-            # Verificar desviación de tiempo
-            if len(self.clock_sync_data) >= 2:
+        }
+        self.clock_sync_data.append(clock_data)
+        
+        # Verificar desviación de tiempo
+        if len(self.clock_sync_data) >= 2:
                 prev_data = self.clock_sync_data[-2]
                 time_diff = (current_time - prev_data["timestamp"]).total_seconds()
                 expected_diff = 60.0  # Esperamos 60 segundos
@@ -84,20 +84,20 @@ def _collect_timing_data(self):
 def _analyze_timing_patterns(self):
         """Analizar patrones temporales"""
         with self.lock:
-            if len(self.timing_events) < 10:
+        if len(self.timing_events) < 10:
                 return
-            
-            # Analizar patrones de timing en eventos recientes
-            recent_events = list(self.timing_events)[-100:]  # Últimos 100 eventos
-            
-            # Agrupar por tipo de evento
-            event_timings = defaultdict(list)
-            for event in recent_events:
+        
+        # Analizar patrones de timing en eventos recientes
+        recent_events = list(self.timing_events)[-100:]  # Últimos 100 eventos
+        
+        # Agrupar por tipo de evento
+        event_timings = defaultdict(list)
+        for event in recent_events:
                 event_timings[event["event_type"]].append(event["timing_data"])
-            
-            # Calcular estadísticas de timing por tipo
-            timing_stats = {}
-            for event_type, timings in event_timings.items():
+        
+        # Calcular estadísticas de timing por tipo
+        timing_stats = {}
+        for event_type, timings in event_timings.items():
                 if timings:
                     timing_stats[event_type] = {
                         "avg_duration_ms": statistics.mean(
@@ -114,18 +114,18 @@ def _analyze_timing_patterns(self):
                         ) if len(timings) > 1 else 0,
                         "count": len(timings),
                     }
-            
-            # Detectar anomalías temporales
-            self._detect_temporal_anomalies(timing_stats)
+        
+        # Detectar anomalías temporales
+        self._detect_temporal_anomalies(timing_stats)
     
     def _detect_temporal_anomalies(self, timing_stats: Dict[str, Any]):
         """Detectar anomalías temporales"""
         for event_type, stats in timing_stats.items():
-            avg_duration = stats["avg_duration_ms"]
-            std_deviation = stats["std_deviation"]
-            
-            # Si la desviación estándar es muy alta, puede indicar problemas
-            if std_deviation > avg_duration * 0.5:  # Más del 50% de variación
+        avg_duration = stats["avg_duration_ms"]
+        std_deviation = stats["std_deviation"]
+        
+        # Si la desviación estándar es muy alta, puede indicar problemas
+        if std_deviation > avg_duration * 0.5:  # Más del 50% de variación
                 logger.warning(
                     f"⚠️ Alta variación temporal detectada en {event_type}: "
                     f"promedio={avg_duration:.2f}ms, desv_std={std_deviation:.2f}ms"
@@ -139,23 +139,23 @@ def _analyze_timing_patterns(self):
     ):
         """Registrar un evento de timing"""
         with self.lock:
-            event = {
+        event = {
                 "timestamp": datetime.now(),
                 "event_type": event_type,
                 "timing_data": timing_data,
                 "user_id": user_id,
-            }
-            self.timing_events.append(event)
+        }
+        self.timing_events.append(event)
     
     def get_timing_analysis(self) -> Dict[str, Any]:
         """Obtener análisis de timing actual"""
         with self.lock:
-            return {
+        return {
                 "total_events": len(self.timing_events),
                 "clock_sync_samples": len(self.clock_sync_data),
                 "token_lifecycle_samples": len(self.token_lifecycle_data),
                 "last_update": datetime.now().isoformat(),
-            }
+        }
 
 # Instancia global del sistema temporal
 temporal_analyzer = TemporalAnalysisSystem()
@@ -189,11 +189,11 @@ async def get_clock_sync_status(
     """Obtener estado de sincronización de reloj"""
     with temporal_analyzer.lock:
         if not temporal_analyzer.clock_sync_data:
-            return {"message": "No hay datos de sincronización disponibles"}
+        return {"message": "No hay datos de sincronización disponibles"}
         
         latest_data = temporal_analyzer.clock_sync_data[-1]
         return {
-            "latest_sync": latest_data,
-            "total_samples": len(temporal_analyzer.clock_sync_data),
-            "status": "synchronized",
+        "latest_sync": latest_data,
+        "total_samples": len(temporal_analyzer.clock_sync_data),
+        "status": "synchronized",
         }

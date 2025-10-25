@@ -22,7 +22,7 @@ router = APIRouter()
 class CriticalErrorMonitor:
     """Monitor de errores críticos del sistema"""
     
-def __init__(self):
+    def __init__(self):
         self.error_patterns = defaultdict(int)
         self.critical_errors = deque(maxlen=1000)
         self.deployment_failures = deque(maxlen=100)
