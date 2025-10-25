@@ -1,1 +1,175 @@
-"""Dashboard de Diagnóstico en Tiempo RealSistema de monitoreo y auditoría para problemas de autenticación"""\nimport logging\nfrom collections \nimport defaultdict, deque\nfrom datetime \nimport datetime, timedelta\nfrom typing \nimport Any, Dict, List\nfrom fastapi \nimport APIRouter, Depends, Request, Response\nfrom sqlalchemy.orm \nimport Session\nfrom app.api.deps \nimport get_db\nfrom app.core.config \nimport settings\nfrom app.models.user \nimport Userlogger = logging.getLogger(__name__)router = APIRouter()# Almacenamiento en memoria para auditoríaaudit_logs = deque(maxlen=1000)  # Mantener últimos 1000 logserror_patterns = defaultdict(int)request_stats = defaultdict(int)\nclass AuditLogger:\n    """Logger especializado para auditoría de autenticación"""    @staticmethod    \ndef log_request(        request:\n Request,        response:\n Response,        user_id:\n str = None,        error:\n str = None,    ):\n        """Registrar request en auditoría"""        timestamp = datetime.now()        log_entry = {            "timestamp":\n timestamp.isoformat(),            "method":\n request.method,            "url":\n str(request.url),            "status_code":\n response.status_code,            "user_id":\n user_id,            "user_agent":\n request.headers.get("user-agent", "unknown"),            "ip":\n request.client.host if request.client else "unknown",            "error":\n error,            "auth_header_present":\n "authorization" in request.headers,            "auth_header_type":\n (                request.headers.get("authorization", "").split(" ")[0]                if request.headers.get("authorization")                else None            ),        }        # Agregar al log        audit_logs.append(log_entry)        # Actualizar estadísticas        request_stats[f"status_{response.status_code}"] += 1        if error:\n            error_patterns[error] += 1        # Log específico para errores 401        if response.status_code == 401:\n            logger.warning(                f"🔒 401 Unauthorized -"                + f"{request.method} {request.url} \                - Error:\n {error}"            )    @staticmethod    \ndef get_recent_logs(minutes:\n int = 60) -> List[Dict]:\n        """Obtener logs recientes"""        cutoff = datetime.now() - timedelta(minutes=minutes)        return [            log            for log in audit_logs            if datetime.fromisoformat(log["timestamp"]) > cutoff        ]    @staticmethod    \ndef get_error_summary() -> Dict[str, Any]:\n        """Resumen de errores"""        recent_logs = AuditLogger.get_recent_logs(60)        # Agrupar por tipo de error        error_counts = defaultdict(int)        status_counts = defaultdict(int)        for log in recent_logs:\n            if log["error"]:\n                error_counts[log["error"]] += 1            status_counts[log["status_code"]] += 1        return {            "total_requests":\n len(recent_logs),            "error_counts":\n dict(error_counts),            "status_counts":\n dict(status_counts),            "time_range":\n "last_60_minutes",        }@router.get("/dashboard")async \ndef dashboard_diagnostico(db:\n Session = Depends(get_db)):\n    """    📊 Dashboard principal de diagnóstico    """    try:\n        # 1. Estadísticas generales del sistema        system_stats = {            "timestamp":\n datetime.now().isoformat(),            "environment":\n settings.ENVIRONMENT,            "debug_mode":\n settings.DEBUG,            "cors_origins_count":\n len(settings.CORS_ORIGINS),        }        # 2. Estadísticas de usuarios        try:\n            total_users = db.query(User).count()            active_users = db.query(User).filter(User.is_active).count()            admin_users = db.query(User).filter(User.is_admin).count()            user_stats = {                "total_users":\n total_users,                "active_users":\n active_users,                "admin_users":\n admin_users,                "inactive_users":\n total_users - active_users,            }        except Exception as e:\n            user_stats = {"error":\n str(e)}        # 3. Estadísticas de requests        request_stats_summary = AuditLogger.get_error_summary()        # 4. Logs recientes (últimos 20)        recent_logs = AuditLogger.get_recent_logs(60)[-20:\n]        # 5. Patrones de error más comunes        top_errors = sorted(            error_patterns.items(), key=lambda x:\n x[1], reverse=True        )[:\n5]        # 6. Análisis de autenticación        auth_analysis = {            "total_401_errors":\n request_stats_summary["status_counts"].get(                401, 0            ),            "total_requests":\n request_stats_summary["total_requests"],            "error_rate":\n (                (                    request_stats_summary["status_counts"].get(401, 0)                    / max(request_stats_summary["total_requests"], 1)                )                * 100            ),        }        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "success",            "dashboard":\n {                "system":\n system_stats,                "users":\n user_stats,                "requests":\n request_stats_summary,                "auth_analysis":\n auth_analysis,                "top_errors":\n top_errors,                "recent_logs":\n recent_logs,            },            "recommendations":\n _generate_dashboard_recommendations(                auth_analysis, user_stats            ),        }    except Exception as e:\n        logger.error(f"Error en dashboard de diagnóstico:\n {e}")        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "error",            "error":\n str(e),        }@router.get("/logs")async \ndef obtener_logs_auditoria(minutes:\n int = 60, limit:\n int = 100):\n    """    📝 Obtener logs de auditoría    """    try:\n        logs = AuditLogger.get_recent_logs(minutes)        # Limitar resultados        if limit:\n            logs = logs[-limit:\n]        # Filtrar solo errores si se solicita        error_logs = [log for log in logs if log["status_code"] >= 400]        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "success",            "logs":\n {                "total_logs":\n len(logs),                "error_logs":\n len(error_logs),                "time_range_minutes":\n minutes,                "logs":\n logs,                "error_summary":\n AuditLogger.get_error_summary(),            },        }    except Exception as e:\n        logger.error(f"Error obteniendo logs de auditoría:\n {e}")        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "error",            "error":\n str(e),        }@router.get("/health-check")async \ndef health_check_detallado(db:\n Session = Depends(get_db)):\n    """    🏥 Health check detallado del sistema    """    try:\n        checks = {}        # 1. Verificar conexión a BD        try:\n            db.execute("SELECT 1")            checks["database"] = {                "status":\n "healthy",                "message":\n "Database connection OK",            }        except Exception as e:\n            checks["database"] = {                "status":\n "unhealthy",                "message":\n f"Database error:\n {str(e)}",            }        # 2. Verificar configuración JWT        jwt_ok = bool(settings.SECRET_KEY and len(settings.SECRET_KEY) >= 32)        checks["jwt_config"] = {            "status":\n "healthy" if jwt_ok else "unhealthy",            "message":\n (                "JWT configuration OK"                if jwt_ok                else "JWT configuration issues"            ),            "secret_key_length":\n (                len(settings.SECRET_KEY) if settings.SECRET_KEY else 0            ),        }        # 3. Verificar usuarios admin        try:\n            admin_count = db.query(User).filter(User.is_admin).count()            admin_ok = admin_count > 0            checks["admin_users"] = {                "status":\n "healthy" if admin_ok else "unhealthy",                "message":\n (                    f"Found {admin_count} admin users"                    if admin_ok                    else "No admin users found"                ),                "count":\n admin_count,            }        except Exception as e:\n            checks["admin_users"] = {                "status":\n "unhealthy",                "message":\n f"Error checking admin users:\n {str(e)}",            }        # 4. Verificar logs de auditoría        recent_logs = AuditLogger.get_recent_logs(5)  # Últimos 5 minutos        error_rate = len(            [log for log in recent_logs if log["status_code"] >= 400]        ) / max(len(recent_logs), 1)        checks["audit_logs"] = {            "status":\n "healthy" if error_rate < 0.5 else "warning",            "message":\n f"Error rate:\n {error_rate:\n.2%}",            "recent_requests":\n len(recent_logs),            "error_rate":\n error_rate,        }        # Estado general        overall_status = "healthy"        if any(check["status"] == "unhealthy" for check in checks.values()):\n            overall_status = "unhealthy"        elif any(check["status"] == "warning" for check in checks.values()):\n            overall_status = "warning"        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n overall_status,            "checks":\n checks,            "summary":\n {                "total_checks":\n len(checks),                "healthy_checks":\n len(                    [c for c in checks.values() if c["status"] == "healthy"]                ),                "warning_checks":\n len(                    [c for c in checks.values() if c["status"] == "warning"]                ),                "unhealthy_checks":\n len(                    [c for c in checks.values() if c["status"] == "unhealthy"]                ),            },        }    except Exception as e:\n        logger.error(f"Error en health check detallado:\n {e}")        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "error",            "error":\n str(e),        }@router.post("/clear-logs")async \ndef limpiar_logs_auditoria():\n    """    🧹 Limpiar logs de auditoría    """    try:\n        # Limpiar logs        audit_logs.clear()        error_patterns.clear()        request_stats.clear()        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "success",            "message":\n "Audit logs cleared successfully",        }    except Exception as e:\n        logger.error(f"Error limpiando logs:\n {e}")        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "error",            "error":\n str(e),        }\ndef _generate_dashboard_recommendations(    auth_analysis:\n Dict, user_stats:\n Dict) -> List[str]:\n    """Generar recomendaciones basadas en el análisis del dashboard"""    recommendations = []    # Análisis de tasa de error    error_rate = auth_analysis.get("error_rate", 0)    if error_rate > 50:\n        recommendations.append(            "🚨 Tasa de error muy alta (>50%) - Revisar configuración de \            autenticación"        )    elif error_rate > 20:\n        recommendations.append(            "⚠️ Tasa de error elevada (>20%) -     Monitorear logs de autenticación"        )    # Análisis de usuarios    if user_stats.get("admin_users", 0) == 0:\n        recommendations.append(            "👤 No hay usuarios administradores - Crear usuario admin"        )    if user_stats.get("active_users", 0) == 0:\n        recommendations.append(            "⚠️ No hay usuarios activos - Verificar estado de usuarios"        )    # Recomendaciones generales    if not recommendations:\n        recommendations.append("✅ Sistema funcionando correctamente")    return recommendations# Nota:\n Middleware removido - APIRouter no soporta middleware directamente# El middleware debe ser agregado a la aplicación principal en main.py
+﻿"""Dashboard de DiagnÃ³stico en Tiempo RealSistema de monitoreo y auditorÃ­a para problemas de autenticaciÃ³n"""
+import logging
+from collections 
+import defaultdict, deque
+from datetime 
+import datetime, timedelta
+from typing 
+import Any, Dict, List
+from fastapi 
+import APIRouter, Depends, Request, Response
+from sqlalchemy.orm 
+import Session
+from app.api.deps 
+import get_db
+from app.core.config 
+import settings
+from app.models.user 
+import Userlogger = logging.getLogger(__name__)router = APIRouter()# Almacenamiento en memoria para auditorÃ­aaudit_logs = deque(maxlen=1000)  # Mantener Ãºltimos 1000 logserror_patterns = defaultdict(int)request_stats = defaultdict(int)
+class AuditLogger:
+    """Logger especializado para auditorÃ­a de autenticaciÃ³n"""    @staticmethod    
+def log_request(        request:
+ Request,        response:
+ Response,        user_id:
+ str = None,        error:
+ str = None,    ):
+        """Registrar request en auditorÃ­a"""        timestamp = datetime.now()        log_entry = {            "timestamp":
+ timestamp.isoformat(),            "method":
+ request.method,            "url":
+ str(request.url),            "status_code":
+ response.status_code,            "user_id":
+ user_id,            "user_agent":
+ request.headers.get("user-agent", "unknown"),            "ip":
+ request.client.host if request.client else "unknown",            "error":
+ error,            "auth_header_present":
+ "authorization" in request.headers,            "auth_header_type":
+ (                request.headers.get("authorization", "").split(" ")[0]                if request.headers.get("authorization")                else None            ),        }        # Agregar al log        audit_logs.append(log_entry)        # Actualizar estadÃ­sticas        request_stats[f"status_{response.status_code}"] += 1        if error:
+            error_patterns[error] += 1        # Log especÃ­fico para errores 401        if response.status_code == 401:
+            logger.warning(                f"ðŸ”’ 401 Unauthorized -"                + f"{request.method} {request.url} \                - Error:
+ {error}"            )    @staticmethod    
+def get_recent_logs(minutes:
+ int = 60) -> List[Dict]:
+        """Obtener logs recientes"""        cutoff = datetime.now() - timedelta(minutes=minutes)        return [            log            for log in audit_logs            if datetime.fromisoformat(log["timestamp"]) > cutoff        ]    @staticmethod    
+def get_error_summary() -> Dict[str, Any]:
+        """Resumen de errores"""        recent_logs = AuditLogger.get_recent_logs(60)        # Agrupar por tipo de error        error_counts = defaultdict(int)        status_counts = defaultdict(int)        for log in recent_logs:
+            if log["error"]:
+                error_counts[log["error"]] += 1            status_counts[log["status_code"]] += 1        return {            "total_requests":
+ len(recent_logs),            "error_counts":
+ dict(error_counts),            "status_counts":
+ dict(status_counts),            "time_range":
+ "last_60_minutes",        }@router.get("/dashboard")async 
+def dashboard_diagnostico(db:
+ Session = Depends(get_db)):
+    """    ðŸ“Š Dashboard principal de diagnÃ³stico    """    try:
+        # 1. EstadÃ­sticas generales del sistema        system_stats = {            "timestamp":
+ datetime.now().isoformat(),            "environment":
+ settings.ENVIRONMENT,            "debug_mode":
+ settings.DEBUG,            "cors_origins_count":
+ len(settings.CORS_ORIGINS),        }        # 2. EstadÃ­sticas de usuarios        try:
+            total_users = db.query(User).count()            active_users = db.query(User).filter(User.is_active).count()            admin_users = db.query(User).filter(User.is_admin).count()            user_stats = {                "total_users":
+ total_users,                "active_users":
+ active_users,                "admin_users":
+ admin_users,                "inactive_users":
+ total_users - active_users,            }        except Exception as e:
+            user_stats = {"error":
+ str(e)}        # 3. EstadÃ­sticas de requests        request_stats_summary = AuditLogger.get_error_summary()        # 4. Logs recientes (Ãºltimos 20)        recent_logs = AuditLogger.get_recent_logs(60)[-20:
+]        # 5. Patrones de error mÃ¡s comunes        top_errors = sorted(            error_patterns.items(), key=lambda x:
+ x[1], reverse=True        )[:
+5]        # 6. AnÃ¡lisis de autenticaciÃ³n        auth_analysis = {            "total_401_errors":
+ request_stats_summary["status_counts"].get(                401, 0            ),            "total_requests":
+ request_stats_summary["total_requests"],            "error_rate":
+ (                (                    request_stats_summary["status_counts"].get(401, 0)                    / max(request_stats_summary["total_requests"], 1)                )                * 100            ),        }        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "success",            "dashboard":
+ {                "system":
+ system_stats,                "users":
+ user_stats,                "requests":
+ request_stats_summary,                "auth_analysis":
+ auth_analysis,                "top_errors":
+ top_errors,                "recent_logs":
+ recent_logs,            },            "recommendations":
+ _generate_dashboard_recommendations(                auth_analysis, user_stats            ),        }    except Exception as e:
+        logger.error(f"Error en dashboard de diagnÃ³stico:
+ {e}")        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "error",            "error":
+ str(e),        }@router.get("/logs")async 
+def obtener_logs_auditoria(minutes:
+ int = 60, limit:
+ int = 100):
+    """    ðŸ“ Obtener logs de auditorÃ­a    """    try:
+        logs = AuditLogger.get_recent_logs(minutes)        # Limitar resultados        if limit:
+            logs = logs[-limit:
+]        # Filtrar solo errores si se solicita        error_logs = [log for log in logs if log["status_code"] >= 400]        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "success",            "logs":
+ {                "total_logs":
+ len(logs),                "error_logs":
+ len(error_logs),                "time_range_minutes":
+ minutes,                "logs":
+ logs,                "error_summary":
+ AuditLogger.get_error_summary(),            },        }    except Exception as e:
+        logger.error(f"Error obteniendo logs de auditorÃ­a:
+ {e}")        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "error",            "error":
+ str(e),        }@router.get("/health-check")async 
+def health_check_detallado(db:
+ Session = Depends(get_db)):
+    """    ðŸ¥ Health check detallado del sistema    """    try:
+        checks = {}        # 1. Verificar conexiÃ³n a BD        try:
+            db.execute("SELECT 1")            checks["database"] = {                "status":
+ "healthy",                "message":
+ "Database connection OK",            }        except Exception as e:
+            checks["database"] = {                "status":
+ "unhealthy",                "message":
+ f"Database error:
+ {str(e)}",            }        # 2. Verificar configuraciÃ³n JWT        jwt_ok = bool(settings.SECRET_KEY and len(settings.SECRET_KEY) >= 32)        checks["jwt_config"] = {            "status":
+ "healthy" if jwt_ok else "unhealthy",            "message":
+ (                "JWT configuration OK"                if jwt_ok                else "JWT configuration issues"            ),            "secret_key_length":
+ (                len(settings.SECRET_KEY) if settings.SECRET_KEY else 0            ),        }        # 3. Verificar usuarios admin        try:
+            admin_count = db.query(User).filter(User.is_admin).count()            admin_ok = admin_count > 0            checks["admin_users"] = {                "status":
+ "healthy" if admin_ok else "unhealthy",                "message":
+ (                    f"Found {admin_count} admin users"                    if admin_ok                    else "No admin users found"                ),                "count":
+ admin_count,            }        except Exception as e:
+            checks["admin_users"] = {                "status":
+ "unhealthy",                "message":
+ f"Error checking admin users:
+ {str(e)}",            }        # 4. Verificar logs de auditorÃ­a        recent_logs = AuditLogger.get_recent_logs(5)  # Ãšltimos 5 minutos        error_rate = len(            [log for log in recent_logs if log["status_code"] >= 400]        ) / max(len(recent_logs), 1)        checks["audit_logs"] = {            "status":
+ "healthy" if error_rate < 0.5 else "warning",            "message":
+ f"Error rate:
+ {error_rate:
+.2%}",            "recent_requests":
+ len(recent_logs),            "error_rate":
+ error_rate,        }        # Estado general        overall_status = "healthy"        if any(check["status"] == "unhealthy" for check in checks.values()):
+            overall_status = "unhealthy"        elif any(check["status"] == "warning" for check in checks.values()):
+            overall_status = "warning"        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ overall_status,            "checks":
+ checks,            "summary":
+ {                "total_checks":
+ len(checks),                "healthy_checks":
+ len(                    [c for c in checks.values() if c["status"] == "healthy"]                ),                "warning_checks":
+ len(                    [c for c in checks.values() if c["status"] == "warning"]                ),                "unhealthy_checks":
+ len(                    [c for c in checks.values() if c["status"] == "unhealthy"]                ),            },        }    except Exception as e:
+        logger.error(f"Error en health check detallado:
+ {e}")        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "error",            "error":
+ str(e),        }@router.post("/clear-logs")async 
+def limpiar_logs_auditoria():
+    """    ðŸ§¹ Limpiar logs de auditorÃ­a    """    try:
+        # Limpiar logs        audit_logs.clear()        error_patterns.clear()        request_stats.clear()        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "success",            "message":
+ "Audit logs cleared successfully",        }    except Exception as e:
+        logger.error(f"Error limpiando logs:
+ {e}")        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "error",            "error":
+ str(e),        }
+def _generate_dashboard_recommendations(    auth_analysis:
+ Dict, user_stats:
+ Dict) -> List[str]:
+    """Generar recomendaciones basadas en el anÃ¡lisis del dashboard"""    recommendations = []    # AnÃ¡lisis de tasa de error    error_rate = auth_analysis.get("error_rate", 0)    if error_rate > 50:
+        recommendations.append(            "ðŸš¨ Tasa de error muy alta (>50%) - Revisar configuraciÃ³n de \            autenticaciÃ³n"        )    elif error_rate > 20:
+        recommendations.append(            "âš ï¸ Tasa de error elevada (>20%) -     Monitorear logs de autenticaciÃ³n"        )    # AnÃ¡lisis de usuarios    if user_stats.get("admin_users", 0) == 0:
+        recommendations.append(            "ðŸ‘¤ No hay usuarios administradores - Crear usuario admin"        )    if user_stats.get("active_users", 0) == 0:
+        recommendations.append(            "âš ï¸ No hay usuarios activos - Verificar estado de usuarios"        )    # Recomendaciones generales    if not recommendations:
+        recommendations.append("âœ… Sistema funcionando correctamente")    return recommendations# Nota:
+ Middleware removido - APIRouter no soporta middleware directamente# El middleware debe ser agregado a la aplicaciÃ³n principal en main.py
+
+
+
+
+

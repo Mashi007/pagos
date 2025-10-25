@@ -1,1 +1,170 @@
-"""Endpoint de diagnóstico completo del sistemaVerifica todos los componentes críticos"""\nimport logging\nfrom datetime \nimport datetime\nfrom typing \nimport Dict, Any, List\nfrom fastapi \nimport APIRouter, Depends\nfrom sqlalchemy \nimport text\nfrom sqlalchemy.orm \nimport Session\nfrom app.api.deps \nimport get_db\nfrom app.core.config \nimport settings\nfrom app.models.analista \nimport Analista\nfrom app.models.auditoria \nimport Auditoria\nfrom app.models.cliente \nimport Cliente\nfrom app.models.concesionario \nimport Concesionario\nfrom app.models.modelo_vehiculo \nimport ModeloVehiculo\nfrom app.models.user \nimport Userlogger = logging.getLogger(__name__)router = APIRouter()\ndef _verificar_conexion_bd(db:\n Session) -> Dict[str, Any]:\n    """Verificar conexión a base de datos"""    try:\n        db.execute(text("SELECT 1"))        return {            "status":\n "ok",            "message":\n "Conexión exitosa",            "url_configurada":\n bool(settings.DATABASE_URL),        }    except Exception as e:\n        return {            "status":\n "error",            "message":\n f"Error de conexión:\n {str(e)}",        }\ndef _verificar_tablas_criticas(db:\n Session) -> Dict[str, Any]:\n    """Verificar tablas críticas"""    tablas_criticas = [        ("usuarios", User),        ("clientes", Cliente),        ("analistas", Analista),        ("concesionarios", Concesionario),        ("modelos_vehiculos", ModeloVehiculo),        ("auditoria", Auditoria),    ]    resultado = {}    for nombre_tabla, modelo in tablas_criticas:\n        try:\n            count = db.query(modelo).count()            resultado[nombre_tabla] = {                "status":\n "ok",                "registros":\n count,                "message":\n f"Tabla {nombre_tabla} accesible",            }        except Exception as e:\n            resultado[nombre_tabla] = {                "status":\n "error",                "message":\n f"Error en tabla {nombre_tabla}:\n {str(e)}",            }    return resultado\ndef _verificar_configuracion_datos(db:\n Session) -> Dict[str, Any]:\n    """Verificar datos de configuración"""    try:\n        analistas_activos = db.query(Analista).filter(Analista.activo).count()        concesionarios_activos = (            db.query(Concesionario).filter(Concesionario.activo).count()        )        modelos_activos = (            db.query(ModeloVehiculo).filter(ModeloVehiculo.activo).count()        )        return {            "status":\n "ok",            "analistas_activos":\n analistas_activos,            "concesionarios_activos":\n concesionarios_activos,            "modelos_activos":\n modelos_activos,            "message":\n "Datos de configuración disponibles",        }    except Exception as e:\n        return {            "status":\n "error",            "message":\n f"Error en configuración:\n {str(e)}",        }\ndef _verificar_administradores(db:\n Session) -> Dict[str, Any]:\n    """Verificar usuario administrador"""    try:\n        admin_count = db.query(User).filter(User.is_admin).count()        admin_activo = (            db.query(User).filter(User.is_admin, User.is_active).count()        )        return {            "status":\n "ok",            "total_admins":\n admin_count,            "admins_activos":\n admin_activo,            "message":\n "Usuarios administradores verificados",        }    except Exception as e:\n        return {            "status":\n "error",            "message":\n f"Error verificando administradores:\n {str(e)}",        }\ndef _verificar_configuracion_app() -> Dict[str, Any]:\n    """Verificar configuración de la aplicación"""    return {        "status":\n "ok",        "environment":\n settings.ENVIRONMENT,        "log_level":\n settings.LOG_LEVEL,        "cors_origins":\n len(settings.CORS_ORIGINS),        "secret_key_configurado":\n bool(settings.SECRET_KEY),        "database_url_configurado":\n bool(settings.DATABASE_URL),    }\ndef _determinar_estado_general(    componentes:\n Dict[str, Any],) -> tuple[str, List[str], str]:\n    """Determinar estado general del sistema"""    errores = []    for componente, info in componentes.items():\n        if info.get("status") == "error":\n            errores.append(                f"{componente}:\n {info.get('message', 'Error desconocido')}"            )    if errores:\n        return "error", errores, f"Sistema con {len(errores)} errores críticos"    else:\n        return "ok", [], "Sistema funcionando correctamente"@router.get("/sistema")\ndef diagnostico_completo_sistema(db:\n Session = Depends(get_db)):\n    """    🔍 Diagnóstico completo del sistema (VERSIÓN REFACTORIZADA)    Verifica todos los componentes críticos    """    diagnostico = {        "timestamp":\n datetime.now().isoformat(),        "status":\n "checking",        "componentes":\n {},    }    try:\n        # Verificar componentes individuales        diagnostico["componentes"]["base_datos"] = _verificar_conexion_bd(db)        diagnostico["componentes"]["tablas"] = _verificar_tablas_criticas(db)        diagnostico["componentes"]["configuracion"] = (            _verificar_configuracion_datos(db)        )        diagnostico["componentes"]["administradores"] = (            _verificar_administradores(db)        )        diagnostico["componentes"][            "configuracion_app"        ] = _verificar_configuracion_app()        # Determinar estado general        status, errores, message = _determinar_estado_general(            diagnostico["componentes"]        )        diagnostico["status"] = status        diagnostico["message"] = message        if errores:\n            diagnostico["errores"] = errores        return diagnostico    except Exception as e:\n        logger.error(f"Error en diagnóstico completo:\n {str(e)}")        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "error",            "message":\n f"Error crítico en diagnóstico:\n {str(e)}",            "componentes":\n {},        }@router.get("/endpoints")\ndef verificar_endpoints_criticos():\n    """    🔗 Verificar estado de endpoints críticos    """    endpoints_criticos = [        "/api/v1/auth/login",        "/api/v1/auth/me",        "/api/v1/auth/refresh",        "/api/v1/clientes/",        "/api/v1/usuarios/",        "/api/v1/analistas/activos",        "/api/v1/concesionarios/activos",        "/api/v1/modelos-vehiculos/activos",    ]    return {        "timestamp":\n datetime.now().isoformat(),        "endpoints_criticos":\n endpoints_criticos,        "total_endpoints":\n len(endpoints_criticos),        "message":\n "Lista de endpoints críticos para verificar",        "nota":\n "Usar herramientas como Postman o curl para verificar cada \        endpoint",    }@router.get("/configuracion")\ndef verificar_configuracion_sistema():\n    """    ⚙️ Verificar configuración del sistema    """    return {        "timestamp":\n datetime.now().isoformat(),        "configuracion":\n {            "environment":\n settings.ENVIRONMENT,            "log_level":\n settings.LOG_LEVEL,            "cors_origins_count":\n len(settings.CORS_ORIGINS),            "secret_key_length":\n (                len(settings.SECRET_KEY) if settings.SECRET_KEY else 0            ),            "database_url_configured":\n bool(settings.DATABASE_URL),            "app_name":\n settings.APP_NAME,            "app_version":\n settings.APP_VERSION,        },        "status":\n "ok",        "message":\n "Configuración del sistema verificada",    }@router.get("/monitoreo")\ndef monitoreo_tiempo_real(db:\n Session = Depends(get_db)):\n    """    📊 Monitoreo en tiempo real del sistema    """    try:\n        # Métricas de rendimiento        start_time = datetime.now()        # Verificar conexión DB        db.execute(text("SELECT 1"))        db_response_time = (datetime.now() - start_time).total_seconds() * 1000        # Contar registros en tiempo real        usuarios_count = db.query(User).count()        clientes_count = db.query(Cliente).count()        analistas_count = db.query(Analista).count()        concesionarios_count = db.query(Concesionario).count()        modelos_count = db.query(ModeloVehiculo).count()        # Verificar usuarios activos        usuarios_activos = db.query(User).filter(User.is_active).count()        usuarios_admin = db.query(User).filter(User.is_admin).count()        # Verificar datos de configuración activos        analistas_activos = db.query(Analista).filter(Analista.activo).count()        concesionarios_activos = (            db.query(Concesionario).filter(Concesionario.activo).count()        )        modelos_activos = (            db.query(ModeloVehiculo).filter(ModeloVehiculo.activo).count()        )        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "healthy",            "rendimiento":\n {                "db_response_time_ms":\n round(db_response_time, 2),                "db_status":\n "connected",            },            "metricas":\n {                "usuarios":\n {                    "total":\n usuarios_count,                    "activos":\n usuarios_activos,                    "administradores":\n usuarios_admin,                    "porcentaje_activos":\n round(                        (                            (usuarios_activos / usuarios_count * 100)                            if usuarios_count > 0                            else 0                        ),                        2,                    ),                },                "clientes":\n {"total":\n clientes_count},                "configuracion":\n {                    "analistas_activos":\n analistas_activos,                    "concesionarios_activos":\n concesionarios_activos,                    "modelos_activos":\n modelos_activos,                    "total_analistas":\n analistas_count,                    "total_concesionarios":\n concesionarios_count,                    "total_modelos":\n modelos_count,                },            },            "alertas":\n [],            "message":\n "Sistema funcionando correctamente",        }    except Exception as e:\n        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "error",            "error":\n str(e),            "message":\n "Error en monitoreo del sistema",        }@router.get("/logs")\ndef obtener_logs_sistema():\n    """    📝 Obtener información de logs del sistema    """    return {        "timestamp":\n datetime.now().isoformat(),        "log_level":\n settings.LOG_LEVEL,        "environment":\n settings.ENVIRONMENT,        "message":\n "Información de configuración de logs",        "nota":\n "Los logs detallados están disponibles en los logs del \        servidor",    }
+﻿"""Endpoint de diagnÃ³stico completo del sistemaVerifica todos los componentes crÃ­ticos"""
+import logging
+from datetime 
+import datetime
+from typing 
+import Dict, Any, List
+from fastapi 
+import APIRouter, Depends
+from sqlalchemy 
+import text
+from sqlalchemy.orm 
+import Session
+from app.api.deps 
+import get_db
+from app.core.config 
+import settings
+from app.models.analista 
+import Analista
+from app.models.auditoria 
+import Auditoria
+from app.models.cliente 
+import Cliente
+from app.models.concesionario 
+import Concesionario
+from app.models.modelo_vehiculo 
+import ModeloVehiculo
+from app.models.user 
+import Userlogger = logging.getLogger(__name__)router = APIRouter()
+def _verificar_conexion_bd(db:
+ Session) -> Dict[str, Any]:
+    """Verificar conexiÃ³n a base de datos"""    try:
+        db.execute(text("SELECT 1"))        return {            "status":
+ "ok",            "message":
+ "ConexiÃ³n exitosa",            "url_configurada":
+ bool(settings.DATABASE_URL),        }    except Exception as e:
+        return {            "status":
+ "error",            "message":
+ f"Error de conexiÃ³n:
+ {str(e)}",        }
+def _verificar_tablas_criticas(db:
+ Session) -> Dict[str, Any]:
+    """Verificar tablas crÃ­ticas"""    tablas_criticas = [        ("usuarios", User),        ("clientes", Cliente),        ("analistas", Analista),        ("concesionarios", Concesionario),        ("modelos_vehiculos", ModeloVehiculo),        ("auditoria", Auditoria),    ]    resultado = {}    for nombre_tabla, modelo in tablas_criticas:
+        try:
+            count = db.query(modelo).count()            resultado[nombre_tabla] = {                "status":
+ "ok",                "registros":
+ count,                "message":
+ f"Tabla {nombre_tabla} accesible",            }        except Exception as e:
+            resultado[nombre_tabla] = {                "status":
+ "error",                "message":
+ f"Error en tabla {nombre_tabla}:
+ {str(e)}",            }    return resultado
+def _verificar_configuracion_datos(db:
+ Session) -> Dict[str, Any]:
+    """Verificar datos de configuraciÃ³n"""    try:
+        analistas_activos = db.query(Analista).filter(Analista.activo).count()        concesionarios_activos = (            db.query(Concesionario).filter(Concesionario.activo).count()        )        modelos_activos = (            db.query(ModeloVehiculo).filter(ModeloVehiculo.activo).count()        )        return {            "status":
+ "ok",            "analistas_activos":
+ analistas_activos,            "concesionarios_activos":
+ concesionarios_activos,            "modelos_activos":
+ modelos_activos,            "message":
+ "Datos de configuraciÃ³n disponibles",        }    except Exception as e:
+        return {            "status":
+ "error",            "message":
+ f"Error en configuraciÃ³n:
+ {str(e)}",        }
+def _verificar_administradores(db:
+ Session) -> Dict[str, Any]:
+    """Verificar usuario administrador"""    try:
+        admin_count = db.query(User).filter(User.is_admin).count()        admin_activo = (            db.query(User).filter(User.is_admin, User.is_active).count()        )        return {            "status":
+ "ok",            "total_admins":
+ admin_count,            "admins_activos":
+ admin_activo,            "message":
+ "Usuarios administradores verificados",        }    except Exception as e:
+        return {            "status":
+ "error",            "message":
+ f"Error verificando administradores:
+ {str(e)}",        }
+def _verificar_configuracion_app() -> Dict[str, Any]:
+    """Verificar configuraciÃ³n de la aplicaciÃ³n"""    return {        "status":
+ "ok",        "environment":
+ settings.ENVIRONMENT,        "log_level":
+ settings.LOG_LEVEL,        "cors_origins":
+ len(settings.CORS_ORIGINS),        "secret_key_configurado":
+ bool(settings.SECRET_KEY),        "database_url_configurado":
+ bool(settings.DATABASE_URL),    }
+def _determinar_estado_general(    componentes:
+ Dict[str, Any],) -> tuple[str, List[str], str]:
+    """Determinar estado general del sistema"""    errores = []    for componente, info in componentes.items():
+        if info.get("status") == "error":
+            errores.append(                f"{componente}:
+ {info.get('message', 'Error desconocido')}"            )    if errores:
+        return "error", errores, f"Sistema con {len(errores)} errores crÃ­ticos"    else:
+        return "ok", [], "Sistema funcionando correctamente"@router.get("/sistema")
+def diagnostico_completo_sistema(db:
+ Session = Depends(get_db)):
+    """    ðŸ” DiagnÃ³stico completo del sistema (VERSIÃ“N REFACTORIZADA)    Verifica todos los componentes crÃ­ticos    """    diagnostico = {        "timestamp":
+ datetime.now().isoformat(),        "status":
+ "checking",        "componentes":
+ {},    }    try:
+        # Verificar componentes individuales        diagnostico["componentes"]["base_datos"] = _verificar_conexion_bd(db)        diagnostico["componentes"]["tablas"] = _verificar_tablas_criticas(db)        diagnostico["componentes"]["configuracion"] = (            _verificar_configuracion_datos(db)        )        diagnostico["componentes"]["administradores"] = (            _verificar_administradores(db)        )        diagnostico["componentes"][            "configuracion_app"        ] = _verificar_configuracion_app()        # Determinar estado general        status, errores, message = _determinar_estado_general(            diagnostico["componentes"]        )        diagnostico["status"] = status        diagnostico["message"] = message        if errores:
+            diagnostico["errores"] = errores        return diagnostico    except Exception as e:
+        logger.error(f"Error en diagnÃ³stico completo:
+ {str(e)}")        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "error",            "message":
+ f"Error crÃ­tico en diagnÃ³stico:
+ {str(e)}",            "componentes":
+ {},        }@router.get("/endpoints")
+def verificar_endpoints_criticos():
+    """    ðŸ”— Verificar estado de endpoints crÃ­ticos    """    endpoints_criticos = [        "/api/v1/auth/login",        "/api/v1/auth/me",        "/api/v1/auth/refresh",        "/api/v1/clientes/",        "/api/v1/usuarios/",        "/api/v1/analistas/activos",        "/api/v1/concesionarios/activos",        "/api/v1/modelos-vehiculos/activos",    ]    return {        "timestamp":
+ datetime.now().isoformat(),        "endpoints_criticos":
+ endpoints_criticos,        "total_endpoints":
+ len(endpoints_criticos),        "message":
+ "Lista de endpoints crÃ­ticos para verificar",        "nota":
+ "Usar herramientas como Postman o curl para verificar cada \        endpoint",    }@router.get("/configuracion")
+def verificar_configuracion_sistema():
+    """    âš™ï¸ Verificar configuraciÃ³n del sistema    """    return {        "timestamp":
+ datetime.now().isoformat(),        "configuracion":
+ {            "environment":
+ settings.ENVIRONMENT,            "log_level":
+ settings.LOG_LEVEL,            "cors_origins_count":
+ len(settings.CORS_ORIGINS),            "secret_key_length":
+ (                len(settings.SECRET_KEY) if settings.SECRET_KEY else 0            ),            "database_url_configured":
+ bool(settings.DATABASE_URL),            "app_name":
+ settings.APP_NAME,            "app_version":
+ settings.APP_VERSION,        },        "status":
+ "ok",        "message":
+ "ConfiguraciÃ³n del sistema verificada",    }@router.get("/monitoreo")
+def monitoreo_tiempo_real(db:
+ Session = Depends(get_db)):
+    """    ðŸ“Š Monitoreo en tiempo real del sistema    """    try:
+        # MÃ©tricas de rendimiento        start_time = datetime.now()        # Verificar conexiÃ³n DB        db.execute(text("SELECT 1"))        db_response_time = (datetime.now() - start_time).total_seconds() * 1000        # Contar registros en tiempo real        usuarios_count = db.query(User).count()        clientes_count = db.query(Cliente).count()        analistas_count = db.query(Analista).count()        concesionarios_count = db.query(Concesionario).count()        modelos_count = db.query(ModeloVehiculo).count()        # Verificar usuarios activos        usuarios_activos = db.query(User).filter(User.is_active).count()        usuarios_admin = db.query(User).filter(User.is_admin).count()        # Verificar datos de configuraciÃ³n activos        analistas_activos = db.query(Analista).filter(Analista.activo).count()        concesionarios_activos = (            db.query(Concesionario).filter(Concesionario.activo).count()        )        modelos_activos = (            db.query(ModeloVehiculo).filter(ModeloVehiculo.activo).count()        )        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "healthy",            "rendimiento":
+ {                "db_response_time_ms":
+ round(db_response_time, 2),                "db_status":
+ "connected",            },            "metricas":
+ {                "usuarios":
+ {                    "total":
+ usuarios_count,                    "activos":
+ usuarios_activos,                    "administradores":
+ usuarios_admin,                    "porcentaje_activos":
+ round(                        (                            (usuarios_activos / usuarios_count * 100)                            if usuarios_count > 0                            else 0                        ),                        2,                    ),                },                "clientes":
+ {"total":
+ clientes_count},                "configuracion":
+ {                    "analistas_activos":
+ analistas_activos,                    "concesionarios_activos":
+ concesionarios_activos,                    "modelos_activos":
+ modelos_activos,                    "total_analistas":
+ analistas_count,                    "total_concesionarios":
+ concesionarios_count,                    "total_modelos":
+ modelos_count,                },            },            "alertas":
+ [],            "message":
+ "Sistema funcionando correctamente",        }    except Exception as e:
+        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "error",            "error":
+ str(e),            "message":
+ "Error en monitoreo del sistema",        }@router.get("/logs")
+def obtener_logs_sistema():
+    """    ðŸ“ Obtener informaciÃ³n de logs del sistema    """    return {        "timestamp":
+ datetime.now().isoformat(),        "log_level":
+ settings.LOG_LEVEL,        "environment":
+ settings.ENVIRONMENT,        "message":
+ "InformaciÃ³n de configuraciÃ³n de logs",        "nota":
+ "Los logs detallados estÃ¡n disponibles en los logs del \        servidor",    }
+
+
+
+
+

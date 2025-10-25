@@ -1,1 +1,268 @@
-"""Sistema de Alertas Inteligentes para AutenticaciónDetecta y alerta sobre problemas de autenticación en tiempo real"""\nimport logging\nimport threading\nimport time\nfrom collections \nimport defaultdict, deque\nfrom datetime \nimport datetime, timedelta\nfrom enum \nimport Enum\nfrom typing \nimport Any, Dict, List, Optional\nfrom fastapi \nimport APIRouter, Depends, HTTPException\nfrom sqlalchemy.orm \nimport Session\nfrom app.api.deps \nimport get_current_user, get_db\nfrom app.models.user \nimport Userlogger = logging.getLogger(__name__)router = APIRouter()# ============================================# SISTEMA DE ALERTAS INTELIGENTES# ============================================\nclass AlertSeverity(Enum):\n    """Niveles de severidad de alertas"""    LOW = "low"    MEDIUM = "medium"    HIGH = "high"    CRITICAL = "critical"\nclass AlertType(Enum):\n    """Tipos de alertas"""    TOKEN_EXPIRY = "token_expiry"    AUTH_FAILURE = "auth_failure"    SUSPICIOUS_ACTIVITY = "suspicious_activity"    SYSTEM_OVERLOAD = "system_overload"    SECURITY_BREACH = "security_breach"    PERFORMANCE_DEGRADATION = "performance_degradation"\nclass IntelligentAlertSystem:\n    """Sistema de alertas inteligentes"""    \ndef __init__(self):\n        self.active_alerts = {}  # Alertas activas        self.alert_history = deque(maxlen=1000)  # Historial de alertas        self.alert_rules = {}  # Reglas de alerta        self.metrics_buffer = deque(maxlen=100)  # Buffer de métricas        self.notification_handlers = []  # Manejadores de notificaciones        self.lock = threading.Lock()        # Inicializar reglas por defecto        self._initialize_default_rules()        # Iniciar monitoreo en background        self._start_background_monitoring()    \ndef _initialize_default_rules(self):\n        """Inicializar reglas de alerta por defecto"""        self.alert_rules = {            AlertType.TOKEN_EXPIRY:\n {                "threshold":\n 5,  # minutos antes de expirar                "severity":\n AlertSeverity.MEDIUM,                "enabled":\n True,                "cooldown":\n 300,  # 5 minutos entre alertas            },            AlertType.AUTH_FAILURE:\n {                "threshold":\n 10,  # fallos por minuto                "severity":\n AlertSeverity.HIGH,                "enabled":\n True,                "cooldown":\n 60,  # 1 minuto entre alertas            },            AlertType.SUSPICIOUS_ACTIVITY:\n {                "threshold":\n 3,  # actividades sospechosas por minuto                "severity":\n AlertSeverity.HIGH,                "enabled":\n True,                "cooldown":\n 180,  # 3 minutos entre alertas            },            AlertType.SYSTEM_OVERLOAD:\n {                "threshold":\n 80,  # porcentaje de CPU/memoria                "severity":\n AlertSeverity.CRITICAL,                "enabled":\n True,                "cooldown":\n 120,  # 2 minutos entre alertas            },            AlertType.PERFORMANCE_DEGRADATION:\n {                "threshold":\n 5.0,  # segundos de tiempo de respuesta                "severity":\n AlertSeverity.MEDIUM,                "enabled":\n True,                "cooldown":\n 300,  # 5 minutos entre alertas            },        }    \ndef _start_background_monitoring(self):\n        """Iniciar monitoreo en background"""        \ndef monitoring_loop():\n            while True:\n                try:\n                    self._check_alert_conditions()                    self._cleanup_expired_alerts()                    time.sleep(30)  # Verificar cada 30 segundos                except Exception as e:\n                    logger.error(f"Error en monitoreo de alertas:\n {e}")                    time.sleep(60)        thread = threading.Thread(target=monitoring_loop, daemon=True)        thread.start()        logger.info("🚨 Sistema de alertas inteligentes iniciado")    \ndef add_metric(        self, metric_type:\n str, value:\n float, metadata:\n Dict[str, Any] = None    ):\n        """Agregar métrica para análisis"""        with self.lock:\n            metric = {                "type":\n metric_type,                "value":\n value,                "timestamp":\n datetime.now(),                "metadata":\n metadata or {},            }            self.metrics_buffer.append(metric)    \ndef _check_alert_conditions(self):\n        """Verificar condiciones de alerta"""        with self.lock:\n            current_time = datetime.now()            # Verificar cada tipo de alerta            for alert_type, rule in self.alert_rules.items():\n                if not rule["enabled"]:\n                    continue                # Verificar cooldown                last_alert = self._get_last_alert_time(alert_type)                if (                    last_alert                    and (current_time - last_alert).total_seconds()                    < rule["cooldown"]                ):\n                    continue                # Verificar condición específica                if self._check_alert_condition(alert_type, rule):\n                    self._trigger_alert(alert_type, rule, current_time)    \ndef _check_alert_condition(        self, alert_type:\n AlertType, rule:\n Dict[str, Any]    ) -> bool:\n        """Verificar condición específica de alerta"""        current_time = datetime.now()        cutoff_time = current_time - timedelta(minutes=5)  # Últimos 5 minutos        # Filtrar métricas recientes        recent_metrics = [            m for m in self.metrics_buffer if m["timestamp"] > cutoff_time        ]        if alert_type == AlertType.AUTH_FAILURE:\n            # Contar fallos de autenticación            auth_failures = [                m for m in recent_metrics if m["type"] == "auth_failure"            ]            return len(auth_failures) >= rule["threshold"]        elif alert_type == AlertType.TOKEN_EXPIRY:\n            # Contar tokens expirando pronto            expiring_tokens = [                m                for m in recent_metrics                if m["type"] == "token_expiry"                and m["value"] <= rule["threshold"]            ]            return len(expiring_tokens) >= 1        elif alert_type == AlertType.SUSPICIOUS_ACTIVITY:\n            # Contar actividades sospechosas            suspicious_activities = [                m for m in recent_metrics if m["type"] == "suspicious_activity"            ]            return len(suspicious_activities) >= rule["threshold"]        elif alert_type == AlertType.PERFORMANCE_DEGRADATION:\n            # Verificar tiempo de respuesta promedio            response_times = [                m["value"]                for m in recent_metrics                if m["type"] == "response_time"            ]            if response_times:\n                avg_response_time = sum(response_times) / len(response_times)                return avg_response_time >= rule["threshold"]        return False    \ndef _trigger_alert(        self, alert_type:\n AlertType, rule:\n Dict[str, Any], timestamp:\n datetime    ):\n        """Disparar alerta"""        alert_id = f"{alert_type.value}_{timestamp.strftime('%Y%m%d_%H%M%S')}"        alert = {            "id":\n alert_id,            "type":\n alert_type.value,            "severity":\n rule["severity"].value,            "timestamp":\n timestamp.isoformat(),            "message":\n self._generate_alert_message(alert_type, rule),            "details":\n self._generate_alert_details(alert_type),            "status":\n "active",            "resolved_at":\n None,        }        self.active_alerts[alert_id] = alert        self.alert_history.append(alert)        # Enviar notificaciones        self._send_notifications(alert)        logger.warning(            f"🚨 Alerta disparada:\n {alert_type.value} - {alert['message']}"        )    \ndef _generate_alert_message(        self, alert_type:\n AlertType, rule:\n Dict[str, Any]    ) -> str:\n        """Generar mensaje de alerta"""        messages = {            AlertType.TOKEN_EXPIRY:\n f"Token expirando en"            + f"menos de \            {rule['threshold']} minutos",            AlertType.AUTH_FAILURE:\n (                f"Más de {rule['threshold']} fallos de autenticación en \                los últimos minutos"            ),            AlertType.SUSPICIOUS_ACTIVITY:\n (                f"Actividad sospechosa detectada     ({rule['threshold']}+ eventos)"            ),            AlertType.SYSTEM_OVERLOAD:\n f"Sistema sobrecargado     ({rule['threshold']}%+ de recursos)",            AlertType.PERFORMANCE_DEGRADATION:\n (                f"Degradación de rendimiento     ({rule['threshold']}s+ tiempo de respuesta)"            ),        }        return messages.get(alert_type, "Alerta desconocida")    \ndef _generate_alert_details(self, alert_type:\n AlertType) -> Dict[str, Any]:\n        """Generar detalles de alerta"""        current_time = datetime.now()        cutoff_time = current_time - timedelta(minutes=5)        recent_metrics = [            m for m in self.metrics_buffer if m["timestamp"] > cutoff_time        ]        details = {            "timestamp":\n current_time.isoformat(),            "metrics_count":\n len(recent_metrics),            "active_alerts_count":\n len(self.active_alerts),        }        if alert_type == AlertType.AUTH_FAILURE:\n            auth_failures = [                m for m in recent_metrics if m["type"] == "auth_failure"            ]            details["auth_failures"] = len(auth_failures)            details["failure_details"] = [m["metadata"] for m in auth_failures]        elif alert_type == AlertType.TOKEN_EXPIRY:\n            expiring_tokens = [                m for m in recent_metrics if m["type"] == "token_expiry"            ]            details["expiring_tokens"] = len(expiring_tokens)            details["token_details"] = [m["metadata"] for m in expiring_tokens]        return details    \ndef _send_notifications(self, alert:\n Dict[str, Any]):\n        """Enviar notificaciones de alerta"""        for handler in self.notification_handlers:\n            try:\n                handler(alert)            except Exception as e:\n                logger.error(f"Error enviando notificación:\n {e}")    \ndef _get_last_alert_time(        self, alert_type:\n AlertType    ) -> Optional[datetime]:\n        """Obtener tiempo de la última alerta de este tipo"""        for alert in reversed(self.alert_history):\n            if alert["type"] == alert_type.value:\n                return datetime.fromisoformat(alert["timestamp"])        return None    \ndef _cleanup_expired_alerts(self):\n        """Limpiar alertas expiradas"""        current_time = datetime.now()        expired_alerts = []        for alert_id, alert in self.active_alerts.items():\n            alert_time = datetime.fromisoformat(alert["timestamp"])            # Alertas expiran después de 1 hora            if (current_time - alert_time).total_seconds() > 3600:\n                expired_alerts.append(alert_id)        for alert_id in expired_alerts:\n            self.active_alerts[alert_id]["status"] = "expired"            self.active_alerts[alert_id][                "resolved_at"            ] = current_time.isoformat()            del self.active_alerts[alert_id]    \ndef resolve_alert(self, alert_id:\n str, resolution_notes:\n str = ""):\n        """Resolver alerta manualmente"""        with self.lock:\n            if alert_id in self.active_alerts:\n                self.active_alerts[alert_id]["status"] = "resolved"                self.active_alerts[alert_id][                    "resolved_at"                ] = datetime.now().isoformat()                self.active_alerts[alert_id][                    "resolution_notes"                ] = resolution_notes                # Actualizar en historial también                for alert in self.alert_history:\n                    if alert["id"] == alert_id:\n                        alert["status"] = "resolved"                        alert["resolved_at"] = datetime.now().isoformat()                        alert["resolution_notes"] = resolution_notes                        break                logger.info(f"✅ Alerta resuelta:\n {alert_id}")                return True            return False    \ndef get_active_alerts(self) -> List[Dict[str, Any]]:\n        """Obtener alertas activas"""        with self.lock:\n            return list(self.active_alerts.values())    \ndef get_alert_statistics(self) -> Dict[str, Any]:\n        """Obtener estadísticas de alertas"""        with self.lock:\n            total_alerts = len(self.alert_history)            active_alerts = len(self.active_alerts)            resolved_alerts = total_alerts - active_alerts            # Contar por severidad            severity_counts = defaultdict(int)            for alert in self.alert_history:\n                severity_counts[alert["severity"]] += 1            # Contar por tipo            type_counts = defaultdict(int)            for alert in self.alert_history:\n                type_counts[alert["type"]] += 1            return {                "total_alerts":\n total_alerts,                "active_alerts":\n active_alerts,                "resolved_alerts":\n resolved_alerts,                "severity_distribution":\n dict(severity_counts),                "type_distribution":\n dict(type_counts),                "last_alert_time":\n (                    self.alert_history[-1]["timestamp"]                    if self.alert_history                    else None                ),            }# Instancia global del sistema de alertasalert_system = IntelligentAlertSystem()# ============================================# ENDPOINTS DE ALERTAS INTELIGENTES# ============================================@router.get("/active-alerts")async \ndef get_active_alerts(    db:\n Session = Depends(get_db),    current_user:\n User = Depends(get_current_user),):\n    """    🚨 Obtener alertas activas    """    try:\n        alerts = alert_system.get_active_alerts()        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "success",            "alerts":\n alerts,            "count":\n len(alerts),        }    except Exception as e:\n        logger.error(f"Error obteniendo alertas activas:\n {e}")        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "error",            "error":\n str(e),        }@router.get("/alert-statistics")async \ndef get_alert_statistics(    db:\n Session = Depends(get_db),    current_user:\n User = Depends(get_current_user),):\n    """    📊 Estadísticas de alertas    """    try:\n        stats = alert_system.get_alert_statistics()        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "success",            "statistics":\n stats,        }    except Exception as e:\n        logger.error(f"Error obteniendo estadísticas de alertas:\n {e}")        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "error",            "error":\n str(e),        }@router.post("/resolve-alert/{alert_id}")async \ndef resolve_alert_endpoint(    alert_id:\n str,    resolution_data:\n Dict[str, str],    db:\n Session = Depends(get_db),    current_user:\n User = Depends(get_current_user),):\n    """    ✅ Resolver alerta manualmente    """    try:\n        resolution_notes = resolution_data.get("notes", "")        success = alert_system.resolve_alert(alert_id, resolution_notes)        if success:\n            return {                "timestamp":\n datetime.now().isoformat(),                "status":\n "success",                "message":\n f"Alerta {alert_id} resuelta exitosamente",            }        else:\n            raise HTTPException(status_code=404, detail="Alerta no encontrada")    except HTTPException:\n        raise    except Exception as e:\n        logger.error(f"Error resolviendo alerta:\n {e}")        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "error",            "error":\n str(e),        }@router.post("/add-metric")async \ndef add_metric_endpoint(    metric_data:\n Dict[str, Any],    db:\n Session = Depends(get_db),    current_user:\n User = Depends(get_current_user),):\n    """    📈 Agregar métrica para análisis de alertas    """    try:\n        metric_type = metric_data.get("type")        value = metric_data.get("value")        metadata = metric_data.get("metadata", {})        if not metric_type or value is None:\n            raise HTTPException(                status_code=400, detail="Tipo y valor de métrica requeridos"            )        alert_system.add_metric(metric_type, value, metadata)        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "success",            "message":\n "Métrica agregada exitosamente",        }    except HTTPException:\n        raise    except Exception as e:\n        logger.error(f"Error agregando métrica:\n {e}")        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "error",            "error":\n str(e),        }@router.get("/alert-history")async \ndef get_alert_history(    limit:\n int = 50,    db:\n Session = Depends(get_db),    current_user:\n User = Depends(get_current_user),):\n    """    📜 Historial de alertas    """    try:\n        with alert_system.lock:\n            history = list(alert_system.alert_history)[-limit:\n]        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "success",            "history":\n history,            "count":\n len(history),        }    except Exception as e:\n        logger.error(f"Error obteniendo historial de alertas:\n {e}")        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "error",            "error":\n str(e),        }@router.post("/configure-alert-rule")async \ndef configure_alert_rule(    rule_data:\n Dict[str, Any],    db:\n Session = Depends(get_db),    current_user:\n User = Depends(get_current_user),):\n    """    ⚙️ Configurar regla de alerta    """    try:\n        alert_type = rule_data.get("type")        threshold = rule_data.get("threshold")        severity = rule_data.get("severity")        enabled = rule_data.get("enabled", True)        cooldown = rule_data.get("cooldown", 300)        if not alert_type or threshold is None:\n            raise HTTPException(                status_code=400, detail="Tipo y umbral requeridos"            )        # Validar tipo de alerta        try:\n            alert_type_enum = AlertType(alert_type)        except ValueError:\n            raise HTTPException(                status_code=400, detail="Tipo de alerta inválido"            )        # Validar severidad        try:\n            severity_enum = (                AlertSeverity(severity) if severity else AlertSeverity.MEDIUM            )        except ValueError:\n            raise HTTPException(status_code=400, detail="Severidad inválida")        # Actualizar regla        with alert_system.lock:\n            alert_system.alert_rules[alert_type_enum] = {                "threshold":\n threshold,                "severity":\n severity_enum,                "enabled":\n enabled,                "cooldown":\n cooldown,            }        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "success",            "message":\n f"Regla de alerta {alert_type} configurada    exitosamente",        }    except HTTPException:\n        raise    except Exception as e:\n        logger.error(f"Error configurando regla de alerta:\n {e}")        return {            "timestamp":\n datetime.now().isoformat(),            "status":\n "error",            "error":\n str(e),        }
+﻿"""Sistema de Alertas Inteligentes para AutenticaciÃ³nDetecta y alerta sobre problemas de autenticaciÃ³n en tiempo real"""
+import logging
+import threading
+import time
+from collections 
+import defaultdict, deque
+from datetime 
+import datetime, timedelta
+from enum 
+import Enum
+from typing 
+import Any, Dict, List, Optional
+from fastapi 
+import APIRouter, Depends, HTTPException
+from sqlalchemy.orm 
+import Session
+from app.api.deps 
+import get_current_user, get_db
+from app.models.user 
+import Userlogger = logging.getLogger(__name__)router = APIRouter()# ============================================# SISTEMA DE ALERTAS INTELIGENTES# ============================================
+class AlertSeverity(Enum):
+    """Niveles de severidad de alertas"""    LOW = "low"    MEDIUM = "medium"    HIGH = "high"    CRITICAL = "critical"
+class AlertType(Enum):
+    """Tipos de alertas"""    TOKEN_EXPIRY = "token_expiry"    AUTH_FAILURE = "auth_failure"    SUSPICIOUS_ACTIVITY = "suspicious_activity"    SYSTEM_OVERLOAD = "system_overload"    SECURITY_BREACH = "security_breach"    PERFORMANCE_DEGRADATION = "performance_degradation"
+class IntelligentAlertSystem:
+    """Sistema de alertas inteligentes"""    
+def __init__(self):
+        self.active_alerts = {}  # Alertas activas        self.alert_history = deque(maxlen=1000)  # Historial de alertas        self.alert_rules = {}  # Reglas de alerta        self.metrics_buffer = deque(maxlen=100)  # Buffer de mÃ©tricas        self.notification_handlers = []  # Manejadores de notificaciones        self.lock = threading.Lock()        # Inicializar reglas por defecto        self._initialize_default_rules()        # Iniciar monitoreo en background        self._start_background_monitoring()    
+def _initialize_default_rules(self):
+        """Inicializar reglas de alerta por defecto"""        self.alert_rules = {            AlertType.TOKEN_EXPIRY:
+ {                "threshold":
+ 5,  # minutos antes de expirar                "severity":
+ AlertSeverity.MEDIUM,                "enabled":
+ True,                "cooldown":
+ 300,  # 5 minutos entre alertas            },            AlertType.AUTH_FAILURE:
+ {                "threshold":
+ 10,  # fallos por minuto                "severity":
+ AlertSeverity.HIGH,                "enabled":
+ True,                "cooldown":
+ 60,  # 1 minuto entre alertas            },            AlertType.SUSPICIOUS_ACTIVITY:
+ {                "threshold":
+ 3,  # actividades sospechosas por minuto                "severity":
+ AlertSeverity.HIGH,                "enabled":
+ True,                "cooldown":
+ 180,  # 3 minutos entre alertas            },            AlertType.SYSTEM_OVERLOAD:
+ {                "threshold":
+ 80,  # porcentaje de CPU/memoria                "severity":
+ AlertSeverity.CRITICAL,                "enabled":
+ True,                "cooldown":
+ 120,  # 2 minutos entre alertas            },            AlertType.PERFORMANCE_DEGRADATION:
+ {                "threshold":
+ 5.0,  # segundos de tiempo de respuesta                "severity":
+ AlertSeverity.MEDIUM,                "enabled":
+ True,                "cooldown":
+ 300,  # 5 minutos entre alertas            },        }    
+def _start_background_monitoring(self):
+        """Iniciar monitoreo en background"""        
+def monitoring_loop():
+            while True:
+                try:
+                    self._check_alert_conditions()                    self._cleanup_expired_alerts()                    time.sleep(30)  # Verificar cada 30 segundos                except Exception as e:
+                    logger.error(f"Error en monitoreo de alertas:
+ {e}")                    time.sleep(60)        thread = threading.Thread(target=monitoring_loop, daemon=True)        thread.start()        logger.info("ðŸš¨ Sistema de alertas inteligentes iniciado")    
+def add_metric(        self, metric_type:
+ str, value:
+ float, metadata:
+ Dict[str, Any] = None    ):
+        """Agregar mÃ©trica para anÃ¡lisis"""        with self.lock:
+            metric = {                "type":
+ metric_type,                "value":
+ value,                "timestamp":
+ datetime.now(),                "metadata":
+ metadata or {},            }            self.metrics_buffer.append(metric)    
+def _check_alert_conditions(self):
+        """Verificar condiciones de alerta"""        with self.lock:
+            current_time = datetime.now()            # Verificar cada tipo de alerta            for alert_type, rule in self.alert_rules.items():
+                if not rule["enabled"]:
+                    continue                # Verificar cooldown                last_alert = self._get_last_alert_time(alert_type)                if (                    last_alert                    and (current_time - last_alert).total_seconds()                    < rule["cooldown"]                ):
+                    continue                # Verificar condiciÃ³n especÃ­fica                if self._check_alert_condition(alert_type, rule):
+                    self._trigger_alert(alert_type, rule, current_time)    
+def _check_alert_condition(        self, alert_type:
+ AlertType, rule:
+ Dict[str, Any]    ) -> bool:
+        """Verificar condiciÃ³n especÃ­fica de alerta"""        current_time = datetime.now()        cutoff_time = current_time - timedelta(minutes=5)  # Ãšltimos 5 minutos        # Filtrar mÃ©tricas recientes        recent_metrics = [            m for m in self.metrics_buffer if m["timestamp"] > cutoff_time        ]        if alert_type == AlertType.AUTH_FAILURE:
+            # Contar fallos de autenticaciÃ³n            auth_failures = [                m for m in recent_metrics if m["type"] == "auth_failure"            ]            return len(auth_failures) >= rule["threshold"]        elif alert_type == AlertType.TOKEN_EXPIRY:
+            # Contar tokens expirando pronto            expiring_tokens = [                m                for m in recent_metrics                if m["type"] == "token_expiry"                and m["value"] <= rule["threshold"]            ]            return len(expiring_tokens) >= 1        elif alert_type == AlertType.SUSPICIOUS_ACTIVITY:
+            # Contar actividades sospechosas            suspicious_activities = [                m for m in recent_metrics if m["type"] == "suspicious_activity"            ]            return len(suspicious_activities) >= rule["threshold"]        elif alert_type == AlertType.PERFORMANCE_DEGRADATION:
+            # Verificar tiempo de respuesta promedio            response_times = [                m["value"]                for m in recent_metrics                if m["type"] == "response_time"            ]            if response_times:
+                avg_response_time = sum(response_times) / len(response_times)                return avg_response_time >= rule["threshold"]        return False    
+def _trigger_alert(        self, alert_type:
+ AlertType, rule:
+ Dict[str, Any], timestamp:
+ datetime    ):
+        """Disparar alerta"""        alert_id = f"{alert_type.value}_{timestamp.strftime('%Y%m%d_%H%M%S')}"        alert = {            "id":
+ alert_id,            "type":
+ alert_type.value,            "severity":
+ rule["severity"].value,            "timestamp":
+ timestamp.isoformat(),            "message":
+ self._generate_alert_message(alert_type, rule),            "details":
+ self._generate_alert_details(alert_type),            "status":
+ "active",            "resolved_at":
+ None,        }        self.active_alerts[alert_id] = alert        self.alert_history.append(alert)        # Enviar notificaciones        self._send_notifications(alert)        logger.warning(            f"ðŸš¨ Alerta disparada:
+ {alert_type.value} - {alert['message']}"        )    
+def _generate_alert_message(        self, alert_type:
+ AlertType, rule:
+ Dict[str, Any]    ) -> str:
+        """Generar mensaje de alerta"""        messages = {            AlertType.TOKEN_EXPIRY:
+ f"Token expirando en"            + f"menos de \            {rule['threshold']} minutos",            AlertType.AUTH_FAILURE:
+ (                f"MÃ¡s de {rule['threshold']} fallos de autenticaciÃ³n en \                los Ãºltimos minutos"            ),            AlertType.SUSPICIOUS_ACTIVITY:
+ (                f"Actividad sospechosa detectada     ({rule['threshold']}+ eventos)"            ),            AlertType.SYSTEM_OVERLOAD:
+ f"Sistema sobrecargado     ({rule['threshold']}%+ de recursos)",            AlertType.PERFORMANCE_DEGRADATION:
+ (                f"DegradaciÃ³n de rendimiento     ({rule['threshold']}s+ tiempo de respuesta)"            ),        }        return messages.get(alert_type, "Alerta desconocida")    
+def _generate_alert_details(self, alert_type:
+ AlertType) -> Dict[str, Any]:
+        """Generar detalles de alerta"""        current_time = datetime.now()        cutoff_time = current_time - timedelta(minutes=5)        recent_metrics = [            m for m in self.metrics_buffer if m["timestamp"] > cutoff_time        ]        details = {            "timestamp":
+ current_time.isoformat(),            "metrics_count":
+ len(recent_metrics),            "active_alerts_count":
+ len(self.active_alerts),        }        if alert_type == AlertType.AUTH_FAILURE:
+            auth_failures = [                m for m in recent_metrics if m["type"] == "auth_failure"            ]            details["auth_failures"] = len(auth_failures)            details["failure_details"] = [m["metadata"] for m in auth_failures]        elif alert_type == AlertType.TOKEN_EXPIRY:
+            expiring_tokens = [                m for m in recent_metrics if m["type"] == "token_expiry"            ]            details["expiring_tokens"] = len(expiring_tokens)            details["token_details"] = [m["metadata"] for m in expiring_tokens]        return details    
+def _send_notifications(self, alert:
+ Dict[str, Any]):
+        """Enviar notificaciones de alerta"""        for handler in self.notification_handlers:
+            try:
+                handler(alert)            except Exception as e:
+                logger.error(f"Error enviando notificaciÃ³n:
+ {e}")    
+def _get_last_alert_time(        self, alert_type:
+ AlertType    ) -> Optional[datetime]:
+        """Obtener tiempo de la Ãºltima alerta de este tipo"""        for alert in reversed(self.alert_history):
+            if alert["type"] == alert_type.value:
+                return datetime.fromisoformat(alert["timestamp"])        return None    
+def _cleanup_expired_alerts(self):
+        """Limpiar alertas expiradas"""        current_time = datetime.now()        expired_alerts = []        for alert_id, alert in self.active_alerts.items():
+            alert_time = datetime.fromisoformat(alert["timestamp"])            # Alertas expiran despuÃ©s de 1 hora            if (current_time - alert_time).total_seconds() > 3600:
+                expired_alerts.append(alert_id)        for alert_id in expired_alerts:
+            self.active_alerts[alert_id]["status"] = "expired"            self.active_alerts[alert_id][                "resolved_at"            ] = current_time.isoformat()            del self.active_alerts[alert_id]    
+def resolve_alert(self, alert_id:
+ str, resolution_notes:
+ str = ""):
+        """Resolver alerta manualmente"""        with self.lock:
+            if alert_id in self.active_alerts:
+                self.active_alerts[alert_id]["status"] = "resolved"                self.active_alerts[alert_id][                    "resolved_at"                ] = datetime.now().isoformat()                self.active_alerts[alert_id][                    "resolution_notes"                ] = resolution_notes                # Actualizar en historial tambiÃ©n                for alert in self.alert_history:
+                    if alert["id"] == alert_id:
+                        alert["status"] = "resolved"                        alert["resolved_at"] = datetime.now().isoformat()                        alert["resolution_notes"] = resolution_notes                        break                logger.info(f"âœ… Alerta resuelta:
+ {alert_id}")                return True            return False    
+def get_active_alerts(self) -> List[Dict[str, Any]]:
+        """Obtener alertas activas"""        with self.lock:
+            return list(self.active_alerts.values())    
+def get_alert_statistics(self) -> Dict[str, Any]:
+        """Obtener estadÃ­sticas de alertas"""        with self.lock:
+            total_alerts = len(self.alert_history)            active_alerts = len(self.active_alerts)            resolved_alerts = total_alerts - active_alerts            # Contar por severidad            severity_counts = defaultdict(int)            for alert in self.alert_history:
+                severity_counts[alert["severity"]] += 1            # Contar por tipo            type_counts = defaultdict(int)            for alert in self.alert_history:
+                type_counts[alert["type"]] += 1            return {                "total_alerts":
+ total_alerts,                "active_alerts":
+ active_alerts,                "resolved_alerts":
+ resolved_alerts,                "severity_distribution":
+ dict(severity_counts),                "type_distribution":
+ dict(type_counts),                "last_alert_time":
+ (                    self.alert_history[-1]["timestamp"]                    if self.alert_history                    else None                ),            }# Instancia global del sistema de alertasalert_system = IntelligentAlertSystem()# ============================================# ENDPOINTS DE ALERTAS INTELIGENTES# ============================================@router.get("/active-alerts")async 
+def get_active_alerts(    db:
+ Session = Depends(get_db),    current_user:
+ User = Depends(get_current_user),):
+    """    ðŸš¨ Obtener alertas activas    """    try:
+        alerts = alert_system.get_active_alerts()        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "success",            "alerts":
+ alerts,            "count":
+ len(alerts),        }    except Exception as e:
+        logger.error(f"Error obteniendo alertas activas:
+ {e}")        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "error",            "error":
+ str(e),        }@router.get("/alert-statistics")async 
+def get_alert_statistics(    db:
+ Session = Depends(get_db),    current_user:
+ User = Depends(get_current_user),):
+    """    ðŸ“Š EstadÃ­sticas de alertas    """    try:
+        stats = alert_system.get_alert_statistics()        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "success",            "statistics":
+ stats,        }    except Exception as e:
+        logger.error(f"Error obteniendo estadÃ­sticas de alertas:
+ {e}")        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "error",            "error":
+ str(e),        }@router.post("/resolve-alert/{alert_id}")async 
+def resolve_alert_endpoint(    alert_id:
+ str,    resolution_data:
+ Dict[str, str],    db:
+ Session = Depends(get_db),    current_user:
+ User = Depends(get_current_user),):
+    """    âœ… Resolver alerta manualmente    """    try:
+        resolution_notes = resolution_data.get("notes", "")        success = alert_system.resolve_alert(alert_id, resolution_notes)        if success:
+            return {                "timestamp":
+ datetime.now().isoformat(),                "status":
+ "success",                "message":
+ f"Alerta {alert_id} resuelta exitosamente",            }        else:
+            raise HTTPException(status_code=404, detail="Alerta no encontrada")    except HTTPException:
+        raise    except Exception as e:
+        logger.error(f"Error resolviendo alerta:
+ {e}")        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "error",            "error":
+ str(e),        }@router.post("/add-metric")async 
+def add_metric_endpoint(    metric_data:
+ Dict[str, Any],    db:
+ Session = Depends(get_db),    current_user:
+ User = Depends(get_current_user),):
+    """    ðŸ“ˆ Agregar mÃ©trica para anÃ¡lisis de alertas    """    try:
+        metric_type = metric_data.get("type")        value = metric_data.get("value")        metadata = metric_data.get("metadata", {})        if not metric_type or value is None:
+            raise HTTPException(                status_code=400, detail="Tipo y valor de mÃ©trica requeridos"            )        alert_system.add_metric(metric_type, value, metadata)        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "success",            "message":
+ "MÃ©trica agregada exitosamente",        }    except HTTPException:
+        raise    except Exception as e:
+        logger.error(f"Error agregando mÃ©trica:
+ {e}")        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "error",            "error":
+ str(e),        }@router.get("/alert-history")async 
+def get_alert_history(    limit:
+ int = 50,    db:
+ Session = Depends(get_db),    current_user:
+ User = Depends(get_current_user),):
+    """    ðŸ“œ Historial de alertas    """    try:
+        with alert_system.lock:
+            history = list(alert_system.alert_history)[-limit:
+]        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "success",            "history":
+ history,            "count":
+ len(history),        }    except Exception as e:
+        logger.error(f"Error obteniendo historial de alertas:
+ {e}")        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "error",            "error":
+ str(e),        }@router.post("/configure-alert-rule")async 
+def configure_alert_rule(    rule_data:
+ Dict[str, Any],    db:
+ Session = Depends(get_db),    current_user:
+ User = Depends(get_current_user),):
+    """    âš™ï¸ Configurar regla de alerta    """    try:
+        alert_type = rule_data.get("type")        threshold = rule_data.get("threshold")        severity = rule_data.get("severity")        enabled = rule_data.get("enabled", True)        cooldown = rule_data.get("cooldown", 300)        if not alert_type or threshold is None:
+            raise HTTPException(                status_code=400, detail="Tipo y umbral requeridos"            )        # Validar tipo de alerta        try:
+            alert_type_enum = AlertType(alert_type)        except ValueError:
+            raise HTTPException(                status_code=400, detail="Tipo de alerta invÃ¡lido"            )        # Validar severidad        try:
+            severity_enum = (                AlertSeverity(severity) if severity else AlertSeverity.MEDIUM            )        except ValueError:
+            raise HTTPException(status_code=400, detail="Severidad invÃ¡lida")        # Actualizar regla        with alert_system.lock:
+            alert_system.alert_rules[alert_type_enum] = {                "threshold":
+ threshold,                "severity":
+ severity_enum,                "enabled":
+ enabled,                "cooldown":
+ cooldown,            }        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "success",            "message":
+ f"Regla de alerta {alert_type} configurada    exitosamente",        }    except HTTPException:
+        raise    except Exception as e:
+        logger.error(f"Error configurando regla de alerta:
+ {e}")        return {            "timestamp":
+ datetime.now().isoformat(),            "status":
+ "error",            "error":
+ str(e),        }
+
+
+
+
+
