@@ -75,7 +75,11 @@ def cache_analistas(key_func):
     return decorator
 
 
-def generate_cache_key
+def generate_cache_key(
+    activo: Optional[bool] = None,
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100
 ) -> str:
     """"""
 

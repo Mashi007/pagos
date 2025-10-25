@@ -111,7 +111,7 @@ class AmortizacionService:
             # Nuevo saldo
             nuevo_saldo = saldo - capital
 
-            cuota = CuotaDetalle(
+            cuota = CuotaResponse(
                 numero_cuota=i + 1,
                 fecha_vencimiento=fechas[i],
                 capital=capital,
@@ -195,7 +195,7 @@ class AmortizacionService:
             # Nuevo saldo
             nuevo_saldo = saldo - capital
 
-            cuota = CuotaDetalle(
+            cuota = CuotaResponse(
                 numero_cuota=i + 1,
                 fecha_vencimiento=fechas[i],
                 capital=capital,
@@ -268,7 +268,7 @@ class AmortizacionService:
                 cuota_total = interes
                 saldo_final = monto
 
-            cuota = CuotaDetalle(
+            cuota = CuotaResponse(
                 numero_cuota=i + 1,
                 fecha_vencimiento=fechas[i],
                 capital=capital,

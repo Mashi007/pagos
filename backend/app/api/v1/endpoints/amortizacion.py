@@ -44,6 +44,7 @@ def generar_tabla_amortizacion(
 @router.post("/prestamo/{prestamo_id}/cuotas", response_model=List[CuotaResponse])
 def crear_cuotas_prestamo(
     prestamo_id: int,
+    request_data: TablaAmortizacionRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -68,7 +69,7 @@ def crear_cuotas_prestamo(
 
     try:
         # Generar tabla
-        tabla = AmortizacionService.generar_tabla_amortizacion(request)
+        tabla = AmortizacionService.generar_tabla_amortizacion(request_data)
         
         # Crear cuotas en BD
         cuotas = AmortizacionService.crear_cuotas_prestamo(

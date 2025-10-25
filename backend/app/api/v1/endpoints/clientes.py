@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 # Endpoints de gestion de clientes - VERSION CON AUDITORIA AUTOMATICA
 # Sistema completo de gestion de clientes con validaciones y auditoria
 
