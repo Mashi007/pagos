@@ -23,7 +23,7 @@ router = APIRouter()
 class CrossValidationAuthChecker:
     """Validador cruzado de autenticación"""
     
-def __init__(self):
+    def __init__(self):
         self.validation_cache = {}  # Cache de validaciones
         self.failed_validations = defaultdict(list)  # Historial de fallos
         self.validation_patterns = defaultdict(int)  # Patrones de validación

@@ -250,7 +250,7 @@ def _check_alert_conditions(self):
                 return True
             return False
     
-def get_alert_statistics(self) -> Dict[str, Any]:
+    def get_alert_statistics(self) -> Dict[str, Any]:
         """Obtener estadísticas de alertas"""
         with self.lock:
             total_alerts = len(self.alert_history)

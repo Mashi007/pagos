@@ -75,7 +75,7 @@ class AuditLogger:
         ]
     
     @staticmethod
-def get_error_summary() -> Dict[str, Any]:
+    def get_error_summary() -> Dict[str, Any]:
         """Obtener resumen de errores"""
         return {
             "total_errors": sum(error_patterns.values()),
