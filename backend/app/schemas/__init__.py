@@ -2,9 +2,9 @@ from datetime import date
 # backend/app/schemas/__init__.py
 
 
-- Cliente: Gestión de clientes
-- Conciliación: Conciliación bancaria
-- KPIs: Métricas e indicadores
+# - Cliente: Gestión de clientes
+# - Conciliación: Conciliación bancaria
+# - KPIs: Métricas e indicadores
 """
 
 # ============================================

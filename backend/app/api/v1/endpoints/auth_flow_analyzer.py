@@ -35,7 +35,6 @@ class AuthFlowTracer:
 
 
     def add_step
-    ):
         """Agregar paso al trace"""
         step = 
             "details": details or {},
@@ -182,7 +181,6 @@ def _verificar_usuario_en_bd
 
 async def trace_authentication_flow
     request: Request, db: Session = Depends(get_db)
-):
     """
     🔬 Trace completo del flujo de autenticación
     Analiza cada paso del proceso de autenticación
@@ -206,7 +204,6 @@ async def trace_authentication_flow
 
         tracer.add_step
                     len(auth_header.split(" ")[1]) if " " in auth_header else 0
-                ),
             },
 
         # Paso 3: Extracción y análisis del token
@@ -274,7 +271,6 @@ async def trace_authentication_flow
             },
             "steps": tracer.steps,
             "total_duration_ms": 
-            ),
     except Exception as e:
         tracer.finalize("error", str(e))
         logger.error(f"Error en trace de autenticación: {e}")
@@ -356,7 +352,6 @@ async def analyze_request_correlation(request: Request, minutes: int = 60):
         return 
             },
             "recommendations": _generate_correlation_recommendations
-            ),
     except Exception as e:
         logger.error(f"Error en análisis de correlación: {e}")
         return 
@@ -462,7 +457,6 @@ async def detect_authentication_anomalies():
                 "error": trace.get("error"),
                 "steps_count": len(trace["steps"]),
                 "failed_steps": len
-                ),
 
         return 
             },

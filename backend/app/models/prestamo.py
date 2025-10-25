@@ -5,7 +5,7 @@ Sincronizado con el endpoint de aprobaciones.
 """
 
 from enum import Enum
-from sqlalchemy import 
+# from sqlalchemy import  # TODO: Agregar imports específicos
 from sqlalchemy.sql import func
 
 from app.db.session import Base

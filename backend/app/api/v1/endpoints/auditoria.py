@@ -25,7 +25,6 @@ logger = logging.getLogger(__name__)
 
 
     query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
-):
     if usuario_email:
         query = query.filter
             Auditoria.usuario_email.ilike(f"%{usuario_email}%")
@@ -67,16 +66,13 @@ def _calcular_paginacion_auditoria(total, limit, skip):
 
 
 def listar_auditoria
-    ),
     usuario_email: Optional[str] = Query
-    ),
     modulo: Optional[str] = Query(None, description="Filtrar por módulo"),
     accion: Optional[str] = Query(None, description="Filtrar por acción"),
     ordenar_por: str = Query("fecha", description="Campo para ordenar"),
     orden: str = Query("desc", description="Orden: asc o desc"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     REFACTORIZADA)
     """
@@ -109,7 +105,6 @@ def listar_auditoria
 def obtener_estadisticas_auditoria
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     📊 Obtener estadísticas de auditoría
     """
@@ -172,12 +167,10 @@ def _crear_excel_auditoria(df):
 
 @router.get("/export/excel", summary="Exportar auditoría a Excel")
 def exportar_auditoria_excel
-    ),
     modulo: Optional[str] = Query(None, description="Filtrar por módulo"),
     accion: Optional[str] = Query(None, description="Filtrar por acción"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     📊 Exportar auditoría a Excel (SOLO ADMIN)
     """
@@ -215,7 +208,6 @@ def exportar_auditoria_excel
 def obtener_auditoria
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     🔍 Obtener un registro de auditoría por ID
     """

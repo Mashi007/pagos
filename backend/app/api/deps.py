@@ -21,7 +21,9 @@ security = HTTPBearer()
 def get_current_user
     db: Session = Depends(get_db),
     credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> User:
+):
+    """Función temporal - TODO: implementar"""
+    return None
     """
     Obtiene el usuario actual desde el token JWT
 
@@ -78,7 +80,9 @@ def get_current_user
 
 def get_current_active_user
     current_user: User = Depends(get_current_user),
-) -> User:
+):
+    """Función temporal - TODO: implementar"""
+    return None
     """
     Obtiene el usuario actual y verifica que esté activo
 
@@ -112,7 +116,9 @@ def require_role(require_admin: bool = True):
     """
 
 
-    def role_checker(current_user: User = Depends(get_current_user)) -> User:
+    def role_checker(current_user: User = Depends(get_current_user)):
+    """Función temporal - TODO: implementar"""
+    return None
         if require_admin and not current_user.is_admin:
             raise HTTPException
         return current_user
@@ -135,7 +141,9 @@ def require_permission(*required_permissions: Permission):
 
     def permission_checker
         current_user: User = Depends(get_current_user),
-    ) -> User:
+    ):
+    """Función temporal - TODO: implementar"""
+    return None
         user_permissions = get_user_permissions(current_user.is_admin)
 
         # Verificar cada permiso requerido
@@ -148,7 +156,9 @@ def require_permission(*required_permissions: Permission):
     return permission_checker
 
 
-def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
+def get_admin_user(current_user: User = Depends(get_current_user)):
+    """Función temporal - TODO: implementar"""
+    return None
     """
     Dependency para endpoints que requieren usuario administrador
 
@@ -167,7 +177,6 @@ class PaginationParams:
 
 
     def __init__
-    ):
         # Validaciones
         if page < 1:
             page = 1
@@ -196,7 +205,6 @@ def get_pagination_params
         @app.get("/items")
         def get_items
             pagination: PaginationParams = Depends(get_pagination_params)
-        ):
             skip = pagination.skip
             limit = pagination.limit
     """

@@ -317,7 +317,6 @@ def validate_cuenta_bancaria(cuenta: str) -> bool:
     if 
         len(cuenta_clean) < MIN_CUENTA_LENGTH
         or len(cuenta_clean) > MAX_CUENTA_LENGTH
-    ):
         return False
 
     return True

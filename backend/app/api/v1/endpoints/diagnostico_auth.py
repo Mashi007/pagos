@@ -188,7 +188,6 @@ router = APIRouter()
 
 async def analyze_authentication_failure
     current_user: User = Depends(get_current_user),
-):
     """Analizar fallo de autenticación específico"""
     try:
         user_id = error_data.get("user_id", "unknown")
@@ -208,7 +207,6 @@ async def analyze_authentication_failure
             detail=f"Error interno: {str(e)}"
 
     current_user: User = Depends(get_current_user),
-):
     try:
         summary = 
 
@@ -221,7 +219,6 @@ async def analyze_authentication_failure
 @router.get("/user-behavior/{user_id}")
 async def get_user_behavior_analysis
     current_user: User = Depends(get_current_user),
-):
     """Obtener análisis de comportamiento de usuario específico"""
     try:
 

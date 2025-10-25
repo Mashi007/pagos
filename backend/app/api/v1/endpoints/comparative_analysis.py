@@ -33,7 +33,6 @@ class ComparativeAnalysisSystem:
         with self.lock:
             case = 
                     "case_id", f"success_{len(self.successful_cases)}"
-                ),
                 "case_type": case_data.get("case_type", "unknown"),
                 "data": case_data.get("data", {}),
                 "metrics": case_data.get("metrics", {}),
@@ -46,7 +45,6 @@ class ComparativeAnalysisSystem:
         with self.lock:
             case = 
                     "case_id", f"failed_{len(self.failed_cases)}"
-                ),
                 "case_type": case_data.get("case_type", "unknown"),
                 "data": case_data.get("data", {}),
                 "metrics": case_data.get("metrics", {}),
@@ -253,7 +251,6 @@ class ComparativeAnalysisSystem:
         common_patterns = {}
         for pattern in set(successful_patterns.keys()) & set
             failed_patterns.keys()
-        ):
             success_freq = successful_patterns[pattern]
             failed_freq = failed_patterns[pattern]
             if success_freq != failed_freq:
@@ -276,7 +273,6 @@ class ComparativeAnalysisSystem:
             if "expiration_analysis" in token_analysis:
                 expiry_diff = token_analysis["expiration_analysis"].get
                     indicators["high_confidence_indicators"].append
-                            ),
                             "confidence": "high",
 
         # Indicadores de confianza media
@@ -286,7 +282,6 @@ class ComparativeAnalysisSystem:
                 active_rate_diff = user_analysis["user_status_analysis"].get
                 if abs(active_rate_diff) > 20:  # Más del 20% de diferencia
                     indicators["medium_confidence_indicators"].append
-                            ),
                             "confidence": "medium",
 
         # Generar recomendaciones
@@ -412,7 +407,6 @@ comparative_system = ComparativeAnalysisSystem()
 async def log_successful_case_endpoint
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     """
     try:
@@ -424,7 +418,6 @@ async def log_successful_case_endpoint
 async def log_failed_case_endpoint
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     ❌ Registrar caso fallido para análisis comparativo
     """
@@ -438,7 +431,6 @@ async def log_failed_case_endpoint
 async def perform_differential_analysis_endpoint
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     📊 Realizar análisis diferencial completo
     """
@@ -454,7 +446,6 @@ async def perform_differential_analysis_endpoint
 async def get_comparative_summary_endpoint
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     📈 Resumen comparativo general
     """
@@ -466,7 +457,6 @@ async def get_comparative_summary_endpoint
                     list(comparative_system.comparison_results.values())[-5:]
                     if comparative_system.comparison_results
                     else []
-                ),
 
         return 
     except Exception as e:

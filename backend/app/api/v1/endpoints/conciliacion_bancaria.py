@@ -20,7 +20,6 @@ router = APIRouter()
 @router.get("/template-conciliacion")
 async def generar_template_conciliacion
     current_user: User = Depends(get_current_user),
-):
     """Generar template Excel para conciliación bancaria"""
     try:
         logger.info
@@ -112,7 +111,6 @@ async def procesar_conciliacion
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """Procesar archivo Excel de conciliación bancaria"""
     try:
         logger.info
@@ -183,7 +181,6 @@ async def procesar_conciliacion
 async def desconciliar_pago
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """Desconciliar un pago ya conciliado"""
     try:
         logger.info
@@ -223,7 +220,6 @@ async def desconciliar_pago
 async def obtener_estado_conciliacion
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """Obtener estado general de conciliación"""
     try:
         # Estadísticas generales

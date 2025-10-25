@@ -27,12 +27,9 @@ def listar_clientes
     per_page: int = Query(20, ge=1, le=1000, description="Tamaño de página"),
     # Búsqueda de texto
     search: Optional[str] = Query
-    ),
     estado: Optional[str] = Query
-    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     """
     try:
@@ -86,7 +83,6 @@ def obtener_cliente
     cliente_id: int = Path(..., description="ID del cliente"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     👤 Obtener cliente por ID
     """
@@ -106,7 +102,6 @@ def obtener_cliente
 def crear_cliente
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     ➕ Crear nuevo cliente
     """
@@ -134,7 +129,6 @@ def actualizar_cliente
     cliente_data: ClienteUpdate = ...,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     ✏️ Actualizar cliente
     """
@@ -170,7 +164,6 @@ def eliminar_cliente
     cliente_id: int = Path(..., description="ID del cliente"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     🗑️ Eliminar cliente (hard delete)
     """

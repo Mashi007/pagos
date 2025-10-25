@@ -87,7 +87,6 @@ class DatabaseSchemaAnalyzer:
 
         # Fix específico para tabla analistas
         fixes["sql_fixes"].append
-                ),
                 "description": "Agregar columna created_at faltante que causa error 503",
                 "priority": "critical",
 
@@ -140,7 +139,6 @@ schema_analyzer = DatabaseSchemaAnalyzer()
 async def analyze_database_schema
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     try:
         analysis = schema_analyzer.analyze_schema_inconsistencies(db)
 
@@ -155,7 +153,6 @@ async def analyze_database_schema
 async def get_schema_fixes
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """Obtener fixes para problemas de esquema"""
     try:
         fixes = schema_analyzer.generate_schema_fixes(db)
@@ -171,7 +168,6 @@ async def get_schema_fixes
 async def validate_schema_consistency
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """Validar consistencia del esquema"""
     try:
         validation = schema_analyzer.validate_schema_consistency(db)
@@ -187,7 +183,6 @@ async def validate_schema_consistency
 async def analyze_specific_table
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """Analizar tabla específica"""
     try:
         if table_name not in schema_analyzer.critical_tables:

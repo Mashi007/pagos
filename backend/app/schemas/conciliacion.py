@@ -108,7 +108,6 @@ class ResultadoConciliacion(BaseModel):
     @classmethod
     def calcular_porcentaje(cls, v, info):
         if 
-        ):
             return round
                 * 100,
                 2,

@@ -21,12 +21,9 @@ router = APIRouter()
 
 @router.get("/admin")
 def dashboard_administrador
-    ),
     fecha_fin: Optional[date] = Query
-    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     👑 DASHBOARD ADMINISTRADOR - ACCESO COMPLETO AL SISTEMA
     ✅ Acceso: TODO el sistema
@@ -94,7 +91,6 @@ def dashboard_administrador
                         "dias": dias_hasta,
                         "color": 
                             else ("warning" if dias_hasta <= 2 else "info")
-                        ),
 
     # TOP 5 USERES DEL MES
     inicio_mes = hoy.replace(day=1)
@@ -102,7 +98,6 @@ def dashboard_administrador
             func.sum(Cliente.total_financiamiento).label("monto_vendido"),
         .select_from(User)
         .outerjoin
-            ),
         .filter
         .group_by(User.id, User.nombre, User.apellido)
         .order_by(func.count(Cliente.id).desc())
@@ -161,7 +156,6 @@ def dashboard_administrador
 def dashboard_cobranzas
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     💰 DASHBOARD COBRANZAS - ACCESO COMPLETO (EXCEPTO GESTIÓN DE USUARIOS)
     ✅ Vista Dashboard:
@@ -198,8 +192,6 @@ def dashboard_cobranzas
                         .join(Cuota)
                         .filter
                             Cuota.estado.in_(["PENDIENTE", "PARCIAL"]),
-                ),
-            ),
         .order_by(Cliente.dias_mora.desc())
         .limit(20)
         .all()
@@ -220,7 +212,6 @@ def dashboard_cobranzas
             color = "primary"
 
         tabla_contactar.append
-                ),
 
     # PAGOS SIN CONCILIAR
         db.query(Pago)
@@ -259,7 +250,6 @@ def dashboard_cobranzas
 def dashboard_comercial
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     👔 DASHBOARD USER - SOLO SUS CLIENTES
     ⚠️ Acceso: SOLO SUS CLIENTES
@@ -328,7 +318,6 @@ def dashboard_comercial
             func.sum(Cliente.total_financiamiento).label("monto"),
         .select_from(Analista)
         .outerjoin
-            ),
         .filter(Analista.activo)
         .group_by(Analista.id, Analista.nombre, Analista.apellido)
         .order_by(func.count(Cliente.id).desc())
@@ -377,7 +366,6 @@ def dashboard_comercial
         "tablas": 
                         "monto": f"${float(cliente.total_financiamiento):,.0f}",
                         "analista": 
-                        ),
                     for cliente in ultimas_ventas
                 ],
         },
@@ -389,10 +377,8 @@ def dashboard_comercial
 @router.get("/analista")
 def dashboard_analista
         description="ID del analista de configuración (default: usuario actual)",
-    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     👤 DASHBOARD USER - SOLO SUS CLIENTES
     ⚠️ Acceso: SOLO SUS CLIENTES
@@ -442,7 +428,6 @@ def dashboard_analista
                     round((1 - idx / len(ranking_general)) * 100, 1)
                     if len(ranking_general) > 0
                     else 0
-                ),
             break
 
     return 
@@ -477,7 +462,6 @@ def dashboard_analista
 @router.get("/matriz-acceso-roles")
 def obtener_matriz_acceso_roles
     current_user: User = Depends(get_current_user),
-):
     """
     📋 Matriz de acceso actualizada por roles
     """
@@ -500,14 +484,10 @@ def obtener_matriz_acceso_roles
 
 @router.get("/por-rol")
 def dashboard_por_rol
-    ),
     filtro_analista: Optional[int] = Query
-    ),
     filtro_estado: Optional[str] = Query
-    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     🎨 Dashboard adaptativo según rol del usuario actual
     IMPLEMENTA MATRIZ DE ACCESO POR ROL:
@@ -529,7 +509,6 @@ def dashboard_por_rol
     filtro_modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     Soporta tooltips y drill-down
     """
@@ -592,7 +571,6 @@ def dashboard_por_rol
 def obtener_configuracion_dashboard
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     ⚙️ Configuración del dashboard interactivo
     """
@@ -616,7 +594,6 @@ def obtener_configuracion_dashboard
 def obtener_alertas_tiempo_real
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     🔔 Alertas en tiempo real para el dashboard
     """
@@ -667,7 +644,6 @@ def obtener_detalle_tabla
     page_size: int = Query(10, ge=1, le=50),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     📋 Obtener detalle de tabla al hacer click en gráfico
     """
@@ -725,7 +701,6 @@ async def exportar_vista_dashboard
     formato: str = Query("excel", description="excel, pdf, png, csv"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     📤 Exportar cualquier vista del dashboard
     """
@@ -782,10 +757,8 @@ async def exportar_vista_dashboard
 
 @router.get("/tiempo-real/actualizacion")
 def obtener_actualizacion_tiempo_real
-    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     """
     hoy = date.today()

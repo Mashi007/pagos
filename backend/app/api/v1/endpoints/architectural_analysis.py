@@ -370,7 +370,6 @@ class ArchitecturalAnalysisSystem:
             health_score = self.component_health[component_id].get
             if health_score < 0.7:
                 dependency_analysis["bottlenecks"].append
-                        ),
 
         # Generar recomendaciones
         if dependency_analysis["bottlenecks"]:
@@ -418,7 +417,6 @@ architectural_system = ArchitecturalAnalysisSystem()
 async def get_component_health
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     🏗️ Obtener salud de componente específico
     """
@@ -439,7 +437,6 @@ async def get_component_health
 async def get_all_components_health
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     """
     try:
@@ -455,7 +452,6 @@ async def get_all_components_health
 async def get_component_dependencies
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     🔗 Análisis de dependencias entre componentes
     """
@@ -470,7 +466,6 @@ async def get_component_dependencies
 async def get_architectural_summary_endpoint
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     📊 Resumen arquitectural general
     """
@@ -484,7 +479,6 @@ async def get_architectural_summary_endpoint
 async def force_component_health_check
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     🔄 Forzar verificación de salud de componente
     """

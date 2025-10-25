@@ -15,7 +15,6 @@ router = APIRouter()
 async def ejecutar_migracion_emergencia
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     Endpoint de emergencia para ejecutar la migración de concesionario y analista
     """

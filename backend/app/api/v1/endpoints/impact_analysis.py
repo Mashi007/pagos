@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 async def get_health_impact_analysis_public():
     """
     Obtener análisis de impacto de health checks (PÚBLICO)
-    - Métricas de performance de health checks
-    - Alertas y recomendaciones
+# - Métricas de performance de health checks
+# - Alertas y recomendaciones
     """
     try:
         analyzer = get_impact_analyzer()
@@ -33,11 +33,10 @@ async def get_health_impact_analysis_public():
 @router.get("/impact/health", response_model=Dict[str, Any])
 async def get_health_impact_analysis
     current_user: User = Depends(get_current_user),
-):
     """
     Obtener análisis de impacto de health checks
-    - Métricas de performance de health checks
-    - Alertas y recomendaciones
+# - Métricas de performance de health checks
+# - Alertas y recomendaciones
     """
     try:
         analyzer = get_impact_analyzer()
@@ -52,11 +51,10 @@ async def get_health_impact_analysis
 @router.get("/impact/performance", response_model=Dict[str, Any])
 async def get_performance_impact_analysis
     current_user: User = Depends(get_current_user),
-):
     """
     Obtener análisis de impacto en performance
-    - Métricas de performance de endpoints
-    - Recomendaciones de optimización
+# - Métricas de performance de endpoints
+# - Recomendaciones de optimización
     """
     try:
         analyzer = get_impact_analyzer()
@@ -71,11 +69,10 @@ async def get_performance_impact_analysis
 @router.get("/impact/errors", response_model=Dict[str, Any])
 async def get_error_impact_analysis
     current_user: User = Depends(get_current_user),
-):
     """
     Obtener análisis de impacto de errores
-    - Impacto en disponibilidad del sistema
-    - Recomendaciones de mitigación
+# - Impacto en disponibilidad del sistema
+# - Recomendaciones de mitigación
     """
     try:
         error_analyzer = get_error_analyzer()
@@ -90,10 +87,9 @@ async def get_error_impact_analysis
 @router.get("/impact/resource-usage", response_model=Dict[str, Any])
 async def get_resource_usage_impact
     current_user: User = Depends(get_current_user),
-):
     """
-    - Uso de CPU y memoria
-    - Recomendaciones de escalado
+# - Uso de CPU y memoria
+# - Recomendaciones de escalado
     """
     try:
         analyzer = get_impact_analyzer()
@@ -106,11 +102,10 @@ async def get_resource_usage_impact
 @router.get("/impact/endpoints", response_model=Dict[str, Any])
 async def get_endpoints_impact_analysis
     current_user: User = Depends(get_current_user),
-):
     """
     Obtener análisis de impacto por endpoint
-    - Métricas de performance por endpoint
-    - Recomendaciones específicas
+# - Métricas de performance por endpoint
+# - Recomendaciones específicas
     """
     try:
         analyzer = get_impact_analyzer()
@@ -125,12 +120,11 @@ async def get_endpoints_impact_analysis
 @router.get("/impact/summary", response_model=Dict[str, Any])
 async def get_impact_summary
     current_user: User = Depends(get_current_user),
-):
     """
     Obtener resumen general de impacto
-    - Resumen de todas las métricas
-    - Estado general del sistema
-    - Recomendaciones prioritarias
+# - Resumen de todas las métricas
+# - Estado general del sistema
+# - Recomendaciones prioritarias
     """
     try:
         analyzer = get_impact_analyzer()

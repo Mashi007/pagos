@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
         with engine.connect() as conn:
             # Verificar si la tabla existe
             result = conn.execute
-                );
             """
             tabla_existe = result.scalar()
 

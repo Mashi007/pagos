@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import 
+# from fastapi import  # TODO: Agregar imports específicos
 from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import Session
 
@@ -30,7 +30,6 @@ router = APIRouter()
 async def crear_pago
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """Crear un nuevo pago"""
     try:
         logger.info
@@ -55,7 +54,6 @@ async def subir_documento
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """Subir documento de pago"""
     try:
         # Validar tipo de archivo
@@ -90,13 +88,10 @@ async def subir_documento
 @router.get("/listar", response_model=PagoListResponse)
     pagina: int = Query(1, ge=1, description="Número de página"),
     por_pagina: int = Query
-    ),
     cedula: Optional[str] = Query(None, description="Filtrar por cédula"),
     conciliado: Optional[bool] = Query
-    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     try:
         query = db.query(Pago).filter(Pago.activo)
 
@@ -126,7 +121,6 @@ async def subir_documento
 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     try:
         total_dolares = 
             db.query(func.sum(Pago.monto_pagado)).filter(Pago.activo).scalar()
@@ -150,7 +144,6 @@ async def subir_documento
 async def obtener_resumen_cliente
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     try:
             db.query(Pago)
             .filter(and_(Pago.activo, Pago.cedula_cliente == cedula.upper()))
@@ -191,7 +184,6 @@ async def obtener_resumen_cliente
 @router.get("/descargar-documento/{filename}")
 async def descargar_documento
     filename: str, current_user: User = Depends(get_current_user)
-):
     """Descargar documento de pago"""
     try:
         file_path = UPLOAD_DIR / filename

@@ -56,7 +56,6 @@ class AprobacionResponse(BaseModel):
 def crear_aprobacion
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """Crear nueva solicitud de aprobación"""
     aprobacion = Aprobacion
     
@@ -69,7 +68,6 @@ def crear_aprobacion
 def listar_aprobaciones
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     query = db.query(Aprobacion
     if estado:
         query = query.filter(Aprobacion.estado == estado
@@ -82,7 +80,6 @@ def listar_aprobaciones
 def obtener_aprobacion
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """Obtener aprobación por ID"""
     aprobacion = 
         db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first(
@@ -96,7 +93,6 @@ def obtener_aprobacion
 def actualizar_aprobacion
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """Aprobar o rechazar una solicitud"""
     aprobacion = 
         db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first(
@@ -129,7 +125,6 @@ def actualizar_aprobacion
 def eliminar_aprobacion
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """Eliminar una solicitud de aprobación"""
     aprobacion = 
         db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first(
@@ -139,7 +134,6 @@ def eliminar_aprobacion
         
     # Solo el solicitante puede eliminar su propia solicitud pendiente
     if 
-    ):
         raise HTTPException
         
     db.delete(aprobacion

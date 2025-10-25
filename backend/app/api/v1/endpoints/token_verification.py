@@ -119,7 +119,6 @@ def _generar_recomendaciones
 
 async def verificar_token_detallado
     request: Request, db: Session = Depends(get_db)
-):
     """
     🔍 Verificación detallada de token JWT (VERSIÓN REFACTORIZADA)
     Analiza token sin requerir autenticación previa

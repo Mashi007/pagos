@@ -57,7 +57,6 @@ class TestClientesEndpoints:
 
 
         self, test_client: TestClient, auth_headers, sample_cliente_data
-    ):
             "/api/v1/clientes/", json=sample_cliente_data, headers=auth_headers
 
         assert response.status_code == 201
@@ -67,7 +66,6 @@ class TestClientesEndpoints:
 
 
     def test_crear_cliente_cedula_duplicada
-    ):
         """Probar creación de cliente con cédula duplicada"""
         # Crear primer cliente
             "/api/v1/clientes/", json=sample_cliente_data, headers=auth_headers
@@ -93,7 +91,6 @@ class TestClientesEndpoints:
 
 
     def test_obtener_cliente_por_id
-    ):
         """Probar obtener cliente por ID"""
         # Crear cliente primero
             "/api/v1/clientes/", json=sample_cliente_data, headers=auth_headers
@@ -117,7 +114,6 @@ class TestClientesEndpoints:
 
 
     def test_actualizar_cliente
-    ):
         """Probar actualización de cliente"""
         # Crear cliente primero
             "/api/v1/clientes/", json=sample_cliente_data, headers=auth_headers
@@ -132,7 +128,6 @@ class TestClientesEndpoints:
 
 
     def test_eliminar_cliente
-    ):
         """Probar eliminación de cliente"""
         # Crear cliente primero
             "/api/v1/clientes/", json=sample_cliente_data, headers=auth_headers

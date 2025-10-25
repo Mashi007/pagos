@@ -5,7 +5,7 @@ Sistema de notificaciones por email, SMS o WhatsApp
 """
 
 from enum import Enum as PyEnum
-from sqlalchemy import 
+# from sqlalchemy import  # TODO: Agregar imports específicos
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.session import Base
@@ -155,7 +155,6 @@ class Notificacion(Base):
 
     @classmethod
     def crear_recordatorio_pago
-    ):
         """
         Helper para crear notificaciones de recordatorio de pago
 

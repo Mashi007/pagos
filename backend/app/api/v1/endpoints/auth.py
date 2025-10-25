@@ -6,7 +6,7 @@ Solución temporal para resolver error 503
 
 import logging
 
-from fastapi import 
+# from fastapi import  # TODO: Agregar imports específicos
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -51,14 +51,13 @@ def add_cors_headers(request: Request, response: Response) -> None:
 
 async def login
     db: Session = Depends(get_db),
-):
     """
     🔐 Login de usuario - VERSIÓN SIMPLIFICADA
     Características:
-    - Sin auditoría (temporal)
-    - Sin rate limiting (temporal)
-    - Solo autenticación básica
-    - Headers CORS
+# - Sin auditoría (temporal)
+# - Sin rate limiting (temporal)
+# - Solo autenticación básica
+# - Headers CORS
     """
     try:
         logger.info(f"Intento de login para: {login_data.email}")
@@ -95,7 +94,6 @@ async def login
 @router.get("/me", response_model=UserMeResponse)
 async def get_current_user_info
     current_user: User = Depends(get_current_user),
-):
     """
     👤 Obtener información del usuario actual
     """
@@ -112,7 +110,6 @@ async def get_current_user_info
 
 async def logout
     current_user: User = Depends(get_current_user),
-):
     """
     🚪 Logout de usuario
     """
@@ -129,7 +126,6 @@ async def logout
 
 async def refresh_token
     db: Session = Depends(get_db),
-):
     """
     🔄 Refrescar token de acceso
     """
@@ -154,7 +150,6 @@ async def refresh_token
 async def change_password
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
     """
     🔑 Cambiar contraseña
     """
@@ -164,7 +159,6 @@ async def change_password
 
         # Verificar contraseña actual
         if not verify_password
-        ):
             raise HTTPException
 
         # Validar fortaleza de nueva contraseña

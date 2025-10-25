@@ -47,12 +47,12 @@ logger.info(f"Database URL configurada: {bool(settings.DATABASE_URL)}")
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
     Middleware para agregar security headers según OWASP
-    - Content-Security-Policy
-    - Strict-Transport-Security (HSTS)
-    - X-Frame-Options
-    - X-Content-Type-Options
-    - X-XSS-Protection
-    - Referrer-Policy
+# - Content-Security-Policy
+# - Strict-Transport-Security (HSTS)
+# - X-Frame-Options
+# - X-Content-Type-Options
+# - X-XSS-Protection
+# - Referrer-Policy
     """
 
 

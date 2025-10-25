@@ -6,7 +6,7 @@ Representa cada cuota de un préstamo con su detalle de capital, interés
 """
 
 from decimal import Decimal
-from sqlalchemy import 
+# from sqlalchemy import  # TODO: Agregar imports específicos
 from sqlalchemy.sql import func
 from app.db.session import Base
 
@@ -188,11 +188,9 @@ Amortizacion = Cuota
 # TABLA DE ASOCIACIÓN PAGO-CUOTAS
 # ============================================
 pago_cuotas = Table
-    ),
     Column
         ForeignKey("cuotas.id", ondelete="CASCADE"),
         primary_key=True,
-    ),
     Column("monto_aplicado", Numeric(12, 2), nullable=False),
     Column("aplicado_a_capital", Numeric(12, 2), default=Decimal("0.00")),
     Column("aplicado_a_interes", Numeric(12, 2), default=Decimal("0.00")),

@@ -34,10 +34,8 @@ def upgrade():
         ),  # Motor, transmisión, etc.
         sa.Column
             "created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")
-        ),
         sa.Column
             "updated_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")
-        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("nombre_completo"),
 

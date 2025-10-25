@@ -123,7 +123,6 @@ strategic_measurements = StrategicMeasurements()
 @router.get("/measurements/system-metrics", response_model=Dict[str, Any])
 async def get_system_metrics
     current_user: User = Depends(get_current_user),
-):
     """Obtener métricas del sistema"""
     metrics = strategic_measurements.collect_system_metrics()
     return metrics
@@ -131,6 +130,5 @@ async def get_system_metrics
 @router.get("/measurements/history", response_model=Dict[str, Any])
 async def get_measurement_history
     current_user: User = Depends(get_current_user),
-):
     """Obtener historial de mediciones"""
     return strategic_measurements.get_measurement_history(limit)

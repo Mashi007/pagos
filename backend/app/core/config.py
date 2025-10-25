@@ -96,7 +96,6 @@ class Settings(BaseSettings):
         if not self.ADMIN_EMAIL or not self.ADMIN_PASSWORD:
             return False
         if 
-        ):
             raise ValueError
         return True
 

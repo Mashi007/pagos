@@ -188,7 +188,6 @@ analyzer = IntermittentFailureAnalyzer()
 async def get_intermittent_failure_analysis
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
-):
     try:
         analysis = analyzer.analyze_intermittent_patterns()
         return 
@@ -199,7 +198,6 @@ async def get_intermittent_failure_analysis
 async def log_request
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
-):
     """Registrar un request para análisis"""
     try:
         success = request_data.get("success", True)

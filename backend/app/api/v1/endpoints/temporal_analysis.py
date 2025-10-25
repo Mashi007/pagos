@@ -118,7 +118,6 @@ temporal_system = TemporalAnalysisSystem()
 async def get_temporal_analysis
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
-):
     """Obtener análisis temporal completo"""
     try:
         analysis = temporal_system.get_temporal_analysis()
@@ -131,7 +130,6 @@ async def get_temporal_analysis
 async def get_timing_statistics
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
-):
     """Obtener estadísticas de timing"""
     try:
         stats = temporal_system.get_timing_statistics()
@@ -143,7 +141,6 @@ async def get_timing_statistics
 async def log_timing_event
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
-):
     """Registrar un evento de timing"""
     try:
         temporal_system.log_timing_event(event_data)
@@ -155,7 +152,6 @@ async def log_timing_event
 async def log_token_lifecycle
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
-):
     """Registrar ciclo de vida de token"""
     try:
         temporal_system.log_token_lifecycle(token_data)

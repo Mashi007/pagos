@@ -44,7 +44,6 @@ router = APIRouter()
 @router.get("/test-auth")
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     """
     try:
@@ -55,12 +54,9 @@ router = APIRouter()
 
 @router.get("/list-no-auth")
     limit: int = Query
-    ),
     activo: Optional[bool] = Query
-    ),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
-):
     """
     """
     try:
@@ -86,13 +82,10 @@ router = APIRouter()
 
 @router.get("/", response_model=ConcesionarioListResponse)
     limit: int = Query
-    ),
     activo: Optional[bool] = Query
-    ),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     """
     try:
@@ -122,7 +115,6 @@ router = APIRouter()
     db: Session = Depends(get_db),
     # TEMPORALMENTE SIN AUTENTICACIÓN PARA DROPDOWNS
     # current_user: User = Depends(get_current_user)
-):
     """
     """
     try:
@@ -135,7 +127,6 @@ router = APIRouter()
 def obtener_concesionario
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     🔍 Obtener un concesionario por ID
     """
@@ -151,7 +142,6 @@ def obtener_concesionario
 def crear_concesionario
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     ➕ Crear un nuevo concesionario
     """
@@ -180,7 +170,6 @@ def crear_concesionario
 def actualizar_concesionario
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     ✏️ Actualizar un concesionario existente
     """
@@ -194,7 +183,6 @@ def actualizar_concesionario
 
         # Verificar nombre único si se está cambiando
         if 
-        ):
             existing = 
                 db.query(Concesionario)
                 .filter
@@ -222,7 +210,6 @@ def actualizar_concesionario
 def eliminar_concesionario
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     🗑️ Eliminar un concesionario (HARD DELETE - borrado completo de BD)
     """

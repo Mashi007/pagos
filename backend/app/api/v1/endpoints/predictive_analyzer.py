@@ -264,7 +264,6 @@ predictive_analyzer = PredictiveAnalyzer()
 
 async def record_authentication_event
     current_user: User = Depends(get_current_user),
-):
     """Registrar evento de autenticación"""
     try:
         user_id = event_data.get("user_id", current_user.id)
@@ -286,7 +285,6 @@ async def record_authentication_event
 
 async def predict_authentication_failure
     current_user: User = Depends(get_current_user),
-):
     """Predecir fallo de autenticación"""
     try:
         user_id = prediction_data.get("user_id", current_user.id)
@@ -312,7 +310,6 @@ async def predict_authentication_failure
 @router.get("/user-behavior/{user_id}")
 async def get_user_behavior_pattern
     current_user: User = Depends(get_current_user),
-):
     """Obtener patrón de comportamiento del usuario"""
     try:
         behavior_pattern = predictive_analyzer.get_user_behavior_pattern(user_id)
@@ -330,7 +327,6 @@ async def get_user_behavior_pattern
 @router.get("/prediction-history")
 async def get_prediction_history
     current_user: User = Depends(get_current_user),
-):
     """Obtener historial de predicciones"""
     try:
         predictions = list(predictive_analyzer.predictions)
@@ -356,7 +352,6 @@ async def get_prediction_history
 @router.get("/model-accuracy")
 async def get_model_accuracy
     current_user: User = Depends(get_current_user),
-):
     """Obtener precisión del modelo predictivo"""
     try:
         # Calcular precisión básica basada en predicciones recientes

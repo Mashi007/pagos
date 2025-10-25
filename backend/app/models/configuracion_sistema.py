@@ -346,16 +346,12 @@ class ConfiguracionPorDefecto:
                             tipo_dato=config_data.get("tipo_dato", "STRING"),
                             requerido=config_data.get("requerido", False),
                             visible_frontend=config_data.get
-                            ),
                             solo_lectura=config_data.get
-                            ),
                             opciones_validas=
                                 json.dumps(config_data.get("opciones_validas"))
                                 if config_data.get("opciones_validas")
                                 else None
-                            ),
                             patron_validacion=config_data.get
-                            ),
                             valor_minimo=config_data.get("valor_minimo"),
                             valor_maximo=config_data.get("valor_maximo"),
                         db.add(nueva_config)

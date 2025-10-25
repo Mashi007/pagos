@@ -98,7 +98,6 @@ class TestHealthCheckImpact:
 
 
     def test_detailed_health_check_performance_impact
-    ):
         """Test de impacto en performance del health check detallado"""
         performance_analyzer.start_measurement()
 
@@ -139,7 +138,6 @@ class TestEndpointPerformanceImpact:
 
 
     def test_client_endpoint_performance_impact
-    ):
         """Test de impacto en performance del endpoint de clientes"""
         performance_analyzer.start_measurement()
 
@@ -191,7 +189,6 @@ class TestConcurrentLoadImpact:
 
 
     def test_concurrent_health_checks_performance
-    ):
         """Test de impacto en performance con múltiples health checks concurrentes"""
         import concurrent.futures
 

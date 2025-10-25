@@ -22,7 +22,6 @@ class EndpointSpecificAnalyzer:
 
 
     def record_business_metric
-    ):
         """Registrar métrica de negocio específica"""
         if endpoint not in self.business_metrics:
             self.business_metrics[endpoint] = {}
@@ -52,7 +51,6 @@ endpoint_analyzer = EndpointSpecificAnalyzer()
 
 
 def endpoint_impact_analysis
-):
     """
     Decorator para análisis de impacto específico por endpoint
 

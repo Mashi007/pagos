@@ -114,7 +114,6 @@ router = APIRouter()
 async def get_network_status
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
-):
     """Obtener estado de la red"""
     try:
         return 
@@ -125,7 +124,6 @@ async def get_network_status
 async def test_connectivity
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
-):
     """Probar conectividad a un endpoint específico"""
     try:
         return 

@@ -39,12 +39,10 @@ def upgrade() -> None:
             sa.DateTime(),
             nullable=False,
             server_default=sa.text("CURRENT_TIMESTAMP"),
-        ),
         sa.Column
             sa.DateTime(),
             nullable=False,
             server_default=sa.text("CURRENT_TIMESTAMP"),
-        ),
         sa.PrimaryKeyConstraint("id"),
 
     # Crear índices

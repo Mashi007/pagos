@@ -33,7 +33,6 @@ def test_analistas_no_auth(db: Session = Depends(get_db)):
                     analista.updated_at.isoformat(
                     if analista.updated_at
                     else None
-                ),
         return 
     except Exception as e:
         logger.error(f"Error en test endpoint analistas no auth: {str(e)}"
@@ -85,12 +84,9 @@ def health_check_analistas(db: Session = Depends(get_db)):
 def analistas_backup1
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query
-    ),
     activo: Optional[bool] = Query
-    ),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
-):
     """
     Endpoint de respaldo 1 - Sin autenticación, con cache
     """
@@ -140,7 +136,6 @@ def analistas_backup1
             
             items.append
                     row[3].isoformat() if row[3] else None
-                ),
         result_data = 
 
         # Guardar en cache
@@ -156,12 +151,9 @@ def analistas_backup1
 def analistas_backup2
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query
-    ),
     activo: Optional[bool] = Query
-    ),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
-):
     """
     Endpoint de respaldo 2 - Sin autenticación, consulta simple
     """
@@ -200,12 +192,9 @@ def analistas_backup2
 def analistas_emergency
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query
-    ),
     activo: Optional[bool] = Query
-    ),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
-):
     """
     Endpoint de emergencia para analistas SIN autenticación
     Usar solo cuando el endpoint principal falle
@@ -249,7 +238,6 @@ def analistas_emergency
             
             items.append
                     row[3].isoformat() if row[3] else None
-                ),
         return 
 
     except Exception as e:
@@ -261,13 +249,10 @@ def analistas_emergency
 def listar_analistas
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query
-    ),
     activo: Optional[bool] = Query
-    ),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     Listar analistas CON autenticación (endpoint principal
     """
@@ -294,12 +279,10 @@ def listar_analistas
                     analista.updated_at.isoformat(
                     if analista.updated_at
                     else None
-                ),
                 "fecha_eliminacion": 
                     analista.fecha_eliminacion.isoformat(
                     if analista.fecha_eliminacion
                     else None
-                ),
         return 
 
     except Exception as e:
@@ -311,12 +294,9 @@ def listar_analistas
 def listar_analistas_no_auth
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query
-    ),
     activo: Optional[bool] = Query
-    ),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
-):
     """
     Listar analistas SIN autenticación (para testing
     """
@@ -347,7 +327,6 @@ def listar_asesores_activos
     db: Session = Depends(get_db),
     # TEMPORALMENTE SIN AUTENTICACIÓN PARA DROPDOWNS
     # current_user: User = Depends(get_current_user
-):
     """
     Listar solo asesores activos (para formularios
     Simplificado: Sin filtros adicionales, solo asesores activos
@@ -364,7 +343,6 @@ def listar_asesores_activos
 def obtener_asesor
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     Obtener un asesor por ID
     """
@@ -376,7 +354,6 @@ def obtener_asesor
 def crear_asesor
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     Crear un nuevo asesor
     """
@@ -414,7 +391,6 @@ def crear_asesor
 def actualizar_asesor
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     Actualizar un asesor existente
     """
@@ -451,7 +427,6 @@ def actualizar_asesor
 def eliminar_asesor
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     Eliminar un analista (HARD DELETE - borrado completo de BD
     """

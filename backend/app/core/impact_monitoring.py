@@ -125,7 +125,6 @@ class ImpactAnalyzer:
                     disk_free_gb=disk.free // (1024 * 1024 * 1024),
                     process_count=len(psutil.pids()),
                     load_average=
-                    ),
                     network_bytes_sent=network.bytes_sent,
                     network_bytes_recv=network.bytes_recv,
             else:
@@ -186,12 +185,10 @@ class ImpactAnalyzer:
 
 
     def _create_alert
-    ):
         """Crear nueva alerta"""
 
         # Verificar si ya existe una alerta similar no resuelta
         existing_alert = next
-            ),
             None,
 
         if existing_alert:
@@ -204,7 +201,6 @@ class ImpactAnalyzer:
 
 
     def record_endpoint_performance
-    ):
         """Registrar performance de un endpoint específico"""
         if not self.metrics_history:
             return
@@ -296,7 +292,6 @@ class ImpactAnalyzer:
             },
             "recent_performance": [asdict(p) for p in recent_performance[-5:]],
             "recommendations": self._generate_recommendations
-            ),
 
 
     def _generate_recommendations
@@ -310,7 +305,6 @@ class ImpactAnalyzer:
             recommendations.append
 
         if 
-        ):
             recommendations.append
 
         if not recommendations:

@@ -15,7 +15,6 @@ router = APIRouter()
 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
     """
     """
     try:

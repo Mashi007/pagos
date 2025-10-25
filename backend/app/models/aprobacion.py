@@ -4,7 +4,7 @@ from datetime import date, timedelta as delta
 Sistema de workflow para solicitudes que requieren aprobación
 """
 
-from sqlalchemy import 
+# from sqlalchemy import  # TODO: Agregar imports específicos
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
