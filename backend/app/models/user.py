@@ -27,6 +27,7 @@ class User(Base):
     nombre = Column(String(NAME_LENGTH), nullable=False)
     apellido = Column(String(NAME_LENGTH), nullable=False)
     hashed_password = Column(String(PASSWORD_LENGTH), nullable=False)
+    rol = Column(String(50), default="USER", nullable=False)  # Campo rol requerido
     is_admin = Column(
         Boolean, default=False, nullable=False
     )  # Cambio clave: rol → is_admin
@@ -58,8 +59,8 @@ class User(Base):
         return f"{self.nombre} {self.apellido}"
 
     @property
-    def rol(self) -> str:
-        """Propiedad para compatibilidad hacia atrás"""
+    def rol_display(self) -> str:
+        """Propiedad para mostrar el rol de forma legible"""
         return "ADMIN" if self.is_admin else "USER"
 
     def to_dict(self):
@@ -69,6 +70,7 @@ class User(Base):
             "email": self.email,
             "nombre": self.nombre,
             "apellido": self.apellido,
+            "rol": self.rol,
             "is_admin": self.is_admin,
             "cargo": self.cargo,
             "is_active": self.is_active,

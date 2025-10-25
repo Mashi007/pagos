@@ -88,10 +88,11 @@ def create_user(
         email=user_data.email,
         nombre=user_data.nombre,
         apellido=user_data.apellido,
+        rol="ADMIN" if user_data.is_admin else "USER",
         cargo=user_data.cargo,
         is_admin=user_data.is_admin,
         hashed_password=get_password_hash(user_data.password),
-        activo=user_data.activo,
+        is_active=user_data.activo,
     )
 
     db.add(new_user)
@@ -187,6 +188,10 @@ def update_user(
                         status_code=status.HTTP_400_BAD_REQUEST, detail=message
                     )
                 setattr(user, "hashed_password", get_password_hash(value))
+            elif field == "is_admin":
+                # Actualizar tanto is_admin como rol
+                setattr(user, "is_admin", value)
+                setattr(user, "rol", "ADMIN" if value else "USER")
             else:
                 setattr(user, field, value)
 

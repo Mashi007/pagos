@@ -19,6 +19,7 @@ class UserBase(BaseModel):
     email: EmailStr
     nombre: str = Field(..., min_length=1, max_length=100)
     apellido: str = Field(..., min_length=1, max_length=100)
+    rol: str = Field(default="USER", max_length=50)  # Campo rol requerido
     cargo: Optional[str] = Field(None, max_length=100)
     is_admin: bool = Field(default=False)  # Cambio clave: rol → is_admin
     is_active: bool = Field(default=True)
@@ -36,6 +37,7 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     nombre: Optional[str] = Field(None, min_length=1, max_length=100)
     apellido: Optional[str] = Field(None, min_length=1, max_length=100)
+    rol: Optional[str] = Field(None, max_length=50)  # Campo rol opcional
     cargo: Optional[str] = Field(None, max_length=100)
     is_admin: Optional[bool] = None  # Cambio clave: rol → is_admin
     is_active: Optional[bool] = None
