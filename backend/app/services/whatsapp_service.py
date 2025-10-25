@@ -31,7 +31,7 @@ class WhatsAppService:
         if not self.access_token or not self.phone_number_id:
             logger.warning("Credenciales de Meta Developers no configuradas")
             logger.info(
-                "Variables requeridas: WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE...
+                "Variables requeridas: WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID"
             )
 
     async def send_message(
@@ -59,7 +59,7 @@ class WhatsAppService:
             if not self.access_token or not self.phone_number_id:
                 return {
                     "success": False,
-                    "error": "WhatsApp no configurado. Faltan credenciales d...
+                    "error": "WhatsApp no configurado. Faltan credenciales de Meta",
                     "message_id": None,
                 }
 
@@ -197,7 +197,7 @@ class WhatsAppService:
             if not self.access_token or not self.phone_number_id:
                 return {
                     "success": False,
-                    "error": "WhatsApp no configurado. Faltan credenciales d...
+                    "error": "WhatsApp no configurado. Faltan credenciales de Meta",
                     "message_id": None,
                 }
 
@@ -319,7 +319,7 @@ class WhatsAppService:
             # URL para obtener estado del mensaje
             f"{self.api_url}/{self.phone_number_id}/messages/{message_id}"
 
-            # Nota: Meta API no proporciona endpoint directo para consultar ...
+            # Nota: Meta API no proporciona endpoint directo para consultar estado
             # El estado se maneja via webhooks
             return {
                 "message_id": message_id,

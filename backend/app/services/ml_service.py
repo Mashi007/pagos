@@ -1,7 +1,7 @@
 # backend/app/services/ml_service.py
 """
 Servicio de Inteligencia Artificial y Machine Learning
-Sistema avanzado de predicción, scoring y recomendaciones para financiamient...
+Sistema avanzado de predicción, scoring y recomendaciones para financiamiento automotriz
 """
 
 import logging
@@ -389,7 +389,7 @@ class ScoringCrediticio:
             return {
                 "decision": "APROBAR_AUTOMATICAMENTE",
                 "color": "#28a745",
-                "mensaje": "Cliente de bajo riesgo - Aprobación automática r...
+                "mensaje": "Cliente de bajo riesgo - Aprobación automática recomendada",
                 "condiciones_especiales": [],
                 "tasa_recomendada": "TASA_PREFERENCIAL",
                 "plazo_maximo": 84,  # 7 años
@@ -398,7 +398,7 @@ class ScoringCrediticio:
             return {
                 "decision": "REVISAR_MANUALMENTE",
                 "color": "#ffc107",
-                "mensaje": "Cliente de riesgo medio - Revisión manual recome...
+                "mensaje": "Cliente de riesgo medio - Revisión manual recomendada",
                 "condiciones_especiales": [
                     "Verificar ingresos",
                     "Solicitar referencias",
@@ -410,7 +410,7 @@ class ScoringCrediticio:
             return {
                 "decision": "ANALIZAR_DETALLADAMENTE",
                 "color": "#17a2b8",
-                "mensaje": "Cliente de riesgo alto - Análisis detallado requ...
+                "mensaje": "Cliente de riesgo alto - Análisis detallado requerido",
                 "condiciones_especiales": [
                     "Solicitar aval",
                     "Aumentar cuota inicial",
@@ -735,7 +735,7 @@ class PrediccionMora:
                     {
                         "accion": "RECORDATORIO_PROACTIVO",
                         "prioridad": "ALTA",
-                        "descripcion": "Enviar recordatorio 5 días antes del...
+                        "descripcion": "Enviar recordatorio 5 días antes del vencimiento",
                         "canal": "WHATSAPP_Y_EMAIL",
                     },
                     {
@@ -752,7 +752,7 @@ class PrediccionMora:
                     {
                         "accion": "SEGUIMIENTO_REGULAR",
                         "prioridad": "MEDIA",
-                        "descripcion": "Incluir en lista de seguimiento sema...
+                        "descripcion": "Incluir en lista de seguimiento semanal",
                         "canal": "EMAIL_AUTOMATICO",
                     }
                 ]
@@ -764,7 +764,7 @@ class PrediccionMora:
                 {
                     "accion": "VERIFICAR_SITUACION",
                     "prioridad": "ALTA",
-                    "descripcion": "Cliente sin pagos recientes - verificar ...
+                    "descripcion": "Cliente sin pagos recientes - verificar situación",
                     "canal": "LLAMADA_TELEFONICA",
                 }
             )
@@ -974,7 +974,7 @@ class AnalisisPredictivoCartera:
             )
 
             # Recomendaciones estratégicas
-            recomendaciones = AnalisisPredictivoCartera._generar_recomendaci...
+            recomendaciones = AnalisisPredictivoCartera._generar_recomendaciones_estrategicas(
                 tendencia_mora, proyeccion_flujo, analisis_segmentos
             )
 
@@ -1352,7 +1352,7 @@ class ChatbotCobranza:
  Hola {nombre}!
 
 Te recordamos que tu cuota #{
-                        contexto['ultima_cuota']['numero']} de tu {vehiculo}...
+                        contexto['ultima_cuota']['numero']} de tu {vehiculo} vence el {
                         contexto['ultima_cuota']['fecha_vencimiento']}.
 
  Monto: ${
@@ -1371,13 +1371,13 @@ Gracias por tu puntualidad! 😊
 Estimado/a {nombre},
 
 Le recordamos que su cuota #{
-                        contexto['ultima_cuota']['numero']} correspondiente ...
+                        contexto['ultima_cuota']['numero']} correspondiente a su {vehiculo} vence el {
                         contexto['ultima_cuota']['fecha_vencimiento']}.
 
 Monto a pagar: ${
                         contexto['ultima_cuota']['monto']:,.2f}
 
-Para mayor comodidad, puede realizar su pago a través de nuestros canales di...
+Para mayor comodidad, puede realizar su pago a través de nuestros canales digitales.
 
 Saludos cordiales,
 Equipo de Cobranzas
@@ -1402,7 +1402,7 @@ Necesitas ayuda? Responde este mensaje.
                 """
                 ),
                 "sms": (
-                    f"FINANCIERA: {nombre}, tu cuota está vencida ({contexto...
+                    f"FINANCIERA: {nombre}, tu cuota está vencida ({contexto['dias_mora']} días). Monto: ${contexto['ultima_cuota']['monto']:,.0f}. Paga hoy para evitar cargos. Info: 809-XXX-XXXX"
                 ),
             },
             "MORA_AVANZADA": {
@@ -1411,7 +1411,7 @@ Necesitas ayuda? Responde este mensaje.
 Buenos días {nombre}, le habla [NOMBRE] de Cobranzas.
 
 Le contacto porque su cuota #{
-                        contexto['ultima_cuota']['numero']} de su {vehiculo}...
+                        contexto['ultima_cuota']['numero']} de su {vehiculo} tiene {
                         contexto['dias_mora']} días de mora.
 
 Cuándo podría realizar el pago de ${
@@ -1496,7 +1496,7 @@ class DetectorPatrones:
                 anomalias.append(
                     {
                         "tipo": "CAMBIO_COMPORTAMIENTO",
-                        "descripcion": "Clientes con cambio súbito en patrón...
+                        "descripcion": "Clientes con cambio súbito en patrón de pago",
                         "cantidad": len(clientes_cambio),
                         "clientes": clientes_cambio[:10],  # Top 10
                         "accion_recomendada": "CONTACTAR_PROACTIVAMENTE",
@@ -1511,7 +1511,7 @@ class DetectorPatrones:
                 anomalias.append(
                     {
                         "tipo": "CONCENTRACION_MORA_USER",
-                        "descripcion": "Asesores con alta concentración de m...
+                        "descripcion": "Asesores con alta concentración de mora",
                         "datos": concentracion_mora,
                         "accion_recomendada": "REVISAR_PROCESO_APROBACION",
                     }
@@ -1719,7 +1719,7 @@ class AlertasInteligentes:
                         "prioridad": "ALTA",
                         "titulo": f"{len(clientes_riesgo)} clientes en riesgo de mora",
                         "descripcion": (
-                            "Clientes con alta probabilidad de entrar en mor...
+                            "Clientes con alta probabilidad de entrar en mora en los próximos 7 días"
                         ),
                         "clientes": clientes_riesgo[:10],
                         "accion_recomendada": "Contacto proactivo inmediato",
@@ -1734,9 +1734,9 @@ class AlertasInteligentes:
                         "tipo": "DETERIORO_CARTERA",
                         "prioridad": "MEDIA",
                         "titulo": "Deterioro detectado en calidad de cartera",
-                        "descripcion": f"Incremento de {deterioro['increment...
+                        "descripcion": f"Incremento de {deterioro['incremento']}% en mora este mes",
                         "datos": deterioro,
-                        "accion_recomendada": "Revisar políticas de aprobaci...
+                        "accion_recomendada": "Revisar políticas de aprobación",
                     }
                 )
 
@@ -1748,7 +1748,7 @@ class AlertasInteligentes:
                         "tipo": "OPORTUNIDADES",
                         "prioridad": "BAJA",
                         "titulo": f"{len(oportunidades)} oportunidades de negocio",
-                        "descripcion": "Clientes elegibles para productos ad...
+                        "descripcion": "Clientes elegibles para productos adicionales",
                         "oportunidades": oportunidades,
                         "accion_recomendada": "Contacto comercial",
                     }

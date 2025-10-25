@@ -82,9 +82,9 @@ class Cliente(Base):
     # ============================================
     # RELACIONES CON OTROS MODELOS
     # ============================================
-    # NOTA: Todas las relaciones comentadas porque las tablas son solo plant...
+    # NOTA: Todas las relaciones comentadas porque las tablas son solo plantillas vacías
     # asesor_config_rel = relationship("Analista", back_populates="clientes")
     # prestamos = relationship("Prestamo", back_populates="cliente", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<Cliente(id={self.id}, cedula='{self.cedula}', nombres='{se...
+        return f"<Cliente(id={self.id}, cedula='{self.cedula}', nombres='{self.nombres}', apellidos='{self.apellidos}')>"

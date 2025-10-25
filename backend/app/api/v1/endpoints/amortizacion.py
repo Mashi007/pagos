@@ -207,7 +207,7 @@ def recalcular_mora(
             total_mora_nueva=resultado["total_mora_nueva"],
             diferencia=resultado["diferencia"],
             cuotas_con_mora=cuotas_detalle,
-            mensaje=f"Se recalculó la mora de {resultado['cuotas_actualizada...
+            mensaje=f"Se recalculó la mora de {resultado['cuotas_actualizadas']} cuotas",
         )
     except Exception as e:
         raise HTTPException(
@@ -302,7 +302,7 @@ def obtener_estado_cuenta(
         cuotas_pendientes=cuotas_pendientes,
         cuotas_vencidas=cuotas_vencidas,
         proximas_cuotas=proximas_cuotas,
-        historial_pagos=[],  # TODO: Implementar cuando tengamos endpoint de...
+        historial_pagos=[],  # TODO: Implementar cuando tengamos endpoint de pagos
     )
 
 

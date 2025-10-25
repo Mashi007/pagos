@@ -288,7 +288,7 @@ def crear_cliente(
             .first()
         )
         if cliente_existente:
-            # ✅ NUEVO: Si el usuario confirma el duplicado, actualizar el cl...
+            # ✅ NUEVO: Si el usuario confirma el duplicado, actualizar el cliente existente
             if cliente_data.confirm_duplicate:
                 logger.info(
                     f"✅ Cliente con cédula {cliente_data.cedula} "
@@ -347,12 +347,12 @@ def crear_cliente(
                     f"ya existe - activando popup de confirmación"
                 )
 
-                # ✅ SOLUCIÓN LIGERA: HTTPException simplificado sin auditorí...
+                # ✅ SOLUCIÓN LIGERA: HTTPException simplificado sin auditoría pesada
                 raise HTTPException(
                     status_code=409,
                     detail={
                         "error": "CLIENTE_DUPLICADO",
-                        "message": f"Ya existe un cliente con la cédula {cli...
+                        "message": f"Ya existe un cliente con la cédula {cliente_data.cedula}",
                         "cedula": cliente_data.cedula,
                         "cliente_existente": {
                             "id": cliente_existente.id,
@@ -400,7 +400,7 @@ def crear_cliente(
             cliente_id=nuevo_cliente.id,
             datos_nuevos=cliente_data.model_dump(),
             descripcion=(
-                f"Cliente creado: {cliente_data.nombres} {cliente_data.apell...
+                f"Cliente creado: {cliente_data.nombres} {cliente_data.apellidos}"
             ),
         )
 
@@ -508,7 +508,7 @@ def crear_cliente_con_confirmacion(
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail="Error interno del servidor al crear cliente con confirma...
+            detail="Error interno del servidor al crear cliente con confirmación",
         )
 
 
@@ -586,7 +586,7 @@ def actualizar_cliente(
             cliente_id=cliente_id,
             datos_anteriores=datos_anteriores,
             datos_nuevos=update_data,
-            descripcion=f"Cliente actualizado: {cliente.nombres} {cliente.ap...
+            descripcion=f"Cliente actualizado: {cliente.nombres} {cliente.apellidos}",
         )
 
         logger.info(f"Cliente actualizado exitosamente: {cliente_id}")

@@ -36,7 +36,7 @@ engine = create_engine(
     connect_args={
         "connect_timeout": DEFAULT_CONNECT_TIMEOUT,  # Timeout de conexión
         "application_name": "rapicredit_backend",
-        "options": f"-c statement_timeout={DEFAULT_STATEMENT_TIMEOUT}",  # T...
+        "options": f"-c statement_timeout={DEFAULT_STATEMENT_TIMEOUT}",  # Timeout de queries
     },
 )
 
@@ -79,7 +79,7 @@ def get_db():
             # Re-lanzar errores de autenticación sin modificar
             raise e
 
-        # CORRECCIÓN CRÍTICA: NO sobrescribir HTTPException que ya tienen me...
+        # CORRECCIÓN CRÍTICA: NO sobrescribir HTTPException que ya tienen mensajes específicos
 
         if isinstance(e, HTTPException):
             # Re-lanzar HTTPException sin modificar (preservar mensaje)

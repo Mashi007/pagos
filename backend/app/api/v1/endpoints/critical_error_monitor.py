@@ -24,7 +24,7 @@ router = APIRouter()
 
 
 class CriticalErrorMonitor:
-    """Monitor específico para errores críticos que causan fallos de desplie...
+    """Monitor específico para errores críticos que causan fallos de despliegue"""
 
     def __init__(self):
         self.critical_errors = deque(maxlen=1000)
@@ -208,8 +208,8 @@ class CriticalErrorMonitor:
                     {
                         "type": "import_fix",
                         "priority": "critical",
-                        "description": "Corregir imports faltantes que causa...
-                        "action": "Verificar y corregir imports en otros arc...
+                        "description": "Corregir imports faltantes que causan fallos de despliegue",
+                        "action": "Verificar y corregir imports en otros archivos",
                         "impact": "Resuelve fallos de despliegue",
                     }
                 )
@@ -219,8 +219,8 @@ class CriticalErrorMonitor:
                     {
                         "type": "schema_fix",
                         "priority": "critical",
-                        "description": "Corregir inconsistencias de esquema ...
-                        "action": "Agregar columna created_at a tabla analis...
+                        "description": "Corregir inconsistencias de esquema que causan errores 503",
+                        "action": "Agregar columna created_at a tabla analistas o corregir queries",
                         "impact": "Resuelve errores 503 en endpoints",
                     }
                 )
@@ -230,8 +230,8 @@ class CriticalErrorMonitor:
                     {
                         "type": "deployment_fix",
                         "priority": "critical",
-                        "description": "Resolver problemas de despliegue que...
-                        "action": "Verificar configuración de puertos y depe...
+                        "description": "Resolver problemas de despliegue que causan timeouts",
+                        "action": "Verificar configuración de puertos y dependencias",
                         "impact": "Permite despliegues exitosos",
                     }
                 )

@@ -165,9 +165,9 @@ class DatabaseSchemaAnalyzer:
                 "table": "analistas",
                 "fix_type": "add_column",
                 "sql": (
-                    "ALTER TABLE analistas ADD COLUMN created_at TIMESTAMP D...
+                    "ALTER TABLE analistas ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;"
                 ),
-                "description": "Agregar columna created_at faltante que caus...
+                "description": "Agregar columna created_at faltante que causa error 503",
                 "priority": "critical",
             }
         )
@@ -177,7 +177,7 @@ class DatabaseSchemaAnalyzer:
             {
                 "file": "backend/app/api/v1/endpoints/analistas.py",
                 "fix_type": "query_fix",
-                "description": "Cambiar queries de created_at a updated_at e...
+                "description": "Cambiar queries de created_at a updated_at en tabla analistas",
                 "priority": "critical",
             }
         )

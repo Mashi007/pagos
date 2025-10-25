@@ -1,7 +1,7 @@
 # backend/app/models/amortizacion.py
 """
 Modelo de Cuota/Amortización
-Representa cada cuota de un préstamo con su detalle de capital, interés y sa...
+Representa cada cuota de un préstamo con su detalle de capital, interés y saldos
 """
 from datetime import date
 from decimal import Decimal
@@ -94,7 +94,7 @@ class Cuota(Base):
     actualizado_en = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relaciones
-    # prestamo = relationship("Prestamo", back_populates="cuotas")  # COMENT...
+    # prestamo = relationship("Prestamo", back_populates="cuotas")  # COMENTADO: Solo plantilla vacía
     # pagos = relationship(
     #     "Pago",
     #     secondary="pago_cuotas",
@@ -103,7 +103,7 @@ class Cuota(Base):
     # )  # COMENTADO: Temporalmente hasta implementar módulo préstamos
 
     def __repr__(self):
-        return f"<Cuota {self.numero_cuota} - Préstamo {self.prestamo_id} - ...
+        return f"<Cuota {self.numero_cuota} - Préstamo {self.prestamo_id} - {self.estado}>"
 
     @property
     def esta_vencida(self) -> bool:
@@ -156,7 +156,7 @@ class Cuota(Base):
 
     def aplicar_pago(self, monto_pago: Decimal) -> dict:
         """
-        Aplica un pago a la cuota siguiendo el orden: mora -> interés -> cap...
+        Aplica un pago a la cuota siguiendo el orden: mora -> interés -> capital
 
         Args:
             monto_pago: Monto del pago a aplicar

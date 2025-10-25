@@ -43,7 +43,7 @@ async def diagnosticar_refresh_token(
                 "status": "error",
                 "error": "No refresh token provided",
                 "recomendacion": (
-                    "Verificar que el frontend esté enviando el refresh_toke...
+                    "Verificar que el frontend esté enviando el refresh_token correctamente"
                 ),
             }
 
@@ -103,7 +103,7 @@ async def diagnosticar_refresh_token(
                     "error": "Refresh token expired",
                     "token_info": token_info,
                     "recomendacion": (
-                        "El refresh token ha expirado. El usuario debe hacer...
+                        "El refresh token ha expirado. El usuario debe hacer login nuevamente."
                     ),
                 }
             else:
@@ -112,7 +112,7 @@ async def diagnosticar_refresh_token(
                     "status": "error",
                     "error": f"Token verification failed: {str(e)}",
                     "token_info": token_info,
-                    "recomendacion": "El refresh token es inválido o corrupt...
+                    "recomendacion": "El refresh token es inválido o corrupto.",
                 }
 
         # 3. Verificar tipo de token
@@ -122,7 +122,7 @@ async def diagnosticar_refresh_token(
                 "status": "error",
                 "error": "Token type is not 'refresh'",
                 "token_info": token_info,
-                "recomendacion": "El token enviado no es un refresh token vá...
+                "recomendacion": "El token enviado no es un refresh token válido.",
             }
 
         # 4. Verificar usuario en BD
@@ -133,7 +133,7 @@ async def diagnosticar_refresh_token(
                 "status": "error",
                 "error": "No user ID in token",
                 "token_info": token_info,
-                "recomendacion": "El refresh token no contiene un user_id vá...
+                "recomendacion": "El refresh token no contiene un user_id válido.",
             }
 
         user = db.query(User).filter(User.id == int(user_id)).first()
@@ -143,7 +143,7 @@ async def diagnosticar_refresh_token(
                 "status": "error",
                 "error": "User not found",
                 "token_info": token_info,
-                "recomendacion": f"Usuario con ID {user_id} no existe en la ...
+                "recomendacion": f"Usuario con ID {user_id} no existe en la base de datos.",
             }
 
         if not user.is_active:
@@ -157,7 +157,7 @@ async def diagnosticar_refresh_token(
                     "active": user.is_active,
                     "admin": user.is_admin,
                 },
-                "recomendacion": "El usuario está inactivo. Contactar admini...
+                "recomendacion": "El usuario está inactivo. Contactar administrador.",
             }
 
         # 5. Intentar generar nuevos tokens
@@ -190,7 +190,7 @@ async def diagnosticar_refresh_token(
                     "refresh_token": new_refresh_token,
                 },
                 "recomendacion": (
-                    "El refresh token es válido. El problema puede estar en ...
+                    "El refresh token es válido. El problema puede estar en el frontend."
                 ),
             }
 
@@ -223,7 +223,7 @@ async def estado_refresh_tokens(
     """
     try:
         logger.info(
-            f"📊 Verificando estado de refresh tokens - Usuario: {current_use...
+            f"📊 Verificando estado de refresh tokens - Usuario: {current_user.email}"
         )
 
         # Información del usuario actual
@@ -261,7 +261,7 @@ async def estado_refresh_tokens(
                 "refresh_token_expire_days": 7,
             },
             "recomendacion": (
-                "Tokens generados correctamente. Verificar configuración del...
+                "Tokens generados correctamente. Verificar configuración del frontend."
             ),
         }
 

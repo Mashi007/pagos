@@ -199,7 +199,7 @@ class TablaAmortizacionResponse(BaseModel):
     cuotas: List[CuotaDetalle]
     resumen: dict = Field(
         default_factory=dict,
-        description="Resumen con totales: total_capital, total_interes, tota...
+        description="Resumen con totales: total_capital, total_interes, total_pagar, etc.",
     )
     parametros: dict = Field(
         default_factory=dict,
@@ -301,7 +301,7 @@ class RecalcularMoraRequest(BaseModel):
         None,
         ge=0,
         le=10,
-        description="Tasa de mora diaria (%). Si no se especifica, usa la co...
+        description="Tasa de mora diaria (%). Si no se especifica, usa la configurada en el sistema",
     )
     fecha_calculo: Optional[date] = Field(
         default=None, description="Fecha para el cálculo (default: hoy)"

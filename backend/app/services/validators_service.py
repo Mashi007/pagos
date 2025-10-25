@@ -149,7 +149,7 @@ class ValidadorTelefono:
                 "error": {
                     "valido": False,
                     "error": (
-                        f"Operadora '{operadora}' no válida para {pais}. Vál...
+                        f"Operadora '{operadora}' no válida para {pais}. Válidas: {', '.join(config['operadoras'])}"
                     ),
                     "valor_original": telefono_original,
                     "valor_formateado": None,
@@ -244,7 +244,7 @@ class ValidadorTelefono:
             else:
                 return {
                     "valido": False,
-                    "error": f"Longitud incorrecta. Formato esperado: {confi...
+                    "error": f"Longitud incorrecta. Formato esperado: {config['formato_display']}",
                     "valor_original": telefono,
                     "valor_formateado": None,
                     "longitud_actual": len(telefono_limpio),
@@ -326,7 +326,7 @@ class ValidadorTelefono:
         if len(numero_sin_codigo) != 10:
             return ValidadorTelefono._crear_error_formato(
                 telefono_limpio,
-                f"Longitud incorrecta. Debe tener 10 dígitos después de +58,...
+                f"Longitud incorrecta. Debe tener 10 dígitos después de +58, tiene {len(numero_sin_codigo)}",
                 config,
             )
 
@@ -349,7 +349,7 @@ class ValidadorTelefono:
         if len(numero_sin_codigo) != 10:
             return ValidadorTelefono._crear_error_formato(
                 telefono_limpio,
-                f"Longitud incorrecta. Debe tener 10 dígitos después de +58,...
+                f"Longitud incorrecta. Debe tener 10 dígitos después de +58, tiene {len(numero_sin_codigo)}",
                 config,
             )
 
@@ -417,7 +417,7 @@ class ValidadorTelefono:
             else:
                 return ValidadorTelefono._crear_error_formato(
                     telefono_limpio,
-                    "Longitud incorrecta. Formato esperado: +58 seguido de 1...
+                    "Longitud incorrecta. Formato esperado: +58 seguido de 10 dígitos (primer dígito no puede ser 0)",
                     config,
                     len(telefono_limpio),
                 )
@@ -456,7 +456,7 @@ class ValidadorCedula:
             "patron": r"^[VEJ]\d{7,10}$",
             "formato_display": "V12345678",
             "descripcion": (
-                "Cédula venezolana: V/E/J + exactamente entre 7 y 10 dígitos...
+                "Cédula venezolana: V/E/J + exactamente entre 7 y 10 dígitos, sin caracteres especiales"
             ),
             "requisitos": {
                 "debe_empezar_por": "V, E o J",
@@ -566,7 +566,7 @@ class ValidadorCedula:
             return {
                 "valido": False,
                 "error": (
-                    f"Prefijo '{cedula_limpia[0] if cedula_limpia else 'ning...
+                    f"Prefijo '{cedula_limpia[0] if cedula_limpia else 'ninguno'}' no válido. DEBE empezar por V, E o J"
                 ),
                 "valor_original": cedula_limpia,
                 "valor_formateado": None,
@@ -589,7 +589,7 @@ class ValidadorCedula:
             if prefijo not in config["prefijos"]:
                 return {
                     "valido": False,
-                    "error": f"Prefijo '{prefijo}' no válido. DEBE empezar p...
+                    "error": f"Prefijo '{prefijo}' no válido. DEBE empezar por V, E o J",
                     "valor_original": cedula_limpia,
                     "valor_formateado": None,
                     "formato_esperado": config["descripcion"],
@@ -649,7 +649,7 @@ class ValidadorCedula:
 
         return {
             "valido": False,
-            "error": "Formato inválido. DEBE empezar por V/E/J seguido de 7-...
+            "error": "Formato inválido. DEBE empezar por V/E/J seguido de 7-10 dígitos",
             "valor_original": cedula_limpia,
             "valor_formateado": cedula_formateada,
             "formato_esperado": config["descripcion"],
@@ -679,7 +679,7 @@ class ValidadorCedula:
 
         return {
             "valido": False,
-            "error": f"Formato inválido. Esperado: {config['formato_display'...
+            "error": f"Formato inválido. Esperado: {config['formato_display']}",
             "valor_original": cedula,
             "formato_esperado": config["descripcion"],
         }
@@ -703,7 +703,7 @@ class ValidadorCedula:
 
         return {
             "valido": False,
-            "error": f"Formato inválido. Esperado: {config['formato_display'...
+            "error": f"Formato inválido. Esperado: {config['formato_display']}",
             "valor_original": cedula_limpia,
             "formato_esperado": config["descripcion"],
         }
@@ -844,7 +844,7 @@ class ValidadorFecha:
             if fecha_parseada > fecha_maxima:
                 return {
                     "valido": False,
-                    "error": "La fecha no puede ser posterior a 4 años en el...
+                    "error": "La fecha no puede ser posterior a 4 años en el futuro",
                     "valor_original": fecha_str,
                     "valor_formateado": fecha_parseada.strftime("%d/%m/%Y"),
                     "fecha_maxima": fecha_maxima.strftime("%d/%m/%Y"),
@@ -860,7 +860,7 @@ class ValidadorFecha:
                 != fecha_parseada.strftime("%d/%m/%Y"),
                 "requiere_recalculo_amortizacion": True,
                 "mensaje_recalculo": (
-                    "¿Desea recalcular la tabla de amortización con la nueva...
+                    "¿Desea recalcular la tabla de amortización con la nueva fecha?"
                 ),
             }
 
@@ -908,7 +908,7 @@ class ValidadorFecha:
             if fecha_parseada > manana:
                 return {
                     "valido": False,
-                    "error": "La fecha de pago no puede ser más de 1 día en ...
+                    "error": "La fecha de pago no puede ser más de 1 día en el futuro",
                     "valor_original": fecha_str,
                     "valor_formateado": fecha_parseada.strftime("%d/%m/%Y"),
                     "fecha_maxima": manana.strftime("%d/%m/%Y"),
@@ -1123,7 +1123,7 @@ class ValidadorMonto:
             if monto < Decimal("1"):
                 return "Monto mínimo de pago: $1"
             if saldo_maximo and monto > saldo_maximo:
-                return f"Monto no puede exceder el saldo pendiente: ${saldo_...
+                return f"Monto no puede exceder el saldo pendiente: ${saldo_maximo:,.2f}"
 
         elif tipo == "CUOTA_INICIAL":
             if monto < Decimal("0"):
@@ -1647,9 +1647,9 @@ class ServicioCorreccionDatos:
                     "Capacitar usuarios en formatos correctos",
                 ],
                 "herramientas_disponibles": {
-                    "correccion_individual": "POST /api/v1/validadores/corre...
-                    "correccion_masiva": "POST /api/v1/validadores/corregir-...
-                    "validacion_tiempo_real": "POST /api/v1/validadores/vali...
+                    "correccion_individual": "POST /api/v1/validadores/corregir-cliente/{id}",
+                    "correccion_masiva": "POST /api/v1/validadores/corregir-masivo",
+                    "validacion_tiempo_real": "POST /api/v1/validadores/validar-campo",
                 },
             }
 
@@ -1906,7 +1906,7 @@ class ValidadorEdad:
         if edad < ValidadorEdad.EDAD_MINIMA:
             return {
                 "valido": False,
-                "error": f"El cliente debe ser mayor de {ValidadorEdad.EDAD_...
+                "error": f"El cliente debe ser mayor de {ValidadorEdad.EDAD_MINIMA} años (edad actual: {edad} años)",
                 "edad": edad,
                 "edad_minima": ValidadorEdad.EDAD_MINIMA,
                 "fecha_nacimiento": fecha.isoformat(),
@@ -1921,7 +1921,7 @@ class ValidadorEdad:
         if edad > ValidadorEdad.EDAD_MAXIMA:
             return {
                 "valido": False,
-                "error": f"La edad máxima permitida es {ValidadorEdad.EDAD_M...
+                "error": f"La edad máxima permitida es {ValidadorEdad.EDAD_MAXIMA} años (edad actual: {edad} años)",
                 "edad": edad,
                 "edad_maxima": ValidadorEdad.EDAD_MAXIMA,
                 "fecha_nacimiento": fecha.isoformat(),
@@ -1934,7 +1934,7 @@ class ValidadorEdad:
         Validar que el cliente tenga edad legal para contratar (VERSIÓN REFACTORIZADA)
 
         Args:
-            fecha_nacimiento: Fecha en formato DD/MM/YYYY, YYYY-MM-DD o date...
+            fecha_nacimiento: Fecha en formato DD/MM/YYYY, YYYY-MM-DD o date object
 
         Returns:
             Dict con validación y edad calculada
@@ -2020,21 +2020,21 @@ class ValidadorCoherenciaFinanciera:
             # 1. Cuota inicial no puede ser mayor al total
             if cuota_inicial > total_financiamiento:
                 errores.append(
-                    "La cuota inicial no puede ser mayor al total del financ...
+                    "La cuota inicial no puede ser mayor al total del financiamiento"
                 )
 
             # 2. Validar cuota inicial mínima (10%)
             cuota_minima = (
                 total_financiamiento
                 * Decimal(
-                    ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCE...
+                    ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE
                 )
                 / Decimal("100")
             )
             if cuota_inicial < cuota_minima:
                 errores.append(
                     f"La cuota inicial debe ser al menos el "
-                    f"{ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PO...
+                    f"{ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE}% "
                     f"del total (mínimo: ${cuota_minima:.2f})"
                 )
 
@@ -2042,7 +2042,7 @@ class ValidadorCoherenciaFinanciera:
             cuota_maxima_recomendada = (
                 total_financiamiento
                 * Decimal(
-                    ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MAXIMA_PORCE...
+                    ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MAXIMA_PORCENTAJE
                 )
                 / Decimal("100")
             )
@@ -2070,7 +2070,7 @@ class ValidadorCoherenciaFinanciera:
                 modalidad_pago == "QUINCENAL" and numero_amortizaciones > 96
             ):  # 4 años máximo
                 advertencias.append(
-                    "Número de amortizaciones muy alto para modalidad quince...
+                    "Número de amortizaciones muy alto para modalidad quincenal"
                 )
             elif (
                 modalidad_pago == "MENSUAL" and numero_amortizaciones > 84
@@ -2175,7 +2175,7 @@ class ValidadorDuplicados:
                 return {
                     "valido": False,
                     "error": (
-                        f"El número de chasis ya está registrado para el cli...
+                        f"El número de chasis ya está registrado para el cliente "
                         f"{existe.nombre_completo} (ID: {existe.id})"
                     ),
                     "chasis": chasis_limpio,
@@ -2232,7 +2232,7 @@ class ValidadorDuplicados:
                 return {
                     "valido": False,
                     "error": (
-                        f"El email ya está registrado para el cliente {exist...
+                        f"El email ya está registrado para el cliente {existe.nombre_completo}"
                     ),
                     "email": email_limpio,
                     "cliente_existente": {

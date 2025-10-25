@@ -101,7 +101,7 @@ async def subir_documento(
         if file_extension not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Tipo de archivo no permitido. Solo PNG, JPG, JPEG, P...
+                detail="Tipo de archivo no permitido. Solo PNG, JPG, JPEG, PDF",
             )
 
         # Validar tamaño

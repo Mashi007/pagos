@@ -246,10 +246,10 @@ class IntelligentAlertSystem:
                 f"Pico de tokens expirados: {current_value:.1%} (umbral: {rule.threshold:.1%})"
             ),
             "authentication_failure_spike": (
-                f"Pico de fallos de autenticación: {current_value:.0f}/min (...
+                f"Pico de fallos de autenticación: {current_value:.0f}/min (umbral: {rule.threshold:.0f}/min)"
             ),
             "database_connection_issues": (
-                f"Problemas de conexión a BD: {current_value:.0f} fallos (um...
+                f"Problemas de conexión a BD: {current_value:.0f} fallos (umbral: {rule.threshold:.0f})"
             ),
             "unusual_user_patterns": (
                 f"Patrones de usuario inusuales: {current_value:.1%} (umbral: {rule.threshold:.1%})"

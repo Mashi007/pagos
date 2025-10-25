@@ -275,7 +275,7 @@ def _procesar_fila_movimiento(
             )
             if not cliente:
                 advertencias.append(
-                    f"Fila {index + 1}: Cédula {cedula} no registrada en sis...
+                    f"Fila {index + 1}: Cédula {cedula} no registrada en sistema"
                 )
 
         # Crear movimiento
@@ -851,7 +851,7 @@ def aplicar_conciliacion_masiva(
 
         for mov_id in conciliacion_data.movimientos_a_aplicar:
             try:
-                # En implementación real, obtendríamos el movimiento de alma...
+                # En implementación real, obtendríamos el movimiento de almacenamiento temporal
                 # Por ahora simulamos la creación de pago
 
                 # Simular creación de pago exitoso
@@ -1023,7 +1023,7 @@ def obtener_tabla_resultados(
             ),
         },
         "leyenda": {
-            "✅ EXACTO": "Coincidencia perfecta - Se puede aplicar automática...
+            "✅ EXACTO": "Coincidencia perfecta - Se puede aplicar automáticamente",
             "⚠️ REVISAR": "Coincidencia parcial - Requiere revisión manual",
             "❌ MANUAL": "Sin coincidencia - Requiere búsqueda manual",
         },
@@ -1113,7 +1113,7 @@ async def flujo_completo_conciliacion(
                 "paso": "4_VALIDACION_FALLIDA",
                 "errores": validacion.errores,
                 "advertencias": validacion.advertencias,
-                "mensaje": "❌ Archivo no válido - Corrija los errores y vuel...
+                "mensaje": "❌ Archivo no válido - Corrija los errores y vuelva a intentar",
             }
 
         # ============================================
@@ -1237,17 +1237,17 @@ async def flujo_completo_conciliacion(
             "tabla_resultados": tabla_resultados,
             "resumen": resumen_final,
             "leyenda": {
-                "✅ EXACTO": "Coincidencia perfecta - Se aplicará automáticam...
-                "⚠️ REVISAR": "Coincidencia parcial - Requiere revisión manu...
+                "✅ EXACTO": "Coincidencia perfecta - Se aplicará automáticamente",
+                "⚠️ REVISAR": "Coincidencia parcial - Requiere revisión manual",
                 "❌ MANUAL": "Sin coincidencia - Requiere búsqueda manual",
             },
             "acciones_disponibles": {
-                "aplicar_exactos": f"POST /conciliacion/aplicar-exactos/{pro...
-                "revisar_parciales": f"POST /conciliacion/revisar-parciales/...
-                "aplicar_todos": f"POST /conciliacion/aplicar-todos/{proceso...
+                "aplicar_exactos": f"POST /conciliacion/aplicar-exactos/{proceso_id}",
+                "revisar_parciales": f"POST /conciliacion/revisar-parciales/{proceso_id}",
+                "aplicar_todos": f"POST /conciliacion/aplicar-todos/{proceso_id}",
             },
             "mensaje": (
-                f"✅ Archivo procesado - {exactos} coincidencias exactas, {re...
+                f"✅ Archivo procesado - {exactos} coincidencias exactas, {revision} requieren revisión"
             ),
         }
 
@@ -1268,7 +1268,7 @@ async def aplicar_coincidencias_exactas(
     🚀 PASO 11a: Aplicar solo coincidencias exactas automáticamente
     """
     try:
-        # En implementación real, recuperarías datos del proceso desde Redis...
+        # En implementación real, recuperarías datos del proceso desde Redis/BD temporal
         # Por ahora simulamos la aplicación
 
         pagos_creados = []
@@ -1352,7 +1352,7 @@ async def aplicar_coincidencias_exactas(
                 "admin_notificado": True,
             },
             "mensaje": (
-                f"✅ {len(pagos_creados)} pagos aplicados exitosamente - Tota...
+                f"✅ {len(pagos_creados)} pagos aplicados exitosamente - Total: ${total_aplicado:,.2f}"
             ),
         }
 
@@ -1378,7 +1378,7 @@ def obtener_paso_flujo_conciliacion(
         return {
             "paso": 1,
             "titulo": "COBRANZAS descarga extracto del banco",
-            "descripcion": "El usuario de cobranzas obtiene el extracto banc...
+            "descripcion": "El usuario de cobranzas obtiene el extracto bancario en formato Excel",
             "formato_requerido": {
                 "archivo": "Excel (.xlsx, .xls)",
                 "columnas": [
@@ -1390,7 +1390,7 @@ def obtener_paso_flujo_conciliacion(
                     "F: Nº Cuenta origen",
                 ],
             },
-            "siguiente_paso": "Ingresar al sistema y acceder a Conciliación ...
+            "siguiente_paso": "Ingresar al sistema y acceder a Conciliación Bancaria",
         }
 
     elif paso == 2:
@@ -1444,17 +1444,17 @@ def obtener_paso_flujo_conciliacion(
                 {
                     "orden": 1,
                     "accion": "Registrar cada pago en BD",
-                    "descripcion": "Crea registro en tabla 'pagos' con todos...
+                    "descripcion": "Crea registro en tabla 'pagos' con todos los detalles",
                 },
                 {
                     "orden": 2,
                     "accion": "Actualizar amortizaciones",
-                    "descripcion": "Actualiza estados y saldos de cuotas afe...
+                    "descripcion": "Actualiza estados y saldos de cuotas afectadas",
                 },
                 {
                     "orden": 3,
                     "accion": "Actualizar estados de clientes",
-                    "descripcion": "Recalcula días de mora y estado financie...
+                    "descripcion": "Recalcula días de mora y estado financiero",
                 },
                 {
                     "orden": 4,
@@ -1509,8 +1509,8 @@ def obtener_paso_flujo_conciliacion(
             "endpoints_principales": {
                 "flujo_completo": "POST /conciliacion/flujo-completo",
                 "validar_archivo": "POST /conciliacion/validar-archivo",
-                "matching_automatico": "POST /conciliacion/matching-automati...
-                "tabla_resultados": "GET /conciliacion/tabla-resultados/{pro...
+                "matching_automatico": "POST /conciliacion/matching-automatico",
+                "tabla_resultados": "GET /conciliacion/tabla-resultados/{proceso_id}",
                 "revision_manual": "POST /conciliacion/revision-manual",
                 "aplicar_masivo": "POST /conciliacion/aplicar-masivo",
             },

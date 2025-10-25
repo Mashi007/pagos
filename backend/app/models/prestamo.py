@@ -131,7 +131,7 @@ class Prestamo(Base):
 
     # Relaciones
     # CORREGIDO: Relación correcta con el modelo Cliente
-    # cliente = relationship("Cliente", back_populates="prestamos")  # COMEN...
-    # cuotas = relationship("Cuota", back_populates="prestamo", cascade="all...
+    # cliente = relationship("Cliente", back_populates="prestamos")  # COMENTADO: Tabla prestamos vacía
+    # cuotas = relationship("Cuota", back_populates="prestamo", cascade="all, delete-orphan")  # COMENTADO: Solo plantilla vacía
     # pagos = relationship("Pago", back_populates="prestamo")  # COMENTADO:
     # Solo plantilla vacía

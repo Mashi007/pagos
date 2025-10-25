@@ -167,7 +167,7 @@ class ErrorImpactAnalyzer:
             self._update_circuit_breaker(endpoint, error)
 
             logger.error(
-                f"Error registrado: {error_metrics.error_type} en {endpoint}...
+                f"Error registrado: {error_metrics.error_type} en {endpoint} - {severity.value}"
             )
 
     def record_success(self, endpoint: str, response_time_ms: float):
@@ -262,7 +262,7 @@ class ErrorImpactAnalyzer:
                 for cb in self.circuit_breakers.values()
                 if cb.state == "OPEN"
             )
-            circuit_breaker_status = f"{open_circuits} circuitos abiertos de...
+            circuit_breaker_status = f"{open_circuits} circuitos abiertos de {len(self.circuit_breakers)}"
 
             # Generar recomendaciones
             recommendations = self._generate_recommendations(

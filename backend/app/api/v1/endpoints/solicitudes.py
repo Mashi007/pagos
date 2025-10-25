@@ -37,7 +37,7 @@ class SolicitudAprobacionCompleta(BaseModel):
 
     tipo_solicitud: str = Field(
         ...,
-        description="MODIFICAR_PAGO, ANULAR_PAGO, EDITAR_CLIENTE, MODIFICAR_...
+        description="MODIFICAR_PAGO, ANULAR_PAGO, EDITAR_CLIENTE, MODIFICAR_AMORTIZACION",
     )
     entidad_tipo: str = Field(..., description="cliente, pago, prestamo")
     entidad_id: int = Field(..., description="ID de la entidad a modificar")
@@ -141,7 +141,7 @@ class FormularioEditarCliente(BaseModel):
     cliente_id: int = Field(..., description="ID del cliente a editar")
     motivo_edicion: str = Field(
         ...,
-        description="CORRECCION_DATOS, CAMBIO_VEHICULO, ACTUALIZACION_CONTAC...
+        description="CORRECCION_DATOS, CAMBIO_VEHICULO, ACTUALIZACION_CONTACTO, OTRO",
     )
     justificacion: str = Field(
         ..., min_length=20, description="Explicación detallada del motivo"
@@ -290,7 +290,7 @@ def _validar_solicitud_modificacion_pago(
     if solicitud_existente:
         raise HTTPException(
             status_code=400,
-            detail=f"Ya existe una solicitud pendiente para este pago (ID: {...
+            detail=f"Ya existe una solicitud pendiente para este pago (ID: {solicitud_existente.id})",
         )
 
     return pago, solicitud_existente
@@ -360,7 +360,7 @@ def _crear_solicitud_aprobacion(
         tipo_solicitud=f"MODIFICAR_PAGO_{formulario.motivo_modificacion}",
         entidad="pago",
         entidad_id=formulario.pago_id,
-        justificacion=f"[{formulario.motivo_modificacion}] {formulario.justi...
+        justificacion=f"[{formulario.motivo_modificacion}] {formulario.justificacion}",
         datos_solicitados=str(datos_solicitados),
         estado="PENDIENTE",
         prioridad=formulario.prioridad,
@@ -524,7 +524,7 @@ async def solicitar_anulacion_pago_completo(
         tipo_solicitud=f"ANULAR_PAGO_{formulario.motivo_anulacion}",
         entidad="pago",
         entidad_id=formulario.pago_id,
-        justificacion=f"[{formulario.motivo_anulacion}] {formulario.justific...
+        justificacion=f"[{formulario.motivo_anulacion}] {formulario.justificacion}",
         datos_solicitados=str(datos_solicitados),
         estado="PENDIENTE",
         prioridad=formulario.prioridad,
@@ -600,7 +600,7 @@ def solicitar_modificacion_pago(
 
     return {
         "solicitud_id": solicitud.id,
-        "mensaje": "✅ Solicitud de modificación de pago enviada para aprobac...
+        "mensaje": "✅ Solicitud de modificación de pago enviada para aprobación",
         "estado": "PENDIENTE",
         "requiere_aprobacion": True,
         "pago_afectado": {
@@ -708,7 +708,7 @@ def solicitar_modificacion_amortizacion(
 
     return {
         "solicitud_id": solicitud.id,
-        "mensaje": "✅ Solicitud de modificación de amortización enviada para...
+        "mensaje": "✅ Solicitud de modificación de amortización enviada para aprobación",
         "estado": "PENDIENTE",
         "requiere_aprobacion": True,
         "prestamo_afectado": {
@@ -766,7 +766,7 @@ def solicitar_edicion_cliente_comercial(
 
     return {
         "solicitud_id": solicitud.id,
-        "mensaje": "✅ Solicitud de edición de cliente enviada para autorizac...
+        "mensaje": "✅ Solicitud de edición de cliente enviada para autorización de Admin",
         "estado": "PENDIENTE",
         "requiere_autorizacion": True,
         "cliente_afectado": {
@@ -1404,7 +1404,7 @@ def obtener_matriz_permisos_actualizada(
     """
     📋 Obtener matriz de permisos actualizada con sistema de aprobaciones
     """
-    # Función obsoleta - sistema de permisos simplificado no requiere matriz...
+    # Función obsoleta - sistema de permisos simplificado no requiere matriz compleja
     # from app.core.permissions import get_permission_matrix_summary
 
     # Sistema simplificado - matriz básica de permisos
@@ -1428,19 +1428,19 @@ def obtener_matriz_permisos_actualizada(
         "matriz_permisos": matriz,
         "flujos_aprobacion": {
             "cobranzas": {
-                "modificar_pagos": "POST /solicitudes/cobranzas/modificar-pa...
+                "modificar_pagos": "POST /solicitudes/cobranzas/modificar-pago",
                 "anular_pagos": "POST /solicitudes/cobranzas/anular-pago",
-                "modificar_amortizacion": "POST /solicitudes/cobranzas/modif...
+                "modificar_amortizacion": "POST /solicitudes/cobranzas/modificar-amortizacion",
             },
             "comercial": {
                 "editar_clientes": "POST /solicitudes/comercial/editar-cliente"
             },
             "analista": {
-                "editar_clientes_propios": "POST /solicitudes/analista/edita...
+                "editar_clientes_propios": "POST /solicitudes/analista/editar-cliente-propio"
             },
             "admin": {
-                "aprobar_solicitudes": "POST /solicitudes/aprobar/{solicitud...
-                "rechazar_solicitudes": "POST /solicitudes/rechazar/{solicit...
+                "aprobar_solicitudes": "POST /solicitudes/aprobar/{solicitud_id}",
+                "rechazar_solicitudes": "POST /solicitudes/rechazar/{solicitud_id}",
                 "ver_pendientes": "GET /solicitudes/pendientes",
             },
         },
@@ -1496,7 +1496,7 @@ async def _notificar_nueva_solicitud_admin(solicitud: Aprobacion, db: Session):
                 tipo="SOLICITUD_APROBACION",
                 categoria="SISTEMA",
                 prioridad=solicitud.prioridad,
-                titulo=f"Nueva solicitud de aprobación - {solicitud.tipo_sol...
+                titulo=f"Nueva solicitud de aprobación - {solicitud.tipo_solicitud}",
                 mensaje=f"""
  Nueva solicitud de aprobación recibida
 
@@ -1520,7 +1520,7 @@ async def _notificar_nueva_solicitud_admin(solicitud: Aprobacion, db: Session):
                         "solicitud_id": solicitud.id,
                         "tipo_solicitud": solicitud.tipo_solicitud,
                         "prioridad": solicitud.prioridad,
-                        "url_accion": f"/solicitudes/pendientes?id={solicitu...
+                        "url_accion": f"/solicitudes/pendientes?id={solicitud.id}",
                     }
                 ),
             )
@@ -1558,39 +1558,39 @@ async def _enviar_email_nueva_solicitud(
         emoji = urgencia_emoji.get(solicitud.prioridad, "📋")
 
         # Template del email
-        asunto = f"{emoji} Nueva solicitud de aprobación - {solicitud.tipo_s...
+        asunto = f"{emoji} Nueva solicitud de aprobación - {solicitud.tipo_solicitud}"
 
         cuerpo_html = f"""
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin...
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                         color: white; padding: 20px; text-align: center;">
                 <h1>{emoji} Nueva Solicitud de Aprobación</h1>
-                <p style="margin: 0; font-size: 18px;">{solicitud.tipo_solic...
+                <p style="margin: 0; font-size: 18px;">{solicitud.tipo_solicitud}</p>
             </div>
 
             <div style="padding: 20px; background: #f8f9fa;">
-                <div style="background: white; padding: 20px; border-radius:...
+                <div style="background: white; padding: 20px; border-radius: 8px;
                             box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                    <h2 style="color: #333; margin-top: 0;">📋 Detalles de la...
+                    <h2 style="color: #333; margin-top: 0;">📋 Detalles de la Solicitud</h2>
 
                     <table style="width: 100%; border-collapse: collapse;">
                         <tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 8px 0; font-weight: bold;">S...
-                            <td style="padding: 8px 0;">{solicitud.solicitan...
+                            <td style="padding: 8px 0; font-weight: bold;">Solicitante:</td>
+                            <td style="padding: 8px 0;">{solicitud.solicitante.full_name}</td>
                         </tr>
                         <tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 8px 0; font-weight: bold;">T...
-                            <td style="padding: 8px 0;">{solicitud.tipo_soli...
+                            <td style="padding: 8px 0; font-weight: bold;">Tipo:</td>
+                            <td style="padding: 8px 0;">{solicitud.tipo_solicitud}</td>
                         </tr>
                         <tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 8px 0; font-weight: bold;">E...
-                            <td style="padding: 8px 0;">{solicitud.entidad} ...
+                            <td style="padding: 8px 0; font-weight: bold;">Entidad:</td>
+                            <td style="padding: 8px 0;">{solicitud.entidad} #{solicitud.entidad_id}</td>
                         </tr>
                         <tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 8px 0; font-weight: bold;">P...
+                            <td style="padding: 8px 0; font-weight: bold;">Prioridad:</td>
                             <td style="padding: 8px 0;">
                                 <span style="
-                                    background: {'#dc3545' if solicitud.prio...
+                                    background: {'#dc3545' if solicitud.prioridad == 'URGENTE' else '#ffc107' if solicitud.prioridad == 'ALTA' else '#28a745'};
                                     color: white;
                                     padding: 2px 8px;
                                     border-radius: 4px;
@@ -1599,35 +1599,35 @@ async def _enviar_email_nueva_solicitud(
                             </td>
                         </tr>
                         <tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 8px 0; font-weight: bold;">F...
-                            <td style="padding: 8px 0;">{solicitud.fecha_lim...
+                            <td style="padding: 8px 0; font-weight: bold;">Fecha límite:</td>
+                            <td style="padding: 8px 0;">{solicitud.fecha_limite}</td>
                         </tr>
                         <tr>
-                            <td style="padding: 8px 0; font-weight: bold;">A...
-                            <td style="padding: 8px 0;">{'✅ Sí' if solicitud...
+                            <td style="padding: 8px 0; font-weight: bold;">Archivo adjunto:</td>
+                            <td style="padding: 8px 0;">{'✅ Sí' if solicitud.archivo_evidencia else '❌ No'}</td>
                         </tr>
                     </table>
 
-                    <h3 style="color: #333; margin-top: 20px;">📝 Justificaci...
-                    <div style="background: #f8f9fa; padding: 15px; border-r...
+                    <h3 style="color: #333; margin-top: 20px;">📝 Justificación:</h3>
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 4px; border-left: 4px solid #007bff;">
                         {solicitud.justificacion}
                     </div>
 
                     <div style="text-align: center; margin-top: 30px;">
-                        <a href="https://pagos-f2qf.onrender.com/solicitudes...
-                           style="background: #007bff; color: white; padding...
+                        <a href="https://pagos-f2qf.onrender.com/solicitudes/pendientes"
+                           style="background: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 5px;">
                             📋 Ver Solicitudes Pendientes
                         </a>
-                        <a href="https://pagos-f2qf.onrender.com/solicitudes...
-                           style="background: #28a745; color: white; padding...
+                        <a href="https://pagos-f2qf.onrender.com/solicitudes/aprobar/{solicitud.id}"
+                           style="background: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 5px;">
                             ✅ Aprobar Solicitud
                         </a>
                     </div>
                 </div>
             </div>
 
-            <div style="background: #343a40; color: white; padding: 15px; te...
-                <p style="margin: 0;">Sistema de Financiamiento Automotriz |...
+            <div style="background: #343a40; color: white; padding: 15px; text-align: center; font-size: 12px;">
+                <p style="margin: 0;">Sistema de Financiamiento Automotriz | Notificación automática</p>
                 <p style="margin: 5px 0 0 0;">No responder a este email</p>
             </div>
         </div>
@@ -1669,13 +1669,13 @@ async def _notificar_resultado_solicitud(solicitud: Aprobacion, db: Session):
  **Detalles:**
  **Tipo:** {solicitud.tipo_solicitud}
  **Entidad:** {solicitud.entidad} #{solicitud.entidad_id}
- **Revisado por:** {solicitud.revisor.full_name if solicitud.revisor else 'N...
+ **Revisado por:** {solicitud.revisor.full_name if solicitud.revisor else 'N/A'}
  **Fecha de revisión:** {solicitud.fecha_revision}
 
  **Comentarios del revisor:**
 {solicitud.comentarios_revisor or 'Sin comentarios adicionales'}
 
-{'🎉 **La acción solicitada ha sido ejecutada exitosamente.**' if solicitud.e...
+{'🎉 **La acción solicitada ha sido ejecutada exitosamente.**' if solicitud.estado == 'APROBADA' else '⚠️ **La solicitud no fue aprobada. Revise los comentarios del revisor.**'}
             """,
             extra_data=str(
                 {
@@ -1751,7 +1751,7 @@ async def _enviar_email_resultado_solicitud(solicitud: Aprobacion):
 
                     {f'''
                     <h3 style="color: #333;">💬 Comentarios del revisor:</h3>
-                    <div style="background: #f8f9fa; padding: 15px; border-r...
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 4px; border-left: 4px solid {color};">
                         {solicitud.comentarios_revisor}
                     </div>
                     ''' if solicitud.comentarios_revisor else ''}
@@ -1762,21 +1762,21 @@ async def _enviar_email_resultado_solicitud(solicitud: Aprobacion):
                     </p>
                     ''' if solicitud.estado == 'APROBADA' else f'''
                     <p style="color: #dc3545; font-weight: bold;">
-                        ⚠️ La solicitud no fue aprobada. Revise los comentar...
+                        ⚠️ La solicitud no fue aprobada. Revise los comentarios del revisor.
                     </p>
                     '''}
 
                     <div style="text-align: center; margin-top: 30px;">
-                        <a href="https://pagos-f2qf.onrender.com/solicitudes...
-                           style="background: #007bff; color: white; padding...
+                        <a href="https://pagos-f2qf.onrender.com/solicitudes/mis-solicitudes"
+                           style="background: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
                             📋 Ver Mis Solicitudes
                         </a>
                     </div>
                 </div>
             </div>
 
-            <div style="background: #343a40; color: white; padding: 15px; te...
-                <p style="margin: 0;">Sistema de Financiamiento Automotriz |...
+            <div style="background: #343a40; color: white; padding: 15px; text-align: center; font-size: 12px;">
+                <p style="margin: 0;">Sistema de Financiamiento Automotriz | Notificación automática</p>
                 <p style="margin: 5px 0 0 0;">No responder a este email</p>
             </div>
         </div>

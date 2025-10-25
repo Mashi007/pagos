@@ -60,18 +60,18 @@ class AuthService:
 
         if not user:
             logger.warning(
-                f"AuthService.authenticate_user - Usuario no encontrado: {em...
+                f"AuthService.authenticate_user - Usuario no encontrado: {email_normalized}"
             )
             return None
 
         if not verify_password(password, user.hashed_password):
             logger.warning(
-                f"AuthService.authenticate_user - Contraseña incorrecta para...
+                f"AuthService.authenticate_user - Contraseña incorrecta para: {email_normalized}"
             )
             return None
 
         logger.info(
-            f"AuthService.authenticate_user - Autenticación exitosa para: {e...
+            f"AuthService.authenticate_user - Autenticación exitosa para: {email_normalized}"
         )
         return user
 
@@ -88,11 +88,11 @@ class AuthService:
             Tupla de (Token, User)
 
         Raises:
-            HTTPException: Si las credenciales son inválidas o el usuario es...
+            HTTPException: Si las credenciales son inválidas o el usuario está inactivo
         """
         # Autenticar usuario
         logger.info(
-            f"AuthService.login - Iniciando proceso de login para: {login_da...
+            f"AuthService.login - Iniciando proceso de login para: {login_data.email}"
         )
 
         user = AuthService.authenticate_user(
@@ -101,7 +101,7 @@ class AuthService:
 
         if not user:
             logger.warning(
-                f"AuthService.login - Fallo en autenticación para: {login_da...
+                f"AuthService.login - Fallo en autenticación para: {login_data.email}"
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -231,7 +231,7 @@ class AuthService:
             Usuario actualizado
 
         Raises:
-            HTTPException: Si la contraseña actual es incorrecta o la nueva ...
+            HTTPException: Si la contraseña actual es incorrecta o la nueva es débil
         """
         # Verificar contraseña actual
         if not verify_password(current_password, user.hashed_password):

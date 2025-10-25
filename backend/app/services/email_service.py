@@ -161,13 +161,13 @@ class EmailService:
                 <head>
                     <style>
                         body { font-family: Arial, sans-serif; }
-                        .container { max-width: 600px; margin: 0 auto; paddi...
-                        .header { background: #007bff; color: white; padding...
+                        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                        .header { background: #007bff; color: white; padding: 20px;
                                   text-align: center; }
                         .content { padding: 20px; background: #f8f9fa; }
-                        .footer { text-align: center; padding: 10px; color: ...
-                        .button { background: #28a745; color: white; padding...
-                                  text-decoration: none; border-radius: 5px;...
+                        .footer { text-align: center; padding: 10px; color: #666; font-size: 12px; }
+                        .button { background: #28a745; color: white; padding: 10px 20px;
+                                  text-decoration: none; border-radius: 5px; display: inline-block; }
                     </style>
                 </head>
                 <body>
@@ -176,16 +176,16 @@ class EmailService:
                             <h2>{{ empresa }}</h2>
                         </div>
                         <div class="content">
-                            <p>Estimado/a <strong>{{ cliente_nombre }}</stro...
-                            <p>Le recordamos que tiene una cuota próxima a v...
+                            <p>Estimado/a <strong>{{ cliente_nombre }}</strong>,</p>
+                            <p>Le recordamos que tiene una cuota próxima a vencer:</p>
                             <ul>
                                 <li>Monto: ${{ monto }}</li>
-                                <li>Fecha de vencimiento: {{ fecha_vencimien...
+                                <li>Fecha de vencimiento: {{ fecha_vencimiento }}</li>
                                 <li>Días restantes: {{ dias_restantes }}</li>
                             </ul>
-                            <p>Por favor, realice su pago a tiempo para evit...
+                            <p>Por favor, realice su pago a tiempo para evitar recargos.</p>
                             <p style="text-align: center;">
-                                <a href="{{ link_pago }}" class="button">Pag...
+                                <a href="{{ link_pago }}" class="button">Pagar Ahora</a>
                             </p>
                         </div>
                         <div class="footer">
@@ -203,8 +203,8 @@ class EmailService:
                 <head>
                     <style>
                         body { font-family: Arial, sans-serif; }
-                        .container { max-width: 600px; margin: 0 auto; paddi...
-                        .header { background: #28a745; color: white; padding...
+                        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                        .header { background: #28a745; color: white; padding: 20px; text-align: center; }
                         .content { padding: 20px; background: #f8f9fa; }
                     </style>
                 </head>
@@ -214,8 +214,8 @@ class EmailService:
                             <h2>¡Préstamo Aprobado!</h2>
                         </div>
                         <div class="content">
-                            <p>Estimado/a <strong>{{ cliente_nombre }}</stro...
-                            <p>Nos complace informarle que su solicitud de p...
+                            <p>Estimado/a <strong>{{ cliente_nombre }}</strong>,</p>
+                            <p>Nos complace informarle que su solicitud de préstamo ha sido <strong>APROBADA</strong>.</p>
                             <h3>Detalles del Préstamo:</h3>
                             <ul>
                                 <li>Monto aprobado: ${{ monto }}</li>
@@ -223,7 +223,7 @@ class EmailService:
                                 <li>Cuota mensual: ${{ cuota }}</li>
                                 <li>Tasa de interés: {{ tasa }}%</li>
                             </ul>
-                            <p>Por favor, acérquese a nuestras oficinas para...
+                            <p>Por favor, acérquese a nuestras oficinas para firmar el contrato.</p>
                         </div>
                     </div>
                 </body>
@@ -237,11 +237,11 @@ class EmailService:
                 <head>
                     <style>
                         body { font-family: Arial, sans-serif; }
-                        .container { max-width: 600px; margin: 0 auto; paddi...
-                        .header { background: #dc3545; color: white; padding...
+                        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                        .header { background: #dc3545; color: white; padding: 20px; text-align: center; }
                         .content { padding: 20px; background: #f8f9fa; }
-                        .warning { background: #fff3cd; border: 1px solid #f...
-                                   padding: 15px; margin: 15px 0; border-rad...
+                        .warning { background: #fff3cd; border: 1px solid #ffc107;
+                                   padding: 15px; margin: 15px 0; border-radius: 5px; }
                     </style>
                 </head>
                 <body>
@@ -250,17 +250,17 @@ class EmailService:
                             <h2>Aviso de Mora</h2>
                         </div>
                         <div class="content">
-                            <p>Estimado/a <strong>{{ cliente_nombre }}</stro...
+                            <p>Estimado/a <strong>{{ cliente_nombre }}</strong>,</p>
                             <div class="warning">
-                                <p><strong>Su cuenta presenta mora en el pag...
+                                <p><strong>Su cuenta presenta mora en el pago.</strong></p>
                             </div>
                             <p>Detalles:</p>
                             <ul>
                                 <li>Días de mora: {{ dias_mora }}</li>
-                                <li>Saldo pendiente: ${{ saldo_pendiente }}<...
+                                <li>Saldo pendiente: ${{ saldo_pendiente }}</li>
                                 <li>Recargo por mora: ${{ recargo_mora }}</li>
                             </ul>
-                            <p>Por favor, regularice su situación a la breve...
+                            <p>Por favor, regularice su situación a la brevedad para evitar acciones legales.</p>
                         </div>
                     </div>
                 </body>

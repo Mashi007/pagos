@@ -38,7 +38,7 @@ def obtener_estado_monitoreo(current_user: User = Depends(get_current_user)):
     if not current_user.is_admin:
         raise HTTPException(
             status_code=403,
-            detail="Solo administradores pueden ver configuración de monitor...
+            detail="Solo administradores pueden ver configuración de monitoreo",
         )
 
     from app.core.monitoring import get_monitoring_status
@@ -63,7 +63,7 @@ def habilitar_monitoreo_basico(current_user: User = Depends(get_current_user)):
         # Configurar formato mejorado
         logging.basicConfig(
             level=logging.INFO,
-            format="%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%...
+            format="%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
 
@@ -85,7 +85,7 @@ def habilitar_monitoreo_basico(current_user: User = Depends(get_current_user)):
                 "📊 Tracking básico de operaciones",
                 "⚡ Sin dependencias externas adicionales",
             ],
-            "siguiente_paso": "Configurar Sentry y Prometheus para monitoreo...
+            "siguiente_paso": "Configurar Sentry y Prometheus para monitoreo avanzado",
         }
 
     except Exception as e:
@@ -172,7 +172,7 @@ def obtener_configuracion_completa(
 @router.get("/validadores")
 def obtener_configuracion_validadores():
     """
-    🔍 Obtener configuración completa de validadores para el módulo de config...
+    🔍 Obtener configuración completa de validadores para el módulo de configuración
     """
     try:
         pass
@@ -183,7 +183,7 @@ def obtener_configuracion_validadores():
             "consultado_por": "Sistema",
             "validadores_disponibles": {
                 "telefono": {
-                    "descripcion": "Validación y formateo de números telefón...
+                    "descripcion": "Validación y formateo de números telefónicos",
                     "paises_soportados": {
                         "venezuela": {
                             "codigo": "+58",
@@ -216,7 +216,7 @@ def obtener_configuracion_validadores():
                             "prefijos_validos": ["V", "E", "J"],
                             "longitud": "7-10 dígitos",
                             "requisitos": {
-                                "prefijos": "V=Venezolano, E=Extranjero, J=J...
+                                "prefijos": "V=Venezolano, E=Extranjero, J=Jurídico",
                                 "dígitos": "Solo números del 0 al 9",
                                 "longitud": "Entre 7 y 10 dígitos",
                             },
@@ -313,7 +313,7 @@ def obtener_configuracion_validadores():
                 "validar_campo": "POST /api/v1/validadores/validar-campo",
                 "corregir_datos": "POST /api/v1/validadores/corregir-datos",
                 "configuracion": "GET /api/v1/validadores/configuracion",
-                "verificacion": "GET /api/v1/validadores/verificacion-valida...
+                "verificacion": "GET /api/v1/validadores/verificacion-validadores",
             },
         }
 
@@ -403,7 +403,7 @@ def obtener_configuracion_categoria(
         if not current_user.is_admin:
             raise HTTPException(
                 status_code=403,
-                detail="Solo administradores pueden ver configuración de cat...
+                detail="Solo administradores pueden ver configuración de categoría",
             )
         configs = (
             db.query(ConfiguracionSistema)
@@ -667,7 +667,7 @@ def probar_integracion(
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Categoría '{categoria}' no soporta pruebas automáti...
+                detail=f"Categoría '{categoria}' no soporta pruebas automáticas",
             )
 
     except HTTPException:
@@ -809,7 +809,7 @@ def inicializar_configuraciones_default(
         total_configs = db.query(ConfiguracionSistema).count()
 
         return {
-            "mensaje": "✅ Configuraciones por defecto inicializadas exitosam...
+            "mensaje": "✅ Configuraciones por defecto inicializadas exitosamente",
             "total_configuraciones": total_configs,
             "categorias_creadas": [
                 "AI - Inteligencia Artificial",
@@ -825,7 +825,7 @@ def inicializar_configuraciones_default(
                 "MONITOREO - Monitoreo y observabilidad",
                 "APLICACION - Configuración general",
             ],
-            "siguiente_paso": "Configurar cada categoría según las necesidad...
+            "siguiente_paso": "Configurar cada categoría según las necesidades",
             "fecha_inicializacion": datetime.now().isoformat(),
         }
 
@@ -928,8 +928,8 @@ def obtener_configuracion_ia(
             "configuracion": configuracion,
             "estado_funcionalidades": estado_ia,
             "instrucciones": {
-                "openai_api_key": "Obtener en https://platform.openai.com/ap...
-                "formato_token": "Debe comenzar con 'sk-' seguido de 48 cara...
+                "openai_api_key": "Obtener en https://platform.openai.com/api-keys",
+                "formato_token": "Debe comenzar con 'sk-' seguido de 48 caracteres",
                 "costo_estimado": "$0.002 por 1K tokens (muy económico)",
                 "beneficios": [
                     "Scoring crediticio automatizado",
@@ -1105,7 +1105,7 @@ def obtener_configuracion_email(
         if not current_user.is_admin:
             raise HTTPException(
                 status_code=403,
-                detail="Solo administradores pueden ver configuración de ema...
+                detail="Solo administradores pueden ver configuración de email",
             )
         configs_email = (
             db.query(ConfiguracionSistema)
@@ -1248,7 +1248,7 @@ def obtener_configuracion_whatsapp(
         if not current_user.is_admin:
             raise HTTPException(
                 status_code=403,
-                detail="Solo administradores pueden ver configuración de Wha...
+                detail="Solo administradores pueden ver configuración de WhatsApp",
             )
         configs_whatsapp = (
             db.query(ConfiguracionSistema)
@@ -1321,7 +1321,7 @@ def dashboard_configuracion_sistema(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=403,
-            detail="Solo administradores pueden ver dashboard de configuraci...
+            detail="Solo administradores pueden ver dashboard de configuración",
         )
 
     try:
@@ -1448,12 +1448,12 @@ def dashboard_configuracion_sistema(
             },
             "acciones_rapidas": {
                 "configurar_ia": "POST /api/v1/configuracion/ia/actualizar",
-                "configurar_email": "POST /api/v1/configuracion/email/actual...
-                "configurar_whatsapp": "POST /api/v1/configuracion/whatsapp/...
+                "configurar_email": "POST /api/v1/configuracion/email/actualizar",
+                "configurar_whatsapp": "POST /api/v1/configuracion/whatsapp/actualizar",
                 "probar_servicios": (
-                    "POST /api/v1/configuracion/sistema/probar-integracion/{...
+                    "POST /api/v1/configuracion/sistema/probar-integracion/{categoria}"
                 ),
-                "inicializar_defaults": "POST /api/v1/configuracion/sistema/...
+                "inicializar_defaults": "POST /api/v1/configuracion/sistema/inicializar-defaults",
             },
             "alertas_configuracion": _generar_alertas_configuracion(
                 db, estado_categorias
@@ -1590,7 +1590,7 @@ def actualizar_configuracion_tasas(
     }
 
     logger.info(
-        f"Tasas actualizadas por {current_user.email}: {_config_cache['tasas...
+        f"Tasas actualizadas por {current_user.email}: {_config_cache['tasas']}"
     )
 
     return {
@@ -1646,7 +1646,7 @@ def actualizar_configuracion_limites(
     }
 
     logger.info(
-        f"Límites actualizados por {current_user.email}: {_config_cache['lim...
+        f"Límites actualizados por {current_user.email}: {_config_cache['limites']}"
     )
 
     return {
@@ -1708,7 +1708,7 @@ def actualizar_configuracion_general(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=403,
-            detail="Solo administradores pueden modificar configuración gene...
+            detail="Solo administradores pueden modificar configuración general",
         )
 
     _config_cache["general"] = {
@@ -1796,7 +1796,7 @@ def restablecer_configuracion_defecto(
             f"TODA la configuración restablecida por {current_user.email}"
         )
         return {
-            "mensaje": "Toda la configuración ha sido restablecida a valores...
+            "mensaje": "Toda la configuración ha sido restablecida a valores por defecto",
             "configuracion": _config_cache,
         }
 
@@ -1806,14 +1806,14 @@ def restablecer_configuracion_defecto(
             f"Configuración de {seccion} restablecida por {current_user.email}"
         )
         return {
-            "mensaje": f"Configuración de {seccion} restablecida a valores p...
+            "mensaje": f"Configuración de {seccion} restablecida a valores por defecto",
             "configuracion": _config_cache[seccion],
         }
 
     else:
         raise HTTPException(
             status_code=400,
-            detail="Sección inválida. Opciones: tasas, limites, notificacion...
+            detail="Sección inválida. Opciones: tasas, limites, notificaciones, general, todo",
         )
 
 
@@ -1921,19 +1921,19 @@ def validar_limites_cliente(
         if prestamos_activos >= limite_prestamos:
             validaciones["puede_solicitar"] = False
             validaciones["mensajes"].append(
-                f"El cliente ya tiene {prestamos_activos} préstamos activos ...
+                f"El cliente ya tiene {prestamos_activos} préstamos activos (límite: {limite_prestamos})"
             )
 
         if monto_solicitado < limites_monto["monto_minimo_prestamo"]:
             validaciones["puede_solicitar"] = False
             validaciones["mensajes"].append(
-                f"Monto mínimo permitido: ${limites_monto['monto_minimo_pres...
+                f"Monto mínimo permitido: ${limites_monto['monto_minimo_prestamo']:,.2f}"
             )
 
         if monto_solicitado > limites_monto["monto_maximo_prestamo"]:
             validaciones["puede_solicitar"] = False
             validaciones["mensajes"].append(
-                f"Monto máximo permitido: ${limites_monto['monto_maximo_pres...
+                f"Monto máximo permitido: ${limites_monto['monto_maximo_prestamo']:,.2f}"
             )
 
         return {
@@ -2019,7 +2019,7 @@ def _generar_recomendaciones_configuracion(estado_servicios):
                 {
                     "servicio": servicio,
                     "prioridad": "MEDIA",
-                    "mensaje": f"Configurar parámetros faltantes en {servici...
+                    "mensaje": f"Configurar parámetros faltantes en {servicio}",
                     "accion": f"Revisar configuración de {servicio}",
                 }
             )

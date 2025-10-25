@@ -51,7 +51,7 @@ async def generar_template_conciliacion(
             [""],
             ["3. PROCESO DE CONCILIACIÓN:"],
             [
-                "   - El sistema compara el número de documento con la base ...
+                "   - El sistema compara el número de documento con la base de datos"
             ],
             ["   - Si hay coincidencia EXACTA: se marca como CONCILIADO"],
             ["   - Si NO hay coincidencia: se marca como PENDIENTE"],
@@ -208,7 +208,7 @@ async def procesar_conciliacion(
             resultados.append(
                 {
                     "fila": index
-                    + 2,  # +2 porque Excel es 1-indexed y primera fila es e...
+                    + 2,  # +2 porque Excel es 1-indexed y primera fila es encabezado
                     "fecha": str(fecha),
                     "numero_documento": numero_documento,
                     "estado": estado,
@@ -220,7 +220,7 @@ async def procesar_conciliacion(
         db.commit()
 
         logger.info(
-            f"Conciliación procesada: {conciliados} conciliados, {pendientes...
+            f"Conciliación procesada: {conciliados} conciliados, {pendientes} pendientes"
         )
 
         return {
@@ -258,7 +258,7 @@ async def desconciliar_pago(
     """Desconciliar un pago ya conciliado"""
     try:
         logger.info(
-            f"Usuario {current_user.email} desconciliando pago {conciliacion...
+            f"Usuario {current_user.email} desconciliando pago {conciliacion_data.numero_documento_anterior}"
         )
 
         # Buscar el pago a desconciliar
@@ -290,7 +290,7 @@ async def desconciliar_pago(
         conciliacion_record = {
             "id": len(db.query(Pago).all()) + 1,  # ID temporal
             "cedula_cliente": conciliacion_data.cedula_cliente,
-            "numero_documento_anterior": conciliacion_data.numero_documento_...
+            "numero_documento_anterior": conciliacion_data.numero_documento_anterior,
             "numero_documento_nuevo": conciliacion_data.numero_documento_nuevo,
             "cedula_nueva": conciliacion_data.cedula_nueva,
             "nota": conciliacion_data.nota,
@@ -302,7 +302,7 @@ async def desconciliar_pago(
         db.commit()
 
         logger.info(
-            f"Pago {conciliacion_data.numero_documento_anterior} desconcilia...
+            f"Pago {conciliacion_data.numero_documento_anterior} desconciliado exitosamente"
         )
 
         return conciliacion_record

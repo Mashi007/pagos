@@ -141,7 +141,7 @@ def calcular_scoring_crediticio(
             accion=TipoAccion.CONSULTA,
             entidad="scoring",
             entidad_id=None,
-            detalles=f"Scoring calculado: {resultado['score_final']} para cé...
+            detalles=f"Scoring calculado: {resultado['score_final']} para cédula {solicitud.cedula}",
         )
         db.add(auditoria)
         db.commit()
@@ -460,7 +460,7 @@ def generar_mensaje_chatbot(
     cliente_id: int,
     tipo_mensaje: str = Query(
         ...,
-        description="RECORDATORIO_AMIGABLE, MORA_TEMPRANA, MORA_AVANZADA, FE...
+        description="RECORDATORIO_AMIGABLE, MORA_TEMPRANA, MORA_AVANZADA, FELICITACION_PUNTUALIDAD",
     ),
     canal: str = Query(
         "WHATSAPP", description="WHATSAPP, EMAIL, SMS, LLAMADA"
@@ -675,9 +675,9 @@ def dashboard_inteligencia_artificial(
             },
             "estado_modelos": estado_modelos,
             "alertas_ia": [
-                f"🚨 {metricas_ia['clientes_alto_riesgo']} clientes identific...
-                f"⚠️ {metricas_ia['alertas_criticas']} alertas críticas requ...
-                f"💡 {metricas_ia['recomendaciones_activas']} recomendaciones...
+                f"🚨 {metricas_ia['clientes_alto_riesgo']} clientes identificados en alto riesgo",
+                f"⚠️ {metricas_ia['alertas_criticas']} alertas críticas requieren atención",
+                f"💡 {metricas_ia['recomendaciones_activas']} recomendaciones activas",
             ],
             "acciones_rapidas": {
                 "ver_clientes_riesgo": "/api/v1/ia/clientes-riesgo",
@@ -798,7 +798,7 @@ def _identificar_alertas_criticas(analisis: Dict) -> List[str]:
     )
     if proyeccion_mora > 15:  # >15% de mora proyectada
         alertas.append(
-            f"🚨 Mora proyectada: {proyeccion_mora:.1f}% - Acción inmediata r...
+            f"🚨 Mora proyectada: {proyeccion_mora:.1f}% - Acción inmediata requerida"
         )
 
     return alertas
@@ -876,7 +876,7 @@ def verificar_sistema_ia(current_user: User = Depends(get_current_user)):
             "dashboard": "/api/v1/ia/dashboard-ia",
             "scoring": "/api/v1/ia/scoring-crediticio",
             "prediccion": "/api/v1/ia/prediccion-mora/{cliente_id}",
-            "recomendaciones": "/api/v1/ia/recomendaciones-cobranza/{cliente...
+            "recomendaciones": "/api/v1/ia/recomendaciones-cobranza/{cliente_id}",
             "anomalias": "/api/v1/ia/detectar-anomalias",
             "chatbot": "/api/v1/ia/chatbot/generar-mensaje",
         },

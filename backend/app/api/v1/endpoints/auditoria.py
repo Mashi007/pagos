@@ -292,7 +292,7 @@ def exportar_auditoria_excel(
 
         return Response(
             content=output.getvalue(),
-            media_type="application/vnd.openxmlformats-officedocument.spread...
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={
                 "Content-Disposition": f"attachment; filename={filename}"
             },

@@ -25,7 +25,7 @@ router = APIRouter()
 
 
 class ComparativeAnalysisSystem:
-    """Sistema comparativo para análisis diferencial de casos exitosos vs fa...
+    """Sistema comparativo para análisis diferencial de casos exitosos vs fallidos"""
 
     def __init__(self):
         self.successful_cases = deque(maxlen=5000)  # Casos exitosos
@@ -492,7 +492,7 @@ class ComparativeAnalysisSystem:
                         {
                             "indicator": "token_expiration_timing",
                             "description": (
-                                f"Diferencia significativa en tiempo de expi...
+                                f"Diferencia significativa en tiempo de expiración: {expiry_diff:.1f} segundos"
                             ),
                             "confidence": "high",
                         }
@@ -511,7 +511,7 @@ class ComparativeAnalysisSystem:
                         {
                             "indicator": "user_active_status",
                             "description": (
-                                f"Diferencia significativa en tasa de usuari...
+                                f"Diferencia significativa en tasa de usuarios activos: {active_rate_diff:.1f}%"
                             ),
                             "confidence": "medium",
                         }

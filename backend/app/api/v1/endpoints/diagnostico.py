@@ -211,7 +211,7 @@ def verificar_endpoints_criticos():
         "endpoints_criticos": endpoints_criticos,
         "total_endpoints": len(endpoints_criticos),
         "message": "Lista de endpoints críticos para verificar",
-        "nota": "Usar herramientas como Postman o curl para verificar cada e...
+        "nota": "Usar herramientas como Postman o curl para verificar cada endpoint",
     }
 
 
@@ -325,5 +325,5 @@ def obtener_logs_sistema():
         "log_level": settings.LOG_LEVEL,
         "environment": settings.ENVIRONMENT,
         "message": "Información de configuración de logs",
-        "nota": "Los logs detallados están disponibles en los logs del servi...
+        "nota": "Los logs detallados están disponibles en los logs del servidor",
     }

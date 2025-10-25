@@ -419,17 +419,17 @@ class ForensicTraceSystem:
 
         if failure_types.count("token_expired") > len(failure_types) * 0.5:
             recommendations.append(
-                "🔴 Más del 50% de fallos son por tokens expirados - revisar ...
+                "🔴 Más del 50% de fallos son por tokens expirados - revisar configuración de expiración"
             )
 
         if failure_types.count("auth_failure") > len(failure_types) * 0.3:
             recommendations.append(
-                "🟡 Más del 30% de fallos son de autenticación - revisar vali...
+                "🟡 Más del 30% de fallos son de autenticación - revisar validación de usuarios"
             )
 
         if failure_types.count("validation_failed") > len(failure_types) * 0.2:
             recommendations.append(
-                "🟡 Más del 20% de fallos son de validación - revisar configu...
+                "🟡 Más del 20% de fallos son de validación - revisar configuración JWT"
             )
 
         # Recomendaciones de timing
@@ -443,7 +443,7 @@ class ForensicTraceSystem:
 
         if avg_time_to_failure < 1:
             recommendations.append(
-                "⚡ Fallos muy rápidos - posible problema de configuración in...
+                "⚡ Fallos muy rápidos - posible problema de configuración inicial"
             )
 
         return recommendations

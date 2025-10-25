@@ -50,7 +50,7 @@ async def debug_autenticacion(request: Request, db: Session = Depends(get_db)):
                 len(settings.SECRET_KEY) if settings.SECRET_KEY else 0
             ),
             "algorithm": settings.ALGORITHM,
-            "access_token_expire_minutes": settings.ACCESS_TOKEN_EXPIRE_MINU...
+            "access_token_expire_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
             "refresh_token_expire_days": settings.REFRESH_TOKEN_EXPIRE_DAYS,
         }
 
@@ -367,7 +367,7 @@ def _generate_recommendations(
 
     if not headers_analysis.get("authorization_present"):
         recommendations.append(
-            "🔑 No se encontró header Authorization - Verificar que el fronte...
+            "🔑 No se encontró header Authorization - Verificar que el frontend esté enviando el token"
         )
 
     if jwt_config.get("secret_key_length", 0) < 32:

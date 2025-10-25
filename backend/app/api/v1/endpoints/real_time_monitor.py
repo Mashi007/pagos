@@ -429,7 +429,7 @@ def _generate_performance_recommendations(status: Dict[str, Any]) -> List[str]:
     expiring_tokens = metrics.get("expiring_tokens", 0)
     if expiring_tokens > 0:
         recommendations.append(
-            f"🔄 {expiring_tokens} tokens expirando pronto - Verificar auto-r...
+            f"🔄 {expiring_tokens} tokens expirando pronto - Verificar auto-refresh"
         )
 
     avg_response_time = status.get("performance", {}).get(
