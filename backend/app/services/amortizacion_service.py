@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.models.amortizacion import Cuota
 from app.schemas.amortizacion import (
-    CuotaDetalle,
+    CuotaResponse,
     TablaAmortizacionRequest,
     TablaAmortizacionResponse,
 )

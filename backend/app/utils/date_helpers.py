@@ -1,7 +1,6 @@
-from datetime import date, timedelta as delta
+from datetime import date, timedelta
 # backend/app/utils/date_helpers.py
-"""Utilidades para manejo de fechas
-""""""
+# Utilidades para manejo de fechas
 
 import calendar
 from typing import List, Optional
@@ -9,37 +8,31 @@ from dateutil.relativedelta import relativedelta
 
 
 def add_months(start_date: date, months: int) -> date:
-    """"""
-    Suma meses a una fecha
-    Args:
-        start_date: Fecha inicial
-        months: Número de meses a sumar
-    Returns:
-        date: Nueva fecha
-    """"""
+    # Suma meses a una fecha
+    # Args:
+    #     start_date: Fecha inicial
+    #     months: Número de meses a sumar
+    # Returns:
+    #     date: Nueva fecha
     return start_date + relativedelta(months=months)
 
 
 def add_weeks(start_date: date, weeks: int) -> date:
-    """"""
-    Suma semanas a una fecha
-    Args:
-        start_date: Fecha inicial
-        weeks: Número de semanas a sumar
-    Returns:
-        date: Nueva fecha
-    """"""
+    # Suma semanas a una fecha
+    # Args:
+    #     start_date: Fecha inicial
+    #     weeks: Número de semanas a sumar
+    # Returns:
+    #     date: Nueva fecha
+    return start_date + timedelta(weeks=weeks)
 
 
-def calculate_payment_dates
-) -> List[date]:
-    """"""
-    Args:
-        start_date: Fecha del primer pago
-        frequency: Frecuencia (SEMANAL, QUINCENAL, MENSUAL, BIMENSUAL)
-    Returns:
-        List[date]: Lista de fechas de vencimiento
-    """"""
+def calculate_payment_dates(start_date: date, num_payments: int, frequency: str) -> List[date]:
+    # Args:
+    #     start_date: Fecha del primer pago
+    #     frequency: Frecuencia (SEMANAL, QUINCENAL, MENSUAL, BIMENSUAL)
+    # Returns:
+    #     List[date]: Lista de fechas de vencimiento
     payment_dates = []
     current_date = start_date
 
@@ -64,38 +57,32 @@ def calculate_payment_dates
 
 
 def days_between(date1: date, date2: date) -> int:
-    """"""
-    Args:
-        date1: Primera fecha
-        date2: Segunda fecha
-    Returns:
-        int: Número de días (puede ser negativo si date2 < date1)
-    """"""
+    # Args:
+    #     date1: Primera fecha
+    #     date2: Segunda fecha
+    # Returns:
+    #     int: Número de días (puede ser negativo si date2 < date1)
     return (date2 - date1).days
 
 
 def is_overdue(due_date: date, reference_date: Optional[date] = None) -> bool:
-    """"""
-    Verifica si una fecha de vencimiento está vencida
-    Args:
-        due_date: Fecha de vencimiento
-        reference_date: Fecha de referencia (por defecto, hoy)
-    Returns:
-        bool: True si está vencida
-    """"""
+    # Verifica si una fecha de vencimiento está vencida
+    # Args:
+    #     due_date: Fecha de vencimiento
+    #     reference_date: Fecha de referencia (por defecto, hoy)
+    # Returns:
+    #     bool: True si está vencida
     if reference_date is None:
         reference_date = date.today()
     return reference_date > due_date
 
 
 def days_overdue(due_date: date, reference_date: Optional[date] = None) -> int:
-    """"""
-    Args:
-        due_date: Fecha de vencimiento
-        reference_date: Fecha de referencia (por defecto, hoy)
-    Returns:
-        int: Días de mora (0 si no está vencida)
-    """"""
+    # Args:
+    #     due_date: Fecha de vencimiento
+    #     reference_date: Fecha de referencia (por defecto, hoy)
+    # Returns:
+    #     int: Días de mora (0 si no está vencida)
     if reference_date is None:
         reference_date = date.today()
 
@@ -104,57 +91,47 @@ def days_overdue(due_date: date, reference_date: Optional[date] = None) -> int:
 
 
 def get_last_day_of_month(year: int, month: int) -> date:
-    """"""
-    Obtiene el último día del mes
-    Args:
-        year: Año
-        month: Mes (1-12)
-    Returns:
-        date: Último día del mes
-    """"""
+    # Obtiene el último día del mes
+    # Args:
+    #     year: Año
+    #     month: Mes (1-12)
+    # Returns:
+    #     date: Último día del mes
     last_day = calendar.monthrange(year, month)[1]
     return date(year, month, last_day)
 
 
 def get_first_day_of_month(year: int, month: int) -> date:
-    """"""
-    Obtiene el primer día del mes
-    Args:
-        year: Año
-        month: Mes (1-12)
-    Returns:
-        date: Primer día del mes
-    """"""
+    # Obtiene el primer día del mes
+    # Args:
+    #     year: Año
+    #     month: Mes (1-12)
+    # Returns:
+    #     date: Primer día del mes
     return date(year, month, 1)
 
 
-def get_month_range
-) -> tuple[date, date]:
-    """"""
-    Obtiene el rango de fechas del mes
-    Args:
-        reference_date: Fecha de referencia (por defecto, hoy)
-    Returns:
-        tuple[date, date]: (primer_día, último_día)
-    """"""
+def get_month_range(reference_date: Optional[date] = None) -> tuple[date, date]:
+    # Obtiene el rango de fechas del mes
+    # Args:
+    #     reference_date: Fecha de referencia (por defecto, hoy)
+    # Returns:
+    #     tuple[date, date]: (primer_día, último_día)
     if reference_date is None:
         reference_date = date.today()
 
-    first_day = get_first_day_of_month
+    first_day = get_first_day_of_month(reference_date.year, reference_date.month)
     last_day = get_last_day_of_month(reference_date.year, reference_date.month)
 
     return first_day, last_day
 
 
-def get_quarter_range
-) -> tuple[date, date]:
-    """"""
-    Obtiene el rango de fechas del trimestre
-    Args:
-        reference_date: Fecha de referencia (por defecto, hoy)
-    Returns:
-        tuple[date, date]: (primer_día_trimestre, último_día_trimestre)
-    """"""
+def get_quarter_range(reference_date: Optional[date] = None) -> tuple[date, date]:
+    # Obtiene el rango de fechas del trimestre
+    # Args:
+    #     reference_date: Fecha de referencia (por defecto, hoy)
+    # Returns:
+    #     tuple[date, date]: (primer_día_trimestre, último_día_trimestre)
     if reference_date is None:
         reference_date = date.today()
 

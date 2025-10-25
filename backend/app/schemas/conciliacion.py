@@ -43,9 +43,12 @@ class MovimientoBancario(BaseModel):
     descripcion: Optional[str] = ""
     cuenta_origen: Optional[str] = Field
 
-    model_config = ConfigDict
+    model_config = ConfigDict(
+        json_encoders={
             Decimal: lambda v: float(v),
             date: lambda v: v.isoformat(),
+        }
+    )
 
     @field_validator("monto")
     @classmethod
@@ -91,9 +94,12 @@ class ConciliacionMatch(BaseModel):
     tipo_match: TipoMatch
     confianza: float = Field
 
-    model_config = ConfigDict
+    model_config = ConfigDict(
+        json_encoders={
             Decimal: lambda v: float(v),
             date: lambda v: v.isoformat(),
+        }
+    )
 
 
 class ResultadoConciliacion(BaseModel):
@@ -107,14 +113,12 @@ class ResultadoConciliacion(BaseModel):
     @field_validator("porcentaje_conciliacion")
     @classmethod
     def calcular_porcentaje(cls, v, info):
-        if 
-            return round
-                * 100,
+        if info.data.get("total_movimientos", 0) > 0:
+            return round(
+                (info.data.get("movimientos_conciliados", 0) / info.data.get("total_movimientos", 1)) * 100,
                 2,
+            )
         return 0.0
-
-
-    class Config:
 
 
 class ConciliacionResponse(BaseModel):
@@ -124,9 +128,11 @@ class ConciliacionResponse(BaseModel):
     fecha_fin: date
     estado: EstadoConciliacion
 
-    model_config = ConfigDict
+    model_config = ConfigDict(
+        json_encoders={
             date: lambda v: v.isoformat(),
-        },
+        }
+    )
 
 
 # ============================================
@@ -155,9 +161,6 @@ class ConfirmacionResponse(BaseModel):
     message: str
     pago_id: int
     referencia_bancaria: str
-
-
-    class Config:
 
 
 # ============================================
@@ -205,10 +208,12 @@ class PagoPendienteConciliacion(BaseModel):
     concepto: str
     dias_pendiente: int = 0
 
-    model_config = ConfigDict
+    model_config = ConfigDict(
+        json_encoders={
             Decimal: lambda v: float(v),
             date: lambda v: v.isoformat(),
-        },
+        }
+    )
 
 
 # ============================================
@@ -223,7 +228,7 @@ class ExtractoBancarioUpload(BaseModel):
     separador: str = ","
     codificacion: str = "utf-8"
     tiene_encabezado: bool = True
-    columnas: Dict[str, str] = 
+    columnas: Dict[str, str] = Field(default_factory=dict)
 
 
 class ValidacionExtracto(BaseModel):
@@ -282,9 +287,13 @@ class ValidacionArchivoBancario(BaseModel):
 
 
 class ConciliacionMasiva(BaseModel):
-    """Schema para conciliación masiva"""
-        True, description="Aplicar coincidencias exactas automáticamente"
-    aplicar_parciales: bool = Field
+    # Schema para conciliación masiva
+    aplicar_exactas: bool = Field(
+        default=True, description="Aplicar coincidencias exactas automáticamente"
+    )
+    aplicar_parciales: bool = Field(
+        default=False, description="Aplicar coincidencias parciales automáticamente"
+    )
     observaciones: Optional[str] = None
 
 
@@ -293,9 +302,6 @@ class ResultadoConciliacionMasiva(BaseModel):
     errores: List[dict] = []
     resumen_financiero: dict
     reporte_generado: bool = True
-
-
-    class Config:
 
 
 class RevisionManual(BaseModel):
@@ -317,4 +323,4 @@ class HistorialConciliacion(BaseModel):
     estado: EstadoConciliacion
     observaciones: Optional[str] = None
 
-    model_config = ConfigDict
+    model_config = ConfigDict(from_attributes=True)

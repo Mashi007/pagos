@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 
 def _aplicar_ordenamiento_auditoria(query, ordenar_por, orden):
-    """Aplicar ordenamiento a la query de auditoría"""
+    # Aplicar ordenamiento a la query de auditoría
     if ordenar_por == "usuario_email":
         order_field = Auditoria.usuario_email
     elif ordenar_por == "modulo":

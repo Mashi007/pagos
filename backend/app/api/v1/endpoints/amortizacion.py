@@ -30,9 +30,7 @@ def generar_tabla_amortizacion(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """"""
-    Genera tabla de amortización para un préstamo
-    """"""
+    # Genera tabla de amortización para un préstamo
     try:
         tabla = AmortizacionService.generar_tabla_amortizacion(request)
         return tabla
@@ -49,9 +47,7 @@ def crear_cuotas_prestamo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """"""
-    Crea las cuotas en BD para un préstamo específico
-    """"""
+    # Crea las cuotas en BD para un préstamo específico
     # Verificar que el préstamo existe
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:
@@ -95,9 +91,7 @@ def obtener_cuotas_prestamo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """"""
-    Obtiene las cuotas de un préstamo
-    """"""
+    # Obtiene las cuotas de un préstamo
     # Verificar préstamo
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:
@@ -125,9 +119,7 @@ def obtener_cuota(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """"""
-    Obtiene el detalle de una cuota específica
-    """"""
+    # Obtiene el detalle de una cuota específica
     cuota = db.query(Cuota).filter(Cuota.id == cuota_id).first()
     if not cuota:
         raise HTTPException(
@@ -150,9 +142,7 @@ def recalcular_mora(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """"""
-    Recalcula la mora de todas las cuotas vencidas de un préstamo
-    """"""
+    # Recalcula la mora de todas las cuotas vencidas de un préstamo
     # Verificar préstamo
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:
@@ -206,10 +196,8 @@ def obtener_estado_cuenta(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """"""
-    Obtiene el estado de cuenta completo de un préstamo
-    Incluye resumen, cuotas pagadas, pendientes, vencidas y próximas
-    """"""
+    # Obtiene el estado de cuenta completo de un préstamo
+    # Incluye resumen, cuotas pagadas, pendientes, vencidas y próximas
     # Verificar préstamo
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:
@@ -288,10 +276,8 @@ def proyectar_pago(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """"""
-    Proyecta cómo se aplicaría un pago sobre las cuotas pendientes
-    No realiza el pago, solo muestra la simulación
-    """"""
+    # Proyecta cómo se aplicaría un pago sobre las cuotas pendientes
+    # No realiza el pago, solo muestra la simulación
     # Verificar préstamo
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:
@@ -367,15 +353,13 @@ def obtener_informacion_adicional(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """"""
-    Obtener información adicional de la tabla de amortización
-    - Cuotas pagadas / Total
-    - % de avance
-    - Próximo vencimiento
-    - Días en mora
-    - Total pagado hasta la fecha
-    - Saldo pendiente
-    """"""
+    # Obtener información adicional de la tabla de amortización
+    # - Cuotas pagadas / Total
+    # - % de avance
+    # - Próximo vencimiento
+    # - Días en mora
+    # - Total pagado hasta la fecha
+    # - Saldo pendiente
     # Verificar préstamo
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:
@@ -448,9 +432,7 @@ def obtener_tabla_visual(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """"""
-    Obtener tabla de amortización en formato visual como el diagrama
-    """"""
+        # Obtener tabla de amortización en formato visual como el diagrama
     # Verificar préstamo
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:

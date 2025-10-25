@@ -24,18 +24,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.post(
     "/crear", response_model=PagoResponse, status_code=status.HTTP_201_CREATED
-
-
-async def crear_pago
+)
+async def crear_pago(
+    pago_data: PagoCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """Crear un nuevo pago"""
+):
+    # Crear un nuevo pago
     try:
-        logger.info
+        logger.info(f"Creando pago - Usuario: {current_user.email}")
 
         # Crear el pago
-        nuevo_pago = Pago
+        nuevo_pago = Pago(**pago_data.model_dump())
 
         db.add(nuevo_pago)
         db.commit()
@@ -46,22 +48,60 @@ async def crear_pago
     except Exception as e:
         db.rollback()
         logger.error(f"Error creando pago: {e}")
-        raise HTTPException
+        raise HTTPException(
+            status_code=500,
             detail=f"Error interno del servidor: {str(e)}",
+        )
 
 
-async def subir_documento
+@router.post("/subir-documento")
+async def subir_documento(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """Subir documento de pago"""
+):
+    # Subir documento de pago
     try:
         # Validar tipo de archivo
         file_extension = Path(file.filename).suffix.lower()
         if file_extension not in ALLOWED_EXTENSIONS:
-            raise HTTPException
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tipo de archivo no permitido. Solo se permiten: {', '.join(ALLOWED_EXTENSIONS)}"
+            )
 
         # Validar tamaño
+        if file.size > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Archivo demasiado grande. Máximo: {MAX_FILE_SIZE / 1024 / 1024:.1f}MB"
+            )
+
+        # Generar nombre único
+        file_id = str(uuid.uuid4())
+        filename = f"{file_id}{file_extension}"
+        
+        # Guardar archivo
+        file_path = UPLOAD_DIR / filename
+        with open(file_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+
+        return {
+            "message": "Archivo subido exitosamente",
+            "file_id": file_id,
+            "filename": filename,
+            "size": len(content)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error subiendo archivo: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Error interno del servidor"
+        )
         file_content = await file.read()
         if len(file_content) > MAX_FILE_SIZE_BYTES:
             raise HTTPException
@@ -182,21 +222,46 @@ async def obtener_resumen_cliente
 
 
 @router.get("/descargar-documento/{filename}")
-async def descargar_documento
-    filename: str, current_user: User = Depends(get_current_user)
-    """Descargar documento de pago"""
+async def descargar_documento(
+    filename: str,
+    current_user: User = Depends(get_current_user)
+):
+    # Descargar documento de pago
     try:
         file_path = UPLOAD_DIR / filename
 
         if not file_path.exists():
-            raise HTTPException
+            raise HTTPException(
+                status_code=404,
+                detail="Archivo no encontrado"
+            )
 
         # Determinar tipo de contenido
         file_extension = file_path.suffix.lower()
-        content_type_map = 
-        content_type = content_type_map.get
+        content_type_map = {
+            '.pdf': 'application/pdf',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.doc': 'application/msword',
+            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        }
+        content_type = content_type_map.get(file_extension, 'application/octet-stream')
 
-        return 
+        return FileResponse(
+            path=str(file_path),
+            media_type=content_type,
+            filename=filename
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error descargando archivo: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Error interno del servidor"
+        ) 
 
     except HTTPException:
         raise
