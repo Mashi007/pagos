@@ -119,9 +119,7 @@ class AuthService:
 
             # Verificar que el usuario existe y está activo
             user = (
-                db.query(User)
-                .filter(User.id == int(user_id), User.is_active)
-                .first()
+                db.query(User).filter(User.id == int(user_id), User.is_active).first()
             )
 
             if not user:

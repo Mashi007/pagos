@@ -29,7 +29,7 @@ DISK_THRESHOLD_PERCENT = 90
 # Tablas críticas para verificar
 CRITICAL_TABLES = [
     "aprobaciones",
-    "auditorias", 
+    "auditorias",
     "clientes",
     "users",
 ]
@@ -48,7 +48,7 @@ def get_system_metrics() -> Dict[str, Any]:
         cpu_percent = psutil.cpu_percent(interval=0.1)
         memory = psutil.virtual_memory()
         disk = psutil.disk_usage("/")
-        
+
         return {
             "cpu_percent": cpu_percent,
             "memory_percent": memory.percent,
@@ -70,21 +70,21 @@ def get_system_metrics() -> Dict[str, Any]:
 def check_database_cached() -> Dict[str, Any]:
     """Verifica la DB con cache para reducir carga y análisis de impacto"""
     current_time = time.time()
-    
-    if (current_time - _last_db_check["timestamp"] < 
-        _last_db_check["cache_duration"]):
+
+    if current_time - _last_db_check["timestamp"] < _last_db_check["cache_duration"]:
         return _last_db_check["data"]
-    
+
     try:
         from app.db.init_db import check_database_connection
+
         db_status = check_database_connection()
-        
+
         _last_db_check["data"] = {
             "status": db_status,
             "timestamp": current_time,
         }
         _last_db_check["timestamp"] = current_time
-        
+
         return _last_db_check["data"]
     except Exception as e:
         logger.error(f"Error verificando DB: {e}")
@@ -105,7 +105,7 @@ async def cors_debug():
 @router.head("/health/render")
 async def render_health_check():
     """Health check optimizado para Render
-    
+
     - Respuesta ultra rápida
     - Acepta tanto GET como HEAD
     - Sin verificaciones de DB para evitar timeouts
@@ -120,61 +120,67 @@ async def render_health_check():
 @router.get("/health")
 async def detailed_health_check(response: Response):
     """Health check detallado con análisis de impacto en performance
-    
+
     - Verifica DB con métricas de respuesta
     - Incluye métricas del sistema
     - Análisis de impacto en performance
     """
     start_time = time.time()
-    
+
     try:
         # Obtener métricas del sistema
         system_metrics = get_system_metrics()
-        
+
         # Verificar DB con cache
         db_check = check_database_cached()
-        
+
         # Calcular tiempo total de respuesta
         response_time_ms = (time.time() - start_time) * 1000
-        
+
         # Análisis de impacto
         impact_analysis = {
             "response_time_ms": response_time_ms,
             "performance_impact": "low",
             "alerts": [],
         }
-        
+
         # Verificar umbrales de performance
         if system_metrics["cpu_percent"] > CPU_THRESHOLD_PERCENT:
-            impact_analysis["alerts"].append({
-                "type": "cpu_high",
-                "message": (
-                    f"CPU usage {system_metrics['cpu_percent']:.1f}% "
-                    f"exceeds threshold {CPU_THRESHOLD_PERCENT}%"
-                ),
-                "severity": "WARNING",
-            })
-        
+            impact_analysis["alerts"].append(
+                {
+                    "type": "cpu_high",
+                    "message": (
+                        f"CPU usage {system_metrics['cpu_percent']:.1f}% "
+                        f"exceeds threshold {CPU_THRESHOLD_PERCENT}%"
+                    ),
+                    "severity": "WARNING",
+                }
+            )
+
         if system_metrics["memory_percent"] > MEMORY_THRESHOLD_PERCENT:
-            impact_analysis["alerts"].append({
-                "type": "memory_high",
-                "message": (
-                    f"Memory usage {system_metrics['memory_percent']:.1f}% "
-                    f"exceeds threshold {MEMORY_THRESHOLD_PERCENT}%"
-                ),
-                "severity": "WARNING",
-            })
-        
+            impact_analysis["alerts"].append(
+                {
+                    "type": "memory_high",
+                    "message": (
+                        f"Memory usage {system_metrics['memory_percent']:.1f}% "
+                        f"exceeds threshold {MEMORY_THRESHOLD_PERCENT}%"
+                    ),
+                    "severity": "WARNING",
+                }
+            )
+
         if system_metrics["disk_percent"] > DISK_THRESHOLD_PERCENT:
-            impact_analysis["alerts"].append({
-                "type": "disk_high",
-                "message": (
-                    f"Disk usage {system_metrics['disk_percent']:.1f}% "
-                    f"exceeds threshold {DISK_THRESHOLD_PERCENT}%"
-                ),
-                "severity": "CRITICAL",
-            })
-        
+            impact_analysis["alerts"].append(
+                {
+                    "type": "disk_high",
+                    "message": (
+                        f"Disk usage {system_metrics['disk_percent']:.1f}% "
+                        f"exceeds threshold {DISK_THRESHOLD_PERCENT}%"
+                    ),
+                    "severity": "CRITICAL",
+                }
+            )
+
         # Determinar estado general
         overall_status = "healthy"
         if not db_check["status"]:
@@ -183,7 +189,7 @@ async def detailed_health_check(response: Response):
             overall_status = "degraded"
         elif impact_analysis["alerts"]:
             overall_status = "warning"
-        
+
         return {
             "status": overall_status,
             "timestamp": time.time(),
@@ -194,7 +200,7 @@ async def detailed_health_check(response: Response):
             "environment": settings.ENVIRONMENT,
             "version": settings.APP_VERSION,
         }
-        
+
     except Exception as e:
         logger.error(f"Error en health check detallado: {e}")
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
@@ -217,20 +223,20 @@ async def readiness_check():
         except Exception as e:
             logger.error(f"Readiness check failed: {e}")
             db_status = False
-        
+
         if not db_status:
             return Response(
                 content='{"status": "not_ready", "reason": "database"}',
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 media_type="application/json",
             )
-        
+
         return Response(
             content='{"status": "ready"}',
             status_code=status.HTTP_200_OK,
             media_type="application/json",
         )
-        
+
     except Exception as e:
         logger.error(f"Readiness check error: {e}")
         return Response(

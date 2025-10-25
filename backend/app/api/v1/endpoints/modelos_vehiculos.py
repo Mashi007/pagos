@@ -30,27 +30,25 @@ def listar_modelos_vehiculos(
     current_user: User = Depends(get_current_user),
 ):
     """Listar modelos de vehículos con filtros"""
-    
+
     query = db.query(ModeloVehiculo)
-    
+
     # Aplicar filtros
     if search:
-        query = query.filter(
-            or_(ModeloVehiculo.modelo.ilike(f"%{search}%"))
-        )
-    
+        query = query.filter(or_(ModeloVehiculo.modelo.ilike(f"%{search}%")))
+
     if activo is not None:
         query = query.filter(ModeloVehiculo.activo == activo)
-    
+
     # Ordenar por modelo
     query = query.order_by(ModeloVehiculo.modelo)
-    
+
     # Contar total
     total = query.count()
-    
+
     # Paginar
     modelos = query.offset(skip).limit(limit).all()
-    
+
     return ModeloVehiculoListResponse(
         items=modelos,
         total=total,
@@ -66,17 +64,12 @@ def obtener_modelo_vehiculo(
     current_user: User = Depends(get_current_user),
 ):
     """Obtener un modelo de vehículo por ID"""
-    
-    modelo = db.query(ModeloVehiculo).filter(
-        ModeloVehiculo.id == modelo_id
-    ).first()
-    
+
+    modelo = db.query(ModeloVehiculo).filter(ModeloVehiculo.id == modelo_id).first()
+
     if not modelo:
-        raise HTTPException(
-            status_code=404,
-            detail="Modelo de vehículo no encontrado"
-        )
-    
+        raise HTTPException(status_code=404, detail="Modelo de vehículo no encontrado")
+
     return modelo
 
 
@@ -87,23 +80,24 @@ def crear_modelo_vehiculo(
     current_user: User = Depends(get_current_user),
 ):
     """Crear un nuevo modelo de vehículo"""
-    
+
     # Verificar si ya existe
-    existing = db.query(ModeloVehiculo).filter(
-        ModeloVehiculo.modelo == modelo_data.modelo
-    ).first()
-    
+    existing = (
+        db.query(ModeloVehiculo)
+        .filter(ModeloVehiculo.modelo == modelo_data.modelo)
+        .first()
+    )
+
     if existing:
         raise HTTPException(
-            status_code=400,
-            detail="Ya existe un modelo con ese nombre"
+            status_code=400, detail="Ya existe un modelo con ese nombre"
         )
-    
+
     modelo = ModeloVehiculo(**modelo_data.dict())
     db.add(modelo)
     db.commit()
     db.refresh(modelo)
-    
+
     return modelo
 
 
@@ -115,24 +109,19 @@ def actualizar_modelo_vehiculo(
     current_user: User = Depends(get_current_user),
 ):
     """Actualizar un modelo de vehículo"""
-    
-    modelo = db.query(ModeloVehiculo).filter(
-        ModeloVehiculo.id == modelo_id
-    ).first()
-    
+
+    modelo = db.query(ModeloVehiculo).filter(ModeloVehiculo.id == modelo_id).first()
+
     if not modelo:
-        raise HTTPException(
-            status_code=404,
-            detail="Modelo de vehículo no encontrado"
-        )
-    
+        raise HTTPException(status_code=404, detail="Modelo de vehículo no encontrado")
+
     # Actualizar campos
     for field, value in modelo_data.dict(exclude_unset=True).items():
         setattr(modelo, field, value)
-    
+
     db.commit()
     db.refresh(modelo)
-    
+
     return modelo
 
 
@@ -143,18 +132,13 @@ def eliminar_modelo_vehiculo(
     current_user: User = Depends(get_current_user),
 ):
     """Eliminar un modelo de vehículo"""
-    
-    modelo = db.query(ModeloVehiculo).filter(
-        ModeloVehiculo.id == modelo_id
-    ).first()
-    
+
+    modelo = db.query(ModeloVehiculo).filter(ModeloVehiculo.id == modelo_id).first()
+
     if not modelo:
-        raise HTTPException(
-            status_code=404,
-            detail="Modelo de vehículo no encontrado"
-        )
-    
+        raise HTTPException(status_code=404, detail="Modelo de vehículo no encontrado")
+
     db.delete(modelo)
     db.commit()
-    
+
     return {"message": "Modelo de vehículo eliminado exitosamente"}

@@ -27,35 +27,27 @@ def dashboard_kpis_principales(
 ):
     """KPIs principales del dashboard"""
     from datetime import date
-    
+
     if not fecha_corte:
         fecha_corte = date.today()
-    
+
     # Cartera total
-    cartera_total = (
-        db.query(func.sum(Cliente.total_financiamiento))
-        .filter(Cliente.total_financiamiento.isnot(None))
-        .scalar()
-        or Decimal("0")
-    )
-    
+    cartera_total = db.query(func.sum(Cliente.total_financiamiento)).filter(
+        Cliente.total_financiamiento.isnot(None)
+    ).scalar() or Decimal("0")
+
     # Clientes al día
     clientes_al_dia = (
-        db.query(func.count(Cliente.id))
-        .filter(Cliente.estado == "ACTIVO")
-        .scalar()
+        db.query(func.count(Cliente.id)).filter(Cliente.estado == "ACTIVO").scalar()
         or 0
     )
-    
+
     # Pagos del mes
-    pagos_mes = (
-        db.query(func.sum(Pago.monto))
-        .filter(func.date_trunc("month", Pago.fecha_pago) == 
-                func.date_trunc("month", fecha_corte))
-        .scalar()
-        or Decimal("0")
-    )
-    
+    pagos_mes = db.query(func.sum(Pago.monto)).filter(
+        func.date_trunc("month", Pago.fecha_pago)
+        == func.date_trunc("month", fecha_corte)
+    ).scalar() or Decimal("0")
+
     # Cuotas vencidas
     cuotas_vencidas = (
         db.query(func.count(Cuota.id))
@@ -64,7 +56,7 @@ def dashboard_kpis_principales(
         .scalar()
         or 0
     )
-    
+
     return {
         "cartera_total": float(cartera_total),
         "clientes_al_dia": clientes_al_dia,
@@ -80,26 +72,20 @@ def kpis_analistas(
     current_user: User = Depends(get_current_user),
 ):
     """KPIs por analista"""
-    
+
     # Analistas con más clientes
     analistas_clientes = (
-        db.query(
-            Analista.nombre,
-            func.count(Cliente.id).label("total_clientes")
-        )
+        db.query(Analista.nombre, func.count(Cliente.id).label("total_clientes"))
         .join(Cliente, Analista.id == Cliente.analista_id)
         .group_by(Analista.id, Analista.nombre)
         .order_by(func.count(Cliente.id).desc())
         .limit(10)
         .all()
     )
-    
+
     return {
         "analistas_clientes": [
-            {
-                "nombre": analista.nombre,
-                "total_clientes": analista.total_clientes
-            }
+            {"nombre": analista.nombre, "total_clientes": analista.total_clientes}
             for analista in analistas_clientes
         ]
     }
@@ -111,23 +97,17 @@ def kpis_cartera(
     current_user: User = Depends(get_current_user),
 ):
     """KPIs de cartera"""
-    
+
     # Cartera por estado
     cartera_estado = (
-        db.query(
-            Cliente.estado,
-            func.sum(Cliente.total_financiamiento).label("total")
-        )
+        db.query(Cliente.estado, func.sum(Cliente.total_financiamiento).label("total"))
         .group_by(Cliente.estado)
         .all()
     )
-    
+
     return {
         "cartera_por_estado": [
-            {
-                "estado": estado,
-                "total": float(total)
-            }
+            {"estado": estado, "total": float(total)}
             for estado, total in cartera_estado
         ]
     }

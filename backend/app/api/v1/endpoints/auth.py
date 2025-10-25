@@ -77,7 +77,9 @@ async def login(
         access_token = create_access_token(subject=user.id)
 
         # Generar refresh token nuevo
-        refresh_token = create_access_token(subject=user.id, expires_delta=timedelta(minutes=1440))
+        refresh_token = create_access_token(
+            subject=user.id, expires_delta=timedelta(minutes=1440)
+        )
 
         logger.info(f"Login exitoso para: {login_data.email}")
 

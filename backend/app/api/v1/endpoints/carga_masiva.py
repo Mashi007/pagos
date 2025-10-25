@@ -29,7 +29,7 @@ router = APIRouter()
 
 class ErrorCargaMasiva(BaseModel):
     """Error encontrado en carga masiva"""
-    
+
     fila: int
     cedula: str
     campo: str
@@ -42,7 +42,7 @@ class ErrorCargaMasiva(BaseModel):
 
 class RegistroCargaMasiva(BaseModel):
     """Registro procesado en carga masiva"""
-    
+
     fila: int
     cedula: str
     nombre_completo: str
@@ -52,6 +52,7 @@ class RegistroCargaMasiva(BaseModel):
 # ============================================
 # ENDPOINT: SUBIR ARCHIVO
 # ============================================
+
 
 @router.post("/subir-archivo")
 async def subir_archivo(
@@ -64,13 +65,12 @@ async def subir_archivo(
         # Validar tipo de archivo
         if not archivo.filename.endswith((".xlsx", ".xls")):
             raise HTTPException(
-                status_code=400,
-                detail="Solo se permiten archivos Excel (.xlsx, .xls)"
+                status_code=400, detail="Solo se permiten archivos Excel (.xlsx, .xls)"
             )
-        
+
         # Leer contenido del archivo
         contenido = await archivo.read()
-        
+
         # Procesar archivo (simulación básica)
         resultado = {
             "archivo": archivo.filename,
@@ -78,22 +78,22 @@ async def subir_archivo(
             "errores_criticos": 0,
             "errores_advertencia": 0,
             "registros_validos": 0,
-            "mensaje": "Archivo procesado correctamente"
+            "mensaje": "Archivo procesado correctamente",
         }
-        
+
         return resultado
-        
+
     except Exception as e:
         logger.error(f"Error procesando archivo: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error procesando archivo: {str(e)}"
+            status_code=500, detail=f"Error procesando archivo: {str(e)}"
         )
 
 
 # ============================================
 # ENDPOINT: DASHBOARD DE CARGA MASIVA
 # ============================================
+
 
 @router.get("/dashboard")
 async def dashboard_carga_masiva(
@@ -108,14 +108,13 @@ async def dashboard_carga_masiva(
             "total_clientes": db.query(Cliente).count(),
             "total_pagos": db.query(Pago).count(),
             "cargas_recientes": [],
-            "estado": "ACTIVO"
+            "estado": "ACTIVO",
         }
-        
+
         return dashboard
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo dashboard: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error obteniendo dashboard: {str(e)}"
+            status_code=500, detail=f"Error obteniendo dashboard: {str(e)}"
         )
