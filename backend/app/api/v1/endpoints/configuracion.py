@@ -558,8 +558,7 @@ def _registrar_auditoria_configuracion(
         accion=TipoAccion.ACTUALIZACION,
         entidad="configuracion_sistema",
         entidad_id=None,
-        detalles=f"Actualizadas {
-            len(actualizaciones_exitosas)} configuraciones",
+        detalles=f"Actualizadas {len(actualizaciones_exitosas)} configuraciones",
     )
     db.add(auditoria)
 
@@ -1591,9 +1590,7 @@ def actualizar_configuracion_tasas(
     }
 
     logger.info(
-        f"Tasas actualizadas por {
-            current_user.email}: {
-            _config_cache['tasas']}")
+        f"Tasas actualizadas por {current_user.email}: {_config_cache['tasas']}")
 
     return {
         "mensaje": "Configuración de tasas actualizada exitosamente",
@@ -1648,9 +1645,7 @@ def actualizar_configuracion_limites(
     }
 
     logger.info(
-        f"Límites actualizados por {
-            current_user.email}: {
-            _config_cache['limites']}")
+        f"Límites actualizados por {current_user.email}: {_config_cache['limites']}")
 
     return {
         "mensaje": "Configuración de límites actualizada exitosamente",
@@ -1929,14 +1924,12 @@ def validar_limites_cliente(
         if monto_solicitado < limites_monto["monto_minimo_prestamo"]:
             validaciones["puede_solicitar"] = False
             validaciones["mensajes"].append(
-                f"Monto mínimo permitido: ${
-                    limites_monto['monto_minimo_prestamo']:,.2f}")
+                f"Monto mínimo permitido: ${limites_monto['monto_minimo_prestamo']:,.2f}")
 
         if monto_solicitado > limites_monto["monto_maximo_prestamo"]:
             validaciones["puede_solicitar"] = False
             validaciones["mensajes"].append(
-                f"Monto máximo permitido: ${
-                    limites_monto['monto_maximo_prestamo']:,.2f}")
+                f"Monto máximo permitido: ${limites_monto['monto_maximo_prestamo']:,.2f}")
 
         return {
             "cliente_id": cliente_id,

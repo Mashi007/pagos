@@ -22,9 +22,7 @@ class Analista(Base):
     # # COMENTADO: Solo plantilla vacía
 
     def __repr__(self):
-        return f"<Analista(id={
-            self.id}, nombre='{
-            self.nombre}', activo={
+        return f"<Analista(id=" f"{self.id}" f", nombre='{self.nombre}', activo={
             self.activo})>"
 
     @property

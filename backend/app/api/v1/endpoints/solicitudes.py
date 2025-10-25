@@ -237,8 +237,7 @@ async def guardar_archivo_evidencia(
     if extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"Tipo de archivo no permitido. Permitidos: {
-                ', '.join(ALLOWED_EXTENSIONS)}",
+            detail=f"Tipo de archivo no permitido. Permitidos: {', '.join(ALLOWED_EXTENSIONS)}",
         )
 
     # Leer contenido y verificar tamaño
@@ -291,8 +290,7 @@ def _validar_solicitud_modificacion_pago(
     if solicitud_existente:
         raise HTTPException(
             status_code=400,
-            detail=f"Ya existe una solicitud pendiente para este pago (ID: {
-                solicitud_existente.id})",
+            detail=f"Ya existe una solicitud pendiente para este pago (ID: {solicitud_existente.id})",
         )
 
     return pago, solicitud_existente
@@ -1712,8 +1710,7 @@ async def _enviar_email_resultado_solicitud(solicitud: Aprobacion):
         emoji = estado_emoji.get(solicitud.estado, "📋")
         color = "#28a745" if solicitud.estado == "APROBADA" else "#dc3545"
 
-        asunto = f"{emoji} Solicitud {
-            solicitud.estado.lower()} - {
+        asunto = f"{emoji}" f"Solicitud {solicitud.estado.lower()} - {
             solicitud.tipo_solicitud}"
 
         cuerpo_html = f"""

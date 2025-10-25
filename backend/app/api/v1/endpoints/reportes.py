@@ -516,9 +516,7 @@ async def generar_estado_cuenta_pdf(
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"attachment; filename=estado_cuenta_{cliente.cedula}.pdf"
-            },
+            headers={"Content-Disposition": f"attachment; filename=estado_cuenta_{cliente.cedula}.pdf"},
         )
 
     except ImportError:
@@ -658,9 +656,7 @@ async def generar_tabla_amortizacion_pdf(
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"attachment; filename=amortizacion_{cliente.cedula}.pdf"
-            },
+            headers={"Content-Disposition": f"attachment; filename=amortizacion_{cliente.cedula}.pdf"},
         )
 
     except ImportError:
@@ -1055,9 +1051,7 @@ async def reporte_mensual_cartera_pdf(
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"attachment; filename=cartera_mensual_{mes:02d}_{anio}.pdf"
-            },
+            headers={"Content-Disposition": f"attachment; filename=cartera_mensual_{mes:02d}_{anio}.pdf"},
         )
 
     except ImportError:
@@ -1255,12 +1249,7 @@ async def reporte_asesor_pdf(
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
-            headers={
-                "Content-Disposition": (
-                    f"attachment; filename=reporte_asesor_{
-                        asesor.full_name.replace(
-                            ' ',
-                            '_')}.pdf")},
+            headers={"Content-Disposition": f"attachment; filename=reporte_asesor_{asesor.full_name.replace(' ', '_')}.pdf"},
         )
 
     except ImportError:

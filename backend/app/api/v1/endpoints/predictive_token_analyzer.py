@@ -275,8 +275,7 @@ class TokenPredictiveAnalyzer:
                     "probability": min(
                         avg_response_time / 5.0,
                         1.0),
-                    "description": f"Tiempo de respuesta alto: {
-                        avg_response_time:.2f}s",
+                    "description": f"Tiempo de respuesta alto: {avg_response_time:.2f}s",
                 })
             predictions["system_health"] = "degraded"
             predictions["recommendations"].append(

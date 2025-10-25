@@ -117,8 +117,7 @@ async def generar_template_conciliacion(
         return {
             "success": True,
             "message": "Template generado exitosamente",
-            "filename": f"Template_Conciliacion_{
-                datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            "filename": f"Template_Conciliacion_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
             "content": output.getvalue(),
         }
 
@@ -252,9 +251,7 @@ async def desconciliar_pago(
     """Desconciliar un pago ya conciliado"""
     try:
         logger.info(
-            f"Usuario {
-                current_user.email} desconciliando pago {
-                conciliacion_data.numero_documento_anterior}")
+            f"Usuario {current_user.email} desconciliando pago {conciliacion_data.numero_documento_anterior}")
 
         # Buscar el pago a desconciliar
         pago = (
@@ -297,8 +294,7 @@ async def desconciliar_pago(
         db.commit()
 
         logger.info(
-            f"Pago {
-                conciliacion_data.numero_documento_anterior} desconciliado exitosamente")
+            f"Pago {conciliacion_data.numero_documento_anterior} desconciliado exitosamente")
 
         return conciliacion_record
 

@@ -275,9 +275,8 @@ def _procesar_fila_movimiento(
             )
             if not cliente:
                 advertencias.append(
-                    f"Fila {
-                        index +
-                        1}: Cédula {cedula} no registrada en sistema")
+                    f"Fila {index + 1}: Cédula {cedula} no registrada en sistema"
+                )
 
         # Crear movimiento
         movimiento = MovimientoBancarioExtendido(
@@ -1645,5 +1644,4 @@ Saludos.
     except Exception as e:
         logger = logging.getLogger(__name__)
         logger.error(
-            f"Error notificando admin sobre conciliación {proceso_id}: {
-                str(e)}")
+            f"Error notificando admin sobre conciliación {proceso_id}: {str(e)}")

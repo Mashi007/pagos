@@ -171,9 +171,7 @@ class NotificacionMulticanal:
                 await self._generar_reporte_diario(resultados)
 
             logger.info(
-                f"✅ Procesamiento completado: {
-                    resultados['exitosas']} exitosas, {
-                    resultados['fallidas']} fallidas")
+                f"✅ Procesamiento completado: {resultados['exitosas']} exitosas, {resultados['fallidas']} fallidas")
 
             return resultados
 
@@ -231,8 +229,7 @@ class NotificacionMulticanal:
 
                 except Exception as e:
                     logger.error(
-                        f"Error enviando notificación a cliente {
-                            cliente_data.get('cliente_id')}: {e}")
+                        f"Error enviando notificación a cliente {cliente_data.get('cliente_id')}: {e}")
                     resultado["fallidas"] += 1
 
             return resultado
@@ -849,8 +846,7 @@ Financiamiento Automotriz"""
                     categoria="CLIENTE",
                     prioridad="NORMAL",
                     titulo=f"Notificación {tipo.value} - {canal}",
-                    mensaje=f"Notificación enviada por {canal} al cliente {
-                        cliente_data['nombre']}",
+                    mensaje=f"Notificación enviada por {canal} al cliente {cliente_data['nombre']}",
                     canal=canal,
                     estado=estado,
                     destinatario_email=(
@@ -919,8 +915,7 @@ Financiamiento Automotriz"""
             """
 
             for tipo, datos in resultados["por_tipo"].items():
-                reporte_html += f"<li><strong>{tipo}:</strong> {
-                    datos['exitosas']}/{
+                reporte_html += f"<li><strong>" f"{tipo}" f":</strong> {datos['exitosas']}/{
                     datos['total']} exitosas</li>"
 
             reporte_html += "</ul>"
@@ -987,11 +982,9 @@ class NotificationScheduler:
 
             # Log de resultados
             logger.info(
-                f"✅ Ciclo completado: {
-                    resultados.get(
+                f"✅ Ciclo completado:" f"{resultados.get(
                         'exitosas',
-                        0)} exitosas, {
-                    resultados.get(
+                        0)}" f"exitosas, {resultados.get(
                         'fallidas',
                         0)} fallidas")
 
@@ -1103,8 +1096,7 @@ class GestorReintentos:
 
                 except Exception as e:
                     logger.error(
-                        f"Error en reintento de notificación {
-                            notificacion.id}: {e}")
+                        f"Error en reintento de notificación {notificacion.id}: {e}")
                     resultados["fallidos"] += 1
 
             return resultados
@@ -1298,8 +1290,7 @@ class WhatsAppTemplateManager:
             "language": template["idioma"],
             "components": template["componentes"],
             "status": "PENDING_APPROVAL",
-            "descripcion": f"Template para {
-                template_name.replace(
+            "descripcion": f"Template para {template_name.replace(
                     '_',
                     ' ').title()}",
         }

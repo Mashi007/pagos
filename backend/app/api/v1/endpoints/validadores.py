@@ -282,8 +282,7 @@ def formatear_mientras_escribe(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error formateando: {
-                str(e)}",
+            detail=f"Error formateando: {str(e)}",
         )
 
 
@@ -358,8 +357,7 @@ def _registrar_auditoria_correccion(
         accion=TipoAccion.ACTUALIZACION,
         entidad="cliente",
         entidad_id=cliente_id,
-        detalles=f"Corrección de datos: {
-            len(cambios_aplicados)} campos actualizados",
+        detalles=f"Corrección de datos: {len(cambios_aplicados)} campos actualizados",
     )
     db.add(auditoria)
     db.commit()
@@ -477,8 +475,7 @@ def corregir_datos_cliente(
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail=f"Error corrigiendo datos: {
-                str(e)}",
+            detail=f"Error corrigiendo datos: {str(e)}",
         )
 
 
@@ -561,11 +558,8 @@ def _validar_y_corregir_numero_operacion(
 def _limpiar_observaciones_error(pago: Pago, current_user: User) -> None:
     """Limpiar observaciones de error"""
     if pago.observaciones and "REQUIERE_VALIDACIÓN" in pago.observaciones:
-        usuario_nombre = f"{
-            current_user.nombre} {
-            current_user.apellido}".strip()
-        pago.observaciones = f"CORREGIDO - {
-            datetime.now().strftime('%d/%m/%Y')} por {usuario_nombre}"
+        usuario_nombre = f"{current_user.nombre} {current_user.apellido}".strip()
+        pago.observaciones = f"CORREGIDO - {datetime.now().strftime('%d/%m/%Y')} por {usuario_nombre}"
 
 
 @router.post("/corregir-pago/{pago_id}")
@@ -642,9 +636,7 @@ def corregir_datos_pago(
             "errores_validacion": errores_validacion,
             "total_correcciones": len(correcciones_aplicadas),
             "fecha_correccion": datetime.now().isoformat(),
-            "corregido_por": f"{
-                current_user.nombre} {
-                current_user.apellido}".strip(),
+            "corregido_por": f"{current_user.nombre} {current_user.apellido}".strip(),
         }
 
     except HTTPException:
@@ -653,8 +645,7 @@ def corregir_datos_pago(
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail=f"Error corrigiendo pago: {
-                str(e)}",
+            detail=f"Error corrigiendo pago: {str(e)}",
         )
 
 
@@ -702,9 +693,7 @@ def detectar_errores_masivo(
                 "limite": limite,
                 "tipo_analisis": tipo_analisis,
                 "pais": pais,
-                "ejecutado_por": f"{
-                    current_user.nombre} {
-                    current_user.apellido}".strip(),
+                "ejecutado_por": f"{current_user.nombre} {current_user.apellido}".strip(),
             },
             "acciones_sugeridas": [
                 "Usar herramienta de corrección masiva para los casos detectados",
@@ -717,8 +706,7 @@ def detectar_errores_masivo(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error en análisis masivo: {
-                str(e)}",
+            detail=f"Error en análisis masivo: {str(e)}",
         )
 
 
@@ -749,11 +737,8 @@ def corregir_datos_masivo(
         return {
             "mensaje": "✅ Corrección masiva iniciada en background",
             "total_clientes": len(correcciones_masivas),
-            "estimacion_tiempo": f"{
-                len(correcciones_masivas) * 2} segundos",
-            "ejecutado_por": f"{
-                current_user.nombre} {
-                current_user.apellido}".strip(),
+            "estimacion_tiempo": f"{len(correcciones_masivas) * 2} segundos",
+            "ejecutado_por": f"{current_user.nombre} {current_user.apellido}".strip(),
             "timestamp": datetime.now().isoformat(),
             "seguimiento": "GET /api/v1/validadores/estado-correccion-masiva",
         }
@@ -761,8 +746,7 @@ def corregir_datos_masivo(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error iniciando corrección masiva: {
-                str(e)}",
+            detail=f"Error iniciando corrección masiva: {str(e)}",
         )
 
 
@@ -853,8 +837,7 @@ def obtener_ejemplos_correccion(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error obteniendo ejemplos: {
-                str(e)}",
+            detail=f"Error obteniendo ejemplos: {str(e)}",
         )
 
 
@@ -953,8 +936,7 @@ async def _procesar_correcciones_masivas(
 
             except Exception as e:
                 logger.error(
-                    f"Error corrigiendo cliente {
-                        correccion.cliente_id}: {e}"
+                    f"Error corrigiendo cliente {correccion.cliente_id}: {e}"
                 )
                 fallidas += 1
 

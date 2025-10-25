@@ -1387,8 +1387,7 @@ Para evitar cargos adicionales, realiza tu pago hoy.
 Necesitas ayuda? Responde este mensaje.
                 """),
                 "sms": (
-                    f"FINANCIERA: {nombre}, tu cuota está vencida ({
-                        contexto['dias_mora']} días). Monto: ${
+                    f"FINANCIERA:" f"{nombre}" f", tu cuota está vencida ({contexto['dias_mora']} días). Monto: ${
                         contexto['ultima_cuota']['monto']:,.0f}. Paga hoy para evitar cargos. Info: 809-XXX-XXXX"),
             },
             "MORA_AVANZADA": {
@@ -1713,8 +1712,7 @@ class AlertasInteligentes:
                         "tipo": "DETERIORO_CARTERA",
                         "prioridad": "MEDIA",
                         "titulo": "Deterioro detectado en calidad de cartera",
-                        "descripcion": f"Incremento de {
-                            deterioro['incremento']}% en mora este mes",
+                        "descripcion": f"Incremento de {deterioro['incremento']}% en mora este mes",
                         "datos": deterioro,
                         "accion_recomendada": "Revisar políticas de aprobación",
                     })
@@ -1726,8 +1724,7 @@ class AlertasInteligentes:
                     {
                         "tipo": "OPORTUNIDADES",
                         "prioridad": "BAJA",
-                        "titulo": f"{
-                            len(oportunidades)} oportunidades de negocio",
+                        "titulo": f"{len(oportunidades)} oportunidades de negocio",
                         "descripcion": "Clientes elegibles para productos adicionales",
                         "oportunidades": oportunidades,
                         "accion_recomendada": "Contacto comercial",

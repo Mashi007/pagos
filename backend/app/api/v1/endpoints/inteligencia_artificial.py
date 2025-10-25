@@ -141,9 +141,7 @@ def calcular_scoring_crediticio(
             accion=TipoAccion.CONSULTA,
             entidad="scoring",
             entidad_id=None,
-            detalles=f"Scoring calculado: {
-                resultado['score_final']} para cédula {
-                solicitud.cedula}",
+            detalles=f"Scoring calculado: {resultado['score_final']} para cédula {solicitud.cedula}",
         )
         db.add(auditoria)
         db.commit()
@@ -800,8 +798,7 @@ def _identificar_alertas_criticas(analisis: Dict) -> List[str]:
     )
     if proyeccion_mora > 15:  # >15% de mora proyectada
         alertas.append(
-            f"🚨 Mora proyectada: {
-                proyeccion_mora:.1f}% - Acción inmediata requerida")
+            f"🚨 Mora proyectada: {proyeccion_mora:.1f}% - Acción inmediata requerida")
 
     return alertas
 

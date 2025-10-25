@@ -1462,8 +1462,7 @@ async def exportar_vista_dashboard(
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 headers={
                     "Content-Disposition": (
-                        f"attachment; filename=dashboard_{tipo_vista}_{
-                            date.today().strftime('%Y%m%d')}.xlsx")},
+                        f"attachment; filename=dashboard_{tipo_vista}_{date.today().strftime('%Y%m%d')}.xlsx")},
             )
 
         else:

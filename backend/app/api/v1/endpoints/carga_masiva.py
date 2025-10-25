@@ -141,8 +141,7 @@ async def cargar_archivo_excel(
             usuario_id=current_user.id,
             accion=TipoAccion.CREAR,
             tabla="CargaMasiva",
-            descripcion=f"Análisis de carga masiva: {
-                archivo.filename} ({tipo_carga})",
+            descripcion=f"Análisis de carga masiva: {archivo.filename} ({tipo_carga})",
             datos_nuevos={
                 "archivo": archivo.filename,
                 "tipo": tipo_carga,
@@ -161,8 +160,7 @@ async def cargar_archivo_excel(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error al procesar archivo: {
-                str(e)}",
+            detail=f"Error al procesar archivo: {str(e)}",
         )
 
 
@@ -214,8 +212,7 @@ def _validar_columnas_requeridas(df: pd.DataFrame) -> None:
     if columnas_faltantes:
         raise HTTPException(
             status_code=400,
-            detail=f"❌ Faltan columnas requeridas: {
-                ', '.join(columnas_faltantes)}",
+            detail=f"❌ Faltan columnas requeridas: {', '.join(columnas_faltantes)}",
         )
 
 
@@ -835,8 +832,7 @@ async def _analizar_archivo_clientes(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error analizando archivo de clientes: {
-                str(e)}",
+            detail=f"Error analizando archivo de clientes: {str(e)}",
         )
 
 
@@ -883,8 +879,7 @@ async def _analizar_archivo_pagos(
         if columnas_faltantes:
             raise HTTPException(
                 status_code=400,
-                detail=f"❌ Faltan columnas requeridas: {
-                    ', '.join(columnas_faltantes)}",
+                detail=f"❌ Faltan columnas requeridas: {', '.join(columnas_faltantes)}",
             )
 
         # Procesar cada pago
@@ -1120,8 +1115,7 @@ async def _analizar_archivo_pagos(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error analizando archivo de pagos: {
-                str(e)}",
+            detail=f"Error analizando archivo de pagos: {str(e)}",
         )
 
 
@@ -1355,8 +1349,7 @@ async def corregir_registro_en_linea(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error corrigiendo registro: {
-                str(e)}",
+            detail=f"Error corrigiendo registro: {str(e)}",
         )
 
 
@@ -1436,8 +1429,7 @@ async def guardar_registros_corregidos(
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail=f"Error guardando registros: {
-                str(e)}",
+            detail=f"Error guardando registros: {str(e)}",
         )
 
 
@@ -1574,9 +1566,7 @@ def _guardar_o_actualizar_cliente(
         db.add(nuevo_cliente)
         db.flush()
         logger.info(
-            f"Cliente creado: {
-                datos['cedula']} (ID: {
-                nuevo_cliente.id})"
+            f"Cliente creado: {datos['cedula']} (ID: {nuevo_cliente.id})"
         )
         return nuevo_cliente
 
@@ -1595,9 +1585,7 @@ def _registrar_auditoria_cliente(
         accion=TipoAccion.ACTUALIZAR if es_actualizacion else TipoAccion.CREAR,
         tabla="Cliente",
         registro_id=cliente.id,
-        descripcion=f"Cliente {
-            'actualizado' if es_actualizacion else 'creado'} desde carga masiva: {
-            datos['cedula']}",
+        descripcion=f"Cliente {'actualizado' if es_actualizacion else 'creado'} desde carga masiva: {datos['cedula']}",
         datos_nuevos=cliente_data,
         resultado="EXITOSO",
     )
@@ -1639,9 +1627,7 @@ async def _guardar_cliente_desde_carga(
 
     except Exception as e:
         raise Exception(
-            f"Error guardando cliente {
-                datos.get('cedula')}: {
-                str(e)}"
+            f"Error guardando cliente {datos.get('cedula')}: {str(e)}"
         )
 
 
@@ -1671,8 +1657,7 @@ async def _guardar_pago_desde_carga(
         # Verificar que el cliente tenga préstamo activo
         if not cliente.prestamos or len(cliente.prestamos) == 0:
             raise Exception(
-                f"Cliente {
-                    datos['cedula']} no tiene préstamos activos"
+                f"Cliente {datos['cedula']} no tiene préstamos activos"
             )
 
         # Usar el primer préstamo activo
@@ -1707,9 +1692,7 @@ async def _guardar_pago_desde_carga(
         db.flush()
 
         logger.info(
-            f"Pago creado para cliente {
-                datos['cedula']}: ${
-                datos['monto_pagado']}"
+            f"Pago creado para cliente {datos['cedula']}: ${datos['monto_pagado']}"
         )
 
         # Registrar en auditoría
@@ -1718,8 +1701,7 @@ async def _guardar_pago_desde_carga(
             accion=TipoAccion.CREAR,
             tabla="Pago",
             registro_id=nuevo_pago.id,
-            descripcion=f"Pago creado desde carga masiva para cliente {
-                datos['cedula']}",
+            descripcion=f"Pago creado desde carga masiva para cliente {datos['cedula']}",
             datos_nuevos=pago_data,
             resultado="EXITOSO",
         )
@@ -1727,9 +1709,7 @@ async def _guardar_pago_desde_carga(
 
     except Exception as e:
         raise Exception(
-            f"Error guardando pago para {
-                datos.get('cedula')}: {
-                str(e)}"
+            f"Error guardando pago para {datos.get('cedula')}: {str(e)}"
         )
 
 
@@ -1840,8 +1820,7 @@ async def descargar_template_excel(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error generando template: {
-                str(e)}",
+            detail=f"Error generando template: {str(e)}",
         )
 
 
@@ -1900,8 +1879,7 @@ async def obtener_opciones_configuracion(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error obteniendo opciones: {
-                str(e)}",
+            detail=f"Error obteniendo opciones: {str(e)}",
         )
 
 
@@ -1962,6 +1940,5 @@ async def dashboard_carga_masiva(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error obteniendo dashboard: {
-                str(e)}",
+            detail=f"Error obteniendo dashboard: {str(e)}",
         )

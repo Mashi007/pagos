@@ -262,8 +262,7 @@ class ErrorImpactAnalyzer:
                 for cb in self.circuit_breakers.values()
                 if cb.state == "OPEN"
             )
-            circuit_breaker_status = f"{open_circuits} circuitos abiertos de {
-                len(
+            circuit_breaker_status = f"{open_circuits}" f"circuitos abiertos de {len(
                     self.circuit_breakers)}"
 
             # Generar recomendaciones

@@ -207,8 +207,7 @@ def recalcular_mora(
             total_mora_nueva=resultado["total_mora_nueva"],
             diferencia=resultado["diferencia"],
             cuotas_con_mora=cuotas_detalle,
-            mensaje=f"Se recalculó la mora de {
-                resultado['cuotas_actualizadas']} cuotas",
+            mensaje=f"Se recalculó la mora de {resultado['cuotas_actualizadas']} cuotas",
         )
     except Exception as e:
         raise HTTPException(
@@ -386,9 +385,7 @@ def proyectar_pago(
         monto_sobrante=monto_disponible,
         nuevo_saldo_pendiente=nuevo_saldo,
         cuotas_restantes=cuotas_restantes,
-        mensaje=f"El pago de {
-            request.monto_pago} afectaría {
-            len(cuotas_afectadas)} cuota(s)",
+        mensaje=f"El pago de {request.monto_pago} afectaría {len(cuotas_afectadas)} cuota(s)",
     )
 
 
