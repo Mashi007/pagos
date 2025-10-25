@@ -1,290 +1,556 @@
-﻿"""Sistema de AnÃ¡lisis Predictivo de AutenticaciÃ³nMachine Learning y anÃ¡lisis estadÃ­stico para predecir problemas de    autenticaciÃ³n"""
+﻿"""Sistema de Análisis Predictivo de Autenticación
+Machine Learning y análisis estadístico para predecir problemas de autenticación
+"""
+
 import logging
 import statistics
-from collections 
-import deque
-from dataclasses 
-import dataclass
-from datetime 
-import datetime, timedelta
-from typing 
-import Any, Dict, List, Optional
-from fastapi 
-import APIRouter, Depends
-from sqlalchemy.orm 
-import Session
-from app.api.deps 
-import get_db
-from app.models.user 
-import Userlogger = logging.getLogger(__name__)router = APIRouter()@dataclass
-class AuthMetrics:
-    """MÃ©tricas de autenticaciÃ³n"""    timestamp:
- datetime    success_rate:
- float    avg_response_time:
- float    error_count:
- int    total_requests:
- int    unique_users:
- int    token_expiry_rate:
- float# Almacenamiento para mÃ©tricas histÃ³ricashistorical_metrics = deque(    maxlen=1000)  # Mantener Ãºltimos 1000 puntos de mÃ©tricasprediction_models = {}  # Modelos de predicciÃ³n
+from collections import deque
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Tuple
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy.orm import Session
+from app.api.deps import get_current_user, get_db
+from app.models.user import User
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+# ============================================
+# DATACLASSES Y MODELOS
+# ============================================
+
+@dataclass
+class PredictionResult:
+    prediction_id: str
+    user_id: str
+    prediction_type: str
+    confidence_score: float
+    predicted_value: Any
+    factors: List[str]
+    timestamp: datetime
+    time_horizon: str  # "short", "medium", "long"
+
+@dataclass
+class UserBehaviorPattern:
+    user_id: str
+    login_frequency: float
+    failure_rate: float
+    time_patterns: Dict[str, float]
+    location_patterns: Dict[str, int]
+    device_patterns: Dict[str, int]
+    risk_score: float
+
+# ============================================
+# SISTEMA DE ANÁLISIS PREDICTIVO
+# ============================================
+
 class PredictiveAnalyzer:
-    """Analizador predictivo para problemas de autenticaciÃ³n"""    @staticmethod    
-def calculate_trend(        data_points:
- List[float], window_size:
- int = 5    ) -> Dict[str, float]:
-        """Calcular tendencia de datos"""        if len(data_points) < window_size:
-            return {                "trend":
- "insufficient_data",                "slope":
- 0.0,                "confidence":
- 0.0,            }        recent_data = data_points[-window_size:
-]        older_data = (            data_points[-window_size * 2 :
- -window_size]            if len(data_points) >= window_size * 2            else recent_data        )        recent_avg = statistics.mean(recent_data)        older_avg = statistics.mean(older_data)        slope = recent_avg - older_avg        trend = (            "increasing"            if slope > 0.05            else "decreasing" if slope < -0.05 else "stable"        )        # Calcular confianza basada en variabilidad        variance = (            statistics.variance(recent_data) if len(recent_data) > 1 else 0        )        confidence = max(0, 1 - (variance / (recent_avg + 0.001)))        return {            "trend":
- trend,            "slope":
- slope,            "confidence":
- confidence,            "recent_avg":
- recent_avg,            "older_avg":
- older_avg,        }    @staticmethod    
-def detect_anomaly_patterns(        metrics:
- List[AuthMetrics],    ) -> List[Dict[str, Any]]:
-        """Detectar patrones anÃ³malos en mÃ©tricas histÃ³ricas"""        anomalies = []        if len(metrics) < 10:
-            return anomalies        # Extraer series temporales        success_rates = [m.success_rate for m in metrics]        response_times = [m.avg_response_time for m in metrics]        error_counts = [m.error_count for m in metrics]        # AnomalÃ­a 1:
- CaÃ­da sÃºbita en tasa de Ã©xito        success_trend = PredictiveAnalyzer.calculate_trend(success_rates)        if (            success_trend["trend"] == "decreasing"            and success_trend["confidence"] > 0.7        ):
-            anomalies.append(                {                    "type":
- "success_rate_decline",                    "severity":
- "high",                    "description":
- f"Success rate declining     (slope:
- {ssuccess_trend['slope']:
-.3f})",                    "confidence":
- success_trend["confidence"],                    "recommendation":
- "Investigate recent changes to    authentication system",                }            )        # AnomalÃ­a 2:
- Aumento en tiempo de respuesta        response_trend = PredictiveAnalyzer.calculate_trend(response_times)        if (            response_trend["trend"] == "increasing"            and response_trend["confidence"] > 0.6        ):
-            anomalies.append(                {                    "type":
- "response_time_increase",                    "severity":
- "medium",                    "description":
- (                        f"Response time increasing     (slope:
- {response_trend['slope']:
-.1f}ms)"                    ),                    "confidence":
- response_trend["confidence"],                    "recommendation":
- "Check database performance and     server load",                }            )        # AnomalÃ­a 3:
- Picos de errores        if len(error_counts) >= 5:
-            recent_errors = error_counts[-5:
-]            avg_recent_errors = statistics.mean(recent_errors)            historical_avg = (                statistics.mean(error_counts[:
--5])                if len(error_counts) > 5                else avg_recent_errors            )            if (                avg_recent_errors > historical_avg * 2            ):
-  # Doble del promedio histÃ³rico                anomalies.append(                    {                        "type":
- "error_spike",                        "severity":
- "high",                        "description":
- (                            f"Error count spike:
- {avg_recent_errors:
-.1f} "    f"vs {historical_avg:
-.1f} historical avg"                        ),                        "confidence":
- 0.8,                        "recommendation":
- "Investigate error patterns and     root causes",                    }                )        return anomalies    @staticmethod    
-def predict_future_issues(metrics:
- List[AuthMetrics]) -> Dict[str, Any]:
-        """Predecir problemas futuros basado en tendencias"""        if len(metrics) < 20:
-            return {                "status":
- "insufficient_data",                "message":
- "Need at least 20 data points",            }        predictions = {}        # Extraer series temporales        success_rates = [m.success_rate for m in metrics]        response_times = [m.avg_response_time for m in metrics]        [m.error_count for m in metrics]        # PredicciÃ³n 1:
- Tasa de Ã©xito        success_trend = PredictiveAnalyzer.calculate_trend(            success_rates, window_size=10        )        if success_trend["trend"] == "decreasing":
-            # Calcular cuÃ¡ndo podrÃ­a llegar a un umbral crÃ­tico            current_rate = success_rates[-1]            critical_threshold = 0.7  # 70% success rate            if (                current_rate > critical_threshold                and success_trend["slope"] < 0            ):
-                days_to_critical = (current_rate - critical_threshold) / abs(                    success_trend["slope"]                )                predictions["success_rate_critical"] = {                    "probability":
- min(0.9, success_trend["confidence"]),                    "days_to_critical":
- max(1, int(days_to_critical)),                    "current_rate":
- current_rate,                    "trend_slope":
- success_trend["slope"],                }        # PredicciÃ³n 2:
- Tiempo de respuesta        response_trend = PredictiveAnalyzer.calculate_trend(            response_times, window_size=10        )        if response_trend["trend"] == "increasing":
-            current_time = response_times[-1]            warning_threshold = 2000  # 2 segundos            if (                current_time < warning_threshold                and response_trend["slope"] > 0            ):
-                days_to_warning = (                    warning_threshold - current_time                ) / response_trend["slope"]                predictions["response_time_warning"] = {                    "probability":
- min(0.8, response_trend["confidence"]),                    "days_to_warning":
- max(1, int(days_to_warning)),                    "current_time":
- current_time,                    "trend_slope":
- response_trend["slope"],                }        return {            "status":
- "success",            "predictions":
- predictions,            "analysis_period":
- f"{len(metrics)} data points",            "last_update":
- (                metrics[-1].timestamp.isoformat() if metrics else None            ),        }@router.post("/auth-metrics")async 
-def collect_authentication_metrics(db:
- Session = Depends(get_db)):
-    """    ðŸ“Š Recolectar mÃ©tricas actuales de autenticaciÃ³n    """    try:
-        # Simular recolecciÃ³n de mÃ©tricas     (en producciÃ³n vendrÃ­a de logs/monitoring)        # Por ahora, calcularemos mÃ©tricas bÃ¡sicas        # Contar usuarios activos        active_users = db.query(User).filter(User.is_active).count()        db.query(User).count()        # MÃ©tricas simuladas basadas en configuraciÃ³n        metrics = AuthMetrics(            timestamp=datetime.now(),            success_rate=0.85,  # Simulado - en producciÃ³n vendrÃ­a de logs            avg_response_time=1200.0,  # Simulado            error_count=15,  # Simulado            total_requests=100,  # Simulado            unique_users=active_users,            token_expiry_rate=0.05,  # Simulado        )        # Agregar a mÃ©tricas histÃ³ricas        historical_metrics.append(metrics)        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "success",            "metrics":
- {                "success_rate":
- metrics.success_rate,                "avg_response_time_ms":
- metrics.avg_response_time,                "error_count":
- metrics.error_count,                "total_requests":
- metrics.total_requests,                "unique_users":
- metrics.unique_users,                "token_expiry_rate":
- metrics.token_expiry_rate,            },            "historical_data_points":
- len(historical_metrics),        }    except Exception as e:
-        logger.error(f"Error recolectando mÃ©tricas:
- {e}")        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "error",            "error":
- str(e),        }router.get("/predictive-analysis")
-def _validar_datos_suficientes(    historical_metrics:
- list,) -> Optional[Dict[str, Any]]:
-    """Validar que hay suficientes datos para anÃ¡lisis"""    if len(historical_metrics) < 5:
-        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "insufficient_data",            "message":
- "Need at least 5 data points for analysis",            "current_points":
- len(historical_metrics),        }    return None
-def _generar_analisis_basico(metrics_list:
- list) -> Dict[str, Any]:
-    """Generar anÃ¡lisis bÃ¡sico de anomalÃ­as y predicciones"""    anomalies = PredictiveAnalyzer.detect_anomaly_patterns(metrics_list)    predictions = PredictiveAnalyzer.predict_future_issues(metrics_list)    return {        "anomalies":
- anomalies,        "predictions":
- predictions,    }
-def _calcular_tendencias(metrics_list:
- list) -> Dict[str, Any]:
-    """Calcular tendencias de mÃ©tricas clave"""    success_rates = [m.success_rate for m in metrics_list]    response_times = [m.avg_response_time for m in metrics_list]    error_counts = [m.error_count for m in metrics_list]    return {        "success_rate":
- PredictiveAnalyzer.calculate_trend(success_rates),        "response_time":
- PredictiveAnalyzer.calculate_trend(response_times),        "error_count":
- PredictiveAnalyzer.calculate_trend(error_counts),    }
-def _generar_recomendaciones_predictivas(    predictions:
- Dict[str, Any],) -> List[str]:
-    """Generar recomendaciones basadas en predicciones"""    recommendations = []    if predictions.get("status") == "success":
-        pred_data = predictions.get("predictions", {})        if "success_rate_critical" in pred_data:
-            pred = pred_data["success_rate_critical"]            recommendations.append(                f"ðŸš¨ PredicciÃ³n:
- Tasa de Ã©xito crÃ­tica en    {pred['days_to_critical']} dÃ­as (probabilidad:
- {pred['probability']:
-.1%})"            )        if "response_time_warning" in pred_data:
-            pred = pred_data["response_time_warning"]            recommendations.append(                f"âš ï¸ PredicciÃ³n:
- Tiempo de respuesta alto en    {pred['days_to_warning']} dÃ­as (probabilidad:
- {pred['probability']:
-.1%})"            )    return recommendations
-def _generar_recomendaciones_tendencias(trends:
- Dict[str, Any]) -> List[str]:
-    """Generar recomendaciones basadas en tendencias"""    recommendations = []    if trends["success_rate"]["trend"] == "decreasing":
-        recommendations.append(            "ðŸ“‰ Tendencia:
- Tasa de Ã©xito disminuyendo - Monitorear de cerca"        )    if trends["response_time"]["trend"] == "increasing":
-        recommendations.append(            "â±ï¸ Tendencia:
- Tiempo de respuesta aumentando - Optimizar sistema"        )    if trends["error_count"]["trend"] == "increasing":
-        recommendations.append(            "âŒ Tendencia:
- Errores aumentando - Investigar causas"        )    if not recommendations:
-        recommendations.append(            "âœ… Sistema estable - Continuar monitoreo rutinario"        )    return recommendationsasync 
-def get_predictive_analysis():
-    """    ðŸ”® AnÃ¡lisis predictivo de problemas de autenticaciÃ³n (VERSIÃ“N REFACTORIZADA)    """    try:
-        # 1. Validar datos suficientes        validation_error = _validar_datos_suficientes(historical_metrics)        if validation_error:
-            return validation_error        # 2. Convertir a lista para anÃ¡lisis        metrics_list = list(historical_metrics)        # 3. Generar anÃ¡lisis bÃ¡sico        analysis = _generar_analisis_basico(metrics_list)        # 4. Calcular tendencias        trends = _calcular_tendencias(metrics_list)        # 5. Generar recomendaciones        recommendations = []        recommendations.extend(            _generar_recomendaciones_predictivas(analysis["predictions"])        )        recommendations.extend(_generar_recomendaciones_tendencias(trends))        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "success",            "analysis":
- {                "anomalies":
- analysis["anomalies"],                "predictions":
- analysis["predictions"],                "trends":
- trends,                "data_points":
- len(metrics_list),                "analysis_period":
- f"{len(metrics_list)} data points",            },            "recommendations":
- recommendations,            "summary":
- {                "total_anomalies":
- len(analysis["anomalies"]),                "critical_anomalies":
- len(                    [                        a                        for a in analysis["anomalies"]                        if a["severity"] == "high"                    ]                ),                "predictions_count":
- (                    len(analysis["predictions"].get("predictions", {}))                    if analysis["predictions"].get("status") == "success"                    else 0                ),            },        }    except Exception as e:
-        logger.error(f"Error en anÃ¡lisis predictivo:
- {e}")        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "error",            "error":
- str(e),        }router.get("/health-score")
-def _validar_datos_health_score(    historical_metrics:
- list,) -> Optional[Dict[str, Any]]:
-    """Validar que hay suficientes datos para health score"""    if len(historical_metrics) < 3:
-        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "insufficient_data",            "message":
- "Need at least 3 data points for health score",        }    return None
-def _calcular_componente_success_rate(recent_metrics:
- list) -> Dict[str, Any]:
-    """Calcular componente de tasa de Ã©xito (40% del score)"""    avg_success_rate = statistics.mean(        [m.success_rate for m in recent_metrics]    )    success_score = min(100, avg_success_rate * 100)    return {        "value":
- avg_success_rate,        "score":
- success_score,        "weight":
- 0.4,    }
-def _calcular_componente_response_time(recent_metrics:
- list) -> Dict[str, Any]:
-    """Calcular componente de tiempo de respuesta (30% del score)"""    avg_response_time = statistics.mean(        [m.avg_response_time for m in recent_metrics]    )    # Score basado en tiempo de respuesta (mejor = mÃ¡s rÃ¡pido)    response_score = max(0, 100 - (avg_response_time / 50))  # Penalizar >5s    return {        "value":
- avg_response_time,        "score":
- response_score,        "weight":
- 0.3,    }
-def _calcular_componente_error_stability(    recent_metrics:
- list,) -> Dict[str, Any]:
-    """Calcular componente de estabilidad de errores (20% del score)"""    error_counts = [m.error_count for m in recent_metrics]    error_variance = (        statistics.variance(error_counts) if len(error_counts) > 1 else 0    )    avg_errors = statistics.mean(error_counts)    stability_score = max(0, 100 - (error_variance / 10) - (avg_errors / 2))    return {        "value":
- avg_errors,        "variance":
- error_variance,        "score":
- stability_score,        "weight":
- 0.2,    }
-def _calcular_componente_user_availability(    recent_metrics:
- list,) -> Dict[str, Any]:
-    """Calcular componente de disponibilidad de usuarios (10% del score)"""    avg_unique_users = statistics.mean(        [m.unique_users for m in recent_metrics]    )    user_score = min(        100, (avg_unique_users / 10) * 100    )  # Normalizar a 10 usuarios    return {        "value":
- avg_unique_users,        "score":
- user_score,        "weight":
- 0.1,    }
-def _calcular_score_total(components:
- Dict[str, Any]) -> float:
-    """Calcular score total ponderado"""    return (        components["success_rate"]["score"]        * components["success_rate"]["weight"]        + components["response_time"]["score"]        * components["response_time"]["weight"]        + components["error_stability"]["score"]        * components["error_stability"]["weight"]        + components["user_availability"]["score"]        * components["user_availability"]["weight"]    )
-def _determinar_estado_salud(total_score:
- float) -> tuple[str, str]:
-    """Determinar estado de salud basado en score total"""    if total_score >= 90:
-        return "excellent", "green"    elif total_score >= 75:
-        return "good", "yellow"    elif total_score >= 60:
-        return "fair", "orange"    else:
-        return "poor", "red"
-def _generar_recomendaciones_health_score(    components:
- Dict[str, Any],) -> List[str]:
-    """Generar recomendaciones basadas en componentes"""    recommendations = []    if components["success_rate"]["score"] < 80:
-        recommendations.append("ðŸ”§ Mejorar tasa de Ã©xito de autenticaciÃ³n")    if components["response_time"]["score"] < 70:
-        recommendations.append("âš¡ Optimizar tiempo de respuesta")    if components["error_stability"]["score"] < 60:
-        recommendations.append("ðŸ›¡ï¸ Reducir variabilidad en errores")    if components["user_availability"]["score"] < 50:
-        recommendations.append("ðŸ‘¥ Verificar disponibilidad de usuarios")    return recommendationsasync 
-def calculate_authentication_health_score():
-    """    ðŸ¥ Calcular puntuaciÃ³n de salud del sistema de autenticaciÃ³n     (VERSIÃ“N REFACTORIZADA)    """    try:
-        # 1. Validar datos suficientes        validation_error = _validar_datos_health_score(historical_metrics)        if validation_error:
-            return validation_error        # 2. Obtener mÃ©tricas mÃ¡s recientes        recent_metrics = list(historical_metrics)[-5:
-]  # Ãšltimos 5 puntos        # 3. Calcular componentes del health score        components = {            "success_rate":
- _calcular_componente_success_rate(recent_metrics),            "response_time":
- _calcular_componente_response_time(                recent_metrics            ),            "error_stability":
- _calcular_componente_error_stability(                recent_metrics            ),            "user_availability":
- _calcular_componente_user_availability(                recent_metrics            ),        }        # 4. Calcular score total ponderado        total_score = _calcular_score_total(components)        # 5. Determinar estado de salud        health_status, health_color = _determinar_estado_salud(total_score)        # 6. Generar recomendaciones        recommendations = _generar_recomendaciones_health_score(components)        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "success",            "health_score":
- {                "total_score":
- round(total_score, 1),                "health_status":
- health_status,                "health_color":
- health_color,                "components":
- components,            },            "recommendations":
- recommendations,            "analysis_period":
- f"{len(recent_metrics)} recent data points",            "last_updated":
- (                recent_metrics[-1].timestamp.isoformat()                if recent_metrics                else None            ),        }    except Exception as e:
-        logger.error(f"Error calculando health score:
- {e}")        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "error",            "error":
- str(e),        }@router.get("/metrics-history")async 
-def get_metrics_history(hours:
- int = 24, limit:
- int = 100):
-    """    ðŸ“ˆ Obtener historial de mÃ©tricas    """    try:
-        cutoff_time = datetime.now() - timedelta(hours=hours)        # Filtrar mÃ©tricas por tiempo        filtered_metrics = [            m for m in historical_metrics if m.timestamp > cutoff_time        ]        # Limitar resultados        if limit:
-            filtered_metrics = filtered_metrics[-limit:
-]        # Convertir a formato serializable        metrics_data = []        for metric in filtered_metrics:
-            metrics_data.append(                {                    "timestamp":
- metric.timestamp.isoformat(),                    "success_rate":
- metric.success_rate,                    "avg_response_time_ms":
- metric.avg_response_time,                    "error_count":
- metric.error_count,                    "total_requests":
- metric.total_requests,                    "unique_users":
- metric.unique_users,                    "token_expiry_rate":
- metric.token_expiry_rate,                }            )        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "success",            "history":
- {                "period_hours":
- hours,                "total_points":
- len(metrics_data),                "metrics":
- metrics_data,            },        }    except Exception as e:
-        logger.error(f"Error obteniendo historial de mÃ©tricas:
- {e}")        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "error",            "error":
- str(e),        }
+    """Analizador predictivo de autenticación"""
+    
+    def __init__(self):
+        self.user_data = defaultdict(lambda: {
+            "login_attempts": deque(maxlen=1000),
+            "successful_logins": deque(maxlen=1000),
+            "failed_logins": deque(maxlen=1000),
+            "ip_addresses": deque(maxlen=100),
+            "user_agents": deque(maxlen=100),
+            "login_times": deque(maxlen=1000),
+            "session_durations": deque(maxlen=1000)
+        })
+        self.predictions = deque(maxlen=1000)
+        self.model_accuracy = {}
+        
+    def record_authentication_event(
+        self, 
+        user_id: str, 
+        success: bool,
+        request_context: Dict[str, Any],
+        session_duration: Optional[float] = None
+    ) -> None:
+        """Registrar evento de autenticación para análisis"""
+        user_data = self.user_data[user_id]
+        timestamp = datetime.now()
+        
+        # Registrar intento de login
+        user_data["login_attempts"].append({
+            "timestamp": timestamp,
+            "success": success,
+            "ip": request_context.get("client_ip"),
+            "user_agent": request_context.get("user_agent")
+        })
+        
+        if success:
+            user_data["successful_logins"].append(timestamp)
+            if session_duration:
+                user_data["session_durations"].append(session_duration)
+        else:
+            user_data["failed_logins"].append(timestamp)
+        
+        # Registrar información de contexto
+        client_ip = request_context.get("client_ip")
+        if client_ip:
+            user_data["ip_addresses"].append(client_ip)
+        
+        user_agent = request_context.get("user_agent")
+        if user_agent:
+            user_data["user_agents"].append(user_agent)
+        
+        user_data["login_times"].append(timestamp.hour)
+        
+        logger.debug(f"Evento de autenticación registrado para usuario {user_id}")
+    
+    def predict_authentication_failure(
+        self, 
+        user_id: str, 
+        time_horizon: str = "short"
+    ) -> PredictionResult:
+        """Predecir probabilidad de fallo de autenticación"""
+        prediction_id = f"pred_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{user_id}"
+        
+        try:
+            user_data = self.user_data[user_id]
+            
+            # Calcular métricas históricas
+            recent_failures = self._get_recent_failures(user_data, time_horizon)
+            failure_rate = self._calculate_failure_rate(user_data, time_horizon)
+            time_pattern_risk = self._analyze_time_patterns(user_data)
+            location_risk = self._analyze_location_patterns(user_data)
+            device_risk = self._analyze_device_patterns(user_data)
+            
+            # Calcular score de confianza y predicción
+            confidence_score = self._calculate_confidence_score(user_data, time_horizon)
+            predicted_failure_probability = self._calculate_failure_probability(
+                failure_rate, time_pattern_risk, location_risk, device_risk
+            )
+            
+            # Identificar factores de riesgo
+            risk_factors = self._identify_risk_factors(
+                failure_rate, time_pattern_risk, location_risk, device_risk
+            )
+            
+            prediction = PredictionResult(
+                prediction_id=prediction_id,
+                user_id=user_id,
+                prediction_type="authentication_failure",
+                confidence_score=confidence_score,
+                predicted_value=predicted_failure_probability,
+                factors=risk_factors,
+                timestamp=datetime.now(),
+                time_horizon=time_horizon
+            )
+            
+            self.predictions.append(prediction)
+            return prediction
+            
+        except Exception as e:
+            logger.error(f"Error prediciendo fallo de autenticación: {e}")
+            # Retornar predicción por defecto en caso de error
+            return PredictionResult(
+                prediction_id=prediction_id,
+                user_id=user_id,
+                prediction_type="authentication_failure",
+                confidence_score=0.0,
+                predicted_value=0.5,  # Probabilidad neutral
+                factors=["Error en análisis"],
+                timestamp=datetime.now(),
+                time_horizon=time_horizon
+            )
+    
+    def _get_recent_failures(self, user_data: Dict, time_horizon: str) -> int:
+        """Obtener fallos recientes según el horizonte temporal"""
+        if time_horizon == "short":
+            cutoff = datetime.now() - timedelta(hours=24)
+        elif time_horizon == "medium":
+            cutoff = datetime.now() - timedelta(days=7)
+        else:  # long
+            cutoff = datetime.now() - timedelta(days=30)
+        
+        recent_failures = [
+            attempt for attempt in user_data["login_attempts"]
+            if attempt["timestamp"] > cutoff and not attempt["success"]
+        ]
+        
+        return len(recent_failures)
+    
+    def _calculate_failure_rate(self, user_data: Dict, time_horizon: str) -> float:
+        """Calcular tasa de fallo"""
+        recent_attempts = self._get_recent_failures(user_data, time_horizon)
+        total_attempts = len([
+            attempt for attempt in user_data["login_attempts"]
+            if attempt["timestamp"] > datetime.now() - timedelta(days=30)
+        ])
+        
+        if total_attempts == 0:
+            return 0.0
+        
+        return recent_attempts / total_attempts
+    
+    def _analyze_time_patterns(self, user_data: Dict) -> float:
+        """Analizar patrones temporales de riesgo"""
+        login_times = list(user_data["login_times"])
+        if not login_times:
+            return 0.0
+        
+        # Calcular desviación estándar de horas de login
+        try:
+            std_dev = statistics.stdev(login_times)
+            # Mayor desviación = mayor riesgo (horarios irregulares)
+            return min(std_dev / 12.0, 1.0)  # Normalizar a 0-1
+        except statistics.StatisticsError:
+            return 0.0
+    
+    def _analyze_location_patterns(self, user_data: Dict) -> float:
+        """Analizar patrones de ubicación"""
+        ip_addresses = list(user_data["ip_addresses"])
+        if not ip_addresses:
+            return 0.0
+        
+        # Calcular diversidad de IPs
+        unique_ips = len(set(ip_addresses))
+        total_ips = len(ip_addresses)
+        
+        if total_ips == 0:
+            return 0.0
+        
+        # Mayor diversidad = mayor riesgo
+        diversity_ratio = unique_ips / total_ips
+        return diversity_ratio
+    
+    def _analyze_device_patterns(self, user_data: Dict) -> float:
+        """Analizar patrones de dispositivos"""
+        user_agents = list(user_data["user_agents"])
+        if not user_agents:
+            return 0.0
+        
+        # Calcular diversidad de user agents
+        unique_agents = len(set(user_agents))
+        total_agents = len(user_agents)
+        
+        if total_agents == 0:
+            return 0.0
+        
+        # Mayor diversidad = mayor riesgo
+        diversity_ratio = unique_agents / total_agents
+        return diversity_ratio
+    
+    def _calculate_confidence_score(self, user_data: Dict, time_horizon: str) -> float:
+        """Calcular score de confianza de la predicción"""
+        total_attempts = len(user_data["login_attempts"])
+        
+        # Más datos = mayor confianza
+        if total_attempts < 10:
+            return 0.3
+        elif total_attempts < 50:
+            return 0.6
+        elif total_attempts < 100:
+            return 0.8
+        else:
+            return 0.9
+    
+    def _calculate_failure_probability(
+        self, 
+        failure_rate: float, 
+        time_risk: float, 
+        location_risk: float, 
+        device_risk: float
+    ) -> float:
+        """Calcular probabilidad de fallo"""
+        # Combinar factores de riesgo con pesos
+        weights = {
+            "failure_rate": 0.4,
+            "time_risk": 0.2,
+            "location_risk": 0.2,
+            "device_risk": 0.2
+        }
+        
+        probability = (
+            failure_rate * weights["failure_rate"] +
+            time_risk * weights["time_risk"] +
+            location_risk * weights["location_risk"] +
+            device_risk * weights["device_risk"]
+        )
+        
+        return min(max(probability, 0.0), 1.0)  # Clamp entre 0 y 1
+    
+    def _identify_risk_factors(
+        self, 
+        failure_rate: float, 
+        time_risk: float, 
+        location_risk: float, 
+        device_risk: float
+    ) -> List[str]:
+        """Identificar factores de riesgo"""
+        factors = []
+        
+        if failure_rate > 0.3:
+            factors.append("Alta tasa de fallos recientes")
+        
+        if time_risk > 0.7:
+            factors.append("Patrones temporales irregulares")
+        
+        if location_risk > 0.7:
+            factors.append("Múltiples ubicaciones de acceso")
+        
+        if device_risk > 0.7:
+            factors.append("Múltiples dispositivos o navegadores")
+        
+        if not factors:
+            factors.append("Patrones normales de acceso")
+        
+        return factors
+    
+    def get_user_behavior_pattern(self, user_id: str) -> UserBehaviorPattern:
+        """Obtener patrón de comportamiento del usuario"""
+        user_data = self.user_data[user_id]
+        
+        # Calcular métricas de comportamiento
+        login_frequency = self._calculate_login_frequency(user_data)
+        failure_rate = self._calculate_failure_rate(user_data, "medium")
+        time_patterns = self._analyze_time_patterns(user_data)
+        location_patterns = dict(Counter(user_data["ip_addresses"]))
+        device_patterns = dict(Counter(user_data["user_agents"]))
+        
+        # Calcular score de riesgo general
+        risk_score = self._calculate_failure_probability(
+            failure_rate, time_patterns, 
+            len(set(user_data["ip_addresses"])) / max(len(user_data["ip_addresses"]), 1),
+            len(set(user_data["user_agents"])) / max(len(user_data["user_agents"]), 1)
+        )
+        
+        return UserBehaviorPattern(
+            user_id=user_id,
+            login_frequency=login_frequency,
+            failure_rate=failure_rate,
+            time_patterns={"std_deviation": time_patterns},
+            location_patterns=location_patterns,
+            device_patterns=device_patterns,
+            risk_score=risk_score
+        )
+    
+    def _calculate_login_frequency(self, user_data: Dict) -> float:
+        """Calcular frecuencia de login (logins por día)"""
+        successful_logins = list(user_data["successful_logins"])
+        if not successful_logins:
+            return 0.0
+        
+        # Calcular días entre primer y último login
+        if len(successful_logins) == 1:
+            return 1.0
+        
+        first_login = min(successful_logins)
+        last_login = max(successful_logins)
+        days = (last_login - first_login).days + 1
+        
+        return len(successful_logins) / days
 
+# Instancia global del analizador predictivo
+predictive_analyzer = PredictiveAnalyzer()
 
+# ============================================
+# ENDPOINTS DE ANÁLISIS PREDICTIVO
+# ============================================
 
+@router.post("/record-auth-event")
+async def record_authentication_event(
+    event_data: Dict[str, Any],
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """Registrar evento de autenticación"""
+    try:
+        user_id = event_data.get("user_id", current_user.id)
+        success = event_data.get("success", False)
+        session_duration = event_data.get("session_duration")
+        
+        # Obtener contexto de la petición
+        request_context = {
+            "client_ip": request.client.host if request.client else None,
+            "user_agent": request.headers.get("User-Agent"),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # Registrar evento
+        predictive_analyzer.record_authentication_event(
+            user_id, success, request_context, session_duration
+        )
+        
+        return {
+            "success": True,
+            "message": "Evento de autenticación registrado exitosamente"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error registrando evento de autenticación: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno: {str(e)}"
+        )
 
+@router.post("/predict-failure")
+async def predict_authentication_failure(
+    prediction_data: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+):
+    """Predecir fallo de autenticación"""
+    try:
+        user_id = prediction_data.get("user_id", current_user.id)
+        time_horizon = prediction_data.get("time_horizon", "short")
+        
+        # Validar horizonte temporal
+        if time_horizon not in ["short", "medium", "long"]:
+            raise HTTPException(
+                status_code=400,
+                detail="time_horizon debe ser 'short', 'medium' o 'long'"
+            )
+        
+        # Realizar predicción
+        prediction = predictive_analyzer.predict_authentication_failure(
+            user_id, time_horizon
+        )
+        
+        # Convertir a formato serializable
+        prediction_data = {
+            "prediction_id": prediction.prediction_id,
+            "user_id": prediction.user_id,
+            "prediction_type": prediction.prediction_type,
+            "confidence_score": prediction.confidence_score,
+            "predicted_value": prediction.predicted_value,
+            "factors": prediction.factors,
+            "timestamp": prediction.timestamp.isoformat(),
+            "time_horizon": prediction.time_horizon
+        }
+        
+        return {
+            "success": True,
+            "prediction": prediction_data
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error prediciendo fallo de autenticación: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno: {str(e)}"
+        )
 
+@router.get("/user-behavior/{user_id}")
+async def get_user_behavior_pattern(
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener patrón de comportamiento del usuario"""
+    try:
+        behavior_pattern = predictive_analyzer.get_user_behavior_pattern(user_id)
+        
+        # Convertir a formato serializable
+        behavior_data = {
+            "user_id": behavior_pattern.user_id,
+            "login_frequency": behavior_pattern.login_frequency,
+            "failure_rate": behavior_pattern.failure_rate,
+            "time_patterns": behavior_pattern.time_patterns,
+            "location_patterns": behavior_pattern.location_patterns,
+            "device_patterns": behavior_pattern.device_patterns,
+            "risk_score": behavior_pattern.risk_score
+        }
+        
+        return {
+            "success": True,
+            "behavior_pattern": behavior_data
+        }
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo patrón de comportamiento: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno: {str(e)}"
+        )
+
+@router.get("/prediction-history")
+async def get_prediction_history(
+    user_id: Optional[str] = None,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener historial de predicciones"""
+    try:
+        predictions = list(predictive_analyzer.predictions)
+        
+        # Filtrar por usuario si se especifica
+        if user_id:
+            predictions = [p for p in predictions if p.user_id == user_id]
+        
+        # Limitar resultados
+        predictions = predictions[-limit:]
+        
+        # Convertir a formato serializable
+        predictions_data = [
+            {
+                "prediction_id": p.prediction_id,
+                "user_id": p.user_id,
+                "prediction_type": p.prediction_type,
+                "confidence_score": p.confidence_score,
+                "predicted_value": p.predicted_value,
+                "factors": p.factors,
+                "timestamp": p.timestamp.isoformat(),
+                "time_horizon": p.time_horizon
+            }
+            for p in predictions
+        ]
+        
+        return {
+            "success": True,
+            "predictions": predictions_data,
+            "total_count": len(predictions_data)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo historial de predicciones: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno: {str(e)}"
+        )
+
+@router.get("/model-accuracy")
+async def get_model_accuracy(
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener precisión del modelo predictivo"""
+    try:
+        # Calcular precisión básica basada en predicciones recientes
+        recent_predictions = list(predictive_analyzer.predictions)[-100:]
+        
+        if not recent_predictions:
+            return {
+                "success": True,
+                "accuracy": {
+                    "overall_accuracy": 0.0,
+                    "sample_size": 0,
+                    "confidence_distribution": {}
+                }
+            }
+        
+        # Calcular distribución de confianza
+        confidence_scores = [p.confidence_score for p in recent_predictions]
+        avg_confidence = statistics.mean(confidence_scores) if confidence_scores else 0.0
+        
+        return {
+            "success": True,
+            "accuracy": {
+                "overall_accuracy": avg_confidence,
+                "sample_size": len(recent_predictions),
+                "confidence_distribution": {
+                    "min": min(confidence_scores) if confidence_scores else 0.0,
+                    "max": max(confidence_scores) if confidence_scores else 0.0,
+                    "mean": avg_confidence
+                }
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo precisión del modelo: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno: {str(e)}"
+        )

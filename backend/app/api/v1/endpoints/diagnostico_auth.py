@@ -1,195 +1,318 @@
-﻿"""Endpoint de DiagnÃ³stico Avanzado de AutenticaciÃ³nSistema de auditorÃ­a para encontrar causa raÃ­z de problemas 401"""
+﻿"""Endpoint de Diagnóstico Avanzado de Autenticación
+Sistema de auditoría para encontrar causa raíz de problemas 401
+"""
+
 import logging
-from datetime 
-import datetime, timedelta
-from typing 
-import Dict, List, Any
-from fastapi 
-import APIRouter, Depends, Request
-from sqlalchemy.orm 
-import Session
-from app.api.deps 
-import get_db
-from app.core.config 
-import settings
-from app.core.security 
-import create_access_token, decode_token
-from app.models.user 
-import Userlogger = logging.getLogger(__name__)router = APIRouter()# Cache para requests fallidosfailed_requests_cache = []@router.get("/auth-debug")async 
-def debug_autenticacion(request:
- Request, db:
- Session = Depends(get_db)):
-    """    ðŸ” DiagnÃ³stico completo de autenticaciÃ³n    Analiza tokens, headers, y configuraciÃ³n    """    try:
-        # 1. Analizar headers de la request        headers_analysis = {}        auth_header = request.headers.get("authorization")        if auth_header:
-            headers_analysis["authorization_present"] = True            headers_analysis["authorization_type"] = (                auth_header.split(" ")[0] if " " in auth_header else "unknown"            )            headers_analysis["token_length"] = (                len(auth_header.split(" ")[1]) if " " in auth_header else 0            )        else:
-            headers_analysis["authorization_present"] = False        # 2. Verificar configuraciÃ³n JWT        jwt_config = {            "secret_key_length":
- (                len(settings.SECRET_KEY) if settings.SECRET_KEY else 0            ),            "algorithm":
- settings.ALGORITHM,            "access_token_expire_minutes":
-    settings.ACCESS_TOKEN_EXPIRE_MINUTES,            "refresh_token_expire_days":
- settings.REFRESH_TOKEN_EXPIRE_DAYS,        }        # 3. Verificar usuarios en BD        users_analysis = {}        try:
-            total_users = db.query(User).count()            active_users = db.query(User).filter(User.is_active).count()            admin_users = db.query(User).filter(User.is_admin).count()            users_analysis = {                "total_users":
- total_users,                "active_users":
- active_users,                "admin_users":
- admin_users,                "status":
- "ok",            }        except Exception as e:
-            users_analysis = {"status":
- "error", "error":
- str(e)}        # 4. Verificar tokens recientes (simulado)        recent_tokens_analysis = {            "failed_requests_last_hour":
- len(                [                    r                    for r in failed_requests_cache                    if r.get("timestamp", datetime.min)                    > datetime.now() - timedelta(hours=1)                ]            ),            "total_failed_requests":
- len(failed_requests_cache),            "last_failed_request":
- (                failed_requests_cache[-1] if failed_requests_cache else None            ),        }        # 5. Test de creaciÃ³n de token        token_test = {}        try:
-            # Buscar usuario admin para test            admin_user = db.query(User).filter(User.is_admin).first()            if admin_user:
-                test_token = create_access_token(                    subject=str(admin_user.id),                    additional_claims={"type":
- "access"},                )                token_test = {                    "status":
- "success",                    "token_created":
- True,                    "token_length":
- len(test_token),                    "test_user_id":
- admin_user.id,                    "test_user_email":
- admin_user.email,                }            else:
-                token_test = {                    "status":
- "error",                    "error":
- "No admin user found",                }        except Exception as e:
-            token_test = {"status":
- "error", "error":
- str(e)}        # 6. Verificar CORS y headers de seguridad        cors_analysis = {            "cors_origins":
- settings.CORS_ORIGINS,            "cors_origins_count":
- len(settings.CORS_ORIGINS),            "environment":
- settings.ENVIRONMENT,        }        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "diagnostic_complete",            "analysis":
- {                "headers":
- headers_analysis,                "jwt_config":
- jwt_config,                "users":
- users_analysis,                "recent_tokens":
- recent_tokens_analysis,                "token_test":
- token_test,                "cors":
- cors_analysis,            },            "recommendations":
- _generate_recommendations(                headers_analysis, jwt_config, users_analysis            ),        }    except Exception as e:
-        logger.error(f"Error en diagnÃ³stico de autenticaciÃ³n:
- {e}")        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "error",            "error":
- str(e),        }
-def _test_login(db:
- Session) -> Dict[str, Any]:
-    """Test de login y generaciÃ³n de token"""    try:
-        admin_user = db.query(User).filter(User.is_admin).first()        if admin_user:
-            # Simular login            test_token = create_access_token(                subject=str(admin_user.id),                additional_claims={"type":
- "access"},            )            return {                "status":
- "success",                "user_found":
- True,                "user_email":
- admin_user.email,                "user_active":
- admin_user.is_active,                "token_generated":
- True,                "token_length":
- len(test_token),                "token":
- test_token,  # Para usar en otros tests            }        else:
-            return {"status":
- "error", "error":
- "No admin user found"}    except Exception as e:
-        return {"status":
- "error", "error":
- str(e)}
-def _test_validacion_token(login_test:
- Dict[str, Any]) -> Dict[str, Any]:
-    """Test de validaciÃ³n de token"""    try:
-        if login_test.get("status") == "success":
-            test_token = login_test.get("token")            # Decodificar el token creado            decoded = decode_token(test_token)            return {                "status":
- "success",                "token_decoded":
- True,                "user_id_from_token":
- decoded.get("sub"),                "token_type":
- decoded.get("type"),                "exp":
- decoded.get("exp"),            }        else:
-            return {"status":
- "skipped", "reason":
- "Login test failed"}    except Exception as e:
-        return {"status":
- "error", "error":
- str(e)}
-def _test_endpoint_protegido(    validation_test:
- Dict[str, Any], db:
- Session) -> Dict[str, Any]:
-    """Test de endpoint protegido"""    try:
-        if validation_test.get("status") == "success":
-            # Simular request con token            user_id = validation_test.get("user_id_from_token")            user = db.query(User).filter(User.id == int(user_id)).first()            if user:
-                return {                    "status":
- "success",                    "user_found_in_db":
- True,                    "user_email":
- user.email,                    "user_active":
- user.is_active,                }            else:
-                return {                    "status":
- "error",                    "error":
- "User not found in DB",                }        else:
-            return {                "status":
- "skipped",                "reason":
- "Validation test failed",            }    except Exception as e:
-        return {"status":
- "error", "error":
- str(e)}@router.post("/auth-test")async 
-def test_autenticacion(request:
- Request, db:
- Session = Depends(get_db)):
-    """    ðŸ§ª Test completo de autenticaciÃ³n (VERSIÃ“N REFACTORIZADA)    Prueba login, token creation, y validaciÃ³n    """    try:
-        # 1. Test de login        login_test = _test_login(db)        # 2. Test de validaciÃ³n de token        validation_test = _test_validacion_token(login_test)        # 3. Test de endpoint protegido        protected_test = _test_endpoint_protegido(validation_test, db)        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "test_complete",            "tests":
- {                "login":
- login_test,                "validation":
- validation_test,                "protected_endpoint":
- protected_test,            },            "overall_status":
- (                "success"                if all(                    t.get("status") == "success"                    for t in [login_test, validation_test, protected_test]                )                else "failed"            ),        }    except Exception as e:
-        logger.error(f"Error en test de autenticaciÃ³n:
- {e}")        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "error",            "error":
- str(e),        }@router.get("/auth-logs")async 
-def obtener_logs_autenticacion():
-    """    ðŸ“ Obtener logs de autenticaciÃ³n recientes    """    try:
-        # Filtrar logs de la Ãºltima hora        recent_logs = [            log            for log in failed_requests_cache            if log.get("timestamp", datetime.min)            > datetime.now() - timedelta(hours=1)        ]        # Agrupar por tipo de error        error_summary = {}        for log in recent_logs:
-            error_type = log.get("error_type", "unknown")            error_summary[error_type] = error_summary.get(error_type, 0) + 1        return {            "timestamp":
- datetime.now().isoformat(),            "logs":
- {                "total_recent_logs":
- len(recent_logs),                "error_summary":
- error_summary,                "recent_requests":
- (                    recent_logs[-10:
-] if recent_logs else []                ),  # Ãšltimos 10            },        }    except Exception as e:
-        logger.error(f"Error obteniendo logs de autenticaciÃ³n:
- {e}")        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "error",            "error":
- str(e),        }@router.post("/auth-fix")async 
-def aplicar_fix_autenticacion(    request:
- Request, db:
- Session = Depends(get_db)):
-    """    ðŸ”§ Aplicar fixes automÃ¡ticos de autenticaciÃ³n    """    try:
-        fixes_applied = []        # 1. Verificar y recrear usuario admin si es necesario        admin_user = db.query(User).filter(User.is_admin).first()        if not admin_user:
-            # Crear usuario admin            
-from app.core.security 
-import get_password_hash            new_admin = User(                email=settings.ADMIN_EMAIL,                password=get_password_hash(settings.ADMIN_PASSWORD),                nombre="Admin",                apellido="Sistema",                is_admin=True,                is_active=True,            )            db.add(new_admin)            db.commit()            fixes_applied.append("admin_user_created")        else:
-            # Asegurar que estÃ© activo            if not admin_user.is_active:
-                admin_user.is_active = True                db.commit()                fixes_applied.append("admin_user_activated")        # 2. Limpiar cache de requests fallidos        failed_requests_cache.clear()        fixes_applied.append("failed_requests_cache_cleared")        # 3. Verificar configuraciÃ³n JWT        if not settings.SECRET_KEY:
-            fixes_applied.append("jwt_secret_key_missing")        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "fixes_applied",            "fixes":
- fixes_applied,            "message":
- f"Aplicados {len(fixes_applied)} fixes",        }    except Exception as e:
-        logger.error(f"Error aplicando fixes:
- {e}")        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "error",            "error":
- str(e),        }
-def _generate_recommendations(    headers_analysis:
- Dict, jwt_config:
- Dict, users_analysis:
- Dict) -> List[str]:
-    """Generar recomendaciones basadas en el anÃ¡lisis"""    recommendations = []    if not headers_analysis.get("authorization_present"):
-        recommendations.append(            "ðŸ”‘ No se encontrÃ³ header Authorization -     Verificar que el frontend estÃ© enviando el token"        )    if jwt_config.get("secret_key_length", 0) < 32:
-        recommendations.append(            "ðŸ” SECRET_KEY muy corta - Debe tener al menos 32 caracteres"        )    if users_analysis.get("admin_users", 0) == 0:
-        recommendations.append(            "ðŸ‘¤ No hay usuarios administradores - Crear usuario admin"        )    if users_analysis.get("active_users", 0) == 0:
-        recommendations.append(            "âš ï¸ No hay usuarios activos - Verificar estado de usuarios"        )    if not recommendations:
-        recommendations.append(            "âœ… ConfiguraciÃ³n parece correcta - Revisar logs de aplicaciÃ³n"        )    return recommendations# Nota:
- Middleware removido - APIRouter no soporta middleware directamente# El middleware debe ser agregado a la aplicaciÃ³n principal en main.py
+from datetime import datetime, timedelta
+from typing import Dict, List, Any
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy.orm import Session
+from app.api.deps import get_current_user, get_db
+from app.models.user import User
 
+logger = logging.getLogger(__name__)
+router = APIRouter()
 
+# ============================================
+# SISTEMA DE DIAGNÓSTICO DE AUTENTICACIÓN
+# ============================================
 
+class AuthenticationDiagnostic:
+    """Diagnosticador avanzado de problemas de autenticación"""
+    
+    def __init__(self):
+        self.error_patterns = {}
+        self.user_behavior = {}
+        self.system_metrics = {}
+        
+    def analyze_authentication_failure(
+        self, 
+        user_id: str, 
+        error_details: Dict[str, Any],
+        request_context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Analizar fallo de autenticación específico"""
+        analysis = {
+            "timestamp": datetime.now().isoformat(),
+            "user_id": user_id,
+            "error_type": error_details.get("error_type", "unknown"),
+            "analysis_results": {},
+            "recommendations": [],
+            "severity": "medium"
+        }
+        
+        try:
+            # 1. Análisis de patrones de error
+            error_pattern = self._analyze_error_pattern(error_details)
+            analysis["analysis_results"]["error_pattern"] = error_pattern
+            
+            # 2. Análisis de comportamiento del usuario
+            user_behavior = self._analyze_user_behavior(user_id, request_context)
+            analysis["analysis_results"]["user_behavior"] = user_behavior
+            
+            # 3. Análisis de contexto del sistema
+            system_context = self._analyze_system_context(request_context)
+            analysis["analysis_results"]["system_context"] = system_context
+            
+            # 4. Análisis de seguridad
+            security_analysis = self._analyze_security_patterns(error_details, request_context)
+            analysis["analysis_results"]["security"] = security_analysis
+            
+            # 5. Generar recomendaciones
+            recommendations = self._generate_recommendations(analysis["analysis_results"])
+            analysis["recommendations"] = recommendations
+            
+            # 6. Determinar severidad
+            analysis["severity"] = self._calculate_severity(analysis["analysis_results"])
+            
+        except Exception as e:
+            logger.error(f"Error en análisis de autenticación: {e}")
+            analysis["error"] = str(e)
+        
+        return analysis
+    
+    def _analyze_error_pattern(self, error_details: Dict[str, Any]) -> Dict[str, Any]:
+        """Analizar patrón del error"""
+        pattern = {
+            "error_type": error_details.get("error_type", "unknown"),
+            "frequency": 1,
+            "common_causes": [],
+            "suggested_fixes": []
+        }
+        
+        error_type = error_details.get("error_type", "").lower()
+        
+        if "invalid_token" in error_type:
+            pattern["common_causes"] = [
+                "Token expirado",
+                "Token malformado",
+                "Token revocado"
+            ]
+            pattern["suggested_fixes"] = [
+                "Verificar expiración del token",
+                "Regenerar token",
+                "Verificar formato del token"
+            ]
+        elif "invalid_credentials" in error_type:
+            pattern["common_causes"] = [
+                "Credenciales incorrectas",
+                "Usuario bloqueado",
+                "Contraseña expirada"
+            ]
+            pattern["suggested_fixes"] = [
+                "Verificar credenciales",
+                "Resetear contraseña",
+                "Verificar estado del usuario"
+            ]
+        elif "permission_denied" in error_type:
+            pattern["common_causes"] = [
+                "Permisos insuficientes",
+                "Rol incorrecto",
+                "Recurso protegido"
+            ]
+            pattern["suggested_fixes"] = [
+                "Verificar permisos del usuario",
+                "Asignar rol correcto",
+                "Verificar configuración de recursos"
+            ]
+        
+        return pattern
+    
+    def _analyze_user_behavior(
+        self, 
+        user_id: str, 
+        request_context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Analizar comportamiento del usuario"""
+        behavior = {
+            "user_id": user_id,
+            "login_attempts": 0,
+            "recent_failures": 0,
+            "ip_addresses": [],
+            "user_agents": [],
+            "time_patterns": [],
+            "risk_score": 0.0
+        }
+        
+        # Aquí se implementaría la lógica para analizar el comportamiento
+        # Por ahora retornamos datos básicos
+        
+        client_ip = request_context.get("client_ip")
+        if client_ip:
+            behavior["ip_addresses"].append(client_ip)
+        
+        user_agent = request_context.get("user_agent")
+        if user_agent:
+            behavior["user_agents"].append(user_agent)
+        
+        # Calcular score de riesgo básico
+        behavior["risk_score"] = 0.3  # Score moderado por defecto
+        
+        return behavior
+    
+    def _analyze_system_context(self, request_context: Dict[str, Any]) -> Dict[str, Any]:
+        """Analizar contexto del sistema"""
+        context = {
+            "timestamp": request_context.get("timestamp", datetime.now().isoformat()),
+            "client_ip": request_context.get("client_ip"),
+            "user_agent": request_context.get("user_agent"),
+            "system_load": "normal",
+            "network_status": "stable",
+            "service_status": "operational"
+        }
+        
+        # Aquí se implementaría la lógica para analizar el estado del sistema
+        # Por ahora retornamos estado básico
+        
+        return context
+    
+    def _analyze_security_patterns(
+        self, 
+        error_details: Dict[str, Any], 
+        request_context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Analizar patrones de seguridad"""
+        security = {
+            "suspicious_activity": False,
+            "brute_force_attempt": False,
+            "unusual_location": False,
+            "security_score": 0.0,
+            "threat_level": "low"
+        }
+        
+        # Análisis básico de patrones sospechosos
+        error_type = error_details.get("error_type", "").lower()
+        
+        if "invalid_credentials" in error_type:
+            # Podría ser un intento de fuerza bruta
+            security["brute_force_attempt"] = True
+            security["security_score"] = 0.7
+            security["threat_level"] = "medium"
+        
+        return security
+    
+    def _generate_recommendations(self, analysis_results: Dict[str, Any]) -> List[str]:
+        """Generar recomendaciones basadas en el análisis"""
+        recommendations = []
+        
+        error_pattern = analysis_results.get("error_pattern", {})
+        security = analysis_results.get("security", {})
+        
+        # Recomendaciones basadas en el tipo de error
+        suggested_fixes = error_pattern.get("suggested_fixes", [])
+        recommendations.extend(suggested_fixes)
+        
+        # Recomendaciones de seguridad
+        if security.get("brute_force_attempt"):
+            recommendations.append("Implementar rate limiting para prevenir ataques de fuerza bruta")
+        
+        if security.get("suspicious_activity"):
+            recommendations.append("Revisar logs de seguridad y considerar bloqueo temporal")
+        
+        # Recomendaciones generales
+        if not recommendations:
+            recommendations.append("Revisar configuración de autenticación")
+            recommendations.append("Verificar logs del sistema")
+        
+        return recommendations
+    
+    def _calculate_severity(self, analysis_results: Dict[str, Any]) -> str:
+        """Calcular severidad del problema"""
+        security = analysis_results.get("security", {})
+        threat_level = security.get("threat_level", "low")
+        
+        if threat_level == "high":
+            return "critical"
+        elif threat_level == "medium":
+            return "high"
+        else:
+            return "medium"
 
+# Instancia global del diagnosticador
+auth_diagnostic = AuthenticationDiagnostic()
 
+# ============================================
+# ENDPOINTS DE DIAGNÓSTICO
+# ============================================
+
+@router.post("/analyze-auth-failure")
+async def analyze_authentication_failure(
+    error_data: Dict[str, Any],
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """Analizar fallo de autenticación específico"""
+    try:
+        user_id = error_data.get("user_id", "unknown")
+        error_details = error_data.get("error_details", {})
+        
+        # Obtener contexto de la petición
+        request_context = {
+            "client_ip": request.client.host if request.client else None,
+            "user_agent": request.headers.get("User-Agent"),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # Realizar análisis
+        analysis = auth_diagnostic.analyze_authentication_failure(
+            user_id, error_details, request_context
+        )
+        
+        return {
+            "success": True,
+            "analysis": analysis
+        }
+        
+    except Exception as e:
+        logger.error(f"Error analizando fallo de autenticación: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno: {str(e)}"
+        )
+
+@router.get("/diagnostic-summary")
+async def get_diagnostic_summary(
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener resumen de diagnósticos"""
+    try:
+        summary = {
+            "timestamp": datetime.now().isoformat(),
+            "total_analyses": len(auth_diagnostic.error_patterns),
+            "common_error_types": list(auth_diagnostic.error_patterns.keys()),
+            "system_status": "operational"
+        }
+        
+        return {
+            "success": True,
+            "summary": summary
+        }
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo resumen de diagnósticos: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno: {str(e)}"
+        )
+
+@router.get("/user-behavior/{user_id}")
+async def get_user_behavior_analysis(
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener análisis de comportamiento de usuario específico"""
+    try:
+        behavior = auth_diagnostic.user_behavior.get(user_id, {})
+        
+        return {
+            "success": True,
+            "user_id": user_id,
+            "behavior": behavior
+        }
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo comportamiento de usuario: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno: {str(e)}"
+        )

@@ -1,223 +1,392 @@
-﻿"""Sistema de AnÃ¡lisis de Fallos IntermitentesIdentifica patrones especÃ­ficos que causan fallos 401 intermitentes"""
+﻿"""Sistema de Análisis de Fallos Intermitentes
+Identifica patrones específicos que causan fallos 401 intermitentes
+"""
+
 import logging
 import statistics
 import threading
-from collections 
-import defaultdict, deque
-from datetime 
-import datetime, timedelta
-from typing 
-import Any, Dict, List
-from fastapi 
-import APIRouter, Depends
-from sqlalchemy.orm 
-import Session
-from app.api.deps 
-import get_current_user, get_db
-from app.models.user 
-import Userlogger = logging.getLogger(__name__)router = APIRouter()# ============================================# SISTEMA DE ANÃLISIS DE FALLOS INTERMITENTES# ============================================
+from collections import defaultdict, deque
+from datetime import datetime, timedelta
+from typing import Any, Dict, List
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from app.api.deps import get_current_user, get_db
+from app.models.user import User
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+# ============================================
+# SISTEMA DE ANÁLISIS DE FALLOS INTERMITENTES
+# ============================================
+
 class IntermittentFailureAnalyzer:
-    """Analizador de fallos intermitentes especÃ­ficos"""    
+    """Analizador de fallos intermitentes específicos"""
+    
 def __init__(self):
-        self.successful_requests = deque(maxlen=1000)  # Requests exitosos        self.failed_requests = deque(maxlen=1000)  # Requests fallidos        self.intermittent_patterns = {}  # Patrones intermitentes        self.lock = threading.Lock()    
-def log_successful_request(self, request_data:
- Dict[str, Any]):
-        """Registrar request exitoso"""        with self.lock:
-            request = {                "timestamp":
- datetime.now(),                "endpoint":
- request_data.get("endpoint"),                "method":
- request_data.get("method"),                "user_id":
- request_data.get("user_id"),                "token_length":
- request_data.get("token_length"),                "response_time_ms":
- request_data.get("response_time_ms"),                "client_ip":
- request_data.get("client_ip"),                "user_agent":
- request_data.get("user_agent"),                "success":
- True,            }            self.successful_requests.append(request)            logger.debug(                f"âœ… Request exitoso registrado:
- {request['endpoint']}"            )    
-def log_failed_request(self, request_data:
- Dict[str, Any]):
-        """Registrar request fallido"""        with self.lock:
-            request = {                "timestamp":
- datetime.now(),                "endpoint":
- request_data.get("endpoint"),                "method":
- request_data.get("method"),                "user_id":
- request_data.get("user_id"),                "token_length":
- request_data.get("token_length"),                "error_type":
- request_data.get("error_type"),                "error_message":
- request_data.get("error_message"),                "client_ip":
- request_data.get("client_ip"),                "user_agent":
- request_data.get("user_agent"),                "success":
- False,            }            self.failed_requests.append(request)            logger.warning(                f"âŒ Request fallido"                + f"registrado:
- {request['endpoint']} \                - {request['error_type']}"            )    
+        self.successful_requests = deque(maxlen=1000)  # Requests exitosos
+        self.failed_requests = deque(maxlen=1000)  # Requests fallidos
+        self.intermittent_patterns = {}  # Patrones intermitentes
+        self.lock = threading.Lock()
+    
+    def log_successful_request(self, request_data: Dict[str, Any]):
+        """Registrar request exitoso"""
+        with self.lock:
+            request = {
+                "timestamp": datetime.now(),
+                "endpoint": request_data.get("endpoint"),
+                "method": request_data.get("method"),
+                "user_id": request_data.get("user_id"),
+                "token_length": request_data.get("token_length"),
+                "response_time_ms": request_data.get("response_time_ms"),
+                "client_ip": request_data.get("client_ip"),
+                "user_agent": request_data.get("user_agent"),
+                "success": True,
+            }
+            self.successful_requests.append(request)
+            
+            logger.debug(
+                f"✅ Request exitoso registrado: {request['endpoint']}"
+            )
+    
+    def log_failed_request(self, request_data: Dict[str, Any]):
+        """Registrar request fallido"""
+        with self.lock:
+            request = {
+                "timestamp": datetime.now(),
+                "endpoint": request_data.get("endpoint"),
+                "method": request_data.get("method"),
+                "user_id": request_data.get("user_id"),
+                "token_length": request_data.get("token_length"),
+                "response_time_ms": request_data.get("response_time_ms"),
+                "client_ip": request_data.get("client_ip"),
+                "user_agent": request_data.get("user_agent"),
+                "error_code": request_data.get("error_code"),
+                "error_message": request_data.get("error_message"),
+                "success": False,
+            }
+            self.failed_requests.append(request)
+            
+            logger.warning(
+                f"❌ Request fallido registrado: {request['endpoint']} - {request['error_code']}"
+            )
+    
 def analyze_intermittent_patterns(self) -> Dict[str, Any]:
-        """Analizar patrones de fallos intermitentes"""        with self.lock:
-            if not self.successful_requests or not self.failed_requests:
-                return {"error":
- "Datos insuficientes para anÃ¡lisis"}            analysis = {                "timestamp":
- datetime.now().isoformat(),                "summary":
- self._analyze_request_summary(),                "intermittent_patterns":
-    self._identify_intermittent_patterns(),                "specific_failure_triggers":
- self._identify_failure_triggers(),                "timing_analysis":
- self._analyze_timing_patterns(),                "recommendations":
- [],            }            return analysis    
-def _analyze_request_summary(self) -> Dict[str, Any]:
-        """Analizar resumen de requests"""        successful_count = len(self.successful_requests)        failed_count = len(self.failed_requests)        total_count = successful_count + failed_count        # AnÃ¡lisis por endpoint        successful_endpoints = defaultdict(int)        failed_endpoints = defaultdict(int)        for req in self.successful_requests:
-            successful_endpoints[req["endpoint"]] += 1        for req in self.failed_requests:
-            failed_endpoints[req["endpoint"]] += 1        return {            "total_requests":
- total_count,            "successful_requests":
- successful_count,            "failed_requests":
- failed_count,            "success_rate":
- (                (successful_count / total_count * 100)                if total_count > 0                else 0            ),            "successful_endpoints":
- dict(successful_endpoints),            "failed_endpoints":
- dict(failed_endpoints),        }    
-def _analizar_patrones_endpoint(self) -> Dict[str, Any]:
-        """Analizar patrones intermitentes por endpoint"""        endpoint_patterns = {}        # Obtener todos los endpoints Ãºnicos        all_endpoints = set()        for req in self.successful_requests:
-            all_endpoints.add(req["endpoint"])        for req in self.failed_requests:
-            all_endpoints.add(req["endpoint"])        for endpoint in all_endpoints:
-            successful_for_endpoint = [                req                for req in self.successful_requests                if req["endpoint"] == endpoint            ]            failed_for_endpoint = [                req                for req in self.failed_requests                if req["endpoint"] == endpoint            ]            if successful_for_endpoint and failed_for_endpoint:
-                endpoint_patterns[endpoint] = {                    "successful_count":
- len(successful_for_endpoint),                    "failed_count":
- len(failed_for_endpoint),                    "intermittency_score":
- (                        len(failed_for_endpoint)                        / (                            len(successful_for_endpoint)                            + len(failed_for_endpoint)                        )                    ),                }        return endpoint_patterns    
-def _analizar_patrones_usuario(self) -> Dict[str, Any]:
-        """Analizar patrones intermitentes por usuario"""        user_patterns = {}        # Obtener todos los usuarios Ãºnicos        all_users = set()        for req in self.successful_requests:
-            if req.get("user_id"):
-                all_users.add(req["user_id"])        for req in self.failed_requests:
-            if req.get("user_id"):
-                all_users.add(req["user_id"])        for user_id in all_users:
-            successful_for_user = [                req                for req in self.successful_requests                if req.get("user_id") == user_id            ]            failed_for_user = [                req                for req in self.failed_requests                if req.get("user_id") == user_id            ]            if successful_for_user and failed_for_user:
-                user_patterns[str(user_id)] = {                    "successful_count":
- len(successful_for_user),                    "failed_count":
- len(failed_for_user),                    "failure_rate":
- (                        len(failed_for_user)                        / (len(successful_for_user) + len(failed_for_user))                        * 100                    ),                }        return user_patterns    
-def _identify_intermittent_patterns(self) -> Dict[str, Any]:
-        """Identificar patrones intermitentes especÃ­ficos     (VERSIÃ“N REFACTORIZADA)"""        patterns = {            "endpoint_intermittency":
- self._analizar_patrones_endpoint(),            "user_specific_patterns":
- self._analizar_patrones_usuario(),            "timing_patterns":
- {},            "token_patterns":
- {},        }        return patterns    
-def _identify_failure_triggers(self) -> Dict[str, Any]:
-        """Identificar triggers especÃ­ficos de fallo"""        triggers = {            "token_length_patterns":
- {},            "timing_triggers":
- {},            "client_patterns":
- {},            "error_type_patterns":
- {},        }        # Patrones de longitud de token        successful_token_lengths = [            req.get("token_length", 0)            for req in self.successful_requests            if req.get("token_length")        ]        failed_token_lengths = [            req.get("token_length", 0)            for req in self.failed_requests            if req.get("token_length")        ]        if successful_token_lengths and failed_token_lengths:
-            triggers["token_length_patterns"] = {                "successful_avg_length":
- statistics.mean(                    successful_token_lengths                ),                "failed_avg_length":
- statistics.mean(failed_token_lengths),                "length_difference":
- (                    statistics.mean(successful_token_lengths)                    - statistics.mean(failed_token_lengths)                ),            }        # Patrones de timing        successful_times = [            req.get("response_time_ms", 0)            for req in self.successful_requests            if req.get("response_time_ms")        ]        failed_times = [            req.get("response_time_ms", 0)            for req in self.failed_requests            if req.get("response_time_ms")        ]        if successful_times and failed_times:
-            triggers["timing_triggers"] = {                "successful_avg_time":
- statistics.mean(successful_times),                "failed_avg_time":
- statistics.mean(failed_times),                "time_difference":
- (                    statistics.mean(successful_times)                    - statistics.mean(failed_times)                ),            }        # Patrones de cliente        successful_ips = [            req.get("client_ip")            for req in self.successful_requests            if req.get("client_ip")        ]        failed_ips = [            req.get("client_ip")            for req in self.failed_requests            if req.get("client_ip")        ]        successful_ip_counts = defaultdict(int)        failed_ip_counts = defaultdict(int)        for ip in successful_ips:
-            successful_ip_counts[ip] += 1        for ip in failed_ips:
-            failed_ip_counts[ip] += 1        triggers["client_patterns"] = {            "successful_ip_distribution":
- dict(successful_ip_counts),            "failed_ip_distribution":
- dict(failed_ip_counts),        }        # Patrones de tipo de error        error_types = defaultdict(int)        for req in self.failed_requests:
-            error_type = req.get("error_type", "unknown")            error_types[error_type] += 1        triggers["error_type_patterns"] = dict(error_types)        return triggers    
-def _analyze_timing_patterns(self) -> Dict[str, Any]:
-        """Analizar patrones de timing especÃ­ficos"""        # Combinar todos los requests y ordenar por tiempo        all_requests = []        for req in self.successful_requests:
-            all_requests.append({**req, "success":
- True})        for req in self.failed_requests:
-            all_requests.append({**req, "success":
- False})        all_requests.sort(key=lambda x:
- x["timestamp"])        # Buscar secuencias de fallos        failure_sequences = []        current_sequence = []        for req in all_requests:
-            if not req["success"]:
-                current_sequence.append(req)            else:
-                if current_sequence:
-                    failure_sequences.append(current_sequence.copy())                    current_sequence = []        if current_sequence:
-            failure_sequences.append(current_sequence)        # Analizar patrones temporales        timing_analysis = {            "total_requests_analyzed":
- len(all_requests),            "failure_sequences_count":
- len(failure_sequences),            "longest_failure_sequence":
- (                max([len(seq) for seq in failure_sequences])                if failure_sequences                else 0            ),            "average_sequence_length":
- (                statistics.mean([len(seq) for seq in failure_sequences])                if failure_sequences                else 0            ),        }        # Buscar patrones de recuperaciÃ³n        recovery_patterns = []        for i in range(len(all_requests) - 1):
-            if (                not all_requests[i]["success"]                and all_requests[i + 1]["success"]            ):
-                recovery_time = (                    all_requests[i + 1]["timestamp"]                    - all_requests[i]["timestamp"]                ).total_seconds()                recovery_patterns.append(recovery_time)        if recovery_patterns:
-            timing_analysis["recovery_patterns"] = {                "avg_recovery_time_seconds":
- statistics.mean(                    recovery_patterns                ),                "min_recovery_time_seconds":
- min(recovery_patterns),                "max_recovery_time_seconds":
- max(recovery_patterns),            }        return timing_analysis    
-def get_intermittent_summary(self) -> Dict[str, Any]:
-        """Obtener resumen de anÃ¡lisis intermitente"""        with self.lock:
-            current_time = datetime.now()            cutoff_time = current_time - timedelta(hours=1)  # Ãšltima hora            # Filtrar requests recientes            recent_successful = [                req                for req in self.successful_requests                if req["timestamp"] > cutoff_time            ]            recent_failed = [                req                for req in self.failed_requests                if req["timestamp"] > cutoff_time            ]            return {                "timestamp":
- current_time.isoformat(),                "summary":
- {                    "recent_successful_requests":
- len(recent_successful),                    "recent_failed_requests":
- len(recent_failed),                    "total_successful_requests":
- len(self.successful_requests),                    "total_failed_requests":
- len(self.failed_requests),                    "intermittency_detected":
- len(recent_successful) > 0                    and len(recent_failed) > 0,                },                "recent_patterns":
- self._analyze_recent_patterns(                    recent_successful, recent_failed                ),            }    
-def _analyze_recent_patterns(        self, recent_successful:
- List[Dict], recent_failed:
- List[Dict]    ) -> Dict[str, Any]:
-        """Analizar patrones recientes"""        if not recent_successful or not recent_failed:
-            return {"status":
- "insufficient_data"}        # Identificar endpoints con comportamiento intermitente        intermittent_endpoints = []        successful_endpoints = set(            req["endpoint"] for req in recent_successful        )        failed_endpoints = set(req["endpoint"] for req in recent_failed)        common_endpoints = successful_endpoints & failed_endpoints        for endpoint in common_endpoints:
-            successful_count = len(                [                    req                    for req in recent_successful                    if req["endpoint"] == endpoint                ]            )            failed_count = len(                [req for req in recent_failed if req["endpoint"] == endpoint]            )            intermittent_endpoints.append(                {                    "endpoint":
- endpoint,                    "successful_count":
- successful_count,                    "failed_count":
- failed_count,                    "intermittency_ratio":
- failed_count                    / (successful_count + failed_count),                }            )        return {            "intermittent_endpoints":
- intermittent_endpoints,            "common_endpoints_count":
- len(common_endpoints),            "total_endpoints_with_failures":
- len(failed_endpoints),        }# Instancia global del analizador intermitenteintermittent_analyzer = IntermittentFailureAnalyzer()# ============================================# ENDPOINTS DE ANÃLISIS INTERMITENTE# ============================================router.post("/log-successful-request")async 
-def log_successful_request_endpoint(    request_data:
- Dict[str, Any],    db:
- Session = Depends(get_db),    current_user:
- User = Depends(get_current_user),):
-    """    âœ… Registrar request exitoso para anÃ¡lisis intermitente    """    try:
-        intermittent_analyzer.log_successful_request(request_data)        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "logged",            "message":
- "Request exitoso registrado",        }    except Exception as e:
-        logger.error(f"Error registrando request exitoso:
- {e}")        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "error",            "error":
- str(e),        }router.post("/log-failed-request")async 
-def log_failed_request_endpoint(    request_data:
- Dict[str, Any],    db:
- Session = Depends(get_db),    current_user:
- User = Depends(get_current_user),):
-    """    âŒ Registrar request fallido para anÃ¡lisis intermitente    """    try:
-        intermittent_analyzer.log_failed_request(request_data)        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "logged",            "message":
- "Request fallido registrado",        }    except Exception as e:
-        logger.error(f"Error registrando request fallido:
- {e}")        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "error",            "error":
- str(e),        }router.get("/intermittent-patterns")async 
-def get_intermittent_patterns(    db:
- Session = Depends(get_db),    current_user:
- User = Depends(get_current_user),):
-    """    ðŸ”„ AnÃ¡lisis de patrones intermitentes    """    try:
-        analysis = intermittent_analyzer.analyze_intermittent_patterns()        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "success",            "analysis":
- analysis,        }    except Exception as e:
-        logger.error(f"Error analizando patrones intermitentes:
- {e}")        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "error",            "error":
- str(e),        }router.get("/intermittent-summary")async 
-def get_intermittent_summary_endpoint(    db:
- Session = Depends(get_db),    current_user:
- User = Depends(get_current_user),):
-    """    ðŸ“Š Resumen de anÃ¡lisis intermitente    """    try:
-        summary = intermittent_analyzer.get_intermittent_summary()        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "success",            "summary":
- summary,        }    except Exception as e:
-        logger.error(f"Error obteniendo resumen intermitente:
- {e}")        return {            "timestamp":
- datetime.now().isoformat(),            "status":
- "error",            "error":
- str(e),        }
+        """Analizar patrones intermitentes"""
+        with self.lock:
+            analysis = {
+                "timestamp": datetime.now().isoformat(),
+                "total_successful": len(self.successful_requests),
+                "total_failed": len(self.failed_requests),
+                "patterns": {},
+                "recommendations": [],
+            }
+            
+            if len(self.successful_requests) == 0 and len(self.failed_requests) == 0:
+                analysis["patterns"]["no_data"] = "No hay datos suficientes para análisis"
+                return analysis
+            
+            # Analizar patrones por endpoint
+            endpoint_patterns = self._analyze_endpoint_patterns()
+            analysis["patterns"]["endpoints"] = endpoint_patterns
+            
+            # Analizar patrones por usuario
+            user_patterns = self._analyze_user_patterns()
+            analysis["patterns"]["users"] = user_patterns
+            
+            # Analizar patrones temporales
+            temporal_patterns = self._analyze_temporal_patterns()
+            analysis["patterns"]["temporal"] = temporal_patterns
+            
+            # Analizar patrones de token
+            token_patterns = self._analyze_token_patterns()
+            analysis["patterns"]["tokens"] = token_patterns
+            
+            # Generar recomendaciones
+            analysis["recommendations"] = self._generate_recommendations(analysis["patterns"])
+            
+            return analysis
+    
+    def _analyze_endpoint_patterns(self) -> Dict[str, Any]:
+        """Analizar patrones por endpoint"""
+        endpoint_stats = defaultdict(lambda: {"successful": 0, "failed": 0})
+        
+        # Contar por endpoint
+        for request in self.successful_requests:
+            endpoint_stats[request["endpoint"]]["successful"] += 1
+        
+        for request in self.failed_requests:
+            endpoint_stats[request["endpoint"]]["failed"] += 1
+        
+        # Calcular tasas de éxito
+        endpoint_analysis = {}
+        for endpoint, stats in endpoint_stats.items():
+            total = stats["successful"] + stats["failed"]
+            if total > 0:
+                success_rate = stats["successful"] / total * 100
+                endpoint_analysis[endpoint] = {
+                    "success_rate": round(success_rate, 2),
+                    "total_requests": total,
+                    "successful": stats["successful"],
+                    "failed": stats["failed"],
+                    "intermittent": 20 < success_rate < 80,  # Considerar intermitente si está entre 20-80%
+                }
+        
+        return endpoint_analysis
+    
+    def _analyze_user_patterns(self) -> Dict[str, Any]:
+        """Analizar patrones por usuario"""
+        user_stats = defaultdict(lambda: {"successful": 0, "failed": 0})
+        
+        # Contar por usuario
+        for request in self.successful_requests:
+            if request["user_id"]:
+                user_stats[request["user_id"]]["successful"] += 1
+        
+        for request in self.failed_requests:
+            if request["user_id"]:
+                user_stats[request["user_id"]]["failed"] += 1
+        
+        # Calcular tasas de éxito por usuario
+        user_analysis = {}
+        for user_id, stats in user_stats.items():
+            total = stats["successful"] + stats["failed"]
+            if total > 0:
+                success_rate = stats["successful"] / total * 100
+                user_analysis[user_id] = {
+                    "success_rate": round(success_rate, 2),
+                    "total_requests": total,
+                    "successful": stats["successful"],
+                    "failed": stats["failed"],
+                    "problematic": success_rate < 50,  # Usuario problemático si éxito < 50%
+                }
+        
+        return user_analysis
+    
+    def _analyze_temporal_patterns(self) -> Dict[str, Any]:
+        """Analizar patrones temporales"""
+        # Agrupar por hora del día
+        hourly_stats = defaultdict(lambda: {"successful": 0, "failed": 0})
+        
+        for request in self.successful_requests:
+            hour = request["timestamp"].hour
+            hourly_stats[hour]["successful"] += 1
+        
+        for request in self.failed_requests:
+            hour = request["timestamp"].hour
+            hourly_stats[hour]["failed"] += 1
+        
+        # Calcular tasas por hora
+        hourly_analysis = {}
+        for hour, stats in hourly_stats.items():
+            total = stats["successful"] + stats["failed"]
+            if total > 0:
+                success_rate = stats["successful"] / total * 100
+                hourly_analysis[hour] = {
+                    "success_rate": round(success_rate, 2),
+                    "total_requests": total,
+                    "peak_hour": total > 10,  # Hora pico si más de 10 requests
+                }
+        
+        return hourly_analysis
+    
+    def _analyze_token_patterns(self) -> Dict[str, Any]:
+        """Analizar patrones de token"""
+        token_lengths_successful = [r["token_length"] for r in self.successful_requests if r["token_length"]]
+        token_lengths_failed = [r["token_length"] for r in self.failed_requests if r["token_length"]]
+        
+        analysis = {}
+        
+        if token_lengths_successful:
+            analysis["successful_tokens"] = {
+                "avg_length": round(statistics.mean(token_lengths_successful), 2),
+                "min_length": min(token_lengths_successful),
+                "max_length": max(token_lengths_successful),
+                "count": len(token_lengths_successful),
+            }
+        
+        if token_lengths_failed:
+            analysis["failed_tokens"] = {
+                "avg_length": round(statistics.mean(token_lengths_failed), 2),
+                "min_length": min(token_lengths_failed),
+                "max_length": max(token_lengths_failed),
+                "count": len(token_lengths_failed),
+            }
+        
+        # Comparar longitudes
+        if token_lengths_successful and token_lengths_failed:
+            avg_successful = statistics.mean(token_lengths_successful)
+            avg_failed = statistics.mean(token_lengths_failed)
+            
+            analysis["comparison"] = {
+                "length_difference": round(abs(avg_successful - avg_failed), 2),
+                "failed_tokens_shorter": avg_failed < avg_successful,
+                "potential_issue": abs(avg_successful - avg_failed) > 50,
+            }
+        
+        return analysis
+    
+    def _generate_recommendations(self, patterns: Dict[str, Any]) -> List[str]:
+        """Generar recomendaciones basadas en patrones"""
+        recommendations = []
+        
+        # Recomendaciones basadas en endpoints
+        endpoints = patterns.get("endpoints", {})
+        for endpoint, stats in endpoints.items():
+            if stats.get("intermittent"):
+                recommendations.append(f"Endpoint {endpoint} muestra comportamiento intermitente - revisar configuración")
+        
+        # Recomendaciones basadas en usuarios
+        users = patterns.get("users", {})
+        problematic_users = [user_id for user_id, stats in users.items() if stats.get("problematic")]
+        if problematic_users:
+            recommendations.append(f"Usuarios problemáticos detectados: {', '.join(problematic_users)}")
+        
+        # Recomendaciones basadas en tokens
+        tokens = patterns.get("tokens", {})
+        comparison = tokens.get("comparison", {})
+        if comparison.get("potential_issue"):
+            recommendations.append("Diferencia significativa en longitud de tokens entre éxitos y fallos")
+        
+        # Recomendaciones generales
+        if not recommendations:
+            recommendations.append("No se detectaron patrones intermitentes obvios")
+        
+        return recommendations
+    
+    def get_failure_rate_by_timeframe(self, minutes: int = 60) -> Dict[str, Any]:
+        """Obtener tasa de fallo por período de tiempo"""
+        cutoff = datetime.now() - timedelta(minutes=minutes)
+        
+        with self.lock:
+            recent_successful = [
+                r for r in self.successful_requests 
+                if r["timestamp"] > cutoff
+            ]
+            recent_failed = [
+                r for r in self.failed_requests 
+                if r["timestamp"] > cutoff
+            ]
+        
+        total_recent = len(recent_successful) + len(recent_failed)
+        failure_rate = (len(recent_failed) / total_recent * 100) if total_recent > 0 else 0
+        
+        return {
+            "timeframe_minutes": minutes,
+            "total_requests": total_recent,
+            "successful_requests": len(recent_successful),
+            "failed_requests": len(recent_failed),
+            "failure_rate_percent": round(failure_rate, 2),
+            "timestamp": datetime.now().isoformat(),
+        }
 
+# Instancia global del analizador
+failure_analyzer = IntermittentFailureAnalyzer()
 
+# ============================================
+# ENDPOINTS DE ANÁLISIS DE FALLOS INTERMITENTES
+# ============================================
 
+@router.post("/log-successful-request")
+async def log_successful_request(
+    request_data: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+):
+    """Registrar request exitoso"""
+    try:
+        failure_analyzer.log_successful_request(request_data)
+        
+        return {
+            "success": True,
+            "message": "Request exitoso registrado"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error registrando request exitoso: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno: {str(e)}"
+        )
 
+@router.post("/log-failed-request")
+async def log_failed_request(
+    request_data: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+):
+    """Registrar request fallido"""
+    try:
+        failure_analyzer.log_failed_request(request_data)
+        
+        return {
+            "success": True,
+            "message": "Request fallido registrado"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error registrando request fallido: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno: {str(e)}"
+        )
 
+@router.get("/analyze-patterns")
+async def analyze_intermittent_patterns(
+    current_user: User = Depends(get_current_user),
+):
+    """Analizar patrones intermitentes"""
+    try:
+        analysis = failure_analyzer.analyze_intermittent_patterns()
+        
+        return {
+            "success": True,
+            "analysis": analysis
+        }
+        
+    except Exception as e:
+        logger.error(f"Error analizando patrones: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno: {str(e)}"
+        )
+
+@router.get("/failure-rate")
+async def get_failure_rate(
+    minutes: int = 60,
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener tasa de fallo por período de tiempo"""
+    try:
+        failure_rate = failure_analyzer.get_failure_rate_by_timeframe(minutes)
+        
+        return {
+            "success": True,
+            "failure_rate": failure_rate
+        }
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo tasa de fallo: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno: {str(e)}"
+        )
+
+@router.get("/endpoint-analysis")
+async def get_endpoint_analysis(
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener análisis específico por endpoint"""
+    try:
+        analysis = failure_analyzer.analyze_intermittent_patterns()
+        endpoint_analysis = analysis["patterns"].get("endpoints", {})
+        
+        return {
+            "success": True,
+            "endpoint_analysis": endpoint_analysis
+        }
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo análisis de endpoints: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno: {str(e)}"
+        )
