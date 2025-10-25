@@ -8,7 +8,7 @@ import uuid
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException
 from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
