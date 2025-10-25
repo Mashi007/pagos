@@ -330,7 +330,7 @@ class ArchitecturalAnalysisSystem:
                 return {
                     "status": "pending",
                     "score": 0.5,
-                    "message": "Requiere sesión de DB para verificación completa",
+                    "message": "Requiere sesión de DB para verificación comp...
                 }
             except Exception as e:
                 return {"status": "error", "score": 0, "error": str(e)}

@@ -710,7 +710,7 @@ def dashboard_analista(
        • Estadísticas de sus clientes
        • NO ve datos de otros analistaes/comerciales
     """
-    # NOTA: Este endpoint necesita rediseño - Los Users no son Analistaes de configuración
+    # NOTA: Este endpoint necesita rediseño - Los Users no son Analistaes de...
     # Por ahora, mostrar dashboard general
 
     # Dashboard general del sistema (todos los clientes)
@@ -845,8 +845,8 @@ def dashboard_analista(
         },
         "mi_ranking": mi_posicion,
         "acciones_sugeridas": [
-            f"Contactar {len([c for c in clientes_mora_detalle if c['dias_mora'] > 30])} clientes críticos",
-            f"Seguimiento a {len([c for c in clientes_mora_detalle if c['dias_mora'] <= 15])} clientes en mora temprana",
+            f"Contactar {len([c for c in clientes_mora_detalle if c['dias_mo...
+            f"Seguimiento a {len([c for c in clientes_mora_detalle if c['dia...
             "Revisar próximos vencimientos de la semana",
         ],
     }
@@ -866,7 +866,7 @@ def obtener_matriz_acceso_roles(
             "nombre": current_user.full_name,
             "rol": "ADMIN" if current_user.is_admin else "USER",
             "dashboard_asignado": (
-                f"/api/v1/dashboard/{'admin' if current_user.is_admin else 'user'}"
+                f"/api/v1/dashboard/{'admin' if current_user.is_admin else '...
             ),
         },
         "matriz_acceso": {
@@ -935,7 +935,7 @@ def obtener_matriz_acceso_roles(
         "implementacion_tecnica": {
             "filtros_por_rol": {
                 "ADMIN_COBRANZAS": "Sin filtros - acceso completo",
-                "USER_USER": "Dashboard general - sin filtro por analista individual",
+                "USER_USER": "Dashboard general - sin filtro por analista in...
             },
             "endpoints_disponibles": {
                 "admin": "/api/v1/dashboard/admin",
@@ -1463,10 +1463,10 @@ async def exportar_vista_dashboard(
 
             return StreamingResponse(
                 output,
-                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                media_type="application/vnd.openxmlformats-officedocument.sp...
                 headers={
                     "Content-Disposition": (
-                        f"attachment; filename=dashboard_{tipo_vista}_{date.today().strftime('%Y%m%d')}.xlsx"
+                        f"attachment; filename=dashboard_{tipo_vista}_{date....
                     )
                 },
             )

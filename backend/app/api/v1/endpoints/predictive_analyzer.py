@@ -1,6 +1,6 @@
 """
 Sistema de Análisis Predictivo de Autenticación
-Machine Learning y análisis estadístico para predecir problemas de autenticación
+Machine Learning y análisis estadístico para predecir problemas de autentica...
 """
 
 import logging
@@ -113,7 +113,7 @@ class PredictiveAnalyzer:
                     "severity": "high",
                     "description": f"Success rate declining (slope: {success_trend['slope']:.3f})",
                     "confidence": success_trend["confidence"],
-                    "recommendation": "Investigate recent changes to authentication system",
+                    "recommendation": "Investigate recent changes to authent...
                 }
             )
 
@@ -131,7 +131,7 @@ class PredictiveAnalyzer:
                         f"Response time increasing (slope: {response_trend['slope']:.1f}ms)"
                     ),
                     "confidence": response_trend["confidence"],
-                    "recommendation": "Check database performance and server load",
+                    "recommendation": "Check database performance and server...
                 }
             )
 
@@ -153,10 +153,10 @@ class PredictiveAnalyzer:
                         "type": "error_spike",
                         "severity": "high",
                         "description": (
-                            f"Error count spike: {avg_recent_errors:.1f} vs {historical_avg:.1f} historical avg"
+                            f"Error count spike: {avg_recent_errors:.1f} vs ...
                         ),
                         "confidence": 0.8,
-                        "recommendation": "Investigate error patterns and root causes",
+                        "recommendation": "Investigate error patterns and ro...
                     }
                 )
 
@@ -336,13 +336,13 @@ def _generar_recomendaciones_predictivas(
         if "success_rate_critical" in pred_data:
             pred = pred_data["success_rate_critical"]
             recommendations.append(
-                f"🚨 Predicción: Tasa de éxito crítica en {pred['days_to_critical']} días (probabilidad: {pred['probability']:.1%})"
+                f"🚨 Predicción: Tasa de éxito crítica en {pred['days_to_crit...
             )
 
         if "response_time_warning" in pred_data:
             pred = pred_data["response_time_warning"]
             recommendations.append(
-                f"⚠️ Predicción: Tiempo de respuesta alto en {pred['days_to_warning']} días (probabilidad: {pred['probability']:.1%})"
+                f"⚠️ Predicción: Tiempo de respuesta alto en {pred['days_to_...
             )
 
     return recommendations

@@ -105,7 +105,7 @@ __all__ = [
     "ResumenCliente",
     # ========== USUARIO ==========
     # NOTA: UserRole eliminado - ahora se usa is_admin boolean
-    # Los schemas de usuario están disponibles directamente desde app.schemas.user
+    # Los schemas de usuario están disponibles directamente desde app.schema...
     # ========== CONCILIACIÓN ==========
     "EstadoConciliacion",
     "TipoMatch",

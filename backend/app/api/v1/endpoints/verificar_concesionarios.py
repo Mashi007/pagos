@@ -25,7 +25,7 @@ def verificar_datos_concesionarios(
     """
     try:
         logger.info(
-            f"🔍 Verificando datos de concesionarios - Usuario: {current_user.email}"
+            f"🔍 Verificando datos de concesionarios - Usuario: {current_user...
         )
 
         # 1. Contar total de concesionarios

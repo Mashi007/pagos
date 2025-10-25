@@ -139,9 +139,9 @@ def verificar_rol_administracion(db: Session = Depends(get_db)):
             ],
             "acciones_disponibles": {
                 "crear_admin": "python backend/scripts/create_admin.py",
-                "modo_interactivo": "python backend/scripts/create_admin.py --interactive",
-                "listar_admins": "python backend/scripts/create_admin.py --list",
-                "verificar_sistema": "python backend/scripts/create_admin.py --verify",
+                "modo_interactivo": "python backend/scripts/create_admin.py ...
+                "listar_admins": "python backend/scripts/create_admin.py --l...
+                "verificar_sistema": "python backend/scripts/create_admin.py...
             },
             "urls_sistema": {
                 "aplicacion": "https://pagos-f2qf.onrender.com",
@@ -222,7 +222,7 @@ def create_user(
             modulo="USUARIOS",
             tabla="usuarios",
             registro_id=new_user.id,
-            descripcion=f"Usuario creado: {new_user.email} como {'Administrador' if new_user.is_admin else 'Usuario'}",
+            descripcion=f"Usuario creado: {new_user.email} como {'Administra...
             datos_nuevos={
                 "email": new_user.email,
                 "nombre": new_user.nombre,
@@ -312,7 +312,7 @@ def test_users_endpoint(
             "current_user": {
                 "id": current_user.id,
                 "email": current_user.email,
-                "is_admin": current_user.is_admin,  # Cambio clave: rol → is_admin
+                "is_admin": current_user.is_admin,  # Cambio clave: rol → is...
             },
             "users": users_data,
         }
@@ -492,7 +492,7 @@ def delete_user(
     db.commit()
 
     return {
-        "message": f"Usuario {user_email} eliminado completamente de la base de datos"
+        "message": f"Usuario {user_email} eliminado completamente de la base...
     }
 
 

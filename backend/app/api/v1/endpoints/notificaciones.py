@@ -117,7 +117,7 @@ async def enviar_notificacion(
         )
 
     logger.info(
-        f"Notificación {nueva_notif.id} programada para envío por {notificacion.canal}"
+        f"Notificación {nueva_notif.id} programada para envío por {notificac...
     )
     return nueva_notif
 
@@ -439,7 +439,7 @@ Gracias por su puntualidad.
                 cliente_id=cliente.id,
                 tipo="EMAIL",
                 categoria="CUOTA_PROXIMA",
-                asunto=f"Recordatorio: Cuota #{cuota.numero_cuota} vence en 3 días",
+                asunto=f"Recordatorio: Cuota #{cuota.numero_cuota} vence en ...
                 mensaje=mensaje,
                 estado="PENDIENTE",
                 programada_para=datetime.now().replace(
@@ -586,7 +586,7 @@ async def enviar_confirmacion_pago(
 
     proximo_vencimiento = "No hay cuotas pendientes"
     if proxima_cuota:
-        proximo_vencimiento = f"Cuota #{proxima_cuota.numero_cuota} - {proxima_cuota.fecha_vencimiento.strftime('%d/%m/%Y')}"
+        proximo_vencimiento = f"Cuota #{proxima_cuota.numero_cuota} - {proxi...
 
     mensaje = f"""
 Estimado/a {cliente.nombre_completo},
@@ -959,15 +959,15 @@ REPORTE SEMANAL - {inicio_semana.strftime('%d/%m')} al {fin_semana.strftime('%d/
  COBRANZA:
         Total cobrado: {sum(float(p.monto_pagado) for p in pagos_semana):,.2f}
  Número de pagos: {len(pagos_semana)}
-        Promedio por pago: {(sum(float(p.monto_pagado) for p in pagos_semana) / len(pagos_semana)):,.2f if pagos_semana else 0}
+        Promedio por pago: {(sum(float(p.monto_pagado) for p in pagos_semana...
 
  NUEVOS CLIENTES: {len(nuevos_clientes)}
 
- TOP PERFORMER: {top_analista[0] if top_analista else 'N/A'} ({top_analista[1] if top_analista else 0} nuevos clientes)
+ TOP PERFORMER: {top_analista[0] if top_analista else 'N/A'} ({top_analista[...
 
  EVOLUCIÓN DE CARTERA:
  Clientes activos: {db.query(Cliente).filter(Cliente.activo).count()}
- Tasa de morosidad: {db.query(Cliente).filter(Cliente.dias_mora > 0).count() / db.query(Cliente).filter(Cliente.activo).count() * 100:.2f}%
+ Tasa de morosidad: {db.query(Cliente).filter(Cliente.dias_mora > 0).count()...
 
 Revisar dashboard completo: https://pagos-f2qf.onrender.com
 
@@ -978,7 +978,7 @@ Saludos.
             user_id=usuario.id,
             tipo="EMAIL",
             categoria="GENERAL",
-            asunto=f"📈 Reporte Semanal - {inicio_semana.strftime('%d/%m')} al {fin_semana.strftime('%d/%m')}",
+            asunto=f"📈 Reporte Semanal - {inicio_semana.strftime('%d/%m')} a...
             mensaje=mensaje,
             estado="PENDIENTE",
             programada_para=datetime.now().replace(hour=9, minute=0),
@@ -1176,7 +1176,7 @@ async def reenviar_notificacion(
     if not notif.puede_reintentar:
         raise HTTPException(
             status_code=400,
-            detail="No se puede reenviar: máximo de intentos alcanzado o estado inválido",
+            detail="No se puede reenviar: máximo de intentos alcanzado o est...
         )
 
     # Resetear estado

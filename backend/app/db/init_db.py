@@ -108,7 +108,7 @@ def create_admin_user():
 
         if existing_admin:
             logger.info(
-                f"Usuario itmaster@rapicreditca.com ya existe: {existing_admin.email}"
+                f"Usuario itmaster@rapicreditca.com ya existe: {existing_adm...
             )
             db.close()
             return True
@@ -170,8 +170,8 @@ def init_db() -> bool:
             logger.error("No se pudo conectar a la base de datos")
             return False
 
-        # NO ejecutar migraciones automáticamente para evitar conflictos con enum
-        # Las migraciones deben ejecutarse manualmente vía endpoint de emergencia
+        # NO ejecutar migraciones automáticamente para evitar conflictos con...
+        # Las migraciones deben ejecutarse manualmente vía endpoint de emerg...
         logger.info(
             "Saltando migraciones automáticas (usar endpoint de emergencia si es necesario)"
         )
@@ -212,7 +212,7 @@ def init_db_startup():
             f"Base de datos: {settings.get_database_url(hide_password=True)}"
         )
 
-        # Intentar inicializar la base de datos pero no fallar si no se puede conectar
+        # Intentar inicializar la base de datos pero no fallar si no se pued...
         db_initialized = False
         try:
             if init_db():

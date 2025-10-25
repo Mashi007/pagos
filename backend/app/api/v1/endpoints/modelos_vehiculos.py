@@ -289,7 +289,7 @@ def eliminar_modelo_vehiculo(
         )
 
         return {
-            "message": "Modelo de vehículo eliminado completamente de la base de datos"
+            "message": "Modelo de vehículo eliminado completamente de la bas...
         }
 
     except HTTPException:

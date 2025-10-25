@@ -53,7 +53,7 @@ def registrar_auditoria(
     # Validar que el usuario no sea None
     if usuario is None:
         logger.warning(
-            f"Intento de registrar auditoría sin usuario válido: {accion} - {modulo}"
+            f"Intento de registrar auditoría sin usuario válido: {accion} - ...
         )
         raise ValueError(
             "No se puede registrar auditoría sin un usuario válido"

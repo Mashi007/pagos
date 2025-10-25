@@ -1,7 +1,7 @@
 # backend/app/models/configuracion_sistema.py
 """
 Modelo de Configuración del Sistema
-Centraliza todas las configuraciones del sistema para fácil gestión desde el frontend
+Centraliza todas las configuraciones del sistema para fácil gestión desde el...
 """
 import json
 import logging
@@ -183,7 +183,7 @@ class ConfiguracionPorDefecto:
         "AI": {
             "OPENAI_API_KEY": {
                 "valor": "",
-                "descripcion": "Token de API de OpenAI para funcionalidades de IA",
+                "descripcion": "Token de API de OpenAI para funcionalidades ...
                 "tipo_dato": "PASSWORD",
                 "requerido": False,
                 "visible_frontend": True,
@@ -239,7 +239,7 @@ class ConfiguracionPorDefecto:
                 "descripcion": "Usuario SMTP (email de la empresa)",
                 "tipo_dato": "STRING",
                 "requerido": True,
-                "patron_validacion": r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
+                "patron_validacion": r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a...
             },
             "SMTP_PASSWORD": {
                 "valor": "",

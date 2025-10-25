@@ -232,8 +232,8 @@ def track_business_metrics(
         labels: Labels adicionales
 
     Examples:
-        track_business_metrics("clientes_creados", 1, {"analista": "Juan", "concesionario": "AutoCenter"})
-        track_business_metrics("pagos_procesados", monto, {"estado": "EXITOSO", "metodo": "TRANSFERENCIA"})
+        track_business_metrics("clientes_creados", 1, {"analista": "Juan", "...
+        track_business_metrics("pagos_procesados", monto, {"estado": "EXITOS...
         track_business_metrics("mora_acumulada", dias_mora, {"cliente_id": 123})
         track_business_metrics("conciliacion_exitosa", 1, {"banco": "Popular", "registros": 50})
     """
@@ -430,7 +430,7 @@ def get_monitoring_status() -> dict:
         "integracion_actual": {
             "main_py": "❌ No integrado",
             "endpoints": "❌ No utilizado",
-            "recomendacion": "Integrar en main.py para habilitar monitoreo completo",
+            "recomendacion": "Integrar en main.py para habilitar monitoreo c...
         },
         "beneficios_implementacion": [
             "🔍 Tracking automático de errores con Sentry",

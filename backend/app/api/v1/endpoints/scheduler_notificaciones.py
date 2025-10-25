@@ -102,17 +102,17 @@ def obtener_configuracion_scheduler(
             "configuracion_cron": {
                 "expresion_actual": "0 * * * *",  # Cada hora
                 "descripcion": "Se ejecuta cada hora durante horario laboral",
-                "comando_sugerido": "0 * 6-22 * * 1-6",  # Cada hora de 6AM a 10PM, Lun-Sab
+                "comando_sugerido": "0 * 6-22 * * 1-6",  # Cada hora de 6AM ...
                 "archivo_cron": "/etc/crontab",
             },
             "instrucciones_setup": {
                 "paso_1": "Configurar cron job en el servidor",
                 "paso_2": (
-                    "Usar endpoint: POST /api/v1/notificaciones-multicanal/procesar-automaticas"
+                    "Usar endpoint: POST /api/v1/notificaciones-multicanal/p...
                 ),
                 "paso_3": "Monitorear logs en: GET /api/v1/scheduler/logs",
                 "comando_cron": (
-                    "0 * 6-22 * * 1-6 curl -X POST 'https://pagos-f2qf.onrender.com/api/v1/notificaciones-multicanal/procesar-automaticas' -H 'Authorization: Bearer TOKEN'"
+                    "0 * 6-22 * * 1-6 curl -X POST 'https://pagos-f2qf.onren...
                 ),
             },
         }
@@ -143,7 +143,7 @@ def configurar_scheduler(
         # Por ahora, simular guardado
 
         return {
-            "mensaje": "✅ Configuración del scheduler actualizada exitosamente",
+            "mensaje": "✅ Configuración del scheduler actualizada exitosamen...
             "configuracion_aplicada": configuracion.dict(),
             "expresion_cron_generada": _generar_expresion_cron(configuracion),
             "fecha_actualizacion": datetime.now().isoformat(),
@@ -174,7 +174,7 @@ def obtener_logs_scheduler(
             {
                 "timestamp": datetime.now().isoformat(),
                 "nivel": "INFO",
-                "mensaje": "✅ Ciclo de notificaciones completado: 45 exitosas, 2 fallidas",
+                "mensaje": "✅ Ciclo de notificaciones completado: 45 exitosa...
                 "detalles": {
                     "total_procesadas": 47,
                     "exitosas": 45,
@@ -191,7 +191,7 @@ def obtener_logs_scheduler(
             {
                 "timestamp": (datetime.now() - timedelta(hours=2)).isoformat(),
                 "nivel": "WARNING",
-                "mensaje": "⚠️ 2 notificaciones fallaron - programando reintentos",
+                "mensaje": "⚠️ 2 notificaciones fallaron - programando reint...
                 "detalles": {
                     "notificaciones_fallidas": 2,
                     "proximo_reintento": "30 minutos",
@@ -204,7 +204,7 @@ def obtener_logs_scheduler(
             "total_logs": len(logs_simulados),
             "logs": logs_simulados[:limite],
             "filtros_disponibles": ["INFO", "WARNING", "ERROR"],
-            "actualizacion_tiempo_real": "Los logs se actualizan cada ejecución del scheduler",
+            "actualizacion_tiempo_real": "Los logs se actualizan cada ejecuc...
         }
 
     except Exception as e:
@@ -379,7 +379,7 @@ def verificar_sistema_notificaciones_completo(
     🔍 Verificación completa del sistema de notificaciones multicanal
     """
     return {
-        "titulo": "🔔 SISTEMA DE NOTIFICACIONES MULTICANAL - VERIFICACIÓN COMPLETA",
+        "titulo": "🔔 SISTEMA DE NOTIFICACIONES MULTICANAL - VERIFICACIÓN COM...
         "fecha_verificacion": datetime.now().isoformat(),
         "cumplimiento_especificaciones": {
             "notificaciones_duales": "✅ Email + WhatsApp simultáneo",
@@ -440,11 +440,11 @@ def verificar_sistema_notificaciones_completo(
             ],
         },
         "endpoints_implementados": {
-            "procesamiento": "/api/v1/notificaciones-multicanal/procesar-automaticas",
+            "procesamiento": "/api/v1/notificaciones-multicanal/procesar-aut...
             "historial": "/api/v1/notificaciones-multicanal/historial",
             "dashboard": "/api/v1/notificaciones-multicanal/dashboard",
-            "preferencias": "/api/v1/notificaciones-multicanal/cliente/{id}/preferencias",
-            "templates": "/api/v1/notificaciones-multicanal/whatsapp/templates",
+            "preferencias": "/api/v1/notificaciones-multicanal/cliente/{id}/...
+            "templates": "/api/v1/notificaciones-multicanal/whatsapp/templat...
             "scheduler": "/api/v1/scheduler/configuracion",
             "pruebas": "/api/v1/notificaciones-multicanal/probar-envio",
         },

@@ -171,7 +171,7 @@ class NotificacionMulticanal:
                 await self._generar_reporte_diario(resultados)
 
             logger.info(
-                f"✅ Procesamiento completado: {resultados['exitosas']} exitosas, {resultados['fallidas']} fallidas"
+                f"✅ Procesamiento completado: {resultados['exitosas']} exito...
             )
 
             return resultados
@@ -230,7 +230,7 @@ class NotificacionMulticanal:
 
                 except Exception as e:
                     logger.error(
-                        f"Error enviando notificación a cliente {cliente_data.get('cliente_id')}: {e}"
+                        f"Error enviando notificación a cliente {cliente_dat...
                     )
                     resultado["fallidas"] += 1
 
@@ -519,28 +519,28 @@ class NotificacionMulticanal:
 
         templates = {
             TipoNotificacionCliente.RECORDATORIO_3_DIAS: {
-                "asunto": f"🚗 Recordatorio: Tu cuota #{variables['cuota']} vence en 3 días",
+                "asunto": f"🚗 Recordatorio: Tu cuota #{variables['cuota']} v...
                 "cuerpo_html": (
                     f"""
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <div style="background: #007bff; color: white; padding: 20px; text-align: center;">
+                <div style="font-family: Arial, sans-serif; max-width: 600px...
+                    <div style="background: #007bff; color: white; padding: ...
                         <h1>🚗 Recordatorio de Pago</h1>
                         <p style="margin: 0;">Tu cuota vence en 3 días</p>
                     </div>
 
                     <div style="padding: 20px; background: #f8f9fa;">
-                        <div style="background: white; padding: 20px; border-radius: 8px;">
+                        <div style="background: white; padding: 20px; border...
                             <h2>Hola {variables['nombre']},</h2>
 
-                            <p>Te recordamos que tu cuota #{variables['cuota']} de tu
-                               <strong>{variables['vehiculo']}</strong> vence el
+                            <p>Te recordamos que tu cuota #{variables['cuota...
+                               <strong>{variables['vehiculo']}</strong> venc...
                                <strong>{variables['fecha']}</strong>.</p>
 
-                            <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                                <h3 style="margin-top: 0;">💰 Detalles del Pago:</h3>
-                                <p><strong>Monto:</strong> {variables['monto']}</p>
-                                <p><strong>Fecha de vencimiento:</strong> {variables['fecha']}</p>
-                                <p><strong>Cuota #:</strong> {variables['cuota']}</p>
+                            <div style="background: #e3f2fd; padding: 15px; ...
+                                <h3 style="margin-top: 0;">💰 Detalles del Pa...
+                                <p><strong>Monto:</strong> {variables['monto...
+                                <p><strong>Fecha de vencimiento:</strong> {v...
+                                <p><strong>Cuota #:</strong> {variables['cuo...
                             </div>
 
                             <p>Puedes realizar tu pago por:</p>
@@ -565,35 +565,35 @@ class NotificacionMulticanal:
                 ),
             },
             TipoNotificacionCliente.MORA_1_DIA: {
-                "asunto": f"⚠️ Tu cuota #{variables['cuota']} está vencida - 1 día de atraso",
+                "asunto": f"⚠️ Tu cuota #{variables['cuota']} está vencida -...
                 "cuerpo_html": (
                     f"""
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <div style="background: #ffc107; color: #212529; padding: 20px; text-align: center;">
+                <div style="font-family: Arial, sans-serif; max-width: 600px...
+                    <div style="background: #ffc107; color: #212529; padding...
                         <h1>⚠️ Cuota Vencida</h1>
                         <p style="margin: 0;">1 día de atraso</p>
                     </div>
 
                     <div style="padding: 20px; background: #f8f9fa;">
-                        <div style="background: white; padding: 20px; border-radius: 8px;">
+                        <div style="background: white; padding: 20px; border...
                             <h2>Estimado/a {variables['nombre']},</h2>
 
-                            <div style="background: #fff3cd; border: 1px solid #ffeaa7;
-                                        padding: 15px; border-radius: 5px; margin: 20px 0;">
-                                <p><strong>⚠️ Tu cuota #{variables['cuota']} está vencida desde ayer.</strong></p>
+                            <div style="background: #fff3cd; border: 1px sol...
+                                        padding: 15px; border-radius: 5px; m...
+                                <p><strong>⚠️ Tu cuota #{variables['cuota']}...
                             </div>
 
-                            <div style="background: #f8d7da; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                                <h3 style="margin-top: 0;">💰 Información del Pago:</h3>
-                                <p><strong>Vehículo:</strong> {variables['vehiculo']}</p>
-                                <p><strong>Monto:</strong> {variables['monto']}</p>
-                                <p><strong>Fecha de vencimiento:</strong> {variables['fecha']}</p>
-                                <p><strong>Días de atraso:</strong> {variables['dias_mora']}</p>
+                            <div style="background: #f8d7da; padding: 15px; ...
+                                <h3 style="margin-top: 0;">💰 Información del...
+                                <p><strong>Vehículo:</strong> {variables['ve...
+                                <p><strong>Monto:</strong> {variables['monto...
+                                <p><strong>Fecha de vencimiento:</strong> {v...
+                                <p><strong>Días de atraso:</strong> {variabl...
                             </div>
 
-                            <p><strong>Para evitar cargos por mora, realiza tu pago hoy mismo.</strong></p>
+                            <p><strong>Para evitar cargos por mora, realiza ...
 
-                            <p>Si tienes alguna dificultad, contáctanos inmediatamente al {variables['telefono_empresa']}.</p>
+                            <p>Si tienes alguna dificultad, contáctanos inme...
 
                             <div style="text-align: center; margin-top: 30px;">
                                 <p style="color: #666;">
@@ -611,30 +611,30 @@ class NotificacionMulticanal:
                 "asunto": f"✅ Pago recibido - Cuota #{variables['cuota']}",
                 "cuerpo_html": (
                     f"""
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <div style="background: #28a745; color: white; padding: 20px; text-align: center;">
+                <div style="font-family: Arial, sans-serif; max-width: 600px...
+                    <div style="background: #28a745; color: white; padding: ...
                         <h1>✅ Pago Confirmado</h1>
                         <p style="margin: 0;">¡Gracias por tu pago!</p>
                     </div>
 
                     <div style="padding: 20px; background: #f8f9fa;">
-                        <div style="background: white; padding: 20px; border-radius: 8px;">
+                        <div style="background: white; padding: 20px; border...
                             <h2>¡Gracias {variables['nombre']}!</h2>
 
-                            <div style="background: #d4edda; border: 1px solid #c3e6cb;
-                                        padding: 15px; border-radius: 5px; margin: 20px 0;">
-                                <p><strong>✅ Hemos recibido tu pago de la cuota #{variables['cuota']}.</strong></p>
+                            <div style="background: #d4edda; border: 1px sol...
+                                        padding: 15px; border-radius: 5px; m...
+                                <p><strong>✅ Hemos recibido tu pago de la cu...
                             </div>
 
-                            <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                                <h3 style="margin-top: 0;">💰 Detalles del Pago:</h3>
-                                <p><strong>Vehículo:</strong> {variables['vehiculo']}</p>
-                                <p><strong>Monto pagado:</strong> {variables['monto']}</p>
-                                <p><strong>Cuota #:</strong> {variables['cuota']}</p>
+                            <div style="background: #e3f2fd; padding: 15px; ...
+                                <h3 style="margin-top: 0;">💰 Detalles del Pa...
+                                <p><strong>Vehículo:</strong> {variables['ve...
+                                <p><strong>Monto pagado:</strong> {variables...
+                                <p><strong>Cuota #:</strong> {variables['cuo...
                                 <p><strong>Estado:</strong> ✅ Pagada</p>
                             </div>
 
-                            <p>Tu cuenta está al día. ¡Gracias por tu puntualidad!</p>
+                            <p>Tu cuenta está al día. ¡Gracias por tu puntua...
 
                             <div style="text-align: center; margin-top: 30px;">
                                 <p style="color: #666;">
@@ -795,7 +795,7 @@ Financiamiento Automotriz"""
 
             if notificaciones_hoy >= self.LIMITE_NOTIFICACIONES_DIA:
                 logger.warning(
-                    f"Cliente {cliente_id} alcanzó límite diario de notificaciones"
+                    f"Cliente {cliente_id} alcanzó límite diario de notifica...
                 )
                 return False
 
@@ -849,7 +849,7 @@ Financiamiento Automotriz"""
                     categoria="CLIENTE",
                     prioridad="NORMAL",
                     titulo=f"Notificación {tipo.value} - {canal}",
-                    mensaje=f"Notificación enviada por {canal} al cliente {cliente_data['nombre']}",
+                    mensaje=f"Notificación enviada por {canal} al cliente {c...
                     canal=canal,
                     estado=estado,
                     destinatario_email=(
@@ -907,10 +907,10 @@ Financiamiento Automotriz"""
 
             <h3>📈 Resumen:</h3>
             <ul>
-                <li>Total procesadas: {resultados['notificaciones_procesadas']}</li>
+                <li>Total procesadas: {resultados['notificaciones_procesadas...
                 <li>✅ Exitosas: {resultados['exitosas']}</li>
                 <li>❌ Fallidas: {resultados['fallidas']}</li>
-                <li>📊 Tasa de éxito: {(resultados['exitosas'] / resultados['notificaciones_procesadas'] * 100):.1f}%</li>
+                <li>📊 Tasa de éxito: {(resultados['exitosas'] / resultados['...
             </ul>
 
             <h3>📋 Por Tipo de Notificación:</h3>
@@ -918,7 +918,7 @@ Financiamiento Automotriz"""
             """
 
             for tipo, datos in resultados["por_tipo"].items():
-                reporte_html += f"<li><strong>{tipo}:</strong> {datos['exitosas']}/{datos['total']} exitosas</li>"
+                reporte_html += f"<li><strong>{tipo}:</strong> {datos['exito...
 
             reporte_html += "</ul>"
 
@@ -935,7 +935,7 @@ Financiamiento Automotriz"""
             for usuario in usuarios_cobranzas:
                 await self.email_service.send_email(
                     to_email=usuario.email,
-                    subject=f"📊 Reporte Diario de Notificaciones - {date.today().strftime('%d/%m/%Y')}",
+                    subject=f"📊 Reporte Diario de Notificaciones - {date.tod...
                     html_content=reporte_html,
                 )
 
@@ -1019,7 +1019,7 @@ class NotificationScheduler:
             return {
                 "email_configurado": ConfigHelper.is_email_configured(db),
                 "whatsapp_habilitado": ConfigHelper.is_whatsapp_enabled(db),
-                "puede_enviar_notificaciones": True,  # Al menos email siempre debe estar
+                "puede_enviar_notificaciones": True,  # Al menos email siemp...
             }
 
         except Exception as e:
@@ -1093,7 +1093,7 @@ class GestorReintentos:
 
                         # Si agotó reintentos, notificar a admin
                         if notificacion.intentos >= notificacion.max_intentos:
-                            await GestorReintentos._notificar_admin_fallo_critico(
+                            await GestorReintentos._notificar_admin_fallo_cr...
                                 notificacion, db
                             )
 
@@ -1101,7 +1101,7 @@ class GestorReintentos:
 
                 except Exception as e:
                     logger.error(
-                        f"Error en reintento de notificación {notificacion.id}: {e}"
+                        f"Error en reintento de notificación {notificacion.i...
                     )
                     resultados["fallidos"] += 1
 
@@ -1222,8 +1222,8 @@ class WhatsAppTemplateManager:
                 {
                     "tipo": "BODY",
                     "texto": (
-                        "👋 Hola {{1}},\n\n🚗 Te recordamos que tu cuota #{{2}} de tu {{3}} "
-                        "vence el {{4}}.\n\n💰 Monto: {{5}}\n\nPor favor realiza tu pago a tiempo. "
+                        "👋 Hola {{1}},\n\n🚗 Te recordamos que tu cuota #{{2}...
+                        "vence el {{4}}.\n\n💰 Monto: {{5}}\n\nPor favor real...
                         "💳\n\n¿Dudas? Responde este mensaje."
                     ),
                 },
@@ -1269,7 +1269,7 @@ class WhatsAppTemplateManager:
                 {
                     "tipo": "BODY",
                     "texto": (
-                        "¡Gracias {{1}}!\n\nHemos recibido tu pago de {{2}}.\n\n🚗 {{3}}\n"
+                        "¡Gracias {{1}}!\n\nHemos recibido tu pago de {{2}}....
                         "📅 Cuota #{{4}}: ✅ PAGADA\n\n¡Tu cuenta está al día!"
                     ),
                 },
@@ -1309,7 +1309,7 @@ class WhatsAppTemplateManager:
                 "nombre": nombre,
                 "descripcion": template["categoria"],
                 "variables": template["variables"],
-                "estado": "PENDIENTE_APROBACION",  # En producción sería dinámico
+                "estado": "PENDIENTE_APROBACION",  # En producción sería din...
             }
             for nombre, template in WhatsAppTemplateManager.TEMPLATES_WHATSAPP.items()
         ]

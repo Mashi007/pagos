@@ -170,7 +170,7 @@ class ImpactAnalyzer:
 
             self.metrics_history.append(metrics)
             logger.debug(
-                f"Métricas recolectadas: CPU {metrics.cpu_percent:.1f}%, Memory {metrics.memory_percent:.1f}%"
+                f"Métricas recolectadas: CPU {metrics.cpu_percent:.1f}%, Mem...
             )
 
         except Exception as e:
@@ -225,7 +225,7 @@ class ImpactAnalyzer:
             self._create_alert(
                 alert_type="CPU_HIGH",
                 severity=AlertSeverity.WARNING,
-                message=f"CPU usage {current.cpu_percent:.1f}% exceeds threshold {ALERT_THRESHOLD_CPU}%",
+                message=f"CPU usage {current.cpu_percent:.1f}% exceeds thres...
                 metrics={"cpu_percent": current.cpu_percent},
             )
 
@@ -234,7 +234,7 @@ class ImpactAnalyzer:
             self._create_alert(
                 alert_type="MEMORY_HIGH",
                 severity=AlertSeverity.WARNING,
-                message=f"Memory usage {current.memory_percent:.1f}% exceeds threshold {ALERT_THRESHOLD_MEMORY}%",
+                message=f"Memory usage {current.memory_percent:.1f}% exceeds...
                 metrics={"memory_percent": current.memory_percent},
             )
 
@@ -243,7 +243,7 @@ class ImpactAnalyzer:
             self._create_alert(
                 alert_type="DISK_HIGH",
                 severity=AlertSeverity.CRITICAL,
-                message=f"Disk usage {current.disk_percent:.1f}% exceeds threshold {ALERT_THRESHOLD_DISK}%",
+                message=f"Disk usage {current.disk_percent:.1f}% exceeds thr...
                 metrics={"disk_percent": current.disk_percent},
             )
 
@@ -315,7 +315,7 @@ class ImpactAnalyzer:
             self._create_alert(
                 alert_type="SLOW_RESPONSE",
                 severity=AlertSeverity.WARNING,
-                message=f"Endpoint {endpoint} response time {response_time_ms:.2f}ms exceeds threshold",
+                message=f"Endpoint {endpoint} response time {response_time_m...
                 metrics={
                     "endpoint": endpoint,
                     "response_time_ms": response_time_ms,

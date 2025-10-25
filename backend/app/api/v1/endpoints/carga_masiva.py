@@ -675,10 +675,10 @@ async def _analizar_archivo_clientes(
                             cedula=cedula,
                             campo="concesionario",
                             valor_original=concesionario,
-                            error=f'Concesionario "{concesionario}" no existe en la base de datos',
+                            error=f'Concesionario "{concesionario}" no exist...
                             tipo_error="DATO_VACIO",
                             puede_corregirse=True,
-                            sugerencia="Seleccione un concesionario existente o créelo primero en Configuración",
+                            sugerencia="Seleccione un concesionario existent...
                         )
                     )
                     datos_vacios += 1
@@ -701,10 +701,10 @@ async def _analizar_archivo_clientes(
                             cedula=cedula,
                             campo="modelo_vehiculo",
                             valor_original=modelo_vehiculo,
-                            error=f'Modelo "{modelo_vehiculo}" no existe en la base de datos',
+                            error=f'Modelo "{modelo_vehiculo}" no existe en ...
                             tipo_error="DATO_VACIO",
                             puede_corregirse=True,
-                            sugerencia="Seleccione un modelo existente o créelo primero en Configuración",
+                            sugerencia="Seleccione un modelo existente o cré...
                         )
                     )
                     datos_vacios += 1
@@ -726,10 +726,10 @@ async def _analizar_archivo_clientes(
                             cedula=cedula,
                             campo="asesor",
                             valor_original=asesor,
-                            error=f'Analista "{asesor}" no existe en la base de datos',
+                            error=f'Analista "{asesor}" no existe en la base...
                             tipo_error="DATO_VACIO",
                             puede_corregirse=True,
-                            sugerencia="Seleccione un asesor existente o créelo primero en Configuración",
+                            sugerencia="Seleccione un asesor existente o cré...
                         )
                     )
                     datos_vacios += 1
@@ -923,10 +923,10 @@ async def _analizar_archivo_pagos(
                             cedula=cedula,
                             campo="cedula",
                             valor_original=cedula,
-                            error=f'Cliente con cédula "{cedula}" NO existe en la base de datos',
+                            error=f'Cliente con cédula "{cedula}" NO existe ...
                             tipo_error="CRITICO",
                             puede_corregirse=False,
-                            sugerencia="Debe crear el cliente primero antes de cargar pagos",
+                            sugerencia="Debe crear el cliente primero antes ...
                         )
                     )
                     errores_criticos += 1
@@ -1044,7 +1044,7 @@ async def _analizar_archivo_pagos(
                         error="Método de pago vacío",
                         tipo_error="DATO_VACIO",
                         puede_corregirse=True,
-                        sugerencia="Seleccione: TRANSFERENCIA, EFECTIVO, CHEQUE, etc.",
+                        sugerencia="Seleccione: TRANSFERENCIA, EFECTIVO, CHE...
                     )
                 )
                 datos_vacios += 1
@@ -1426,7 +1426,7 @@ async def guardar_registros_corregidos(
 
         return {
             "success": True,
-            "mensaje": f"✅ {registros_guardados} registros guardados exitosamente",
+            "mensaje": f"✅ {registros_guardados} registros guardados exitosa...
             "registros_guardados": registros_guardados,
             "errores": errores_guardado,
         }
@@ -1591,7 +1591,7 @@ def _registrar_auditoria_cliente(
         accion=TipoAccion.ACTUALIZAR if es_actualizacion else TipoAccion.CREAR,
         tabla="Cliente",
         registro_id=cliente.id,
-        descripcion=f"Cliente {'actualizado' if es_actualizacion else 'creado'} desde carga masiva: {datos['cedula']}",
+        descripcion=f"Cliente {'actualizado' if es_actualizacion else 'cread...
         datos_nuevos=cliente_data,
         resultado="EXITOSO",
     )
@@ -1698,7 +1698,7 @@ async def _guardar_pago_desde_carga(
         db.flush()
 
         logger.info(
-            f"Pago creado para cliente {datos['cedula']}: ${datos['monto_pagado']}"
+            f"Pago creado para cliente {datos['cedula']}: ${datos['monto_pag...
         )
 
         # Registrar en auditoría
@@ -1707,7 +1707,7 @@ async def _guardar_pago_desde_carga(
             accion=TipoAccion.CREAR,
             tabla="Pago",
             registro_id=nuevo_pago.id,
-            descripcion=f"Pago creado desde carga masiva para cliente {datos['cedula']}",
+            descripcion=f"Pago creado desde carga masiva para cliente {datos...
             datos_nuevos=pago_data,
             resultado="EXITOSO",
         )
@@ -1818,7 +1818,7 @@ async def descargar_template_excel(
 
         return StreamingResponse(
             output,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            media_type="application/vnd.openxmlformats-officedocument.spread...
             headers={
                 "Content-Disposition": f"attachment; filename={nombre_archivo}"
             },
@@ -1942,7 +1942,7 @@ async def dashboard_carga_masiva(
             "tipos_carga": [
                 {
                     "tipo": "clientes",
-                    "descripcion": "Carga masiva de clientes con financiamiento",
+                    "descripcion": "Carga masiva de clientes con financiamie...
                     "template": "/api/v1/carga-masiva/template-excel/clientes",
                 },
                 {

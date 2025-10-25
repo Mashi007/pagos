@@ -115,7 +115,7 @@ async def procesar_notificaciones_automaticas(
         if not config_servicios["puede_enviar_notificaciones"]:
             raise HTTPException(
                 status_code=400,
-                detail="Servicios de notificación no configurados. Configure email y/o WhatsApp.",
+                detail="Servicios de notificación no configurados. Configure...
             )
 
         # Ejecutar procesamiento en background
@@ -127,7 +127,7 @@ async def procesar_notificaciones_automaticas(
         )
 
         return {
-            "mensaje": "✅ Procesamiento de notificaciones iniciado en background",
+            "mensaje": "✅ Procesamiento de notificaciones iniciado en backgr...
             "timestamp": datetime.now().isoformat(),
             "servicios_disponibles": {
                 "email": (
@@ -142,7 +142,7 @@ async def procesar_notificaciones_automaticas(
                 ),
             },
             "estimacion_tiempo": "2-5 minutos dependiendo del volumen",
-            "seguimiento": "GET /api/v1/notificaciones-multicanal/estado-procesamiento",
+            "seguimiento": "GET /api/v1/notificaciones-multicanal/estado-pro...
         }
 
     except HTTPException:
@@ -583,15 +583,15 @@ def actualizar_preferencias_cliente(
             )
 
         return {
-            "mensaje": "✅ Preferencias de notificación actualizadas exitosamente",
+            "mensaje": "✅ Preferencias de notificación actualizadas exitosam...
             "cliente": {"id": cliente_id, "nombre": cliente.nombre_completo},
             "nueva_configuracion": {
                 "canal_preferido": canal_preferido.value,
                 "descripcion": (
                     {
-                        "AMBOS": "Recibirá notificaciones por email Y WhatsApp",
+                        "AMBOS": "Recibirá notificaciones por email Y WhatsA...
                         "EMAIL": "Recibirá notificaciones solo por email",
-                        "WHATSAPP": "Recibirá notificaciones solo por WhatsApp",
+                        "WHATSAPP": "Recibirá notificaciones solo por WhatsA...
                         "NINGUNO": "NO recibirá notificaciones automáticas",
                     }.get(canal_preferido.value)
                 ),
@@ -630,10 +630,10 @@ def listar_templates_whatsapp(current_user: User = Depends(get_current_user)):
             "total_templates": len(templates),
             "templates": templates,
             "informacion_importante": {
-                "aprobacion_meta": "Las plantillas deben ser aprobadas por Meta antes de usar",
+                "aprobacion_meta": "Las plantillas deben ser aprobadas por M...
                 "tiempo_aprobacion": "1-2 días hábiles",
-                "proceso": "El sistema enviará automáticamente para aprobación",
-                "limitaciones": "WhatsApp tiene reglas estrictas sobre contenido",
+                "proceso": "El sistema enviará automáticamente para aprobaci...
+                "limitaciones": "WhatsApp tiene reglas estrictas sobre conte...
             },
             "variables_disponibles": [
                 "{nombre} - Nombre del cliente",
@@ -899,10 +899,10 @@ def dashboard_notificaciones_multicanal(
                 "scheduler": "✅ EJECUTÁNDOSE",
             },
             "acciones_rapidas": {
-                "procesar_ahora": "POST /api/v1/notificaciones-multicanal/procesar-automaticas",
-                "ver_historial": "GET /api/v1/notificaciones-multicanal/historial",
-                "procesar_reintentos": "POST /api/v1/notificaciones-multicanal/procesar-reintentos",
-                "configurar_templates": "GET /api/v1/notificaciones-multicanal/whatsapp/templates",
+                "procesar_ahora": "POST /api/v1/notificaciones-multicanal/pr...
+                "ver_historial": "GET /api/v1/notificaciones-multicanal/hist...
+                "procesar_reintentos": "POST /api/v1/notificaciones-multican...
+                "configurar_templates": "GET /api/v1/notificaciones-multican...
             },
         }
 
@@ -1146,10 +1146,10 @@ def verificar_sistema_notificaciones_multicanal(
         },
         "endpoints_principales": {
             "dashboard": "/api/v1/notificaciones-multicanal/dashboard",
-            "procesar_automaticas": "/api/v1/notificaciones-multicanal/procesar-automaticas",
+            "procesar_automaticas": "/api/v1/notificaciones-multicanal/proce...
             "historial": "/api/v1/notificaciones-multicanal/historial",
-            "preferencias_cliente": "/api/v1/notificaciones-multicanal/cliente/{id}/preferencias",
-            "templates_whatsapp": "/api/v1/notificaciones-multicanal/whatsapp/templates",
+            "preferencias_cliente": "/api/v1/notificaciones-multicanal/clien...
+            "templates_whatsapp": "/api/v1/notificaciones-multicanal/whatsap...
             "probar_envio": "/api/v1/notificaciones-multicanal/probar-envio",
         },
         "configuracion_requerida": {

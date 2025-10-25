@@ -267,7 +267,7 @@ def analistas_backup2(
     """
     try:
         # Consulta más simple para evitar problemas
-        query = "SELECT id, nombre, activo FROM analistas ORDER BY id OFFSET %s LIMIT %s"
+        query = "SELECT id, nombre, activo FROM analistas ORDER BY id OFFSET...
         count_query = "SELECT COUNT(*) FROM analistas"
 
         # Obtener total
@@ -484,7 +484,7 @@ def listar_analistas(
                     "apellido": analista.apellido
                     or "",  # ✅ Usar propiedad calculada
                     "activo": analista.activo,
-                    "nombre_completo": analista.nombre_completo,  # ✅ Usar propiedad calculada
+                    "nombre_completo": analista.nombre_completo,  # ✅ Usar p...
                     "primer_nombre": analista.primer_nombre
                     or "",  # ✅ Usar propiedad calculada
                     "updated_at": (

@@ -1,5 +1,5 @@
 """
-Sistema de seguridad: JWT, hashing de passwords, tokens y dependencias de FastAPI
+Sistema de seguridad: JWT, hashing de passwords, tokens y dependencias de Fa...
 """
 
 from datetime import datetime, timedelta
@@ -108,7 +108,7 @@ def decode_token(token: str) -> dict:
 # -------------------------------------------------------------
 # DEPENDENCIAS DE AUTENTICACIÓN PARA FASTAPI (ELIMINADAS - DUPLICADAS)
 # -------------------------------------------------------------
-# Las funciones get_current_user y get_current_active_user están definidas en app/api/deps.py
+# Las funciones get_current_user y get_current_active_user están definidas e...
 # para evitar duplicación y conflictos de importación
 
 # -------------------------------------------------------------

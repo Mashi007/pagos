@@ -17,11 +17,11 @@ async def ejecutar_migracion_emergencia(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Endpoint de emergencia para ejecutar la migración de concesionario y analista
+    Endpoint de emergencia para ejecutar la migración de concesionario y ana...
     """
     try:
         logger.info(
-            f"Ejecutando migración de emergencia - Usuario: {current_user.email}"
+            f"Ejecutando migración de emergencia - Usuario: {current_user.em...
         )
 
         # Verificar si las columnas ya existen

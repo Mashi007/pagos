@@ -461,13 +461,13 @@ def _validate_password_length(password: str) -> tuple[bool, str]:
     if len(password) < MIN_PASSWORD_LENGTH:
         return (
             False,
-            f"La contraseña debe tener al menos {MIN_PASSWORD_LENGTH} caracteres",
+            f"La contraseña debe tener al menos {MIN_PASSWORD_LENGTH} caract...
         )
 
     if len(password) > MAX_PASSWORD_LENGTH:
         return (
             False,
-            f"La contraseña no puede tener más de {MAX_PASSWORD_LENGTH} caracteres",
+            f"La contraseña no puede tener más de {MAX_PASSWORD_LENGTH} cara...
         )
 
     return True, ""

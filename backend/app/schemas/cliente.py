@@ -147,7 +147,7 @@ class ClienteCreateWithConfirmation(BaseModel):
 
 
 class ClienteUpdate(BaseModel):
-    """Schema para actualizar cliente - campos opcionales para actualización parcial"""
+    """Schema para actualizar cliente - campos opcionales para actualización...
 
     # Datos personales
     cedula: Optional[str] = Field(None, min_length=8, max_length=20)

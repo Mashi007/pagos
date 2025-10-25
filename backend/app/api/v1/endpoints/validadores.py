@@ -377,7 +377,7 @@ def _generar_respuesta_correccion(
         resultado_correccion["requiere_recalculo_amortizacion"]
         and recalcular_amortizacion
     ):
-        mensaje_recalculo = "⚠️ Se requiere recalcular la tabla de amortización"
+        mensaje_recalculo = "⚠️ Se requiere recalcular la tabla de amortizac...
 
     return {
         "mensaje": "✅ Corrección de datos procesada exitosamente",
@@ -561,7 +561,7 @@ def _limpiar_observaciones_error(pago: Pago, current_user: User) -> None:
         usuario_nombre = (
             f"{current_user.nombre} {current_user.apellido}".strip()
         )
-        pago.observaciones = f"CORREGIDO - {datetime.now().strftime('%d/%m/%Y')} por {usuario_nombre}"
+        pago.observaciones = f"CORREGIDO - {datetime.now().strftime('%d/%m/%...
 
 
 @router.post("/corregir-pago/{pago_id}")
@@ -698,7 +698,7 @@ def detectar_errores_masivo(
                 "ejecutado_por": f"{current_user.nombre} {current_user.apellido}".strip(),
             },
             "acciones_sugeridas": [
-                "Usar herramienta de corrección masiva para los casos detectados",
+                "Usar herramienta de corrección masiva para los casos detect...
                 "Configurar validadores en formularios del frontend",
                 "Capacitar usuarios en formatos correctos",
                 "Implementar auto-formateo en tiempo real",
@@ -802,7 +802,7 @@ def obtener_ejemplos_correccion(
                     "✅ Formato correcto",
                     "⚠️ Puede requerir recálculo de amortización",
                 ],
-                "accion_adicional": "Sistema pregunta si recalcular tabla de amortización",
+                "accion_adicional": "Sistema pregunta si recalcular tabla de...
             },
             "monto": {
                 "titulo": "💰 MONTO PAGADO = ERROR",
@@ -823,14 +823,14 @@ def obtener_ejemplos_correccion(
             "pais_configurado": pais,
             "ejemplos": ejemplos,
             "herramientas_disponibles": {
-                "validacion_tiempo_real": "POST /api/v1/validadores/validar-campo",
-                "formateo_automatico": "POST /api/v1/validadores/formatear-tiempo-real",
-                "correccion_individual": "POST /api/v1/validadores/corregir-cliente/{id}",
-                "deteccion_masiva": "GET /api/v1/validadores/detectar-errores-masivo",
+                "validacion_tiempo_real": "POST /api/v1/validadores/validar-...
+                "formateo_automatico": "POST /api/v1/validadores/formatear-t...
+                "correccion_individual": "POST /api/v1/validadores/corregir-...
+                "deteccion_masiva": "GET /api/v1/validadores/detectar-errore...
             },
             "integracion_frontend": {
-                "validacion_onchange": "Usar endpoint validar-campo en onChange",
-                "formateo_onkeyup": "Usar endpoint formatear-tiempo-real en onKeyUp",
+                "validacion_onchange": "Usar endpoint validar-campo en onCha...
+                "formateo_onkeyup": "Usar endpoint formatear-tiempo-real en ...
                 "calendario_fechas": "Usar datepicker para fechas críticas",
                 "input_numerico": "Usar input type='number' para montos",
             },
@@ -876,10 +876,10 @@ def obtener_validadores_info():
         ],
         "endpoints": {
             "validar_campo": "POST /api/v1/validadores/validar-campo",
-            "formatear_tiempo_real": "POST /api/v1/validadores/formatear-tiempo-real",
+            "formatear_tiempo_real": "POST /api/v1/validadores/formatear-tie...
             "configuracion": "GET /api/v1/validadores/configuracion",
-            "ejemplos_correccion": "GET /api/v1/validadores/ejemplos-correccion",
-            "detectar_errores_masivo": "GET /api/v1/validadores/detectar-errores-masivo",
+            "ejemplos_correccion": "GET /api/v1/validadores/ejemplos-correcc...
+            "detectar_errores_masivo": "GET /api/v1/validadores/detectar-err...
             "test_cedula": "GET /api/v1/validadores/test-cedula/{cedula}",
             "test_simple": "GET /api/v1/validadores/test-simple",
             "ping": "GET /api/v1/validadores/ping",
@@ -943,7 +943,7 @@ async def _procesar_correcciones_masivas(
                 fallidas += 1
 
         logger.info(
-            f"📊 Corrección masiva completada: {exitosas} exitosas, {fallidas} fallidas"
+            f"📊 Corrección masiva completada: {exitosas} exitosas, {fallidas...
         )
 
         db.close()
@@ -1051,9 +1051,9 @@ def verificar_sistema_validadores(
         },
         "endpoints_principales": {
             "validar_campo": "POST /api/v1/validadores/validar-campo",
-            "formatear_tiempo_real": "POST /api/v1/validadores/formatear-tiempo-real",
-            "corregir_cliente": "POST /api/v1/validadores/corregir-cliente/{id}",
-            "detectar_errores": "GET /api/v1/validadores/detectar-errores-masivo",
+            "formatear_tiempo_real": "POST /api/v1/validadores/formatear-tie...
+            "corregir_cliente": "POST /api/v1/validadores/corregir-cliente/{...
+            "detectar_errores": "GET /api/v1/validadores/detectar-errores-ma...
             "ejemplos": "GET /api/v1/validadores/ejemplos-correccion",
         },
         "integracion_frontend": {
@@ -1083,7 +1083,7 @@ async def obtener_configuracion_validadores():
     return {
         "cedula_venezuela": {
             "descripcion": (
-                "Cédula venezolana: V/E/J + exactamente entre 7 y 10 dígitos, sin caracteres especiales"
+                "Cédula venezolana: V/E/J + exactamente entre 7 y 10 dígitos...
             ),
             "requisitos": {
                 "debe_empezar_por": "V, E o J",
@@ -1114,7 +1114,7 @@ async def obtener_configuracion_validadores():
             "formato_display": "+58 XXXXXXXXXX",
         },
         "email": {
-            "descripcion": "Email válido con normalización automática a minúsculas",
+            "descripcion": "Email válido con normalización automática a minú...
             "requisitos": {
                 "formato": "usuario@dominio.com",
                 "normalizacion": "Automática a minúsculas",
@@ -1124,7 +1124,7 @@ async def obtener_configuracion_validadores():
                     "guerrillamail.com",
                 ],
             },
-            "patron_regex": r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
+            "patron_regex": r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,...
         },
         "fecha": {
             "descripcion": "Fecha en formato DD/MM/YYYY",

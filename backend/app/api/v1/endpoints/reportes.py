@@ -396,7 +396,7 @@ async def exportar_excel(
 
         return StreamingResponse(
             output,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            media_type="application/vnd.openxmlformats-officedocument.spread...
             headers={
                 "Content-Disposition": f"attachment; filename={filename}"
             },
@@ -503,7 +503,7 @@ async def generar_estado_cuenta_pdf(
         p.drawString(
             50,
             y_pos - 90,
-            f"Cuotas: {resumen['cuotas_pagadas']} / {resumen['cuotas_totales']}",
+            f"Cuotas: {resumen['cuotas_pagadas']} / {resumen['cuotas_totales...
         )
         p.drawString(
             50, y_pos - 110, f"% Avance: {resumen['porcentaje_avance']}%"
@@ -518,7 +518,8 @@ async def generar_estado_cuenta_pdf(
             buffer,
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f"attachment; filename=estado_cuenta_{cliente.cedula}.pdf"
+f"attachment; filename=estado_cuenta_{cliente.cedula}.pd"
+    f"
             },
         )
 

@@ -231,9 +231,9 @@ class IntelligentAlertSystem:
     ) -> str:
         """Generar mensaje de alerta"""
         messages = {
-            AlertType.TOKEN_EXPIRY: f"Token expirando en menos de {rule['threshold']} minutos",
+            AlertType.TOKEN_EXPIRY: f"Token expirando en menos de {rule['thr...
             AlertType.AUTH_FAILURE: (
-                f"Más de {rule['threshold']} fallos de autenticación en los últimos minutos"
+                f"Más de {rule['threshold']} fallos de autenticación en los ...
             ),
             AlertType.SUSPICIOUS_ACTIVITY: (
                 f"Actividad sospechosa detectada ({rule['threshold']}+ eventos)"
@@ -582,7 +582,7 @@ async def configure_alert_rule(
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
-            "message": f"Regla de alerta {alert_type} configurada exitosamente",
+            "message": f"Regla de alerta {alert_type} configurada exitosamen...
         }
 
     except HTTPException:
