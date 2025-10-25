@@ -134,79 +134,93 @@ async def debug_autenticacion(request: Request, db: Session = Depends(get_db)):
         }
 
 
+def _test_login(db: Session) -> Dict[str, Any]:
+    """Test de login y generación de token"""
+    try:
+        admin_user = db.query(User).filter(User.is_admin).first()
+        if admin_user:
+            # Simular login
+            test_token = create_access_token(
+                subject=str(admin_user.id), additional_claims={"type": "access"}
+            )
+            return {
+                "status": "success",
+                "user_found": True,
+                "user_email": admin_user.email,
+                "user_active": admin_user.is_active,
+                "token_generated": True,
+                "token_length": len(test_token),
+                "token": test_token,  # Para usar en otros tests
+            }
+        else:
+            return {"status": "error", "error": "No admin user found"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+def _test_validacion_token(login_test: Dict[str, Any]) -> Dict[str, Any]:
+    """Test de validación de token"""
+    try:
+        if login_test.get("status") == "success":
+            test_token = login_test.get("token")
+            # Decodificar el token creado
+            decoded = decode_token(test_token)
+            return {
+                "status": "success",
+                "token_decoded": True,
+                "user_id_from_token": decoded.get("sub"),
+                "token_type": decoded.get("type"),
+                "exp": decoded.get("exp"),
+            }
+        else:
+            return {"status": "skipped", "reason": "Login test failed"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+def _test_endpoint_protegido(validation_test: Dict[str, Any], db: Session) -> Dict[str, Any]:
+    """Test de endpoint protegido"""
+    try:
+        if validation_test.get("status") == "success":
+            # Simular request con token
+            user_id = validation_test.get("user_id_from_token")
+            user = db.query(User).filter(User.id == int(user_id)).first()
+            if user:
+                return {
+                    "status": "success",
+                    "user_found_in_db": True,
+                    "user_email": user.email,
+                    "user_active": user.is_active,
+                }
+            else:
+                return {
+                    "status": "error",
+                    "error": "User not found in DB",
+                }
+        else:
+            return {
+                "status": "skipped",
+                "reason": "Validation test failed",
+            }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
 @router.post("/auth-test")
 async def test_autenticacion(request: Request, db: Session = Depends(get_db)):
     """
-    🧪 Test completo de autenticación
+    🧪 Test completo de autenticación (VERSIÓN REFACTORIZADA)
     Prueba login, token creation, y validación
     """
     try:
         # 1. Test de login
-        login_test = {}
-        try:
-            admin_user = db.query(User).filter(User.is_admin).first()
-            if admin_user:
-                # Simular login
-                test_token = create_access_token(
-                    subject=str(admin_user.id), additional_claims={"type": "access"}
-                )
-                login_test = {
-                    "status": "success",
-                    "user_found": True,
-                    "user_email": admin_user.email,
-                    "user_active": admin_user.is_active,
-                    "token_generated": True,
-                    "token_length": len(test_token),
-                }
-            else:
-                login_test = {"status": "error", "error": "No admin user found"}
-        except Exception as e:
-            login_test = {"status": "error", "error": str(e)}
+        login_test = _test_login(db)
 
         # 2. Test de validación de token
-        validation_test = {}
-        try:
-            if login_test.get("status") == "success":
-                # Decodificar el token creado
-                decoded = decode_token(test_token)
-                validation_test = {
-                    "status": "success",
-                    "token_decoded": True,
-                    "user_id_from_token": decoded.get("sub"),
-                    "token_type": decoded.get("type"),
-                    "exp": decoded.get("exp"),
-                }
-            else:
-                validation_test = {"status": "skipped", "reason": "Login test failed"}
-        except Exception as e:
-            validation_test = {"status": "error", "error": str(e)}
+        validation_test = _test_validacion_token(login_test)
 
         # 3. Test de endpoint protegido
-        protected_test = {}
-        try:
-            if validation_test.get("status") == "success":
-                # Simular request con token
-                user_id = validation_test.get("user_id_from_token")
-                user = db.query(User).filter(User.id == int(user_id)).first()
-                if user:
-                    protected_test = {
-                        "status": "success",
-                        "user_found_in_db": True,
-                        "user_email": user.email,
-                        "user_active": user.is_active,
-                    }
-                else:
-                    protected_test = {
-                        "status": "error",
-                        "error": "User not found in DB",
-                    }
-            else:
-                protected_test = {
-                    "status": "skipped",
-                    "reason": "Validation test failed",
-                }
-        except Exception as e:
-            protected_test = {"status": "error", "error": str(e)}
+        protected_test = _test_endpoint_protegido(validation_test, db)
 
         return {
             "timestamp": datetime.now().isoformat(),

@@ -382,6 +382,87 @@ def corregir_datos_cliente(
         raise HTTPException(status_code=500, detail=f"Error corrigiendo datos: {str(e)}")
 
 
+def _validar_y_corregir_monto_pago(pago: Pago, monto_pagado: str) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Validar y corregir monto pagado"""
+    correcciones = []
+    errores = []
+
+    validacion_monto = ValidadorMonto.validar_y_formatear_monto(monto_pagado, "MONTO_PAGO")
+
+    if validacion_monto["valido"]:
+        pago.monto_pagado = validacion_monto["valor_decimal"]
+        correcciones.append({
+            "campo": "monto_pagado",
+            "valor_anterior": str(pago.monto_pagado),
+            "valor_nuevo": str(validacion_monto["valor_decimal"]),
+        })
+    else:
+        errores.append({
+            "campo": "monto_pagado",
+            "error": validacion_monto["error"]
+        })
+
+    return correcciones, errores
+
+
+def _validar_y_corregir_fecha_pago(pago: Pago, fecha_pago: str) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Validar y corregir fecha de pago"""
+    correcciones = []
+    errores = []
+
+    validacion_fecha = ValidadorFecha.validar_fecha_pago(fecha_pago)
+
+    if validacion_fecha["valido"]:
+        fecha_parseada = datetime.strptime(validacion_fecha["fecha_iso"], "%Y-%m-%d").date()
+        pago.fecha_pago = fecha_parseada
+        correcciones.append({
+            "campo": "fecha_pago",
+            "valor_anterior": str(pago.fecha_pago),
+            "valor_nuevo": str(fecha_parseada),
+        })
+    else:
+        errores.append({
+            "campo": "fecha_pago",
+            "error": validacion_fecha["error"]
+        })
+
+    return correcciones, errores
+
+
+def _validar_y_corregir_numero_operacion(pago: Pago, numero_operacion: str) -> List[Dict[str, Any]]:
+    """Validar y corregir número de operación"""
+    correcciones = []
+
+    if numero_operacion.upper() != "ERROR" and numero_operacion.strip():
+        pago.numero_operacion = numero_operacion.strip()
+        correcciones.append({
+            "campo": "numero_operacion",
+            "valor_anterior": pago.numero_operacion,
+            "valor_nuevo": numero_operacion.strip(),
+        })
+
+    return correcciones
+
+
+def _limpiar_observaciones_error(pago: Pago, current_user: User) -> None:
+    """Limpiar observaciones de error"""
+    if pago.observaciones and "REQUIERE_VALIDACIÓN" in pago.observaciones:
+        usuario_nombre = f"{current_user.nombre} {current_user.apellido}".strip()
+        pago.observaciones = f"CORREGIDO - {datetime.now().strftime('%d/%m/%Y')} por {usuario_nombre}"
+
+
+def _registrar_auditoria_correccion(pago_id: int, correcciones_aplicadas: List[Dict[str, Any]], current_user: User, db: Session) -> None:
+    """Registrar auditoría de corrección"""
+    auditoria = Auditoria.registrar(
+        usuario_id=current_user.id,
+        accion=TipoAccion.ACTUALIZACION,
+        entidad="pago",
+        entidad_id=pago_id,
+        detalles=f"Corrección de pago: {len(correcciones_aplicadas)} campos actualizados",
+    )
+    db.add(auditoria)
+
+
 @router.post("/corregir-pago/{pago_id}")
 def corregir_datos_pago(
     pago_id: int,
@@ -392,7 +473,7 @@ def corregir_datos_pago(
     current_user: User = Depends(get_current_user),
 ):
     """
-    💰 Corregir datos incorrectos de un pago específico
+    💰 Corregir datos incorrectos de un pago específico (VERSIÓN REFACTORIZADA)
 
     Ejemplo: Pago con "MONTO PAGADO = ERROR"
     """
@@ -407,73 +488,30 @@ def corregir_datos_pago(
 
         # Corregir monto pagado
         if monto_pagado is not None:
-            validacion_monto = ValidadorMonto.validar_y_formatear_monto(monto_pagado, "MONTO_PAGO")
-
-            if validacion_monto["valido"]:
-                pago.monto_pagado = validacion_monto["valor_decimal"]
-                correcciones_aplicadas.append(
-                    {
-                        "campo": "monto_pagado",
-                        "valor_anterior": str(pago.monto_pagado),
-                        "valor_nuevo": str(validacion_monto["valor_decimal"]),
-                    }
-                )
-            else:
-                errores_validacion.append(
-                    {"campo": "monto_pagado", "error": validacion_monto["error"]}
-                )
+            correcciones, errores = _validar_y_corregir_monto_pago(pago, monto_pagado)
+            correcciones_aplicadas.extend(correcciones)
+            errores_validacion.extend(errores)
 
         # Corregir fecha de pago
         if fecha_pago is not None:
-            validacion_fecha = ValidadorFecha.validar_fecha_pago(fecha_pago)
-
-            if validacion_fecha["valido"]:
-                fecha_parseada = datetime.strptime(validacion_fecha["fecha_iso"], "%Y-%m-%d").date()
-                pago.fecha_pago = fecha_parseada
-                correcciones_aplicadas.append(
-                    {
-                        "campo": "fecha_pago",
-                        "valor_anterior": str(pago.fecha_pago),
-                        "valor_nuevo": str(fecha_parseada),
-                    }
-                )
-            else:
-                errores_validacion.append(
-                    {"campo": "fecha_pago", "error": validacion_fecha["error"]}
-                )
+            correcciones, errores = _validar_y_corregir_fecha_pago(pago, fecha_pago)
+            correcciones_aplicadas.extend(correcciones)
+            errores_validacion.extend(errores)
 
         # Corregir número de operación
         if numero_operacion is not None:
-            if numero_operacion.upper() != "ERROR" and numero_operacion.strip():
-                pago.numero_operacion = numero_operacion.strip()
-                correcciones_aplicadas.append(
-                    {
-                        "campo": "numero_operacion",
-                        "valor_anterior": pago.numero_operacion,
-                        "valor_nuevo": numero_operacion.strip(),
-                    }
-                )
+            correcciones = _validar_y_corregir_numero_operacion(pago, numero_operacion)
+            correcciones_aplicadas.extend(correcciones)
 
         # Guardar cambios si hay correcciones válidas
         if correcciones_aplicadas:
             # Limpiar observaciones de error
-            if pago.observaciones and "REQUIERE_VALIDACIÓN" in pago.observaciones:
-                usuario_nombre = f"{current_user.nombre} {current_user.apellido}".strip()
-                pago.observaciones = (
-                    f"CORREGIDO - {datetime.now().strftime('%d/%m/%Y')} por {usuario_nombre}"
-                )
+            _limpiar_observaciones_error(pago, current_user)
 
             db.commit()
 
             # Registrar en auditoría
-            auditoria = Auditoria.registrar(
-                usuario_id=current_user.id,
-                accion=TipoAccion.ACTUALIZACION,
-                entidad="pago",
-                entidad_id=pago_id,
-                detalles=f"Corrección de pago: {len(correcciones_aplicadas)} campos actualizados",
-            )
-            db.add(auditoria)
+            _registrar_auditoria_correccion(pago_id, correcciones_aplicadas, current_user, db)
             db.commit()
 
         return {

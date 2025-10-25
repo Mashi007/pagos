@@ -1106,9 +1106,107 @@ class ValidadorEmail:
     ]
 
     @staticmethod
+    def _validar_entrada_email(email_str: str) -> Optional[Dict[str, Any]]:
+        """Validar entrada básica de email"""
+        if not email_str or email_str.upper() == "ERROR":
+            return {
+                "valido": False,
+                "error": "Email requerido",
+                "valor_original": email_str,
+                "valor_formateado": None,
+            }
+        return None
+
+    @staticmethod
+    def _normalizar_email(email_str: str) -> str:
+        """Normalizar email: quitar espacios y convertir a minúsculas"""
+        return email_str.strip().lower()
+
+    @staticmethod
+    def _validar_simbolo_arroba(email_limpio: str, email_original: str) -> Optional[Dict[str, Any]]:
+        """Validar que contenga el símbolo @"""
+        if "@" not in email_limpio:
+            return {
+                "valido": False,
+                "error": "Email debe contener el símbolo @",
+                "valor_original": email_original,
+                "valor_formateado": email_limpio,
+                "formato_esperado": "usuario@dominio.com",
+            }
+        return None
+
+    @staticmethod
+    def _validar_formato_rfc(email_limpio: str, email_original: str) -> Optional[Dict[str, Any]]:
+        """Validar formato RFC 5322"""
+        patron_email = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+
+        if not re.match(patron_email, email_limpio):
+            return {
+                "valido": False,
+                "error": "Formato de email inválido",
+                "valor_original": email_original,
+                "valor_formateado": email_limpio,
+                "formato_esperado": "usuario@dominio.com",
+                "ejemplo_valido": "usuario@ejemplo.com",
+            }
+        return None
+
+    @staticmethod
+    def _extraer_partes_email(email_limpio: str) -> tuple[str, str]:
+        """Extraer partes del email"""
+        partes_email = email_limpio.split("@")
+        return partes_email[0], partes_email[1]
+
+    @staticmethod
+    def _validar_partes_email(usuario: str, dominio: str, email_original: str, email_limpio: str) -> Optional[Dict[str, Any]]:
+        """Validar partes del email"""
+        if len(usuario) == 0:
+            return {
+                "valido": False,
+                "error": "La parte del usuario no puede estar vacía",
+                "valor_original": email_original,
+                "valor_formateado": email_limpio,
+            }
+
+        if len(dominio) == 0:
+            return {
+                "valido": False,
+                "error": "El dominio no puede estar vacío",
+                "valor_original": email_original,
+                "valor_formateado": email_limpio,
+            }
+
+        return None
+
+    @staticmethod
+    def _validar_dominio_bloqueado(dominio: str, email_original: str, email_limpio: str, verificar_dominio: bool) -> Optional[Dict[str, Any]]:
+        """Verificar dominio bloqueado"""
+        if verificar_dominio and dominio in ValidadorEmail.DOMINIOS_BLOQUEADOS:
+            return {
+                "valido": False,
+                "error": f"Dominio '{dominio}' no permitido",
+                "valor_original": email_original,
+                "valor_formateado": email_limpio,
+                "razon": "Dominio de email temporal bloqueado",
+                "dominios_bloqueados": ValidadorEmail.DOMINIOS_BLOQUEADOS,
+            }
+        return None
+
+    @staticmethod
+    def _calcular_cambios_realizados(email_str: str, email_limpio: str) -> List[str]:
+        """Calcular qué cambios se realizaron"""
+        cambios_realizados = []
+        if email_str != email_limpio:
+            if email_str.strip() != email_limpio:
+                cambios_realizados.append("Espacios removidos")
+            if email_str.lower() != email_limpio:
+                cambios_realizados.append("Convertido a minúsculas")
+        return cambios_realizados
+
+    @staticmethod
     def validar_email(email_str: str, verificar_dominio: bool = True) -> Dict[str, Any]:
         """
-        📧 Validar email con normalización automática a minúsculas
+        📧 Validar email con normalización automática a minúsculas (VERSIÓN REFACTORIZADA)
 
         Características:
         - Convierte automáticamente a minúsculas (incluyendo @)
@@ -1117,81 +1215,39 @@ class ValidadorEmail:
         - Normalización de espacios
         """
         try:
-            if not email_str or email_str.upper() == "ERROR":
-                return {
-                    "valido": False,
-                    "error": "Email requerido",
-                    "valor_original": email_str,
-                    "valor_formateado": None,
-                }
+            # 1. Validar entrada básica
+            error_entrada = ValidadorEmail._validar_entrada_email(email_str)
+            if error_entrada:
+                return error_entrada
 
-            # Normalizar email: quitar espacios y convertir a minúsculas
-            email_limpio = email_str.strip().lower()
+            # 2. Normalizar email
+            email_limpio = ValidadorEmail._normalizar_email(email_str)
 
-            # Validar que contenga el símbolo @
-            if "@" not in email_limpio:
-                return {
-                    "valido": False,
-                    "error": "Email debe contener el símbolo @",
-                    "valor_original": email_str,
-                    "valor_formateado": email_limpio,
-                    "formato_esperado": "usuario@dominio.com",
-                }
+            # 3. Validar símbolo @
+            error_arroba = ValidadorEmail._validar_simbolo_arroba(email_limpio, email_str)
+            if error_arroba:
+                return error_arroba
 
-            # Validar formato RFC 5322
-            patron_email = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+            # 4. Validar formato RFC
+            error_formato = ValidadorEmail._validar_formato_rfc(email_limpio, email_str)
+            if error_formato:
+                return error_formato
 
-            if not re.match(patron_email, email_limpio):
-                return {
-                    "valido": False,
-                    "error": "Formato de email inválido",
-                    "valor_original": email_str,
-                    "valor_formateado": email_limpio,
-                    "formato_esperado": "usuario@dominio.com",
-                    "ejemplo_valido": "usuario@ejemplo.com",
-                }
+            # 5. Extraer partes del email
+            usuario, dominio = ValidadorEmail._extraer_partes_email(email_limpio)
 
-            # Extraer partes del email
-            partes_email = email_limpio.split("@")
-            usuario = partes_email[0]
-            dominio = partes_email[1]
+            # 6. Validar partes del email
+            error_partes = ValidadorEmail._validar_partes_email(usuario, dominio, email_str, email_limpio)
+            if error_partes:
+                return error_partes
 
-            # Validaciones adicionales
-            if len(usuario) == 0:
-                return {
-                    "valido": False,
-                    "error": "La parte del usuario no puede estar vacía",
-                    "valor_original": email_str,
-                    "valor_formateado": email_limpio,
-                }
+            # 7. Verificar dominio bloqueado
+            error_dominio = ValidadorEmail._validar_dominio_bloqueado(dominio, email_str, email_limpio, verificar_dominio)
+            if error_dominio:
+                return error_dominio
 
-            if len(dominio) == 0:
-                return {
-                    "valido": False,
-                    "error": "El dominio no puede estar vacío",
-                    "valor_original": email_str,
-                    "valor_formateado": email_limpio,
-                }
-
-            # Verificar dominio bloqueado
-            if verificar_dominio:
-                if dominio in ValidadorEmail.DOMINIOS_BLOQUEADOS:
-                    return {
-                        "valido": False,
-                        "error": f"Dominio '{dominio}' no permitido",
-                        "valor_original": email_str,
-                        "valor_formateado": email_limpio,
-                        "razon": "Dominio de email temporal bloqueado",
-                        "dominios_bloqueados": ValidadorEmail.DOMINIOS_BLOQUEADOS,
-                    }
-
-            # Determinar qué cambios se realizaron
-            cambios_realizados = []
-            if email_str != email_limpio:
-                if email_str.strip() != email_limpio:
-                    cambios_realizados.append("Espacios removidos")
-                if email_str.lower() != email_limpio:
-                    cambios_realizados.append("Convertido a minúsculas")
+            # 8. Calcular cambios realizados
+            cambios_realizados = ValidadorEmail._calcular_cambios_realizados(email_str, email_limpio)
 
             return {
                 "valido": True,
