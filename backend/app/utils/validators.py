@@ -66,8 +66,7 @@ def validate_phone(phone: str) -> bool:
     phone_clean = re.sub(r"[\s\-\(\)]", "", phone)
 
     # Patrón para números venezolanos: +58 +
-    # 10 dígitos (no puede \
-    empezar por 0)
+    # 10 dígitos (no puedeempezar por 0)
     pattern = r"^\+58[1-9]\d{9}$"
 
     return bool(re.match(pattern, phone_clean))

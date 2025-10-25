@@ -275,7 +275,8 @@ def _procesar_fila_movimiento(
             )
             if not cliente:
                 advertencias.append(
-                    f"Fila {index + 1}: Cédula" + f"{cedula} no registrada \
+                    f"Fila {index + 1}: Cédula"
+                    + f"{cedula} no registrada \
                     en sistema"
                 )
 
@@ -1247,8 +1248,7 @@ async def flujo_completo_conciliacion(
                 "aplicar_exactos": f"POST /conciliacion/aplicar-exactos/ \
                 {proceso_id}",
                 "revisar_parciales": f"POST /conciliacion/revisar-parciales/{proceso_id}",
-                "aplicar_todos": f"POST /conciliacion/aplicar-todos/{p \
-                roceso_id}",
+                "aplicar_todos": f"POST /conciliacion/aplicar-todos/{proceso_id}",
             },
             "mensaje": (
                 f"✅ Archivo procesado - {exactos} coincidencias exactas, {revision} requieren revisión"

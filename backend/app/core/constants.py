@@ -10,8 +10,7 @@ Constantes y enumeraciones del sistema de préstamos y cobranza.
 from enum import Enum
 
 # ✅ ELIMINADO: Import de UserRole -
-# ahora se usa sistema simplificado \
-con is_admin
+# ahora se usa sistema simplificadocon is_admin
 # from app.core.permissions import UserRole
 # Roles = UserRole
 

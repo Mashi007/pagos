@@ -102,8 +102,7 @@ def obtener_configuracion_scheduler(
             "configuracion_cron": {
                 "expresion_actual": "0 * * * *",  # Cada hora
                 "descripcion": "Se ejecuta cada hora durante horario laboral",
-                "comando_sugerido": "0 * 6-22 * * 1-6",  # Cada hora de \
-                6AM a 10PM, Lun-Sab
+                "comando_sugerido": "0 * 6-22 * * 1-6",  # Cada hora de6AM a 10PM, Lun-Sab
                 "archivo_cron": "/etc/crontab",
             },
             "instrucciones_setup": {

@@ -50,8 +50,7 @@ async def debug_autenticacion(request: Request, db: Session = Depends(get_db)):
                 len(settings.SECRET_KEY) if settings.SECRET_KEY else 0
             ),
             "algorithm": settings.ALGORITHM,
-            "access_token_expire_minutes": settings.ACCESS_TOKEN_EXPIR \
-            E_MINUTES,
+            "access_token_expire_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
             "refresh_token_expire_days": settings.REFRESH_TOKEN_EXPIRE_DAYS,
         }
 
