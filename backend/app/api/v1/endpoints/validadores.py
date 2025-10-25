@@ -42,7 +42,9 @@ class ValidacionCampo(BaseModel):
 
     campo: str = Field(..., description="Nombre del campo a validar")
     valor: str = Field(..., description="Valor a validar")
-    pais: str = Field("VENEZUELA", description="País para validaciones específicas")
+    pais: str = Field(
+        "VENEZUELA",
+        description="País para validaciones específicas")
     contexto: Optional[Dict[str, Any]] = Field(
         None, description="Contexto adicional para validación"
     )
@@ -52,7 +54,9 @@ class CorreccionDatos(BaseModel):
     """Schema para corrección de datos de cliente"""
 
     cliente_id: int = Field(..., description="ID del cliente")
-    correcciones: Dict[str, str] = Field(..., description="Campos a corregir con nuevos valores")
+    correcciones: Dict[str,
+                       str] = Field(...,
+                                    description="Campos a corregir con nuevos valores")
     pais: str = Field("VENEZUELA", description="País para validaciones")
     recalcular_amortizacion: bool = Field(
         True, description="Recalcular amortización si cambia fecha"
@@ -68,7 +72,8 @@ class CorreccionDatos(BaseModel):
 def test_cedula_simple(cedula: str):
     """Endpoint simple para probar validación de cédula sin autenticación"""
     try:
-        resultado = ValidadorCedula.validar_y_formatear_cedula(cedula, "VENEZUELA")
+        resultado = ValidadorCedula.validar_y_formatear_cedula(
+            cedula, "VENEZUELA")
         return {
             "cedula_test": cedula,
             "resultado": resultado,
@@ -102,7 +107,8 @@ def test_simple():
 def test_cedula_post(cedula: str = "E12345678"):
     """Endpoint POST simple para probar validación sin autenticación"""
     try:
-        resultado = ValidadorCedula.validar_y_formatear_cedula(cedula, "VENEZUELA")
+        resultado = ValidadorCedula.validar_y_formatear_cedula(
+            cedula, "VENEZUELA")
         return {
             "cedula_test": cedula,
             "resultado": resultado,
@@ -117,7 +123,8 @@ def test_cedula_post(cedula: str = "E12345678"):
 def test_cedula_custom(cedula: str):
     """Endpoint POST para probar cualquier cédula sin autenticación"""
     try:
-        resultado = ValidadorCedula.validar_y_formatear_cedula(cedula, "VENEZUELA")
+        resultado = ValidadorCedula.validar_y_formatear_cedula(
+            cedula, "VENEZUELA")
         return {
             "cedula_test": cedula,
             "resultado": resultado,
@@ -162,12 +169,14 @@ def _validar_campo_fecha_pago(valor: str) -> Dict[str, Any]:
     return ValidadorFecha.validar_fecha_pago(valor)
 
 
-def _validar_campo_monto(valor: str, campo: str, contexto: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def _validar_campo_monto(valor: str, campo: str,
+                         contexto: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Validar campo de monto"""
     saldo_maximo = None
     if contexto and "saldo_pendiente" in contexto:
         saldo_maximo = Decimal(str(contexto["saldo_pendiente"]))
-    return ValidadorMonto.validar_y_formatear_monto(valor, campo.upper(), saldo_maximo)
+    return ValidadorMonto.validar_y_formatear_monto(
+        valor, campo.upper(), saldo_maximo)
 
 
 def _validar_campo_amortizaciones(valor: str) -> Dict[str, Any]:
@@ -223,11 +232,16 @@ def validar_campo_tiempo_real(validacion: ValidacionCampo):
             "campo": validacion.campo,
             "validacion": resultado,
             "timestamp": datetime.now().isoformat(),
-            "recomendaciones": _generar_recomendaciones_campo(campo, resultado),
+            "recomendaciones": _generar_recomendaciones_campo(
+                campo,
+                resultado),
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error validando campo: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error validando campo: {
+                str(e)}")
 
 
 @router.post("/formatear-tiempo-real")
@@ -246,7 +260,8 @@ def formatear_mientras_escribe(
     - Para mejorar UX mientras el usuario escribe
     """
     try:
-        resultado = AutoFormateador.formatear_mientras_escribe(campo, valor, pais)
+        resultado = AutoFormateador.formatear_mientras_escribe(
+            campo, valor, pais)
 
         return {
             "campo": campo,
@@ -256,7 +271,10 @@ def formatear_mientras_escribe(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error formateando: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error formateando: {
+                str(e)}")
 
 
 # ============================================
@@ -264,10 +282,13 @@ def formatear_mientras_escribe(
 # ============================================
 
 
-def _aplicar_correccion_campo(cliente: Cliente, campo: str, nuevo_valor: str) -> dict:
+def _aplicar_correccion_campo(
+        cliente: Cliente,
+        campo: str,
+        nuevo_valor: str) -> dict:
     """Aplicar corrección a un campo específico del cliente"""
     valor_anterior = None
-    
+
     if campo == "telefono":
         valor_anterior = cliente.telefono
         cliente.telefono = nuevo_valor
@@ -279,7 +300,8 @@ def _aplicar_correccion_campo(cliente: Cliente, campo: str, nuevo_valor: str) ->
         cliente.email = nuevo_valor
     elif campo == "fecha_entrega":
         valor_anterior = cliente.fecha_entrega
-        cliente.fecha_entrega = datetime.strptime(nuevo_valor, "%d/%m/%Y").date()
+        cliente.fecha_entrega = datetime.strptime(
+            nuevo_valor, "%d/%m/%Y").date()
     elif campo == "total_financiamiento":
         valor_anterior = cliente.total_financiamiento
         cliente.total_financiamiento = Decimal(nuevo_valor)
@@ -289,7 +311,7 @@ def _aplicar_correccion_campo(cliente: Cliente, campo: str, nuevo_valor: str) ->
     elif campo == "amortizaciones":
         valor_anterior = cliente.numero_amortizaciones
         cliente.numero_amortizaciones = int(nuevo_valor)
-    
+
     return {
         "campo": campo,
         "valor_anterior": valor_anterior,
@@ -297,40 +319,53 @@ def _aplicar_correccion_campo(cliente: Cliente, campo: str, nuevo_valor: str) ->
     }
 
 
-def _procesar_correcciones_cliente(cliente: Cliente, resultado_correccion: dict) -> list[dict]:
+def _procesar_correcciones_cliente(
+        cliente: Cliente,
+        resultado_correccion: dict) -> list[dict]:
     """Procesar y aplicar correcciones al cliente"""
     cambios_aplicados = []
-    
+
     for correccion in resultado_correccion["correcciones_aplicadas"]:
         if correccion["cambio_realizado"]:
             campo = correccion["campo"]
             nuevo_valor = correccion["valor_nuevo"]
-            
+
             cambio = _aplicar_correccion_campo(cliente, campo, nuevo_valor)
             cambios_aplicados.append(cambio)
-    
+
     return cambios_aplicados
 
 
-def _registrar_auditoria_correccion(cliente_id: int, cambios_aplicados: list[dict], current_user: User, db: Session) -> None:
+def _registrar_auditoria_correccion(
+        cliente_id: int,
+        cambios_aplicados: list[dict],
+        current_user: User,
+        db: Session) -> None:
     """Registrar auditoría de corrección"""
     auditoria = Auditoria.registrar(
         usuario_id=current_user.id,
         accion=TipoAccion.ACTUALIZACION,
         entidad="cliente",
         entidad_id=cliente_id,
-        detalles=f"Corrección de datos: {len(cambios_aplicados)} campos actualizados",
+        detalles=f"Corrección de datos: {
+            len(cambios_aplicados)} campos actualizados",
     )
     db.add(auditoria)
     db.commit()
 
 
-def _generar_respuesta_correccion(cliente_id: int, cliente: Cliente, resultado_correccion: dict, cambios_aplicados: list[dict], recalcular_amortizacion: bool, current_user: User) -> dict:
+def _generar_respuesta_correccion(
+        cliente_id: int,
+        cliente: Cliente,
+        resultado_correccion: dict,
+        cambios_aplicados: list[dict],
+        recalcular_amortizacion: bool,
+        current_user: User) -> dict:
     """Generar respuesta de corrección"""
     mensaje_recalculo = None
     if resultado_correccion["requiere_recalculo_amortizacion"] and recalcular_amortizacion:
         mensaje_recalculo = "⚠️ Se requiere recalcular la tabla de amortización"
-    
+
     return {
         "mensaje": "✅ Corrección de datos procesada exitosamente",
         "cliente": {
@@ -381,7 +416,9 @@ def corregir_datos_cliente(
         # Verificar que el cliente existe
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
         if not cliente:
-            raise HTTPException(status_code=404, detail="Cliente no encontrado")
+            raise HTTPException(
+                status_code=404,
+                detail="Cliente no encontrado")
 
         # Procesar correcciones
         resultado_correccion = ServicioCorreccionDatos.corregir_datos_cliente(
@@ -389,32 +426,46 @@ def corregir_datos_cliente(
         )
 
         if resultado_correccion.get("error_general"):
-            raise HTTPException(status_code=400, detail=resultado_correccion["error_general"])
+            raise HTTPException(status_code=400,
+                                detail=resultado_correccion["error_general"])
 
         # Aplicar correcciones válidas a la base de datos
-        cambios_aplicados = _procesar_correcciones_cliente(cliente, resultado_correccion)
+        cambios_aplicados = _procesar_correcciones_cliente(
+            cliente, resultado_correccion)
 
         # Guardar cambios si hay correcciones válidas
         if cambios_aplicados:
             db.commit()
-            _registrar_auditoria_correccion(cliente_id, cambios_aplicados, current_user, db)
+            _registrar_auditoria_correccion(
+                cliente_id, cambios_aplicados, current_user, db)
 
         # Generar respuesta
-        return _generar_respuesta_correccion(cliente_id, cliente, resultado_correccion, cambios_aplicados, recalcular_amortizacion, current_user)
+        return _generar_respuesta_correccion(
+            cliente_id,
+            cliente,
+            resultado_correccion,
+            cambios_aplicados,
+            recalcular_amortizacion,
+            current_user)
 
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error corrigiendo datos: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error corrigiendo datos: {
+                str(e)}")
 
 
-def _validar_y_corregir_monto_pago(pago: Pago, monto_pagado: str) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def _validar_y_corregir_monto_pago(
+        pago: Pago, monto_pagado: str) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Validar y corregir monto pagado"""
     correcciones = []
     errores = []
 
-    validacion_monto = ValidadorMonto.validar_y_formatear_monto(monto_pagado, "MONTO_PAGO")
+    validacion_monto = ValidadorMonto.validar_y_formatear_monto(
+        monto_pagado, "MONTO_PAGO")
 
     if validacion_monto["valido"]:
         pago.monto_pagado = validacion_monto["valor_decimal"]
@@ -432,7 +483,8 @@ def _validar_y_corregir_monto_pago(pago: Pago, monto_pagado: str) -> tuple[List[
     return correcciones, errores
 
 
-def _validar_y_corregir_fecha_pago(pago: Pago, fecha_pago: str) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def _validar_y_corregir_fecha_pago(
+        pago: Pago, fecha_pago: str) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Validar y corregir fecha de pago"""
     correcciones = []
     errores = []
@@ -440,7 +492,8 @@ def _validar_y_corregir_fecha_pago(pago: Pago, fecha_pago: str) -> tuple[List[Di
     validacion_fecha = ValidadorFecha.validar_fecha_pago(fecha_pago)
 
     if validacion_fecha["valido"]:
-        fecha_parseada = datetime.strptime(validacion_fecha["fecha_iso"], "%Y-%m-%d").date()
+        fecha_parseada = datetime.strptime(
+            validacion_fecha["fecha_iso"], "%Y-%m-%d").date()
         pago.fecha_pago = fecha_parseada
         correcciones.append({
             "campo": "fecha_pago",
@@ -456,7 +509,8 @@ def _validar_y_corregir_fecha_pago(pago: Pago, fecha_pago: str) -> tuple[List[Di
     return correcciones, errores
 
 
-def _validar_y_corregir_numero_operacion(pago: Pago, numero_operacion: str) -> List[Dict[str, Any]]:
+def _validar_y_corregir_numero_operacion(
+        pago: Pago, numero_operacion: str) -> List[Dict[str, Any]]:
     """Validar y corregir número de operación"""
     correcciones = []
 
@@ -474,20 +528,13 @@ def _validar_y_corregir_numero_operacion(pago: Pago, numero_operacion: str) -> L
 def _limpiar_observaciones_error(pago: Pago, current_user: User) -> None:
     """Limpiar observaciones de error"""
     if pago.observaciones and "REQUIERE_VALIDACIÓN" in pago.observaciones:
-        usuario_nombre = f"{current_user.nombre} {current_user.apellido}".strip()
-        pago.observaciones = f"CORREGIDO - {datetime.now().strftime('%d/%m/%Y')} por {usuario_nombre}"
+        usuario_nombre = f"{
+            current_user.nombre} {
+            current_user.apellido}".strip()
+        pago.observaciones = f"CORREGIDO - {
+            datetime.now().strftime('%d/%m/%Y')} por {usuario_nombre}"
 
 
-def _registrar_auditoria_correccion(pago_id: int, correcciones_aplicadas: List[Dict[str, Any]], current_user: User, db: Session) -> None:
-    """Registrar auditoría de corrección"""
-    auditoria = Auditoria.registrar(
-        usuario_id=current_user.id,
-        accion=TipoAccion.ACTUALIZACION,
-        entidad="pago",
-        entidad_id=pago_id,
-        detalles=f"Corrección de pago: {len(correcciones_aplicadas)} campos actualizados",
-    )
-    db.add(auditoria)
 
 
 @router.post("/corregir-pago/{pago_id}")
@@ -515,19 +562,22 @@ def corregir_datos_pago(
 
         # Corregir monto pagado
         if monto_pagado is not None:
-            correcciones, errores = _validar_y_corregir_monto_pago(pago, monto_pagado)
+            correcciones, errores = _validar_y_corregir_monto_pago(
+                pago, monto_pagado)
             correcciones_aplicadas.extend(correcciones)
             errores_validacion.extend(errores)
 
         # Corregir fecha de pago
         if fecha_pago is not None:
-            correcciones, errores = _validar_y_corregir_fecha_pago(pago, fecha_pago)
+            correcciones, errores = _validar_y_corregir_fecha_pago(
+                pago, fecha_pago)
             correcciones_aplicadas.extend(correcciones)
             errores_validacion.extend(errores)
 
         # Corregir número de operación
         if numero_operacion is not None:
-            correcciones = _validar_y_corregir_numero_operacion(pago, numero_operacion)
+            correcciones = _validar_y_corregir_numero_operacion(
+                pago, numero_operacion)
             correcciones_aplicadas.extend(correcciones)
 
         # Guardar cambios si hay correcciones válidas
@@ -538,7 +588,8 @@ def corregir_datos_pago(
             db.commit()
 
             # Registrar en auditoría
-            _registrar_auditoria_correccion(pago_id, correcciones_aplicadas, current_user, db)
+            _registrar_auditoria_correccion(
+                pago_id, correcciones_aplicadas, current_user, db)
             db.commit()
 
         return {
@@ -552,14 +603,19 @@ def corregir_datos_pago(
             "errores_validacion": errores_validacion,
             "total_correcciones": len(correcciones_aplicadas),
             "fecha_correccion": datetime.now().isoformat(),
-            "corregido_por": f"{current_user.nombre} {current_user.apellido}".strip(),
+            "corregido_por": f"{
+                current_user.nombre} {
+                current_user.apellido}".strip(),
         }
 
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error corrigiendo pago: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error corrigiendo pago: {
+                str(e)}")
 
 
 # ============================================
@@ -569,11 +625,19 @@ def corregir_datos_pago(
 
 @router.get("/detectar-errores-masivo")
 def detectar_errores_masivo(
-    limite: int = Query(100, ge=1, le=1000, description="Límite de registros a analizar"),
-    tipo_analisis: str = Query("CLIENTES", description="CLIENTES, PAGOS, AMBOS"),
-    pais: str = Query("VENEZUELA", description="País para validaciones"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+        limite: int = Query(
+            100,
+            ge=1,
+            le=1000,
+            description="Límite de registros a analizar"),
+    tipo_analisis: str = Query(
+            "CLIENTES",
+            description="CLIENTES, PAGOS, AMBOS"),
+        pais: str = Query(
+            "VENEZUELA",
+            description="País para validaciones"),
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
 ):
     """
     🔍 Detectar datos incorrectos masivamente en la base de datos
@@ -587,10 +651,12 @@ def detectar_errores_masivo(
     """
     # Solo administrador general puede ejecutar análisis masivo
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Sin permisos para análisis masivo")
+        raise HTTPException(status_code=403,
+                            detail="Sin permisos para análisis masivo")
 
     try:
-        resultado = ServicioCorreccionDatos.detectar_datos_incorrectos_masivo(db, limite)
+        resultado = ServicioCorreccionDatos.detectar_datos_incorrectos_masivo(
+            db, limite)
 
         return {
             "analisis_masivo": resultado,
@@ -598,7 +664,9 @@ def detectar_errores_masivo(
                 "limite": limite,
                 "tipo_analisis": tipo_analisis,
                 "pais": pais,
-                "ejecutado_por": f"{current_user.nombre} {current_user.apellido}".strip(),
+                "ejecutado_por": f"{
+                    current_user.nombre} {
+                    current_user.apellido}".strip(),
             },
             "acciones_sugeridas": [
                 "Usar herramienta de corrección masiva para los casos detectados",
@@ -609,7 +677,10 @@ def detectar_errores_masivo(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en análisis masivo: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error en análisis masivo: {
+                str(e)}")
 
 
 @router.post("/corregir-masivo")
@@ -623,25 +694,34 @@ def corregir_datos_masivo(
     🔧 Corrección masiva de datos incorrectos
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Sin permisos para corrección masiva")
+        raise HTTPException(status_code=403,
+                            detail="Sin permisos para corrección masiva")
 
     try:
         # Ejecutar correcciones en background
         background_tasks.add_task(
-            _procesar_correcciones_masivas, correcciones_masivas, current_user.id, db
-        )
+            _procesar_correcciones_masivas,
+            correcciones_masivas,
+            current_user.id,
+            db)
 
         return {
             "mensaje": "✅ Corrección masiva iniciada en background",
             "total_clientes": len(correcciones_masivas),
-            "estimacion_tiempo": f"{len(correcciones_masivas) * 2} segundos",
-            "ejecutado_por": f"{current_user.nombre} {current_user.apellido}".strip(),
+            "estimacion_tiempo": f"{
+                len(correcciones_masivas) * 2} segundos",
+            "ejecutado_por": f"{
+                current_user.nombre} {
+                current_user.apellido}".strip(),
             "timestamp": datetime.now().isoformat(),
             "seguimiento": "GET /api/v1/validadores/estado-correccion-masiva",
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error iniciando corrección masiva: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error iniciando corrección masiva: {
+                str(e)}")
 
 
 # ============================================
@@ -729,7 +809,10 @@ def obtener_ejemplos_correccion(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo ejemplos: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error obteniendo ejemplos: {
+                str(e)}")
 
 
 # ============================================
@@ -815,8 +898,7 @@ async def _procesar_correcciones_masivas(
         for correccion in correcciones:
             try:
                 resultado = ServicioCorreccionDatos.corregir_datos_cliente(
-                    correccion.cliente_id, correccion.correcciones, correccion.pais
-                )
+                    correccion.cliente_id, correccion.correcciones, correccion.pais)
 
                 if resultado.get("cambios_realizados"):
                     exitosas += 1
@@ -824,10 +906,13 @@ async def _procesar_correcciones_masivas(
                     fallidas += 1
 
             except Exception as e:
-                logger.error(f"Error corrigiendo cliente {correccion.cliente_id}: {e}")
+                logger.error(
+                    f"Error corrigiendo cliente {
+                        correccion.cliente_id}: {e}")
                 fallidas += 1
 
-        logger.info(f"📊 Corrección masiva completada: {exitosas} exitosas, {fallidas} fallidas")
+        logger.info(
+            f"📊 Corrección masiva completada: {exitosas} exitosas, {fallidas} fallidas")
 
         db.close()
 
@@ -835,23 +920,29 @@ async def _procesar_correcciones_masivas(
         logger.error(f"Error en corrección masiva: {e}")
 
 
-def _generar_recomendaciones_campo(campo: str, resultado_validacion: Dict) -> List[str]:
+def _generar_recomendaciones_campo(
+        campo: str,
+        resultado_validacion: Dict) -> List[str]:
     """Generar recomendaciones específicas por campo"""
     recomendaciones = []
 
     if not resultado_validacion.get("valido"):
         if campo == "telefono":
-            recomendaciones.append("📱 Use formato internacional: +58 424 1234567")
+            recomendaciones.append(
+                "📱 Use formato internacional: +58 424 1234567")
             recomendaciones.append("🔍 Verifique que la operadora sea válida")
         elif campo == "cedula":
-            recomendaciones.append("📝 Agregue prefijo V para venezolanos, E para extranjeros")
-            recomendaciones.append("🔢 Verifique que tenga 7-8 dígitos después de la letra")
+            recomendaciones.append(
+                "📝 Agregue prefijo V para venezolanos, E para extranjeros")
+            recomendaciones.append(
+                "🔢 Verifique que tenga 7-8 dígitos después de la letra")
         elif campo == "email":
             recomendaciones.append("📧 Verifique formato: usuario@dominio.com")
             recomendaciones.append("🚫 Evite dominios de email temporal")
         elif "fecha" in campo:
             recomendaciones.append("📅 Use calendario para seleccionar fecha")
-            recomendaciones.append("⏰ Verifique reglas de negocio (no futuras)")
+            recomendaciones.append(
+                "⏰ Verifique reglas de negocio (no futuras)")
         elif "monto" in campo:
             recomendaciones.append("💰 Use solo números y punto decimal")
             recomendaciones.append("📊 Verifique límites permitidos")
@@ -865,7 +956,8 @@ def _generar_recomendaciones_campo(campo: str, resultado_validacion: Dict) -> Li
 
 
 @router.get("/verificacion-validadores")
-def verificar_sistema_validadores(current_user: User = Depends(get_current_user)):
+def verificar_sistema_validadores(
+        current_user: User = Depends(get_current_user)):
     """
     🔍 Verificación completa del sistema de validadores
     """
