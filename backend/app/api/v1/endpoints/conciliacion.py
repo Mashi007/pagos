@@ -11,8 +11,15 @@ from decimal import Decimal
 from typing import List, Optional
 
 import pandas as pd
-from fastapi import (APIRouter, BackgroundTasks, Depends, File, HTTPException,
-                     Query, UploadFile)
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+)
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -24,13 +31,17 @@ from app.models.notificacion import Notificacion
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.models.user import User
-from app.schemas.conciliacion import (ConciliacionMasiva, EstadoConciliacion,
-                                      HistorialConciliacion, MovimientoBancarioExtendido,
-                                      ResultadoConciliacion,
-                                      ResultadoConciliacionMasiva,
-                                      RevisionManual,
-                                      TipoMatch,
-                                      ValidacionArchivoBancario)
+from app.schemas.conciliacion import (
+    ConciliacionMasiva,
+    EstadoConciliacion,
+    HistorialConciliacion,
+    MovimientoBancarioExtendido,
+    ResultadoConciliacion,
+    ResultadoConciliacionMasiva,
+    RevisionManual,
+    TipoMatch,
+    ValidacionArchivoBancario,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -1324,9 +1335,7 @@ async def _notificar_admin_conciliacion(
         # Obtener administradores
         admins = (
             db.query(User)
-            .filter(
-                User.is_admin, User.is_active, User.email.isnot(None)
-            )
+            .filter(User.is_admin, User.is_active, User.email.isnot(None))
             .all()
         )
 

@@ -9,7 +9,6 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-
 # Agregar el directorio del proyecto al path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 

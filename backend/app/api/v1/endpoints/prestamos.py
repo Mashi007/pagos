@@ -13,8 +13,7 @@ from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.user import User
-from app.schemas.prestamo import (PrestamoCreate, PrestamoResponse,
-                                  PrestamoUpdate)
+from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate
 
 # Constantes de cálculo de fechas
 DAYS_PER_WEEK = 7

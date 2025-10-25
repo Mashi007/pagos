@@ -13,10 +13,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.user import User
-from app.schemas.modelo_vehiculo import (ModeloVehiculoCreate,
-                                         ModeloVehiculoListResponse,
-                                         ModeloVehiculoResponse,
-                                         ModeloVehiculoUpdate)
+from app.schemas.modelo_vehiculo import (
+    ModeloVehiculoCreate,
+    ModeloVehiculoListResponse,
+    ModeloVehiculoResponse,
+    ModeloVehiculoUpdate,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

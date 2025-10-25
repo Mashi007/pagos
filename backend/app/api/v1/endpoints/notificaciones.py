@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import (APIRouter, BackgroundTasks, Depends, HTTPException, Query)
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
@@ -23,6 +23,7 @@ from app.models.notificacion import Notificacion
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.models.user import User
+
 # Servicios de notificación
 from app.services.email_service import EmailService
 from app.services.whatsapp_service import WhatsAppService
@@ -918,8 +919,8 @@ REPORTE SEMANAL - {inicio_semana.strftime('%d/%m')} al {fin_semana.strftime('%d/
  TOP PERFORMER: {top_analista[0] if top_analista else 'N/A'} ({top_analista[1] if top_analista else 0} nuevos clientes)
 
  EVOLUCIÓN DE CARTERA:
- Clientes activos: {db.query(Cliente).filter(Cliente.activo ).count()}
- Tasa de morosidad: {db.query(Cliente).filter(Cliente.dias_mora > 0).count() / db.query(Cliente).filter(Cliente.activo ).count() * 100:.2f}%
+ Clientes activos: {db.query(Cliente).filter(Cliente.activo).count()}
+ Tasa de morosidad: {db.query(Cliente).filter(Cliente.dias_mora > 0).count() / db.query(Cliente).filter(Cliente.activo).count() * 100:.2f}%
 
 Revisar dashboard completo: https://pagos-f2qf.onrender.com
 

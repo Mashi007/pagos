@@ -9,7 +9,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from fastapi import (APIRouter, BackgroundTasks, Depends, HTTPException, Query)
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -18,16 +18,19 @@ from app.models.auditoria import Auditoria, TipoAccion
 from app.models.cliente import Cliente
 from app.models.pago import Pago
 from app.models.user import User
+from app.services.validators_service import (
+    AutoFormateador,
+    ServicioCorreccionDatos,
+    ValidadorAmortizaciones,
+    ValidadorCedula,
+    ValidadorEmail,
+    ValidadorFecha,
+    ValidadorMonto,
+    ValidadorTelefono,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-from app.services.validators_service import (AutoFormateador,
-                                             ServicioCorreccionDatos,
-                                             ValidadorAmortizaciones,
-                                             ValidadorCedula, ValidadorEmail,
-                                             ValidadorFecha, ValidadorMonto,
-                                             ValidadorTelefono)
 
 # ============================================
 # SCHEMAS PARA VALIDADORES

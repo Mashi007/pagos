@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 
-
 class QualityStandards:
     """
     Clase para validar y aplicar normas de calidad en servicios
@@ -166,7 +165,7 @@ class QualityStandards:
                                 return False
 
             return True
-        except:
+        except Exception:
             return False
 
     @staticmethod
@@ -182,7 +181,7 @@ class QualityStandards:
                         return False
 
             return True
-        except:
+        except Exception:
             return False
 
     @staticmethod
@@ -246,7 +245,7 @@ class QualityStandards:
                         return False
 
             return True
-        except:
+        except Exception:
             return False
 
     @staticmethod
@@ -429,8 +428,9 @@ class ServiceMetrics:
 
         return recommendations
 
-
 # Función de utilidad para aplicar normas automáticamente
+
+
 def apply_quality_standards(services_dir: str) -> Dict[str, Any]:
     """
     Aplicar normas de calidad y generar reporte

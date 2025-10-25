@@ -284,7 +284,7 @@ class ArchitecturalAnalysisSystem:
                         "score": 0,
                         "error": "Token malformado no detectado",
                     }
-                except:
+                except Exception:
                     return {
                         "status": "success",
                         "score": 1.0,

@@ -5,8 +5,7 @@ Registra todas las acciones importantes del sistema para trazabilidad
 """
 from enum import Enum
 
-from sqlalchemy import (JSON, Column, DateTime, ForeignKey, Integer, String,
-                        Text)
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 

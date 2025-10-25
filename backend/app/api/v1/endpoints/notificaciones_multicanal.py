@@ -8,7 +8,7 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional
 
-from fastapi import (APIRouter, BackgroundTasks, Depends, HTTPException, Query)
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
@@ -21,9 +21,15 @@ from app.models.notificacion import Notificacion
 from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.services.notification_multicanal_service import (
-    CanalNotificacion, GestorReintentos, NotificacionMulticanal,
-    NotificationScheduler, PreferenciasNotificacion, TipoNotificacionCliente,
-    WhatsAppTemplateManager, notification_scheduler)
+    CanalNotificacion,
+    GestorReintentos,
+    NotificacionMulticanal,
+    NotificationScheduler,
+    PreferenciasNotificacion,
+    TipoNotificacionCliente,
+    WhatsAppTemplateManager,
+    notification_scheduler,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

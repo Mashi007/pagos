@@ -10,7 +10,8 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import get_current_user
-from app.core.impact_monitoring import get_error_analyzer, get_impact_analyzer
+from app.core.impact_monitoring import get_impact_analyzer
+from app.core.error_impact_analysis import get_error_analyzer
 from app.models.user import User
 
 router = APIRouter()

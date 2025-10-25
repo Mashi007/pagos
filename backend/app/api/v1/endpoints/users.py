@@ -9,14 +9,17 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import (PaginationParams, get_admin_user, get_current_user,
-                          get_db, get_pagination_params)
+from app.api.deps import (
+    PaginationParams,
+    get_admin_user,
+    get_current_user,
+    get_db,
+    get_pagination_params,
+)
 from app.core.security import get_password_hash
 from app.models.user import User
-from app.schemas.user import (UserCreate, UserListResponse, UserResponse,
-                              UserUpdate)
-from app.utils.auditoria_helper import (registrar_creacion,
-                                        registrar_eliminacion)
+from app.schemas.user import UserCreate, UserListResponse, UserResponse, UserUpdate
+from app.utils.auditoria_helper import registrar_creacion, registrar_eliminacion
 from app.utils.validators import validate_password_strength
 
 logger = logging.getLogger(__name__)

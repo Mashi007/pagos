@@ -978,9 +978,7 @@ def obtener_datos_grafico(
     elif tipo_grafico == "distribucion_mora":
         # Gráfico de dona/pie para distribución
         al_dia = (
-            db.query(Cliente)
-            .filter(Cliente.activo, Cliente.dias_mora == 0)
-            .count()
+            db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora == 0).count()
         )
         mora_1_30 = (
             db.query(Cliente)
@@ -993,9 +991,7 @@ def obtener_datos_grafico(
             .count()
         )
         mora_60_plus = (
-            db.query(Cliente)
-            .filter(Cliente.activo, Cliente.dias_mora > 60)
-            .count()
+            db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 60).count()
         )
 
         return {

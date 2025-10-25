@@ -3,8 +3,7 @@ import logging
 from datetime import datetime
 
 import pandas as pd
-from fastapi import (APIRouter, Depends, File, HTTPException, UploadFile,
-                     status)
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
@@ -175,9 +174,7 @@ async def procesar_conciliacion(
             # Buscar pago en BD
             pago = (
                 db.query(Pago)
-                .filter(
-                    and_(Pago.activo, Pago.numero_documento == numero_documento)
-                )
+                .filter(and_(Pago.activo, Pago.numero_documento == numero_documento))
                 .first()
             )
 
@@ -312,9 +309,7 @@ async def obtener_estado_conciliacion(
         # Estadísticas generales
         total_pagos = db.query(Pago).filter(Pago.activo).count()
         pagos_conciliados = (
-            db.query(Pago)
-            .filter(and_(Pago.activo, Pago.conciliado))
-            .count()
+            db.query(Pago).filter(and_(Pago.activo, Pago.conciliado)).count()
         )
         pagos_pendientes = total_pagos - pagos_conciliados
 

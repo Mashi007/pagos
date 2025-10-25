@@ -11,8 +11,11 @@ from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.models.amortizacion import Cuota
-from app.schemas.amortizacion import (CuotaDetalle, TablaAmortizacionRequest,
-                                      TablaAmortizacionResponse)
+from app.schemas.amortizacion import (
+    CuotaDetalle,
+    TablaAmortizacionRequest,
+    TablaAmortizacionResponse,
+)
 from app.utils.date_helpers import calculate_payment_dates
 
 

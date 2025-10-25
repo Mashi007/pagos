@@ -12,9 +12,11 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
+
 # Imports para Excel
 from openpyxl.styles import Font, PatternFill
 from reportlab.lib.pagesizes import A4, letter
+
 # Imports para reportes PDF
 from reportlab.pdfgen import canvas
 from sqlalchemy import func
@@ -27,8 +29,7 @@ from app.models.cliente import Cliente
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.models.user import User
-from app.schemas.reportes import (ReporteCartera, ReporteCobranza,
-                                  ReporteMorosidad)
+from app.schemas.reportes import ReporteCartera, ReporteCobranza, ReporteMorosidad
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -453,8 +454,13 @@ async def generar_tabla_amortizacion_pdf(
 
         from reportlab.lib import colors
         from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer,
-                                        Table, TableStyle)
+        from reportlab.platypus import (
+            Paragraph,
+            SimpleDocTemplate,
+            Spacer,
+            Table,
+            TableStyle,
+        )
 
         # Obtener cliente y sus cuotas
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
@@ -786,8 +792,13 @@ async def reporte_mensual_cartera_pdf(
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer,
-                                        Table, TableStyle)
+        from reportlab.platypus import (
+            Paragraph,
+            SimpleDocTemplate,
+            Spacer,
+            Table,
+            TableStyle,
+        )
 
         # Establecer período
         if not mes:
@@ -953,8 +964,13 @@ async def reporte_asesor_pdf(
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer,
-                                        Table, TableStyle)
+        from reportlab.platypus import (
+            Paragraph,
+            SimpleDocTemplate,
+            Spacer,
+            Table,
+            TableStyle,
+        )
 
         # Verificar que el analista existe
         from app.models.analista import Analista

@@ -67,7 +67,6 @@ class PrestamoCreate(PrestamoBase):
     """Schema para crear un préstamo"""
 
 
-
 class PrestamoUpdate(BaseModel):
     """Schema para actualizar un préstamo"""
 

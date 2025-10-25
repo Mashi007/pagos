@@ -22,7 +22,6 @@ class ModeloVehiculoCreate(ModeloVehiculoBase):
     """Schema para crear un modelo de vehículo"""
 
 
-
 class ModeloVehiculoUpdate(BaseModel):
     """Schema para actualizar un modelo de vehículo"""
 

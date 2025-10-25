@@ -367,10 +367,12 @@ def probar_validadores(datos_prueba: Dict[str, Any]):
     🧪 Probar validadores con datos de ejemplo
     """
     try:
-        from app.services.validators_service import (ValidadorCedula,
-                                                     ValidadorEmail,
-                                                     ValidadorFecha,
-                                                     ValidadorTelefono)
+        from app.services.validators_service import (
+            ValidadorCedula,
+            ValidadorEmail,
+            ValidadorFecha,
+            ValidadorTelefono,
+        )
 
         resultados = {}
 
@@ -1202,8 +1204,7 @@ def dashboard_configuracion_sistema(
         )
 
     try:
-        from app.models.configuracion_sistema import (ConfigHelper,
-                                                      ConfiguracionSistema)
+        from app.models.configuracion_sistema import ConfigHelper, ConfiguracionSistema
 
         # Estadísticas de configuración
         total_configs = db.query(ConfiguracionSistema).count()

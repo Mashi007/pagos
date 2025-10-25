@@ -11,9 +11,14 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.security import (create_access_token, create_refresh_token,
-                               decode_token, get_password_hash,
-                               validate_password_strength, verify_password)
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    get_password_hash,
+    validate_password_strength,
+    verify_password,
+)
 from app.models.user import User
 from app.schemas.auth import LoginRequest, Token
 
@@ -247,8 +252,9 @@ class AuthService:
         """
         try:
             # Usar is_admin directamente - evitar conflicto de nombres
-            from app.core.permissions_simple import \
-                get_user_permissions as get_permissions
+            from app.core.permissions_simple import (
+                get_user_permissions as get_permissions,
+            )
 
             permissions = get_permissions(user.is_admin)
             permission_strings = [perm.value for perm in permissions]

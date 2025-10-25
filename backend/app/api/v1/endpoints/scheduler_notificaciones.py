@@ -7,7 +7,7 @@ Configuración y gestión del cron job de notificaciones
 import logging
 from datetime import datetime, timedelta
 
-from fastapi import (APIRouter, BackgroundTasks, Depends, HTTPException)
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 

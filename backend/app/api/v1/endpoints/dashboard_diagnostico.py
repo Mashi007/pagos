@@ -8,7 +8,7 @@ from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
-from fastapi import (APIRouter, Depends, Request, Response)
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db

@@ -13,10 +13,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.concesionario import Concesionario
 from app.models.user import User
-from app.schemas.concesionario import (ConcesionarioCreate,
-                                       ConcesionarioListResponse,
-                                       ConcesionarioResponse,
-                                       ConcesionarioUpdate)
+from app.schemas.concesionario import (
+    ConcesionarioCreate,
+    ConcesionarioListResponse,
+    ConcesionarioResponse,
+    ConcesionarioUpdate,
+)
 
 logger = logging.getLogger(__name__)
 

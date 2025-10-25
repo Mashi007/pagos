@@ -144,7 +144,7 @@ class CorrelationAnalyzer:
                         else False
                     ),
                 }
-            except:
+            except Exception:
                 token_analysis = {"error": "Invalid token format"}
 
         return {

@@ -73,7 +73,6 @@ class PagoCreate(PagoBase):
     """Schema para crear un pago"""
 
 
-
 class PagoUpdate(BaseModel):
     """Schema para actualizar un pago"""
 
@@ -123,7 +122,6 @@ class ConciliacionBase(BaseModel):
 
 class ConciliacionCreate(ConciliacionBase):
     """Schema para crear conciliación"""
-
 
 
 class ConciliacionResponse(ConciliacionBase):

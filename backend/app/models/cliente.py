@@ -1,6 +1,4 @@
-
-from sqlalchemy import (TIMESTAMP, Boolean, Column, Date, Integer, String,
-                        Text)
+from sqlalchemy import TIMESTAMP, Boolean, Column, Date, Integer, String, Text
 from sqlalchemy.sql import func
 
 from app.db.session import Base

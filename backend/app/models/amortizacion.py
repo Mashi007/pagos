@@ -6,8 +6,17 @@ Representa cada cuota de un préstamo con su detalle de capital, interés y sald
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import (Boolean, Column, Date, DateTime, ForeignKey, Integer,
-                        Numeric, String, Table)
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Table,
+)
 from sqlalchemy.sql import func
 
 from app.db.session import Base

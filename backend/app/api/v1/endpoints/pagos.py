@@ -9,16 +9,20 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import (APIRouter, Depends, File, HTTPException, Query,
-                     UploadFile, status)
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.pago import Pago
 from app.models.user import User
-from app.schemas.pago import (KPIsPagos, PagoCreate, PagoListResponse,
-                              PagoResponse, ResumenCliente)
+from app.schemas.pago import (
+    KPIsPagos,
+    PagoCreate,
+    PagoListResponse,
+    PagoResponse,
+    ResumenCliente,
+)
 
 # Constantes de configuración de archivos
 UPLOAD_DIR = Path("uploads/pagos")

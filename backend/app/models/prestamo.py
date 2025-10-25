@@ -6,8 +6,16 @@ Sincronizado con el endpoint de aprobaciones.
 
 from enum import Enum
 
-from sqlalchemy import (TIMESTAMP, Column, Date, ForeignKey, Integer, Numeric,
-                        String, Text)
+from sqlalchemy import (
+    TIMESTAMP,
+    Column,
+    Date,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.sql import func
 
 from app.db.session import Base

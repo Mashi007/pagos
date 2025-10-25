@@ -11,8 +11,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
-from fastapi import (APIRouter, Depends, File, Form, HTTPException,
-                     UploadFile)
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -25,9 +24,13 @@ from app.models.concesionario import Concesionario
 from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.pago import Pago
 from app.models.user import User
-from app.services.validators_service import (ValidadorCedula, ValidadorEmail,
-                                             ValidadorFecha, ValidadorMonto,
-                                             ValidadorTelefono)
+from app.services.validators_service import (
+    ValidadorCedula,
+    ValidadorEmail,
+    ValidadorFecha,
+    ValidadorMonto,
+    ValidadorTelefono,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

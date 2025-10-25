@@ -12,8 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.config import settings
-from app.core.security import (create_access_token, create_refresh_token,
-                               decode_token)
+from app.core.security import create_access_token, create_refresh_token, decode_token
 from app.models.user import User
 
 logger = logging.getLogger(__name__)

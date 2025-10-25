@@ -6,8 +6,7 @@ Registra la conciliación entre pagos del sistema y movimientos bancarios
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import (Column, DateTime, ForeignKey, Integer, Numeric, String,
-                        Text)
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 

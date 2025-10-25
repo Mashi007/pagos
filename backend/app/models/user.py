@@ -3,8 +3,7 @@ Modelo de Usuario Simplificado
 Solo 2 roles: ADMIN (acceso completo) y USER (acceso limitado)
 """
 
-
-from sqlalchemy import (Boolean, Column, DateTime, Integer, String)
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 

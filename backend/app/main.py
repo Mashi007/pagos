@@ -11,17 +11,35 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 # Routers
-from app.api.v1.endpoints import (amortizacion, analistas, aprobaciones,
-                                  auditoria, auth, carga_masiva, clientes,
-                                  concesionarios, conciliacion,
-                                  conciliacion_bancaria, configuracion,
-                                  dashboard, health, impact_analysis,
-                                  inteligencia_artificial, kpis,
-                                  migracion_emergencia, modelos_vehiculos,
-                                  notificaciones, notificaciones_multicanal,
-                                  pagos, prestamos, reportes,
-                                  scheduler_notificaciones, solicitudes, users,
-                                  validadores)
+from app.api.v1.endpoints import (
+    amortizacion,
+    analistas,
+    aprobaciones,
+    auditoria,
+    auth,
+    carga_masiva,
+    clientes,
+    concesionarios,
+    conciliacion,
+    conciliacion_bancaria,
+    configuracion,
+    dashboard,
+    health,
+    impact_analysis,
+    inteligencia_artificial,
+    kpis,
+    migracion_emergencia,
+    modelos_vehiculos,
+    notificaciones,
+    notificaciones_multicanal,
+    pagos,
+    prestamos,
+    reportes,
+    scheduler_notificaciones,
+    solicitudes,
+    users,
+    validadores,
+)
 from app.core.config import settings
 from app.db.init_db import init_db_shutdown, init_db_startup
 

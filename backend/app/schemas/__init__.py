@@ -14,6 +14,7 @@ Schemas organizados por módulo:
 # SCHEMAS DE CLIENTE
 # ============================================
 from app.schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
+
 # ============================================
 # SCHEMAS DE USUARIO Y AUTENTICACIÓN
 # ============================================
@@ -23,38 +24,61 @@ from app.schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
 # ============================================
 # SCHEMAS DE CONCILIACIÓN BANCARIA
 # ============================================
-from app.schemas.conciliacion import (ConciliacionCreate, ConciliacionMatch,
-                                      ConciliacionResponse,
-                                      ConfirmacionConciliacion,
-                                      ConfirmacionResponse,
-                                      EstadisticasConciliacion,
-                                      EstadoConciliacion,
-                                      ExtractoBancarioUpload,
-                                      FiltroConciliacion, MovimientoBancario,
-                                      MovimientoBancarioResponse,
-                                      PagoPendienteConciliacion,
-                                      ReporteConciliacionMensual,
-                                      ResultadoConciliacion, TipoMatch,
-                                      ValidacionExtracto)
+from app.schemas.conciliacion import (
+    ConciliacionCreate,
+    ConciliacionMatch,
+    ConciliacionResponse,
+    ConfirmacionConciliacion,
+    ConfirmacionResponse,
+    EstadisticasConciliacion,
+    EstadoConciliacion,
+    ExtractoBancarioUpload,
+    FiltroConciliacion,
+    MovimientoBancario,
+    MovimientoBancarioResponse,
+    PagoPendienteConciliacion,
+    ReporteConciliacionMensual,
+    ResultadoConciliacion,
+    TipoMatch,
+    ValidacionExtracto,
+)
+
 # ============================================
 # SCHEMAS DE KPIs
 # ============================================
 # ACTUALIZADO: Importaciones corregidas para coincidir con kpis.py
-from app.schemas.kpis import (DashboardKPIs, KPIBase, KPIConValores, KPICreate,
-                              KPIEstadisticas, KPIResponse, KPIUpdate,
-                              KPIValorBase, KPIValorCreate, KPIValorResponse,
-                              KPIValorUpdate)
+from app.schemas.kpis import (
+    DashboardKPIs,
+    KPIBase,
+    KPIConValores,
+    KPICreate,
+    KPIEstadisticas,
+    KPIResponse,
+    KPIUpdate,
+    KPIValorBase,
+    KPIValorCreate,
+    KPIValorResponse,
+    KPIValorUpdate,
+)
+
 # ============================================
 # SCHEMAS DE PAGO
 # ============================================
-from app.schemas.pago import (ConciliacionCreate, ConciliacionResponse,
-                              KPIsPagos, PagoCreate, PagoListResponse,
-                              PagoResponse, PagoUpdate, ResumenCliente)
+from app.schemas.pago import (
+    ConciliacionCreate,
+    ConciliacionResponse,
+    KPIsPagos,
+    PagoCreate,
+    PagoListResponse,
+    PagoResponse,
+    PagoUpdate,
+    ResumenCliente,
+)
+
 # ============================================
 # SCHEMAS DE PRÉSTAMO
 # ============================================
-from app.schemas.prestamo import (PrestamoCreate, PrestamoResponse,
-                                  PrestamoUpdate)
+from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate
 
 # ============================================
 # EXPORTS PÚBLICOS

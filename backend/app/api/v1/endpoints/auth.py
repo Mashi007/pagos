@@ -5,17 +5,25 @@ Solución temporal para resolver error 503
 """
 import logging
 
-from fastapi import (APIRouter, Depends, HTTPException, Request, Response,
-                     status)
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.config import settings
-from app.core.security import (create_access_token, create_refresh_token,
-                               get_password_hash, verify_password)
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    get_password_hash,
+    verify_password,
+)
 from app.models.user import User
-from app.schemas.auth import (ChangePasswordRequest, LoginRequest,
-                              LoginResponse, RefreshTokenRequest, Token)
+from app.schemas.auth import (
+    ChangePasswordRequest,
+    LoginRequest,
+    LoginResponse,
+    RefreshTokenRequest,
+    Token,
+)
 from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
 from app.utils.validators import validate_password_strength

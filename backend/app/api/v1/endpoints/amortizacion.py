@@ -13,13 +13,16 @@ from app.api.deps import get_current_active_user, get_db
 from app.models.amortizacion import Cuota
 from app.models.prestamo import Prestamo
 from app.models.user import User
-from app.schemas.amortizacion import (CuotaResponse, EstadoCuentaResponse,
-                                      ProyeccionPagoRequest,
-                                      ProyeccionPagoResponse,
-                                      RecalcularMoraRequest,
-                                      RecalcularMoraResponse,
-                                      TablaAmortizacionRequest,
-                                      TablaAmortizacionResponse)
+from app.schemas.amortizacion import (
+    CuotaResponse,
+    EstadoCuentaResponse,
+    ProyeccionPagoRequest,
+    ProyeccionPagoResponse,
+    RecalcularMoraRequest,
+    RecalcularMoraResponse,
+    TablaAmortizacionRequest,
+    TablaAmortizacionResponse,
+)
 from app.services.amortizacion_service import AmortizacionService
 
 router = APIRouter()

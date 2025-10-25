@@ -9,18 +9,23 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, List
 
-from fastapi import (APIRouter, BackgroundTasks, Depends, HTTPException, Query)
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
 from app.models.user import User
-from app.services.ml_service import (AlertasInteligentes,
-                                     AnalisisPredictivoCartera,
-                                     ChatbotCobranza, DetectorPatrones,
-                                     OptimizadorTasas, PrediccionMora,
-                                     ScoringCrediticio, SistemaRecomendaciones)
+from app.services.ml_service import (
+    AlertasInteligentes,
+    AnalisisPredictivoCartera,
+    ChatbotCobranza,
+    DetectorPatrones,
+    OptimizadorTasas,
+    PrediccionMora,
+    ScoringCrediticio,
+    SistemaRecomendaciones,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
