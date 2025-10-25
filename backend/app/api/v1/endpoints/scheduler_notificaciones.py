@@ -170,34 +170,29 @@ def obtener_logs_scheduler(
         # En producción, obtener logs reales
         # Por ahora, simular logs
 
-        logs_simulados = [
-            {
-                "timestamp": datetime.now().isoformat(),
-                "nivel": "INFO",
-                "mensaje": "✅ Ciclo de notificaciones completado: 45 exitosas, 2 fallidas",
-                "detalles": {
-                    "total_procesadas": 47,
-                    "exitosas": 45,
-                    "fallidas": 2,
-                    "tiempo_ejecucion": "2.3 segundos",
-                },
-            },
-            {
-                "timestamp": (datetime.now() - timedelta(hours=1)).isoformat(),
-                "nivel": "INFO",
-                "mensaje": "🔔 Iniciando ciclo automático de notificaciones",
-                "detalles": {"clientes_objetivo": 47, "tipos_notificacion": 4},
-            },
-            {
-                "timestamp": (datetime.now() - timedelta(hours=2)).isoformat(),
-                "nivel": "WARNING",
-                "mensaje": "⚠️ 2 notificaciones fallaron - programando reintentos",
-                "detalles": {
-                    "notificaciones_fallidas": 2,
-                    "proximo_reintento": "30 minutos",
-                },
-            },
-        ]
+        logs_simulados = [{"timestamp": datetime.now().isoformat(),
+                           "nivel": "INFO",
+                           "mensaje": "✅ Ciclo de notificaciones completado: 45 exitosas, 2 fallidas",
+                           "detalles": {"total_procesadas": 47,
+                                        "exitosas": 45,
+                                        "fallidas": 2,
+                                        "tiempo_ejecucion": "2.3 segundos",
+                                        },
+                           },
+                          {"timestamp": (datetime.now() - timedelta(hours=1)).isoformat(),
+                           "nivel": "INFO",
+                           "mensaje": "🔔 Iniciando ciclo automático de notificaciones",
+                           "detalles": {"clientes_objetivo": 47,
+                                        "tipos_notificacion": 4},
+                           },
+                          {"timestamp": (datetime.now() - timedelta(hours=2)).isoformat(),
+                           "nivel": "WARNING",
+                           "mensaje": "⚠️ 2 notificaciones fallaron - programando reintentos",
+                           "detalles": {"notificaciones_fallidas": 2,
+                                        "proximo_reintento": "30 minutos",
+                                        },
+                           },
+                          ]
 
         return {
             "titulo": "📋 LOGS DEL SCHEDULER DE NOTIFICACIONES",

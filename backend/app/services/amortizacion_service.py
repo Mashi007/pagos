@@ -43,8 +43,8 @@ class AmortizacionService:
             return AmortizacionService._generar_americano(request)
         else:
             raise ValueError(
-                f"Sistema de amortización no soportado: {request.sistema_amortizacion}"
-            )
+                f"Sistema de amortización no soportado: {
+                    request.sistema_amortizacion}")
 
     @staticmethod
     def _generar_frances(

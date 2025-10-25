@@ -558,7 +558,8 @@ def _registrar_auditoria_configuracion(
         accion=TipoAccion.ACTUALIZACION,
         entidad="configuracion_sistema",
         entidad_id=None,
-        detalles=f"Actualizadas {len(actualizaciones_exitosas)} configuraciones",
+        detalles=f"Actualizadas {
+            len(actualizaciones_exitosas)} configuraciones",
     )
     db.add(auditoria)
 
@@ -1590,8 +1591,9 @@ def actualizar_configuracion_tasas(
     }
 
     logger.info(
-        f"Tasas actualizadas por {current_user.email}: {_config_cache['tasas']}"
-    )
+        f"Tasas actualizadas por {
+            current_user.email}: {
+            _config_cache['tasas']}")
 
     return {
         "mensaje": "Configuración de tasas actualizada exitosamente",
@@ -1646,8 +1648,9 @@ def actualizar_configuracion_limites(
     }
 
     logger.info(
-        f"Límites actualizados por {current_user.email}: {_config_cache['limites']}"
-    )
+        f"Límites actualizados por {
+            current_user.email}: {
+            _config_cache['limites']}")
 
     return {
         "mensaje": "Configuración de límites actualizada exitosamente",
@@ -1921,20 +1924,19 @@ def validar_limites_cliente(
         if prestamos_activos >= limite_prestamos:
             validaciones["puede_solicitar"] = False
             validaciones["mensajes"].append(
-                f"El cliente ya tiene {prestamos_activos} préstamos activos (límite: {limite_prestamos})"
-            )
+                f"El cliente ya tiene {prestamos_activos} préstamos activos (límite: {limite_prestamos})")
 
         if monto_solicitado < limites_monto["monto_minimo_prestamo"]:
             validaciones["puede_solicitar"] = False
             validaciones["mensajes"].append(
-                f"Monto mínimo permitido: ${limites_monto['monto_minimo_prestamo']:,.2f}"
-            )
+                f"Monto mínimo permitido: ${
+                    limites_monto['monto_minimo_prestamo']:,.2f}")
 
         if monto_solicitado > limites_monto["monto_maximo_prestamo"]:
             validaciones["puede_solicitar"] = False
             validaciones["mensajes"].append(
-                f"Monto máximo permitido: ${limites_monto['monto_maximo_prestamo']:,.2f}"
-            )
+                f"Monto máximo permitido: ${
+                    limites_monto['monto_maximo_prestamo']:,.2f}")
 
         return {
             "cliente_id": cliente_id,
@@ -2021,8 +2023,7 @@ def _generar_recomendaciones_configuracion(estado_servicios):
                     "prioridad": "MEDIA",
                     "mensaje": f"Configurar parámetros faltantes en {servicio}",
                     "accion": f"Revisar configuración de {servicio}",
-                }
-            )
+                })
 
     return recomendaciones
 

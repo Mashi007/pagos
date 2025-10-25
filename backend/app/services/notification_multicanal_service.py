@@ -171,8 +171,9 @@ class NotificacionMulticanal:
                 await self._generar_reporte_diario(resultados)
 
             logger.info(
-                f"✅ Procesamiento completado: {resultados['exitosas']} exitosas, {resultados['fallidas']} fallidas"
-            )
+                f"✅ Procesamiento completado: {
+                    resultados['exitosas']} exitosas, {
+                    resultados['fallidas']} fallidas")
 
             return resultados
 
@@ -230,8 +231,8 @@ class NotificacionMulticanal:
 
                 except Exception as e:
                     logger.error(
-                        f"Error enviando notificación a cliente {cliente_data.get('cliente_id')}: {e}"
-                    )
+                        f"Error enviando notificación a cliente {
+                            cliente_data.get('cliente_id')}: {e}")
                     resultado["fallidas"] += 1
 
             return resultado
@@ -532,8 +533,8 @@ class NotificacionMulticanal:
                         <div style="background: white; padding: 20px; border-radius: 8px;">
                             <h2>Hola {variables['nombre']},</h2>
 
-                            <p>Te recordamos que tu cuota #{variables['cuota']} de tu 
-                               <strong>{variables['vehiculo']}</strong> vence el 
+                            <p>Te recordamos que tu cuota #{variables['cuota']} de tu
+                               <strong>{variables['vehiculo']}</strong> vence el
                                <strong>{variables['fecha']}</strong>.</p>
 
                             <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0;">
@@ -578,7 +579,7 @@ class NotificacionMulticanal:
                         <div style="background: white; padding: 20px; border-radius: 8px;">
                             <h2>Estimado/a {variables['nombre']},</h2>
 
-                            <div style="background: #fff3cd; border: 1px solid #ffeaa7; 
+                            <div style="background: #fff3cd; border: 1px solid #ffeaa7;
                                         padding: 15px; border-radius: 5px; margin: 20px 0;">
                                 <p><strong>⚠️ Tu cuota #{variables['cuota']} está vencida desde ayer.</strong></p>
                             </div>
@@ -621,7 +622,7 @@ class NotificacionMulticanal:
                         <div style="background: white; padding: 20px; border-radius: 8px;">
                             <h2>¡Gracias {variables['nombre']}!</h2>
 
-                            <div style="background: #d4edda; border: 1px solid #c3e6cb; 
+                            <div style="background: #d4edda; border: 1px solid #c3e6cb;
                                         padding: 15px; border-radius: 5px; margin: 20px 0;">
                                 <p><strong>✅ Hemos recibido tu pago de la cuota #{variables['cuota']}.</strong></p>
                             </div>
@@ -795,8 +796,7 @@ Financiamiento Automotriz"""
 
             if notificaciones_hoy >= self.LIMITE_NOTIFICACIONES_DIA:
                 logger.warning(
-                    f"Cliente {cliente_id} alcanzó límite diario de notificaciones"
-                )
+                    f"Cliente {cliente_id} alcanzó límite diario de notificaciones")
                 return False
 
             # Verificar intervalo mínimo
@@ -849,7 +849,8 @@ Financiamiento Automotriz"""
                     categoria="CLIENTE",
                     prioridad="NORMAL",
                     titulo=f"Notificación {tipo.value} - {canal}",
-                    mensaje=f"Notificación enviada por {canal} al cliente {cliente_data['nombre']}",
+                    mensaje=f"Notificación enviada por {canal} al cliente {
+                        cliente_data['nombre']}",
                     canal=canal,
                     estado=estado,
                     destinatario_email=(
@@ -910,7 +911,7 @@ Financiamiento Automotriz"""
                 <li>Total procesadas: {resultados['notificaciones_procesadas']}</li>
                 <li>✅ Exitosas: {resultados['exitosas']}</li>
                 <li>❌ Fallidas: {resultados['fallidas']}</li>
-                <li>📊 Tasa de éxito: {(resultados['exitosas']/resultados['notificaciones_procesadas']*100):.1f}%</li>
+                <li>📊 Tasa de éxito: {(resultados['exitosas'] / resultados['notificaciones_procesadas'] * 100):.1f}%</li>
             </ul>
 
             <h3>📋 Por Tipo de Notificación:</h3>
@@ -918,7 +919,9 @@ Financiamiento Automotriz"""
             """
 
             for tipo, datos in resultados["por_tipo"].items():
-                reporte_html += f"<li><strong>{tipo}:</strong> {datos['exitosas']}/{datos['total']} exitosas</li>"
+                reporte_html += f"<li><strong>{tipo}:</strong> {
+                    datos['exitosas']}/{
+                    datos['total']} exitosas</li>"
 
             reporte_html += "</ul>"
 
@@ -984,8 +987,13 @@ class NotificationScheduler:
 
             # Log de resultados
             logger.info(
-                f"✅ Ciclo completado: {resultados.get('exitosas', 0)} exitosas, {resultados.get('fallidas', 0)} fallidas"
-            )
+                f"✅ Ciclo completado: {
+                    resultados.get(
+                        'exitosas',
+                        0)} exitosas, {
+                    resultados.get(
+                        'fallidas',
+                        0)} fallidas")
 
             return {
                 "mensaje": "✅ Ciclo de notificaciones completado exitosamente",
@@ -1095,8 +1103,8 @@ class GestorReintentos:
 
                 except Exception as e:
                     logger.error(
-                        f"Error en reintento de notificación {notificacion.id}: {e}"
-                    )
+                        f"Error en reintento de notificación {
+                            notificacion.id}: {e}")
                     resultados["fallidos"] += 1
 
             return resultados
@@ -1290,7 +1298,10 @@ class WhatsAppTemplateManager:
             "language": template["idioma"],
             "components": template["componentes"],
             "status": "PENDING_APPROVAL",
-            "descripcion": f"Template para {template_name.replace('_', ' ').title()}",
+            "descripcion": f"Template para {
+                template_name.replace(
+                    '_',
+                    ' ').title()}",
         }
 
     @staticmethod

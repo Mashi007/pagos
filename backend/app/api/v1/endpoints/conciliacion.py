@@ -275,8 +275,9 @@ def _procesar_fila_movimiento(
             )
             if not cliente:
                 advertencias.append(
-                    f"Fila {index + 1}: Cédula {cedula} no registrada en sistema"
-                )
+                    f"Fila {
+                        index +
+                        1}: Cédula {cedula} no registrada en sistema")
 
         # Crear movimiento
         movimiento = MovimientoBancarioExtendido(
@@ -804,7 +805,8 @@ def procesar_revision_manual(
             }
 
         elif revision.accion == "RECHAZAR":
-            # Marcar como rechazado (requeriría tabla de movimientos temporales)
+            # Marcar como rechazado (requeriría tabla de movimientos
+            # temporales)
             return {
                 "message": "Movimiento rechazado",
                 "observaciones": revision.observaciones,
@@ -1276,14 +1278,15 @@ async def aplicar_coincidencias_exactas(
         errores = []
 
         # Simular aplicación de pagos exactos
-        # En implementación real, iterarías sobre los movimientos exactos guardados
+        # En implementación real, iterarías sobre los movimientos exactos
+        # guardados
         for i in range(5):  # Simulación de 5 pagos exactos
             try:
                 # Crear pago simulado
                 pago_simulado = {
                     "id": 1000 + i,
                     "monto": 500.00,
-                    "cliente": f"Cliente-{i+1}",
+                    "cliente": f"Cliente-{i + 1}",
                     "cuota": i + 1,
                 }
 
@@ -1292,7 +1295,7 @@ async def aplicar_coincidencias_exactas(
                 total_aplicado += Decimal(str(pago_simulado["monto"]))
 
             except Exception as e:
-                errores.append({"movimiento": f"MOV-{i+1}", "error": str(e)})
+                errores.append({"movimiento": f"MOV-{i + 1}", "error": str(e)})
 
         # Registrar en auditoría
         auditoria = Auditoria.registrar(
@@ -1435,38 +1438,31 @@ def obtener_paso_flujo_conciliacion(
         }
 
     elif paso == 12:
-        return {
-            "paso": 12,
-            "titulo": "Sistema EJECUTA EN LOTE",
-            "acciones_automaticas": [
-                {
-                    "orden": 1,
-                    "accion": "Registrar cada pago en BD",
-                    "descripcion": "Crea registro en tabla 'pagos' con todos los detalles",
-                },
-                {
-                    "orden": 2,
-                    "accion": "Actualizar amortizaciones",
-                    "descripcion": "Actualiza estados y saldos de cuotas afectadas",
-                },
-                {
-                    "orden": 3,
-                    "accion": "Actualizar estados de clientes",
-                    "descripcion": "Recalcula días de mora y estado financiero",
-                },
-                {
-                    "orden": 4,
-                    "accion": "Registrar en auditoría",
-                    "descripcion": "Guarda log completo del proceso masivo",
-                },
-                {
-                    "orden": 5,
-                    "accion": "Enviar emails de confirmación",
-                    "descripcion": "Notifica a cada cliente sobre su pago (background)",
-                },
-            ],
-            "siguiente_paso": "Generar reporte PDF",
-        }
+        return {"paso": 12,
+                "titulo": "Sistema EJECUTA EN LOTE",
+                "acciones_automaticas": [{"orden": 1,
+                                          "accion": "Registrar cada pago en BD",
+                                          "descripcion": "Crea registro en tabla 'pagos' con todos los detalles",
+                                          },
+                                         {"orden": 2,
+                                          "accion": "Actualizar amortizaciones",
+                                          "descripcion": "Actualiza estados y saldos de cuotas afectadas",
+                                          },
+                                         {"orden": 3,
+                                          "accion": "Actualizar estados de clientes",
+                                          "descripcion": "Recalcula días de mora y estado financiero",
+                                          },
+                                         {"orden": 4,
+                                          "accion": "Registrar en auditoría",
+                                          "descripcion": "Guarda log completo del proceso masivo",
+                                          },
+                                         {"orden": 5,
+                                          "accion": "Enviar emails de confirmación",
+                                          "descripcion": "Notifica a cada cliente sobre su pago (background)",
+                                          },
+                                         ],
+                "siguiente_paso": "Generar reporte PDF",
+                }
 
     elif paso == 13:
         return {
@@ -1649,5 +1645,5 @@ Saludos.
     except Exception as e:
         logger = logging.getLogger(__name__)
         logger.error(
-            f"Error notificando admin sobre conciliación {proceso_id}: {str(e)}"
-        )
+            f"Error notificando admin sobre conciliación {proceso_id}: {
+                str(e)}")

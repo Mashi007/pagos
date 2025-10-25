@@ -398,8 +398,7 @@ async def exportar_excel(
             output,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={
-                "Content-Disposition": f"attachment; filename={filename}"
-            },
+                "Content-Disposition": f"attachment; filename={filename}"},
         )
 
     except Exception as e:
@@ -980,7 +979,7 @@ async def reporte_mensual_cartera_pdf(
                 "Clientes al Día",
                 f"{clientes_al_dia:,}",
                 (
-                    f"{(clientes_al_dia/total_clientes*100):.1f}%"
+                    f"{(clientes_al_dia / total_clientes * 100):.1f}%"
                     if total_clientes > 0
                     else "0%"
                 ),
@@ -989,7 +988,7 @@ async def reporte_mensual_cartera_pdf(
                 "Clientes en Mora",
                 f"{clientes_mora:,}",
                 (
-                    f"{(clientes_mora/total_clientes*100):.1f}%"
+                    f"{(clientes_mora / total_clientes * 100):.1f}%"
                     if total_clientes > 0
                     else "0%"
                 ),
@@ -1024,7 +1023,7 @@ async def reporte_mensual_cartera_pdf(
                 "0 días (Al día)",
                 str(clientes_al_dia),
                 (
-                    f"{(clientes_al_dia/total_clientes*100):.1f}%"
+                    f"{(clientes_al_dia / total_clientes * 100):.1f}%"
                     if total_clientes > 0
                     else "0%"
                 ),
@@ -1173,7 +1172,7 @@ async def reporte_asesor_pdf(
             [
                 "Clientes al Día",
                 (
-                    f"{clientes_al_dia} ({(clientes_al_dia/len(clientes_asesor)*100):.1f}%)"
+                    f"{clientes_al_dia} ({(clientes_al_dia / len(clientes_asesor) * 100):.1f}%)"
                     if clientes_asesor
                     else "0"
                 ),
@@ -1181,7 +1180,7 @@ async def reporte_asesor_pdf(
             [
                 "Clientes en Mora",
                 (
-                    f"{clientes_mora} ({(clientes_mora/len(clientes_asesor)*100):.1f}%)"
+                    f"{clientes_mora} ({(clientes_mora / len(clientes_asesor) * 100):.1f}%)"
                     if clientes_asesor
                     else "0"
                 ),
@@ -1258,9 +1257,10 @@ async def reporte_asesor_pdf(
             media_type="application/pdf",
             headers={
                 "Content-Disposition": (
-                    f"attachment; filename=reporte_asesor_{asesor.full_name.replace(' ', '_')}.pdf"
-                )
-            },
+                    f"attachment; filename=reporte_asesor_{
+                        asesor.full_name.replace(
+                            ' ',
+                            '_')}.pdf")},
         )
 
     except ImportError:

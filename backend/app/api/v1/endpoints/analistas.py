@@ -161,7 +161,8 @@ def analistas_backup1(
             return cached_result
 
         # Usar SQL directo para máxima compatibilidad
-        base_query = "SELECT id, nombre, activo, updated_at FROM analistas"  # ✅ CORREGIDO: updated_at en lugar de created_at
+        # ✅ CORREGIDO: updated_at en lugar de created_at
+        base_query = "SELECT id, nombre, activo, updated_at FROM analistas"
         count_query = "SELECT COUNT(*) FROM analistas"
         where_conditions = []
 
@@ -350,7 +351,8 @@ def analistas_emergency(
     """
     try:
         # Usar SQL directo para máxima compatibilidad
-        base_query = "SELECT id, nombre, activo, updated_at FROM analistas"  # ✅ CORREGIDO: updated_at en lugar de created_at
+        # ✅ CORREGIDO: updated_at en lugar de created_at
+        base_query = "SELECT id, nombre, activo, updated_at FROM analistas"
         count_query = "SELECT COUNT(*) FROM analistas"
         where_conditions = []
 
@@ -584,7 +586,8 @@ def listar_asesores(
     """
     try:
         # Usar SQL directo para máxima compatibilidad
-        base_query = "SELECT id, nombre, activo, updated_at FROM analistas"  # ✅ CORREGIDO: updated_at en lugar de created_at
+        # ✅ CORREGIDO: updated_at en lugar de created_at
+        base_query = "SELECT id, nombre, activo, updated_at FROM analistas"
         count_query = "SELECT COUNT(*) FROM analistas"
         where_conditions = []
 
@@ -718,7 +721,8 @@ def crear_asesor(
                 f"{asesor_data.nombre.lower().replace(' ', '.')}@asesor.local"
             )
 
-        # Verificar que no exista un asesor con el mismo email (solo si se proporciona email)
+        # Verificar que no exista un asesor con el mismo email (solo si se
+        # proporciona email)
         if asesor_data.email:
             existing = (
                 db.query(Analista)

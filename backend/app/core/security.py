@@ -27,7 +27,8 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = DEFAULT_ACCESS_TOKEN_EXPIRE_MINUTES
 REFRESH_TOKEN_EXPIRE_DAYS = DEFAULT_REFRESH_TOKEN_EXPIRE_DAYS
 
-# Esquema OAuth2 para FastAPI, que define dónde esperar el token (Authorization: Bearer <token>)
+# Esquema OAuth2 para FastAPI, que define dónde esperar el token
+# (Authorization: Bearer <token>)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
 
 
@@ -99,7 +100,8 @@ def decode_token(token: str) -> dict:
         )
         return payload
     except PyJWTError as e:
-        # Re-lanza PyJWTError para que el manejador de excepciones de FastAPI lo capture
+        # Re-lanza PyJWTError para que el manejador de excepciones de FastAPI
+        # lo capture
         raise PyJWTError(f"Error decodificando token: {str(e)}")
 
 

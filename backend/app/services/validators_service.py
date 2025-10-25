@@ -149,12 +149,14 @@ class ValidadorTelefono:
                 "error": {
                     "valido": False,
                     "error": (
-                        f"Operadora '{operadora}' no válida para {pais}. "
-                        f"Válidas: {', '.join(config['operadoras'])}"
-                    ),
+                        f"Operadora '{operadora}' no válida para {pais}. " f"Válidas: {
+                            ', '.join(
+                                config['operadoras'])}"),
                     "valor_original": telefono_original,
                     "valor_formateado": None,
-                    "sugerencia": f"Debe comenzar con: {', '.join(config['operadoras'])}",
+                    "sugerencia": f"Debe comenzar con: {
+                        ', '.join(
+                            config['operadoras'])}",
                 },
             }
 
@@ -244,7 +246,8 @@ class ValidadorTelefono:
             else:
                 return {
                     "valido": False,
-                    "error": f"Longitud incorrecta. Formato esperado: {config['formato_display']}",
+                    "error": f"Longitud incorrecta. Formato esperado: {
+                        config['formato_display']}",
                     "valor_original": telefono,
                     "valor_formateado": None,
                     "longitud_actual": len(telefono_limpio),
@@ -566,8 +569,8 @@ class ValidadorCedula:
             return {
                 "valido": False,
                 "error": (
-                    f"Prefijo '{cedula_limpia[0] if cedula_limpia else 'ninguno'}' no válido. DEBE empezar por V, E o J"
-                ),
+                    f"Prefijo '{
+                        cedula_limpia[0] if cedula_limpia else 'ninguno'}' no válido. DEBE empezar por V, E o J"),
                 "valor_original": cedula_limpia,
                 "valor_formateado": None,
                 "formato_esperado": config["descripcion"],
@@ -601,8 +604,8 @@ class ValidadorCedula:
                 return {
                     "valido": False,
                     "error": (
-                        f"Longitud inválida: {len(numero)} dígitos. DEBE tener entre 7 y 10 dígitos"
-                    ),
+                        f"Longitud inválida: {
+                            len(numero)} dígitos. DEBE tener entre 7 y 10 dígitos"),
                     "valor_original": cedula_limpia,
                     "valor_formateado": None,
                     "formato_esperado": config["descripcion"],
@@ -611,7 +614,8 @@ class ValidadorCedula:
                     "longitud_requerida": "7-10 dígitos",
                 }
 
-            # Validar que todos los dígitos sean números (sin caracteres especiales)
+            # Validar que todos los dígitos sean números (sin caracteres
+            # especiales)
             if not numero.isdigit():
                 return {
                     "valido": False,
@@ -678,7 +682,8 @@ class ValidadorCedula:
 
         return {
             "valido": False,
-            "error": f"Formato inválido. Esperado: {config['formato_display']}",
+            "error": f"Formato inválido. Esperado: {
+                config['formato_display']}",
             "valor_original": cedula,
             "formato_esperado": config["descripcion"],
         }
@@ -702,7 +707,8 @@ class ValidadorCedula:
 
         return {
             "valido": False,
-            "error": f"Formato inválido. Esperado: {config['formato_display']}",
+            "error": f"Formato inválido. Esperado: {
+                config['formato_display']}",
             "valor_original": cedula_limpia,
             "formato_esperado": config["descripcion"],
         }
@@ -739,7 +745,8 @@ class ValidadorNombre:
             if len(palabras) < 4:
                 return {
                     "valido": False,
-                    "error": f"Nombre debe tener al menos 4 palabras. Encontradas: {len(palabras)}",
+                    "error": f"Nombre debe tener al menos 4 palabras. Encontradas: {
+                        len(palabras)}",
                     "valor_original": nombre,
                     "palabras_encontradas": len(palabras),
                     "palabras_requeridas": 4,
@@ -822,7 +829,8 @@ class ValidadorFecha:
                     "requiere_calendario": True,
                 }
 
-            # Validar reglas de negocio: desde hace 2 años hasta 4 años adelante
+            # Validar reglas de negocio: desde hace 2 años hasta 4 años
+            # adelante
             hoy = date.today()
 
             # Calcular límites
@@ -1121,7 +1129,8 @@ class ValidadorMonto:
             if monto < Decimal("1"):
                 return "Monto mínimo de pago: $1"
             if saldo_maximo and monto > saldo_maximo:
-                return f"Monto no puede exceder el saldo pendiente: ${saldo_maximo:,.2f}"
+                return f"Monto no puede exceder el saldo pendiente: ${
+                    saldo_maximo:,.2f}"
 
         elif tipo == "CUOTA_INICIAL":
             if monto < Decimal("0"):
@@ -1904,7 +1913,8 @@ class ValidadorEdad:
         if edad < ValidadorEdad.EDAD_MINIMA:
             return {
                 "valido": False,
-                "error": f"El cliente debe ser mayor de {ValidadorEdad.EDAD_MINIMA} años (edad actual: {edad} años)",
+                "error": f"El cliente debe ser mayor de {
+                    ValidadorEdad.EDAD_MINIMA} años (edad actual: {edad} años)",
                 "edad": edad,
                 "edad_minima": ValidadorEdad.EDAD_MINIMA,
                 "fecha_nacimiento": fecha.isoformat(),
@@ -1919,7 +1929,8 @@ class ValidadorEdad:
         if edad > ValidadorEdad.EDAD_MAXIMA:
             return {
                 "valido": False,
-                "error": f"La edad máxima permitida es {ValidadorEdad.EDAD_MAXIMA} años (edad actual: {edad} años)",
+                "error": f"La edad máxima permitida es {
+                    ValidadorEdad.EDAD_MAXIMA} años (edad actual: {edad} años)",
                 "edad": edad,
                 "edad_maxima": ValidadorEdad.EDAD_MAXIMA,
                 "fecha_nacimiento": fecha.isoformat(),
@@ -2023,12 +2034,10 @@ class ValidadorCoherenciaFinanciera:
 
             # 2. Validar cuota inicial mínima (10%)
             cuota_minima = (
-                total_financiamiento
-                * Decimal(
-                    ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE
-                )
-                / Decimal("100")
-            )
+                total_financiamiento *
+                Decimal(
+                    ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE) /
+                Decimal("100"))
             if cuota_inicial < cuota_minima:
                 errores.append(
                     f"La cuota inicial debe ser al menos el "
@@ -2038,16 +2047,17 @@ class ValidadorCoherenciaFinanciera:
 
             # 3. Advertencia si cuota inicial es muy alta
             cuota_maxima_recomendada = (
-                total_financiamiento
-                * Decimal(
-                    ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MAXIMA_PORCENTAJE
-                )
-                / Decimal("100")
-            )
+                total_financiamiento *
+                Decimal(
+                    ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MAXIMA_PORCENTAJE) /
+                Decimal("100"))
             if cuota_inicial > cuota_maxima_recomendada:
                 advertencias.append(
-                    f"La cuota inicial es muy alta ({(cuota_inicial/total_financiamiento*100):.1f}% del total)"
-                )
+                    f"La cuota inicial es muy alta ({
+                        (
+                            cuota_inicial /
+                            total_financiamiento *
+                            100):.1f}% del total)")
 
             # 4. Monto financiado debe ser positivo
             monto_financiado = total_financiamiento - cuota_inicial
@@ -2170,9 +2180,9 @@ class ValidadorDuplicados:
                 return {
                     "valido": False,
                     "error": (
-                        f"El número de chasis ya está registrado para el cliente "
-                        f"{existe.nombre_completo} (ID: {existe.id})"
-                    ),
+                        f"El número de chasis ya está registrado para el cliente " f"{
+                            existe.nombre_completo} (ID: {
+                            existe.id})"),
                     "chasis": chasis_limpio,
                     "cliente_existente": {
                         "id": existe.id,
@@ -2227,8 +2237,8 @@ class ValidadorDuplicados:
                 return {
                     "valido": False,
                     "error": (
-                        f"El email ya está registrado para el cliente {existe.nombre_completo}"
-                    ),
+                        f"El email ya está registrado para el cliente {
+                            existe.nombre_completo}"),
                     "email": email_limpio,
                     "cliente_existente": {
                         "id": existe.id,

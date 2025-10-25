@@ -400,8 +400,9 @@ def crear_cliente(
             cliente_id=nuevo_cliente.id,
             datos_nuevos=cliente_data.model_dump(),
             descripcion=(
-                f"Cliente creado: {cliente_data.nombres} {cliente_data.apellidos}"
-            ),
+                f"Cliente creado: {
+                    cliente_data.nombres} {
+                    cliente_data.apellidos}"),
         )
 
         logger.info(f"Cliente creado exitosamente: {nuevo_cliente.id}")
@@ -586,7 +587,9 @@ def actualizar_cliente(
             cliente_id=cliente_id,
             datos_anteriores=datos_anteriores,
             datos_nuevos=update_data,
-            descripcion=f"Cliente actualizado: {cliente.nombres} {cliente.apellidos}",
+            descripcion=f"Cliente actualizado: {
+                cliente.nombres} {
+                cliente.apellidos}",
         )
 
         logger.info(f"Cliente actualizado exitosamente: {cliente_id}")

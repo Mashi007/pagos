@@ -130,7 +130,7 @@ class CrossValidationAuthChecker:
                     validation["status"] = "invalid"
                     validation["details"][
                         "error"
-                    ] = f"Parte {i+1} no es base64 válido"
+                    ] = f"Parte {i + 1} no es base64 válido"
                     return validation
 
             # Intentar decodificar el payload

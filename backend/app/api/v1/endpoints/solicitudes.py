@@ -237,7 +237,8 @@ async def guardar_archivo_evidencia(
     if extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"Tipo de archivo no permitido. Permitidos: {', '.join(ALLOWED_EXTENSIONS)}",
+            detail=f"Tipo de archivo no permitido. Permitidos: {
+                ', '.join(ALLOWED_EXTENSIONS)}",
         )
 
     # Leer contenido y verificar tamaño
@@ -290,7 +291,8 @@ def _validar_solicitud_modificacion_pago(
     if solicitud_existente:
         raise HTTPException(
             status_code=400,
-            detail=f"Ya existe una solicitud pendiente para este pago (ID: {solicitud_existente.id})",
+            detail=f"Ya existe una solicitud pendiente para este pago (ID: {
+                solicitud_existente.id})",
         )
 
     return pago, solicitud_existente
@@ -714,9 +716,9 @@ def solicitar_modificacion_amortizacion(
         "prestamo_afectado": {
             "id": prestamo.id,
             "cliente": (
-                prestamo.cliente.nombre_completo if prestamo.cliente else "N/A"
-            ),
-            "monto_actual": float(prestamo.monto_total),
+                prestamo.cliente.nombre_completo if prestamo.cliente else "N/A"),
+            "monto_actual": float(
+                prestamo.monto_total),
         },
     }
 
@@ -1562,14 +1564,14 @@ async def _enviar_email_nueva_solicitud(
 
         cuerpo_html = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                         color: white; padding: 20px; text-align: center;">
                 <h1>{emoji} Nueva Solicitud de Aprobación</h1>
                 <p style="margin: 0; font-size: 18px;">{solicitud.tipo_solicitud}</p>
             </div>
 
             <div style="padding: 20px; background: #f8f9fa;">
-                <div style="background: white; padding: 20px; border-radius: 8px; 
+                <div style="background: white; padding: 20px; border-radius: 8px;
                             box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                     <h2 style="color: #333; margin-top: 0;">📋 Detalles de la Solicitud</h2>
 
@@ -1710,7 +1712,9 @@ async def _enviar_email_resultado_solicitud(solicitud: Aprobacion):
         emoji = estado_emoji.get(solicitud.estado, "📋")
         color = "#28a745" if solicitud.estado == "APROBADA" else "#dc3545"
 
-        asunto = f"{emoji} Solicitud {solicitud.estado.lower()} - {solicitud.tipo_solicitud}"
+        asunto = f"{emoji} Solicitud {
+            solicitud.estado.lower()} - {
+            solicitud.tipo_solicitud}"
 
         cuerpo_html = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

@@ -120,8 +120,8 @@ def check_database_cached() -> Dict[str, Any]:
             )
 
             logger.info(
-                f"DB Check realizado: {db_status}, Response time: {response_time:.2f}ms"
-            )
+                f"DB Check realizado: {db_status}, Response time: {
+                    response_time:.2f}ms")
         except Exception as e:
             response_time = (time.time() - start_time) * 1000
             logger.error(
@@ -223,33 +223,30 @@ async def detailed_health_check(response: Response):
                 {
                     "type": "CPU_HIGH",
                     "message": (
-                        f"CPU usage {system_metrics['cpu_percent']:.1f}% exceeds threshold {CPU_THRESHOLD_PERCENT}%"
-                    ),
+                        f"CPU usage {
+                            system_metrics['cpu_percent']:.1f}% exceeds threshold {CPU_THRESHOLD_PERCENT}%"),
                     "severity": "WARNING",
-                }
-            )
+                })
 
         if system_metrics["memory_percent"] > MEMORY_THRESHOLD_PERCENT:
             impact_analysis["alerts"].append(
                 {
                     "type": "MEMORY_HIGH",
                     "message": (
-                        f"Memory usage {system_metrics['memory_percent']:.1f}% exceeds threshold {MEMORY_THRESHOLD_PERCENT}%"
-                    ),
+                        f"Memory usage {
+                            system_metrics['memory_percent']:.1f}% exceeds threshold {MEMORY_THRESHOLD_PERCENT}%"),
                     "severity": "WARNING",
-                }
-            )
+                })
 
         if system_metrics["disk_percent"] > DISK_THRESHOLD_PERCENT:
             impact_analysis["alerts"].append(
                 {
                     "type": "DISK_HIGH",
                     "message": (
-                        f"Disk usage {system_metrics['disk_percent']:.1f}% exceeds threshold {DISK_THRESHOLD_PERCENT}%"
-                    ),
+                        f"Disk usage {
+                            system_metrics['disk_percent']:.1f}% exceeds threshold {DISK_THRESHOLD_PERCENT}%"),
                     "severity": "CRITICAL",
-                }
-            )
+                })
 
         # Determinar estado general
         overall_status = "healthy"

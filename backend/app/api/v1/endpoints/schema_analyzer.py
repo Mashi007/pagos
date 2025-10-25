@@ -179,8 +179,7 @@ class DatabaseSchemaAnalyzer:
                 "fix_type": "query_fix",
                 "description": "Cambiar queries de created_at a updated_at en tabla analistas",
                 "priority": "critical",
-            }
-        )
+            })
 
         return fixes
 

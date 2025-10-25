@@ -36,57 +36,51 @@ async def generar_template_conciliacion(
         ws_instrucciones = wb.active
         ws_instrucciones.title = "Instrucciones"
 
-        instrucciones = [
-            ["INSTRUCCIONES PARA CONCILIACIÓN BANCARIA"],
-            [""],
-            ["1. FORMATO DE ARCHIVO:"],
-            ["   - Archivo Excel (.xlsx)"],
-            ["   - Primera fila: encabezados de columnas"],
-            ["   - Datos desde la segunda fila"],
-            ["   - Máximo 100 registros por archivo"],
-            [""],
-            ["2. COLUMNAS REQUERIDAS:"],
-            ["   - fecha: Fecha real del pago (formato YYYY-MM-DD)"],
-            ["   - numero_documento: Número de documento del pago"],
-            [""],
-            ["3. PROCESO DE CONCILIACIÓN:"],
-            [
-                "   - El sistema compara el número de documento con la base de datos"
-            ],
-            ["   - Si hay coincidencia EXACTA: se marca como CONCILIADO"],
-            ["   - Si NO hay coincidencia: se marca como PENDIENTE"],
-            [""],
-            ["4. VALIDACIONES:"],
-            ["   - Fecha debe estar en formato YYYY-MM-DD"],
-            ["   - Número de documento debe coincidir EXACTAMENTE"],
-            ["   - No se permiten caracteres especiales adicionales"],
-            [""],
-            ["5. EJEMPLOS DE DATOS VÁLIDOS:"],
-            ["   - fecha: '2024-01-15'"],
-            ["   - numero_documento: 'DOC001234'"],
-            [""],
-            ["6. NOTAS IMPORTANTES:"],
-            ["   - No eliminar las columnas"],
-            ["   - No cambiar el orden de las columnas"],
-            ["   - Usar solo caracteres ASCII"],
-            ["   - Verificar que los números de documento sean exactos"],
-            ["   - Un archivo por vez"],
-            [""],
-            ["7. RESULTADO:"],
-            ["   - Los pagos conciliados aparecerán en el resumen"],
-            ["   - Los pendientes requerirán revisión manual"],
-            [""],
-            ["8. DESCONCILIACIÓN:"],
-            ["   - Se puede desconciliar un pago ya conciliado"],
-            ["   - Requiere formulario con justificación"],
-            ["   - Se registra en auditoría"],
-            [""],
-            [
-                "FECHA DE GENERACIÓN: "
-                + datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            ],
-            ["GENERADO POR: " + current_user.email],
-        ]
+        instrucciones = [["INSTRUCCIONES PARA CONCILIACIÓN BANCARIA"],
+                         [""],
+                         ["1. FORMATO DE ARCHIVO:"],
+                         ["   - Archivo Excel (.xlsx)"],
+                         ["   - Primera fila: encabezados de columnas"],
+                         ["   - Datos desde la segunda fila"],
+                         ["   - Máximo 100 registros por archivo"],
+                         [""],
+                         ["2. COLUMNAS REQUERIDAS:"],
+                         ["   - fecha: Fecha real del pago (formato YYYY-MM-DD)"],
+                         ["   - numero_documento: Número de documento del pago"],
+                         [""],
+                         ["3. PROCESO DE CONCILIACIÓN:"],
+                         ["   - El sistema compara el número de documento con la base de datos"],
+                         ["   - Si hay coincidencia EXACTA: se marca como CONCILIADO"],
+                         ["   - Si NO hay coincidencia: se marca como PENDIENTE"],
+                         [""],
+                         ["4. VALIDACIONES:"],
+                         ["   - Fecha debe estar en formato YYYY-MM-DD"],
+                         ["   - Número de documento debe coincidir EXACTAMENTE"],
+                         ["   - No se permiten caracteres especiales adicionales"],
+                         [""],
+                         ["5. EJEMPLOS DE DATOS VÁLIDOS:"],
+                         ["   - fecha: '2024-01-15'"],
+                         ["   - numero_documento: 'DOC001234'"],
+                         [""],
+                         ["6. NOTAS IMPORTANTES:"],
+                         ["   - No eliminar las columnas"],
+                         ["   - No cambiar el orden de las columnas"],
+                         ["   - Usar solo caracteres ASCII"],
+                         ["   - Verificar que los números de documento sean exactos"],
+                         ["   - Un archivo por vez"],
+                         [""],
+                         ["7. RESULTADO:"],
+                         ["   - Los pagos conciliados aparecerán en el resumen"],
+                         ["   - Los pendientes requerirán revisión manual"],
+                         [""],
+                         ["8. DESCONCILIACIÓN:"],
+                         ["   - Se puede desconciliar un pago ya conciliado"],
+                         ["   - Requiere formulario con justificación"],
+                         ["   - Se registra en auditoría"],
+                         [""],
+                         ["FECHA DE GENERACIÓN: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+                         ["GENERADO POR: " + current_user.email],
+                         ]
 
         # Agregar instrucciones a la hoja
         for i, instruccion in enumerate(instrucciones, 1):
@@ -123,7 +117,8 @@ async def generar_template_conciliacion(
         return {
             "success": True,
             "message": "Template generado exitosamente",
-            "filename": f"Template_Conciliacion_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            "filename": f"Template_Conciliacion_{
+                datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
             "content": output.getvalue(),
         }
 
@@ -220,8 +215,7 @@ async def procesar_conciliacion(
         db.commit()
 
         logger.info(
-            f"Conciliación procesada: {conciliados} conciliados, {pendientes} pendientes"
-        )
+            f"Conciliación procesada: {conciliados} conciliados, {pendientes} pendientes")
 
         return {
             "success": True,
@@ -258,8 +252,9 @@ async def desconciliar_pago(
     """Desconciliar un pago ya conciliado"""
     try:
         logger.info(
-            f"Usuario {current_user.email} desconciliando pago {conciliacion_data.numero_documento_anterior}"
-        )
+            f"Usuario {
+                current_user.email} desconciliando pago {
+                conciliacion_data.numero_documento_anterior}")
 
         # Buscar el pago a desconciliar
         pago = (
@@ -285,7 +280,8 @@ async def desconciliar_pago(
         pago.conciliado = False
         pago.fecha_conciliacion = None
 
-        # Crear registro de auditoría (simulado - se integrará con módulo de auditoría)
+        # Crear registro de auditoría (simulado - se integrará con módulo de
+        # auditoría)
         conciliacion_record = {
             "id": len(db.query(Pago).all()) + 1,  # ID temporal
             "cedula_cliente": conciliacion_data.cedula_cliente,
@@ -301,8 +297,8 @@ async def desconciliar_pago(
         db.commit()
 
         logger.info(
-            f"Pago {conciliacion_data.numero_documento_anterior} desconciliado exitosamente"
-        )
+            f"Pago {
+                conciliacion_data.numero_documento_anterior} desconciliado exitosamente")
 
         return conciliacion_record
 

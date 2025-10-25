@@ -110,7 +110,8 @@ async def diagnosticar_refresh_token(
                 return {
                     "timestamp": datetime.now().isoformat(),
                     "status": "error",
-                    "error": f"Token verification failed: {str(e)}",
+                    "error": f"Token verification failed: {
+                        str(e)}",
                     "token_info": token_info,
                     "recomendacion": "El refresh token es inválido o corrupto.",
                 }

@@ -117,8 +117,9 @@ async def enviar_notificacion(
         )
 
     logger.info(
-        f"Notificación {nueva_notif.id} programada para envío por {notificacion.canal}"
-    )
+        f"Notificación {
+            nueva_notif.id} programada para envío por {
+            notificacion.canal}")
     return nueva_notif
 
 
@@ -439,12 +440,14 @@ Gracias por su puntualidad.
                 cliente_id=cliente.id,
                 tipo="EMAIL",
                 categoria="CUOTA_PROXIMA",
-                asunto=f"Recordatorio: Cuota #{cuota.numero_cuota} vence en 3 días",
+                asunto=f"Recordatorio: Cuota #{
+                    cuota.numero_cuota} vence en 3 días",
                 mensaje=mensaje,
                 estado="PENDIENTE",
                 programada_para=datetime.now().replace(
-                    hour=9, minute=0, second=0
-                ),
+                    hour=9,
+                    minute=0,
+                    second=0),
                 prioridad="ALTA",
             )
 
@@ -586,7 +589,9 @@ async def enviar_confirmacion_pago(
 
     proximo_vencimiento = "No hay cuotas pendientes"
     if proxima_cuota:
-        proximo_vencimiento = f"Cuota #{proxima_cuota.numero_cuota} - {proxima_cuota.fecha_vencimiento.strftime('%d/%m/%Y')}"
+        proximo_vencimiento = f"Cuota #{
+            proxima_cuota.numero_cuota} - {
+            proxima_cuota.fecha_vencimiento.strftime('%d/%m/%Y')}"
 
     mensaje = f"""
 Estimado/a {cliente.nombre_completo},
@@ -617,7 +622,9 @@ Agradecemos su puntualidad y confianza.
         cliente_id=cliente.id,
         tipo="EMAIL",
         categoria="PAGO_RECIBIDO",
-        asunto=f"✅ Confirmación: Pago de {float(pago.monto_pagado):.2f} recibido",
+        asunto=f"✅ Confirmación: Pago de {
+            float(
+                pago.monto_pagado):.2f} recibido",
         mensaje=mensaje,
         estado="PENDIENTE",
         programada_para=datetime.now(),
@@ -717,7 +724,11 @@ PRÓXIMOS VENCIMIENTOS:
 """
 
         for cuota in cuotas_pendientes:
-            mensaje += f"• Cuota #{cuota.numero_cuota}: {float(cuota.monto_cuota):.2f} - {cuota.fecha_vencimiento.strftime('%d/%m/%Y')}\n"
+            mensaje += f"• Cuota #{
+                cuota.numero_cuota}: {
+                float(
+                    cuota.monto_cuota):.2f} - {
+                cuota.fecha_vencimiento.strftime('%d/%m/%Y')}\n"
 
         mensaje += "\nMantengase al día con sus pagos.\n\nSaludos cordiales."
 

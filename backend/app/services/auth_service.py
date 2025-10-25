@@ -60,14 +60,12 @@ class AuthService:
 
         if not user:
             logger.warning(
-                f"AuthService.authenticate_user - Usuario no encontrado: {email_normalized}"
-            )
+                f"AuthService.authenticate_user - Usuario no encontrado: {email_normalized}")
             return None
 
         if not verify_password(password, user.hashed_password):
             logger.warning(
-                f"AuthService.authenticate_user - Contraseña incorrecta para: {email_normalized}"
-            )
+                f"AuthService.authenticate_user - Contraseña incorrecta para: {email_normalized}")
             return None
 
         logger.info(

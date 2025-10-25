@@ -294,7 +294,8 @@ async def evaluate_alerts(db: Session = Depends(get_db)):
         # Recolectar métricas actuales
         current_time = datetime.now()
 
-        # Simular recolección de métricas (en producción vendría de logs/monitoring)
+        # Simular recolección de métricas (en producción vendría de
+        # logs/monitoring)
         metrics = {
             "error_rate": 0.15,  # Simulado
             "avg_response_time": 1200,  # Simulado

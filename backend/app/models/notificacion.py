@@ -107,7 +107,8 @@ class Notificacion(Base):
     asunto = Column(String(255), nullable=True)
     mensaje = Column(Text, nullable=False)
 
-    # Datos adicionales (JSON) - Renombrado de 'metadata' a 'extra_data' para evitar conflicto con SQLAlchemy
+    # Datos adicionales (JSON) - Renombrado de 'metadata' a 'extra_data' para
+    # evitar conflicto con SQLAlchemy
     extra_data = Column(JSON, nullable=True)
 
     # Estado de envío
@@ -147,7 +148,8 @@ class Notificacion(Base):
 
     # Relaciones
     user = relationship("User", back_populates="notificaciones")
-    # cliente = relationship("Cliente", back_populates="notificaciones")  # COMENTADO: Tabla notificaciones vacía
+    # cliente = relationship("Cliente", back_populates="notificaciones")  #
+    # COMENTADO: Tabla notificaciones vacía
 
     def __repr__(self):
         return f"<Notificacion {self.tipo.value} - {self.categoria.value} - {self.estado.value}>"

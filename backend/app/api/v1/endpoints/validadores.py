@@ -959,8 +959,7 @@ async def _procesar_correcciones_masivas(
                 fallidas += 1
 
         logger.info(
-            f"📊 Corrección masiva completada: {exitosas} exitosas, {fallidas} fallidas"
-        )
+            f"📊 Corrección masiva completada: {exitosas} exitosas, {fallidas} fallidas")
 
         db.close()
 

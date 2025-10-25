@@ -87,8 +87,9 @@ class AuthFlowTracer:
         self._detect_anomalies(trace_data)
 
         logger.info(
-            f"🏁 AUTH_TRACE [{self.trace_id}] COMPLETED: {overall_status} ({total_duration:.2f}ms)"
-        )
+            f"🏁 AUTH_TRACE [{
+                self.trace_id}] COMPLETED: {overall_status} ({
+                total_duration:.2f}ms)")
 
     def _detect_anomalies(self, trace_data: Dict):
         """Detectar patrones anómalos en el trace"""
@@ -609,19 +610,19 @@ def _detectar_anomalia_tasa_error(recent_traces: list) -> list:
             {
                 "type": "high_error_rate",
                 "severity": "critical",
-                "description": f"Error rate is {error_rate:.1f}% (>{total_traces} traces analyzed)",
+                "description": f"Error rate is {
+                    error_rate:.1f}% (>{total_traces} traces analyzed)",
                 "recommendation": "Investigate authentication configuration and token generation",
-            }
-        )
+            })
     elif error_rate > 20:
         anomalies.append(
             {
                 "type": "elevated_error_rate",
                 "severity": "warning",
-                "description": f"Error rate is {error_rate:.1f}% (>{total_traces} traces analyzed)",
+                "description": f"Error rate is {
+                    error_rate:.1f}% (>{total_traces} traces analyzed)",
                 "recommendation": "Monitor authentication patterns closely",
-            }
-        )
+            })
 
     return anomalies
 
@@ -638,10 +639,11 @@ def _detectar_anomalia_duracion_excesiva(recent_traces: list) -> list:
             {
                 "type": "slow_authentication",
                 "severity": "warning",
-                "description": f"{len(slow_traces)} traces took >3s (avg: {avg_slow_duration:.0f}ms)",
+                "description": f"{
+                    len(slow_traces)} traces took >3s (avg: {
+                    avg_slow_duration:.0f}ms)",
                 "recommendation": "Check database performance and network latency",
-            }
-        )
+            })
     return anomalies
 
 
@@ -677,10 +679,10 @@ def _detectar_anomalia_timing_exitoso() -> list:
                 {
                     "type": "slow_successful_auth",
                     "severity": "info",
-                    "description": f"Successful authentications average {avg_success_duration:.0f}ms",
+                    "description": f"Successful authentications average {
+                        avg_success_duration:.0f}ms",
                     "recommendation": "Consider optimizing authentication flow",
-                }
-            )
+                })
     return anomalies
 
 

@@ -584,7 +584,9 @@ def actualizar_preferencias_cliente(
 
         return {
             "mensaje": "✅ Preferencias de notificación actualizadas exitosamente",
-            "cliente": {"id": cliente_id, "nombre": cliente.nombre_completo},
+            "cliente": {
+                "id": cliente_id,
+                "nombre": cliente.nombre_completo},
             "nueva_configuracion": {
                 "canal_preferido": canal_preferido.value,
                 "descripcion": (
@@ -593,8 +595,8 @@ def actualizar_preferencias_cliente(
                         "EMAIL": "Recibirá notificaciones solo por email",
                         "WHATSAPP": "Recibirá notificaciones solo por WhatsApp",
                         "NINGUNO": "NO recibirá notificaciones automáticas",
-                    }.get(canal_preferido.value)
-                ),
+                    }.get(
+                        canal_preferido.value)),
             },
             "fecha_actualizacion": datetime.now().isoformat(),
             "actualizado_por": current_user.full_name,

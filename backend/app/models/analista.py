@@ -18,10 +18,14 @@ class Analista(Base):
     fecha_eliminacion = Column(DateTime(timezone=True), nullable=True)
 
     # Relaciones
-    # clientes = relationship("Cliente", back_populates="asesor_config_rel")  # COMENTADO: Solo plantilla vacía
+    # clientes = relationship("Cliente", back_populates="asesor_config_rel")
+    # # COMENTADO: Solo plantilla vacía
 
     def __repr__(self):
-        return f"<Analista(id={self.id}, nombre='{self.nombre}', activo={self.activo})>"
+        return f"<Analista(id={
+            self.id}, nombre='{
+            self.nombre}', activo={
+            self.activo})>"
 
     @property
     def nombre_completo(self):

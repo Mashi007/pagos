@@ -138,7 +138,8 @@ USER_PERMISSIONS: List[Permission] = [
     Permission.PRESTAMO_READ,
     Permission.PAGO_READ,
     Permission.REPORTE_READ,
-    # PERMISOS OPERATIVOS AGREGADOS - Usuarios regulares pueden gestionar operaciones básicas
+    # PERMISOS OPERATIVOS AGREGADOS - Usuarios regulares pueden gestionar
+    # operaciones básicas
     Permission.CLIENTE_CREATE,  # ✅ Crear clientes
     Permission.CLIENTE_UPDATE,  # ✅ Actualizar clientes
     Permission.PRESTAMO_CREATE,  # ✅ Crear préstamos

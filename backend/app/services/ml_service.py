@@ -730,33 +730,23 @@ class PrediccionMora:
                 ]
             )
         elif probabilidad >= 0.50:
-            recomendaciones.extend(
-                [
-                    {
-                        "accion": "RECORDATORIO_PROACTIVO",
-                        "prioridad": "ALTA",
-                        "descripcion": "Enviar recordatorio 5 días antes del vencimiento",
-                        "canal": "WHATSAPP_Y_EMAIL",
-                    },
-                    {
-                        "accion": "OFERTA_DESCUENTO",
-                        "prioridad": "MEDIA",
-                        "descripcion": "Ofrecer descuento por pago puntual",
-                        "canal": "LLAMADA_TELEFONICA",
-                    },
-                ]
-            )
+            recomendaciones.extend([{"accion": "RECORDATORIO_PROACTIVO",
+                                     "prioridad": "ALTA",
+                                     "descripcion": "Enviar recordatorio 5 días antes del vencimiento",
+                                     "canal": "WHATSAPP_Y_EMAIL",
+                                     },
+                                    {"accion": "OFERTA_DESCUENTO",
+                                     "prioridad": "MEDIA",
+                                     "descripcion": "Ofrecer descuento por pago puntual",
+                                     "canal": "LLAMADA_TELEFONICA",
+                                     },
+                                    ])
         elif probabilidad >= 0.30:
-            recomendaciones.extend(
-                [
-                    {
-                        "accion": "SEGUIMIENTO_REGULAR",
-                        "prioridad": "MEDIA",
-                        "descripcion": "Incluir en lista de seguimiento semanal",
-                        "canal": "EMAIL_AUTOMATICO",
-                    }
-                ]
-            )
+            recomendaciones.extend([{"accion": "SEGUIMIENTO_REGULAR",
+                                     "prioridad": "MEDIA",
+                                     "descripcion": "Incluir en lista de seguimiento semanal",
+                                     "canal": "EMAIL_AUTOMATICO",
+                                     }])
 
         # Recomendaciones específicas por features
         if features.get("ultimo_pago_dias", 0) > 30:
@@ -766,8 +756,7 @@ class PrediccionMora:
                     "prioridad": "ALTA",
                     "descripcion": "Cliente sin pagos recientes - verificar situación",
                     "canal": "LLAMADA_TELEFONICA",
-                }
-            )
+                })
 
         return recomendaciones
 
@@ -975,8 +964,7 @@ class AnalisisPredictivoCartera:
 
             # Recomendaciones estratégicas
             recomendaciones = AnalisisPredictivoCartera._generar_recomendaciones_estrategicas(
-                tendencia_mora, proyeccion_flujo, analisis_segmentos
-            )
+                tendencia_mora, proyeccion_flujo, analisis_segmentos)
 
             return {
                 "fecha_analisis": datetime.now().isoformat(),
@@ -1351,9 +1339,12 @@ class ChatbotCobranza:
                     f"""
  Hola {nombre}!
 
-Te recordamos que tu cuota #{contexto['ultima_cuota']['numero']} de tu {vehiculo} vence el {contexto['ultima_cuota']['fecha_vencimiento']}.
+Te recordamos que tu cuota #{
+                        contexto['ultima_cuota']['numero']} de tu {vehiculo} vence el {
+                        contexto['ultima_cuota']['fecha_vencimiento']}.
 
- Monto: ${contexto['ultima_cuota']['monto']:,.0f}
+ Monto: ${
+                        contexto['ultima_cuota']['monto']:,.0f}
 
 Puedes pagar por:
  Transferencia bancaria
@@ -1361,54 +1352,59 @@ Puedes pagar por:
  App móvil
 
 Gracias por tu puntualidad! 😊
-                """
-                ),
+                """),
                 "email": (
                     f"""
 Estimado/a {nombre},
 
-Le recordamos que su cuota #{contexto['ultima_cuota']['numero']} correspondiente a su {vehiculo} vence el {contexto['ultima_cuota']['fecha_vencimiento']}.
+Le recordamos que su cuota #{
+                        contexto['ultima_cuota']['numero']} correspondiente a su {vehiculo} vence el {
+                        contexto['ultima_cuota']['fecha_vencimiento']}.
 
-Monto a pagar: ${contexto['ultima_cuota']['monto']:,.2f}
+Monto a pagar: ${
+                        contexto['ultima_cuota']['monto']:,.2f}
 
 Para mayor comodidad, puede realizar su pago a través de nuestros canales digitales.
 
 Saludos cordiales,
 Equipo de Cobranzas
-                """
-                ),
+                """),
             },
             "MORA_TEMPRANA": {
                 "whatsapp": (
                     f"""
-️ {nombre}, tu cuota #{contexto['ultima_cuota']['numero']} está vencida.
+️ {nombre}, tu cuota #{
+                        contexto['ultima_cuota']['numero']} está vencida.
 
  Vehículo: {vehiculo}
- Monto: ${contexto['ultima_cuota']['monto']:,.0f}
- Días de mora: {contexto['dias_mora']}
+ Monto: ${
+                        contexto['ultima_cuota']['monto']:,.0f}
+ Días de mora: {
+                        contexto['dias_mora']}
 
 Para evitar cargos adicionales, realiza tu pago hoy.
 
 Necesitas ayuda? Responde este mensaje.
-                """
-                ),
+                """),
                 "sms": (
-                    f"FINANCIERA: {nombre}, tu cuota está vencida ({contexto['dias_mora']} días). Monto: ${contexto['ultima_cuota']['monto']:,.0f}. Paga hoy para evitar cargos. Info: 809-XXX-XXXX"
-                ),
+                    f"FINANCIERA: {nombre}, tu cuota está vencida ({
+                        contexto['dias_mora']} días). Monto: ${
+                        contexto['ultima_cuota']['monto']:,.0f}. Paga hoy para evitar cargos. Info: 809-XXX-XXXX"),
             },
             "MORA_AVANZADA": {
                 "llamada_script": (
                     f"""
 Buenos días {nombre}, le habla [NOMBRE] de Cobranzas.
 
-Le contacto porque su cuota #{contexto['ultima_cuota']['numero']} de su {vehiculo} tiene {contexto['dias_mora']} días de mora.
+Le contacto porque su cuota #{
+                        contexto['ultima_cuota']['numero']} de su {vehiculo} tiene {
+                        contexto['dias_mora']} días de mora.
 
-Cuándo podría realizar el pago de ${contexto['ultima_cuota']['monto']:,.0f}?
+Cuándo podría realizar el pago de ${
+                        contexto['ultima_cuota']['monto']:,.0f}?
 
 Podemos ofrecerle facilidades de pago si lo necesita.
-                """
-                )
-            },
+                """)},
             "FELICITACION_PUNTUALIDAD": {
                 "whatsapp": (
                     f"""
@@ -1422,9 +1418,7 @@ Como cliente puntual, tienes beneficios especiales:
  Atención prioritaria
 
 Gracias por ser un cliente ejemplar! ⭐
-                """
-                )
-            },
+                """)},
         }
 
         return mensajes.get(tipo, {"mensaje": "Tipo de mensaje no encontrado"})
@@ -1496,14 +1490,11 @@ class DetectorPatrones:
                 DetectorPatrones._detectar_concentracion_mora_analista(db)
             )
             if concentracion_mora:
-                anomalias.append(
-                    {
-                        "tipo": "CONCENTRACION_MORA_USER",
-                        "descripcion": "Asesores con alta concentración de mora",
-                        "datos": concentracion_mora,
-                        "accion_recomendada": "REVISAR_PROCESO_APROBACION",
-                    }
-                )
+                anomalias.append({"tipo": "CONCENTRACION_MORA_USER",
+                                  "descripcion": "Asesores con alta concentración de mora",
+                                  "datos": concentracion_mora,
+                                  "accion_recomendada": "REVISAR_PROCESO_APROBACION",
+                                  })
 
             # 3. PATRONES ESTACIONALES
             patrones_estacionales = (
@@ -1722,11 +1713,11 @@ class AlertasInteligentes:
                         "tipo": "DETERIORO_CARTERA",
                         "prioridad": "MEDIA",
                         "titulo": "Deterioro detectado en calidad de cartera",
-                        "descripcion": f"Incremento de {deterioro['incremento']}% en mora este mes",
+                        "descripcion": f"Incremento de {
+                            deterioro['incremento']}% en mora este mes",
                         "datos": deterioro,
                         "accion_recomendada": "Revisar políticas de aprobación",
-                    }
-                )
+                    })
 
             # 3. OPORTUNIDADES DE NEGOCIO
             oportunidades = AlertasInteligentes._identificar_oportunidades(db)
@@ -1735,12 +1726,12 @@ class AlertasInteligentes:
                     {
                         "tipo": "OPORTUNIDADES",
                         "prioridad": "BAJA",
-                        "titulo": f"{len(oportunidades)} oportunidades de negocio",
+                        "titulo": f"{
+                            len(oportunidades)} oportunidades de negocio",
                         "descripcion": "Clientes elegibles para productos adicionales",
                         "oportunidades": oportunidades,
                         "accion_recomendada": "Contacto comercial",
-                    }
-                )
+                    })
 
             return {
                 "fecha_generacion": datetime.now().isoformat(),

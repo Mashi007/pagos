@@ -61,7 +61,8 @@ class Prestamo(Base):
     __tablename__ = "prestamos"
 
     id = Column(Integer, primary_key=True, index=True)
-    # CORREGIDO: Usamos "clientes.id" para referenciar correctamente al modelo Cliente
+    # CORREGIDO: Usamos "clientes.id" para referenciar correctamente al modelo
+    # Cliente
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False)
     codigo_prestamo = Column(String(CODIGO_LENGTH), unique=True, index=True)
 
@@ -83,7 +84,8 @@ class Prestamo(Base):
         Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False
     )
     cuotas_pagadas = Column(Integer, default=0)
-    # Se recomienda que cuotas_pendientes sea calculado, pero se mantiene como columna por diseño.
+    # Se recomienda que cuotas_pendientes sea calculado, pero se mantiene como
+    # columna por diseño.
     cuotas_pendientes = Column(Integer)
 
     # Fechas
@@ -131,4 +133,5 @@ class Prestamo(Base):
     # CORREGIDO: Relación correcta con el modelo Cliente
     # cliente = relationship("Cliente", back_populates="prestamos")  # COMENTADO: Tabla prestamos vacía
     # cuotas = relationship("Cuota", back_populates="prestamo", cascade="all, delete-orphan")  # COMENTADO: Solo plantilla vacía
-    # pagos = relationship("Pago", back_populates="prestamo")  # COMENTADO: Solo plantilla vacía
+    # pagos = relationship("Pago", back_populates="prestamo")  # COMENTADO:
+    # Solo plantilla vacía

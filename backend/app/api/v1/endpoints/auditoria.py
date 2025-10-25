@@ -294,8 +294,7 @@ def exportar_auditoria_excel(
             content=output.getvalue(),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={
-                "Content-Disposition": f"attachment; filename={filename}"
-            },
+                "Content-Disposition": f"attachment; filename={filename}"},
         )
 
     except HTTPException:

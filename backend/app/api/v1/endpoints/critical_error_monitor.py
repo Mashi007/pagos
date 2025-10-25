@@ -211,8 +211,7 @@ class CriticalErrorMonitor:
                         "description": "Corregir imports faltantes que causan fallos de despliegue",
                         "action": "Verificar y corregir imports en otros archivos",
                         "impact": "Resuelve fallos de despliegue",
-                    }
-                )
+                    })
 
             elif error_type == "schema_error":
                 recommendations.append(
@@ -222,8 +221,7 @@ class CriticalErrorMonitor:
                         "description": "Corregir inconsistencias de esquema que causan errores 503",
                         "action": "Agregar columna created_at a tabla analistas o corregir queries",
                         "impact": "Resuelve errores 503 en endpoints",
-                    }
-                )
+                    })
 
             elif error_type == "deployment_failure":
                 recommendations.append(
@@ -233,8 +231,7 @@ class CriticalErrorMonitor:
                         "description": "Resolver problemas de despliegue que causan timeouts",
                         "action": "Verificar configuración de puertos y dependencias",
                         "impact": "Permite despliegues exitosos",
-                    }
-                )
+                    })
 
         return recommendations
 

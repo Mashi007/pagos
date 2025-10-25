@@ -22,7 +22,8 @@ class Cliente(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     # Documento - OBLIGATORIO
-    # CORREGIDO: Removido unique=True para permitir múltiples clientes con misma cédula
+    # CORREGIDO: Removido unique=True para permitir múltiples clientes con
+    # misma cédula
     cedula = Column(String(CEDULA_LENGTH), nullable=False, index=True)
 
     # Datos personales - OBLIGATORIOS
@@ -86,4 +87,8 @@ class Cliente(Base):
     # prestamos = relationship("Prestamo", back_populates="cliente", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<Cliente(id={self.id}, cedula='{self.cedula}', nombres='{self.nombres}', apellidos='{self.apellidos}')>"
+        return f"<Cliente(id={
+            self.id}, cedula='{
+            self.cedula}', nombres='{
+            self.nombres}', apellidos='{
+                self.apellidos}')>"
