@@ -1,24 +1,21 @@
-﻿"""Sistema de Análisis de Fallos Intermitentes
-Identifica patrones específicos que causan fallos 401 intermitentes
-"""
+# backend/app/api/v1/endpoints/intermittent_failure_analyzer.py
+"""Analizador de fallos intermitentes específicos"""
 
-import logging
 import statistics
 import threading
+import time
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List
-from fastapi import APIRouter, Depends
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 
-logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# ============================================
-# SISTEMA DE ANÁLISIS DE FALLOS INTERMITENTES
-# ============================================
 
 class IntermittentFailureAnalyzer:
     """Analizador de fallos intermitentes específicos"""
@@ -29,53 +26,26 @@ class IntermittentFailureAnalyzer:
         self.intermittent_patterns = {}  # Patrones intermitentes
         self.lock = threading.Lock()
     
-    def log_successful_request(self, request_data: Dict[str, Any]):
-        """Registrar request exitoso"""
+    def log_request(self, request_data: Dict[str, Any], success: bool):
+        """Registrar un request"""
         with self.lock:
-                request = {
+            request_entry = {
                 "timestamp": datetime.now(),
                 "endpoint": request_data.get("endpoint"),
-                "method": request_data.get("method"),
                 "user_id": request_data.get("user_id"),
-                "token_length": request_data.get("token_length"),
-                "response_time_ms": request_data.get("response_time_ms"),
-                "client_ip": request_data.get("client_ip"),
-                "user_agent": request_data.get("user_agent"),
-                "success": True,
-        }
-        self.successful_requests.append(request)
-        
-        logger.debug(
-                f"✅ Request exitoso registrado: {request['endpoint']}"
-        )
+                "token_length": len(request_data.get("token", "")),
+                "success": success,
+            }
+            
+            if success:
+                self.successful_requests.append(request_entry)
+            else:
+                self.failed_requests.append(request_entry)
     
-    def log_failed_request(self, request_data: Dict[str, Any]):
-        """Registrar request fallido"""
-        with self.lock:
-                request = {
-                "timestamp": datetime.now(),
-                "endpoint": request_data.get("endpoint"),
-                "method": request_data.get("method"),
-                "user_id": request_data.get("user_id"),
-                "token_length": request_data.get("token_length"),
-                "response_time_ms": request_data.get("response_time_ms"),
-                "client_ip": request_data.get("client_ip"),
-                "user_agent": request_data.get("user_agent"),
-                "error_code": request_data.get("error_code"),
-                "error_message": request_data.get("error_message"),
-                "success": False,
-        }
-        self.failed_requests.append(request)
-        
-        logger.warning(
-                f"❌ Request fallido registrado: {request['endpoint']} - {request['error_code']}"
-        )
-    
-def analyze_intermittent_patterns(self) -> Dict[str, Any]:
+    def analyze_intermittent_patterns(self) -> Dict[str, Any]:
         """Analizar patrones intermitentes"""
         with self.lock:
-                analysis = {
-                "timestamp": datetime.now().isoformat(),
+            analysis = {
                 "total_successful": len(self.successful_requests),
                 "total_failed": len(self.failed_requests),
                 "patterns": {},
@@ -220,8 +190,7 @@ def analyze_intermittent_patterns(self) -> Dict[str, Any]:
             
             analysis["comparison"] = {
                 "length_difference": round(abs(avg_successful - avg_failed), 2),
-                "failed_tokens_shorter": avg_failed < avg_successful,
-                "potential_issue": abs(avg_successful - avg_failed) > 50,
+                "successful_longer": avg_successful > avg_failed,
             }
         
         return analysis
@@ -230,163 +199,63 @@ def analyze_intermittent_patterns(self) -> Dict[str, Any]:
         """Generar recomendaciones basadas en patrones"""
         recommendations = []
         
-        # Recomendaciones basadas en endpoints
-        endpoints = patterns.get("endpoints", {})
-        for endpoint, stats in endpoints.items():
-        if stats.get("intermittent"):
-                recommendations.append(f"Endpoint {endpoint} muestra comportamiento intermitente - revisar configuración")
+        # Recomendaciones por endpoint
+        if "endpoints" in patterns:
+            for endpoint, data in patterns["endpoints"].items():
+                if data.get("intermittent"):
+                    recommendations.append(f"Endpoint {endpoint} muestra comportamiento intermitente")
         
-        # Recomendaciones basadas en usuarios
-        users = patterns.get("users", {})
-        problematic_users = [user_id for user_id, stats in users.items() if stats.get("problematic")]
-        if problematic_users:
-        recommendations.append(f"Usuarios problemáticos detectados: {', '.join(problematic_users)}")
+        # Recomendaciones por usuario
+        if "users" in patterns:
+            for user_id, data in patterns["users"].items():
+                if data.get("problematic"):
+                    recommendations.append(f"Usuario {user_id} tiene alta tasa de fallos")
         
-        # Recomendaciones basadas en tokens
-        tokens = patterns.get("tokens", {})
-        comparison = tokens.get("comparison", {})
-        if comparison.get("potential_issue"):
-        recommendations.append("Diferencia significativa en longitud de tokens entre éxitos y fallos")
-        
-        # Recomendaciones generales
-        if not recommendations:
-        recommendations.append("No se detectaron patrones intermitentes obvios")
+        # Recomendaciones por token
+        if "tokens" in patterns and "comparison" in patterns["tokens"]:
+            comparison = patterns["tokens"]["comparison"]
+            if comparison["length_difference"] > 10:
+                recommendations.append("Diferencia significativa en longitud de tokens entre éxitos y fallos")
         
         return recommendations
-    
-        def get_failure_rate_by_timeframe(self, minutes: int = 60) -> Dict[str, Any]:
-        """Obtener tasa de fallo por período de tiempo"""
-        cutoff = datetime.now() - timedelta(minutes=minutes)
-        
-        with self.lock:
-                recent_successful = [
-                r for r in self.successful_requests 
-                if r["timestamp"] > cutoff
-        ]
-        recent_failed = [
-                r for r in self.failed_requests 
-                if r["timestamp"] > cutoff
-        ]
-        
-        total_recent = len(recent_successful) + len(recent_failed)
-        failure_rate = (len(recent_failed) / total_recent * 100) if total_recent > 0 else 0
-        
-        return {
-        "timeframe_minutes": minutes,
-        "total_requests": total_recent,
-        "successful_requests": len(recent_successful),
-        "failed_requests": len(recent_failed),
-        "failure_rate_percent": round(failure_rate, 2),
-        "timestamp": datetime.now().isoformat(),
-        }
+
 
 # Instancia global del analizador
-failure_analyzer = IntermittentFailureAnalyzer()
+analyzer = IntermittentFailureAnalyzer()
 
-# ============================================
-# ENDPOINTS DE ANÁLISIS DE FALLOS INTERMITENTES
-# ============================================
 
-@router.post("/log-successful-request")
-async def log_successful_request(
-        request_data: Dict[str, Any],
-        current_user: User = Depends(get_current_user),
+@router.get("/intermittent-failure-analysis")
+async def get_intermittent_failure_analysis(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-        """Registrar request exitoso"""
-        try:
-        failure_analyzer.log_successful_request(request_data)
+    """Obtener análisis de fallos intermitentes"""
+    try:
+        analysis = analyzer.analyze_intermittent_patterns()
+        return {
+            "status": "success",
+            "data": analysis,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error en análisis: {str(e)}")
+
+
+@router.post("/log-request")
+async def log_request(
+    request_data: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Registrar un request para análisis"""
+    try:
+        success = request_data.get("success", True)
+        analyzer.log_request(request_data, success)
         
         return {
-        "success": True,
-        "message": "Request exitoso registrado"
+            "status": "success",
+            "message": "Request registrado exitosamente",
+            "timestamp": datetime.now().isoformat()
         }
-        
-        except Exception as e:
-        logger.error(f"Error registrando request exitoso: {e}")
-        raise HTTPException(
-        status_code=500,
-        detail=f"Error interno: {str(e)}"
-        )
-
-@router.post("/log-failed-request")
-async def log_failed_request(
-        request_data: Dict[str, Any],
-        current_user: User = Depends(get_current_user),
-):
-        """Registrar request fallido"""
-        try:
-        failure_analyzer.log_failed_request(request_data)
-        
-        return {
-        "success": True,
-        "message": "Request fallido registrado"
-        }
-        
-        except Exception as e:
-        logger.error(f"Error registrando request fallido: {e}")
-        raise HTTPException(
-        status_code=500,
-        detail=f"Error interno: {str(e)}"
-        )
-
-@router.get("/analyze-patterns")
-async def analyze_intermittent_patterns(
-        current_user: User = Depends(get_current_user),
-):
-        """Analizar patrones intermitentes"""
-        try:
-        analysis = failure_analyzer.analyze_intermittent_patterns()
-        
-        return {
-        "success": True,
-        "analysis": analysis
-        }
-        
-        except Exception as e:
-        logger.error(f"Error analizando patrones: {e}")
-        raise HTTPException(
-        status_code=500,
-        detail=f"Error interno: {str(e)}"
-        )
-
-@router.get("/failure-rate")
-async def get_failure_rate(
-        minutes: int = 60,
-        current_user: User = Depends(get_current_user),
-):
-        """Obtener tasa de fallo por período de tiempo"""
-        try:
-        failure_rate = failure_analyzer.get_failure_rate_by_timeframe(minutes)
-        
-        return {
-        "success": True,
-        "failure_rate": failure_rate
-        }
-        
-        except Exception as e:
-        logger.error(f"Error obteniendo tasa de fallo: {e}")
-        raise HTTPException(
-        status_code=500,
-        detail=f"Error interno: {str(e)}"
-        )
-
-@router.get("/endpoint-analysis")
-async def get_endpoint_analysis(
-        current_user: User = Depends(get_current_user),
-):
-        """Obtener análisis específico por endpoint"""
-        try:
-        analysis = failure_analyzer.analyze_intermittent_patterns()
-        endpoint_analysis = analysis["patterns"].get("endpoints", {})
-        
-        return {
-        "success": True,
-        "endpoint_analysis": endpoint_analysis
-        }
-        
-        except Exception as e:
-        logger.error(f"Error obteniendo análisis de endpoints: {e}")
-        raise HTTPException(
-        status_code=500,
-        detail=f"Error interno: {str(e)}"
-        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al registrar request: {str(e)}")
