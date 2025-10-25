@@ -7,7 +7,7 @@ import logging
 import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 
 from app.models.cliente import Cliente

@@ -8,7 +8,7 @@ import io
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 import pandas as pd
 from fastapi import (

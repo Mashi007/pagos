@@ -308,31 +308,32 @@ async def exportar_excel(
             detail="openpyxl no está instalado. Ejecuta: pip install openpyxl",
         )
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
+    try:
+        wb = openpyxl.Workbook()
+        ws = wb.active
 
-    # Crear estilos
-    header_fill, header_font = _crear_estilos_excel()
+        # Crear estilos
+        header_fill, header_font = _crear_estilos_excel()
 
-    # Crear reporte según tipo
-    if tipo_reporte == "cartera":
-        _crear_reporte_cartera(ws, header_fill, header_font, db)
-    elif tipo_reporte == "pagos":
-        _crear_reporte_pagos(ws, header_fill, header_font, fecha_inicio, fecha_fin, db)
+        # Crear reporte según tipo
+        if tipo_reporte == "cartera":
+            _crear_reporte_cartera(ws, header_fill, header_font, db)
+        elif tipo_reporte == "pagos":
+            _crear_reporte_pagos(ws, header_fill, header_font, fecha_inicio, fecha_fin, db)
 
-    # Ajustar ancho de columnas
-    _ajustar_ancho_columnas(ws)
+        # Ajustar ancho de columnas
+        _ajustar_ancho_columnas(ws)
 
-    # Guardar en memoria
-    output = _guardar_excel_en_memoria(wb)
+        # Guardar en memoria
+        output = _guardar_excel_en_memoria(wb)
 
-    filename = f"reporte_{tipo_reporte}_{date.today().strftime('%Y%m%d')}.xlsx"
+        filename = f"reporte_{tipo_reporte}_{date.today().strftime('%Y%m%d')}.xlsx"
 
-    return StreamingResponse(
-        output,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
-    )
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando Excel: {str(e)}")
