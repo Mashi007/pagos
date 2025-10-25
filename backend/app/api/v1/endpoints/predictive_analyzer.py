@@ -48,7 +48,7 @@ class PredictiveAnalyzer:
             return {"trend": "insufficient_data", "slope": 0.0, "confidence": 0.0}
 
         recent_data = data_points[-window_size:]
-        older_data = data_points[-window_size * 2 : -window_size] if len(data_points) >= window_size * 2 else recent_data
+        older_data = data_points[-window_size * 2:-window_size] if len(data_points) >= window_size * 2 else recent_data
 
         recent_avg = statistics.mean(recent_data)
         older_avg = statistics.mean(older_data)

@@ -679,8 +679,8 @@ def ping_validadores():
 # ============================================
 
 
-@router.get("/configuracion")
-def obtener_configuracion_validadores(current_user: User = Depends(get_current_user)):
+# @router.get("/configuracion")
+# # def obtener_configuracion_validadores(current_user: User = Depends(get_current_user)):
     """
     ⚙️ Obtener configuración de validadores para el frontend
     """
