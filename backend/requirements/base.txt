@@ -30,6 +30,7 @@ annotated-types==0.6.0
 # SECURITY
 # ============================================
 python-jose[cryptography]==3.3.0
+PyJWT==2.8.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.1.1
 
