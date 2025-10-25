@@ -71,7 +71,8 @@ class IntermittentFailureAnalyzer:
             self.failed_requests.append(request)
 
             logger.warning(
-                f"❌ Request fallido" + f"registrado: {request['endpoint']} \
+                f"❌ Request fallido"
+                + f"registrado: {request['endpoint']} \
                 - {request['error_type']}"
             )
 

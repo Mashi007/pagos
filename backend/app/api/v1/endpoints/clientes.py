@@ -288,9 +288,8 @@ def crear_cliente(
             .first()
         )
         if cliente_existente:
-            # ✅ NUEVO: Si el usuario confirma
-            # el duplicado \
-            , actualizar el cliente existente
+            # ✅ NUEVO: Si el usuario confirma el duplicado,
+            # actualizar el cliente existente
             if cliente_data.confirm_duplicate:
                 logger.info(
                     f"✅ Cliente con cédula {cliente_data.cedula} "

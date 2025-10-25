@@ -237,7 +237,8 @@ class IntelligentAlertSystem:
 
         messages = {
             "high_error_rate": (
-                f"Tasa de error" + f"alta: {current_value:.1%} (umbral: \
+                f"Tasa de error"
+                + f"alta: {current_value:.1%} (umbral: \
                 {rule.threshold:.1%})"
             ),
             "slow_response_time": (

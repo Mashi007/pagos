@@ -43,7 +43,8 @@ class AmortizacionService:
             return AmortizacionService._generar_americano(request)
         else:
             raise ValueError(
-                f"Sistema de amortización" + f"no soportado: {request. \
+                f"Sistema de amortización"
+                + f"no soportado: {request. \
                 sistema_amortizacion}"
             )
 

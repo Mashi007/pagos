@@ -171,7 +171,8 @@ class NotificacionMulticanal:
                 await self._generar_reporte_diario(resultados)
 
             logger.info(
-                f"✅ Procesamiento completado:" + f"{resultados['exitosas']} \
+                f"✅ Procesamiento completado:"
+                + f"{resultados['exitosas']} \
                 exitosas, {resultados['fallidas']} fallidas"
             )
 
@@ -569,8 +570,8 @@ class NotificacionMulticanal:
                 ),
             },
             TipoNotificacionCliente.MORA_1_DIA: {
-                "asunto": f"⚠️ Tu cuota #{variables['cuota']} está" +  \
-                f"vencida - 1 día de atraso",
+                "asunto": f"⚠️ Tu cuota #{variables['cuota']} está"
+                + f"vencida - 1 día de atraso",
                 "cuerpo_html": (
                     f"""
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

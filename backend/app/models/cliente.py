@@ -29,7 +29,9 @@ class Cliente(Base):
     # Datos personales - OBLIGATORIOS
     nombres = Column(String(NAME_LENGTH), nullable=False)  # 1-2 palabras \
     máximo
-    apellidos = Column(String(NAME_LENGTH), nullable=False)  # 1-2 palabras máximo
+    apellidos = Column(
+        String(NAME_LENGTH), nullable=False
+    )  # 1-2 palabras máximo
     telefono = Column(
         String(PHONE_LENGTH), nullable=False, index=True
     )  # Validado por validadores
@@ -38,7 +40,9 @@ class Cliente(Base):
     )  # Validado por validadores
     direccion = Column(Text, nullable=False)  # Libre
     fecha_nacimiento = Column(Date, nullable=False)  # Validado por validadores
-    ocupacion = Column(String(OCCUPATION_LENGTH), nullable=False)  # Texto libre
+    ocupacion = Column(
+        String(OCCUPATION_LENGTH), nullable=False
+    )  # Texto libre
 
     # ============================================
     # DATOS DEL VEHÍCULO Y FINANCIAMIENTO - OBLIGATORIOS

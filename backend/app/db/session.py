@@ -36,8 +36,7 @@ engine = create_engine(
     connect_args={
         "connect_timeout": DEFAULT_CONNECT_TIMEOUT,  # Timeout de conexión
         "application_name": "rapicredit_backend",
-        "options": f"-c statement_timeout={DEFAULT_STATEMENT_TIMEOUT}" \
-        ,  # Timeout de queries
+        "options": f"-c statement_timeout={DEFAULT_STATEMENT_TIMEOUT}",  # Timeout de queries
     },
 )
 

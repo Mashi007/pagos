@@ -91,8 +91,9 @@ def log_login_attempt(
     )
 
 
-def log_password_change(user_email: str, user_id: int, ip_address: str \
-, success: bool):
+def log_password_change(
+    user_email: str, user_id: int, ip_address: str, success: bool
+):
     """Registra un cambio de contraseña"""
     log_security_event(
         event_type=SecurityEventType.PASSWORD_CHANGE,

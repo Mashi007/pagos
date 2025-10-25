@@ -65,7 +65,8 @@ class AuditLogger:
         # Log específico para errores 401
         if response.status_code == 401:
             logger.warning(
-                f"🔒 401 Unauthorized -" + f"{request.method} {request.url} \
+                f"🔒 401 Unauthorized -"
+                + f"{request.method} {request.url} \
                 - Error: {error}"
             )
 

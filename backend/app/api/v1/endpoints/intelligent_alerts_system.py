@@ -231,7 +231,8 @@ class IntelligentAlertSystem:
     ) -> str:
         """Generar mensaje de alerta"""
         messages = {
-            AlertType.TOKEN_EXPIRY: f"Token expirando en" + f"menos de \
+            AlertType.TOKEN_EXPIRY: f"Token expirando en"
+            + f"menos de \
             {rule['threshold']} minutos",
             AlertType.AUTH_FAILURE: (
                 f"Más de {rule['threshold']} fallos de autenticación en los últimos minutos"

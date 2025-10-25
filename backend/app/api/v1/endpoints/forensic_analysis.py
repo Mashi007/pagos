@@ -239,7 +239,8 @@ class ForensicTraceSystem:
         data = event.get("data", {})
 
         summaries = {
-            "token_received": f"Token recibido:" + f"{data.get('token_length' \
+            "token_received": f"Token recibido:"
+            + f"{data.get('token_length' \
             , 'unknown')} chars",
             "token_validation": f"Validación token: {data.get('status' \
             , 'unknown')}",

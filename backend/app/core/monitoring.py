@@ -333,7 +333,9 @@ def track_bulk_migration(
     track_business_metrics(
         "bulk_migration_successful", successful, {"type": migration_type}
     )
-    track_business_metrics("bulk_migration_failed", failed, {"type": migration_type})
+    track_business_metrics(
+        "bulk_migration_failed", failed, {"type": migration_type}
+    )
     track_business_metrics(
         "bulk_migration_warnings", warnings, {"type": migration_type}
     )
@@ -355,7 +357,9 @@ class track_operation:
         self.context = kwargs
 
     def __enter__(self):
-        logging.info(f"Iniciando operación: {self.operation_name}", extra=self.context)
+        logging.info(
+            f"Iniciando operación: {self.operation_name}", extra=self.context
+        )
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):

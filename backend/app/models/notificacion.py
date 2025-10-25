@@ -152,8 +152,11 @@ class Notificacion(Base):
     # COMENTADO: Tabla notificaciones vacía
 
     def __repr__(self):
-        return f"<Notificacion {self.tipo.value} -" + f"{self.categoria.value} \
+        return (
+            f"<Notificacion {self.tipo.value} -"
+            + f"{self.categoria.value} \
         - {self.estado.value}>"
+        )
 
     @property
     def esta_pendiente(self) -> bool:

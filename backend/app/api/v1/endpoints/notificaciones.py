@@ -117,7 +117,8 @@ async def enviar_notificacion(
         )
 
     logger.info(
-        f"Notificación {nueva_notif.id} programada" + f"para envío por \
+        f"Notificación {nueva_notif.id} programada"
+        + f"para envío por \
         {notificacion.canal}"
     )
     return nueva_notif
