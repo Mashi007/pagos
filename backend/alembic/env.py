@@ -17,7 +17,7 @@ def get_url() -> str:
     """
     Obtiene DATABASE_URL con normalización y reintentos.
 
-    Normaliza automáticamente postgres:// a postgresql:// para 
+    Normaliza automáticamente postgres:// a postgresql:// para
     compatibilidad con SQLAlchemy 1.4+.
 
     Returns:
@@ -30,7 +30,8 @@ def get_url() -> str:
         database_url = os.environ.get("DATABASE_URL")
 
         if database_url:
-            # Normalizar: Railway puede usar postgres://, SQLAlchemy necesita postgresql://
+            # Normalizar: Railway puede usar postgres://, SQLAlchemy necesita
+            # postgresql://
             if database_url.startswith("postgres://"):
                 database_url = database_url.replace("postgres://", "postgresql://", 1)
 
@@ -50,23 +51,29 @@ def get_url() -> str:
 
     found_vars = False
     for key in sorted(os.environ.keys()):
-        if any(term in key.upper() for term in ["DATA", "POSTGRES", "DB", "SQL"]):
+        terms = ["DATA", "POSTGRES", "DB", "SQL"]
+        if any(term in key.upper() for term in terms):
             # Enmascarar valores sensibles
             value = os.environ[key]
-            masked = f"{value[:MASK_PREFIX_LENGTH]}...{value[-MASK_SUFFIX_LENGTH:]}" if len(value) > MASK_THRESHOLD else "***"
+            if len(value) > MASK_THRESHOLD:
+                masked = (
+                    f"{value[:MASK_PREFIX_LENGTH]}..." f"{value[-MASK_SUFFIX_LENGTH:]}"
+                )
+            else:
+                masked = "***"
             logger.info(f"  {key}: {masked}")
             found_vars = True
 
     if not found_vars:
-        logger.warning("No se encontraron variables de entorno relacionadas con base de datos")
+        logger.warning("No se encontraron variables de entorno relacionadas con BD")
 
     raise ValueError(
         "DATABASE_URL no está configurada después de múltiples reintentos.\n\n"
         "SOLUCIÓN EN RAILWAY:\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "1. Verifica que el servicio PostgreSQL esté vinculado al proyecto\n"
-        "2. Ve a: Settings → Variables\n"
-        "3. DATABASE_URL debe aparecer automáticamente al vincular PostgreSQL\n"
+        "2. Ve a: Settings -> Variables\n"
+        "3. DATABASE_URL aparece auto al vincular PostgreSQL\n"
         "4. Si falta, regenera la vinculación desde el panel de PostgreSQL\n\n"
         "DESARROLLO LOCAL:\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -84,6 +91,7 @@ from logging.config import fileConfig
 
 # Importar modelos para que Alembic los detecte
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.db.session import Base
@@ -95,7 +103,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Configurar URL de base de datos
-config.set_main_option('sqlalchemy.url', get_url())
+config.set_main_option("sqlalchemy.url", get_url())
 
 target_metadata = Base.metadata
 
@@ -123,9 +131,7 @@ def run_migrations_online():
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

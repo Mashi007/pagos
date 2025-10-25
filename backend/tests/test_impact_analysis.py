@@ -2,6 +2,7 @@
 Tests de Análisis de Impacto en Performance
 Implementa testing con métricas de impacto en recursos del sistema
 """
+
 import pytest
 import time
 import psutil
@@ -15,6 +16,7 @@ TEST_TIMEOUT_SECONDS = 30
 MAX_MEMORY_USAGE_MB = 100
 MAX_CPU_USAGE_PERCENT = 50
 MAX_RESPONSE_TIME_MS = 1000
+
 
 class PerformanceImpactAnalyzer:
     """
@@ -33,7 +35,7 @@ class PerformanceImpactAnalyzer:
             "cpu_percent": psutil.cpu_percent(),
             "memory_percent": psutil.virtual_memory().percent,
             "memory_available_mb": psutil.virtual_memory().available // (1024 * 1024),
-            "process_count": len(psutil.pids())
+            "process_count": len(psutil.pids()),
         }
 
     def end_measurement(self):
@@ -45,14 +47,19 @@ class PerformanceImpactAnalyzer:
             "cpu_percent": psutil.cpu_percent(),
             "memory_percent": psutil.virtual_memory().percent,
             "memory_available_mb": psutil.virtual_memory().available // (1024 * 1024),
-            "process_count": len(psutil.pids())
+            "process_count": len(psutil.pids()),
         }
 
     def get_impact_analysis(self) -> dict:
         """Obtener análisis de impacto en performance"""
         cpu_delta = self.end_metrics["cpu_percent"] - self.start_metrics["cpu_percent"]
-        memory_delta = self.end_metrics["memory_percent"] - self.start_metrics["memory_percent"]
-        memory_mb_delta = self.start_metrics["memory_available_mb"] - self.end_metrics["memory_available_mb"]
+        memory_delta = (
+            self.end_metrics["memory_percent"] - self.start_metrics["memory_percent"]
+        )
+        memory_mb_delta = (
+            self.start_metrics["memory_available_mb"]
+            - self.end_metrics["memory_available_mb"]
+        )
 
         return {
             "test_duration_seconds": self.test_duration,
@@ -60,22 +67,34 @@ class PerformanceImpactAnalyzer:
                 "start_percent": self.start_metrics["cpu_percent"],
                 "end_percent": self.end_metrics["cpu_percent"],
                 "delta_percent": cpu_delta,
-                "impact_level": "LOW" if abs(cpu_delta) < 5 else "MEDIUM" if abs(cpu_delta) < 15 else "HIGH"
+                "impact_level": (
+                    "LOW"
+                    if abs(cpu_delta) < 5
+                    else "MEDIUM" if abs(cpu_delta) < 15 else "HIGH"
+                ),
             },
             "memory_impact": {
                 "start_percent": self.start_metrics["memory_percent"],
                 "end_percent": self.end_metrics["memory_percent"],
                 "delta_percent": memory_delta,
                 "memory_used_mb": memory_mb_delta,
-                "impact_level": "LOW" if memory_mb_delta < 10 else "MEDIUM" if memory_mb_delta < 50 else "HIGH"
+                "impact_level": (
+                    "LOW"
+                    if memory_mb_delta < 10
+                    else "MEDIUM" if memory_mb_delta < 50 else "HIGH"
+                ),
             },
-            "performance_score": self._calculate_performance_score()
+            "performance_score": self._calculate_performance_score(),
         }
 
     def _calculate_performance_score(self) -> float:
         """Calcular score de performance (0-100)"""
-        cpu_impact = abs(self.end_metrics["cpu_percent"] - self.start_metrics["cpu_percent"])
-        memory_impact = abs(self.end_metrics["memory_percent"] - self.start_metrics["memory_percent"])
+        cpu_impact = abs(
+            self.end_metrics["cpu_percent"] - self.start_metrics["cpu_percent"]
+        )
+        memory_impact = abs(
+            self.end_metrics["memory_percent"] - self.start_metrics["memory_percent"]
+        )
 
         # Score basado en impacto mínimo
         score = 100 - (cpu_impact * 2) - (memory_impact * 1.5)
@@ -92,6 +111,7 @@ def performance_analyzer():
 def test_client():
     """Fixture para cliente de testing"""
     from app.main import app
+
     return TestClient(app)
 
 
@@ -117,7 +137,9 @@ class TestHealthCheckImpact:
         assert impact_analysis["memory_impact"]["impact_level"] in ["LOW", "MEDIUM"]
         assert impact_analysis["performance_score"] > 80  # Score mínimo aceptable
 
-    def test_detailed_health_check_performance_impact(self, test_client, performance_analyzer):
+    def test_detailed_health_check_performance_impact(
+        self, test_client, performance_analyzer
+    ):
         """Test de impacto en performance del health check detallado"""
         performance_analyzer.start_measurement()
 
@@ -133,7 +155,9 @@ class TestHealthCheckImpact:
         assert "system_metrics" in data
 
         # Verificaciones de impacto
-        assert impact_analysis["test_duration_seconds"] < 2.0  # Debe ser razonablemente rápido
+        assert (
+            impact_analysis["test_duration_seconds"] < 2.0
+        )  # Debe ser razonablemente rápido
         assert impact_analysis["performance_score"] > 70  # Score mínimo aceptable
 
     def test_health_check_memory_leak(self, test_client, performance_analyzer):
@@ -155,7 +179,9 @@ class TestHealthCheckImpact:
 class TestEndpointPerformanceImpact:
     """Tests de impacto en performance de endpoints"""
 
-    def test_client_endpoint_performance_impact(self, test_client, performance_analyzer):
+    def test_client_endpoint_performance_impact(
+        self, test_client, performance_analyzer
+    ):
         """Test de impacto en performance del endpoint de clientes"""
         performance_analyzer.start_measurement()
 
@@ -174,10 +200,7 @@ class TestEndpointPerformanceImpact:
         performance_analyzer.start_measurement()
 
         # Simular request de login
-        login_data = {
-            "email": "test@example.com",
-            "password": "testpassword"
-        }
+        login_data = {"email": "test@example.com", "password": "testpassword"}
         response = test_client.post("/api/v1/auth/login", json=login_data)
 
         performance_analyzer.end_measurement()
@@ -209,7 +232,9 @@ class TestDatabaseImpact:
 class TestConcurrentLoadImpact:
     """Tests de impacto en performance bajo carga concurrente"""
 
-    def test_concurrent_health_checks_performance(self, test_client, performance_analyzer):
+    def test_concurrent_health_checks_performance(
+        self, test_client, performance_analyzer
+    ):
         """Test de impacto en performance con múltiples health checks concurrentes"""
         import threading
         import concurrent.futures
@@ -222,7 +247,9 @@ class TestConcurrentLoadImpact:
         # Ejecutar 5 requests concurrentes
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             futures = [executor.submit(make_request) for _ in range(5)]
-            responses = [future.result() for future in concurrent.futures.as_completed(futures)]
+            responses = [
+                future.result() for future in concurrent.futures.as_completed(futures)
+            ]
 
         performance_analyzer.end_measurement()
         impact_analysis = performance_analyzer.get_impact_analysis()
@@ -232,7 +259,9 @@ class TestConcurrentLoadImpact:
             assert response.status_code == 200
 
         # Verificaciones de impacto
-        assert impact_analysis["test_duration_seconds"] < 3.0  # Debe manejar concurrencia
+        assert (
+            impact_analysis["test_duration_seconds"] < 3.0
+        )  # Debe manejar concurrencia
         assert impact_analysis["performance_score"] > 60  # Score mínimo aceptable
 
 
@@ -282,7 +311,9 @@ class TestPerformanceBenchmarks:
         assert avg_time < 500  # Promedio menor a 500ms
         assert max_time < 1000  # Máximo menor a 1000ms
 
-        print(f"Detailed health check benchmark - Avg: {avg_time:.2f}ms, Max: {max_time:.2f}ms")
+        print(
+            f"Detailed health check benchmark - Avg: {avg_time:.2f}ms, Max: {max_time:.2f}ms"
+        )
 
 
 if __name__ == "__main__":

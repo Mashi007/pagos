@@ -12,11 +12,14 @@ from datetime import datetime
 MODELO_VEHICULO_LENGTH = 100
 
 # Configurar logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 # Agregar el directorio del proyecto al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 def generar_migracion():
     """Generar migración para agregar columna modelo_vehiculo"""
@@ -68,7 +71,7 @@ def downgrade():
 '''
 
     try:
-        with open(filename, 'w', encoding='utf-8') as f:
+        with open(filename, "w", encoding="utf-8") as f:
             f.write(migracion_content)
 
         logger.info(f"Migración generada: {filename}")
@@ -78,6 +81,7 @@ def downgrade():
 
     except Exception as e:
         logger.error(f"Error generando migración: {e}")
+
 
 if __name__ == "__main__":
     generar_migracion()

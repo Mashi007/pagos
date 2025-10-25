@@ -17,8 +17,11 @@ REQUEST_TIMEOUT = 15
 SEPARATOR_LENGTH = 50
 
 # Configurar logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
+
 
 class VerificarAutenticacionFrontendAnalistas:
     def __init__(self):
@@ -27,7 +30,7 @@ class VerificarAutenticacionFrontendAnalistas:
         self.credentials = {
             "email": "itmaster@rapicreditca.com",
             "password": "R@pi_2025**",
-            "remember": True
+            "remember": True,
         }
 
     def hacer_login(self) -> Dict[str, Any]:
@@ -39,23 +42,25 @@ class VerificarAutenticacionFrontendAnalistas:
             response = requests.post(
                 f"{self.backend_url}/api/v1/auth/login",
                 json=self.credentials,
-                headers={'Content-Type': 'application/json'},
-                timeout=REQUEST_TIMEOUT
+                headers={"Content-Type": "application/json"},
+                timeout=REQUEST_TIMEOUT,
             )
 
             if response.status_code == 200:
                 data = response.json()
-                access_token = data.get('access_token')
-                user_info = data.get('user', {})
+                access_token = data.get("access_token")
+                user_info = data.get("user", {})
 
                 logger.info("   ✅ Login exitoso")
                 logger.info(f"   📊 Usuario: {user_info.get('email', 'N/A')}")
-                logger.info(f"   📊 Rol: {'Administrador' if user_info.get('is_admin') else 'Usuario'}")
+                logger.info(
+                    f"   📊 Rol: {'Administrador' if user_info.get('is_admin') else 'Usuario'}"
+                )
 
                 return {
                     "status": "success",
                     "access_token": access_token,
-                    "user": user_info
+                    "user": user_info,
                 }
             else:
                 logger.error(f"   ❌ Login falló: {response.status_code}")
@@ -72,34 +77,36 @@ class VerificarAutenticacionFrontendAnalistas:
         logger.info("-" * 50)
 
         headers = {
-            'Authorization': f'Bearer {access_token}',
-            'Content-Type': 'application/json'
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
         }
 
         try:
             logger.info("   🔍 Probando: /api/v1/analistas/")
             response = requests.get(
-                f"{self.backend_url}/api/v1/analistas/",
-                headers=headers,
-                timeout=15
+                f"{self.backend_url}/api/v1/analistas/", headers=headers, timeout=15
             )
 
             logger.info(f"   📊 Status Code: {response.status_code}")
 
             if response.status_code == 200:
                 data = response.json()
-                logger.info("   ✅ ÉXITO: Endpoint principal funcionando con autenticación")
+                logger.info(
+                    "   ✅ ÉXITO: Endpoint principal funcionando con autenticación"
+                )
                 logger.info(f"   📊 Total analistas: {data.get('total', 0)}")
                 logger.info(f"   📊 Items: {len(data.get('items', []))}")
 
-                if data.get('items'):
-                    primer_analista = data['items'][0]
-                    logger.info(f"   📊 Primer analista: {primer_analista.get('nombre', 'N/A')}")
+                if data.get("items"):
+                    primer_analista = data["items"][0]
+                    logger.info(
+                        f"   📊 Primer analista: {primer_analista.get('nombre', 'N/A')}"
+                    )
 
                 return {
                     "status": "success",
                     "status_code": response.status_code,
-                    "data": data
+                    "data": data,
                 }
             else:
                 logger.error(f"   ❌ FALLO: Endpoint principal")
@@ -107,15 +114,12 @@ class VerificarAutenticacionFrontendAnalistas:
                 return {
                     "status": "error",
                     "status_code": response.status_code,
-                    "error": response.text[:200]
+                    "error": response.text[:200],
                 }
 
         except Exception as e:
             logger.error(f"   ❌ ERROR: Endpoint principal - {e}")
-            return {
-                "status": "error",
-                "error": str(e)
-            }
+            return {"status": "error", "error": str(e)}
 
     def probar_endpoint_sin_auth(self) -> Dict[str, Any]:
         """Probar endpoint principal analistas sin autenticación"""
@@ -124,10 +128,7 @@ class VerificarAutenticacionFrontendAnalistas:
 
         try:
             logger.info("   🔍 Probando: /api/v1/analistas/ (sin auth)")
-            response = requests.get(
-                f"{self.backend_url}/api/v1/analistas/",
-                timeout=15
-            )
+            response = requests.get(f"{self.backend_url}/api/v1/analistas/", timeout=15)
 
             logger.info(f"   📊 Status Code: {response.status_code}")
 
@@ -137,7 +138,7 @@ class VerificarAutenticacionFrontendAnalistas:
                 return {
                     "status": "expected",
                     "status_code": response.status_code,
-                    "message": "Endpoint requiere autenticación"
+                    "message": "Endpoint requiere autenticación",
                 }
             elif response.status_code == 200:
                 logger.error("   ❌ INESPERADO: Endpoint funciona sin autenticación")
@@ -145,7 +146,7 @@ class VerificarAutenticacionFrontendAnalistas:
                 return {
                     "status": "unexpected",
                     "status_code": response.status_code,
-                    "message": "Endpoint funciona sin autenticación"
+                    "message": "Endpoint funciona sin autenticación",
                 }
             else:
                 logger.error(f"   ❌ FALLO: Status inesperado")
@@ -153,15 +154,12 @@ class VerificarAutenticacionFrontendAnalistas:
                 return {
                     "status": "error",
                     "status_code": response.status_code,
-                    "error": response.text[:200]
+                    "error": response.text[:200],
                 }
 
         except Exception as e:
             logger.error(f"   ❌ ERROR: Endpoint sin auth - {e}")
-            return {
-                "status": "error",
-                "error": str(e)
-            }
+            return {"status": "error", "error": str(e)}
 
     def verificar_frontend_url(self) -> Dict[str, Any]:
         """Verificar que el frontend esté disponible"""
@@ -170,39 +168,29 @@ class VerificarAutenticacionFrontendAnalistas:
 
         try:
             logger.info("   🔍 Probando: Frontend URL")
-            response = requests.get(
-                f"{self.frontend_url}",
-                timeout=15
-            )
+            response = requests.get(f"{self.frontend_url}", timeout=15)
 
             logger.info(f"   📊 Status Code: {response.status_code}")
 
             if response.status_code == 200:
                 logger.info("   ✅ Frontend disponible")
-                return {
-                    "status": "success",
-                    "status_code": response.status_code
-                }
+                return {"status": "success", "status_code": response.status_code}
             else:
                 logger.error(f"   ❌ Frontend no disponible: {response.status_code}")
-                return {
-                    "status": "error",
-                    "status_code": response.status_code
-                }
+                return {"status": "error", "status_code": response.status_code}
 
         except Exception as e:
             logger.error(f"   ❌ Error verificando frontend: {e}")
-            return {
-                "status": "error",
-                "error": str(e)
-            }
+            return {"status": "error", "error": str(e)}
 
     def ejecutar_verificacion_autenticacion_frontend(self):
         """Ejecutar verificación completa de autenticación frontend"""
         logger.info("🔍 VERIFICACIÓN DE AUTENTICACIÓN EN FRONTEND PARA ANALISTAS")
         logger.info("=" * 80)
         logger.info(f"📅 Fecha y hora: {datetime.now()}")
-        logger.info("🎯 Objetivo: Verificar que el frontend esté enviando autenticación correctamente")
+        logger.info(
+            "🎯 Objetivo: Verificar que el frontend esté enviando autenticación correctamente"
+        )
         logger.info("=" * 80)
 
         resultados = {}
@@ -245,8 +233,12 @@ class VerificarAutenticacionFrontendAnalistas:
             logger.info("🎉 AUTENTICACIÓN FUNCIONANDO CORRECTAMENTE")
             logger.info("   ✅ Endpoint requiere autenticación (403 sin auth)")
             logger.info("   ✅ Endpoint funciona con autenticación (200 con auth)")
-            logger.info("   🎯 El problema está en el frontend - no está enviando autenticación")
-            logger.info("   💡 SOLUCIÓN: Verificar que el frontend esté enviando el token correctamente")
+            logger.info(
+                "   🎯 El problema está en el frontend - no está enviando autenticación"
+            )
+            logger.info(
+                "   💡 SOLUCIÓN: Verificar que el frontend esté enviando el token correctamente"
+            )
         elif sin_auth["status"] == "unexpected":
             logger.error("❌ PROBLEMA DE SEGURIDAD")
             logger.error("   📊 Endpoint funciona sin autenticación (no debería)")
@@ -259,9 +251,11 @@ class VerificarAutenticacionFrontendAnalistas:
 
         return resultados
 
+
 def main():
     verificador = VerificarAutenticacionFrontendAnalistas()
     return verificador.ejecutar_verificacion_autenticacion_frontend()
+
 
 if __name__ == "__main__":
     main()

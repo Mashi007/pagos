@@ -2,6 +2,7 @@
 Pruebas Unitarias - Validadores
 Testing de la lógica de validación del sistema
 """
+
 import pytest
 from datetime import date, datetime
 from decimal import Decimal
@@ -15,7 +16,7 @@ from app.services.validators_service import (
     ValidadorEmail,
     ValidadorEdad,
     ValidadorCoherenciaFinanciera,
-    ValidadorDuplicados
+    ValidadorDuplicados,
 )
 
 
@@ -347,7 +348,7 @@ class TestValidadorCoherenciaFinanciera:
             "cuota_inicial": 5000,
             "monto_financiado": 45000,
             "numero_amortizaciones": 24,
-            "monto_cuota": 2000
+            "monto_cuota": 2000,
         }
         resultado = validador.validar(datos)
 
@@ -361,7 +362,7 @@ class TestValidadorCoherenciaFinanciera:
             "cuota_inicial": 5000,
             "monto_financiado": 60000,  # Mayor que monto_total - cuota_inicial
             "numero_amortizaciones": 24,
-            "monto_cuota": 2000
+            "monto_cuota": 2000,
         }
         resultado = validador.validar(datos)
 
@@ -376,7 +377,7 @@ class TestValidadorCoherenciaFinanciera:
             "cuota_inicial": 5000,
             "monto_financiado": 45000,
             "numero_amortizaciones": 24,
-            "monto_cuota": 1000  # Muy bajo para el monto financiado
+            "monto_cuota": 1000,  # Muy bajo para el monto financiado
         }
         resultado = validador.validar(datos)
 
@@ -392,7 +393,7 @@ class TestValidadorDuplicados:
         validador = ValidadorDuplicados()
         datos_existentes = [
             {"cedula": "V12345678", "email": "test@example.com"},
-            {"cedula": "V87654321", "email": "other@example.com"}
+            {"cedula": "V87654321", "email": "other@example.com"},
         ]
         datos_nuevos = {"cedula": "V12345678", "email": "new@example.com"}
 
@@ -405,9 +406,7 @@ class TestValidadorDuplicados:
     def test_sin_duplicados(self):
         """Probar sin duplicados"""
         validador = ValidadorDuplicados()
-        datos_existentes = [
-            {"cedula": "V12345678", "email": "test@example.com"}
-        ]
+        datos_existentes = [{"cedula": "V12345678", "email": "test@example.com"}]
         datos_nuevos = {"cedula": "V87654321", "email": "new@example.com"}
 
         resultado = validador.validar(datos_nuevos, datos_existentes)

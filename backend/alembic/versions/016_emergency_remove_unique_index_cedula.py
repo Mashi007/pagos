@@ -5,13 +5,14 @@ Revises: 015_remove_unique_constraint_cedula_fixed
 Create Date: 2025-01-21 02:15:00.000000
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '016_emergency_remove_unique_index_cedula'
-down_revision = '015_remove_unique_constraint_cedula_fixed'
+revision = "016_emergency_remove_unique_index_cedula"
+down_revision = "015_remove_unique_constraint_cedula_fixed"
 branch_labels = None
 depends_on = None
 
@@ -22,7 +23,9 @@ def upgrade():
     op.execute("DROP INDEX IF EXISTS ix_clientes_cedula")
 
     # Create a non-unique index for performance
-    op.execute("CREATE INDEX IF NOT EXISTS idx_clientes_cedula_performance ON clientes (cedula)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_clientes_cedula_performance ON clientes (cedula)"
+    )
 
 
 def downgrade():

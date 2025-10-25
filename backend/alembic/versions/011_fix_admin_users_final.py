@@ -13,8 +13,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '011_fix_admin_users_final'
-down_revision: Union[str, None] = '010_fix_roles_final'
+revision: str = "011_fix_admin_users_final"
+down_revision: Union[str, None] = "010_fix_roles_final"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -27,19 +27,23 @@ def upgrade() -> None:
 
     # Lista de usuarios que DEBEN ser administradores
     admin_emails = [
-        'itmaster@rapicreditca.com',
-        'admin@rapicredit.com',
-        'admin@sistema.com',
-        'daniel@rapicredit.com'
+        "itmaster@rapicreditca.com",
+        "admin@rapicredit.com",
+        "admin@sistema.com",
+        "daniel@rapicredit.com",
     ]
 
     # Marcar usuarios específicos como administradores
     for email in admin_emails:
-        result = connection.execute(sa.text(f"""
+        result = connection.execute(
+            sa.text(
+                f"""
             UPDATE usuarios 
             SET is_admin = TRUE, updated_at = NOW()
             WHERE email = '{email}' AND is_active = TRUE
-        """))
+        """
+            )
+        )
 
         if result.rowcount > 0:
             print(f"Usuario {email} marcado como administrador")
@@ -47,14 +51,18 @@ def upgrade() -> None:
             print(f"Usuario {email} no encontrado o inactivo")
 
     # Verificar que al menos un usuario sea administrador
-    admin_count = connection.execute(sa.text("SELECT COUNT(*) FROM usuarios WHERE is_admin = TRUE")).scalar()
+    admin_count = connection.execute(
+        sa.text("SELECT COUNT(*) FROM usuarios WHERE is_admin = TRUE")
+    ).scalar()
 
     if admin_count == 0:
         print("CRÍTICO: No hay administradores en el sistema")
         print("Creando usuario administrador por defecto...")
 
         # Crear usuario administrador por defecto
-        connection.execute(sa.text("""
+        connection.execute(
+            sa.text(
+                """
             INSERT INTO usuarios (
                 email, nombre, apellido, hashed_password, 
                 is_admin, is_active, created_at
@@ -71,20 +79,28 @@ def upgrade() -> None:
                 is_admin = TRUE,
                 is_active = TRUE,
                 updated_at = NOW()
-        """))
+        """
+            )
+        )
         print("Usuario administrador por defecto creado/actualizado")
 
     # Verificación final
-    final_admin_count = connection.execute(sa.text("SELECT COUNT(*) FROM usuarios WHERE is_admin = TRUE")).scalar()
+    final_admin_count = connection.execute(
+        sa.text("SELECT COUNT(*) FROM usuarios WHERE is_admin = TRUE")
+    ).scalar()
     print(f"Total de administradores en el sistema: {final_admin_count}")
 
     # Mostrar lista de administradores
-    admins = connection.execute(sa.text("""
+    admins = connection.execute(
+        sa.text(
+            """
         SELECT email, nombre, apellido, is_active 
         FROM usuarios 
         WHERE is_admin = TRUE 
         ORDER BY email
-    """)).fetchall()
+    """
+        )
+    ).fetchall()
 
     print("Lista de administradores:")
     for admin in admins:
@@ -101,18 +117,22 @@ def downgrade() -> None:
 
     # Lista de usuarios que fueron marcados como administradores
     admin_emails = [
-        'itmaster@rapicreditca.com',
-        'admin@rapicredit.com',
-        'admin@sistema.com',
-        'daniel@rapicredit.com'
+        "itmaster@rapicreditca.com",
+        "admin@rapicredit.com",
+        "admin@sistema.com",
+        "daniel@rapicredit.com",
     ]
 
     # Revertir a usuarios normales
     for email in admin_emails:
-        connection.execute(sa.text(f"""
+        connection.execute(
+            sa.text(
+                f"""
             UPDATE usuarios 
             SET is_admin = FALSE, updated_at = NOW()
             WHERE email = '{email}'
-        """))
+        """
+            )
+        )
 
     # ### end Alembic commands ###

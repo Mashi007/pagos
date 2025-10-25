@@ -2,6 +2,7 @@
 Pruebas de Integración - Endpoints
 Testing de endpoints completos del sistema
 """
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -14,7 +15,7 @@ class TestAuthEndpoints:
         """Probar login exitoso"""
         response = test_client.post(
             "/api/v1/auth/login",
-            data={"username": test_user.email, "password": "testpassword123"}
+            data={"username": test_user.email, "password": "testpassword123"},
         )
 
         assert response.status_code == 200
@@ -26,7 +27,7 @@ class TestAuthEndpoints:
         """Probar login con credenciales inválidas"""
         response = test_client.post(
             "/api/v1/auth/login",
-            data={"username": "invalid@example.com", "password": "wrongpassword"}
+            data={"username": "invalid@example.com", "password": "wrongpassword"},
         )
 
         assert response.status_code == 401
@@ -36,7 +37,7 @@ class TestAuthEndpoints:
         """Probar login con password incorrecta"""
         response = test_client.post(
             "/api/v1/auth/login",
-            data={"username": test_user.email, "password": "wrongpassword"}
+            data={"username": test_user.email, "password": "wrongpassword"},
         )
 
         assert response.status_code == 401
@@ -44,10 +45,7 @@ class TestAuthEndpoints:
 
     def test_get_current_user(self, test_client: TestClient, auth_headers):
         """Probar obtener usuario actual"""
-        response = test_client.get(
-            "/api/v1/auth/me",
-            headers=auth_headers
-        )
+        response = test_client.get("/api/v1/auth/me", headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -65,12 +63,12 @@ class TestAuthEndpoints:
 class TestClientesEndpoints:
     """Pruebas para endpoints de clientes"""
 
-    def test_crear_cliente_exitoso(self, test_client: TestClient, auth_headers, sample_cliente_data):
+    def test_crear_cliente_exitoso(
+        self, test_client: TestClient, auth_headers, sample_cliente_data
+    ):
         """Probar creación exitosa de cliente"""
         response = test_client.post(
-            "/api/v1/clientes/",
-            json=sample_cliente_data,
-            headers=auth_headers
+            "/api/v1/clientes/", json=sample_cliente_data, headers=auth_headers
         )
 
         assert response.status_code == 201
@@ -79,21 +77,19 @@ class TestClientesEndpoints:
         assert data["nombres"] == sample_cliente_data["nombres"]
         assert data["apellidos"] == sample_cliente_data["apellidos"]
 
-    def test_crear_cliente_cedula_duplicada(self, test_client: TestClient, auth_headers, sample_cliente_data, db_session):
+    def test_crear_cliente_cedula_duplicada(
+        self, test_client: TestClient, auth_headers, sample_cliente_data, db_session
+    ):
         """Probar creación de cliente con cédula duplicada"""
         # Crear primer cliente
         response1 = test_client.post(
-            "/api/v1/clientes/",
-            json=sample_cliente_data,
-            headers=auth_headers
+            "/api/v1/clientes/", json=sample_cliente_data, headers=auth_headers
         )
         assert response1.status_code == 201
 
         # Intentar crear segundo cliente con misma cédula
         response2 = test_client.post(
-            "/api/v1/clientes/",
-            json=sample_cliente_data,
-            headers=auth_headers
+            "/api/v1/clientes/", json=sample_cliente_data, headers=auth_headers
         )
 
         assert response2.status_code == 503
@@ -101,10 +97,7 @@ class TestClientesEndpoints:
 
     def test_listar_clientes(self, test_client: TestClient, auth_headers):
         """Probar listado de clientes"""
-        response = test_client.get(
-            "/api/v1/clientes/",
-            headers=auth_headers
-        )
+        response = test_client.get("/api/v1/clientes/", headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -113,20 +106,19 @@ class TestClientesEndpoints:
         assert "page" in data
         assert "per_page" in data
 
-    def test_obtener_cliente_por_id(self, test_client: TestClient, auth_headers, sample_cliente_data, db_session):
+    def test_obtener_cliente_por_id(
+        self, test_client: TestClient, auth_headers, sample_cliente_data, db_session
+    ):
         """Probar obtener cliente por ID"""
         # Crear cliente primero
         create_response = test_client.post(
-            "/api/v1/clientes/",
-            json=sample_cliente_data,
-            headers=auth_headers
+            "/api/v1/clientes/", json=sample_cliente_data, headers=auth_headers
         )
         cliente_id = create_response.json()["id"]
 
         # Obtener cliente por ID
         response = test_client.get(
-            f"/api/v1/clientes/{cliente_id}",
-            headers=auth_headers
+            f"/api/v1/clientes/{cliente_id}", headers=auth_headers
         )
 
         assert response.status_code == 200
@@ -136,34 +128,28 @@ class TestClientesEndpoints:
 
     def test_obtener_cliente_no_existe(self, test_client: TestClient, auth_headers):
         """Probar obtener cliente que no existe"""
-        response = test_client.get(
-            "/api/v1/clientes/99999",
-            headers=auth_headers
-        )
+        response = test_client.get("/api/v1/clientes/99999", headers=auth_headers)
 
         assert response.status_code == 404
         assert "no encontrado" in response.json()["detail"].lower()
 
-    def test_actualizar_cliente(self, test_client: TestClient, auth_headers, sample_cliente_data, db_session):
+    def test_actualizar_cliente(
+        self, test_client: TestClient, auth_headers, sample_cliente_data, db_session
+    ):
         """Probar actualización de cliente"""
         # Crear cliente primero
         create_response = test_client.post(
-            "/api/v1/clientes/",
-            json=sample_cliente_data,
-            headers=auth_headers
+            "/api/v1/clientes/", json=sample_cliente_data, headers=auth_headers
         )
         cliente_id = create_response.json()["id"]
 
         # Actualizar cliente
-        datos_actualizacion = {
-            "nombres": "Juan Carlos",
-            "apellidos": "Pérez González"
-        }
+        datos_actualizacion = {"nombres": "Juan Carlos", "apellidos": "Pérez González"}
 
         response = test_client.put(
             f"/api/v1/clientes/{cliente_id}",
             json=datos_actualizacion,
-            headers=auth_headers
+            headers=auth_headers,
         )
 
         assert response.status_code == 200
@@ -171,20 +157,19 @@ class TestClientesEndpoints:
         assert data["nombres"] == "Juan Carlos"
         assert data["apellidos"] == "Pérez González"
 
-    def test_eliminar_cliente(self, test_client: TestClient, auth_headers, sample_cliente_data, db_session):
+    def test_eliminar_cliente(
+        self, test_client: TestClient, auth_headers, sample_cliente_data, db_session
+    ):
         """Probar eliminación de cliente"""
         # Crear cliente primero
         create_response = test_client.post(
-            "/api/v1/clientes/",
-            json=sample_cliente_data,
-            headers=auth_headers
+            "/api/v1/clientes/", json=sample_cliente_data, headers=auth_headers
         )
         cliente_id = create_response.json()["id"]
 
         # Eliminar cliente
         response = test_client.delete(
-            f"/api/v1/clientes/{cliente_id}",
-            headers=auth_headers
+            f"/api/v1/clientes/{cliente_id}", headers=auth_headers
         )
 
         assert response.status_code == 200
@@ -277,10 +262,7 @@ class TestCargaMasivaEndpoints:
         data = {"tipo_carga": "clientes"}
 
         response = test_client.post(
-            "/api/v1/carga-masiva/upload",
-            files=files,
-            data=data,
-            headers=auth_headers
+            "/api/v1/carga-masiva/upload", files=files, data=data, headers=auth_headers
         )
 
         assert response.status_code == 400
@@ -291,23 +273,24 @@ class TestCargaMasivaEndpoints:
         data = {"tipo_carga": "clientes"}
 
         response = test_client.post(
-            "/api/v1/carga-masiva/upload",
-            data=data,
-            headers=auth_headers
+            "/api/v1/carga-masiva/upload", data=data, headers=auth_headers
         )
 
         assert response.status_code == 422  # Validation error
 
     def test_upload_tipo_carga_invalido(self, test_client: TestClient, auth_headers):
         """Probar upload con tipo de carga inválido"""
-        files = {"archivo": ("test.xlsx", b"test content", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+        files = {
+            "archivo": (
+                "test.xlsx",
+                b"test content",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        }
         data = {"tipo_carga": "invalid_type"}
 
         response = test_client.post(
-            "/api/v1/carga-masiva/upload",
-            files=files,
-            data=data,
-            headers=auth_headers
+            "/api/v1/carga-masiva/upload", files=files, data=data, headers=auth_headers
         )
 
         assert response.status_code == 400
@@ -319,10 +302,7 @@ class TestConcesionariosEndpoints:
 
     def test_listar_concesionarios(self, test_client: TestClient, auth_headers):
         """Probar listado de concesionarios"""
-        response = test_client.get(
-            "/api/v1/concesionarios/",
-            headers=auth_headers
-        )
+        response = test_client.get("/api/v1/concesionarios/", headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -336,13 +316,11 @@ class TestConcesionariosEndpoints:
             "direccion": "Caracas, Venezuela",
             "telefono": "+58412123456",
             "email": "test@concesionario.com",
-            "activo": True
+            "activo": True,
         }
 
         response = test_client.post(
-            "/api/v1/concesionarios/",
-            json=datos_concesionario,
-            headers=auth_headers
+            "/api/v1/concesionarios/", json=datos_concesionario, headers=auth_headers
         )
 
         assert response.status_code == 201
@@ -356,10 +334,7 @@ class TestAnalistasEndpoints:
 
     def test_listar_analistas(self, test_client: TestClient, auth_headers):
         """Probar listado de analistas"""
-        response = test_client.get(
-            "/api/v1/analistas/",
-            headers=auth_headers
-        )
+        response = test_client.get("/api/v1/analistas/", headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -372,13 +347,11 @@ class TestAnalistasEndpoints:
             "nombre": "Analista Test",
             "email": "analista@test.com",
             "telefono": "+58412123456",
-            "activo": True
+            "activo": True,
         }
 
         response = test_client.post(
-            "/api/v1/analistas/",
-            json=datos_analista,
-            headers=auth_headers
+            "/api/v1/analistas/", json=datos_analista, headers=auth_headers
         )
 
         assert response.status_code == 201

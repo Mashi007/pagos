@@ -15,10 +15,13 @@ TOKEN_PREFIX_LENGTH = 20
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 BASE_URL = os.getenv("FRONTEND_URL", "https://pagos-f2qf.onrender.com")
+
 
 def probar_credenciales_admin():
     """Probar diferentes credenciales de administrador"""
@@ -40,18 +43,22 @@ def probar_credenciales_admin():
     for i, creds in enumerate(credenciales_posibles, 1):
         logger.info(f"📊 Intento {i}: {creds['email']} / {creds['password']}")
         try:
-            response = requests.post(f"{BASE_URL}/api/v1/auth/login", 
-                                   json={**creds, "remember": True}, 
-                                   timeout=REQUEST_TIMEOUT)
+            response = requests.post(
+                f"{BASE_URL}/api/v1/auth/login",
+                json={**creds, "remember": True},
+                timeout=REQUEST_TIMEOUT,
+            )
             logger.info(f"   📊 Status Code: {response.status_code}")
 
             if response.status_code == 200:
                 data = response.json()
                 logger.info(f"   ✅ LOGIN EXITOSO!")
                 logger.info(f"   📊 Usuario: {data['user']['email']}")
-                logger.info(f"   📊 Rol: {'Administrador' if data['user']['is_admin'] else 'Usuario'}")
+                logger.info(
+                    f"   📊 Rol: {'Administrador' if data['user']['is_admin'] else 'Usuario'}"
+                )
                 logger.info(f"   📊 Token obtenido: {data['access_token'][:20]}...")
-                return data['access_token']
+                return data["access_token"]
             else:
                 logger.info(f"   ❌ Error: {response.status_code}")
                 logger.info(f"   📊 Respuesta: {response.text}")
@@ -61,6 +68,7 @@ def probar_credenciales_admin():
 
     logger.error("❌ No se encontraron credenciales válidas")
     return None
+
 
 def probar_login_usuario_prueba():
     """Probar login con usuario prueba2@gmail.com"""
@@ -79,17 +87,23 @@ def probar_login_usuario_prueba():
     for i, creds in enumerate(credenciales_usuario, 1):
         logger.info(f"📊 Intento {i}: {creds['email']} / {creds['password']}")
         try:
-            response = requests.post(f"{BASE_URL}/api/v1/auth/login", 
-                                   json={**creds, "remember": True}, 
-                                   timeout=REQUEST_TIMEOUT)
+            response = requests.post(
+                f"{BASE_URL}/api/v1/auth/login",
+                json={**creds, "remember": True},
+                timeout=REQUEST_TIMEOUT,
+            )
             logger.info(f"   📊 Status Code: {response.status_code}")
 
             if response.status_code == 200:
                 data = response.json()
                 logger.info(f"   ✅ LOGIN EXITOSO!")
                 logger.info(f"   📊 Usuario: {data['user']['email']}")
-                logger.info(f"   📊 Rol: {'Administrador' if data['user']['is_admin'] else 'Usuario'}")
-                logger.info(f"   📊 Estado: {'Activo' if data['user']['is_active'] else 'Inactivo'}")
+                logger.info(
+                    f"   📊 Rol: {'Administrador' if data['user']['is_admin'] else 'Usuario'}"
+                )
+                logger.info(
+                    f"   📊 Estado: {'Activo' if data['user']['is_active'] else 'Inactivo'}"
+                )
                 return True
             else:
                 logger.info(f"   ❌ Error: {response.status_code}")
@@ -100,6 +114,7 @@ def probar_login_usuario_prueba():
 
     logger.error("❌ No se pudo hacer login con usuario prueba")
     return False
+
 
 def main():
     logger.info("🔍 VERIFICACIÓN DE CREDENCIALES")
@@ -126,6 +141,7 @@ def main():
         logger.info("✅ Usuario prueba puede hacer login")
     else:
         logger.error("❌ Usuario prueba no puede hacer login")
+
 
 if __name__ == "__main__":
     main()
