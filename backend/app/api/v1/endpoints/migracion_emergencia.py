@@ -1,6 +1,5 @@
-"""Endpoint de migración de emergencia"""
-Migración de emergencia para agregar columnas concesionario y analista
-""""""
+# Endpoint de migración de emergencia
+# Migración de emergencia para agregar columnas concesionario y analista
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,54 +11,49 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-async def ejecutar_migracion_emergencia
+
+@router.post("/migracion-emergencia")
+def migracion_emergencia(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """"""
-    Endpoint de emergencia para ejecutar la migración de concesionario y analista
-    """"""
+):
+    # Migración de emergencia para agregar columnas faltantes
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden ejecutar migraciones"
+        )
+    
     try:
-        logger.info(f"Ejecutando migración de emergencia - Usuario: {current_user.email}")
-
         # Verificar si las columnas ya existen
         inspector = inspect(db.bind)
-        columns = [col["name"] for col in inspector.get_columns("clientes")]
-        logger.info(f"Columnas actuales en clientes: {columns}")
-
-        # Agregar concesionario si no existe
-        if "concesionario" not in columns:
-            logger.info("Agregando columna 'concesionario'")
-            db.execute
-                    "ALTER TABLE clientes ADD COLUMN concesionario VARCHAR(100)"
-            db.execute
-                    "CREATE INDEX idx_clientes_concesionario ON clientes (concesionario)"
-            logger.info("✅ Columna 'concesionario' agregada")
-        else:
-            logger.info("ℹ️ Columna 'concesionario' ya existe")
-
-        # Agregar analista si no existe
-        if "analista" not in columns:
-            logger.info("Agregando columna 'analista'")
-            db.execute
-                text("ALTER TABLE clientes ADD COLUMN analista VARCHAR(100)")
-            db.execute
-                    "CREATE INDEX idx_clientes_analista ON clientes (analista)"
-            logger.info("✅ Columna 'analista' agregada")
-        else:
-            logger.info("ℹ️ Columna 'analista' ya existe")
-
-        db.commit()
-
-        # Verificar estructura final
-        inspector = inspect(db.bind)
-        final_columns = [
-            col["name"] for col in inspector.get_columns("clientes")
-        logger.info(f"Columnas finales en clientes: {final_columns}")
-
-        return 
-
+        columns = inspector.get_columns('clientes')
+        column_names = [col['name'] for col in columns]
+        
+        migrations_applied = []
+        
+        # Agregar columna concesionario_id si no existe
+        if 'concesionario_id' not in column_names:
+            db.execute(text("ALTER TABLE clientes ADD COLUMN concesionario_id INTEGER"))
+            db.commit()
+            migrations_applied.append("Agregada columna concesionario_id")
+        
+        # Agregar columna analista_id si no existe
+        if 'analista_id' not in column_names:
+            db.execute(text("ALTER TABLE clientes ADD COLUMN analista_id INTEGER"))
+            db.commit()
+            migrations_applied.append("Agregada columna analista_id")
+        
+        return {
+            "message": "Migración completada exitosamente",
+            "migrations_applied": migrations_applied,
+            "total_migrations": len(migrations_applied)
+        }
+        
     except Exception as e:
         db.rollback()
         logger.error(f"Error en migración de emergencia: {e}")
-        raise HTTPException
-            detail=f"Error ejecutando migración: {str(e)}"
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error en migración: {str(e)}"
+        )

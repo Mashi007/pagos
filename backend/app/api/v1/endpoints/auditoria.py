@@ -1,33 +1,25 @@
-from datetime import date
-"""Endpoints de auditoría del sistema
-""""""
-
+from datetime import date, datetime
+from typing import Optional, List
 import io
 import logging
-from typing import Optional
 
-import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import asc, desc, func
+from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.auditoria import Auditoria
 from app.models.user import User
-from app.schemas.auditoria import 
+from app.schemas.auditoria import AuditoriaResponse
 
-router = APIRouter()
 logger = logging.getLogger(__name__)
-
-# ============================================
-# CRUD DE AUDITORÍA
-# ============================================
+router = APIRouter()
 
 
-    query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
+def _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, fecha_desde, fecha_hasta):
+    # Aplicar filtros a la query de auditoría
     if usuario_email:
-        query = query.filter
-            Auditoria.usuario_email.ilike(f"%{usuario_email}%")
+        query = query.filter(Auditoria.usuario_email.ilike(f"%{usuario_email}%"))
     if modulo:
         query = query.filter(Auditoria.modulo == modulo)
     if accion:
@@ -57,171 +49,133 @@ def _aplicar_ordenamiento_auditoria(query, ordenar_por, orden):
 
 
 def _calcular_paginacion_auditoria(total, limit, skip):
-    """Calcular información de paginación"""
+    # Calcular información de paginación
     total_pages = (total + limit - 1) // limit
     current_page = (skip // limit) + 1
     return total_pages, current_page
 
-@router.get
-
-
-def listar_auditoria
-    usuario_email: Optional[str] = Query
+@router.get("/auditoria")
+def listar_auditoria(
+    usuario_email: Optional[str] = Query(None, description="Filtrar por email de usuario"),
     modulo: Optional[str] = Query(None, description="Filtrar por módulo"),
     accion: Optional[str] = Query(None, description="Filtrar por acción"),
     ordenar_por: str = Query("fecha", description="Campo para ordenar"),
     orden: str = Query("desc", description="Orden: asc o desc"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """"""
-    REFACTORIZADA)
-    """"""
+):
+    # Listar registros de auditoría con filtros y paginación
     try:
         # Construir query base
         query = db.query(Auditoria)
 
-            query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
-
-        # Contar total
-        total = query.count()
+        # Aplicar filtros
+        query = _aplicar_filtros_auditoria(
+            query, usuario_email, modulo, accion, None, None
+        )
 
         # Aplicar ordenamiento
         query = _aplicar_ordenamiento_auditoria(query, ordenar_por, orden)
 
+        # Obtener total para paginación
+        total = query.count()
+
         # Aplicar paginación
-        auditorias = query.offset(skip).limit(limit).all()
+        limit = 50
+        skip = 0
+        query = query.offset(skip).limit(limit)
 
-        # Calcular páginas
-        total_pages, current_page = _calcular_paginacion_auditoria
+        # Ejecutar query
+        registros = query.all()
 
-        return AuditoriaListResponse
+        # Calcular paginación
+        total_pages, current_page = _calcular_paginacion_auditoria(total, limit, skip)
+
+        return {
+            "data": [AuditoriaResponse.model_validate(r) for r in registros],
+            "pagination": {
+                "total": total,
+                "limit": limit,
+                "skip": skip,
+                "total_pages": total_pages,
+                "current_page": current_page,
+                "has_next": skip + limit < total,
+                "has_prev": skip > 0
+            }
+        }
+
     except Exception as e:
         logger.error(f"Error listando auditoría: {e}")
-        raise HTTPException
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno del servidor: {str(e)}"
+        )
 
-@router.get
 
-
-def obtener_estadisticas_auditoria
+@router.get("/auditoria/exportar")
+def exportar_auditoria(
+    usuario_email: Optional[str] = Query(None),
+    modulo: Optional[str] = Query(None),
+    accion: Optional[str] = Query(None),
+    fecha_desde: Optional[date] = Query(None),
+    fecha_hasta: Optional[date] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """"""
-    📊 Obtener estadísticas de auditoría
-    """"""
+):
+    # Exportar auditoría a Excel
     try:
-        # Total de acciones
-        total_acciones = db.query(Auditoria).count()
-
-        # Acciones por módulo
-        acciones_por_modulo = {}
-            db.query(Auditoria.modulo, func.count(Auditoria.id))
-            .group_by(Auditoria.modulo)
-            .all()
-            acciones_por_modulo[modulo] = count
-
-        # Acciones por usuario (top 10)
-        acciones_por_usuario = {}
-            db.query(Auditoria.usuario_email, func.count(Auditoria.id))
-            .group_by(Auditoria.usuario_email)
-            .order_by(func.count(Auditoria.id).desc())
-            .limit(10)
-            .all()
-            if email:  # Solo si tiene email
-                acciones_por_usuario[email] = count
-
-        # Acciones por período
-
-        acciones_hoy = 
-            db.query(Auditoria)
-            .filter(func.date(Auditoria.fecha) == hoy)
-            .count()
-        acciones_esta_semana = 
-            db.query(Auditoria)
-            .filter(func.date(Auditoria.fecha) >= esta_semana)
-            .count()
-        acciones_este_mes = 
-            db.query(Auditoria)
-            .filter(func.date(Auditoria.fecha) >= este_mes)
-            .count()
-
-        return AuditoriaStatsResponse
-    except Exception as e:
-        logger.error(f"Error obteniendo estadísticas: {e}")
-        raise HTTPException
-
-
-def _crear_dataframe_auditoria(auditorias):
-    data = []
-    for auditoria in auditorias:
-        data.append
-    return pd.DataFrame(data)
-
-
-def _crear_excel_auditoria(df):
-    """Crear archivo Excel en memoria"""
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, sheet_name="Auditoría", index=False)
-    output.seek(0)
-    return output
-
-@router.get("/export/excel", summary="Exportar auditoría a Excel")
-def exportar_auditoria_excel
-    modulo: Optional[str] = Query(None, description="Filtrar por módulo"),
-    accion: Optional[str] = Query(None, description="Filtrar por acción"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    """"""
-    📊 Exportar auditoría a Excel (SOLO ADMIN)
-    """"""
-    try:
-        if not current_user.is_admin:
-            raise HTTPException
-
+        # Construir query
         query = db.query(Auditoria)
+        query = _aplicar_filtros_auditoria(
             query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
+        )
+        query = query.order_by(desc(Auditoria.fecha))
 
-        auditorias = query.order_by(desc(Auditoria.fecha)).all()
-        df = _crear_dataframe_auditoria(auditorias)
+        # Obtener datos
+        registros = query.all()
 
-        # Crear Excel y generar respuesta
-        output = _crear_excel_auditoria(df)
+        # Crear archivo Excel
+        output = _crear_excel_auditoria(registros)
 
-        # Registrar la exportación
-        logger.info
-
-        return Response
+        return Response(
             content=output.getvalue(),
-            media_type="application/vnd.openxmlformats-officedocument. \
-            spreadsheetml.sheet",
-            headers=
-            },
-    except HTTPException:
-        raise
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=auditoria.xlsx"}
+        )
+
     except Exception as e:
         logger.error(f"Error exportando auditoría: {e}")
-        raise HTTPException
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno del servidor: {str(e)}"
+        )
 
-@router.get
 
+def _crear_excel_auditoria(registros):
+    # Crear archivo Excel en memoria
+    from openpyxl import Workbook
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Auditoría"
 
-def obtener_auditoria
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    """"""
-    🔍 Obtener un registro de auditoría por ID
-    """"""
-    try:
-        auditoria = 
-            db.query(Auditoria).filter(Auditoria.id == auditoria_id).first()
-        if not auditoria:
-            raise HTTPException
-        return auditoria
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error obteniendo auditoría {auditoria_id}: {e}")
-        raise HTTPException
+    # Encabezados
+    headers = ["Fecha", "Usuario", "Módulo", "Acción", "Detalles", "IP"]
+    for col, header in enumerate(headers, 1):
+        ws.cell(row=1, column=col, value=header)
 
-"""
-""""""
+    # Datos
+    for row, registro in enumerate(registros, 2):
+        ws.cell(row=row, column=1, value=registro.fecha)
+        ws.cell(row=row, column=2, value=registro.usuario_email)
+        ws.cell(row=row, column=3, value=registro.modulo)
+        ws.cell(row=row, column=4, value=registro.accion)
+        ws.cell(row=row, column=5, value=registro.detalles)
+        ws.cell(row=row, column=6, value=registro.ip_address)
+
+    # Guardar en memoria
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return output

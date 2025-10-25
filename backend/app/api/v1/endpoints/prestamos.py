@@ -1,23 +1,161 @@
 from datetime import date
-# Depends, HTTPException, Query\nfrom sqlalchemy.orm \nimport Session\nfrom app.api.deps \nimport get_current_user,
-# get_db\nfrom app.models.cliente \nimport Cliente\nfrom app.models.prestamo \nimport Prestamo\nfrom app.models.user \nimport
-# User\nfrom app.schemas.prestamo \nimport ( PrestamoCreate, PrestamoResponse, PrestamoUpdate,)# Constantes de cálculo de
-# fechasDAYS_PER_WEEK = 7DAYS_PER_QUINCENA = 15DAYS_PER_MONTH = 30router = APIRouter()\ndef calcular_proxima_fecha_pago
-# status_code=201)\ndef crear_prestamo( prestamo:\n PrestamoCreate, db:\n Session = Depends(get_db), current_user:\n User =
-# Depends(get_current_user),):\n """Crear un nuevo préstamo""" # Verificar que el cliente existe cliente = 
-# db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first() ) if not cliente:\n raise
-# HTTPException(status_code=404, detail="Cliente no encontrado") # Calcular próxima fecha de pago proxima_fecha =
-# calcular_proxima_fecha_pago( prestamo.fecha_inicio, prestamo.modalidad.value, 0 ) # ✅ CORRECCIÓN:\n usar model_dump() en
-# lugar de dict() db_prestamo = Prestamo( **prestamo.model_dump(), saldo_pendiente=prestamo.monto_total, cuotas_pagadas=0,
-# proxima_fecha_pago=proxima_fecha, ) db.add(db_prestamo) db.commit() db.refresh(db_prestamo) return
-# limit:\n int = Query(20, ge=1, le=1000), cliente_id:\n int = Query(None), estado:\n str = Query(None), db:\n Session =
-# obtener_prestamo(prestamo_id:\n int, db:\n Session = Depends(get_db)):\n """Obtener un préstamo por ID""" prestamo =
-# db.query(Prestamo).filter(Prestamo.id == prestamo_id).first() if not prestamo:\n raise HTTPException
-# detail="Préstamo no encontrado") return prestamo@router.put("/{prestamo_id}", response_model=PrestamoResponse)\ndef
-# actualizar_prestamo( prestamo_id:\n int, prestamo_data:\n PrestamoUpdate, db:\n Session = Depends(get_db),):\n
-# prestamo:\n raise HTTPException(status_code=404, detail="Préstamo no encontrado") # ✅ CORRECCIÓN:\n usar model_dump() en
-# lugar de dict() for field, value in prestamo_data.model_dump(exclude_unset=True).items():\n setattr(prestamo, field, value)
-# db.commit() db.refresh(prestamo) return prestamo# TEMPORALMENTE COMENTADO PARA EVITAR ERROR 503# @router.get("/stats")#
-# float(monto_total_prestado),# "monto_total_pendiente":\n float(monto_total_pendiente)# }# except Exception as e:\n# raise
-# HTTPException(# status_code=500, detail=f"Error:\n {str(e)}")# ENDPOINT TEMPORAL CON DATOS MOCK PARA EVITAR ERROR
-# HTTPException( status_code=500, detail=f"Error al obtener estadísticas:\n {str(e)}", )
+from typing import List, Optional
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_user, get_db
+from app.models.prestamo import Prestamo
+from app.models.user import User
+from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+
+@router.post(
+    "/",
+    response_model=PrestamoResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def crear_prestamo(
+    prestamo_data: PrestamoCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Crear nuevo préstamo
+    try:
+        nuevo_prestamo = Prestamo(**prestamo_data.model_dump())
+        nuevo_prestamo.creado_por = current_user.id
+        
+        db.add(nuevo_prestamo)
+        db.commit()
+        db.refresh(nuevo_prestamo)
+        
+        return nuevo_prestamo
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creando préstamo: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno del servidor: {str(e)}"
+        )
+
+
+@router.get("/", response_model=List[PrestamoResponse])
+def listar_prestamos(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Listar préstamos con paginación
+    try:
+        prestamos = db.query(Prestamo).offset(skip).limit(limit).all()
+        return prestamos
+        
+    except Exception as e:
+        logger.error(f"Error listando préstamos: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno del servidor: {str(e)}"
+        )
+
+
+@router.get("/{prestamo_id}", response_model=PrestamoResponse)
+def obtener_prestamo(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Obtener préstamo específico
+    try:
+        prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+        
+        if not prestamo:
+            raise HTTPException(
+                status_code=404,
+                detail="Préstamo no encontrado"
+            )
+        
+        return prestamo
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error obteniendo préstamo: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno del servidor: {str(e)}"
+        )
+
+
+@router.put("/{prestamo_id}", response_model=PrestamoResponse)
+def actualizar_prestamo(
+    prestamo_id: int,
+    prestamo_data: PrestamoUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Actualizar préstamo
+    try:
+        prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+        
+        if not prestamo:
+            raise HTTPException(
+                status_code=404,
+                detail="Préstamo no encontrado"
+            )
+        
+        # Actualizar campos
+        for field, value in prestamo_data.model_dump(exclude_unset=True).items():
+            setattr(prestamo, field, value)
+        
+        db.commit()
+        db.refresh(prestamo)
+        
+        return prestamo
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error actualizando préstamo: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno del servidor: {str(e)}"
+        )
+
+
+@router.delete("/{prestamo_id}")
+def eliminar_prestamo(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Eliminar préstamo
+    try:
+        prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+        
+        if not prestamo:
+            raise HTTPException(
+                status_code=404,
+                detail="Préstamo no encontrado"
+            )
+        
+        db.delete(prestamo)
+        db.commit()
+        
+        return {"message": "Préstamo eliminado exitosamente"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error eliminando préstamo: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno del servidor: {str(e)}"
+        )
