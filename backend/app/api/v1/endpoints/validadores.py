@@ -264,6 +264,97 @@ def formatear_mientras_escribe(
 # ============================================
 
 
+def _aplicar_correccion_campo(cliente: Cliente, campo: str, nuevo_valor: str) -> dict:
+    """Aplicar corrección a un campo específico del cliente"""
+    valor_anterior = None
+    
+    if campo == "telefono":
+        valor_anterior = cliente.telefono
+        cliente.telefono = nuevo_valor
+    elif campo == "cedula":
+        valor_anterior = cliente.cedula
+        cliente.cedula = nuevo_valor
+    elif campo == "email":
+        valor_anterior = cliente.email
+        cliente.email = nuevo_valor
+    elif campo == "fecha_entrega":
+        valor_anterior = cliente.fecha_entrega
+        cliente.fecha_entrega = datetime.strptime(nuevo_valor, "%d/%m/%Y").date()
+    elif campo == "total_financiamiento":
+        valor_anterior = cliente.total_financiamiento
+        cliente.total_financiamiento = Decimal(nuevo_valor)
+    elif campo == "cuota_inicial":
+        valor_anterior = cliente.cuota_inicial
+        cliente.cuota_inicial = Decimal(nuevo_valor)
+    elif campo == "amortizaciones":
+        valor_anterior = cliente.numero_amortizaciones
+        cliente.numero_amortizaciones = int(nuevo_valor)
+    
+    return {
+        "campo": campo,
+        "valor_anterior": valor_anterior,
+        "valor_nuevo": nuevo_valor,
+    }
+
+
+def _procesar_correcciones_cliente(cliente: Cliente, resultado_correccion: dict) -> list[dict]:
+    """Procesar y aplicar correcciones al cliente"""
+    cambios_aplicados = []
+    
+    for correccion in resultado_correccion["correcciones_aplicadas"]:
+        if correccion["cambio_realizado"]:
+            campo = correccion["campo"]
+            nuevo_valor = correccion["valor_nuevo"]
+            
+            cambio = _aplicar_correccion_campo(cliente, campo, nuevo_valor)
+            cambios_aplicados.append(cambio)
+    
+    return cambios_aplicados
+
+
+def _registrar_auditoria_correccion(cliente_id: int, cambios_aplicados: list[dict], current_user: User, db: Session) -> None:
+    """Registrar auditoría de corrección"""
+    auditoria = Auditoria.registrar(
+        usuario_id=current_user.id,
+        accion=TipoAccion.ACTUALIZACION,
+        entidad="cliente",
+        entidad_id=cliente_id,
+        detalles=f"Corrección de datos: {len(cambios_aplicados)} campos actualizados",
+    )
+    db.add(auditoria)
+    db.commit()
+
+
+def _generar_respuesta_correccion(cliente_id: int, cliente: Cliente, resultado_correccion: dict, cambios_aplicados: list[dict], recalcular_amortizacion: bool, current_user: User) -> dict:
+    """Generar respuesta de corrección"""
+    mensaje_recalculo = None
+    if resultado_correccion["requiere_recalculo_amortizacion"] and recalcular_amortizacion:
+        mensaje_recalculo = "⚠️ Se requiere recalcular la tabla de amortización"
+    
+    return {
+        "mensaje": "✅ Corrección de datos procesada exitosamente",
+        "cliente": {
+            "id": cliente_id,
+            "nombre": cliente.nombre_completo,
+            "cedula": cliente.cedula,
+        },
+        "resultado_correccion": resultado_correccion,
+        "cambios_aplicados_bd": cambios_aplicados,
+        "total_cambios": len(cambios_aplicados),
+        "errores_encontrados": len(resultado_correccion["errores_encontrados"]),
+        "recalculo_amortizacion": {
+            "requerido": resultado_correccion["requiere_recalculo_amortizacion"],
+            "aplicado": (
+                recalcular_amortizacion
+                and resultado_correccion["requiere_recalculo_amortizacion"]
+            ),
+            "mensaje": mensaje_recalculo,
+        },
+        "fecha_correccion": datetime.now().isoformat(),
+        "corregido_por": f"{current_user.nombre} {current_user.apellido}".strip(),
+    }
+
+
 @router.post("/corregir-cliente/{cliente_id}")
 def corregir_datos_cliente(
     cliente_id: int,
@@ -301,79 +392,15 @@ def corregir_datos_cliente(
             raise HTTPException(status_code=400, detail=resultado_correccion["error_general"])
 
         # Aplicar correcciones válidas a la base de datos
-        cambios_aplicados = []
-        for correccion in resultado_correccion["correcciones_aplicadas"]:
-            if correccion["cambio_realizado"]:
-                campo = correccion["campo"]
-                nuevo_valor = correccion["valor_nuevo"]
-
-                # Mapear campos a atributos del modelo
-                if campo == "telefono":
-                    cliente.telefono = nuevo_valor
-                elif campo == "cedula":
-                    cliente.cedula = nuevo_valor
-                elif campo == "email":
-                    cliente.email = nuevo_valor
-                elif campo == "fecha_entrega":
-                    cliente.fecha_entrega = datetime.strptime(nuevo_valor, "%d/%m/%Y").date()
-                elif campo == "total_financiamiento":
-                    cliente.total_financiamiento = Decimal(nuevo_valor)
-                elif campo == "cuota_inicial":
-                    cliente.cuota_inicial = Decimal(nuevo_valor)
-                elif campo == "amortizaciones":
-                    cliente.numero_amortizaciones = int(nuevo_valor)
-
-                cambios_aplicados.append(
-                    {
-                        "campo": campo,
-                        "valor_anterior": correccion["valor_anterior"],
-                        "valor_nuevo": nuevo_valor,
-                    }
-                )
+        cambios_aplicados = _procesar_correcciones_cliente(cliente, resultado_correccion)
 
         # Guardar cambios si hay correcciones válidas
         if cambios_aplicados:
             db.commit()
+            _registrar_auditoria_correccion(cliente_id, cambios_aplicados, current_user, db)
 
-            # Registrar en auditoría
-            auditoria = Auditoria.registrar(
-                usuario_id=current_user.id,
-                accion=TipoAccion.ACTUALIZACION,
-                entidad="cliente",
-                entidad_id=cliente_id,
-                detalles=f"Corrección de datos: {len(cambios_aplicados)} campos actualizados",
-            )
-            db.add(auditoria)
-            db.commit()
-
-        # Manejar recálculo de amortización si es necesario
-        mensaje_recalculo = None
-        if resultado_correccion["requiere_recalculo_amortizacion"] and recalcular_amortizacion:
-            # TODO: Integrar con servicio de amortización
-            mensaje_recalculo = "⚠️ Se requiere recalcular la tabla de amortización"
-
-        return {
-            "mensaje": "✅ Corrección de datos procesada exitosamente",
-            "cliente": {
-                "id": cliente_id,
-                "nombre": cliente.nombre_completo,
-                "cedula": cliente.cedula,
-            },
-            "resultado_correccion": resultado_correccion,
-            "cambios_aplicados_bd": cambios_aplicados,
-            "total_cambios": len(cambios_aplicados),
-            "errores_encontrados": len(resultado_correccion["errores_encontrados"]),
-            "recalculo_amortizacion": {
-                "requerido": resultado_correccion["requiere_recalculo_amortizacion"],
-                "aplicado": (
-                    recalcular_amortizacion
-                    and resultado_correccion["requiere_recalculo_amortizacion"]
-                ),
-                "mensaje": mensaje_recalculo,
-            },
-            "fecha_correccion": datetime.now().isoformat(),
-            "corregido_por": f"{current_user.nombre} {current_user.apellido}".strip(),
-        }
+        # Generar respuesta
+        return _generar_respuesta_correccion(cliente_id, cliente, resultado_correccion, cambios_aplicados, recalcular_amortizacion, current_user)
 
     except HTTPException:
         raise
