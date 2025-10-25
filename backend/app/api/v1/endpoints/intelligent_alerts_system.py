@@ -40,7 +40,7 @@ class AlertType(Enum):
 class IntelligentAlertSystem:
     """Sistema de alertas inteligentes"""    
     
-def __init__(self):
+    def __init__(self):
         self.active_alerts = {}  # Alertas activas
         self.alert_history = deque(maxlen=1000)  # Historial de alertas
         self.alert_rules = {}  # Reglas de alerta
@@ -54,7 +54,7 @@ def __init__(self):
         # Iniciar monitoreo en background
         self._start_background_monitoring()
     
-def _initialize_default_rules(self):
+    def _initialize_default_rules(self):
         """Inicializar reglas de alerta por defecto"""
         self.alert_rules = {
             AlertType.TOKEN_EXPIRY: {
@@ -95,7 +95,7 @@ def _initialize_default_rules(self):
             },
         }
     
-def _start_background_monitoring(self):
+    def _start_background_monitoring(self):
         """Iniciar monitoreo en background"""        
         def monitor():
             while True:

@@ -35,9 +35,9 @@ def __init__(self):
         # Iniciar monitoreo temporal en background
         self._start_temporal_monitoring()
     
-def _start_temporal_monitoring(self):
+    def _start_temporal_monitoring(self):
         """Iniciar monitoreo temporal en background"""        
-def monitoring_loop():
+        def monitoring_loop():
             while True:
                 try:
                     self._collect_timing_data()
@@ -51,7 +51,7 @@ def monitoring_loop():
         thread.start()
         logger.info("🕐 Sistema temporal de análisis iniciado")
     
-def _collect_timing_data(self):
+    def _collect_timing_data(self):
         """Recopilar datos de timing del sistema"""
         with self.lock:
             current_time = datetime.now()
