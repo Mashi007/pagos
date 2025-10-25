@@ -30,6 +30,45 @@ logger = logging.getLogger(__name__)
 # ============================================
 
 
+def _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, fecha_desde, fecha_hasta):
+    """Aplicar filtros a la query de auditoría"""
+    if usuario_email:
+        query = query.filter(Auditoria.usuario_email.ilike(f"%{usuario_email}%"))
+    if modulo:
+        query = query.filter(Auditoria.modulo == modulo)
+    if accion:
+        query = query.filter(Auditoria.accion == accion)
+    if fecha_desde:
+        query = query.filter(Auditoria.fecha >= fecha_desde)
+    if fecha_hasta:
+        query = query.filter(Auditoria.fecha <= fecha_hasta)
+    return query
+
+
+def _aplicar_ordenamiento_auditoria(query, ordenar_por, orden):
+    """Aplicar ordenamiento a la query de auditoría"""
+    if ordenar_por == "usuario_email":
+        order_field = Auditoria.usuario_email
+    elif ordenar_por == "modulo":
+        order_field = Auditoria.modulo
+    elif ordenar_por == "accion":
+        order_field = Auditoria.accion
+    else:
+        order_field = Auditoria.fecha
+
+    if orden == "asc":
+        return query.order_by(asc(order_field))
+    else:
+        return query.order_by(desc(order_field))
+
+
+def _calcular_paginacion_auditoria(total, limit, skip):
+    """Calcular información de paginación"""
+    total_pages = (total + limit - 1) // limit
+    current_page = (skip // limit) + 1
+    return total_pages, current_page
+
+
 @router.get("/", response_model=AuditoriaListResponse, summary="Listar auditoría")
 def listar_auditoria(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
@@ -45,7 +84,7 @@ def listar_auditoria(
     current_user: User = Depends(get_current_user),
 ):
     """
-    📋 Listar registros de auditoría con filtros y paginación
+    📋 Listar registros de auditoría con filtros y paginación (VERSIÓN REFACTORIZADA)
 
     Todos los usuarios pueden ver auditoría
     """
@@ -54,45 +93,19 @@ def listar_auditoria(
         query = db.query(Auditoria)
 
         # Aplicar filtros
-        if usuario_email:
-            query = query.filter(Auditoria.usuario_email.ilike(f"%{usuario_email}%"))
-
-        if modulo:
-            query = query.filter(Auditoria.modulo == modulo)
-
-        if accion:
-            query = query.filter(Auditoria.accion == accion)
-
-        if fecha_desde:
-            query = query.filter(Auditoria.fecha >= fecha_desde)
-
-        if fecha_hasta:
-            query = query.filter(Auditoria.fecha <= fecha_hasta)
+        query = _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, fecha_desde, fecha_hasta)
 
         # Contar total
         total = query.count()
 
         # Aplicar ordenamiento
-        if ordenar_por == "usuario_email":
-            order_field = Auditoria.usuario_email
-        elif ordenar_por == "modulo":
-            order_field = Auditoria.modulo
-        elif ordenar_por == "accion":
-            order_field = Auditoria.accion
-        else:
-            order_field = Auditoria.fecha
-
-        if orden == "asc":
-            query = query.order_by(asc(order_field))
-        else:
-            query = query.order_by(desc(order_field))
+        query = _aplicar_ordenamiento_auditoria(query, ordenar_por, orden)
 
         # Aplicar paginación
         auditorias = query.offset(skip).limit(limit).all()
 
         # Calcular páginas
-        total_pages = (total + limit - 1) // limit
-        current_page = (skip // limit) + 1
+        total_pages, current_page = _calcular_paginacion_auditoria(total, limit, skip)
 
         return AuditoriaListResponse(
             items=auditorias,
@@ -166,21 +179,6 @@ def obtener_estadisticas_auditoria(
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
-
-
-def _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, fecha_desde, fecha_hasta):
-    """Aplicar filtros a la query de auditoría"""
-    if usuario_email:
-        query = query.filter(Auditoria.usuario_email.ilike(f"%{usuario_email}%"))
-    if modulo:
-        query = query.filter(Auditoria.modulo == modulo)
-    if accion:
-        query = query.filter(Auditoria.accion == accion)
-    if fecha_desde:
-        query = query.filter(Auditoria.fecha >= fecha_desde)
-    if fecha_hasta:
-        query = query.filter(Auditoria.fecha <= fecha_hasta)
-    return query
 
 
 def _crear_dataframe_auditoria(auditorias):

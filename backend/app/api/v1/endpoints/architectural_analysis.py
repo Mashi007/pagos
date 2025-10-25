@@ -224,72 +224,82 @@ class ArchitecturalAnalysisSystem:
                 "error": "Componente no reconocido",
             }
 
+    def _test_token_creation(self) -> Dict[str, Any]:
+        """Test de creación de token JWT"""
+        try:
+            start_time = time.time()
+            test_token = create_access_token(
+                subject="test_user",
+                additional_claims={"type": "access", "test": True},
+            )
+            creation_time = (time.time() - start_time) * 1000
+
+            return {
+                "status": "success",
+                "score": 1.0,
+                "metrics": {
+                    "token_created": True,
+                    "creation_time_ms": creation_time,
+                    "token_length": len(test_token),
+                },
+            }
+        except Exception as e:
+            return {"status": "error", "score": 0, "error": str(e)}
+
+    def _test_token_validation(self) -> Dict[str, Any]:
+        """Test de validación de token JWT"""
+        try:
+            test_token = create_access_token(
+                subject="test_user",
+                additional_claims={"type": "access", "test": True},
+            )
+            start_time = time.time()
+            payload = decode_token(test_token)
+            validation_time = (time.time() - start_time) * 1000
+
+            return {
+                "status": "success",
+                "score": 1.0,
+                "metrics": {
+                    "token_validated": True,
+                    "validation_time_ms": validation_time,
+                    "payload_keys": list(payload.keys()),
+                },
+            }
+        except Exception as e:
+            return {"status": "error", "score": 0, "error": str(e)}
+
+    def _test_token_decoding(self) -> Dict[str, Any]:
+        """Test de decodificación de token malformado"""
+        try:
+            # Test con token malformado
+            malformed_token = "invalid.token.here"
+            try:
+                decode_token(malformed_token)
+                return {
+                    "status": "error",
+                    "score": 0,
+                    "error": "Token malformado no detectado",
+                }
+            except Exception:
+                return {
+                    "status": "success",
+                    "score": 1.0,
+                    "metrics": {"malformed_token_detected": True},
+                }
+        except Exception as e:
+            return {"status": "error", "score": 0, "error": str(e)}
+
     def _check_jwt_handler(self, check_name: str) -> Dict[str, Any]:
-        """Verificar JWT Handler"""
+        """Verificar JWT Handler (VERSIÓN REFACTORIZADA)"""
         if check_name == "token_creation":
-            try:
-                start_time = time.time()
-                test_token = create_access_token(
-                    subject="test_user",
-                    additional_claims={"type": "access", "test": True},
-                )
-                creation_time = (time.time() - start_time) * 1000
-
-                return {
-                    "status": "success",
-                    "score": 1.0,
-                    "metrics": {
-                        "token_created": True,
-                        "creation_time_ms": creation_time,
-                        "token_length": len(test_token),
-                    },
-                }
-            except Exception as e:
-                return {"status": "error", "score": 0, "error": str(e)}
-
+            return self._test_token_creation()
         elif check_name == "token_validation":
-            try:
-                test_token = create_access_token(
-                    subject="test_user",
-                    additional_claims={"type": "access", "test": True},
-                )
-                start_time = time.time()
-                payload = decode_token(test_token)
-                validation_time = (time.time() - start_time) * 1000
-
-                return {
-                    "status": "success",
-                    "score": 1.0,
-                    "metrics": {
-                        "token_validated": True,
-                        "validation_time_ms": validation_time,
-                        "payload_keys": list(payload.keys()),
-                    },
-                }
-            except Exception as e:
-                return {"status": "error", "score": 0, "error": str(e)}
-
+            return self._test_token_validation()
         elif check_name == "token_decoding":
-            try:
-                # Test con token malformado
-                malformed_token = "invalid.token.here"
-                try:
-                    decode_token(malformed_token)
-                    return {
-                        "status": "error",
-                        "score": 0,
-                        "error": "Token malformado no detectado",
-                    }
-                except Exception:
-                    return {
-                        "status": "success",
-                        "score": 1.0,
-                        "metrics": {"malformed_token_detected": True},
-                    }
-            except Exception as e:
-                return {"status": "error", "score": 0, "error": str(e)}
-
-        return {"status": "unknown", "score": 0, "error": "Check no reconocido"}
+            return self._test_token_decoding()
+        else:
+            return {"status": "unknown", "score": 0, "error": "Check no reconocido"}
 
     def _check_database_layer(self, check_name: str) -> Dict[str, Any]:
         """Verificar Database Layer"""
