@@ -170,7 +170,11 @@ async def procesar_conciliacion(
             numero_documento = str(row["numero_documento"]).strip()
 
             # Buscar pago en BD
-            pago = db.query(Pago).filter(and_(Pago.activo, Pago.numero_documento == numero_documento)).first()
+            pago = (
+                db.query(Pago)
+                .filter(and_(Pago.activo, Pago.numero_documento == numero_documento))
+                .first()
+            )
 
             if pago:
                 # Marcar como conciliado
@@ -231,7 +235,9 @@ async def desconciliar_pago(
 ):
     """Desconciliar un pago ya conciliado"""
     try:
-        logger.info(f"Usuario {current_user.email} desconciliando pago {conciliacion_data.numero_documento_anterior}")
+        logger.info(
+            f"Usuario {current_user.email} desconciliando pago {conciliacion_data.numero_documento_anterior}"
+        )
 
         # Buscar el pago a desconciliar
         pago = (
@@ -271,7 +277,9 @@ async def desconciliar_pago(
 
         db.commit()
 
-        logger.info(f"Pago {conciliacion_data.numero_documento_anterior} desconciliado exitosamente")
+        logger.info(
+            f"Pago {conciliacion_data.numero_documento_anterior} desconciliado exitosamente"
+        )
 
         return conciliacion_record
 
@@ -287,7 +295,9 @@ async def desconciliar_pago(
 
 
 @router.get("/estado-conciliacion")
-async def obtener_estado_conciliacion(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def obtener_estado_conciliacion(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """Obtener estado general de conciliación"""
     try:
         # Estadísticas generales

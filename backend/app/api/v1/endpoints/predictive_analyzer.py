@@ -49,7 +49,9 @@ class PredictiveAnalyzer:
 
         recent_data = data_points[-window_size:]
         older_data = (
-            data_points[-window_size * 2:-window_size] if len(data_points) >= window_size * 2 else recent_data
+            data_points[-window_size * 2:-window_size]
+            if len(data_points) >= window_size * 2
+            else recent_data
         )
 
         recent_avg = statistics.mean(recent_data)
@@ -103,7 +105,9 @@ class PredictiveAnalyzer:
                 {
                     "type": "response_time_increase",
                     "severity": "medium",
-                    "description": f"Response time increasing (slope: {response_trend['slope']:.1f}ms)",
+                    "description": (
+                        f"Response time increasing (slope: {response_trend['slope']:.1f}ms)"
+                    ),
                     "confidence": response_trend["confidence"],
                     "recommendation": "Check database performance and server load",
                 }
@@ -113,7 +117,9 @@ class PredictiveAnalyzer:
         if len(error_counts) >= 5:
             recent_errors = error_counts[-5:]
             avg_recent_errors = statistics.mean(recent_errors)
-            historical_avg = statistics.mean(error_counts[:-5]) if len(error_counts) > 5 else avg_recent_errors
+            historical_avg = (
+                statistics.mean(error_counts[:-5]) if len(error_counts) > 5 else avg_recent_errors
+            )
 
             if avg_recent_errors > historical_avg * 2:  # Doble del promedio histórico
                 anomalies.append(
@@ -294,7 +300,9 @@ async def get_predictive_analysis():
             recommendations.append("📉 Tendencia: Tasa de éxito disminuyendo - Monitorear de cerca")
 
         if trends["response_time"]["trend"] == "increasing":
-            recommendations.append("⏱️ Tendencia: Tiempo de respuesta aumentando - Optimizar sistema")
+            recommendations.append(
+                "⏱️ Tendencia: Tiempo de respuesta aumentando - Optimizar sistema"
+            )
 
         if trends["error_count"]["trend"] == "increasing":
             recommendations.append("❌ Tendencia: Errores aumentando - Investigar causas")
@@ -317,7 +325,9 @@ async def get_predictive_analysis():
                 "total_anomalies": len(anomalies),
                 "critical_anomalies": len([a for a in anomalies if a["severity"] == "high"]),
                 "predictions_count": (
-                    len(predictions.get("predictions", {})) if predictions.get("status") == "success" else 0
+                    len(predictions.get("predictions", {}))
+                    if predictions.get("status") == "success"
+                    else 0
                 ),
             },
         }

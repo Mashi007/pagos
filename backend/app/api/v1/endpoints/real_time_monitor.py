@@ -96,7 +96,9 @@ class RealTimeAuthMonitor:
         with self.lock:
             # Analizar últimos 5 minutos
             cutoff_time = datetime.now() - timedelta(minutes=5)
-            recent_requests = [req for req in self.request_history if req["timestamp"] > cutoff_time]
+            recent_requests = [
+                req for req in self.request_history if req["timestamp"] > cutoff_time
+            ]
 
             # Contar errores por tipo
             error_counts = defaultdict(int)
@@ -112,7 +114,9 @@ class RealTimeAuthMonitor:
             # Limpiar patrones antiguos
             if len(self.error_patterns) > 100:
                 # Mantener solo los más frecuentes
-                sorted_patterns = sorted(self.error_patterns.items(), key=lambda x: x[1], reverse=True)
+                sorted_patterns = sorted(
+                    self.error_patterns.items(), key=lambda x: x[1], reverse=True
+                )
                 self.error_patterns = dict(sorted_patterns[:50])
 
     def _cleanup_expired_sessions(self):
@@ -134,12 +138,18 @@ class RealTimeAuthMonitor:
 
             # Análisis de últimos 5 minutos
             cutoff_time = current_time - timedelta(minutes=5)
-            recent_requests = [req for req in self.request_history if req["timestamp"] > cutoff_time]
+            recent_requests = [
+                req for req in self.request_history if req["timestamp"] > cutoff_time
+            ]
 
             # Estadísticas básicas
             total_requests = len(recent_requests)
             failed_requests = len([req for req in recent_requests if not req.get("success", True)])
-            success_rate = ((total_requests - failed_requests) / total_requests * 100) if total_requests > 0 else 100
+            success_rate = (
+                ((total_requests - failed_requests) / total_requests * 100)
+                if total_requests > 0
+                else 100
+            )
 
             # Análisis de tokens
             active_tokens = len(self.token_analysis)
@@ -184,7 +194,9 @@ class RealTimeAuthMonitor:
         if not self.performance_metrics:
             return 0.0
 
-        error_count = sum(1 for metric in self.performance_metrics if not metric.get("success", True))
+        error_count = sum(
+            1 for metric in self.performance_metrics if not metric.get("success", True)
+        )
         return round((error_count / len(self.performance_metrics)) * 100, 2)
 
 
@@ -268,7 +280,9 @@ async def analyze_user_tokens(
                 "total_requests": total_requests,
                 "successful_requests": successful_requests,
                 "success_rate_percent": round(success_rate, 2),
-                "most_used_endpoints": dict(sorted(endpoint_usage.items(), key=lambda x: x[1], reverse=True)[:10]),
+                "most_used_endpoints": dict(
+                    sorted(endpoint_usage.items(), key=lambda x: x[1], reverse=True)[:10]
+                ),
                 "recent_requests": user_token_analyses[:20],  # Últimos 20 requests
             },
         }
@@ -371,15 +385,21 @@ def _generate_performance_recommendations(status: Dict[str, Any]) -> List[str]:
 
     success_rate = metrics.get("success_rate_percent", 100)
     if success_rate < 95:
-        recommendations.append(f"⚠️ Tasa de éxito baja ({success_rate}%) - Revisar configuración de tokens")
+        recommendations.append(
+            f"⚠️ Tasa de éxito baja ({success_rate}%) - Revisar configuración de tokens"
+        )
 
     expiring_tokens = metrics.get("expiring_tokens", 0)
     if expiring_tokens > 0:
-        recommendations.append(f"🔄 {expiring_tokens} tokens expirando pronto - Verificar auto-refresh")
+        recommendations.append(
+            f"🔄 {expiring_tokens} tokens expirando pronto - Verificar auto-refresh"
+        )
 
     avg_response_time = status.get("performance", {}).get("avg_response_time", 0)
     if avg_response_time > 2.0:
-        recommendations.append(f"🐌 Tiempo de respuesta alto ({avg_response_time}s) - Optimizar queries")
+        recommendations.append(
+            f"🐌 Tiempo de respuesta alto ({avg_response_time}s) - Optimizar queries"
+        )
 
     if not recommendations:
         recommendations.append("✅ Sistema funcionando correctamente")

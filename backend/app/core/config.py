@@ -87,7 +87,9 @@ class Settings(BaseSettings):
     # USUARIO ADMINISTRADOR INICIAL
     # ============================================
     ADMIN_EMAIL: str = "itmaster@rapicreditca.com"
-    ADMIN_PASSWORD: str = Field(default="R@pi_2025**", env="ADMIN_PASSWORD")  # ✅ Variable de entorno
+    ADMIN_PASSWORD: str = Field(
+        default="R@pi_2025**", env="ADMIN_PASSWORD"
+    )  # ✅ Variable de entorno
 
     # ============================================
     # VALIDACIÓN DE CONFIGURACIÓN
@@ -97,7 +99,9 @@ class Settings(BaseSettings):
         if not self.ADMIN_EMAIL or not self.ADMIN_PASSWORD:
             return False
         if self.ADMIN_PASSWORD == "R@pi_2025**" and self.ENVIRONMENT == "production":
-            raise ValueError("⚠️ CRÍTICO: Contraseña por defecto detectada en producción. Configure ADMIN_PASSWORD")
+            raise ValueError(
+                "⚠️ CRÍTICO: Contraseña por defecto detectada en producción. Configure ADMIN_PASSWORD"
+            )
         return True
 
     def validate_cors_origins(self) -> bool:

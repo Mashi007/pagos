@@ -284,7 +284,9 @@ class ForensicTraceSystem:
             evidence["timing_evidence"] = {
                 "first_event_time": events[0]["timestamp"].isoformat(),
                 "failure_time": failure_event["timestamp"].isoformat(),
-                "total_duration_ms": (failure_event["timestamp"] - events[0]["timestamp"]).total_seconds() * 1000,
+                "total_duration_ms": (
+                    (failure_event["timestamp"] - events[0]["timestamp"]).total_seconds() * 1000
+                ),
             }
 
         # Evidencia del sistema
@@ -311,7 +313,9 @@ class ForensicTraceSystem:
                 event_type_counts[event["event_type"]] += 1
 
             # Análisis de secuencias fallidas
-            recent_failures = [seq for seq in self.failed_sequences if seq["failure_time"] > cutoff_time]
+            recent_failures = [
+                seq for seq in self.failed_sequences if seq["failure_time"] > cutoff_time
+            ]
 
             # Patrones de fallo más comunes
             failure_patterns = defaultdict(int)
@@ -323,7 +327,9 @@ class ForensicTraceSystem:
                 "summary": {
                     "total_events_24h": len(recent_events),
                     "total_failures_24h": len(recent_failures),
-                    "active_trace_sessions": len([s for s in self.trace_sessions.values() if s["status"] == "active"]),
+                    "active_trace_sessions": len(
+                        [s for s in self.trace_sessions.values() if s["status"] == "active"]
+                    ),
                     "event_type_distribution": dict(event_type_counts),
                     "failure_pattern_distribution": dict(failure_patterns),
                 },
@@ -331,7 +337,9 @@ class ForensicTraceSystem:
                 "recommendations": self._generate_forensic_recommendations(recent_failures),
             }
 
-    def _generate_forensic_recommendations(self, recent_failures: List[Dict[str, Any]]) -> List[str]:
+    def _generate_forensic_recommendations(
+        self, recent_failures: List[Dict[str, Any]]
+    ) -> List[str]:
         """Generar recomendaciones basadas en evidencia forense"""
         recommendations = []
 
@@ -348,10 +356,14 @@ class ForensicTraceSystem:
             )
 
         if failure_types.count("auth_failure") > len(failure_types) * 0.3:
-            recommendations.append("🟡 Más del 30% de fallos son de autenticación - revisar validación de usuarios")
+            recommendations.append(
+                "🟡 Más del 30% de fallos son de autenticación - revisar validación de usuarios"
+            )
 
         if failure_types.count("validation_failed") > len(failure_types) * 0.2:
-            recommendations.append("🟡 Más del 20% de fallos son de validación - revisar configuración JWT")
+            recommendations.append(
+                "🟡 Más del 20% de fallos son de validación - revisar configuración JWT"
+            )
 
         # Recomendaciones de timing
         avg_time_to_failure = sum(
@@ -361,7 +373,9 @@ class ForensicTraceSystem:
         ) / len(recent_failures)
 
         if avg_time_to_failure < 1:
-            recommendations.append("⚡ Fallos muy rápidos - posible problema de configuración inicial")
+            recommendations.append(
+                "⚡ Fallos muy rápidos - posible problema de configuración inicial"
+            )
 
         return recommendations
 
@@ -464,7 +478,9 @@ async def analyze_failure_sequence(
 
 
 @router.get("/forensic-summary")
-async def get_forensic_summary_endpoint(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_forensic_summary_endpoint(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📊 Resumen forense general
     """

@@ -59,8 +59,12 @@ def registrar_auditoria_cliente(
     """Registrar auditoría para operaciones de cliente - VERSIÓN LIGERA"""
     try:
         # ✅ OPTIMIZACIÓN: Solo serializar si es necesario y simplificar datos
-        datos_anteriores_serializados = serializar_datos_auditoria(datos_anteriores) if datos_anteriores else None
-        datos_nuevos_serializados = serializar_datos_auditoria(datos_nuevos) if datos_nuevos else None
+        datos_anteriores_serializados = (
+            serializar_datos_auditoria(datos_anteriores) if datos_anteriores else None
+        )
+        datos_nuevos_serializados = (
+            serializar_datos_auditoria(datos_nuevos) if datos_nuevos else None
+        )
 
         # ✅ OPTIMIZACIÓN: Auditoría mínima para reducir uso de recursos
         auditoria = Auditoria(
@@ -155,16 +159,22 @@ def listar_clientes(
                     "telefono": cliente.telefono,
                     "email": cliente.email,
                     "direccion": cliente.direccion,
-                    "fecha_nacimiento": cliente.fecha_nacimiento.isoformat() if cliente.fecha_nacimiento else None,
+                    "fecha_nacimiento": (
+                        cliente.fecha_nacimiento.isoformat() if cliente.fecha_nacimiento else None
+                    ),
                     "ocupacion": cliente.ocupacion,
                     "modelo_vehiculo": cliente.modelo_vehiculo,
                     "concesionario": cliente.concesionario,
                     "analista": cliente.analista,
                     "estado": cliente.estado,
                     "activo": cliente.activo,
-                    "fecha_registro": cliente.fecha_registro.isoformat() if cliente.fecha_registro else None,
+                    "fecha_registro": (
+                        cliente.fecha_registro.isoformat() if cliente.fecha_registro else None
+                    ),
                     "fecha_actualizacion": (
-                        cliente.fecha_actualizacion.isoformat() if cliente.fecha_actualizacion else None
+                        cliente.fecha_actualizacion.isoformat()
+                        if cliente.fecha_actualizacion
+                        else None
                     ),
                     "usuario_registro": cliente.usuario_registro,
                     "notas": cliente.notas,
@@ -256,7 +266,8 @@ def crear_cliente(
             # ✅ NUEVO: Si el usuario confirma el duplicado, actualizar el cliente existente
             if cliente_data.confirm_duplicate:
                 logger.info(
-                    f"✅ Cliente con cédula {cliente_data.cedula} " f"confirmado como duplicado - actualizando datos"
+                    f"✅ Cliente con cédula {cliente_data.cedula} "
+                    f"confirmado como duplicado - actualizando datos"
                 )
 
                 # Actualizar datos del cliente existente
@@ -295,12 +306,15 @@ def crear_cliente(
                     ),
                 )
 
-                logger.info(f"Cliente actualizado exitosamente por confirmación: " f"{cliente_existente.id}")
+                logger.info(
+                    f"Cliente actualizado exitosamente por confirmación: " f"{cliente_existente.id}"
+                )
                 return ClienteResponse.model_validate(cliente_existente)
             else:
                 # Si no confirma, mostrar popup de confirmación
                 logger.warning(
-                    f"⚠️ Cliente con cédula {cliente_data.cedula} " f"ya existe - activando popup de confirmación"
+                    f"⚠️ Cliente con cédula {cliente_data.cedula} "
+                    f"ya existe - activando popup de confirmación"
                 )
 
                 # ✅ SOLUCIÓN LIGERA: HTTPException simplificado sin auditoría pesada
@@ -312,7 +326,9 @@ def crear_cliente(
                         "cedula": cliente_data.cedula,
                         "cliente_existente": {
                             "id": cliente_existente.id,
-                            "cedula": cliente_existente.cedula,  # ✅ CORRECCIÓN CRÍTICA: Agregar cedula
+                            "cedula": (
+                                cliente_existente.cedula
+                            ),  # ✅ CORRECCIÓN CRÍTICA: Agregar cedula
                             "nombres": cliente_existente.nombres,
                             "apellidos": cliente_existente.apellidos,
                             "telefono": cliente_existente.telefono,
@@ -388,7 +404,10 @@ def crear_cliente_con_confirmacion(
     try:
         logger.info(f"Crear cliente con confirmación - Usuario: {current_user.email}")
         logger.info(f"Datos recibidos: {request_data}")
-        logger.info(f"Confirmación: {request_data.confirmacion}, " f"Comentarios: {request_data.comentarios}")
+        logger.info(
+            f"Confirmación: {request_data.confirmacion}, "
+            f"Comentarios: {request_data.comentarios}"
+        )
 
         if not request_data.confirmacion:
             raise HTTPException(
@@ -412,7 +431,10 @@ def crear_cliente_con_confirmacion(
             concesionario=cliente_data.concesionario,
             analista=cliente_data.analista,
             estado=cliente_data.estado,
-            notas=(f"{cliente_data.notas or 'NA'} | " f"CONFIRMADO POR OPERADOR: {request_data.comentarios}"),
+            notas=(
+                f"{cliente_data.notas or 'NA'} | "
+                f"CONFIRMADO POR OPERADOR: {request_data.comentarios}"
+            ),
             usuario_registro=current_user.email,
             fecha_registro=datetime.now(),
             fecha_actualizacion=datetime.now(),
@@ -487,7 +509,9 @@ def actualizar_cliente(
             "telefono": cliente.telefono,
             "email": cliente.email,
             "direccion": cliente.direccion,
-            "fecha_nacimiento": cliente.fecha_nacimiento.isoformat() if cliente.fecha_nacimiento else None,
+            "fecha_nacimiento": (
+                cliente.fecha_nacimiento.isoformat() if cliente.fecha_nacimiento else None
+            ),
             "ocupacion": cliente.ocupacion,
             "modelo_vehiculo": cliente.modelo_vehiculo,
             "concesionario": cliente.concesionario,
@@ -578,7 +602,9 @@ def eliminar_cliente(
             cliente_id=cliente_id,
             datos_anteriores=datos_anteriores,
             datos_nuevos={"eliminado": True},
-            descripcion=(f"Cliente eliminado físicamente: " f"{cliente.nombres} {cliente.apellidos}"),
+            descripcion=(
+                f"Cliente eliminado físicamente: " f"{cliente.nombres} {cliente.apellidos}"
+            ),
         )
 
         logger.info(f"Cliente eliminado exitosamente: {cliente_id}")

@@ -98,7 +98,9 @@ class KPIValorResponse(KPIValorBase):
 class KPIConValores(KPIResponse):
     """Schema de KPI con sus valores históricos"""
 
-    valores: List[KPIValorResponse] = Field(default_factory=list, description="Valores históricos del KPI")
+    valores: List[KPIValorResponse] = Field(
+        default_factory=list, description="Valores históricos del KPI"
+    )
 
 
 class KPIEstadisticas(BaseModel):
@@ -112,7 +114,9 @@ class KPIEstadisticas(BaseModel):
     valor_minimo: Optional[Decimal] = None
     valor_maximo: Optional[Decimal] = None
     tendencia: Optional[str] = Field(None, description="ascendente, descendente, estable")
-    cumplimiento_objetivo: Optional[float] = Field(None, description="Porcentaje de cumplimiento del objetivo")
+    cumplimiento_objetivo: Optional[float] = Field(
+        None, description="Porcentaje de cumplimiento del objetivo"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 

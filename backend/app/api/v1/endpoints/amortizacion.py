@@ -83,7 +83,9 @@ def crear_cuotas_prestamo(
 @router.get("/prestamo/{prestamo_id}/cuotas", response_model=List[CuotaResponse])
 def obtener_cuotas_prestamo(
     prestamo_id: int,
-    estado: Optional[str] = Query(None, description="Filtrar por estado: PENDIENTE, PAGADA, VENCIDA, PARCIAL"),
+    estado: Optional[str] = Query(
+        None, description="Filtrar por estado: PENDIENTE, PAGADA, VENCIDA, PARCIAL"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -150,7 +152,9 @@ def recalcular_mora(
         resultado = AmortizacionService.recalcular_mora(db, prestamo_id, tasa_mora, fecha_calculo)
 
         # Obtener cuotas con mora
-        cuotas_con_mora = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id, Cuota.monto_mora > 0).all()
+        cuotas_con_mora = (
+            db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id, Cuota.monto_mora > 0).all()
+        )
 
         cuotas_detalle = [
             {
@@ -426,7 +430,9 @@ def obtener_informacion_adicional(
             "total_pagado_hasta_fecha": float(total_pagado),
             "saldo_pendiente": float(saldo_pendiente),
             "porcentaje_pagado": (
-                round((float(total_pagado) / float(prestamo.monto_total) * 100), 2) if prestamo.monto_total > 0 else 0
+                round((float(total_pagado) / float(prestamo.monto_total) * 100), 2)
+                if prestamo.monto_total > 0
+                else 0
             ),
         },
         "estados_detalle": estados_cuotas,
@@ -448,7 +454,9 @@ def obtener_tabla_visual(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Préstamo no encontrado")
 
     # Obtener cuotas ordenadas
-    cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota).all()
+    cuotas = (
+        db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota).all()
+    )
 
     # Formatear para tabla visual
     tabla_visual = []
@@ -471,7 +479,11 @@ def obtener_tabla_visual(
             color = "info"
 
         # Determinar si es adelantado
-        if cuota.estado == "PAGADA" and cuota.fecha_pago and cuota.fecha_pago < cuota.fecha_vencimiento:
+        if (
+            cuota.estado == "PAGADA"
+            and cuota.fecha_pago
+            and cuota.fecha_pago < cuota.fecha_vencimiento
+        ):
             emoji = "🚀"
             color = "primary"
 
@@ -486,7 +498,9 @@ def obtener_tabla_visual(
                 "dias_mora": cuota.dias_mora if cuota.dias_mora > 0 else None,
                 "monto_mora": float(cuota.monto_mora) if cuota.monto_mora > 0 else None,
                 "porcentaje_pagado": float(cuota.porcentaje_pagado),
-                "fecha_pago_real": cuota.fecha_pago.strftime("%d/%m/%Y") if cuota.fecha_pago else None,
+                "fecha_pago_real": (
+                    cuota.fecha_pago.strftime("%d/%m/%Y") if cuota.fecha_pago else None
+                ),
             }
         )
 

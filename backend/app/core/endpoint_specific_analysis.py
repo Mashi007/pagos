@@ -33,7 +33,9 @@ class EndpointSpecificAnalyzer:
         if metric_name not in self.business_metrics[endpoint]:
             self.business_metrics[endpoint][metric_name] = []
 
-        self.business_metrics[endpoint][metric_name].append({"value": value, "timestamp": datetime.utcnow()})
+        self.business_metrics[endpoint][metric_name].append(
+            {"value": value, "timestamp": datetime.utcnow()}
+        )
 
     def get_endpoint_analysis(self, endpoint: str) -> Dict[str, Any]:
         """Obtener análisis específico del endpoint"""
@@ -53,7 +55,8 @@ class EndpointSpecificAnalyzer:
                     "min": min(v["value"] for v in recent_values),
                     "trend": (
                         "increasing"
-                        if len(recent_values) > 1 and recent_values[-1]["value"] > recent_values[0]["value"]
+                        if len(recent_values) > 1
+                        and recent_values[-1]["value"] > recent_values[0]["value"]
                         else "stable"
                     ),
                 }
@@ -97,7 +100,9 @@ def endpoint_impact_analysis(endpoint_name: str, business_metrics: Optional[Dict
                             # Extraer valor de la métrica usando el path
                             value = _extract_metric_value(result, metric_path)
                             if value is not None:
-                                endpoint_analyzer.record_business_metric(endpoint_name, metric_name, value)
+                                endpoint_analyzer.record_business_metric(
+                                    endpoint_name, metric_name, value
+                                )
                         except Exception as e:
                             logger.warning(f"Error extrayendo métrica {metric_name}: {e}")
 
@@ -238,9 +243,13 @@ def clientes_endpoint_analysis(func: Callable):
             # Métricas específicas de clientes
             if result:
                 if hasattr(result, "__len__"):
-                    endpoint_analyzer.record_business_metric("clientes", "registros_devueltos", len(result))
+                    endpoint_analyzer.record_business_metric(
+                        "clientes", "registros_devueltos", len(result)
+                    )
                 elif isinstance(result, dict) and "total" in result:
-                    endpoint_analyzer.record_business_metric("clientes", "registros_devueltos", result["total"])
+                    endpoint_analyzer.record_business_metric(
+                        "clientes", "registros_devueltos", result["total"]
+                    )
 
             record_endpoint_performance("clientes", response_time)
             record_success("clientes", response_time)
@@ -273,9 +282,13 @@ def pagos_endpoint_analysis(func: Callable):
             # Métricas específicas de pagos
             if result:
                 if isinstance(result, dict) and "monto_total" in result:
-                    endpoint_analyzer.record_business_metric("pagos", "monto_procesado", result["monto_total"])
+                    endpoint_analyzer.record_business_metric(
+                        "pagos", "monto_procesado", result["monto_total"]
+                    )
                 elif hasattr(result, "monto_pagado"):
-                    endpoint_analyzer.record_business_metric("pagos", "monto_procesado", result.monto_pagado)
+                    endpoint_analyzer.record_business_metric(
+                        "pagos", "monto_procesado", result.monto_pagado
+                    )
 
             record_endpoint_performance("pagos", response_time)
             record_success("pagos", response_time)

@@ -65,9 +65,15 @@ class ClienteBase(BaseModel):
     )
 
     # Datos del vehículo - OBLIGATORIOS
-    modelo_vehiculo: str = Field(..., min_length=1, max_length=MAX_NAME_LENGTH, description="De configuración")
-    concesionario: str = Field(..., min_length=1, max_length=MAX_NAME_LENGTH, description="De configuración")
-    analista: str = Field(..., min_length=1, max_length=MAX_NAME_LENGTH, description="De configuración")
+    modelo_vehiculo: str = Field(
+        ..., min_length=1, max_length=MAX_NAME_LENGTH, description="De configuración"
+    )
+    concesionario: str = Field(
+        ..., min_length=1, max_length=MAX_NAME_LENGTH, description="De configuración"
+    )
+    analista: str = Field(
+        ..., min_length=1, max_length=MAX_NAME_LENGTH, description="De configuración"
+    )
 
     # Estado - OBLIGATORIO
     estado: str = Field(
@@ -112,7 +118,9 @@ class ClienteCreate(ClienteBase):
     """Schema para crear cliente - todos los campos son obligatorios"""
 
     # Campo para confirmación de duplicados
-    confirm_duplicate: bool = Field(False, description="Indica si el usuario confirma crear un duplicado")
+    confirm_duplicate: bool = Field(
+        False, description="Indica si el usuario confirma crear un duplicado"
+    )
 
 
 class ClienteCreateWithConfirmation(BaseModel):
@@ -216,7 +224,9 @@ class ClienteSearchFilters(BaseModel):
     fecha_registro_hasta: Optional[date] = None
 
     # Ordenamiento
-    order_by: Optional[str] = Field(None, pattern="^(nombres|apellidos|cedula|fecha_registro|estado)$")
+    order_by: Optional[str] = Field(
+        None, pattern="^(nombres|apellidos|cedula|fecha_registro|estado)$"
+    )
     order_direction: Optional[str] = Field("asc", pattern="^(asc|desc)$")
 
 
@@ -242,14 +252,18 @@ class ClienteCreateWithLoan(ClienteBase):
     total_financiamiento: Decimal = Field(..., gt=0, description="Total del financiamiento")
     cuota_inicial: Decimal = Field(default=Decimal("0.00"), ge=0)
     fecha_entrega: date = Field(..., description="Fecha de entrega del vehículo")
-    numero_amortizaciones: int = Field(..., ge=1, le=MAX_AMORTIZACIONES, description="Número de cuotas")
+    numero_amortizaciones: int = Field(
+        ..., ge=1, le=MAX_AMORTIZACIONES, description="Número de cuotas"
+    )
     modalidad_pago: str = Field(..., pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
 
     # Configuración del préstamo
     tasa_interes_anual: Optional[Decimal] = Field(
         None, ge=0, le=MAX_TASA_INTERES, description="Tasa de interés anual (%)"
     )
-    generar_tabla_automatica: bool = Field(True, description="Generar tabla de amortización automáticamente")
+    generar_tabla_automatica: bool = Field(
+        True, description="Generar tabla de amortización automáticamente"
+    )
 
 
 class ClienteQuickActions(BaseModel):

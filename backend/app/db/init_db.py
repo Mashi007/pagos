@@ -158,7 +158,9 @@ def init_db() -> bool:
 
         # NO ejecutar migraciones automáticamente para evitar conflictos con enum
         # Las migraciones deben ejecutarse manualmente vía endpoint de emergencia
-        logger.info("Saltando migraciones automáticas (usar endpoint de emergencia si es necesario)")
+        logger.info(
+            "Saltando migraciones automáticas (usar endpoint de emergencia si es necesario)"
+        )
 
         tables_exist = all(table_exists(table) for table in MAIN_TABLES)
 

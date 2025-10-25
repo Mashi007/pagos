@@ -23,7 +23,9 @@ DAYS_PER_MONTH = 30
 router = APIRouter()
 
 
-def calcular_proxima_fecha_pago(fecha_inicio: datetime, modalidad: str, cuotas_pagadas: int) -> datetime:
+def calcular_proxima_fecha_pago(
+    fecha_inicio: datetime, modalidad: str, cuotas_pagadas: int
+) -> datetime:
     """Calcula la próxima fecha de pago según la modalidad"""
     if modalidad == "SEMANAL":
         return fecha_inicio + timedelta(weeks=cuotas_pagadas + 1)
@@ -95,7 +97,9 @@ def obtener_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{prestamo_id}", response_model=PrestamoResponse)
-def actualizar_prestamo(prestamo_id: int, prestamo_data: PrestamoUpdate, db: Session = Depends(get_db)):
+def actualizar_prestamo(
+    prestamo_id: int, prestamo_data: PrestamoUpdate, db: Session = Depends(get_db)
+):
     """Actualizar datos de un préstamo"""
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:

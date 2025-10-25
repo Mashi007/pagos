@@ -57,14 +57,24 @@ class QualityStandards:
                 content = f.read()
 
             # Validaciones de estructura
-            results["validations"]["has_docstring"] = QualityStandards._has_module_docstring(content)
+            results["validations"]["has_docstring"] = QualityStandards._has_module_docstring(
+                content
+            )
             results["validations"]["proper_imports"] = QualityStandards._validate_imports(content)
-            results["validations"]["class_structure"] = QualityStandards._validate_class_structure(content)
-            results["validations"]["function_length"] = QualityStandards._validate_function_length(content)
+            results["validations"]["class_structure"] = QualityStandards._validate_class_structure(
+                content
+            )
+            results["validations"]["function_length"] = QualityStandards._validate_function_length(
+                content
+            )
             results["validations"]["line_length"] = QualityStandards._validate_line_length(content)
             results["validations"]["indentation"] = QualityStandards._validate_indentation(content)
-            results["validations"]["forbidden_words"] = QualityStandards._check_forbidden_words(content)
-            results["validations"]["error_handling"] = QualityStandards._validate_error_handling(content)
+            results["validations"]["forbidden_words"] = QualityStandards._check_forbidden_words(
+                content
+            )
+            results["validations"]["error_handling"] = QualityStandards._validate_error_handling(
+                content
+            )
             results["validations"]["logging"] = QualityStandards._validate_logging(content)
 
             # Calcular score
@@ -341,7 +351,9 @@ class ServiceMetrics:
                     metrics["total_functions"] += 1
                     function_length = len(node.body)
                     function_lengths.append(function_length)
-                    metrics["max_function_length"] = max(metrics["max_function_length"], function_length)
+                    metrics["max_function_length"] = max(
+                        metrics["max_function_length"], function_length
+                    )
 
                     # Calcular complejidad ciclomática básica
                     complexity = 1  # Base complexity
@@ -398,8 +410,8 @@ def apply_quality_standards(services_dir: str) -> Dict[str, Any]:
             with open(service["file_path"], "r", encoding="utf-8") as f:
                 content = f.read()
             service["metrics"] = ServiceMetrics.calculate_complexity_metrics(content)
-            service["performance_recommendations"] = ServiceMetrics.generate_performance_recommendations(
-                service["metrics"]
+            service["performance_recommendations"] = (
+                ServiceMetrics.generate_performance_recommendations(service["metrics"])
             )
         except Exception as e:
             service["metrics"] = {"error": str(e)}

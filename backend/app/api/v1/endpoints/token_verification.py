@@ -105,7 +105,9 @@ async def verificar_token_detallado(request: Request, db: Session = Depends(get_
             token_analysis["expiration"] = {
                 "exp_datetime": exp_datetime.isoformat(),
                 "is_expired": is_expired,
-                "time_until_expiry": str(exp_datetime - datetime.now()) if not is_expired else "EXPIRED",
+                "time_until_expiry": (
+                    str(exp_datetime - datetime.now()) if not is_expired else "EXPIRED"
+                ),
             }
         else:
             token_analysis["expiration"] = {"error": "No expiration found in token"}
@@ -189,7 +191,9 @@ async def verificar_token_detallado(request: Request, db: Session = Depends(get_
             "user_verification": user_verification,
             "recommendations": recommendations,
             "overall_status": (
-                "valid" if verification_result.get("verified") and user_verification.get("user_found") else "invalid"
+                "valid"
+                if verification_result.get("verified") and user_verification.get("user_found")
+                else "invalid"
             ),
         }
 
@@ -277,7 +281,9 @@ async def generar_token_prueba(db: Session = Depends(get_db)):
             }
 
         # Generar token
-        test_token = create_access_token(subject=str(admin_user.id), additional_claims={"type": "access"})
+        test_token = create_access_token(
+            subject=str(admin_user.id), additional_claims={"type": "access"}
+        )
 
         return {
             "timestamp": datetime.now().isoformat(),

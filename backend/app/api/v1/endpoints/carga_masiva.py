@@ -113,16 +113,22 @@ async def cargar_archivo_excel(
     try:
         # Validar tipo de archivo
         if not archivo.filename.endswith((".xlsx", ".xls")):
-            raise HTTPException(status_code=400, detail="Solo se permiten archivos Excel (.xlsx, .xls)")
+            raise HTTPException(
+                status_code=400, detail="Solo se permiten archivos Excel (.xlsx, .xls)"
+            )
 
         # Leer contenido
         contenido = await archivo.read()
 
         # Procesar según tipo
         if tipo_carga == "clientes":
-            resultado = await _analizar_archivo_clientes(contenido, archivo.filename, db, current_user.id)
+            resultado = await _analizar_archivo_clientes(
+                contenido, archivo.filename, db, current_user.id
+            )
         elif tipo_carga == "pagos":
-            resultado = await _analizar_archivo_pagos(contenido, archivo.filename, db, current_user.id)
+            resultado = await _analizar_archivo_pagos(
+                contenido, archivo.filename, db, current_user.id
+            )
         else:
             raise HTTPException(
                 status_code=400,
@@ -309,7 +315,9 @@ async def _analizar_archivo_clientes(
                 datos_vacios += 1
 
             # Número de Amortizaciones (CRÍTICO si hay financiamiento)
-            if total_financiamiento and (not numero_amortizaciones or numero_amortizaciones.upper() == "ERROR"):
+            if total_financiamiento and (
+                not numero_amortizaciones or numero_amortizaciones.upper() == "ERROR"
+            ):
                 errores_registro.append(
                     ErrorCargaMasiva(
                         fila=fila_numero,
@@ -592,7 +600,11 @@ async def _analizar_archivo_clientes(
 
             # Verificar si asesor existe
             if asesor:
-                asesor_obj = db.query(Analista).filter(Analista.nombre.ilike(f"%{asesor}%"), Analista.activo).first()
+                asesor_obj = (
+                    db.query(Analista)
+                    .filter(Analista.nombre.ilike(f"%{asesor}%"), Analista.activo)
+                    .first()
+                )
 
                 if not asesor_obj:
                     errores_registro.append(
@@ -681,7 +693,9 @@ async def _analizar_archivo_clientes(
             total_registros=total_registros,
             registros_procesados=len([r for r in registros_procesados if r.estado == "LISTO"]),
             registros_con_errores=registros_con_errores,
-            registros_pendientes=len([r for r in registros_procesados if r.estado == "PENDIENTE_CORRECCION"]),
+            registros_pendientes=len(
+                [r for r in registros_procesados if r.estado == "PENDIENTE_CORRECCION"]
+            ),
             errores_criticos=errores_criticos,
             errores_advertencia=errores_advertencia,
             datos_vacios=datos_vacios,
@@ -692,7 +706,9 @@ async def _analizar_archivo_clientes(
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error analizando archivo de clientes: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error analizando archivo de clientes: {str(e)}"
+        )
 
 
 # ============================================
@@ -913,7 +929,9 @@ async def _analizar_archivo_pagos(
                 RegistroCargaMasiva(
                     fila=fila_numero,
                     cedula=cedula or "VACÍO",
-                    nombre_completo=(cliente.nombre_completo if cliente else "Cliente no encontrado"),
+                    nombre_completo=(
+                        cliente.nombre_completo if cliente else "Cliente no encontrado"
+                    ),
                     estado=estado,
                     errores=errores_registro,
                     datos={
@@ -933,7 +951,9 @@ async def _analizar_archivo_pagos(
             total_registros=total_registros,
             registros_procesados=len([r for r in registros_procesados if r.estado == "LISTO"]),
             registros_con_errores=registros_con_errores,
-            registros_pendientes=len([r for r in registros_procesados if r.estado == "PENDIENTE_CORRECCION"]),
+            registros_pendientes=len(
+                [r for r in registros_procesados if r.estado == "PENDIENTE_CORRECCION"]
+            ),
             errores_criticos=errores_criticos,
             errores_advertencia=errores_advertencia,
             datos_vacios=datos_vacios,
@@ -1036,7 +1056,11 @@ async def corregir_registro_en_linea(
 
             elif campo == "asesor":
                 # Verificar que existe
-                asesor = db.query(Analista).filter(Analista.nombre.ilike(f"%{valor}%"), Analista.activo).first()
+                asesor = (
+                    db.query(Analista)
+                    .filter(Analista.nombre.ilike(f"%{valor}%"), Analista.activo)
+                    .first()
+                )
                 if not asesor:
                     errores_validacion.append(f"Analista '{valor}' no existe en la BD")
                 else:
@@ -1194,7 +1218,9 @@ async def _guardar_cliente_desde_carga(datos: Dict[str, Any], db: Session, usuar
         # Buscar asesor_id
         if datos.get("asesor"):
             asesor_obj = (
-                db.query(Analista).filter(Analista.nombre.ilike(f"%{datos['asesor']}%"), Analista.activo).first()
+                db.query(Analista)
+                .filter(Analista.nombre.ilike(f"%{datos['asesor']}%"), Analista.activo)
+                .first()
             )
             if asesor_obj:
                 asesor_id = asesor_obj.id
@@ -1217,18 +1243,30 @@ async def _guardar_cliente_desde_carga(datos: Dict[str, Any], db: Session, usuar
             # Campos legacy (mantener por compatibilidad)
             "concesionario": datos.get("concesionario", ""),
             "modelo_vehiculo": datos.get("modelo_vehiculo", ""),
-            "marca_vehiculo": datos.get("modelo_vehiculo", "").split(" ")[0] if datos.get("modelo_vehiculo") else "",
+            "marca_vehiculo": (
+                datos.get("modelo_vehiculo", "").split(" ")[0]
+                if datos.get("modelo_vehiculo")
+                else ""
+            ),
             # Financiamiento
             "total_financiamiento": (
-                Decimal(str(datos.get("total_financiamiento", 0))) if datos.get("total_financiamiento") else None
+                Decimal(str(datos.get("total_financiamiento", 0)))
+                if datos.get("total_financiamiento")
+                else None
             ),
-            "cuota_inicial": Decimal(str(datos.get("cuota_inicial", 0))) if datos.get("cuota_inicial") else None,
+            "cuota_inicial": (
+                Decimal(str(datos.get("cuota_inicial", 0))) if datos.get("cuota_inicial") else None
+            ),
             "numero_amortizaciones": (
-                int(datos.get("numero_amortizaciones", 12)) if datos.get("numero_amortizaciones") else None
+                int(datos.get("numero_amortizaciones", 12))
+                if datos.get("numero_amortizaciones")
+                else None
             ),
             "modalidad_pago": datos.get("modalidad_pago", "MENSUAL").upper(),
             "fecha_entrega": (
-                datetime.strptime(datos["fecha_entrega"], "%Y-%m-%d").date() if datos.get("fecha_entrega") else None
+                datetime.strptime(datos["fecha_entrega"], "%Y-%m-%d").date()
+                if datos.get("fecha_entrega")
+                else None
             ),
             # Estado
             "estado": "ACTIVO",
@@ -1310,7 +1348,9 @@ async def _guardar_pago_desde_carga(datos: Dict[str, Any], db: Session, usuario_
                 if isinstance(datos["fecha_pago"], str)
                 else datos["fecha_pago"]
             ),
-            "numero_cuota": int(datos.get("numero_cuota", 1)) if datos.get("numero_cuota") else None,
+            "numero_cuota": (
+                int(datos.get("numero_cuota", 1)) if datos.get("numero_cuota") else None
+            ),
             "referencia": datos.get("documento_pago", ""),
             "metodo_pago": datos.get("metodo_pago", "TRANSFERENCIA").upper(),
             "estado": "CONFIRMADO",
@@ -1450,7 +1490,9 @@ async def descargar_template_excel(
 
 
 @router.get("/opciones-configuracion")
-async def obtener_opciones_configuracion(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def obtener_opciones_configuracion(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📋 Obtener listas de opciones para corrección en línea
 
@@ -1495,7 +1537,9 @@ async def obtener_opciones_configuracion(db: Session = Depends(get_db), current_
 
 
 @router.get("/dashboard")
-async def dashboard_carga_masiva(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def dashboard_carga_masiva(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📊 Dashboard de carga masiva
 

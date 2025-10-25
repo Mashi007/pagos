@@ -35,8 +35,12 @@ async def debug_autenticacion(request: Request, db: Session = Depends(get_db)):
 
         if auth_header:
             headers_analysis["authorization_present"] = True
-            headers_analysis["authorization_type"] = auth_header.split(" ")[0] if " " in auth_header else "unknown"
-            headers_analysis["token_length"] = len(auth_header.split(" ")[1]) if " " in auth_header else 0
+            headers_analysis["authorization_type"] = (
+                auth_header.split(" ")[0] if " " in auth_header else "unknown"
+            )
+            headers_analysis["token_length"] = (
+                len(auth_header.split(" ")[1]) if " " in auth_header else 0
+            )
         else:
             headers_analysis["authorization_present"] = False
 
@@ -83,7 +87,9 @@ async def debug_autenticacion(request: Request, db: Session = Depends(get_db)):
             # Buscar usuario admin para test
             admin_user = db.query(User).filter(User.is_admin).first()
             if admin_user:
-                test_token = create_access_token(subject=str(admin_user.id), additional_claims={"type": "access"})
+                test_token = create_access_token(
+                    subject=str(admin_user.id), additional_claims={"type": "access"}
+                )
                 token_test = {
                     "status": "success",
                     "token_created": True,
@@ -114,7 +120,9 @@ async def debug_autenticacion(request: Request, db: Session = Depends(get_db)):
                 "token_test": token_test,
                 "cors": cors_analysis,
             },
-            "recommendations": _generate_recommendations(headers_analysis, jwt_config, users_analysis),
+            "recommendations": _generate_recommendations(
+                headers_analysis, jwt_config, users_analysis
+            ),
         }
 
     except Exception as e:
@@ -139,7 +147,9 @@ async def test_autenticacion(request: Request, db: Session = Depends(get_db)):
             admin_user = db.query(User).filter(User.is_admin).first()
             if admin_user:
                 # Simular login
-                test_token = create_access_token(subject=str(admin_user.id), additional_claims={"type": "access"})
+                test_token = create_access_token(
+                    subject=str(admin_user.id), additional_claims={"type": "access"}
+                )
                 login_test = {
                     "status": "success",
                     "user_found": True,
@@ -208,7 +218,10 @@ async def test_autenticacion(request: Request, db: Session = Depends(get_db)):
             },
             "overall_status": (
                 "success"
-                if all(t.get("status") == "success" for t in [login_test, validation_test, protected_test])
+                if all(
+                    t.get("status") == "success"
+                    for t in [login_test, validation_test, protected_test]
+                )
                 else "failed"
             ),
         }
@@ -315,7 +328,9 @@ async def aplicar_fix_autenticacion(request: Request, db: Session = Depends(get_
         }
 
 
-def _generate_recommendations(headers_analysis: Dict, jwt_config: Dict, users_analysis: Dict) -> List[str]:
+def _generate_recommendations(
+    headers_analysis: Dict, jwt_config: Dict, users_analysis: Dict
+) -> List[str]:
     """Generar recomendaciones basadas en el análisis"""
     recommendations = []
 

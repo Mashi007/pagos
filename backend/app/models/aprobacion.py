@@ -51,7 +51,9 @@ class Aprobacion(Base):
     )
 
     # Detalles de la solicitud
-    tipo_solicitud = Column(String(50), nullable=False, index=True)  # PRESTAMO, MODIFICACION_MONTO, ANULACION, etc.
+    tipo_solicitud = Column(
+        String(50), nullable=False, index=True
+    )  # PRESTAMO, MODIFICACION_MONTO, ANULACION, etc.
 
     entidad = Column(String(50), nullable=False)  # Cliente, Prestamo, Pago, etc.
     entidad_id = Column(Integer, nullable=False, index=True)
@@ -87,8 +89,12 @@ class Aprobacion(Base):
     actualizado_en = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relaciones
-    solicitante = relationship("User", foreign_keys=[solicitante_id], back_populates="aprobaciones_solicitadas")
-    revisor = relationship("User", foreign_keys=[revisor_id], back_populates="aprobaciones_revisadas")
+    solicitante = relationship(
+        "User", foreign_keys=[solicitante_id], back_populates="aprobaciones_solicitadas"
+    )
+    revisor = relationship(
+        "User", foreign_keys=[revisor_id], back_populates="aprobaciones_revisadas"
+    )
 
     def __repr__(self):
         return f"<Aprobacion {self.tipo_solicitud} - {self.estado}>"

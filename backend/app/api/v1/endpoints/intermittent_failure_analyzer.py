@@ -68,7 +68,9 @@ class IntermittentFailureAnalyzer:
             }
             self.failed_requests.append(request)
 
-            logger.warning(f"❌ Request fallido registrado: {request['endpoint']} - {request['error_type']}")
+            logger.warning(
+                f"❌ Request fallido registrado: {request['endpoint']} - {request['error_type']}"
+            )
 
     def analyze_intermittent_patterns(self) -> Dict[str, Any]:
         """Analizar patrones de fallos intermitentes"""
@@ -129,15 +131,20 @@ class IntermittentFailureAnalyzer:
             all_endpoints.add(req["endpoint"])
 
         for endpoint in all_endpoints:
-            successful_for_endpoint = [req for req in self.successful_requests if req["endpoint"] == endpoint]
-            failed_for_endpoint = [req for req in self.failed_requests if req["endpoint"] == endpoint]
+            successful_for_endpoint = [
+                req for req in self.successful_requests if req["endpoint"] == endpoint
+            ]
+            failed_for_endpoint = [
+                req for req in self.failed_requests if req["endpoint"] == endpoint
+            ]
 
             if successful_for_endpoint and failed_for_endpoint:
                 patterns["endpoint_intermittency"][endpoint] = {
                     "successful_count": len(successful_for_endpoint),
                     "failed_count": len(failed_for_endpoint),
                     "intermittency_score": (
-                        len(failed_for_endpoint) / (len(successful_for_endpoint) + len(failed_for_endpoint))
+                        len(failed_for_endpoint)
+                        / (len(successful_for_endpoint) + len(failed_for_endpoint))
                     ),
                 }
 
@@ -151,14 +158,20 @@ class IntermittentFailureAnalyzer:
                 all_users.add(req["user_id"])
 
         for user_id in all_users:
-            successful_for_user = [req for req in self.successful_requests if req.get("user_id") == user_id]
+            successful_for_user = [
+                req for req in self.successful_requests if req.get("user_id") == user_id
+            ]
             failed_for_user = [req for req in self.failed_requests if req.get("user_id") == user_id]
 
             if successful_for_user and failed_for_user:
                 patterns["user_specific_patterns"][str(user_id)] = {
                     "successful_count": len(successful_for_user),
                     "failed_count": len(failed_for_user),
-                    "failure_rate": len(failed_for_user) / (len(successful_for_user) + len(failed_for_user)) * 100,
+                    "failure_rate": (
+                        len(failed_for_user)
+                        / (len(successful_for_user) + len(failed_for_user))
+                        * 100
+                    ),
                 }
 
         return patterns
@@ -174,32 +187,49 @@ class IntermittentFailureAnalyzer:
 
         # Patrones de longitud de token
         successful_token_lengths = [
-            req.get("token_length", 0) for req in self.successful_requests if req.get("token_length")
+            req.get("token_length", 0)
+            for req in self.successful_requests
+            if req.get("token_length")
         ]
-        failed_token_lengths = [req.get("token_length", 0) for req in self.failed_requests if req.get("token_length")]
+        failed_token_lengths = [
+            req.get("token_length", 0) for req in self.failed_requests if req.get("token_length")
+        ]
 
         if successful_token_lengths and failed_token_lengths:
             triggers["token_length_patterns"] = {
                 "successful_avg_length": statistics.mean(successful_token_lengths),
                 "failed_avg_length": statistics.mean(failed_token_lengths),
-                "length_difference": statistics.mean(successful_token_lengths) - statistics.mean(failed_token_lengths),
+                "length_difference": (
+                    statistics.mean(successful_token_lengths)
+                    - statistics.mean(failed_token_lengths)
+                ),
             }
 
         # Patrones de timing
         successful_times = [
-            req.get("response_time_ms", 0) for req in self.successful_requests if req.get("response_time_ms")
+            req.get("response_time_ms", 0)
+            for req in self.successful_requests
+            if req.get("response_time_ms")
         ]
-        failed_times = [req.get("response_time_ms", 0) for req in self.failed_requests if req.get("response_time_ms")]
+        failed_times = [
+            req.get("response_time_ms", 0)
+            for req in self.failed_requests
+            if req.get("response_time_ms")
+        ]
 
         if successful_times and failed_times:
             triggers["timing_triggers"] = {
                 "successful_avg_time": statistics.mean(successful_times),
                 "failed_avg_time": statistics.mean(failed_times),
-                "time_difference": statistics.mean(successful_times) - statistics.mean(failed_times),
+                "time_difference": (
+                    statistics.mean(successful_times) - statistics.mean(failed_times)
+                ),
             }
 
         # Patrones de cliente
-        successful_ips = [req.get("client_ip") for req in self.successful_requests if req.get("client_ip")]
+        successful_ips = [
+            req.get("client_ip") for req in self.successful_requests if req.get("client_ip")
+        ]
         failed_ips = [req.get("client_ip") for req in self.failed_requests if req.get("client_ip")]
 
         successful_ip_counts = defaultdict(int)
@@ -257,7 +287,9 @@ class IntermittentFailureAnalyzer:
         timing_analysis = {
             "total_requests_analyzed": len(all_requests),
             "failure_sequences_count": len(failure_sequences),
-            "longest_failure_sequence": max([len(seq) for seq in failure_sequences]) if failure_sequences else 0,
+            "longest_failure_sequence": (
+                max([len(seq) for seq in failure_sequences]) if failure_sequences else 0
+            ),
             "average_sequence_length": (
                 statistics.mean([len(seq) for seq in failure_sequences]) if failure_sequences else 0
             ),
@@ -267,7 +299,9 @@ class IntermittentFailureAnalyzer:
         recovery_patterns = []
         for i in range(len(all_requests) - 1):
             if not all_requests[i]["success"] and all_requests[i + 1]["success"]:
-                recovery_time = (all_requests[i + 1]["timestamp"] - all_requests[i]["timestamp"]).total_seconds()
+                recovery_time = (
+                    all_requests[i + 1]["timestamp"] - all_requests[i]["timestamp"]
+                ).total_seconds()
                 recovery_patterns.append(recovery_time)
 
         if recovery_patterns:
@@ -286,7 +320,9 @@ class IntermittentFailureAnalyzer:
             cutoff_time = current_time - timedelta(hours=1)  # Última hora
 
             # Filtrar requests recientes
-            recent_successful = [req for req in self.successful_requests if req["timestamp"] > cutoff_time]
+            recent_successful = [
+                req for req in self.successful_requests if req["timestamp"] > cutoff_time
+            ]
             recent_failed = [req for req in self.failed_requests if req["timestamp"] > cutoff_time]
 
             return {
@@ -301,7 +337,9 @@ class IntermittentFailureAnalyzer:
                 "recent_patterns": self._analyze_recent_patterns(recent_successful, recent_failed),
             }
 
-    def _analyze_recent_patterns(self, recent_successful: List[Dict], recent_failed: List[Dict]) -> Dict[str, Any]:
+    def _analyze_recent_patterns(
+        self, recent_successful: List[Dict], recent_failed: List[Dict]
+    ) -> Dict[str, Any]:
         """Analizar patrones recientes"""
         if not recent_successful or not recent_failed:
             return {"status": "insufficient_data"}
@@ -315,7 +353,9 @@ class IntermittentFailureAnalyzer:
         common_endpoints = successful_endpoints & failed_endpoints
 
         for endpoint in common_endpoints:
-            successful_count = len([req for req in recent_successful if req["endpoint"] == endpoint])
+            successful_count = len(
+                [req for req in recent_successful if req["endpoint"] == endpoint]
+            )
             failed_count = len([req for req in recent_failed if req["endpoint"] == endpoint])
 
             intermittent_endpoints.append(
@@ -402,7 +442,9 @@ async def log_failed_request_endpoint(
 router.get("/intermittent-patterns")
 
 
-async def get_intermittent_patterns(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_intermittent_patterns(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🔄 Análisis de patrones intermitentes
     """

@@ -170,7 +170,9 @@ class TablaAmortizacionResponse(BaseModel):
         default_factory=dict,
         description="Resumen con totales: total_capital, total_interes, total_pagar, etc.",
     )
-    parametros: dict = Field(default_factory=dict, description="Parámetros usados para generar la tabla")
+    parametros: dict = Field(
+        default_factory=dict, description="Parámetros usados para generar la tabla"
+    )
 
 
 class AplicarPagoRequest(BaseModel):
@@ -225,7 +227,9 @@ class ProyeccionPagoRequest(BaseModel):
 
     prestamo_id: int
     monto_pago: Decimal = Field(..., gt=0, description="Monto que se planea pagar")
-    fecha_proyeccion: Optional[date] = Field(default=None, description="Fecha para la proyección (default: hoy)")
+    fecha_proyeccion: Optional[date] = Field(
+        default=None, description="Fecha para la proyección (default: hoy)"
+    )
 
     @field_validator("monto_pago", mode="before")
     @classmethod
@@ -261,7 +265,9 @@ class RecalcularMoraRequest(BaseModel):
         le=10,
         description="Tasa de mora diaria (%). Si no se especifica, usa la configurada en el sistema",
     )
-    fecha_calculo: Optional[date] = Field(default=None, description="Fecha para el cálculo (default: hoy)")
+    fecha_calculo: Optional[date] = Field(
+        default=None, description="Fecha para el cálculo (default: hoy)"
+    )
 
     @field_validator("tasa_mora_diaria", mode="before")
     @classmethod

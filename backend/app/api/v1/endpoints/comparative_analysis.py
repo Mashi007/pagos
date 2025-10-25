@@ -178,7 +178,9 @@ class ComparativeAnalysisSystem:
 
         return {
             "token_length_analysis": {
-                "successful_avg_length": statistics.mean(successful_lengths) if successful_lengths else 0,
+                "successful_avg_length": (
+                    statistics.mean(successful_lengths) if successful_lengths else 0
+                ),
                 "failed_avg_length": statistics.mean(failed_lengths) if failed_lengths else 0,
                 "length_difference": (
                     statistics.mean(successful_lengths) - statistics.mean(failed_lengths)
@@ -187,8 +189,12 @@ class ComparativeAnalysisSystem:
                 ),
             },
             "expiration_analysis": {
-                "successful_avg_time_to_expiry": statistics.mean(successful_exp_times) if successful_exp_times else 0,
-                "failed_avg_time_to_expiry": statistics.mean(failed_exp_times) if failed_exp_times else 0,
+                "successful_avg_time_to_expiry": (
+                    statistics.mean(successful_exp_times) if successful_exp_times else 0
+                ),
+                "failed_avg_time_to_expiry": (
+                    statistics.mean(failed_exp_times) if failed_exp_times else 0
+                ),
                 "expiry_difference": (
                     statistics.mean(successful_exp_times) - statistics.mean(failed_exp_times)
                     if successful_exp_times and failed_exp_times
@@ -231,9 +237,13 @@ class ComparativeAnalysisSystem:
         return {
             "user_status_analysis": {
                 "successful_active_rate": (
-                    (successful_active_count / len(successful_users) * 100) if successful_users else 0
+                    (successful_active_count / len(successful_users) * 100)
+                    if successful_users
+                    else 0
                 ),
-                "failed_active_rate": (failed_active_count / len(failed_users) * 100) if failed_users else 0,
+                "failed_active_rate": (
+                    (failed_active_count / len(failed_users) * 100) if failed_users else 0
+                ),
                 "active_rate_difference": (
                     (successful_active_count / len(successful_users) * 100)
                     - (failed_active_count / len(failed_users) * 100)
@@ -243,9 +253,13 @@ class ComparativeAnalysisSystem:
             },
             "admin_status_analysis": {
                 "successful_admin_rate": (
-                    (successful_admin_count / len(successful_users) * 100) if successful_users else 0
+                    (successful_admin_count / len(successful_users) * 100)
+                    if successful_users
+                    else 0
                 ),
-                "failed_admin_rate": (failed_admin_count / len(failed_users) * 100) if failed_users else 0,
+                "failed_admin_rate": (
+                    (failed_admin_count / len(failed_users) * 100) if failed_users else 0
+                ),
                 "admin_rate_difference": (
                     (successful_admin_count / len(successful_users) * 100)
                     - (failed_admin_count / len(failed_users) * 100)
@@ -288,9 +302,12 @@ class ComparativeAnalysisSystem:
                 "successful_avg_response_time": (
                     statistics.mean(successful_response_times) if successful_response_times else 0
                 ),
-                "failed_avg_response_time": statistics.mean(failed_response_times) if failed_response_times else 0,
+                "failed_avg_response_time": (
+                    statistics.mean(failed_response_times) if failed_response_times else 0
+                ),
                 "response_time_difference": (
-                    statistics.mean(successful_response_times) - statistics.mean(failed_response_times)
+                    statistics.mean(successful_response_times)
+                    - statistics.mean(failed_response_times)
                     if successful_response_times and failed_response_times
                     else 0
                 ),
@@ -333,12 +350,16 @@ class ComparativeAnalysisSystem:
             "endpoint_analysis": {
                 "successful_endpoints": self._count_patterns(successful_endpoints),
                 "failed_endpoints": self._count_patterns(failed_endpoints),
-                "endpoint_differences": self._find_pattern_differences(successful_endpoints, failed_endpoints),
+                "endpoint_differences": self._find_pattern_differences(
+                    successful_endpoints, failed_endpoints
+                ),
             },
             "method_analysis": {
                 "successful_methods": self._count_patterns(successful_methods),
                 "failed_methods": self._count_patterns(failed_methods),
-                "method_differences": self._find_pattern_differences(successful_methods, failed_methods),
+                "method_differences": self._find_pattern_differences(
+                    successful_methods, failed_methods
+                ),
             },
         }
 
@@ -370,7 +391,9 @@ class ComparativeAnalysisSystem:
             "success_only_patterns": list(success_only_patterns),
             "failure_only_patterns": list(failure_only_patterns),
             "common_patterns_with_differences": common_patterns,
-            "pattern_significance": self._calculate_pattern_significance(successful_patterns, failed_patterns),
+            "pattern_significance": self._calculate_pattern_significance(
+                successful_patterns, failed_patterns
+            ),
         }
 
     def _identify_root_cause_indicators(self) -> Dict[str, Any]:
@@ -408,7 +431,9 @@ class ComparativeAnalysisSystem:
             user_analysis = analysis_results["user_analysis"]
 
             if "user_status_analysis" in user_analysis:
-                active_rate_diff = user_analysis["user_status_analysis"].get("active_rate_difference", 0)
+                active_rate_diff = user_analysis["user_status_analysis"].get(
+                    "active_rate_difference", 0
+                )
                 if abs(active_rate_diff) > 20:  # Más del 20% de diferencia
                     indicators["medium_confidence_indicators"].append(
                         {
@@ -466,7 +491,9 @@ class ComparativeAnalysisSystem:
             pattern_counts[pattern] += 1
         return dict(pattern_counts)
 
-    def _find_pattern_differences(self, successful_patterns: List[str], failed_patterns: List[str]) -> Dict[str, Any]:
+    def _find_pattern_differences(
+        self, successful_patterns: List[str], failed_patterns: List[str]
+    ) -> Dict[str, Any]:
         """Encontrar diferencias en patrones"""
         successful_counts = self._count_patterns(successful_patterns)
         failed_counts = self._count_patterns(failed_patterns)

@@ -40,7 +40,9 @@ class User(Base):
         foreign_keys="Aprobacion.solicitante_id",
         back_populates="solicitante",
     )
-    aprobaciones_revisadas = relationship("Aprobacion", foreign_keys="Aprobacion.revisor_id", back_populates="revisor")
+    aprobaciones_revisadas = relationship(
+        "Aprobacion", foreign_keys="Aprobacion.revisor_id", back_populates="revisor"
+    )
 
     # Relación removida: Los préstamos pertenecen a Cliente, no a User
 

@@ -114,7 +114,9 @@ class Notificacion(Base):
     max_intentos = Column(Integer, default=3)
 
     # Fechas
-    programada_para = Column(DateTime(timezone=True), nullable=True, index=True)  # Para notificaciones programadas
+    programada_para = Column(
+        DateTime(timezone=True), nullable=True, index=True
+    )  # Para notificaciones programadas
 
     enviada_en = Column(DateTime(timezone=True), nullable=True)
     leida_en = Column(DateTime(timezone=True), nullable=True)

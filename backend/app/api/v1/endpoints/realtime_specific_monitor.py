@@ -35,7 +35,9 @@ class RealTimeSpecificMonitor:
         self.success_moments = deque(maxlen=100)  # Momentos específicos de éxito
         self.lock = threading.Lock()
 
-    def start_specific_monitoring(self, session_id: str, target_endpoints: List[str] = None) -> Dict[str, Any]:
+    def start_specific_monitoring(
+        self, session_id: str, target_endpoints: List[str] = None
+    ) -> Dict[str, Any]:
         """Iniciar monitoreo específico"""
         with self.lock:
             monitoring_session = {
@@ -63,10 +65,14 @@ class RealTimeSpecificMonitor:
             session = self.monitoring_sessions[session_id]
             session["status"] = "stopped"
             session["end_time"] = datetime.now()
-            session["duration_seconds"] = (session["end_time"] - session["start_time"]).total_seconds()
+            session["duration_seconds"] = (
+                session["end_time"] - session["start_time"]
+            ).total_seconds()
 
             # Si no hay más sesiones activas, detener monitoreo global
-            active_sessions = [s for s in self.monitoring_sessions.values() if s["status"] == "active"]
+            active_sessions = [
+                s for s in self.monitoring_sessions.values() if s["status"] == "active"
+            ]
             if not active_sessions:
                 self.active_monitoring = False
 
@@ -191,8 +197,12 @@ class RealTimeSpecificMonitor:
             return {"error": "No hay contexto disponible"}
 
         return {
-            "avg_active_sessions": sum(c.get("active_sessions_count", 0) for c in contexts) / len(contexts),
-            "total_events_during_failures": sum(c.get("total_events_captured", 0) for c in contexts),
+            "avg_active_sessions": (
+                sum(c.get("active_sessions_count", 0) for c in contexts) / len(contexts)
+            ),
+            "total_events_during_failures": sum(
+                c.get("total_events_captured", 0) for c in contexts
+            ),
             "context_samples": contexts[-5:],  # Últimos 5 contextos
         }
 
@@ -223,7 +233,9 @@ class RealTimeSpecificMonitor:
                         "from": current,
                         "to": next_outcome,
                         "time_diff_seconds": (
-                            (all_moments[i + 1]["timestamp"] - all_moments[i]["timestamp"]).total_seconds()
+                            (
+                                all_moments[i + 1]["timestamp"] - all_moments[i]["timestamp"]
+                            ).total_seconds()
                         ),
                     }
                 )
@@ -237,14 +249,18 @@ class RealTimeSpecificMonitor:
                 [t for t in transitions if t["from"] == "success" and t["to"] == "failure"]
             ),
             "avg_transition_time_seconds": (
-                sum(t["time_diff_seconds"] for t in transitions) / len(transitions) if transitions else 0
+                sum(t["time_diff_seconds"] for t in transitions) / len(transitions)
+                if transitions
+                else 0
             ),
         }
 
     def get_real_time_status(self) -> Dict[str, Any]:
         """Obtener estado del monitoreo en tiempo real"""
         with self.lock:
-            active_sessions = [s for s in self.monitoring_sessions.values() if s["status"] == "active"]
+            active_sessions = [
+                s for s in self.monitoring_sessions.values() if s["status"] == "active"
+            ]
 
             return {
                 "timestamp": datetime.now().isoformat(),
@@ -391,7 +407,9 @@ async def capture_auth_event_endpoint(
 
 
 @router.get("/failure-moments-analysis")
-async def get_failure_moments_analysis(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_failure_moments_analysis(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🔍 Análisis de momentos específicos de fallo
     """
@@ -414,7 +432,9 @@ async def get_failure_moments_analysis(db: Session = Depends(get_db), current_us
 
 
 @router.get("/real-time-status")
-async def get_real_time_status_endpoint(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_real_time_status_endpoint(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📊 Estado del monitoreo en tiempo real
     """

@@ -82,7 +82,9 @@ def test_concesionarios_simple(db: Session = Depends(get_db)):
 
 
 @router.get("/test-auth")
-def test_concesionarios_auth(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def test_concesionarios_auth(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     Test endpoint con autenticación para verificar concesionarios
     """
@@ -202,7 +204,9 @@ def listar_concesionarios_activos(
         return [c.to_dict() for c in concesionarios]
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al listar concesionarios activos: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error al listar concesionarios activos: {str(e)}"
+        )
 
 
 @router.get("/{concesionario_id}", response_model=ConcesionarioResponse)
@@ -277,7 +281,9 @@ def actualizar_concesionario(
                 .first()
             )
             if existing:
-                raise HTTPException(status_code=400, detail="Ya existe un concesionario con este nombre")
+                raise HTTPException(
+                    status_code=400, detail="Ya existe un concesionario con este nombre"
+                )
 
         # Actualizar campos
         update_data = concesionario_data.dict(exclude_unset=True)

@@ -60,8 +60,12 @@ class Cuota(Base):
     total_pagado = Column(Numeric(12, 2), default=Decimal("0.00"))
 
     # Saldos pendientes
-    capital_pendiente = Column(Numeric(12, 2), nullable=False)  # Capital que falta pagar de esta cuota
-    interes_pendiente = Column(Numeric(12, 2), nullable=False)  # Interés que falta pagar de esta cuota
+    capital_pendiente = Column(
+        Numeric(12, 2), nullable=False
+    )  # Capital que falta pagar de esta cuota
+    interes_pendiente = Column(
+        Numeric(12, 2), nullable=False
+    )  # Interés que falta pagar de esta cuota
 
     # Mora
     dias_mora = Column(Integer, default=0)
@@ -69,7 +73,9 @@ class Cuota(Base):
     tasa_mora = Column(Numeric(5, 2), default=Decimal("0.00"))  # Tasa de mora aplicada (%)
 
     # Estado
-    estado = Column(String(20), nullable=False, default="PENDIENTE", index=True)  # PENDIENTE, PAGADA, VENCIDA, PARCIAL
+    estado = Column(
+        String(20), nullable=False, default="PENDIENTE", index=True
+    )  # PENDIENTE, PAGADA, VENCIDA, PARCIAL
 
     # Información adicional
     observaciones = Column(String(500), nullable=True)

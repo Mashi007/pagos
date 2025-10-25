@@ -36,7 +36,9 @@ async def diagnosticar_refresh_token(request: Request, db: Session = Depends(get
                 "timestamp": datetime.now().isoformat(),
                 "status": "error",
                 "error": "No refresh token provided",
-                "recomendacion": "Verificar que el frontend esté enviando el refresh_token correctamente",
+                "recomendacion": (
+                    "Verificar que el frontend esté enviando el refresh_token correctamente"
+                ),
             }
 
         logger.info(f"🔍 Refresh token recibido: {refresh_token[:20]}...")
@@ -63,7 +65,9 @@ async def diagnosticar_refresh_token(request: Request, db: Session = Depends(get
 
                 token_info["expired"] = now > exp_datetime
                 token_info["expires_at"] = exp_datetime.isoformat()
-                token_info["time_until_expiry"] = str(exp_datetime - now) if not token_info["expired"] else "EXPIRED"
+                token_info["time_until_expiry"] = (
+                    str(exp_datetime - now) if not token_info["expired"] else "EXPIRED"
+                )
 
         except Exception as e:
             return {
@@ -88,7 +92,9 @@ async def diagnosticar_refresh_token(request: Request, db: Session = Depends(get
                     "status": "error",
                     "error": "Refresh token expired",
                     "token_info": token_info,
-                    "recomendacion": "El refresh token ha expirado. El usuario debe hacer login nuevamente.",
+                    "recomendacion": (
+                        "El refresh token ha expirado. El usuario debe hacer login nuevamente."
+                    ),
                 }
             else:
                 return {
@@ -170,7 +176,9 @@ async def diagnosticar_refresh_token(request: Request, db: Session = Depends(get
                     "access_token": new_access_token,
                     "refresh_token": new_refresh_token,
                 },
-                "recomendacion": "El refresh token es válido. El problema puede estar en el frontend.",
+                "recomendacion": (
+                    "El refresh token es válido. El problema puede estar en el frontend."
+                ),
             }
 
         except Exception as e:
@@ -193,7 +201,9 @@ async def diagnosticar_refresh_token(request: Request, db: Session = Depends(get
 
 
 @router.get("/estado-refresh-tokens")
-async def estado_refresh_tokens(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def estado_refresh_tokens(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📊 Estado general de los refresh tokens en el sistema
     """
@@ -232,7 +242,9 @@ async def estado_refresh_tokens(db: Session = Depends(get_db), current_user: Use
                 "access_token_expire_minutes": 30,
                 "refresh_token_expire_days": 7,
             },
-            "recomendacion": "Tokens generados correctamente. Verificar configuración del frontend.",
+            "recomendacion": (
+                "Tokens generados correctamente. Verificar configuración del frontend."
+            ),
         }
 
     except Exception as e:

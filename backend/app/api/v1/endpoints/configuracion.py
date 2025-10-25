@@ -52,7 +52,9 @@ def habilitar_monitoreo_basico(current_user: User = Depends(get_current_user)):
     ⚡ Habilitar monitoreo básico sin dependencias externas
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Solo administradores pueden configurar monitoreo")
+        raise HTTPException(
+            status_code=403, detail="Solo administradores pueden configurar monitoreo"
+        )
 
     try:
         # Configurar logging estructurado básico
@@ -133,7 +135,9 @@ def obtener_configuracion_completa(
                 "tipo_dato": config.tipo_dato,
                 "requerido": config.requerido,
                 "solo_lectura": config.solo_lectura,
-                "opciones_validas": json.loads(config.opciones_validas) if config.opciones_validas else None,
+                "opciones_validas": (
+                    json.loads(config.opciones_validas) if config.opciones_validas else None
+                ),
                 "valor_minimo": config.valor_minimo,
                 "valor_maximo": config.valor_maximo,
                 "patron_validacion": config.patron_validacion,
@@ -398,7 +402,9 @@ def obtener_configuracion_categoria(
                 "tipo_dato": config.tipo_dato,
                 "requerido": config.requerido,
                 "solo_lectura": config.solo_lectura,
-                "opciones_validas": json.loads(config.opciones_validas) if config.opciones_validas else None,
+                "opciones_validas": (
+                    json.loads(config.opciones_validas) if config.opciones_validas else None
+                ),
                 "valor_minimo": config.valor_minimo,
                 "valor_maximo": config.valor_maximo,
                 "patron_validacion": config.patron_validacion,
@@ -544,7 +550,9 @@ def probar_integracion(
     🧪 Probar integración de una categoría específica
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Solo administradores pueden probar integraciones")
+        raise HTTPException(
+            status_code=403, detail="Solo administradores pueden probar integraciones"
+        )
 
     try:
         categoria = categoria.upper()
@@ -570,7 +578,9 @@ def probar_integracion(
 
 
 @router.get("/sistema/estado-servicios")
-def obtener_estado_servicios(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def obtener_estado_servicios(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📊 Obtener estado de todos los servicios configurados
     """
@@ -593,7 +603,9 @@ def obtener_estado_servicios(db: Session = Depends(get_db), current_user: User =
             "email": {
                 "habilitado": True,  # Siempre habilitado
                 "configurado": ConfigHelper.is_email_configured(db),
-                "estado": "✅ CONFIGURADO" if ConfigHelper.is_email_configured(db) else "⚠️ PENDIENTE",
+                "estado": (
+                    "✅ CONFIGURADO" if ConfigHelper.is_email_configured(db) else "⚠️ PENDIENTE"
+                ),
             },
             "whatsapp": {
                 "habilitado": ConfigHelper.is_whatsapp_enabled(db),
@@ -609,7 +621,11 @@ def obtener_estado_servicios(db: Session = Depends(get_db), current_user: User =
             "monitoreo": {
                 "habilitado": bool(ConfigHelper.get_config(db, "MONITOREO", "SENTRY_DSN")),
                 "configurado": bool(ConfigHelper.get_config(db, "MONITOREO", "SENTRY_DSN")),
-                "estado": "✅ ACTIVO" if ConfigHelper.get_config(db, "MONITOREO", "SENTRY_DSN") else "❌ INACTIVO",
+                "estado": (
+                    "✅ ACTIVO"
+                    if ConfigHelper.get_config(db, "MONITOREO", "SENTRY_DSN")
+                    else "❌ INACTIVO"
+                ),
             },
         }
 
@@ -635,11 +651,15 @@ def obtener_estado_servicios(db: Session = Depends(get_db), current_user: User =
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo estado de servicios: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error obteniendo estado de servicios: {str(e)}"
+        )
 
 
 @router.post("/sistema/inicializar-defaults")
-def inicializar_configuraciones_default(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def inicializar_configuraciones_default(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🔧 Inicializar configuraciones por defecto del sistema
     """
@@ -680,7 +700,9 @@ def inicializar_configuraciones_default(db: Session = Depends(get_db), current_u
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error inicializando configuraciones: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error inicializando configuraciones: {str(e)}"
+        )
 
 
 # ============================================
@@ -689,7 +711,9 @@ def inicializar_configuraciones_default(db: Session = Depends(get_db), current_u
 
 
 @router.get("/ia")
-def obtener_configuracion_ia(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def obtener_configuracion_ia(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🤖 Obtener configuración de Inteligencia Artificial
     """
@@ -715,7 +739,9 @@ def obtener_configuracion_ia(db: Session = Depends(get_db), current_user: User =
             valor_mostrar = config.valor_procesado
             if config.tipo_dato == "PASSWORD" and config.valor:
                 valor_mostrar = (
-                    f"{'*' * (len(config.valor) - 4)}{config.valor[-4:]}" if len(config.valor) > 4 else "****"
+                    f"{'*' * (len(config.valor) - 4)}{config.valor[-4:]}"
+                    if len(config.valor) > 4
+                    else "****"
                 )
 
             configuracion[config.clave] = {
@@ -725,7 +751,9 @@ def obtener_configuracion_ia(db: Session = Depends(get_db), current_user: User =
                 "tipo_dato": config.tipo_dato,
                 "requerido": config.requerido,
                 "configurado": bool(config.valor),
-                "opciones_validas": json.loads(config.opciones_validas) if config.opciones_validas else None,
+                "opciones_validas": (
+                    json.loads(config.opciones_validas) if config.opciones_validas else None
+                ),
             }
 
         # Estado de funcionalidades IA
@@ -832,7 +860,9 @@ def actualizar_configuracion_ia(
 
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error actualizando configuración IA: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error actualizando configuración IA: {str(e)}"
+        )
 
 
 # ============================================
@@ -841,7 +871,9 @@ def actualizar_configuracion_ia(
 
 
 @router.get("/email")
-def obtener_configuracion_email(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def obtener_configuracion_email(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📧 Obtener configuración de email
     """
@@ -852,7 +884,9 @@ def obtener_configuracion_email(db: Session = Depends(get_db), current_user: Use
                 status_code=403,
                 detail="Solo administradores pueden ver configuración de email",
             )
-        configs_email = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "EMAIL").all()
+        configs_email = (
+            db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "EMAIL").all()
+        )
 
         configuracion = {}
         for config in configs_email:
@@ -902,7 +936,9 @@ def obtener_configuracion_email(db: Session = Depends(get_db), current_user: Use
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo configuración email: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error obteniendo configuración email: {str(e)}"
+        )
 
 
 @router.post("/email/actualizar")
@@ -953,7 +989,9 @@ def actualizar_configuracion_email(
 
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error actualizando configuración email: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error actualizando configuración email: {str(e)}"
+        )
 
 
 # ============================================
@@ -962,7 +1000,9 @@ def actualizar_configuracion_email(
 
 
 @router.get("/whatsapp")
-def obtener_configuracion_whatsapp(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def obtener_configuracion_whatsapp(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📱 Obtener configuración de WhatsApp
     """
@@ -973,7 +1013,11 @@ def obtener_configuracion_whatsapp(db: Session = Depends(get_db), current_user: 
                 status_code=403,
                 detail="Solo administradores pueden ver configuración de WhatsApp",
             )
-        configs_whatsapp = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "WHATSAPP").all()
+        configs_whatsapp = (
+            db.query(ConfiguracionSistema)
+            .filter(ConfiguracionSistema.categoria == "WHATSAPP")
+            .all()
+        )
 
         configuracion = {}
         for config in configs_whatsapp:
@@ -1014,7 +1058,9 @@ def obtener_configuracion_whatsapp(db: Session = Depends(get_db), current_user: 
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo configuración WhatsApp: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error obteniendo configuración WhatsApp: {str(e)}"
+        )
 
 
 # ============================================
@@ -1023,7 +1069,9 @@ def obtener_configuracion_whatsapp(db: Session = Depends(get_db), current_user: 
 
 
 @router.get("/dashboard")
-def dashboard_configuracion_sistema(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def dashboard_configuracion_sistema(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📊 Dashboard principal de configuración del sistema
     """
@@ -1044,7 +1092,9 @@ def dashboard_configuracion_sistema(db: Session = Depends(get_db), current_user:
             .count()
         )
 
-        configs_requeridas = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.requerido).count()
+        configs_requeridas = (
+            db.query(ConfiguracionSistema).filter(ConfiguracionSistema.requerido).count()
+        )
 
         configs_requeridas_configuradas = (
             db.query(ConfiguracionSistema)
@@ -1061,7 +1111,11 @@ def dashboard_configuracion_sistema(db: Session = Depends(get_db), current_user:
         estado_categorias = {}
 
         for (categoria,) in categorias:
-            total_cat = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == categoria).count()
+            total_cat = (
+                db.query(ConfiguracionSistema)
+                .filter(ConfiguracionSistema.categoria == categoria)
+                .count()
+            )
 
             configuradas_cat = (
                 db.query(ConfiguracionSistema)
@@ -1079,7 +1133,11 @@ def dashboard_configuracion_sistema(db: Session = Depends(get_db), current_user:
                 "total": total_cat,
                 "configuradas": configuradas_cat,
                 "porcentaje": porcentaje,
-                "estado": "✅ COMPLETA" if porcentaje == 100 else "⚠️ PARCIAL" if porcentaje > 0 else "❌ PENDIENTE",
+                "estado": (
+                    "✅ COMPLETA"
+                    if porcentaje == 100
+                    else "⚠️ PARCIAL" if porcentaje > 0 else "❌ PENDIENTE"
+                ),
             }
 
         return {
@@ -1106,7 +1164,9 @@ def dashboard_configuracion_sistema(db: Session = Depends(get_db), current_user:
                     "descripcion": "Sistema de autenticación JWT",
                 },
                 "email": {
-                    "estado": "✅ CONFIGURADO" if ConfigHelper.is_email_configured(db) else "⚠️ PENDIENTE",
+                    "estado": (
+                        "✅ CONFIGURADO" if ConfigHelper.is_email_configured(db) else "⚠️ PENDIENTE"
+                    ),
                     "descripcion": "Servicio de email",
                 },
                 "ia": {
@@ -1114,7 +1174,9 @@ def dashboard_configuracion_sistema(db: Session = Depends(get_db), current_user:
                     "descripcion": "Inteligencia Artificial",
                 },
                 "whatsapp": {
-                    "estado": "✅ ACTIVO" if ConfigHelper.is_whatsapp_enabled(db) else "❌ INACTIVO",
+                    "estado": (
+                        "✅ ACTIVO" if ConfigHelper.is_whatsapp_enabled(db) else "❌ INACTIVO"
+                    ),
                     "descripcion": "WhatsApp Business",
                 },
             },
@@ -1122,19 +1184,25 @@ def dashboard_configuracion_sistema(db: Session = Depends(get_db), current_user:
                 "configurar_ia": "POST /api/v1/configuracion/ia/actualizar",
                 "configurar_email": "POST /api/v1/configuracion/email/actualizar",
                 "configurar_whatsapp": "POST /api/v1/configuracion/whatsapp/actualizar",
-                "probar_servicios": "POST /api/v1/configuracion/sistema/probar-integracion/{categoria}",
+                "probar_servicios": (
+                    "POST /api/v1/configuracion/sistema/probar-integracion/{categoria}"
+                ),
                 "inicializar_defaults": "POST /api/v1/configuracion/sistema/inicializar-defaults",
             },
             "alertas_configuracion": _generar_alertas_configuracion(db, estado_categorias),
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en dashboard de configuración: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error en dashboard de configuración: {str(e)}"
+        )
 
 
 # Schemas
 class ConfiguracionTasas(BaseModel):
-    tasa_interes_base: Decimal = Field(..., ge=0, le=100, description="Tasa de interés base anual (%)")
+    tasa_interes_base: Decimal = Field(
+        ..., ge=0, le=100, description="Tasa de interés base anual (%)"
+    )
     tasa_mora: Decimal = Field(..., ge=0, le=10, description="Tasa de mora mensual (%)")
     tasa_descuento_pronto_pago: Optional[Decimal] = Field(None, ge=0, le=10)
 
@@ -1223,7 +1291,9 @@ def obtener_configuracion_tasas(current_user: User = Depends(get_current_user)):
 
 
 @router.put("/tasas")
-def actualizar_configuracion_tasas(config: ConfiguracionTasas, current_user: User = Depends(get_current_user)):
+def actualizar_configuracion_tasas(
+    config: ConfiguracionTasas, current_user: User = Depends(get_current_user)
+):
     """
     Actualizar configuración de tasas de interés.
     Solo accesible para ADMIN.
@@ -1256,7 +1326,9 @@ def obtener_configuracion_limites(current_user: User = Depends(get_current_user)
 
 
 @router.put("/limites")
-def actualizar_configuracion_limites(config: ConfiguracionLimites, current_user: User = Depends(get_current_user)):
+def actualizar_configuracion_limites(
+    config: ConfiguracionLimites, current_user: User = Depends(get_current_user)
+):
     """
     Actualizar configuración de límites.
     Solo accesible para ADMIN.
@@ -1266,10 +1338,14 @@ def actualizar_configuracion_limites(config: ConfiguracionLimites, current_user:
 
     # Validar que máximo > mínimo
     if config.monto_maximo_prestamo <= config.monto_minimo_prestamo:
-        raise HTTPException(status_code=400, detail="El monto máximo debe ser mayor al monto mínimo")
+        raise HTTPException(
+            status_code=400, detail="El monto máximo debe ser mayor al monto mínimo"
+        )
 
     if config.plazo_maximo_meses <= config.plazo_minimo_meses:
-        raise HTTPException(status_code=400, detail="El plazo máximo debe ser mayor al plazo mínimo")
+        raise HTTPException(
+            status_code=400, detail="El plazo máximo debe ser mayor al plazo mínimo"
+        )
 
     _config_cache["limites"] = {
         "monto_minimo_prestamo": float(config.monto_minimo_prestamo),
@@ -1325,7 +1401,9 @@ def actualizar_configuracion_notificaciones(
 
 
 @router.put("/general")
-def actualizar_configuracion_general(config: ConfiguracionGeneral, current_user: User = Depends(get_current_user)):
+def actualizar_configuracion_general(
+    config: ConfiguracionGeneral, current_user: User = Depends(get_current_user)
+):
     """
     Actualizar configuración general.
     Solo accesible para ADMIN.
@@ -1469,7 +1547,11 @@ def calcular_cuota_ejemplo(
     if tasa_mensual == 0:
         cuota = monto / plazo_meses
     else:
-        cuota = monto * (tasa_mensual * (1 + tasa_mensual) ** plazo_meses) / ((1 + tasa_mensual) ** plazo_meses - 1)
+        cuota = (
+            monto
+            * (tasa_mensual * (1 + tasa_mensual) ** plazo_meses)
+            / ((1 + tasa_mensual) ** plazo_meses - 1)
+        )
 
     total_pagar = cuota * plazo_meses
     total_interes = total_pagar - monto
@@ -1495,11 +1577,15 @@ def validar_limites_cliente(
     try:
         # Solo admin puede validar límites
         if not current_user.is_admin:
-            raise HTTPException(status_code=403, detail="Solo administradores pueden validar límites")
+            raise HTTPException(
+                status_code=403, detail="Solo administradores pueden validar límites"
+            )
 
         # Contar préstamos activos del cliente
         prestamos_activos = (
-            db.query(Prestamo).filter(Prestamo.cliente_id == cliente_id, Prestamo.estado == "ACTIVO").count()
+            db.query(Prestamo)
+            .filter(Prestamo.cliente_id == cliente_id, Prestamo.estado == "ACTIVO")
+            .count()
         )
 
         limite_prestamos = _config_cache["limites"]["limite_prestamos_activos"]
@@ -1516,11 +1602,15 @@ def validar_limites_cliente(
 
         if monto_solicitado < limites_monto["monto_minimo_prestamo"]:
             validaciones["puede_solicitar"] = False
-            validaciones["mensajes"].append(f"Monto mínimo permitido: ${limites_monto['monto_minimo_prestamo']:,.2f}")
+            validaciones["mensajes"].append(
+                f"Monto mínimo permitido: ${limites_monto['monto_minimo_prestamo']:,.2f}"
+            )
 
         if monto_solicitado > limites_monto["monto_maximo_prestamo"]:
             validaciones["puede_solicitar"] = False
-            validaciones["mensajes"].append(f"Monto máximo permitido: ${limites_monto['monto_maximo_prestamo']:,.2f}")
+            validaciones["mensajes"].append(
+                f"Monto máximo permitido: ${limites_monto['monto_maximo_prestamo']:,.2f}"
+            )
 
         return {
             "cliente_id": cliente_id,

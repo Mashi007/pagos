@@ -140,7 +140,9 @@ class DatabaseSchemaAnalyzer:
             {
                 "table": "analistas",
                 "fix_type": "add_column",
-                "sql": "ALTER TABLE analistas ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;",
+                "sql": (
+                    "ALTER TABLE analistas ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;"
+                ),
                 "description": "Agregar columna created_at faltante que causa error 503",
                 "priority": "critical",
             }
@@ -194,7 +196,9 @@ schema_analyzer = DatabaseSchemaAnalyzer()
 
 
 @router.get("/schema-inconsistencies")
-async def get_schema_inconsistencies(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_schema_inconsistencies(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🔍 Analizar inconsistencias específicas del esquema de BD
     """
@@ -217,7 +221,9 @@ async def get_schema_inconsistencies(db: Session = Depends(get_db), current_user
 
 
 @router.get("/schema-fixes")
-async def get_schema_fixes(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_schema_fixes(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🔧 Generar fixes específicos para el esquema
     """
@@ -240,7 +246,9 @@ async def get_schema_fixes(db: Session = Depends(get_db), current_user: User = D
 
 
 @router.get("/schema-monitoring")
-async def get_schema_monitoring(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_schema_monitoring(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📊 Monitorear estado actual del esquema
     """

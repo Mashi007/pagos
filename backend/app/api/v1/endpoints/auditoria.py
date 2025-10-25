@@ -108,7 +108,9 @@ def listar_auditoria(
 
 
 @router.get("/stats", response_model=AuditoriaStatsResponse, summary="Estadísticas de auditoría")
-def obtener_estadisticas_auditoria(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def obtener_estadisticas_auditoria(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📊 Obtener estadísticas de auditoría
 
@@ -120,7 +122,9 @@ def obtener_estadisticas_auditoria(db: Session = Depends(get_db), current_user: 
 
         # Acciones por módulo
         acciones_por_modulo = {}
-        modulos = db.query(Auditoria.modulo, func.count(Auditoria.id)).group_by(Auditoria.modulo).all()
+        modulos = (
+            db.query(Auditoria.modulo, func.count(Auditoria.id)).group_by(Auditoria.modulo).all()
+        )
         for modulo, count in modulos:
             acciones_por_modulo[modulo] = count
 
@@ -143,8 +147,12 @@ def obtener_estadisticas_auditoria(db: Session = Depends(get_db), current_user: 
         este_mes = hoy - timedelta(days=30)
 
         acciones_hoy = db.query(Auditoria).filter(func.date(Auditoria.fecha) == hoy).count()
-        acciones_esta_semana = db.query(Auditoria).filter(func.date(Auditoria.fecha) >= esta_semana).count()
-        acciones_este_mes = db.query(Auditoria).filter(func.date(Auditoria.fecha) >= este_mes).count()
+        acciones_esta_semana = (
+            db.query(Auditoria).filter(func.date(Auditoria.fecha) >= esta_semana).count()
+        )
+        acciones_este_mes = (
+            db.query(Auditoria).filter(func.date(Auditoria.fecha) >= este_mes).count()
+        )
 
         return AuditoriaStatsResponse(
             total_acciones=total_acciones,
@@ -231,7 +239,9 @@ def exportar_auditoria_excel(
 
         # Construir query y aplicar filtros
         query = db.query(Auditoria)
-        query = _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, fecha_desde, fecha_hasta)
+        query = _aplicar_filtros_auditoria(
+            query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
+        )
 
         # Obtener registros y crear DataFrame
         auditorias = query.order_by(desc(Auditoria.fecha)).all()

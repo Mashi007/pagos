@@ -11,9 +11,13 @@ DECIMAL_PRECISION = 2
 MIN_PASSWORD_LENGTH = 8
 
 # Definir constraints personalizados para Decimal
-DecimalAmount = Annotated[Decimal, Field(ge=0, description="Monto en formato decimal con 2 decimales")]
+DecimalAmount = Annotated[
+    Decimal, Field(ge=0, description="Monto en formato decimal con 2 decimales")
+]
 
-DecimalPercentage = Annotated[Decimal, Field(ge=0, le=MAX_PERCENTAGE, description="Porcentaje con 2 decimales")]
+DecimalPercentage = Annotated[
+    Decimal, Field(ge=0, le=MAX_PERCENTAGE, description="Porcentaje con 2 decimales")
+]
 
 
 class PrestamoBase(BaseModel):
@@ -22,7 +26,9 @@ class PrestamoBase(BaseModel):
     cliente_id: int
     monto_total: Decimal = Field(..., gt=0, description="Monto total del préstamo")
     monto_financiado: Decimal = Field(..., gt=0, description="Monto financiado")
-    monto_inicial: Decimal = Field(default=Decimal("0.00"), ge=0, description="Monto inicial/cuota inicial")
+    monto_inicial: Decimal = Field(
+        default=Decimal("0.00"), ge=0, description="Monto inicial/cuota inicial"
+    )
     tasa_interes: Decimal = Field(
         default=Decimal("0.00"),
         ge=0,
@@ -65,7 +71,9 @@ class PrestamoUpdate(BaseModel):
     """Schema para actualizar un préstamo"""
 
     monto_total: Optional[Decimal] = Field(None, gt=0, description="Monto total del préstamo")
-    tasa_interes: Optional[Decimal] = Field(None, ge=0, le=MAX_PERCENTAGE, description="Tasa de interés anual (%)")
+    tasa_interes: Optional[Decimal] = Field(
+        None, ge=0, le=MAX_PERCENTAGE, description="Tasa de interés anual (%)"
+    )
     estado: Optional[str] = None
     categoria: Optional[str] = None
     observaciones: Optional[str] = None

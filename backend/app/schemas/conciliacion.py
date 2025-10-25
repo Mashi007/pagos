@@ -46,7 +46,9 @@ class MovimientoBancario(BaseModel):
     descripcion: Optional[str] = ""
     cuenta_origen: Optional[str] = Field(None, description="Número de cuenta origen")
 
-    model_config = ConfigDict(json_encoders={Decimal: lambda v: float(v), date: lambda v: v.isoformat()})
+    model_config = ConfigDict(
+        json_encoders={Decimal: lambda v: float(v), date: lambda v: v.isoformat()}
+    )
 
     @field_validator("monto")
     @classmethod
@@ -94,9 +96,13 @@ class ConciliacionMatch(BaseModel):
     monto_pago: Decimal
     fecha_pago: date
     tipo_match: TipoMatch
-    confianza: float = Field(ge=0, le=MAX_CONFIDENCE, description="Porcentaje de confianza del match")
+    confianza: float = Field(
+        ge=0, le=MAX_CONFIDENCE, description="Porcentaje de confianza del match"
+    )
 
-    model_config = ConfigDict(json_encoders={Decimal: lambda v: float(v), date: lambda v: v.isoformat()})
+    model_config = ConfigDict(
+        json_encoders={Decimal: lambda v: float(v), date: lambda v: v.isoformat()}
+    )
 
 
 class ResultadoConciliacion(BaseModel):
@@ -375,4 +381,6 @@ class HistorialConciliacion(BaseModel):
     estado: EstadoConciliacion
     observaciones: Optional[str] = None
 
-    model_config = ConfigDict(from_attributes=True, json_encoders={datetime: lambda v: v.isoformat()})
+    model_config = ConfigDict(
+        from_attributes=True, json_encoders={datetime: lambda v: v.isoformat()}
+    )

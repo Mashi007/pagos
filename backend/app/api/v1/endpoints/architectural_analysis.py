@@ -151,7 +151,9 @@ class ArchitecturalAnalysisSystem:
 
                     # Limitar historial de métricas
                     if len(self.component_metrics[component_id]) > 100:
-                        self.component_metrics[component_id] = self.component_metrics[component_id][-100:]
+                        self.component_metrics[component_id] = self.component_metrics[component_id][
+                            -100:
+                        ]
 
                 except Exception as e:
                     logger.error(f"Error monitoreando componente {component_id}: {e}")
@@ -161,7 +163,9 @@ class ArchitecturalAnalysisSystem:
                         "overall_health_score": 0,
                     }
 
-    def _check_component_health(self, component_id: str, component_info: Dict[str, Any]) -> Dict[str, Any]:
+    def _check_component_health(
+        self, component_id: str, component_info: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Verificar salud de un componente específico"""
         health_checks = component_info.get("health_checks", [])
         health_results = {}
@@ -575,7 +579,9 @@ class ArchitecturalAnalysisSystem:
             dependency_analysis["recommendations"].append("🔧 Revisar componentes con baja salud")
 
         if not dependency_analysis["bottlenecks"]:
-            dependency_analysis["recommendations"].append("✅ Arquitectura funcionando correctamente")
+            dependency_analysis["recommendations"].append(
+                "✅ Arquitectura funcionando correctamente"
+            )
 
         return dependency_analysis
 
@@ -587,10 +593,18 @@ class ArchitecturalAnalysisSystem:
             # Estadísticas generales
             total_components = len(self.system_components)
             healthy_components = len(
-                [c for c in self.component_health.values() if c.get("status") in ["excellent", "good"]]
+                [
+                    c
+                    for c in self.component_health.values()
+                    if c.get("status") in ["excellent", "good"]
+                ]
             )
-            degraded_components = len([c for c in self.component_health.values() if c.get("status") == "degraded"])
-            poor_components = len([c for c in self.component_health.values() if c.get("status") == "poor"])
+            degraded_components = len(
+                [c for c in self.component_health.values() if c.get("status") == "degraded"]
+            )
+            poor_components = len(
+                [c for c in self.component_health.values() if c.get("status") == "poor"]
+            )
 
             # Análisis de dependencias
             dependency_analysis = self.analyze_component_dependencies()
@@ -658,7 +672,9 @@ async def get_component_health(
 
 
 @router.get("/all-components-health")
-async def get_all_components_health(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_all_components_health(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🏗️ Obtener salud de todos los componentes
     """
@@ -682,7 +698,9 @@ async def get_all_components_health(db: Session = Depends(get_db), current_user:
 
 
 @router.get("/component-dependencies")
-async def get_component_dependencies(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_component_dependencies(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🔗 Análisis de dependencias entre componentes
     """
@@ -744,7 +762,9 @@ async def force_component_health_check(
                 raise HTTPException(status_code=404, detail="Componente no encontrado")
 
             component_info = architectural_system.system_components[component_id]
-            health_status = architectural_system._check_component_health(component_id, component_info)
+            health_status = architectural_system._check_component_health(
+                component_id, component_info
+            )
             architectural_system.component_health[component_id] = health_status
 
         return {

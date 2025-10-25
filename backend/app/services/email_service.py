@@ -82,7 +82,9 @@ class EmailService:
                 message.attach(MIMEText(body, "plain"))
 
             # Enviar
-            async with aiosmtplib.SMTP(hostname=self.smtp_host, port=self.smtp_port, use_tls=True) as smtp:
+            async with aiosmtplib.SMTP(
+                hostname=self.smtp_host, port=self.smtp_port, use_tls=True
+            ) as smtp:
                 await smtp.login(self.smtp_user, self.smtp_password)
                 await smtp.send_message(message)
 
@@ -99,7 +101,9 @@ class EmailService:
 
             # Actualizar notificación como fallida
             if notificacion_id:
-                self._actualizar_notificacion(notificacion_id, EstadoNotificacion.FALLIDA.value, error=str(e))
+                self._actualizar_notificacion(
+                    notificacion_id, EstadoNotificacion.FALLIDA.value, error=str(e)
+                )
 
             return False
 
@@ -265,7 +269,9 @@ class EmailService:
 
         return Template(templates[template_name])
 
-    def _actualizar_notificacion(self, notificacion_id: int, estado: str, error: Optional[str] = None):
+    def _actualizar_notificacion(
+        self, notificacion_id: int, estado: str, error: Optional[str] = None
+    ):
         """
         Actualizar estado de notificación en base de datos.
         """

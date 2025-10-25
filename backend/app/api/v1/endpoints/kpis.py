@@ -57,7 +57,9 @@ def dashboard_kpis_principales(
 
     # ⚠️ CLIENTES EN MORA
     clientes_en_mora = (
-        db.query(Cliente).filter(Cliente.activo, Cliente.estado_financiero == "MORA", Cliente.dias_mora > 0).count()
+        db.query(Cliente)
+        .filter(Cliente.activo, Cliente.estado_financiero == "MORA", Cliente.dias_mora > 0)
+        .count()
     )
 
     # 📈 TASA DE MOROSIDAD
@@ -121,7 +123,9 @@ def dashboard_kpis_principales(
         },
         "resumen": {
             "total_clientes": total_clientes,
-            "porcentaje_al_dia": round((clientes_al_dia / total_clientes * 100), 2) if total_clientes > 0 else 0,
+            "porcentaje_al_dia": (
+                round((clientes_al_dia / total_clientes * 100), 2) if total_clientes > 0 else 0
+            ),
             "porcentaje_mora": round(tasa_morosidad, 2),
         },
     }
@@ -278,17 +282,22 @@ def kpis_cobranza(db: Session = Depends(get_db), current_user: User = Depends(ge
 
     # Promedio de días de retraso
     promedio_dias_mora = (
-        db.query(func.avg(Cliente.dias_mora)).filter(Cliente.activo, Cliente.dias_mora > 0).scalar() or 0
+        db.query(func.avg(Cliente.dias_mora)).filter(Cliente.activo, Cliente.dias_mora > 0).scalar()
+        or 0
     )
 
     # Porcentaje de cumplimiento de pagos (cuotas pagadas a tiempo)
     cuotas_vencidas = db.query(Cuota).filter(Cuota.fecha_vencimiento <= date.today()).count()
 
     cuotas_pagadas_tiempo = (
-        db.query(Cuota).filter(Cuota.estado == "PAGADA", Cuota.fecha_pago <= Cuota.fecha_vencimiento).count()
+        db.query(Cuota)
+        .filter(Cuota.estado == "PAGADA", Cuota.fecha_pago <= Cuota.fecha_vencimiento)
+        .count()
     )
 
-    porcentaje_cumplimiento = (cuotas_pagadas_tiempo / cuotas_vencidas * 100) if cuotas_vencidas > 0 else 0
+    porcentaje_cumplimiento = (
+        (cuotas_pagadas_tiempo / cuotas_vencidas * 100) if cuotas_vencidas > 0 else 0
+    )
 
     # Top 10 clientes morosos
     top_morosos = (
@@ -421,12 +430,18 @@ def kpis_analistaes(db: Session = Depends(get_db), current_user: User = Depends(
         )
 
     # Identificar mejores y peores
-    mejor_vendedor = max(ranking_ventas, key=lambda x: x["total_ventas"]) if ranking_ventas else None
+    mejor_vendedor = (
+        max(ranking_ventas, key=lambda x: x["total_ventas"]) if ranking_ventas else None
+    )
     mayor_monto = max(ranking_ventas, key=lambda x: x["monto_vendido"]) if ranking_ventas else None
     menor_ventas = min(ranking_ventas, key=lambda x: x["total_ventas"]) if ranking_ventas else None
 
-    mejor_cobrador = max(ranking_cobranza, key=lambda x: x["tasa_cobro"]) if ranking_cobranza else None
-    peor_cobrador = min(ranking_cobranza, key=lambda x: x["tasa_cobro"]) if ranking_cobranza else None
+    mejor_cobrador = (
+        max(ranking_cobranza, key=lambda x: x["tasa_cobro"]) if ranking_cobranza else None
+    )
+    peor_cobrador = (
+        min(ranking_cobranza, key=lambda x: x["tasa_cobro"]) if ranking_cobranza else None
+    )
 
     return {
         "ranking_ventas": {
@@ -443,10 +458,14 @@ def kpis_analistaes(db: Session = Depends(get_db), current_user: User = Depends(
         "comparativa": {
             "total_analistaes": len(ranking_ventas),
             "promedio_ventas": (
-                sum(r["total_ventas"] for r in ranking_ventas) / len(ranking_ventas) if ranking_ventas else 0
+                sum(r["total_ventas"] for r in ranking_ventas) / len(ranking_ventas)
+                if ranking_ventas
+                else 0
             ),
             "promedio_tasa_cobro": (
-                sum(r["tasa_cobro"] for r in ranking_cobranza) / len(ranking_cobranza) if ranking_cobranza else 0
+                sum(r["tasa_cobro"] for r in ranking_cobranza) / len(ranking_cobranza)
+                if ranking_cobranza
+                else 0
             ),
         },
     }
@@ -508,8 +527,12 @@ def kpis_productos(db: Session = Depends(get_db), current_user: User = Depends(g
         )
 
     # Identificar extremos
-    modelo_mas_vendido = max(modelos_data, key=lambda x: x["total_ventas"]) if modelos_data else None
-    modelo_menos_vendido = min(modelos_data, key=lambda x: x["total_ventas"]) if modelos_data else None
+    modelo_mas_vendido = (
+        max(modelos_data, key=lambda x: x["total_ventas"]) if modelos_data else None
+    )
+    modelo_menos_vendido = (
+        min(modelos_data, key=lambda x: x["total_ventas"]) if modelos_data else None
+    )
 
     return {
         "modelo_mas_vendido": modelo_mas_vendido,
@@ -523,14 +546,18 @@ def kpis_productos(db: Session = Depends(get_db), current_user: User = Depends(g
         "estadisticas": {
             "total_modelos": len(modelos_data),
             "ticket_promedio_general": (
-                sum(m["ticket_promedio"] for m in modelos_data) / len(modelos_data) if modelos_data else 0
+                sum(m["ticket_promedio"] for m in modelos_data) / len(modelos_data)
+                if modelos_data
+                else 0
             ),
         },
     }
 
 
 @router.get("/concesionarios")
-def kpis_concesionarios(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def kpis_concesionarios(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🏢 KPIs de Concesionario
     - Ventas por concesionario
@@ -593,8 +620,16 @@ def kpis_concesionarios(db: Session = Depends(get_db), current_user: User = Depe
         "ventas_por_concesionario": concesionarios_data,
         "comparativa": {
             "mejor_concesionario": concesionarios_data[0] if concesionarios_data else None,
-            "peor_tasa_mora": min(concesionarios_data, key=lambda x: x["tasa_mora"]) if concesionarios_data else None,
-            "mayor_volumen": max(concesionarios_data, key=lambda x: x["monto_total"]) if concesionarios_data else None,
+            "peor_tasa_mora": (
+                min(concesionarios_data, key=lambda x: x["tasa_mora"])
+                if concesionarios_data
+                else None
+            ),
+            "mayor_volumen": (
+                max(concesionarios_data, key=lambda x: x["monto_total"])
+                if concesionarios_data
+                else None
+            ),
         },
         "estadisticas_generales": {
             "total_concesionarios": len(concesionarios_data),

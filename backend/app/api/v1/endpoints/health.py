@@ -302,7 +302,9 @@ async def health_check_full(response: Response):
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
         "database": "connected",
-        "database_last_check": _last_db_check["timestamp"].isoformat() if _last_db_check["timestamp"] else None,
+        "database_last_check": (
+            _last_db_check["timestamp"].isoformat() if _last_db_check["timestamp"] else None
+        ),
         "timestamp": datetime.utcnow().isoformat(),
     }
 

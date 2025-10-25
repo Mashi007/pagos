@@ -49,7 +49,9 @@ class ConfiguracionNotificacionesCliente(BaseModel):
     mora_3_dias: bool = Field(True, description="Notificación 3 días de mora")
     mora_5_dias: bool = Field(True, description="Notificación 5 días de mora")
     confirmacion_pago: bool = Field(True, description="Confirmación de pago")
-    canal_preferido: CanalNotificacion = Field(CanalNotificacion.AMBOS, description="Canal preferido")
+    canal_preferido: CanalNotificacion = Field(
+        CanalNotificacion.AMBOS, description="Canal preferido"
+    )
 
 
 class EstadisticasNotificaciones(BaseModel):
@@ -118,8 +120,16 @@ async def procesar_notificaciones_automaticas(
             "mensaje": "✅ Procesamiento de notificaciones iniciado en background",
             "timestamp": datetime.now().isoformat(),
             "servicios_disponibles": {
-                "email": "✅ CONFIGURADO" if config_servicios["email_configurado"] else "❌ NO CONFIGURADO",
-                "whatsapp": "✅ HABILITADO" if config_servicios["whatsapp_habilitado"] else "❌ DESHABILITADO",
+                "email": (
+                    "✅ CONFIGURADO"
+                    if config_servicios["email_configurado"]
+                    else "❌ NO CONFIGURADO"
+                ),
+                "whatsapp": (
+                    "✅ HABILITADO"
+                    if config_servicios["whatsapp_habilitado"]
+                    else "❌ DESHABILITADO"
+                ),
             },
             "estimacion_tiempo": "2-5 minutos dependiendo del volumen",
             "seguimiento": "GET /api/v1/notificaciones-multicanal/estado-procesamiento",
@@ -132,7 +142,9 @@ async def procesar_notificaciones_automaticas(
 
 
 @router.get("/estado-procesamiento")
-def obtener_estado_procesamiento(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def obtener_estado_procesamiento(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📊 Obtener estado actual del procesamiento de notificaciones
     """
@@ -195,9 +207,17 @@ def obtener_estado_procesamiento(db: Session = Depends(get_db), current_user: Us
                 "proxima_ejecucion": "En la próxima hora",
             },
             "alertas": [
-                (f"🚨 {fallidas} notificaciones fallidas requieren atención" if fallidas > 0 else None),
+                (
+                    f"🚨 {fallidas} notificaciones fallidas requieren atención"
+                    if fallidas > 0
+                    else None
+                ),
                 (f"⏳ {pendientes} notificaciones pendientes de envío" if pendientes > 0 else None),
-                ("✅ Sistema funcionando correctamente" if fallidas == 0 and pendientes == 0 else None),
+                (
+                    "✅ Sistema funcionando correctamente"
+                    if fallidas == 0 and pendientes == 0
+                    else None
+                ),
             ],
         }
 
@@ -259,7 +279,9 @@ def obtener_historial_notificaciones(
         # Paginación
         total = query.count()
         skip = (page - 1) * page_size
-        notificaciones = query.order_by(desc(Notificacion.creado_en)).offset(skip).limit(page_size).all()
+        notificaciones = (
+            query.order_by(desc(Notificacion.creado_en)).offset(skip).limit(page_size).all()
+        )
 
         # Formatear resultados
         historial = []
@@ -272,13 +294,20 @@ def obtener_historial_notificaciones(
                     "id": notif.id,
                     "cliente": {
                         "id": notif.usuario_id,
-                        "nombre": notif.destinatario_nombre or (cliente.nombre_completo if cliente else "N/A"),
+                        "nombre": (
+                            notif.destinatario_nombre
+                            or (cliente.nombre_completo if cliente else "N/A")
+                        ),
                         "email": notif.destinatario_email,
                         "telefono": notif.destinatario_telefono,
                     },
                     "canal": {
                         "tipo": notif.canal,
-                        "icono": "📧" if notif.canal == "EMAIL" else "📱" if notif.canal == "WHATSAPP" else "📋",
+                        "icono": (
+                            "📧"
+                            if notif.canal == "EMAIL"
+                            else "📱" if notif.canal == "WHATSAPP" else "📋"
+                        ),
                     },
                     "tipo": {
                         "codigo": notif.tipo,
@@ -289,7 +318,11 @@ def obtener_historial_notificaciones(
                         "icono": (
                             "✅"
                             if notif.estado == "ENTREGADO"
-                            else ("📬" if notif.estado == "LEIDO" else "⏳" if notif.estado == "PENDIENTE" else "❌")
+                            else (
+                                "📬"
+                                if notif.estado == "LEIDO"
+                                else "⏳" if notif.estado == "PENDIENTE" else "❌"
+                            )
                         ),
                         "descripcion": _traducir_estado_notificacion(notif.estado),
                     },
@@ -467,7 +500,9 @@ def actualizar_preferencias_cliente(
             )
 
         # Actualizar preferencias
-        exito = PreferenciasNotificacion.actualizar_preferencias_cliente(cliente_id, canal_preferido, db)
+        exito = PreferenciasNotificacion.actualizar_preferencias_cliente(
+            cliente_id, canal_preferido, db
+        )
 
         if not exito:
             raise HTTPException(status_code=500, detail="Error actualizando preferencias")
@@ -539,12 +574,16 @@ def listar_templates_whatsapp(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/whatsapp/templates/{template_name}/aprobar")
-def enviar_template_para_aprobacion(template_name: str, current_user: User = Depends(get_current_user)):
+def enviar_template_para_aprobacion(
+    template_name: str, current_user: User = Depends(get_current_user)
+):
     """
     📤 Enviar template de WhatsApp a Meta para aprobación
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Solo administradores pueden gestionar templates")
+        raise HTTPException(
+            status_code=403, detail="Solo administradores pueden gestionar templates"
+        )
 
     try:
         # Obtener template formateado para Meta
@@ -723,7 +762,9 @@ def dashboard_notificaciones_multicanal(
                 },
                 "whatsapp": {
                     "cantidad": por_canal["WHATSAPP"],
-                    "porcentaje": round((por_canal["WHATSAPP"] / total * 100), 1) if total > 0 else 0,
+                    "porcentaje": (
+                        round((por_canal["WHATSAPP"] / total * 100), 1) if total > 0 else 0
+                    ),
                     "color": "#25d366",
                 },
             },
@@ -805,7 +846,9 @@ async def probar_envio_notificacion(
 
         # Crear servicio y enviar notificación de prueba
         servicio = NotificacionMulticanal(db)
-        resultado = await servicio._enviar_notificacion_multicanal(cliente_data, tipo_notificacion, canal)
+        resultado = await servicio._enviar_notificacion_multicanal(
+            cliente_data, tipo_notificacion, canal
+        )
 
         return {
             "mensaje": "🧪 Notificación de prueba enviada",

@@ -42,7 +42,9 @@ class AmortizacionService:
         elif request.sistema_amortizacion == "AMERICANO":
             return AmortizacionService._generar_americano(request)
         else:
-            raise ValueError(f"Sistema de amortización no soportado: {request.sistema_amortizacion}")
+            raise ValueError(
+                f"Sistema de amortización no soportado: {request.sistema_amortizacion}"
+            )
 
     @staticmethod
     def _generar_frances(
@@ -72,7 +74,9 @@ class AmortizacionService:
 
         # Calcular cuota fija (si tasa > 0)
         if tasa_periodo > 0:
-            factor = (tasa_periodo * (1 + tasa_periodo) ** n_cuotas) / ((1 + tasa_periodo) ** n_cuotas - 1)
+            factor = (tasa_periodo * (1 + tasa_periodo) ** n_cuotas) / (
+                (1 + tasa_periodo) ** n_cuotas - 1
+            )
             cuota_fija = monto * factor
         else:
             # Sin interés, solo dividir el monto
@@ -81,7 +85,9 @@ class AmortizacionService:
         cuota_fija = cuota_fija.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         # Generar fechas de vencimiento
-        fechas = calculate_payment_dates(request.fecha_primer_vencimiento, n_cuotas, request.modalidad)
+        fechas = calculate_payment_dates(
+            request.fecha_primer_vencimiento, n_cuotas, request.modalidad
+        )
 
         # Generar cuotas
         cuotas = []
@@ -162,7 +168,9 @@ class AmortizacionService:
         capital_fijo = (monto / Decimal(n_cuotas)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         # Generar fechas
-        fechas = calculate_payment_dates(request.fecha_primer_vencimiento, n_cuotas, request.modalidad)
+        fechas = calculate_payment_dates(
+            request.fecha_primer_vencimiento, n_cuotas, request.modalidad
+        )
 
         # Generar cuotas
         cuotas = []
@@ -239,7 +247,9 @@ class AmortizacionService:
         interes_fijo = (monto * tasa_periodo).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         # Generar fechas
-        fechas = calculate_payment_dates(request.fecha_primer_vencimiento, n_cuotas, request.modalidad)
+        fechas = calculate_payment_dates(
+            request.fecha_primer_vencimiento, n_cuotas, request.modalidad
+        )
 
         # Generar cuotas
         cuotas = []
@@ -291,7 +301,9 @@ class AmortizacionService:
         return TablaAmortizacionResponse(cuotas=cuotas, resumen=resumen, parametros=parametros)
 
     @staticmethod
-    def crear_cuotas_prestamo(db: Session, prestamo_id: int, tabla: TablaAmortizacionResponse) -> List[Cuota]:
+    def crear_cuotas_prestamo(
+        db: Session, prestamo_id: int, tabla: TablaAmortizacionResponse
+    ) -> List[Cuota]:
         """
         Crea las cuotas en la BD para un préstamo
 
@@ -328,7 +340,9 @@ class AmortizacionService:
         return cuotas_creadas
 
     @staticmethod
-    def obtener_cuotas_prestamo(db: Session, prestamo_id: int, estado: Optional[str] = None) -> List[Cuota]:
+    def obtener_cuotas_prestamo(
+        db: Session, prestamo_id: int, estado: Optional[str] = None
+    ) -> List[Cuota]:
         """Obtiene las cuotas de un préstamo"""
         query = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id)
 

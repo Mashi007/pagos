@@ -82,7 +82,9 @@ class CriticalErrorMonitor:
             elif error_type == "frontend_error":
                 self.frontend_errors.append(error_entry)
 
-            logger.critical(f"🚨 Error crítico registrado: {error_type} - {error_data.get('message', '')}")
+            logger.critical(
+                f"🚨 Error crítico registrado: {error_type} - {error_data.get('message', '')}"
+            )
 
     def _determine_severity(self, error_type: str, error_data: Dict[str, Any]) -> str:
         """Determinar severidad del error"""
@@ -170,7 +172,9 @@ class CriticalErrorMonitor:
 
         return {
             "hourly_distribution": dict(hourly_errors),
-            "peak_error_hour": max(hourly_errors.items(), key=lambda x: x[1])[0] if hourly_errors else None,
+            "peak_error_hour": (
+                max(hourly_errors.items(), key=lambda x: x[1])[0] if hourly_errors else None
+            ),
             "error_frequency": len(self.critical_errors) / 24,  # Errores por hora promedio
         }
 
@@ -283,7 +287,9 @@ async def log_critical_error_endpoint(
 
 
 @router.get("/critical-error-analysis")
-async def get_critical_error_analysis(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_critical_error_analysis(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📊 Análisis de tendencias de errores críticos
     """

@@ -112,7 +112,9 @@ class ConfiguracionSistema(Base):
     @staticmethod
     def obtener_categoria(db, categoria: str) -> Dict[str, Any]:
         """Obtener todas las configuraciones de una categoría"""
-        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == categoria).all()
+        configs = (
+            db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == categoria).all()
+        )
 
         resultado = {}
         for config in configs:
@@ -678,8 +680,12 @@ class ConfigHelper:
         return {
             "tasa_base": ConfigHelper.get_config(db, "FINANCIERO", "TASA_INTERES_BASE", 18.0),
             "tasa_mora": ConfigHelper.get_config(db, "FINANCIERO", "TASA_MORA_MENSUAL", 2.0),
-            "cuota_inicial_min": ConfigHelper.get_config(db, "FINANCIERO", "CUOTA_INICIAL_MINIMA", 10.0),
-            "monto_maximo": ConfigHelper.get_config(db, "FINANCIERO", "MONTO_MAXIMO_FINANCIAMIENTO", 5000000),
+            "cuota_inicial_min": ConfigHelper.get_config(
+                db, "FINANCIERO", "CUOTA_INICIAL_MINIMA", 10.0
+            ),
+            "monto_maximo": ConfigHelper.get_config(
+                db, "FINANCIERO", "MONTO_MAXIMO_FINANCIAMIENTO", 5000000
+            ),
             "plazo_maximo": ConfigHelper.get_config(db, "FINANCIERO", "PLAZO_MAXIMO_MESES", 84),
         }
 
@@ -687,9 +693,15 @@ class ConfigHelper:
     def get_notification_config(db) -> Dict:
         """Obtener configuración de notificaciones"""
         return {
-            "recordatorios": ConfigHelper.get_config(db, "NOTIFICACIONES", "RECORDATORIOS_HABILITADOS", True),
-            "dias_antes": ConfigHelper.get_config(db, "NOTIFICACIONES", "DIAS_ANTES_RECORDATORIO", 3),
-            "mora_habilitada": ConfigHelper.get_config(db, "NOTIFICACIONES", "NOTIFICACIONES_MORA_HABILITADAS", True),
+            "recordatorios": ConfigHelper.get_config(
+                db, "NOTIFICACIONES", "RECORDATORIOS_HABILITADOS", True
+            ),
+            "dias_antes": ConfigHelper.get_config(
+                db, "NOTIFICACIONES", "DIAS_ANTES_RECORDATORIO", 3
+            ),
+            "mora_habilitada": ConfigHelper.get_config(
+                db, "NOTIFICACIONES", "NOTIFICACIONES_MORA_HABILITADAS", True
+            ),
             "frecuencia_mora": ConfigHelper.get_config(
                 db, "NOTIFICACIONES", "FRECUENCIA_NOTIFICACIONES_MORA", "DIARIA"
             ),

@@ -93,7 +93,8 @@ class WhatsAppService:
                             {
                                 "type": "body",
                                 "parameters": [
-                                    {"type": "text", "text": str(value)} for value in template_params.values()
+                                    {"type": "text", "text": str(value)}
+                                    for value in template_params.values()
                                 ],
                             }
                         ],
@@ -157,7 +158,9 @@ class WhatsAppService:
 
             # Actualizar notificación como fallida
             if notificacion_id:
-                self._actualizar_notificacion(notificacion_id, EstadoNotificacion.FALLIDA.value, error=error_msg)
+                self._actualizar_notificacion(
+                    notificacion_id, EstadoNotificacion.FALLIDA.value, error=error_msg
+                )
 
             return {"success": False, "error": error_msg, "message_id": None}
 
@@ -217,7 +220,9 @@ class WhatsAppService:
                     "components": [
                         {
                             "type": "body",
-                            "parameters": [{"type": "text", "text": str(value)} for value in variables.values()],
+                            "parameters": [
+                                {"type": "text", "text": str(value)} for value in variables.values()
+                            ],
                         }
                     ],
                 },
@@ -272,7 +277,9 @@ class WhatsAppService:
 
             # Actualizar notificación como fallida
             if notificacion_id:
-                self._actualizar_notificacion(notificacion_id, EstadoNotificacion.FALLIDA.value, error=error_msg)
+                self._actualizar_notificacion(
+                    notificacion_id, EstadoNotificacion.FALLIDA.value, error=error_msg
+                )
 
             return {"success": False, "error": error_msg, "message_id": None}
 
@@ -369,6 +376,8 @@ class WhatsAppService:
             "api_url": self.api_url,
         }
 
-        config_status["ready"] = all([config_status["access_token"], config_status["phone_number_id"]])
+        config_status["ready"] = all(
+            [config_status["access_token"], config_status["phone_number_id"]]
+        )
 
         return config_status

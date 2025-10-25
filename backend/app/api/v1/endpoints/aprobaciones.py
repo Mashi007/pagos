@@ -116,7 +116,9 @@ def obtener_aprobacion(
     aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
 
     if not aprobacion:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aprobación no encontrada")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Aprobación no encontrada"
+        )
 
     return aprobacion
 
@@ -132,7 +134,9 @@ def actualizar_aprobacion(
     aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
 
     if not aprobacion:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aprobación no encontrada")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Aprobación no encontrada"
+        )
 
     if not aprobacion.esta_pendiente:
         raise HTTPException(
@@ -171,7 +175,9 @@ def eliminar_aprobacion(
     aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
 
     if not aprobacion:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aprobación no encontrada")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Aprobación no encontrada"
+        )
 
     # Solo el solicitante puede eliminar su propia solicitud pendiente
     if aprobacion.solicitante_id != current_user.id or not aprobacion.esta_pendiente:

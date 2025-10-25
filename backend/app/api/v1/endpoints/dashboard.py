@@ -84,12 +84,16 @@ def dashboard_administrador(
     distribucion_clientes = {
         "al_dia": {
             "cantidad": clientes_al_dia,
-            "porcentaje": round((clientes_al_dia / total_clientes * 100), 1) if total_clientes > 0 else 0,
+            "porcentaje": (
+                round((clientes_al_dia / total_clientes * 100), 1) if total_clientes > 0 else 0
+            ),
             "color": "#28a745",
         },
         "mora": {
             "cantidad": clientes_en_mora,
-            "porcentaje": round((clientes_en_mora / total_clientes * 100), 1) if total_clientes > 0 else 0,
+            "porcentaje": (
+                round((clientes_en_mora / total_clientes * 100), 1) if total_clientes > 0 else 0
+            ),
             "color": "#ffc107",
         },
     }
@@ -125,7 +129,11 @@ def dashboard_administrador(
                         "monto": f"${float(cuota.monto_cuota):,.0f}",
                         "fecha": cuota.fecha_vencimiento.strftime("%d/%m/%Y"),
                         "dias": dias_hasta,
-                        "color": "danger" if dias_hasta == 0 else ("warning" if dias_hasta <= 2 else "info"),
+                        "color": (
+                            "danger"
+                            if dias_hasta == 0
+                            else ("warning" if dias_hasta <= 2 else "info")
+                        ),
                     }
                 )
 
@@ -258,7 +266,9 @@ def dashboard_administrador(
 
 
 @router.get("/cobranzas")
-def dashboard_cobranzas(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def dashboard_cobranzas(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     💰 DASHBOARD COBRANZAS - ACCESO COMPLETO (EXCEPTO GESTIÓN DE USUARIOS)
     ✅ Acceso: TODO el sistema (excepto gestión de usuarios)
@@ -283,7 +293,9 @@ def dashboard_cobranzas(db: Session = Depends(get_db), current_user: User = Depe
     ).scalar() or Decimal("0")
 
     vencimientos_hoy = (
-        db.query(Cuota).filter(Cuota.fecha_vencimiento == hoy, Cuota.estado.in_(["PENDIENTE", "PARCIAL"])).count()
+        db.query(Cuota)
+        .filter(Cuota.fecha_vencimiento == hoy, Cuota.estado.in_(["PENDIENTE", "PARCIAL"]))
+        .count()
     )
 
     clientes_mora = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).count()
@@ -429,7 +441,9 @@ def dashboard_cobranzas(db: Session = Depends(get_db), current_user: User = Depe
 
 
 @router.get("/comercial")
-def dashboard_comercial(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def dashboard_comercial(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     👔 DASHBOARD USER - SOLO SUS CLIENTES
     ⚠️ Acceso: SOLO SUS CLIENTES
@@ -468,7 +482,9 @@ def dashboard_comercial(db: Session = Depends(get_db), current_user: User = Depe
     # )
 
     # VENTAS DEL MES (solo sus clientes)
-    ventas_mes = db.query(Cliente).filter(filtro_clientes, Cliente.fecha_registro >= inicio_mes).count()
+    ventas_mes = (
+        db.query(Cliente).filter(filtro_clientes, Cliente.fecha_registro >= inicio_mes).count()
+    )
 
     monto_vendido_mes = db.query(func.sum(Cliente.total_financiamiento)).filter(
         filtro_clientes, Cliente.fecha_registro >= inicio_mes
@@ -530,7 +546,13 @@ def dashboard_comercial(db: Session = Depends(get_db), current_user: User = Depe
     ]
 
     # ÚLTIMAS VENTAS REGISTRADAS
-    ultimas_ventas = db.query(Cliente).filter(Cliente.activo).order_by(Cliente.fecha_registro.desc()).limit(10).all()
+    ultimas_ventas = (
+        db.query(Cliente)
+        .filter(Cliente.activo)
+        .order_by(Cliente.fecha_registro.desc())
+        .limit(10)
+        .all()
+    )
 
     return {
         "tipo_dashboard": "USER",
@@ -605,7 +627,9 @@ def dashboard_comercial(db: Session = Depends(get_db), current_user: User = Depe
 
 @router.get("/analista")
 def dashboard_analista(
-    analista_id: Optional[int] = Query(None, description="ID del analista de configuración (default: usuario actual)"),
+    analista_id: Optional[int] = Query(
+        None, description="ID del analista de configuración (default: usuario actual)"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -644,7 +668,11 @@ def dashboard_analista(
             "dias_mora": cliente.dias_mora,
             "monto_deuda": float(cliente.total_financiamiento or 0),
             "vehiculo": cliente.vehiculo_completo,
-            "prioridad": "🔴 Alta" if cliente.dias_mora > 30 else ("🟡 Media" if cliente.dias_mora > 15 else "🟠 Baja"),
+            "prioridad": (
+                "🔴 Alta"
+                if cliente.dias_mora > 30
+                else ("🟡 Media" if cliente.dias_mora > 15 else "🟠 Baja")
+            ),
         }
         for cliente in mis_clientes
         if cliente.dias_mora > 0
@@ -677,7 +705,11 @@ def dashboard_analista(
                 "total_analistaes": len(ranking_general),
                 "clientes": analista_rank.total_clientes,
                 "monto": float(analista_rank.monto_total or 0),
-                "percentil": round((1 - idx / len(ranking_general)) * 100, 1) if len(ranking_general) > 0 else 0,
+                "percentil": (
+                    round((1 - idx / len(ranking_general)) * 100, 1)
+                    if len(ranking_general) > 0
+                    else 0
+                ),
             }
             break
 
@@ -750,7 +782,9 @@ def obtener_matriz_acceso_roles(current_user: User = Depends(get_current_user)):
         "usuario_actual": {
             "nombre": current_user.full_name,
             "rol": "ADMIN" if current_user.is_admin else "USER",
-            "dashboard_asignado": f"/api/v1/dashboard/{'admin' if current_user.is_admin else 'user'}",
+            "dashboard_asignado": (
+                f"/api/v1/dashboard/{'admin' if current_user.is_admin else 'user'}"
+            ),
         },
         "matriz_acceso": {
             "ADMIN": {
@@ -858,7 +892,9 @@ def dashboard_por_rol(
         dashboard_data["info_acceso"] = {
             "rol": user_role,
             "descripcion": info_acceso.get(user_role, "Acceso básico"),
-            "filtros_aplicados": "Solo sus clientes" if user_role in ["USER", "USER"] else "Sin filtros",
+            "filtros_aplicados": (
+                "Solo sus clientes" if user_role in ["USER", "USER"] else "Sin filtros"
+            ),
             "puede_ver_otros_analistaes": user_role in ["ADMIN", "COBRANZAS"],
         }
 
@@ -886,9 +922,9 @@ def obtener_datos_grafico(
         for i in range(12):  # Últimos 12 meses
             mes_fecha = hoy.replace(day=1) - timedelta(days=30 * i)
             # Simulación de datos históricos
-            cartera_mes = db.query(func.sum(Cliente.total_financiamiento)).filter(Cliente.activo).scalar() or Decimal(
-                "0"
-            )
+            cartera_mes = db.query(func.sum(Cliente.total_financiamiento)).filter(
+                Cliente.activo
+            ).scalar() or Decimal("0")
 
             datos.append(
                 {
@@ -906,8 +942,12 @@ def obtener_datos_grafico(
     elif tipo_grafico == "distribucion_mora":
         # Gráfico de dona/pie para distribución
         al_dia = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora == 0).count()
-        mora_1_30 = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora.between(1, 30)).count()
-        mora_31_60 = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora.between(31, 60)).count()
+        mora_1_30 = (
+            db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora.between(1, 30)).count()
+        )
+        mora_31_60 = (
+            db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora.between(31, 60)).count()
+        )
         mora_60_plus = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 60).count()
 
         return {
@@ -971,7 +1011,9 @@ def obtener_datos_grafico(
 
 
 @router.get("/configuracion-dashboard")
-def obtener_configuracion_dashboard(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def obtener_configuracion_dashboard(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     ⚙️ Configuración del dashboard interactivo
     """
@@ -991,7 +1033,10 @@ def obtener_configuracion_dashboard(db: Session = Depends(get_db), current_user:
         "filtros_disponibles": {
             "fechas": ["dia", "semana", "mes", "año", "personalizado"],
             "estados": ["TODOS", "AL_DIA", "MORA", "CRITICO"],
-            "analistaes": [{"id": u.id, "nombre": u.full_name} for u in db.query(User).filter(User.is_active).all()],
+            "analistaes": [
+                {"id": u.id, "nombre": u.full_name}
+                for u in db.query(User).filter(User.is_active).all()
+            ],
         },
         "opciones_exportacion": ["PDF", "Excel", "PNG", "CSV"],
         "responsive": {
@@ -1002,7 +1047,9 @@ def obtener_configuracion_dashboard(db: Session = Depends(get_db), current_user:
 
 
 @router.get("/alertas-tiempo-real")
-def obtener_alertas_tiempo_real(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def obtener_alertas_tiempo_real(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🔔 Alertas en tiempo real para el dashboard
     """
@@ -1144,7 +1191,9 @@ def obtener_detalle_tabla(
                             "monto": float(cuota.monto_cuota),
                             "fecha_vencimiento": cuota.fecha_vencimiento,
                             "dias_hasta": (cuota.fecha_vencimiento - date.today()).days,
-                            "analista": cliente.analista.full_name if cliente.analista else "Sin asignar",
+                            "analista": (
+                                cliente.analista.full_name if cliente.analista else "Sin asignar"
+                            ),
                         }
                     )
 
@@ -1173,7 +1222,11 @@ def obtener_detalle_tabla(
                 "monto_financiamiento": float(cliente.total_financiamiento or 0),
                 "vehiculo": cliente.vehiculo_completo,
                 "analista": cliente.analista.full_name if cliente.analista else "Sin asignar",
-                "prioridad": "CRITICA" if cliente.dias_mora > 60 else ("ALTA" if cliente.dias_mora > 30 else "MEDIA"),
+                "prioridad": (
+                    "CRITICA"
+                    if cliente.dias_mora > 60
+                    else ("ALTA" if cliente.dias_mora > 30 else "MEDIA")
+                ),
             }
             for cliente in clientes
         ]
@@ -1271,7 +1324,9 @@ async def exportar_vista_dashboard(
 
 @router.get("/tiempo-real/actualizacion")
 def obtener_actualizacion_tiempo_real(
-    componentes: Optional[str] = Query(None, description="Componentes a actualizar (separados por coma)"),
+    componentes: Optional[str] = Query(
+        None, description="Componentes a actualizar (separados por coma)"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

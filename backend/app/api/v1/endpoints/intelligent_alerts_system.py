@@ -160,13 +160,17 @@ class IntelligentAlertSystem:
         elif alert_type == AlertType.TOKEN_EXPIRY:
             # Contar tokens expirando pronto
             expiring_tokens = [
-                m for m in recent_metrics if m["type"] == "token_expiry" and m["value"] <= rule["threshold"]
+                m
+                for m in recent_metrics
+                if m["type"] == "token_expiry" and m["value"] <= rule["threshold"]
             ]
             return len(expiring_tokens) >= 1
 
         elif alert_type == AlertType.SUSPICIOUS_ACTIVITY:
             # Contar actividades sospechosas
-            suspicious_activities = [m for m in recent_metrics if m["type"] == "suspicious_activity"]
+            suspicious_activities = [
+                m for m in recent_metrics if m["type"] == "suspicious_activity"
+            ]
             return len(suspicious_activities) >= rule["threshold"]
 
         elif alert_type == AlertType.PERFORMANCE_DEGRADATION:
@@ -205,8 +209,12 @@ class IntelligentAlertSystem:
         """Generar mensaje de alerta"""
         messages = {
             AlertType.TOKEN_EXPIRY: f"Token expirando en menos de {rule['threshold']} minutos",
-            AlertType.AUTH_FAILURE: f"Más de {rule['threshold']} fallos de autenticación en los últimos minutos",
-            AlertType.SUSPICIOUS_ACTIVITY: f"Actividad sospechosa detectada ({rule['threshold']}+ eventos)",
+            AlertType.AUTH_FAILURE: (
+                f"Más de {rule['threshold']} fallos de autenticación en los últimos minutos"
+            ),
+            AlertType.SUSPICIOUS_ACTIVITY: (
+                f"Actividad sospechosa detectada ({rule['threshold']}+ eventos)"
+            ),
             AlertType.SYSTEM_OVERLOAD: f"Sistema sobrecargado ({rule['threshold']}%+ de recursos)",
             AlertType.PERFORMANCE_DEGRADATION: (
                 f"Degradación de rendimiento ({rule['threshold']}s+ tiempo de respuesta)"
@@ -318,7 +326,9 @@ class IntelligentAlertSystem:
                 "resolved_alerts": resolved_alerts,
                 "severity_distribution": dict(severity_counts),
                 "type_distribution": dict(type_counts),
-                "last_alert_time": self.alert_history[-1]["timestamp"] if self.alert_history else None,
+                "last_alert_time": (
+                    self.alert_history[-1]["timestamp"] if self.alert_history else None
+                ),
             }
 
 
@@ -331,7 +341,9 @@ alert_system = IntelligentAlertSystem()
 
 
 @router.get("/active-alerts")
-async def get_active_alerts(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_active_alerts(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🚨 Obtener alertas activas
     """
@@ -355,7 +367,9 @@ async def get_active_alerts(db: Session = Depends(get_db), current_user: User = 
 
 
 @router.get("/alert-statistics")
-async def get_alert_statistics(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_alert_statistics(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📊 Estadísticas de alertas
     """

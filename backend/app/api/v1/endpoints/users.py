@@ -39,7 +39,9 @@ def verificar_rol_administracion(db: Session = Depends(get_db)):
     try:
         # Buscar todos los administradores
         admins = db.query(User).filter(User.is_admin).all()  # Cambio clave: rol → is_admin
-        admins_activos = db.query(User).filter(User.is_admin, User.is_active).all()  # Cambio clave: rol → is_admin
+        admins_activos = (
+            db.query(User).filter(User.is_admin, User.is_active).all()
+        )  # Cambio clave: rol → is_admin
 
         # Estadísticas de usuarios por tipo
         tipos_stats = {
@@ -232,7 +234,9 @@ def test_users_simple(db: Session = Depends(get_db)):
 
 
 @router.get("/test")
-def test_users_endpoint(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def test_users_endpoint(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     Test endpoint para verificar usuarios
     """
@@ -294,7 +298,9 @@ def list_users(
     # Paginación
     users = query.offset(pagination.skip).limit(pagination.limit).all()
 
-    return UserListResponse(items=users, total=total, page=pagination.page, page_size=pagination.page_size)
+    return UserListResponse(
+        items=users, total=total, page=pagination.page, page_size=pagination.page_size
+    )
 
 
 @router.get("/{user_id}", response_model=UserResponse, summary="Obtener usuario")

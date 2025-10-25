@@ -273,7 +273,9 @@ class StrategicMeasurements:
 
         return {
             "total_issues": len(consistency_issues),
-            "critical_issues": len([i for i in consistency_issues if i.get("severity") == "critical"]),
+            "critical_issues": len(
+                [i for i in consistency_issues if i.get("severity") == "critical"]
+            ),
             "issues": consistency_issues,
         }
 
@@ -392,7 +394,9 @@ strategic_measurements = StrategicMeasurements()
 
 
 @router.get("/deployment-health")
-async def get_deployment_health(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_deployment_health(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🚀 Medir salud del despliegue
     """
@@ -415,7 +419,9 @@ async def get_deployment_health(db: Session = Depends(get_db), current_user: Use
 
 
 @router.get("/schema-consistency")
-async def get_schema_consistency(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_schema_consistency(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📊 Medir consistencia del esquema
     """
@@ -438,7 +444,9 @@ async def get_schema_consistency(db: Session = Depends(get_db), current_user: Us
 
 
 @router.get("/frontend-stability")
-async def get_frontend_stability(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_frontend_stability(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🎨 Medir estabilidad del frontend
     """
@@ -461,7 +469,9 @@ async def get_frontend_stability(db: Session = Depends(get_db), current_user: Us
 
 
 @router.get("/system-performance")
-async def get_system_performance(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_system_performance(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     ⚡ Medir rendimiento del sistema
     """

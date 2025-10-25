@@ -179,7 +179,9 @@ async def validar_archivo_bancario(
                     monto=monto,
                     cedula_pagador=cedula if cedula != "nan" else None,
                     descripcion=str(fila.get("descripcion", "")),
-                    cuenta_origen=(str(fila.get("cuenta_origen", "")) if "cuenta_origen" in fila else None),
+                    cuenta_origen=(
+                        str(fila.get("cuenta_origen", "")) if "cuenta_origen" in fila else None
+                    ),
                     id=len(movimientos_validos) + 1,
                 )
 
@@ -402,7 +404,9 @@ def matching_automatico(
         conciliados=len(exactos),
         sin_conciliar_banco=len(sin_match),
         sin_conciliar_sistema=len(parciales),
-        porcentaje_conciliacion=(round((len(exactos) / len(movimientos) * 100), 2) if movimientos else 0),
+        porcentaje_conciliacion=(
+            round((len(exactos) / len(movimientos) * 100), 2) if movimientos else 0
+        ),
         detalle_conciliados=exactos,
         detalle_sin_conciliar_banco=sin_match,
         detalle_sin_conciliar_sistema=parciales,
@@ -470,7 +474,9 @@ def reporte_conciliacion(mes: int, anio: int, db: Session = Depends(get_db)):
     ultimo_dia = monthrange(anio, mes)[1]
     fecha_fin = date(anio, mes, ultimo_dia)
 
-    total_pagos = db.query(Pago).filter(Pago.fecha_pago >= fecha_inicio, Pago.fecha_pago <= fecha_fin).count()
+    total_pagos = (
+        db.query(Pago).filter(Pago.fecha_pago >= fecha_inicio, Pago.fecha_pago <= fecha_fin).count()
+    )
 
     conciliados = (
         db.query(Pago)
@@ -490,7 +496,9 @@ def reporte_conciliacion(mes: int, anio: int, db: Session = Depends(get_db)):
         "total_pagos": total_pagos,
         "conciliados": conciliados,
         "pendientes": pendientes,
-        "porcentaje_conciliacion": round((conciliados / total_pagos * 100) if total_pagos > 0 else 0, 2),
+        "porcentaje_conciliacion": round(
+            (conciliados / total_pagos * 100) if total_pagos > 0 else 0, 2
+        ),
     }
 
 
@@ -832,7 +840,9 @@ async def flujo_completo_conciliacion(
             raise HTTPException(status_code=403, detail="Sin permisos para conciliación bancaria")
 
         # Validar archivo (reutilizar endpoint existente)
-        validacion = await validar_archivo_bancario(archivo=archivo, db=db, current_user=current_user)
+        validacion = await validar_archivo_bancario(
+            archivo=archivo, db=db, current_user=current_user
+        )
 
         if not validacion.archivo_valido:
             return {
@@ -849,7 +859,9 @@ async def flujo_completo_conciliacion(
         movimientos_extendidos = validacion.vista_previa
 
         # Ejecutar matching automático
-        resultado_matching = matching_automatico(movimientos=movimientos_extendidos, db=db, current_user=current_user)
+        resultado_matching = matching_automatico(
+            movimientos=movimientos_extendidos, db=db, current_user=current_user
+        )
 
         # ============================================
         # PASO 8: TABLA DE RESULTADOS
@@ -886,7 +898,9 @@ async def flujo_completo_conciliacion(
                     "confianza": match["confianza"],
                     "accion_sugerida": "REVISION_MANUAL",
                     "diferencia": (
-                        f"${match['cuota']['diferencia']:,.2f}" if "diferencia" in match.get("cuota", {}) else None
+                        f"${match['cuota']['diferencia']:,.2f}"
+                        if "diferencia" in match.get("cuota", {})
+                        else None
                     ),
                     "requiere_revision": True,
                 }
@@ -917,11 +931,17 @@ async def flujo_completo_conciliacion(
         manuales = len([r for r in tabla_resultados if "❌" in r["estado"]])
 
         total_monto_aplicable = sum(
-            float(r["monto"].replace("$", "").replace(",", "")) for r in tabla_resultados if "✅" in r["estado"]
+            float(r["monto"].replace("$", "").replace(",", ""))
+            for r in tabla_resultados
+            if "✅" in r["estado"]
         )
 
         clientes_afectados = len(
-            set(r["cedula"] for r in tabla_resultados if "✅" in r["estado"] and r["cedula"] != "Desconocida")
+            set(
+                r["cedula"]
+                for r in tabla_resultados
+                if "✅" in r["estado"] and r["cedula"] != "Desconocida"
+            )
         )
 
         resumen_final = {
@@ -931,7 +951,9 @@ async def flujo_completo_conciliacion(
             "busqueda_manual": manuales,
             "total_monto_aplicable": total_monto_aplicable,
             "clientes_afectados": clientes_afectados,
-            "tasa_exito_automatico": round((exactos / len(tabla_resultados) * 100), 2) if tabla_resultados else 0,
+            "tasa_exito_automatico": (
+                round((exactos / len(tabla_resultados) * 100), 2) if tabla_resultados else 0
+            ),
         }
 
         # Guardar datos temporalmente para aplicación posterior
@@ -955,7 +977,9 @@ async def flujo_completo_conciliacion(
                 "revisar_parciales": f"POST /conciliacion/revisar-parciales/{proceso_id}",
                 "aplicar_todos": f"POST /conciliacion/aplicar-todos/{proceso_id}",
             },
-            "mensaje": f"✅ Archivo procesado - {exactos} coincidencias exactas, {revision} requieren revisión",
+            "mensaje": (
+                f"✅ Archivo procesado - {exactos} coincidencias exactas, {revision} requieren revisión"
+            ),
         }
 
     except Exception as e:
@@ -1055,7 +1079,9 @@ async def aplicar_coincidencias_exactas(
                 "reporte_pdf_programado": True,
                 "admin_notificado": True,
             },
-            "mensaje": f"✅ {len(pagos_creados)} pagos aplicados exitosamente - Total: ${total_aplicado:,.2f}",
+            "mensaje": (
+                f"✅ {len(pagos_creados)} pagos aplicados exitosamente - Total: ${total_aplicado:,.2f}"
+            ),
         }
 
     except Exception as e:

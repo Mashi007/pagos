@@ -77,7 +77,9 @@ class Prestamo(Base):
     cuotas_pendientes = Column(Integer)
 
     # Fechas
-    fecha_aprobacion = Column(Date, nullable=True)  # Hacemos nullable, ya que solo se llena al ser APROBADO
+    fecha_aprobacion = Column(
+        Date, nullable=True
+    )  # Hacemos nullable, ya que solo se llena al ser APROBADO
     fecha_desembolso = Column(Date)
     fecha_primer_vencimiento = Column(Date, nullable=False)
     fecha_ultimo_vencimiento = Column(Date)

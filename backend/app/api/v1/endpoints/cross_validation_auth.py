@@ -201,8 +201,12 @@ class CrossValidationAuthChecker:
             }
 
             # Verificar si el endpoint requiere admin
-            is_admin_endpoint = any(admin_ep in endpoint for admin_ep in context_rules["admin_endpoints"])
-            is_user_endpoint = any(user_ep in endpoint for user_ep in context_rules["user_endpoints"])
+            is_admin_endpoint = any(
+                admin_ep in endpoint for admin_ep in context_rules["admin_endpoints"]
+            )
+            is_user_endpoint = any(
+                user_ep in endpoint for user_ep in context_rules["user_endpoints"]
+            )
 
             if is_admin_endpoint:
                 # Verificar si el token tiene claims de admin
@@ -351,8 +355,12 @@ class CrossValidationAuthChecker:
         avg_score = sum(scores) / len(scores) if scores else 0.0
 
         # Determinar estado general
-        failed_validations = [k for k, v in validations.items() if v.get("status") in ["invalid", "error"]]
-        suspicious_validations = [k for k, v in validations.items() if v.get("status") == "suspicious"]
+        failed_validations = [
+            k for k, v in validations.items() if v.get("status") in ["invalid", "error"]
+        ]
+        suspicious_validations = [
+            k for k, v in validations.items() if v.get("status") == "suspicious"
+        ]
 
         if failed_validations:
             overall_status = "failed"
@@ -439,7 +447,9 @@ async def cross_validate_token_endpoint(
 
 
 @router.get("/validation-history")
-async def get_validation_history(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_validation_history(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📊 Historial de validaciones cruzadas
     """
@@ -465,7 +475,9 @@ async def get_validation_history(db: Session = Depends(get_db), current_user: Us
                 ),
                 "common_patterns": sorted_patterns[:10],
             },
-            "recent_validations": list(cross_validator.validation_cache.values())[-10:],  # Últimas 10
+            "recent_validations": list(cross_validator.validation_cache.values())[
+                -10:
+            ],  # Últimas 10
         }
 
     except Exception as e:

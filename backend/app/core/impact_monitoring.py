@@ -143,7 +143,9 @@ class ImpactAnalyzer:
                     disk_percent=disk.percent,
                     disk_free_gb=disk.free // (1024 * 1024 * 1024),
                     process_count=len(psutil.pids()),
-                    load_average=(list(os.getloadavg()) if hasattr(os, "getloadavg") else [0, 0, 0]),
+                    load_average=(
+                        list(os.getloadavg()) if hasattr(os, "getloadavg") else [0, 0, 0]
+                    ),
                     network_bytes_sent=network.bytes_sent,
                     network_bytes_recv=network.bytes_recv,
                 )
@@ -163,7 +165,9 @@ class ImpactAnalyzer:
                 )
 
             self.metrics_history.append(metrics)
-            logger.debug(f"Métricas recolectadas: CPU {metrics.cpu_percent:.1f}%, Memory {metrics.memory_percent:.1f}%")
+            logger.debug(
+                f"Métricas recolectadas: CPU {metrics.cpu_percent:.1f}%, Memory {metrics.memory_percent:.1f}%"
+            )
 
         except Exception as e:
             logger.error(f"Error recolectando métricas: {e}")
@@ -246,7 +250,9 @@ class ImpactAnalyzer:
         alert_id = f"{alert_type}_{int(time.time())}"
 
         # Verificar si ya existe una alerta similar no resuelta
-        existing_alert = next((a for a in self.alerts if a.type == alert_type and not a.resolved), None)
+        existing_alert = next(
+            (a for a in self.alerts if a.type == alert_type and not a.resolved), None
+        )
 
         if existing_alert:
             return  # No crear alertas duplicadas
@@ -384,7 +390,9 @@ class ImpactAnalyzer:
             "recommendations": self._generate_recommendations(impact_counts, avg_response_time),
         }
 
-    def _generate_recommendations(self, impact_counts: Dict[str, int], avg_response_time: float) -> List[str]:
+    def _generate_recommendations(
+        self, impact_counts: Dict[str, int], avg_response_time: float
+    ) -> List[str]:
         """Generar recomendaciones basadas en el análisis"""
         recommendations = []
 

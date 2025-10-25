@@ -34,9 +34,13 @@ class PagoBase(BaseModel):
     documento_nombre: Optional[str] = Field(
         None, max_length=MAX_DOCUMENTO_NOMBRE_LENGTH, description="Nombre del documento"
     )
-    documento_tipo: Optional[str] = Field(None, max_length=MAX_DOCUMENTO_TIPO_LENGTH, description="Tipo de documento")
+    documento_tipo: Optional[str] = Field(
+        None, max_length=MAX_DOCUMENTO_TIPO_LENGTH, description="Tipo de documento"
+    )
     documento_tamaño: Optional[int] = Field(None, ge=0, description="Tamaño del documento en bytes")
-    documento_ruta: Optional[str] = Field(None, max_length=MAX_DOCUMENTO_RUTA_LENGTH, description="Ruta del documento")
+    documento_ruta: Optional[str] = Field(
+        None, max_length=MAX_DOCUMENTO_RUTA_LENGTH, description="Ruta del documento"
+    )
     notas: Optional[str] = Field(None, description="Notas adicionales")
 
     @field_validator("cedula_cliente")

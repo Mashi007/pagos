@@ -312,7 +312,9 @@ def track_approval_workflow(
     )
 
 
-def track_bulk_migration(total_records: int, successful: int, failed: int, warnings: int, migration_type: str) -> None:
+def track_bulk_migration(
+    total_records: int, successful: int, failed: int, warnings: int, migration_type: str
+) -> None:
     """
     Trackear migraciones masivas
     """

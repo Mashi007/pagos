@@ -86,7 +86,12 @@ def listar_modelos_activos(
     📋 Listar solo modelos de vehículos activos (para formularios)
     """
     try:
-        modelos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo).order_by(ModeloVehiculo.modelo).all()
+        modelos = (
+            db.query(ModeloVehiculo)
+            .filter(ModeloVehiculo.activo)
+            .order_by(ModeloVehiculo.modelo)
+            .all()
+        )
 
         return [ModeloVehiculoResponse.model_validate(modelo) for modelo in modelos]
 
@@ -130,10 +135,14 @@ def crear_modelo_vehiculo(
     """
     try:
         # Verificar si ya existe un modelo con el mismo nombre
-        existing_modelo = db.query(ModeloVehiculo).filter(ModeloVehiculo.modelo.ilike(modelo_data.modelo)).first()
+        existing_modelo = (
+            db.query(ModeloVehiculo).filter(ModeloVehiculo.modelo.ilike(modelo_data.modelo)).first()
+        )
 
         if existing_modelo:
-            raise HTTPException(status_code=400, detail="Ya existe un modelo de vehículo con ese nombre")
+            raise HTTPException(
+                status_code=400, detail="Ya existe un modelo de vehículo con ese nombre"
+            )
 
         # Crear nuevo modelo
         nuevo_modelo = ModeloVehiculo(modelo=modelo_data.modelo.strip(), activo=modelo_data.activo)
@@ -230,7 +239,9 @@ def eliminar_modelo_vehiculo(
         db.delete(modelo)
         db.commit()
 
-        logger.info(f"Modelo de vehículo ELIMINADO COMPLETAMENTE: {modelo_nombre} (ID: {modelo_id})")
+        logger.info(
+            f"Modelo de vehículo ELIMINADO COMPLETAMENTE: {modelo_nombre} (ID: {modelo_id})"
+        )
 
         return {"message": "Modelo de vehículo eliminado completamente de la base de datos"}
 

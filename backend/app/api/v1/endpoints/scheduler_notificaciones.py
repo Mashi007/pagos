@@ -43,12 +43,16 @@ class ConfiguracionScheduler(BaseModel):
 
 
 @router.get("/configuracion")
-def obtener_configuracion_scheduler(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def obtener_configuracion_scheduler(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     ⚙️ Obtener configuración actual del scheduler de notificaciones
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Sin permisos para ver configuración del scheduler")
+        raise HTTPException(
+            status_code=403, detail="Sin permisos para ver configuración del scheduler"
+        )
 
     try:
         # Configuración actual (simulada - en producción sería de BD)
@@ -95,7 +99,9 @@ def obtener_configuracion_scheduler(db: Session = Depends(get_db), current_user:
             },
             "instrucciones_setup": {
                 "paso_1": "Configurar cron job en el servidor",
-                "paso_2": "Usar endpoint: POST /api/v1/notificaciones-multicanal/procesar-automaticas",
+                "paso_2": (
+                    "Usar endpoint: POST /api/v1/notificaciones-multicanal/procesar-automaticas"
+                ),
                 "paso_3": "Monitorear logs en: GET /api/v1/scheduler/logs",
                 "comando_cron": (
                     "0 * 6-22 * * 1-6 curl -X POST 'https://pagos-f2qf.onrender.com/api/v1/notificaciones-multicanal/procesar-automaticas' -H 'Authorization: Bearer TOKEN'"
@@ -228,7 +234,9 @@ async def ejecutar_scheduler_manual(
 
 
 @router.get("/estado")
-def obtener_estado_scheduler(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def obtener_estado_scheduler(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📊 Obtener estado actual del scheduler
     """

@@ -59,7 +59,9 @@ def add_cors_headers(request: Request, response: Response) -> None:
             logger.info(f"CORS Debug - Usando fallback: {settings.CORS_ORIGINS[0]}")
 
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+    response.headers["Access-Control-Allow-Headers"] = (
+        "Content-Type, Authorization, X-Requested-With"
+    )
     response.headers["Access-Control-Allow-Credentials"] = "true"
 
 
@@ -126,7 +128,9 @@ async def login(
 
 
 @router.get("/me", response_model=UserMeResponse)
-async def get_current_user_info(request: Request, response: Response, current_user: User = Depends(get_current_user)):
+async def get_current_user_info(
+    request: Request, response: Response, current_user: User = Depends(get_current_user)
+):
     """
     👤 Obtener información del usuario actual
     """
@@ -145,7 +149,9 @@ async def get_current_user_info(request: Request, response: Response, current_us
 
 
 @router.post("/logout")
-async def logout(request: Request, response: Response, current_user: User = Depends(get_current_user)):
+async def logout(
+    request: Request, response: Response, current_user: User = Depends(get_current_user)
+):
     """
     🚪 Logout de usuario
     """

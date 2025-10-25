@@ -66,7 +66,9 @@ class ScoringCrediticio:
     """
 
     @staticmethod
-    def calcular_score_completo(cliente_data: Dict, prestamo_data: Dict, db: Session) -> Dict[str, Any]:
+    def calcular_score_completo(
+        cliente_data: Dict, prestamo_data: Dict, db: Session
+    ) -> Dict[str, Any]:
         """
         Calcular score crediticio completo (0-1000)
         """
@@ -86,11 +88,15 @@ class ScoringCrediticio:
             scores_componentes["laboral"] = score_laboral
 
             # 4. GARANTÍAS ADICIONALES (15%)
-            score_garantias = ScoringCrediticio._calcular_score_garantias(cliente_data, prestamo_data)
+            score_garantias = ScoringCrediticio._calcular_score_garantias(
+                cliente_data, prestamo_data
+            )
             scores_componentes["garantias"] = score_garantias
 
             # 5. COMPORTAMIENTO DE PAGO (10%)
-            score_comportamiento = ScoringCrediticio._calcular_score_comportamiento(cliente_data, db)
+            score_comportamiento = ScoringCrediticio._calcular_score_comportamiento(
+                cliente_data, db
+            )
             scores_componentes["comportamiento"] = score_comportamiento
 
             # SCORE FINAL PONDERADO
@@ -106,7 +112,9 @@ class ScoringCrediticio:
             recomendacion = ScoringCrediticio._generar_recomendacion(score_final)
 
             # FACTORES DE RIESGO
-            factores_riesgo = ScoringCrediticio._identificar_factores_riesgo(scores_componentes, cliente_data)
+            factores_riesgo = ScoringCrediticio._identificar_factores_riesgo(
+                scores_componentes, cliente_data
+            )
 
             return {
                 "score_final": round(score_final, 0),
@@ -168,7 +176,12 @@ class ScoringCrediticio:
                 return 600  # Score neutro para cliente nuevo
 
             # Analizar comportamiento de pagos previos
-            pagos_cliente = db.query(Pago).join(Prestamo).filter(Prestamo.cliente_id == cliente_existente.id).all()
+            pagos_cliente = (
+                db.query(Pago)
+                .join(Prestamo)
+                .filter(Prestamo.cliente_id == cliente_existente.id)
+                .all()
+            )
 
             if not pagos_cliente:
                 return 600  # Sin historial
@@ -446,7 +459,9 @@ class PrediccionMora:
     """
 
     @staticmethod
-    def predecir_probabilidad_mora(cliente_id: int, horizonte_dias: int, db: Session) -> Dict[str, Any]:
+    def predecir_probabilidad_mora(
+        cliente_id: int, horizonte_dias: int, db: Session
+    ) -> Dict[str, Any]:
         """
         Predecir probabilidad de mora en los próximos N días
         """
@@ -463,7 +478,9 @@ class PrediccionMora:
             probabilidad = PrediccionMora._aplicar_modelo_mora(features)
 
             # Generar recomendaciones
-            recomendaciones = PrediccionMora._generar_recomendaciones_mora(probabilidad, features, horizonte_dias)
+            recomendaciones = PrediccionMora._generar_recomendaciones_mora(
+                probabilidad, features, horizonte_dias
+            )
 
             return {
                 "cliente_id": cliente_id,
@@ -523,10 +540,12 @@ class PrediccionMora:
 
             if pagos_cliente:
                 features["pagos_ultimos_12_meses"] = len(pagos_cliente)
-                features["promedio_dias_mora"] = sum(p.dias_mora for p in pagos_cliente) / len(pagos_cliente)
-                features["pagos_puntuales_ratio"] = len([p for p in pagos_cliente if p.dias_mora == 0]) / len(
+                features["promedio_dias_mora"] = sum(p.dias_mora for p in pagos_cliente) / len(
                     pagos_cliente
                 )
+                features["pagos_puntuales_ratio"] = len(
+                    [p for p in pagos_cliente if p.dias_mora == 0]
+                ) / len(pagos_cliente)
                 features["ultimo_pago_dias"] = (date.today() - pagos_cliente[0].fecha_pago).days
             else:
                 features["pagos_ultimos_12_meses"] = 0
@@ -620,7 +639,9 @@ class PrediccionMora:
             }
 
     @staticmethod
-    def _generar_recomendaciones_mora(probabilidad: float, features: Dict, horizonte_dias: int) -> List[Dict]:
+    def _generar_recomendaciones_mora(
+        probabilidad: float, features: Dict, horizonte_dias: int
+    ) -> List[Dict]:
         """Generar recomendaciones específicas para prevenir mora"""
         recomendaciones = []
 
@@ -898,7 +919,11 @@ class AnalisisPredictivoCartera:
                 .count()
             )
 
-            total_clientes = db.query(Cliente).filter(Cliente.fecha_registro <= fecha_mes, Cliente.activo).count()
+            total_clientes = (
+                db.query(Cliente)
+                .filter(Cliente.fecha_registro <= fecha_mes, Cliente.activo)
+                .count()
+            )
 
             tasa_mora = (clientes_mora / total_clientes * 100) if total_clientes > 0 else 0
 
@@ -1005,7 +1030,9 @@ class OptimizadorTasas:
     """
 
     @staticmethod
-    def optimizar_condiciones_prestamo(cliente_data: Dict, prestamo_data: Dict, db: Session) -> Dict[str, Any]:
+    def optimizar_condiciones_prestamo(
+        cliente_data: Dict, prestamo_data: Dict, db: Session
+    ) -> Dict[str, Any]:
         """
         Optimizar tasas y condiciones basado en perfil del cliente
         """
@@ -1014,10 +1041,14 @@ class OptimizadorTasas:
             scoring = ScoringCrediticio.calcular_score_completo(cliente_data, prestamo_data, db)
 
             # Optimizar tasa de interés
-            tasa_optimizada = OptimizadorTasas._optimizar_tasa_interes(scoring["score_final"], prestamo_data)
+            tasa_optimizada = OptimizadorTasas._optimizar_tasa_interes(
+                scoring["score_final"], prestamo_data
+            )
 
             # Optimizar plazo
-            plazo_optimizado = OptimizadorTasas._optimizar_plazo(scoring["score_final"], prestamo_data)
+            plazo_optimizado = OptimizadorTasas._optimizar_plazo(
+                scoring["score_final"], prestamo_data
+            )
 
             # Calcular cuota optimizada
             cuota_optimizada = OptimizadorTasas._calcular_cuota_optimizada(
@@ -1094,7 +1125,11 @@ class OptimizadorTasas:
                 return monto / plazo_meses
 
             # Fórmula de cuota fija (sistema francés)
-            cuota = monto * (tasa_mensual * (1 + tasa_mensual) ** plazo_meses) / ((1 + tasa_mensual) ** plazo_meses - 1)
+            cuota = (
+                monto
+                * (tasa_mensual * (1 + tasa_mensual) ** plazo_meses)
+                / ((1 + tasa_mensual) ** plazo_meses - 1)
+            )
 
             return round(cuota, 2)
 
@@ -1113,7 +1148,9 @@ class ChatbotCobranza:
     """
 
     @staticmethod
-    def generar_mensaje_personalizado(cliente_id: int, tipo_mensaje: str, db: Session) -> Dict[str, Any]:
+    def generar_mensaje_personalizado(
+        cliente_id: int, tipo_mensaje: str, db: Session
+    ) -> Dict[str, Any]:
         """
         Generar mensaje personalizado para cliente
         """
@@ -1407,7 +1444,9 @@ class DetectorPatrones:
                             "nombre": cliente.nombre_completo,
                             "mora_anterior": round(mora_anterior, 1),
                             "mora_reciente": round(mora_reciente, 1),
-                            "cambio_porcentual": round((mora_reciente - mora_anterior) / mora_anterior * 100, 1),
+                            "cambio_porcentual": round(
+                                (mora_reciente - mora_anterior) / mora_anterior * 100, 1
+                            ),
                         }
                     )
 
@@ -1459,7 +1498,9 @@ class DetectorPatrones:
 
         for mes in range(1, 13):
             clientes_mes = (
-                db.query(Cliente).filter(func.extract("month", Cliente.fecha_registro) == mes, Cliente.activo).all()
+                db.query(Cliente)
+                .filter(func.extract("month", Cliente.fecha_registro) == mes, Cliente.activo)
+                .all()
             )
 
             if clientes_mes:
@@ -1513,7 +1554,9 @@ class AlertasInteligentes:
                         "tipo": "RIESGO_MORA",
                         "prioridad": "ALTA",
                         "titulo": f"{len(clientes_riesgo)} clientes en riesgo de mora",
-                        "descripcion": "Clientes con alta probabilidad de entrar en mora en los próximos 7 días",
+                        "descripcion": (
+                            "Clientes con alta probabilidad de entrar en mora en los próximos 7 días"
+                        ),
                         "clientes": clientes_riesgo[:10],
                         "accion_recomendada": "Contacto proactivo inmediato",
                     }
@@ -1551,7 +1594,9 @@ class AlertasInteligentes:
                 "fecha_generacion": datetime.now().isoformat(),
                 "total_alertas": len(alertas),
                 "alertas": alertas,
-                "nivel_sistema": "CRITICO" if any(a["prioridad"] == "ALTA" for a in alertas) else "NORMAL",
+                "nivel_sistema": (
+                    "CRITICO" if any(a["prioridad"] == "ALTA" for a in alertas) else "NORMAL"
+                ),
             }
 
         except Exception as e:
@@ -1564,7 +1609,9 @@ class AlertasInteligentes:
         # Clientes actualmente al día pero con señales de riesgo
         clientes_riesgo = []
 
-        clientes_al_dia = db.query(Cliente).filter(Cliente.activo, Cliente.estado_financiero == "AL_DIA").all()
+        clientes_al_dia = (
+            db.query(Cliente).filter(Cliente.activo, Cliente.estado_financiero == "AL_DIA").all()
+        )
 
         for cliente in clientes_al_dia:
             # Calcular probabilidad de mora

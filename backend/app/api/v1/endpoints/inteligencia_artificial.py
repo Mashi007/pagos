@@ -112,7 +112,9 @@ def calcular_scoring_crediticio(
             "monto_total": float(solicitud.monto_total),
             "monto_financiado": float(solicitud.monto_total - solicitud.cuota_inicial),
             "plazo_meses": solicitud.plazo_meses,
-            "cuota_mensual": float(solicitud.monto_total - solicitud.cuota_inicial) / solicitud.plazo_meses,
+            "cuota_mensual": (
+                float(solicitud.monto_total - solicitud.cuota_inicial) / solicitud.plazo_meses
+            ),
         }
 
         # Calcular scoring
@@ -240,7 +242,10 @@ def listar_clientes_alto_riesgo(
     """
     try:
         clientes_activos = (
-            db.query(Cliente).filter(Cliente.activo, Cliente.estado_financiero == "AL_DIA").limit(limite * 2).all()
+            db.query(Cliente)
+            .filter(Cliente.activo, Cliente.estado_financiero == "AL_DIA")
+            .limit(limite * 2)
+            .all()
         )  # Obtener más para filtrar
 
         clientes_riesgo = []
@@ -352,7 +357,9 @@ def optimizar_condiciones_prestamo(
             "cuota_inicial": float(cuota_inicial),
         }
 
-        condiciones_optimizadas = OptimizadorTasas.optimizar_condiciones_prestamo(cliente_data, prestamo_data, db)
+        condiciones_optimizadas = OptimizadorTasas.optimizar_condiciones_prestamo(
+            cliente_data, prestamo_data, db
+        )
 
         return {
             "cliente_cedula": cedula,
@@ -465,7 +472,9 @@ def analisis_predictivo_cartera(
 router.get("/detectar-anomalias")
 
 
-def detectar_anomalias_sistema(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def detectar_anomalias_sistema(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🔍 Detectar anomalías y patrones inusuales en la cartera
     """
@@ -482,7 +491,9 @@ def detectar_anomalias_sistema(db: Session = Depends(get_db), current_user: User
             "patrones_detectados": patrones,
             "alertas_inteligentes": alertas,
             "resumen_ejecutivo": {
-                "anomalias_criticas": len([a for a in alertas.get("alertas", []) if a["prioridad"] == "ALTA"]),
+                "anomalias_criticas": len(
+                    [a for a in alertas.get("alertas", []) if a["prioridad"] == "ALTA"]
+                ),
                 "patrones_identificados": patrones.get("total_anomalias", 0),
                 "nivel_sistema": alertas.get("nivel_sistema", "NORMAL"),
                 "requiere_atencion": alertas.get("nivel_sistema") == "CRITICO",
@@ -500,7 +511,9 @@ def detectar_anomalias_sistema(db: Session = Depends(get_db), current_user: User
 router.get("/dashboard-ia")
 
 
-def dashboard_inteligencia_artificial(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def dashboard_inteligencia_artificial(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🤖 Dashboard principal de Inteligencia Artificial
     """

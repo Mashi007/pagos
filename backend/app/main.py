@@ -167,7 +167,9 @@ app.include_router(health.router, prefix=f"{settings.API_V1_PREFIX}", tags=["Hea
 app.include_router(auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["Auth"])
 app.include_router(users.router, prefix=f"{settings.API_V1_PREFIX}/usuarios", tags=["Usuarios"])
 app.include_router(clientes.router, prefix=f"{settings.API_V1_PREFIX}/clientes", tags=["Clientes"])
-app.include_router(prestamos.router, prefix=f"{settings.API_V1_PREFIX}/prestamos", tags=["Prestamos"])
+app.include_router(
+    prestamos.router, prefix=f"{settings.API_V1_PREFIX}/prestamos", tags=["Prestamos"]
+)
 app.include_router(pagos.router, prefix=f"{settings.API_V1_PREFIX}/pagos", tags=["Pagos"])
 app.include_router(
     conciliacion_bancaria.router,
@@ -196,13 +198,17 @@ app.include_router(
     prefix=f"{settings.API_V1_PREFIX}/aprobaciones",
     tags=["Aprobaciones"],
 )
-app.include_router(auditoria.router, prefix=f"{settings.API_V1_PREFIX}/auditoria", tags=["Auditoria"])
+app.include_router(
+    auditoria.router, prefix=f"{settings.API_V1_PREFIX}/auditoria", tags=["Auditoria"]
+)
 app.include_router(
     configuracion.router,
     prefix=f"{settings.API_V1_PREFIX}/configuracion",
     tags=["Configuracion"],
 )
-app.include_router(dashboard.router, prefix=f"{settings.API_V1_PREFIX}/dashboard", tags=["Dashboard"])
+app.include_router(
+    dashboard.router, prefix=f"{settings.API_V1_PREFIX}/dashboard", tags=["Dashboard"]
+)
 app.include_router(
     solicitudes.router,
     prefix=f"{settings.API_V1_PREFIX}/solicitudes",
@@ -238,7 +244,9 @@ app.include_router(
     prefix=f"{settings.API_V1_PREFIX}/concesionarios",
     tags=["Concesionarios"],
 )
-app.include_router(analistas.router, prefix=f"{settings.API_V1_PREFIX}/analistas", tags=["Analistas"])
+app.include_router(
+    analistas.router, prefix=f"{settings.API_V1_PREFIX}/analistas", tags=["Analistas"]
+)
 app.include_router(
     modelos_vehiculos.router,
     prefix=f"{settings.API_V1_PREFIX}/modelos-vehiculos",
@@ -266,6 +274,8 @@ async def root():
         "version": settings.APP_VERSION,
         "status": "running",
         "docs": "/docs",
-        "deploy_timestamp": "2025-10-16T10:30:00Z",  # Fix modelo_vehiculo_id error - ready for real data
+        "deploy_timestamp": (
+            "2025-10-16T10:30:00Z"
+        ),  # Fix modelo_vehiculo_id error - ready for real data
         "real_data_ready": True,
     }

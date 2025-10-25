@@ -43,7 +43,9 @@ class ValidacionCampo(BaseModel):
     campo: str = Field(..., description="Nombre del campo a validar")
     valor: str = Field(..., description="Valor a validar")
     pais: str = Field("VENEZUELA", description="País para validaciones específicas")
-    contexto: Optional[Dict[str, Any]] = Field(None, description="Contexto adicional para validación")
+    contexto: Optional[Dict[str, Any]] = Field(
+        None, description="Contexto adicional para validación"
+    )
 
 
 class CorreccionDatos(BaseModel):
@@ -52,7 +54,9 @@ class CorreccionDatos(BaseModel):
     cliente_id: int = Field(..., description="ID del cliente")
     correcciones: Dict[str, str] = Field(..., description="Campos a corregir con nuevos valores")
     pais: str = Field("VENEZUELA", description="País para validaciones")
-    recalcular_amortizacion: bool = Field(True, description="Recalcular amortización si cambia fecha")
+    recalcular_amortizacion: bool = Field(
+        True, description="Recalcular amortización si cambia fecha"
+    )
 
 
 # ============================================
@@ -232,7 +236,9 @@ def corregir_datos_cliente(
     cliente_id: int,
     correcciones: Dict[str, str],
     pais: str = Query("VENEZUELA", description="País para validaciones"),
-    recalcular_amortizacion: bool = Query(True, description="Recalcular amortización si cambia fecha"),
+    recalcular_amortizacion: bool = Query(
+        True, description="Recalcular amortización si cambia fecha"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -254,7 +260,9 @@ def corregir_datos_cliente(
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
         # Procesar correcciones
-        resultado_correccion = ServicioCorreccionDatos.corregir_datos_cliente(cliente_id, correcciones, pais)
+        resultado_correccion = ServicioCorreccionDatos.corregir_datos_cliente(
+            cliente_id, correcciones, pais
+        )
 
         if resultado_correccion.get("error_general"):
             raise HTTPException(status_code=400, detail=resultado_correccion["error_general"])
@@ -324,7 +332,10 @@ def corregir_datos_cliente(
             "errores_encontrados": len(resultado_correccion["errores_encontrados"]),
             "recalculo_amortizacion": {
                 "requerido": resultado_correccion["requiere_recalculo_amortizacion"],
-                "aplicado": recalcular_amortizacion and resultado_correccion["requiere_recalculo_amortizacion"],
+                "aplicado": (
+                    recalcular_amortizacion
+                    and resultado_correccion["requiere_recalculo_amortizacion"]
+                ),
                 "mensaje": mensaje_recalculo,
             },
             "fecha_correccion": datetime.now().isoformat(),
@@ -375,7 +386,9 @@ def corregir_datos_pago(
                     }
                 )
             else:
-                errores_validacion.append({"campo": "monto_pagado", "error": validacion_monto["error"]})
+                errores_validacion.append(
+                    {"campo": "monto_pagado", "error": validacion_monto["error"]}
+                )
 
         # Corregir fecha de pago
         if fecha_pago is not None:
@@ -392,7 +405,9 @@ def corregir_datos_pago(
                     }
                 )
             else:
-                errores_validacion.append({"campo": "fecha_pago", "error": validacion_fecha["error"]})
+                errores_validacion.append(
+                    {"campo": "fecha_pago", "error": validacion_fecha["error"]}
+                )
 
         # Corregir número de operación
         if numero_operacion is not None:
@@ -411,7 +426,9 @@ def corregir_datos_pago(
             # Limpiar observaciones de error
             if pago.observaciones and "REQUIERE_VALIDACIÓN" in pago.observaciones:
                 usuario_nombre = f"{current_user.nombre} {current_user.apellido}".strip()
-                pago.observaciones = f"CORREGIDO - {datetime.now().strftime('%d/%m/%Y')} por {usuario_nombre}"
+                pago.observaciones = (
+                    f"CORREGIDO - {datetime.now().strftime('%d/%m/%Y')} por {usuario_nombre}"
+                )
 
             db.commit()
 
@@ -512,7 +529,9 @@ def corregir_datos_masivo(
 
     try:
         # Ejecutar correcciones en background
-        background_tasks.add_task(_procesar_correcciones_masivas, correcciones_masivas, current_user.id, db)
+        background_tasks.add_task(
+            _procesar_correcciones_masivas, correcciones_masivas, current_user.id, db
+        )
 
         return {
             "mensaje": "✅ Corrección masiva iniciada en background",
@@ -683,7 +702,9 @@ def ping_validadores():
 # ============================================
 
 
-async def _procesar_correcciones_masivas(correcciones: List[CorreccionDatos], user_id: int, db_session: Session):
+async def _procesar_correcciones_masivas(
+    correcciones: List[CorreccionDatos], user_id: int, db_session: Session
+):
     """Procesar correcciones masivas en background"""
     try:
         from app.db.session import SessionLocal
@@ -834,7 +855,9 @@ async def obtener_configuracion_validadores():
     """
     return {
         "cedula_venezuela": {
-            "descripcion": "Cédula venezolana: V/E/J + exactamente entre 7 y 10 dígitos, sin caracteres especiales",
+            "descripcion": (
+                "Cédula venezolana: V/E/J + exactamente entre 7 y 10 dígitos, sin caracteres especiales"
+            ),
             "requisitos": {
                 "debe_empezar_por": "V, E o J",
                 "longitud_digitos": "Entre 7 y 10 dígitos",
@@ -851,7 +874,9 @@ async def obtener_configuracion_validadores():
             "tipos": {"V": "Venezolano", "E": "Extranjero", "J": "Jurídico"},
         },
         "telefono_venezuela": {
-            "descripcion": "Teléfono venezolano: +58 seguido de 10 dígitos (primer dígito no puede ser 0)",
+            "descripcion": (
+                "Teléfono venezolano: +58 seguido de 10 dígitos (primer dígito no puede ser 0)"
+            ),
             "requisitos": {
                 "debe_empezar_por": "+58",
                 "longitud_total": 10,

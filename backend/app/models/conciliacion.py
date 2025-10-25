@@ -25,7 +25,9 @@ class Conciliacion(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     # Relación con pago
-    pago_id = Column(Integer, ForeignKey("pagos.id", ondelete="CASCADE"), nullable=False, index=True)
+    pago_id = Column(
+        Integer, ForeignKey("pagos.id", ondelete="CASCADE"), nullable=False, index=True
+    )
 
     # Información bancaria
     fecha_carga = Column(DateTime(timezone=True), nullable=False)

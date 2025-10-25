@@ -43,7 +43,9 @@ class AuditLogger:
             "error": error,
             "auth_header_present": "authorization" in request.headers,
             "auth_header_type": (
-                request.headers.get("authorization", "").split(" ")[0] if request.headers.get("authorization") else None
+                request.headers.get("authorization", "").split(" ")[0]
+                if request.headers.get("authorization")
+                else None
             ),
         }
 
@@ -130,7 +132,10 @@ async def dashboard_diagnostico(db: Session = Depends(get_db)):
             "total_401_errors": request_stats_summary["status_counts"].get(401, 0),
             "total_requests": request_stats_summary["total_requests"],
             "error_rate": (
-                (request_stats_summary["status_counts"].get(401, 0) / max(request_stats_summary["total_requests"], 1))
+                (
+                    request_stats_summary["status_counts"].get(401, 0)
+                    / max(request_stats_summary["total_requests"], 1)
+                )
                 * 100
             ),
         }
@@ -229,7 +234,9 @@ async def health_check_detallado(db: Session = Depends(get_db)):
             admin_ok = admin_count > 0
             checks["admin_users"] = {
                 "status": "healthy" if admin_ok else "unhealthy",
-                "message": f"Found {admin_count} admin users" if admin_ok else "No admin users found",
+                "message": (
+                    f"Found {admin_count} admin users" if admin_ok else "No admin users found"
+                ),
                 "count": admin_count,
             }
         except Exception as e:
@@ -240,7 +247,9 @@ async def health_check_detallado(db: Session = Depends(get_db)):
 
         # 4. Verificar logs de auditoría
         recent_logs = AuditLogger.get_recent_logs(5)  # Últimos 5 minutos
-        error_rate = len([log for log in recent_logs if log["status_code"] >= 400]) / max(len(recent_logs), 1)
+        error_rate = len([log for log in recent_logs if log["status_code"] >= 400]) / max(
+            len(recent_logs), 1
+        )
 
         checks["audit_logs"] = {
             "status": "healthy" if error_rate < 0.5 else "warning",
@@ -310,7 +319,9 @@ def _generate_dashboard_recommendations(auth_analysis: Dict, user_stats: Dict) -
     # Análisis de tasa de error
     error_rate = auth_analysis.get("error_rate", 0)
     if error_rate > 50:
-        recommendations.append("🚨 Tasa de error muy alta (>50%) - Revisar configuración de autenticación")
+        recommendations.append(
+            "🚨 Tasa de error muy alta (>50%) - Revisar configuración de autenticación"
+        )
     elif error_rate > 20:
         recommendations.append("⚠️ Tasa de error elevada (>20%) - Monitorear logs de autenticación")
 

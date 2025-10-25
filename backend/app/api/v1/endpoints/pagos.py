@@ -43,7 +43,9 @@ async def crear_pago(
 ):
     """Crear un nuevo pago"""
     try:
-        logger.info(f"Usuario {current_user.email} creando pago para cédula {pago_data.cedula_cliente}")
+        logger.info(
+            f"Usuario {current_user.email} creando pago para cédula {pago_data.cedula_cliente}"
+        )
 
         # Crear el pago
         nuevo_pago = Pago(
@@ -173,7 +175,9 @@ async def listar_pagos(
 
 
 @router.get("/kpis", response_model=KPIsPagos)
-async def obtener_kpis_pagos(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def obtener_kpis_pagos(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """Obtener KPIs de pagos"""
     try:
         # KPIs básicos
@@ -211,7 +215,9 @@ async def obtener_resumen_cliente(
     """Obtener resumen de pagos por cliente"""
     try:
         # Filtrar pagos del cliente
-        pagos_cliente = db.query(Pago).filter(and_(Pago.activo, Pago.cedula_cliente == cedula.upper())).all()
+        pagos_cliente = (
+            db.query(Pago).filter(and_(Pago.activo, Pago.cedula_cliente == cedula.upper())).all()
+        )
 
         if not pagos_cliente:
             raise HTTPException(
@@ -263,7 +269,9 @@ async def descargar_documento(filename: str, current_user: User = Depends(get_cu
         file_path = UPLOAD_DIR / filename
 
         if not file_path.exists():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Archivo no encontrado")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Archivo no encontrado"
+            )
 
         # Determinar tipo de contenido
         file_extension = file_path.suffix.lower()

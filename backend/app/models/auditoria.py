@@ -52,10 +52,14 @@ class Auditoria(Base):
     usuario_email = Column(String(255), nullable=True, index=True)
 
     # Acción realizada
-    accion = Column(String(50), nullable=False, index=True)  # CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.
+    accion = Column(
+        String(50), nullable=False, index=True
+    )  # CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.
 
     # Módulo del sistema
-    modulo = Column(String(50), nullable=False, index=True)  # USUARIOS, CLIENTES, PRESTAMOS, PAGOS, etc.
+    modulo = Column(
+        String(50), nullable=False, index=True
+    )  # USUARIOS, CLIENTES, PRESTAMOS, PAGOS, etc.
 
     # Entidad afectada
     tabla = Column(String(50), nullable=False, index=True)  # Cliente, Prestamo, Pago, User, etc.
