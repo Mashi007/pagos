@@ -160,6 +160,52 @@ def obtener_estadisticas_auditoria(db: Session = Depends(get_db), current_user: 
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
+def _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, fecha_desde, fecha_hasta):
+    """Aplicar filtros a la query de auditoría"""
+    if usuario_email:
+        query = query.filter(Auditoria.usuario_email.ilike(f"%{usuario_email}%"))
+    if modulo:
+        query = query.filter(Auditoria.modulo == modulo)
+    if accion:
+        query = query.filter(Auditoria.accion == accion)
+    if fecha_desde:
+        query = query.filter(Auditoria.fecha >= fecha_desde)
+    if fecha_hasta:
+        query = query.filter(Auditoria.fecha <= fecha_hasta)
+    return query
+
+
+def _crear_dataframe_auditoria(auditorias):
+    """Crear DataFrame a partir de registros de auditoría"""
+    data = []
+    for auditoria in auditorias:
+        data.append(
+            {
+                "ID": auditoria.id,
+                "Email Usuario": auditoria.usuario_email or "N/A",
+                "Acción": auditoria.accion,
+                "Módulo": auditoria.modulo,
+                "Tabla": auditoria.tabla,
+                "ID Registro": auditoria.registro_id or "N/A",
+                "Descripción": auditoria.descripcion or "N/A",
+                "IP Address": auditoria.ip_address or "N/A",
+                "Resultado": auditoria.resultado,
+                "Fecha": auditoria.fecha.strftime("%Y-%m-%d %H:%M:%S"),
+                "Mensaje Error": auditoria.mensaje_error or "N/A",
+            }
+        )
+    return pd.DataFrame(data)
+
+
+def _crear_excel_auditoria(df):
+    """Crear archivo Excel en memoria"""
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name="Auditoría", index=False)
+    output.seek(0)
+    return output
+
+
 @router.get("/export/excel", summary="Exportar auditoría a Excel")
 def exportar_auditoria_excel(
     usuario_email: Optional[str] = Query(None, description="Filtrar por email de usuario"),
@@ -183,57 +229,16 @@ def exportar_auditoria_excel(
                 detail="Solo los administradores pueden exportar auditoría",
             )
 
-        # Construir query base
+        # Construir query y aplicar filtros
         query = db.query(Auditoria)
-
-        # Aplicar filtros
-        if usuario_email:
-            query = query.filter(Auditoria.usuario_email.ilike(f"%{usuario_email}%"))
-
-        if modulo:
-            query = query.filter(Auditoria.modulo == modulo)
-
-        if accion:
-            query = query.filter(Auditoria.accion == accion)
-
-        if fecha_desde:
-            query = query.filter(Auditoria.fecha >= fecha_desde)
-
-        if fecha_hasta:
-            query = query.filter(Auditoria.fecha <= fecha_hasta)
-
-        # Obtener todos los registros (sin paginación para export)
+        query = _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, fecha_desde, fecha_hasta)
+        
+        # Obtener registros y crear DataFrame
         auditorias = query.order_by(desc(Auditoria.fecha)).all()
-
-        # Crear DataFrame
-        data = []
-        for auditoria in auditorias:
-            data.append(
-                {
-                    "ID": auditoria.id,
-                    "Email Usuario": auditoria.usuario_email or "N/A",
-                    "Acción": auditoria.accion,
-                    "Módulo": auditoria.modulo,
-                    "Tabla": auditoria.tabla,
-                    "ID Registro": auditoria.registro_id or "N/A",
-                    "Descripción": auditoria.descripcion or "N/A",
-                    "IP Address": auditoria.ip_address or "N/A",
-                    "Resultado": auditoria.resultado,
-                    "Fecha": auditoria.fecha.strftime("%Y-%m-%d %H:%M:%S"),
-                    "Mensaje Error": auditoria.mensaje_error or "N/A",
-                }
-            )
-
-        df = pd.DataFrame(data)
-
-        # Crear archivo Excel en memoria
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            df.to_excel(writer, sheet_name="Auditoría", index=False)
-
-        output.seek(0)
-
-        # Generar nombre de archivo con timestamp
+        df = _crear_dataframe_auditoria(auditorias)
+        
+        # Crear Excel y generar respuesta
+        output = _crear_excel_auditoria(df)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"auditoria_{timestamp}.xlsx"
 
