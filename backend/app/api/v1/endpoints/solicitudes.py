@@ -1337,7 +1337,15 @@ async def _enviar_email_nueva_solicitud(solicitud: Aprobacion, admins: List[User
                         </tr>
                         <tr style="border-bottom: 1px solid #eee;">
                             <td style="padding: 8px 0; font-weight: bold;">Prioridad:</td>
-                            <td style="padding: 8px 0;"><span style="background: {'#dc3545' if solicitud.prioridad == 'URGENTE' else '#ffc107' if solicitud.prioridad == 'ALTA' else '#28a745'}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">{solicitud.prioridad}</span></td>
+                            <td style="padding: 8px 0;">
+                                <span style="
+                                    background: {'#dc3545' if solicitud.prioridad == 'URGENTE' else '#ffc107' if solicitud.prioridad == 'ALTA' else '#28a745'};
+                                    color: white;
+                                    padding: 2px 8px;
+                                    border-radius: 4px;
+                                    font-size: 12px;
+                                ">{solicitud.prioridad}</span>
+                            </td>
                         </tr>
                         <tr style="border-bottom: 1px solid #eee;">
                             <td style="padding: 8px 0; font-weight: bold;">Fecha límite:</td>
@@ -1495,7 +1503,15 @@ async def _enviar_email_resultado_solicitud(solicitud: Aprobacion):
                     </div>
                     ''' if solicitud.comentarios_revisor else ''}
 
-                    {'<p style="color: #28a745; font-weight: bold;">🎉 La acción solicitada ha sido ejecutada exitosamente.</p>' if solicitud.estado == 'APROBADA' else '<p style="color: #dc3545; font-weight: bold;">⚠️ La solicitud no fue aprobada. Revise los comentarios del revisor.</p>'}
+                    {f'''
+                    <p style="color: #28a745; font-weight: bold;">
+                        🎉 La acción solicitada ha sido ejecutada exitosamente.
+                    </p>
+                    ''' if solicitud.estado == 'APROBADA' else f'''
+                    <p style="color: #dc3545; font-weight: bold;">
+                        ⚠️ La solicitud no fue aprobada. Revise los comentarios del revisor.
+                    </p>
+                    '''}
 
                     <div style="text-align: center; margin-top: 30px;">
                         <a href="https://pagos-f2qf.onrender.com/solicitudes/mis-solicitudes"

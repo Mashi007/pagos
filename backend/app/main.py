@@ -102,7 +102,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         # CSP más permisivo para desarrollo
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' *;"
+            "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "connect-src 'self' *;"
         )
 
         # Referrer Policy más permisivo

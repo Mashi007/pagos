@@ -1142,7 +1142,12 @@ class WhatsAppTemplateManager:
                 {
                     "tipo": "BODY",
                     "texto": (
-                        "{{1}}, tu cuota #{{2}} está vencida.\n\n🚗 Vehículo: {{3}}\n💰 Monto: {{4}}\n📅 Días de atraso: {{5}}\n\nPara evitar cargos adicionales, paga hoy.\n\n¿Necesitas ayuda? Responde este mensaje."
+                        "{{1}}, tu cuota #{{2}} está vencida.\n\n"
+                        "🚗 Vehículo: {{3}}\n"
+                        "💰 Monto: {{4}}\n"
+                        "📅 Días de atraso: {{5}}\n\n"
+                        "Para evitar cargos adicionales, paga hoy.\n\n"
+                        "¿Necesitas ayuda? Responde este mensaje."
                     ),
                 },
                 {"tipo": "FOOTER", "texto": "Financiamiento Automotriz"},
