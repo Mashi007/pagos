@@ -92,7 +92,9 @@ class WhatsAppService:
                         "components": [
                             {
                                 "type": "body",
-                                "parameters": [{"type": "text", "text": str(value)} for value in template_params.values()],
+                                "parameters": [
+                                    {"type": "text", "text": str(value)} for value in template_params.values()
+                                ],
                             }
                         ],
                     },

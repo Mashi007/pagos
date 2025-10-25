@@ -690,5 +690,7 @@ class ConfigHelper:
             "recordatorios": ConfigHelper.get_config(db, "NOTIFICACIONES", "RECORDATORIOS_HABILITADOS", True),
             "dias_antes": ConfigHelper.get_config(db, "NOTIFICACIONES", "DIAS_ANTES_RECORDATORIO", 3),
             "mora_habilitada": ConfigHelper.get_config(db, "NOTIFICACIONES", "NOTIFICACIONES_MORA_HABILITADAS", True),
-            "frecuencia_mora": ConfigHelper.get_config(db, "NOTIFICACIONES", "FRECUENCIA_NOTIFICACIONES_MORA", "DIARIA"),
+            "frecuencia_mora": ConfigHelper.get_config(
+                db, "NOTIFICACIONES", "FRECUENCIA_NOTIFICACIONES_MORA", "DIARIA"
+            ),
         }

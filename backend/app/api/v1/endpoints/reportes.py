@@ -228,7 +228,9 @@ async def exportar_excel(
             cell.fill = header_fill
             cell.font = header_font
 
-        prestamos = db.query(Prestamo).filter(Prestamo.estado.in_([EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA])).all()
+        prestamos = (
+            db.query(Prestamo).filter(Prestamo.estado.in_([EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA])).all()
+        )
 
         for p in prestamos:
             ws.append(
@@ -1028,7 +1030,9 @@ async def reporte_asesor_pdf(
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=reporte_asesor_{asesor.full_name.replace(' ', '_')}.pdf"},
+            headers={
+                "Content-Disposition": f"attachment; filename=reporte_asesor_{asesor.full_name.replace(' ', '_')}.pdf"
+            },
         )
 
     except ImportError:
@@ -1055,7 +1059,9 @@ def verificar_reportes_pdf_implementados(
             "1_estado_cuenta": {
                 "nombre": "✅ Estado de cuenta por cliente",
                 "endpoint": "GET /api/v1/reportes/estado-cuenta/{cliente_id}/pdf",
-                "descripcion": "Datos del cliente, resumen financiero, tabla de amortización con estado, historial de pagos, saldo pendiente",
+                "descripcion": (
+                    "Datos del cliente, resumen financiero, tabla de amortización con estado, historial de pagos, saldo pendiente"
+                ),
                 "implementado": True,
                 "formato": "PDF",
                 "ejemplo_url": "/api/v1/reportes/estado-cuenta/123/pdf",
@@ -1071,7 +1077,9 @@ def verificar_reportes_pdf_implementados(
             "3_cobranza_diaria": {
                 "nombre": "✅ Reporte de cobranza diaria",
                 "endpoint": "GET /api/v1/reportes/cobranza-diaria/pdf",
-                "descripcion": "Pagos recibidos del día, vencimientos del día, pagos pendientes, resumen de efectividad",
+                "descripcion": (
+                    "Pagos recibidos del día, vencimientos del día, pagos pendientes, resumen de efectividad"
+                ),
                 "implementado": True,
                 "formato": "PDF/JSON",
                 "ejemplo_url": "/api/v1/reportes/cobranza-diaria/pdf?fecha=2025-10-13",
@@ -1087,7 +1095,9 @@ def verificar_reportes_pdf_implementados(
             "5_reporte_asesor": {
                 "nombre": "✅ Reporte por asesor",
                 "endpoint": "GET /api/v1/reportes/asesor/{asesor_id}/pdf",
-                "descripcion": "Clientes del asesor, ventas del período, estado de cobranza, ranking vs otros asesores, cartera asignada",
+                "descripcion": (
+                    "Clientes del asesor, ventas del período, estado de cobranza, ranking vs otros asesores, cartera asignada"
+                ),
                 "implementado": True,
                 "formato": "PDF",
                 "ejemplo_url": "/api/v1/reportes/asesor/1/pdf",
@@ -1106,11 +1116,21 @@ def verificar_reportes_pdf_implementados(
             "nota": "Si reportlab no está instalado, se devuelve error 500 con mensaje claro",
         },
         "ejemplos_uso": {
-            "estado_cuenta": "curl -X GET 'https://pagos-f2qf.onrender.com/api/v1/reportes/estado-cuenta/123/pdf' -H 'Authorization: Bearer TOKEN'",
-            "tabla_amortizacion": "curl -X GET 'https://pagos-f2qf.onrender.com/api/v1/reportes/tabla-amortizacion/123/pdf' -H 'Authorization: Bearer TOKEN'",
-            "cobranza_diaria": "curl -X GET 'https://pagos-f2qf.onrender.com/api/v1/reportes/cobranza-diaria/pdf?fecha=2025-10-13' -H 'Authorization: Bearer TOKEN'",
-            "cartera_mensual": "curl -X GET 'https://pagos-f2qf.onrender.com/api/v1/reportes/cartera-mensual/pdf?mes=10&anio=2025' -H 'Authorization: Bearer TOKEN'",
-            "reporte_asesor": "curl -X GET 'https://pagos-f2qf.onrender.com/api/v1/reportes/asesor/1/pdf' -H 'Authorization: Bearer TOKEN'",
+            "estado_cuenta": (
+                "curl -X GET 'https://pagos-f2qf.onrender.com/api/v1/reportes/estado-cuenta/123/pdf' -H 'Authorization: Bearer TOKEN'"
+            ),
+            "tabla_amortizacion": (
+                "curl -X GET 'https://pagos-f2qf.onrender.com/api/v1/reportes/tabla-amortizacion/123/pdf' -H 'Authorization: Bearer TOKEN'"
+            ),
+            "cobranza_diaria": (
+                "curl -X GET 'https://pagos-f2qf.onrender.com/api/v1/reportes/cobranza-diaria/pdf?fecha=2025-10-13' -H 'Authorization: Bearer TOKEN'"
+            ),
+            "cartera_mensual": (
+                "curl -X GET 'https://pagos-f2qf.onrender.com/api/v1/reportes/cartera-mensual/pdf?mes=10&anio=2025' -H 'Authorization: Bearer TOKEN'"
+            ),
+            "reporte_asesor": (
+                "curl -X GET 'https://pagos-f2qf.onrender.com/api/v1/reportes/asesor/1/pdf' -H 'Authorization: Bearer TOKEN'"
+            ),
         },
         "resumen_verificacion": {
             "total_reportes_solicitados": 5,

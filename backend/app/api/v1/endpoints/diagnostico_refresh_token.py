@@ -227,7 +227,7 @@ async def estado_refresh_tokens(db: Session = Depends(get_db), current_user: Use
                 "refresh_token": test_refresh_token,
             },
             "configuracion": {
-                "jwt_secret_key": ("CONFIGURED" if settings.SECRET_KEY else "NOT_CONFIGURED"),
+                "jwt_secret_key": "CONFIGURED" if settings.SECRET_KEY else "NOT_CONFIGURED",
                 "jwt_algorithm": "HS256",
                 "access_token_expire_minutes": 30,
                 "refresh_token_expire_days": 7,

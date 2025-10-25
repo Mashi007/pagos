@@ -170,9 +170,13 @@ class NetworkDiagnosticSystem:
             cutoff_time = current_time - timedelta(minutes=10)  # Últimos 10 minutos
 
             # Filtrar tests recientes
-            recent_tests = [test for test in self.connection_tests if datetime.fromisoformat(test["timestamp"]) > cutoff_time]
+            recent_tests = [
+                test for test in self.connection_tests if datetime.fromisoformat(test["timestamp"]) > cutoff_time
+            ]
 
-            recent_latency = [test for test in self.latency_history if datetime.fromisoformat(test["timestamp"]) > cutoff_time]
+            recent_latency = [
+                test for test in self.latency_history if datetime.fromisoformat(test["timestamp"]) > cutoff_time
+            ]
 
             # Análisis de conectividad
             connectivity_analysis = self._analyze_connectivity(recent_tests)
@@ -490,7 +494,9 @@ async def get_network_statistics(db: Session = Depends(get_db), current_user: Us
             # Estadísticas de latencia
             latency_stats = {
                 "total_tests": len(network_diagnostic.latency_history),
-                "recent_tests": (list(network_diagnostic.latency_history)[-20:] if network_diagnostic.latency_history else []),
+                "recent_tests": (
+                    list(network_diagnostic.latency_history)[-20:] if network_diagnostic.latency_history else []
+                ),
             }
 
             # Calcular métricas agregadas

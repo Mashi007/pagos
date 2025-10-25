@@ -231,9 +231,15 @@ class IntelligentAlertSystem:
             "high_error_rate": f"Tasa de error alta: {current_value:.1%} (umbral: {rule.threshold:.1%})",
             "slow_response_time": f"Tiempo de respuesta lento: {current_value:.0f}ms (umbral: {rule.threshold:.0f}ms)",
             "token_expiry_spike": f"Pico de tokens expirados: {current_value:.1%} (umbral: {rule.threshold:.1%})",
-            "authentication_failure_spike": f"Pico de fallos de autenticación: {current_value:.0f}/min (umbral: {rule.threshold:.0f}/min)",
-            "database_connection_issues": f"Problemas de conexión a BD: {current_value:.0f} fallos (umbral: {rule.threshold:.0f})",
-            "unusual_user_patterns": f"Patrones de usuario inusuales: {current_value:.1%} (umbral: {rule.threshold:.1%})",
+            "authentication_failure_spike": (
+                f"Pico de fallos de autenticación: {current_value:.0f}/min (umbral: {rule.threshold:.0f}/min)"
+            ),
+            "database_connection_issues": (
+                f"Problemas de conexión a BD: {current_value:.0f} fallos (umbral: {rule.threshold:.0f})"
+            ),
+            "unusual_user_patterns": (
+                f"Patrones de usuario inusuales: {current_value:.1%} (umbral: {rule.threshold:.1%})"
+            ),
         }
 
         return messages.get(rule.name, f"Alerta {rule.name}: {current_value} > {rule.threshold}")

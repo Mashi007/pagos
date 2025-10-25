@@ -154,7 +154,9 @@ class NotificacionMulticanal:
             if self._es_hora_reporte_diario():
                 await self._generar_reporte_diario(resultados)
 
-            logger.info(f"✅ Procesamiento completado: {resultados['exitosas']} exitosas, {resultados['fallidas']} fallidas")
+            logger.info(
+                f"✅ Procesamiento completado: {resultados['exitosas']} exitosas, {resultados['fallidas']} fallidas"
+            )
 
             return resultados
 
@@ -183,7 +185,9 @@ class NotificacionMulticanal:
                         continue
 
                     # Obtener preferencias del cliente
-                    preferencias = PreferenciasNotificacion.obtener_preferencias_cliente(cliente_data["cliente_id"], self.db)
+                    preferencias = PreferenciasNotificacion.obtener_preferencias_cliente(
+                        cliente_data["cliente_id"], self.db
+                    )
 
                     if preferencias == CanalNotificacion.NINGUNO:
                         continue
@@ -323,7 +327,7 @@ class NotificacionMulticanal:
                         "cuota_numero": cuota.numero_cuota,
                         "monto_cuota": float(cuota.monto_cuota),
                         "fecha_vencimiento": cuota.fecha_vencimiento,
-                        "dias_mora": ((hoy - cuota.fecha_vencimiento).days if cuota.fecha_vencimiento < hoy else 0),
+                        "dias_mora": (hoy - cuota.fecha_vencimiento).days if cuota.fecha_vencimiento < hoy else 0,
                         "saldo_pendiente": float(cuota.capital_pendiente + cuota.interes_pendiente),
                         "vehiculo": cliente.vehiculo_completo or "Vehículo",
                     }
@@ -461,7 +465,8 @@ class NotificacionMulticanal:
         templates = {
             TipoNotificacionCliente.RECORDATORIO_3_DIAS: {
                 "asunto": f"🚗 Recordatorio: Tu cuota #{variables['cuota']} vence en 3 días",
-                "cuerpo_html": f"""
+                "cuerpo_html": (
+                    f"""
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <div style="background: #007bff; color: white; padding: 20px; text-align: center;">
                         <h1>🚗 Recordatorio de Pago</h1>
@@ -499,11 +504,13 @@ class NotificacionMulticanal:
                         </div>
                     </div>
                 </div>
-                """,
+                """
+                ),
             },
             TipoNotificacionCliente.MORA_1_DIA: {
                 "asunto": f"⚠️ Tu cuota #{variables['cuota']} está vencida - 1 día de atraso",
-                "cuerpo_html": f"""
+                "cuerpo_html": (
+                    f"""
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <div style="background: #ffc107; color: #212529; padding: 20px; text-align: center;">
                         <h1>⚠️ Cuota Vencida</h1>
@@ -539,11 +546,13 @@ class NotificacionMulticanal:
                         </div>
                     </div>
                 </div>
-                """,
+                """
+                ),
             },
             TipoNotificacionCliente.CONFIRMACION_PAGO: {
                 "asunto": f"✅ Pago recibido - Cuota #{variables['cuota']}",
-                "cuerpo_html": f"""
+                "cuerpo_html": (
+                    f"""
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <div style="background: #28a745; color: white; padding: 20px; text-align: center;">
                         <h1>✅ Pago Confirmado</h1>
@@ -577,7 +586,8 @@ class NotificacionMulticanal:
                         </div>
                     </div>
                 </div>
-                """,
+                """
+                ),
             },
         }
 
@@ -602,7 +612,8 @@ class NotificacionMulticanal:
 
         templates = {
             TipoNotificacionCliente.RECORDATORIO_3_DIAS: {
-                "mensaje": f"""👋 Hola {nombre},
+                "mensaje": (
+                    f"""👋 Hola {nombre},
 
  Te recordamos que tu cuota #{cuota} de tu {vehiculo} vence el {fecha}.
 
@@ -614,9 +625,11 @@ Dudas? Responde este mensaje.
 
 Gracias,
 Financiamiento Automotriz"""
+                )
             },
             TipoNotificacionCliente.RECORDATORIO_1_DIA: {
-                "mensaje": f"""⏰ {nombre}, tu cuota vence MAÑANA
+                "mensaje": (
+                    f"""⏰ {nombre}, tu cuota vence MAÑANA
 
  Vehículo: {vehiculo}
  Monto: {monto}
@@ -625,9 +638,11 @@ Financiamiento Automotriz"""
 No olvides realizar tu pago!
 
 Financiamiento Automotriz"""
+                )
             },
             TipoNotificacionCliente.DIA_VENCIMIENTO: {
-                "mensaje": f"""📅 {nombre}, tu cuota vence HOY
+                "mensaje": (
+                    f"""📅 {nombre}, tu cuota vence HOY
 
  {vehiculo}
  {monto}
@@ -636,9 +651,11 @@ Financiamiento Automotriz"""
 Realiza tu pago antes de las 6:00 PM para evitar mora.
 
 Financiamiento Automotriz"""
+                )
             },
             TipoNotificacionCliente.MORA_1_DIA: {
-                "mensaje": f"""⚠️ {nombre}, tu cuota está vencida
+                "mensaje": (
+                    f"""⚠️ {nombre}, tu cuota está vencida
 
  {vehiculo}
  {monto}
@@ -649,9 +666,11 @@ Para evitar cargos adicionales, paga hoy.
 Necesitas ayuda? Responde este mensaje.
 
 Financiamiento Automotriz"""
+                )
             },
             TipoNotificacionCliente.MORA_3_DIAS: {
-                "mensaje": f"""🚨 {nombre}, URGENTE - 3 días de atraso
+                "mensaje": (
+                    f"""🚨 {nombre}, URGENTE - 3 días de atraso
 
  {vehiculo}
  {monto} + mora
@@ -662,9 +681,11 @@ Contacta inmediatamente para evitar acciones legales.
 Responde AHORA o llama: 809-XXX-XXXX
 
 Financiamiento Automotriz"""
+                )
             },
             TipoNotificacionCliente.MORA_5_DIAS: {
-                "mensaje": f"""🚨 {nombre}, CRÍTICO - 5 días de atraso
+                "mensaje": (
+                    f"""🚨 {nombre}, CRÍTICO - 5 días de atraso
 
  {vehiculo}
  {monto} + mora acumulada
@@ -675,9 +696,11 @@ LTIMA OPORTUNIDAD antes de proceso legal.
 LLAMA AHORA: 809-XXX-XXXX
 
 Financiamiento Automotriz"""
+                )
             },
             TipoNotificacionCliente.CONFIRMACION_PAGO: {
-                "mensaje": f"""✅ ¡Pago confirmado!
+                "mensaje": (
+                    f"""✅ ¡Pago confirmado!
 
 Gracias {nombre} por tu pago de {monto}.
 
@@ -687,6 +710,7 @@ Gracias {nombre} por tu pago de {monto}.
 Tu cuenta está al día!
 
 Financiamiento Automotriz"""
+                )
             },
         }
 
@@ -1078,7 +1102,9 @@ class WhatsAppTemplateManager:
                 {"tipo": "HEADER", "formato": "TEXT", "texto": "Recordatorio de Pago"},
                 {
                     "tipo": "BODY",
-                    "texto": "👋 Hola {{1}},\n\n🚗 Te recordamos que tu cuota #{{2}} de tu {{3}} vence el {{4}}.\n\n💰 Monto: {{5}}\n\nPor favor realiza tu pago a tiempo. 💳\n\n¿Dudas? Responde este mensaje.",
+                    "texto": (
+                        "👋 Hola {{1}},\n\n🚗 Te recordamos que tu cuota #{{2}} de tu {{3}} vence el {{4}}.\n\n💰 Monto: {{5}}\n\nPor favor realiza tu pago a tiempo. 💳\n\n¿Dudas? Responde este mensaje."
+                    ),
                 },
                 {"tipo": "FOOTER", "texto": "Financiamiento Automotriz"},
             ],
@@ -1092,7 +1118,9 @@ class WhatsAppTemplateManager:
                 {"tipo": "HEADER", "formato": "TEXT", "texto": "⚠️ Cuota Vencida"},
                 {
                     "tipo": "BODY",
-                    "texto": "{{1}}, tu cuota #{{2}} está vencida.\n\n🚗 Vehículo: {{3}}\n💰 Monto: {{4}}\n📅 Días de atraso: {{5}}\n\nPara evitar cargos adicionales, paga hoy.\n\n¿Necesitas ayuda? Responde este mensaje.",
+                    "texto": (
+                        "{{1}}, tu cuota #{{2}} está vencida.\n\n🚗 Vehículo: {{3}}\n💰 Monto: {{4}}\n📅 Días de atraso: {{5}}\n\nPara evitar cargos adicionales, paga hoy.\n\n¿Necesitas ayuda? Responde este mensaje."
+                    ),
                 },
                 {"tipo": "FOOTER", "texto": "Financiamiento Automotriz"},
             ],
@@ -1106,7 +1134,9 @@ class WhatsAppTemplateManager:
                 {"tipo": "HEADER", "formato": "TEXT", "texto": "✅ Pago Confirmado"},
                 {
                     "tipo": "BODY",
-                    "texto": "¡Gracias {{1}}!\n\nHemos recibido tu pago de {{2}}.\n\n🚗 {{3}}\n📅 Cuota #{{4}}: ✅ PAGADA\n\n¡Tu cuenta está al día!",
+                    "texto": (
+                        "¡Gracias {{1}}!\n\nHemos recibido tu pago de {{2}}.\n\n🚗 {{3}}\n📅 Cuota #{{4}}: ✅ PAGADA\n\n¡Tu cuenta está al día!"
+                    ),
                 },
                 {"tipo": "FOOTER", "texto": "Financiamiento Automotriz"},
             ],

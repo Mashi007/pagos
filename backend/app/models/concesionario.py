@@ -26,5 +26,5 @@ class Concesionario(Base):
             "activo": self.activo,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "fecha_eliminacion": (self.fecha_eliminacion.isoformat() if self.fecha_eliminacion else None),
+            "fecha_eliminacion": self.fecha_eliminacion.isoformat() if self.fecha_eliminacion else None,
         }

@@ -98,7 +98,9 @@ def verificar_datos_concesionarios(db: Session = Depends(get_db), current_user: 
             "usuario": current_user.email,
             "analisis": {
                 "total_concesionarios": total,
-                "estructura_tabla": [{"columna": col[0], "tipo": col[1], "nullable": col[2] == "YES"} for col in columns],
+                "estructura_tabla": [
+                    {"columna": col[0], "tipo": col[1], "nullable": col[2] == "YES"} for col in columns
+                ],
                 "registros_ejemplo": [
                     {
                         "id": reg[0],
@@ -113,15 +115,15 @@ def verificar_datos_concesionarios(db: Session = Depends(get_db), current_user: 
                     "total": stats[0],
                     "genericos": stats[1],
                     "reales": stats[2],
-                    "porcentaje_reales": (round((stats[2] / stats[0]) * 100, 2) if stats[0] > 0 else 0),
+                    "porcentaje_reales": round((stats[2] / stats[0]) * 100, 2) if stats[0] > 0 else 0,
                 },
                 "nombres_reales": [nombre[0] for nombre in nombres_reales],
                 "concesionarios_activos": activos,
             },
             "conclusion": {
                 "tiene_datos_reales": stats[2] > 0,
-                "problema_identificado": ("Datos genéricos" if stats[1] > stats[2] else "Datos reales"),
-                "recomendacion": ("Migrar datos reales" if stats[1] > stats[2] else "Datos correctos"),
+                "problema_identificado": "Datos genéricos" if stats[1] > stats[2] else "Datos reales",
+                "recomendacion": "Migrar datos reales" if stats[1] > stats[2] else "Datos correctos",
             },
         }
 

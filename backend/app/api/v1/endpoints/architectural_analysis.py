@@ -566,7 +566,7 @@ class ArchitecturalAnalysisSystem:
                     {
                         "component": component_id,
                         "health_score": health_score,
-                        "impact": ("high" if component_id in critical_components else "medium"),
+                        "impact": "high" if component_id in critical_components else "medium",
                     }
                 )
 
@@ -586,7 +586,9 @@ class ArchitecturalAnalysisSystem:
 
             # Estadísticas generales
             total_components = len(self.system_components)
-            healthy_components = len([c for c in self.component_health.values() if c.get("status") in ["excellent", "good"]])
+            healthy_components = len(
+                [c for c in self.component_health.values() if c.get("status") in ["excellent", "good"]]
+            )
             degraded_components = len([c for c in self.component_health.values() if c.get("status") == "degraded"])
             poor_components = len([c for c in self.component_health.values() if c.get("status") == "poor"])
 
@@ -608,8 +610,8 @@ class ArchitecturalAnalysisSystem:
                 "dependency_analysis": dependency_analysis,
                 "system_metrics": {
                     "cpu_usage": psutil.cpu_percent() if PSUTIL_AVAILABLE else 0,
-                    "memory_usage": (psutil.virtual_memory().percent if PSUTIL_AVAILABLE else 0),
-                    "disk_usage": (psutil.disk_usage("/").percent if PSUTIL_AVAILABLE else 0),
+                    "memory_usage": psutil.virtual_memory().percent if PSUTIL_AVAILABLE else 0,
+                    "disk_usage": psutil.disk_usage("/").percent if PSUTIL_AVAILABLE else 0,
                 },
             }
 
@@ -703,7 +705,9 @@ async def get_component_dependencies(db: Session = Depends(get_db), current_user
 
 
 @router.get("/architectural-summary")
-async def get_architectural_summary_endpoint(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_architectural_summary_endpoint(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📊 Resumen arquitectural general
     """

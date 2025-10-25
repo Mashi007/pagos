@@ -7,7 +7,6 @@ import logging
 import time
 from typing import Any, Dict, Optional
 
-
 # Configurar logger
 logger = logging.getLogger(__name__)
 

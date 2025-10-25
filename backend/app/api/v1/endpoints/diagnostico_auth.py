@@ -67,10 +67,14 @@ async def debug_autenticacion(request: Request, db: Session = Depends(get_db)):
         # 4. Verificar tokens recientes (simulado)
         recent_tokens_analysis = {
             "failed_requests_last_hour": len(
-                [r for r in failed_requests_cache if r.get("timestamp", datetime.min) > datetime.now() - timedelta(hours=1)]
+                [
+                    r
+                    for r in failed_requests_cache
+                    if r.get("timestamp", datetime.min) > datetime.now() - timedelta(hours=1)
+                ]
             ),
             "total_failed_requests": len(failed_requests_cache),
-            "last_failed_request": (failed_requests_cache[-1] if failed_requests_cache else None),
+            "last_failed_request": failed_requests_cache[-1] if failed_requests_cache else None,
         }
 
         # 5. Test de creación de token
@@ -226,7 +230,9 @@ async def obtener_logs_autenticacion():
     try:
         # Filtrar logs de la última hora
         recent_logs = [
-            log for log in failed_requests_cache if log.get("timestamp", datetime.min) > datetime.now() - timedelta(hours=1)
+            log
+            for log in failed_requests_cache
+            if log.get("timestamp", datetime.min) > datetime.now() - timedelta(hours=1)
         ]
 
         # Agrupar por tipo de error
@@ -240,7 +246,7 @@ async def obtener_logs_autenticacion():
             "logs": {
                 "total_recent_logs": len(recent_logs),
                 "error_summary": error_summary,
-                "recent_requests": (recent_logs[-10:] if recent_logs else []),  # Últimos 10
+                "recent_requests": recent_logs[-10:] if recent_logs else [],  # Últimos 10
             },
         }
 
@@ -314,7 +320,9 @@ def _generate_recommendations(headers_analysis: Dict, jwt_config: Dict, users_an
     recommendations = []
 
     if not headers_analysis.get("authorization_present"):
-        recommendations.append("🔑 No se encontró header Authorization - Verificar que el frontend esté enviando el token")
+        recommendations.append(
+            "🔑 No se encontró header Authorization - Verificar que el frontend esté enviando el token"
+        )
 
     if jwt_config.get("secret_key_length", 0) < 32:
         recommendations.append("🔐 SECRET_KEY muy corta - Debe tener al menos 32 caracteres")

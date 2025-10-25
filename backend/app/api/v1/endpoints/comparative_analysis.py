@@ -130,8 +130,8 @@ class ComparativeAnalysisSystem:
             "total_cases": total_count,
             "successful_cases": successful_count,
             "failed_cases": failed_count,
-            "success_rate": ((successful_count / total_count * 100) if total_count > 0 else 0),
-            "failure_rate": ((failed_count / total_count * 100) if total_count > 0 else 0),
+            "success_rate": (successful_count / total_count * 100) if total_count > 0 else 0,
+            "failure_rate": (failed_count / total_count * 100) if total_count > 0 else 0,
             "successful_types_distribution": dict(successful_types),
             "failed_types_distribution": dict(failed_types),
         }
@@ -178,8 +178,8 @@ class ComparativeAnalysisSystem:
 
         return {
             "token_length_analysis": {
-                "successful_avg_length": (statistics.mean(successful_lengths) if successful_lengths else 0),
-                "failed_avg_length": (statistics.mean(failed_lengths) if failed_lengths else 0),
+                "successful_avg_length": statistics.mean(successful_lengths) if successful_lengths else 0,
+                "failed_avg_length": statistics.mean(failed_lengths) if failed_lengths else 0,
                 "length_difference": (
                     statistics.mean(successful_lengths) - statistics.mean(failed_lengths)
                     if successful_lengths and failed_lengths
@@ -187,8 +187,8 @@ class ComparativeAnalysisSystem:
                 ),
             },
             "expiration_analysis": {
-                "successful_avg_time_to_expiry": (statistics.mean(successful_exp_times) if successful_exp_times else 0),
-                "failed_avg_time_to_expiry": (statistics.mean(failed_exp_times) if failed_exp_times else 0),
+                "successful_avg_time_to_expiry": statistics.mean(successful_exp_times) if successful_exp_times else 0,
+                "failed_avg_time_to_expiry": statistics.mean(failed_exp_times) if failed_exp_times else 0,
                 "expiry_difference": (
                     statistics.mean(successful_exp_times) - statistics.mean(failed_exp_times)
                     if successful_exp_times and failed_exp_times
@@ -230,19 +230,25 @@ class ComparativeAnalysisSystem:
 
         return {
             "user_status_analysis": {
-                "successful_active_rate": ((successful_active_count / len(successful_users) * 100) if successful_users else 0),
-                "failed_active_rate": ((failed_active_count / len(failed_users) * 100) if failed_users else 0),
+                "successful_active_rate": (
+                    (successful_active_count / len(successful_users) * 100) if successful_users else 0
+                ),
+                "failed_active_rate": (failed_active_count / len(failed_users) * 100) if failed_users else 0,
                 "active_rate_difference": (
-                    (successful_active_count / len(successful_users) * 100) - (failed_active_count / len(failed_users) * 100)
+                    (successful_active_count / len(successful_users) * 100)
+                    - (failed_active_count / len(failed_users) * 100)
                     if successful_users and failed_users
                     else 0
                 ),
             },
             "admin_status_analysis": {
-                "successful_admin_rate": ((successful_admin_count / len(successful_users) * 100) if successful_users else 0),
-                "failed_admin_rate": ((failed_admin_count / len(failed_users) * 100) if failed_users else 0),
+                "successful_admin_rate": (
+                    (successful_admin_count / len(successful_users) * 100) if successful_users else 0
+                ),
+                "failed_admin_rate": (failed_admin_count / len(failed_users) * 100) if failed_users else 0,
                 "admin_rate_difference": (
-                    (successful_admin_count / len(successful_users) * 100) - (failed_admin_count / len(failed_users) * 100)
+                    (successful_admin_count / len(successful_users) * 100)
+                    - (failed_admin_count / len(failed_users) * 100)
                     if successful_users and failed_users
                     else 0
                 ),
@@ -282,7 +288,7 @@ class ComparativeAnalysisSystem:
                 "successful_avg_response_time": (
                     statistics.mean(successful_response_times) if successful_response_times else 0
                 ),
-                "failed_avg_response_time": (statistics.mean(failed_response_times) if failed_response_times else 0),
+                "failed_avg_response_time": statistics.mean(failed_response_times) if failed_response_times else 0,
                 "response_time_difference": (
                     statistics.mean(successful_response_times) - statistics.mean(failed_response_times)
                     if successful_response_times and failed_response_times
@@ -390,7 +396,9 @@ class ComparativeAnalysisSystem:
                     indicators["high_confidence_indicators"].append(
                         {
                             "indicator": "token_expiration_timing",
-                            "description": f"Diferencia significativa en tiempo de expiración: {expiry_diff:.1f} segundos",
+                            "description": (
+                                f"Diferencia significativa en tiempo de expiración: {expiry_diff:.1f} segundos"
+                            ),
                             "confidence": "high",
                         }
                     )
@@ -405,7 +413,9 @@ class ComparativeAnalysisSystem:
                     indicators["medium_confidence_indicators"].append(
                         {
                             "indicator": "user_active_status",
-                            "description": f"Diferencia significativa en tasa de usuarios activos: {active_rate_diff:.1f}%",
+                            "description": (
+                                f"Diferencia significativa en tasa de usuarios activos: {active_rate_diff:.1f}%"
+                            ),
                             "confidence": "medium",
                         }
                     )
@@ -444,7 +454,7 @@ class ComparativeAnalysisSystem:
         """Analizar patrones de timing"""
         response_times = [t.get("response_time_ms", 0) for t in timing_data_list]
         return {
-            "avg_response_time": (statistics.mean(response_times) if response_times else 0),
+            "avg_response_time": statistics.mean(response_times) if response_times else 0,
             "min_response_time": min(response_times) if response_times else 0,
             "max_response_time": max(response_times) if response_times else 0,
         }
@@ -630,7 +640,9 @@ async def perform_differential_analysis_endpoint(
 
 
 @router.get("/comparative-summary")
-async def get_comparative_summary_endpoint(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_comparative_summary_endpoint(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📈 Resumen comparativo general
     """
@@ -644,7 +656,9 @@ async def get_comparative_summary_endpoint(db: Session = Depends(get_db), curren
                     "total_analyses_performed": len(comparative_system.comparison_results),
                 },
                 "recent_analyses": (
-                    list(comparative_system.comparison_results.values())[-5:] if comparative_system.comparison_results else []
+                    list(comparative_system.comparison_results.values())[-5:]
+                    if comparative_system.comparison_results
+                    else []
                 ),
             }
 

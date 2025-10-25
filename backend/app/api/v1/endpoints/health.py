@@ -193,7 +193,7 @@ async def detailed_health_check(response: Response):
                 "response_time_ms": total_response_time,
                 "cpu_usage_percent": system_metrics["cpu_percent"],
                 "memory_usage_percent": system_metrics["memory_percent"],
-                "impact_level": ("LOW" if total_response_time < MAX_RESPONSE_TIME_MS else "MEDIUM"),
+                "impact_level": "LOW" if total_response_time < MAX_RESPONSE_TIME_MS else "MEDIUM",
             },
             "system_status": {
                 "cpu_healthy": system_metrics["cpu_percent"] < CPU_THRESHOLD_PERCENT,
@@ -208,7 +208,9 @@ async def detailed_health_check(response: Response):
             impact_analysis["alerts"].append(
                 {
                     "type": "CPU_HIGH",
-                    "message": f"CPU usage {system_metrics['cpu_percent']:.1f}% exceeds threshold {CPU_THRESHOLD_PERCENT}%",
+                    "message": (
+                        f"CPU usage {system_metrics['cpu_percent']:.1f}% exceeds threshold {CPU_THRESHOLD_PERCENT}%"
+                    ),
                     "severity": "WARNING",
                 }
             )
@@ -217,7 +219,9 @@ async def detailed_health_check(response: Response):
             impact_analysis["alerts"].append(
                 {
                     "type": "MEMORY_HIGH",
-                    "message": f"Memory usage {system_metrics['memory_percent']:.1f}% exceeds threshold {MEMORY_THRESHOLD_PERCENT}%",
+                    "message": (
+                        f"Memory usage {system_metrics['memory_percent']:.1f}% exceeds threshold {MEMORY_THRESHOLD_PERCENT}%"
+                    ),
                     "severity": "WARNING",
                 }
             )
@@ -226,7 +230,9 @@ async def detailed_health_check(response: Response):
             impact_analysis["alerts"].append(
                 {
                     "type": "DISK_HIGH",
-                    "message": f"Disk usage {system_metrics['disk_percent']:.1f}% exceeds threshold {DISK_THRESHOLD_PERCENT}%",
+                    "message": (
+                        f"Disk usage {system_metrics['disk_percent']:.1f}% exceeds threshold {DISK_THRESHOLD_PERCENT}%"
+                    ),
                     "severity": "CRITICAL",
                 }
             )
@@ -296,7 +302,7 @@ async def health_check_full(response: Response):
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
         "database": "connected",
-        "database_last_check": (_last_db_check["timestamp"].isoformat() if _last_db_check["timestamp"] else None),
+        "database_last_check": _last_db_check["timestamp"].isoformat() if _last_db_check["timestamp"] else None,
         "timestamp": datetime.utcnow().isoformat(),
     }
 

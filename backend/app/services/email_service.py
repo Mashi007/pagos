@@ -146,7 +146,8 @@ class EmailService:
         Cargar template HTML desde archivo.
         """
         templates = {
-            "recordatorio_pago": """
+            "recordatorio_pago": (
+                """
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -184,8 +185,10 @@ class EmailService:
                     </div>
                 </body>
                 </html>
-            """,
-            "prestamo_aprobado": """
+            """
+            ),
+            "prestamo_aprobado": (
+                """
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -216,8 +219,10 @@ class EmailService:
                     </div>
                 </body>
                 </html>
-            """,
-            "mora": """
+            """
+            ),
+            "mora": (
+                """
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -251,7 +256,8 @@ class EmailService:
                     </div>
                 </body>
                 </html>
-            """,
+            """
+            ),
         }
 
         if template_name not in templates:

@@ -12,7 +12,6 @@ from contextvars import ContextVar
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-
 # Context variables para trazabilidad
 request_id: ContextVar[Optional[str]] = ContextVar("request_id", default=None)
 user_id: ContextVar[Optional[int]] = ContextVar("user_id", default=None)

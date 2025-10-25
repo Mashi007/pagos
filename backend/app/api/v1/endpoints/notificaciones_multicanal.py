@@ -118,8 +118,8 @@ async def procesar_notificaciones_automaticas(
             "mensaje": "✅ Procesamiento de notificaciones iniciado en background",
             "timestamp": datetime.now().isoformat(),
             "servicios_disponibles": {
-                "email": ("✅ CONFIGURADO" if config_servicios["email_configurado"] else "❌ NO CONFIGURADO"),
-                "whatsapp": ("✅ HABILITADO" if config_servicios["whatsapp_habilitado"] else "❌ DESHABILITADO"),
+                "email": "✅ CONFIGURADO" if config_servicios["email_configurado"] else "❌ NO CONFIGURADO",
+                "whatsapp": "✅ HABILITADO" if config_servicios["whatsapp_habilitado"] else "❌ DESHABILITADO",
             },
             "estimacion_tiempo": "2-5 minutos dependiendo del volumen",
             "seguimiento": "GET /api/v1/notificaciones-multicanal/estado-procesamiento",
@@ -181,7 +181,7 @@ def obtener_estado_procesamiento(db: Session = Depends(get_db), current_user: Us
                 "exitosas": exitosas,
                 "fallidas": fallidas,
                 "pendientes": pendientes,
-                "tasa_exito": (round((exitosas / total_hoy * 100), 2) if total_hoy > 0 else 0),
+                "tasa_exito": round((exitosas / total_hoy * 100), 2) if total_hoy > 0 else 0,
             },
             "por_canal": {
                 "email": por_canal.get("EMAIL", 0),
@@ -278,7 +278,7 @@ def obtener_historial_notificaciones(
                     },
                     "canal": {
                         "tipo": notif.canal,
-                        "icono": ("📧" if notif.canal == "EMAIL" else "📱" if notif.canal == "WHATSAPP" else "📋"),
+                        "icono": "📧" if notif.canal == "EMAIL" else "📱" if notif.canal == "WHATSAPP" else "📋",
                     },
                     "tipo": {
                         "codigo": notif.tipo,
@@ -365,12 +365,14 @@ def obtener_preferencias_cliente(
             },
             "preferencias_actuales": {
                 "canal_preferido": canal_preferido.value,
-                "descripcion": {
-                    "AMBOS": "📧📱 Email y WhatsApp",
-                    "EMAIL": "📧 Solo Email",
-                    "WHATSAPP": "📱 Solo WhatsApp",
-                    "NINGUNO": "🚫 Sin notificaciones",
-                }.get(canal_preferido.value, "No definido"),
+                "descripcion": (
+                    {
+                        "AMBOS": "📧📱 Email y WhatsApp",
+                        "EMAIL": "📧 Solo Email",
+                        "WHATSAPP": "📱 Solo WhatsApp",
+                        "NINGUNO": "🚫 Sin notificaciones",
+                    }.get(canal_preferido.value, "No definido")
+                ),
             },
             "canales_disponibles": {
                 "email": {
@@ -475,12 +477,14 @@ def actualizar_preferencias_cliente(
             "cliente": {"id": cliente_id, "nombre": cliente.nombre_completo},
             "nueva_configuracion": {
                 "canal_preferido": canal_preferido.value,
-                "descripcion": {
-                    "AMBOS": "Recibirá notificaciones por email Y WhatsApp",
-                    "EMAIL": "Recibirá notificaciones solo por email",
-                    "WHATSAPP": "Recibirá notificaciones solo por WhatsApp",
-                    "NINGUNO": "NO recibirá notificaciones automáticas",
-                }.get(canal_preferido.value),
+                "descripcion": (
+                    {
+                        "AMBOS": "Recibirá notificaciones por email Y WhatsApp",
+                        "EMAIL": "Recibirá notificaciones solo por email",
+                        "WHATSAPP": "Recibirá notificaciones solo por WhatsApp",
+                        "NINGUNO": "NO recibirá notificaciones automáticas",
+                    }.get(canal_preferido.value)
+                ),
             },
             "fecha_actualizacion": datetime.now().isoformat(),
             "actualizado_por": current_user.full_name,
@@ -695,18 +699,18 @@ def dashboard_notificaciones_multicanal(
                 "total_enviadas": {"valor": total, "icono": "📊", "color": "#007bff"},
                 "exitosas": {
                     "valor": exitosas,
-                    "porcentaje": (round((exitosas / total * 100), 2) if total > 0 else 0),
+                    "porcentaje": round((exitosas / total * 100), 2) if total > 0 else 0,
                     "icono": "✅",
                     "color": "#28a745",
                 },
                 "fallidas": {
                     "valor": fallidas,
-                    "porcentaje": (round((fallidas / total * 100), 2) if total > 0 else 0),
+                    "porcentaje": round((fallidas / total * 100), 2) if total > 0 else 0,
                     "icono": "❌",
                     "color": "#dc3545",
                 },
                 "tasa_exito": {
-                    "valor": (f"{round((exitosas / total * 100), 1)}%" if total > 0 else "0%"),
+                    "valor": f"{round((exitosas / total * 100), 1)}%" if total > 0 else "0%",
                     "icono": "🎯",
                     "color": "#17a2b8",
                 },
@@ -714,12 +718,12 @@ def dashboard_notificaciones_multicanal(
             "distribucion_canales": {
                 "email": {
                     "cantidad": por_canal["EMAIL"],
-                    "porcentaje": (round((por_canal["EMAIL"] / total * 100), 1) if total > 0 else 0),
+                    "porcentaje": round((por_canal["EMAIL"] / total * 100), 1) if total > 0 else 0,
                     "color": "#007bff",
                 },
                 "whatsapp": {
                     "cantidad": por_canal["WHATSAPP"],
-                    "porcentaje": (round((por_canal["WHATSAPP"] / total * 100), 1) if total > 0 else 0),
+                    "porcentaje": round((por_canal["WHATSAPP"] / total * 100), 1) if total > 0 else 0,
                     "color": "#25d366",
                 },
             },
@@ -904,7 +908,9 @@ def _agrupar_por_campo(lista: List[Dict], extractor) -> Dict[str, int]:
 
 
 @router.get("/verificacion-sistema")
-def verificar_sistema_notificaciones_multicanal(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def verificar_sistema_notificaciones_multicanal(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🔍 Verificación completa del sistema de notificaciones multicanal
     """

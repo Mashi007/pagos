@@ -122,8 +122,11 @@ class ForensicTraceSystem:
                         "session_id": session_id,
                         "success": success,
                         "duration_seconds": (
-                            self.trace_sessions[session_id]["end_time"] - self.trace_sessions[session_id]["start_time"]
-                        ).total_seconds(),
+                            (
+                                self.trace_sessions[session_id]["end_time"]
+                                - self.trace_sessions[session_id]["start_time"]
+                            ).total_seconds()
+                        ),
                     },
                 )
 
@@ -340,7 +343,9 @@ class ForensicTraceSystem:
         failure_types = [f["failure_event"]["event_type"] for f in recent_failures]
 
         if failure_types.count("token_expired") > len(failure_types) * 0.5:
-            recommendations.append("🔴 Más del 50% de fallos son por tokens expirados - revisar configuración de expiración")
+            recommendations.append(
+                "🔴 Más del 50% de fallos son por tokens expirados - revisar configuración de expiración"
+            )
 
         if failure_types.count("auth_failure") > len(failure_types) * 0.3:
             recommendations.append("🟡 Más del 30% de fallos son de autenticación - revisar validación de usuarios")

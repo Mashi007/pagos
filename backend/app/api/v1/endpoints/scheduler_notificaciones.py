@@ -97,7 +97,9 @@ def obtener_configuracion_scheduler(db: Session = Depends(get_db), current_user:
                 "paso_1": "Configurar cron job en el servidor",
                 "paso_2": "Usar endpoint: POST /api/v1/notificaciones-multicanal/procesar-automaticas",
                 "paso_3": "Monitorear logs en: GET /api/v1/scheduler/logs",
-                "comando_cron": "0 * 6-22 * * 1-6 curl -X POST 'https://pagos-f2qf.onrender.com/api/v1/notificaciones-multicanal/procesar-automaticas' -H 'Authorization: Bearer TOKEN'",
+                "comando_cron": (
+                    "0 * 6-22 * * 1-6 curl -X POST 'https://pagos-f2qf.onrender.com/api/v1/notificaciones-multicanal/procesar-automaticas' -H 'Authorization: Bearer TOKEN'"
+                ),
             },
         }
 
@@ -331,7 +333,9 @@ def _generar_expresion_cron(config: ConfiguracionScheduler) -> str:
 
 
 @router.get("/verificacion-completa")
-def verificar_sistema_notificaciones_completo(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def verificar_sistema_notificaciones_completo(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🔍 Verificación completa del sistema de notificaciones multicanal
     """

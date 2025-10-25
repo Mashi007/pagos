@@ -130,9 +130,9 @@ async def dashboard_diagnostico(db: Session = Depends(get_db)):
             "total_401_errors": request_stats_summary["status_counts"].get(401, 0),
             "total_requests": request_stats_summary["total_requests"],
             "error_rate": (
-                request_stats_summary["status_counts"].get(401, 0) / max(request_stats_summary["total_requests"], 1)
-            )
-            * 100,
+                (request_stats_summary["status_counts"].get(401, 0) / max(request_stats_summary["total_requests"], 1))
+                * 100
+            ),
         }
 
         return {
@@ -229,7 +229,7 @@ async def health_check_detallado(db: Session = Depends(get_db)):
             admin_ok = admin_count > 0
             checks["admin_users"] = {
                 "status": "healthy" if admin_ok else "unhealthy",
-                "message": (f"Found {admin_count} admin users" if admin_ok else "No admin users found"),
+                "message": f"Found {admin_count} admin users" if admin_ok else "No admin users found",
                 "count": admin_count,
             }
         except Exception as e:

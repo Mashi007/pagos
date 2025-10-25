@@ -126,7 +126,11 @@ class QualityStandards:
             for node in ast.walk(tree):
                 if isinstance(node, ast.ClassDef):
                     # Verificar que la clase tenga docstring
-                    if not (node.body and isinstance(node.body[0], ast.Expr) and isinstance(node.body[0].value, ast.Constant)):
+                    if not (
+                        node.body
+                        and isinstance(node.body[0], ast.Expr)
+                        and isinstance(node.body[0].value, ast.Constant)
+                    ):
                         return False
 
                     # Verificar métodos
@@ -394,7 +398,9 @@ def apply_quality_standards(services_dir: str) -> Dict[str, Any]:
             with open(service["file_path"], "r", encoding="utf-8") as f:
                 content = f.read()
             service["metrics"] = ServiceMetrics.calculate_complexity_metrics(content)
-            service["performance_recommendations"] = ServiceMetrics.generate_performance_recommendations(service["metrics"])
+            service["performance_recommendations"] = ServiceMetrics.generate_performance_recommendations(
+                service["metrics"]
+            )
         except Exception as e:
             service["metrics"] = {"error": str(e)}
 

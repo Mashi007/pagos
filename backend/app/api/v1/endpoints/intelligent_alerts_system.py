@@ -159,7 +159,9 @@ class IntelligentAlertSystem:
 
         elif alert_type == AlertType.TOKEN_EXPIRY:
             # Contar tokens expirando pronto
-            expiring_tokens = [m for m in recent_metrics if m["type"] == "token_expiry" and m["value"] <= rule["threshold"]]
+            expiring_tokens = [
+                m for m in recent_metrics if m["type"] == "token_expiry" and m["value"] <= rule["threshold"]
+            ]
             return len(expiring_tokens) >= 1
 
         elif alert_type == AlertType.SUSPICIOUS_ACTIVITY:
@@ -206,7 +208,9 @@ class IntelligentAlertSystem:
             AlertType.AUTH_FAILURE: f"Más de {rule['threshold']} fallos de autenticación en los últimos minutos",
             AlertType.SUSPICIOUS_ACTIVITY: f"Actividad sospechosa detectada ({rule['threshold']}+ eventos)",
             AlertType.SYSTEM_OVERLOAD: f"Sistema sobrecargado ({rule['threshold']}%+ de recursos)",
-            AlertType.PERFORMANCE_DEGRADATION: f"Degradación de rendimiento ({rule['threshold']}s+ tiempo de respuesta)",
+            AlertType.PERFORMANCE_DEGRADATION: (
+                f"Degradación de rendimiento ({rule['threshold']}s+ tiempo de respuesta)"
+            ),
         }
         return messages.get(alert_type, "Alerta desconocida")
 
@@ -314,7 +318,7 @@ class IntelligentAlertSystem:
                 "resolved_alerts": resolved_alerts,
                 "severity_distribution": dict(severity_counts),
                 "type_distribution": dict(type_counts),
-                "last_alert_time": (self.alert_history[-1]["timestamp"] if self.alert_history else None),
+                "last_alert_time": self.alert_history[-1]["timestamp"] if self.alert_history else None,
             }
 
 

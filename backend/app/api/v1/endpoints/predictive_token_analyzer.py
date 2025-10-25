@@ -300,7 +300,9 @@ async def analyze_token_predictive(
 
 
 @router.get("/predict-system-failures")
-async def predict_system_failures_endpoint(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def predict_system_failures_endpoint(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🔮 Predicción de fallas del sistema
     """

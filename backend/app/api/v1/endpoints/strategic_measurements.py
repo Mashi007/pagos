@@ -134,11 +134,11 @@ class StrategicMeasurements:
                 "timestamp": datetime.now(),
                 "category": "system_performance",
                 "metrics": {
-                    "memory_usage": (psutil.virtual_memory().percent if PSUTIL_AVAILABLE else 0),
+                    "memory_usage": psutil.virtual_memory().percent if PSUTIL_AVAILABLE else 0,
                     "cpu_usage": psutil.cpu_percent() if PSUTIL_AVAILABLE else 0,
-                    "disk_usage": (psutil.disk_usage("/").percent if PSUTIL_AVAILABLE else 0),
+                    "disk_usage": psutil.disk_usage("/").percent if PSUTIL_AVAILABLE else 0,
                     "process_count": len(psutil.pids()) if PSUTIL_AVAILABLE else 0,
-                    "load_average": (os.getloadavg() if hasattr(os, "getloadavg") else [0, 0, 0]),
+                    "load_average": os.getloadavg() if hasattr(os, "getloadavg") else [0, 0, 0],
                 },
             }
 
@@ -378,7 +378,7 @@ class StrategicMeasurements:
                     "deployment_measurements": len(self.deployment_metrics),
                     "schema_measurements": len(self.schema_metrics),
                     "performance_measurements": len(self.performance_metrics),
-                    "last_measurement": (self.measurements[-1] if self.measurements else None),
+                    "last_measurement": self.measurements[-1] if self.measurements else None,
                 },
             }
 
@@ -484,7 +484,9 @@ async def get_system_performance(db: Session = Depends(get_db), current_user: Us
 
 
 @router.get("/measurement-summary")
-async def get_measurement_summary_endpoint(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_measurement_summary_endpoint(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📋 Resumen de mediciones estratégicas
     """

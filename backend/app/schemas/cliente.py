@@ -246,7 +246,9 @@ class ClienteCreateWithLoan(ClienteBase):
     modalidad_pago: str = Field(..., pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
 
     # Configuración del préstamo
-    tasa_interes_anual: Optional[Decimal] = Field(None, ge=0, le=MAX_TASA_INTERES, description="Tasa de interés anual (%)")
+    tasa_interes_anual: Optional[Decimal] = Field(
+        None, ge=0, le=MAX_TASA_INTERES, description="Tasa de interés anual (%)"
+    )
     generar_tabla_automatica: bool = Field(True, description="Generar tabla de amortización automáticamente")
 
 

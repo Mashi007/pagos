@@ -170,7 +170,7 @@ class CriticalErrorMonitor:
 
         return {
             "hourly_distribution": dict(hourly_errors),
-            "peak_error_hour": (max(hourly_errors.items(), key=lambda x: x[1])[0] if hourly_errors else None),
+            "peak_error_hour": max(hourly_errors.items(), key=lambda x: x[1])[0] if hourly_errors else None,
             "error_frequency": len(self.critical_errors) / 24,  # Errores por hora promedio
         }
 
@@ -234,7 +234,7 @@ class CriticalErrorMonitor:
                     "import_errors": len(self.import_errors),
                     "schema_errors": len(self.schema_errors),
                     "frontend_errors": len(self.frontend_errors),
-                    "last_error": (self.critical_errors[-1] if self.critical_errors else None),
+                    "last_error": self.critical_errors[-1] if self.critical_errors else None,
                 },
             }
 
@@ -306,7 +306,9 @@ async def get_critical_error_analysis(db: Session = Depends(get_db), current_use
 
 
 @router.get("/critical-error-summary")
-async def get_critical_error_summary_endpoint(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_critical_error_summary_endpoint(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📋 Resumen de errores críticos
     """

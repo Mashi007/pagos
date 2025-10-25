@@ -634,7 +634,7 @@ def aplicar_conciliacion_masiva(
             resumen_financiero={
                 "total_monto_aplicado": float(total_monto),
                 "clientes_afectados": len(clientes_afectados),
-                "promedio_pago": (float(total_monto / len(pagos_creados)) if pagos_creados else 0),
+                "promedio_pago": float(total_monto / len(pagos_creados)) if pagos_creados else 0,
             },
             reporte_generado=True,
         )
@@ -931,7 +931,7 @@ async def flujo_completo_conciliacion(
             "busqueda_manual": manuales,
             "total_monto_aplicable": total_monto_aplicable,
             "clientes_afectados": clientes_afectados,
-            "tasa_exito_automatico": (round((exactos / len(tabla_resultados) * 100), 2) if tabla_resultados else 0),
+            "tasa_exito_automatico": round((exactos / len(tabla_resultados) * 100), 2) if tabla_resultados else 0,
         }
 
         # Guardar datos temporalmente para aplicación posterior
@@ -1220,7 +1220,9 @@ def obtener_paso_flujo_conciliacion(
 # ============================================
 
 
-async def _generar_reporte_conciliacion_completo(proceso_id: str, user_id: int, pagos_creados: List[dict], total_monto: float):
+async def _generar_reporte_conciliacion_completo(
+    proceso_id: str, user_id: int, pagos_creados: List[dict], total_monto: float
+):
     """
     📄 PASO 13: Generar reporte PDF de conciliación
     """
@@ -1251,7 +1253,9 @@ async def _generar_reporte_conciliacion_completo(proceso_id: str, user_id: int, 
         logger.error(f"Error generando reporte completo: {str(e)}")
 
 
-async def _notificar_admin_conciliacion(proceso_id: str, usuario_proceso: str, pagos_aplicados: int, total_monto: float):
+async def _notificar_admin_conciliacion(
+    proceso_id: str, usuario_proceso: str, pagos_aplicados: int, total_monto: float
+):
     """
     🔔 PASO 15: Notificar a Admin sobre conciliación completada
     """

@@ -222,14 +222,20 @@ class RealTimeSpecificMonitor:
                     {
                         "from": current,
                         "to": next_outcome,
-                        "time_diff_seconds": (all_moments[i + 1]["timestamp"] - all_moments[i]["timestamp"]).total_seconds(),
+                        "time_diff_seconds": (
+                            (all_moments[i + 1]["timestamp"] - all_moments[i]["timestamp"]).total_seconds()
+                        ),
                     }
                 )
 
         return {
             "total_transitions": len(transitions),
-            "failure_to_success_transitions": len([t for t in transitions if t["from"] == "failure" and t["to"] == "success"]),
-            "success_to_failure_transitions": len([t for t in transitions if t["from"] == "success" and t["to"] == "failure"]),
+            "failure_to_success_transitions": len(
+                [t for t in transitions if t["from"] == "failure" and t["to"] == "success"]
+            ),
+            "success_to_failure_transitions": len(
+                [t for t in transitions if t["from"] == "success" and t["to"] == "failure"]
+            ),
             "avg_transition_time_seconds": (
                 sum(t["time_diff_seconds"] for t in transitions) / len(transitions) if transitions else 0
             ),

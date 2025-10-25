@@ -430,7 +430,7 @@ def corregir_datos_pago(
             "mensaje": "✅ Corrección de pago procesada exitosamente",
             "pago": {
                 "id": pago_id,
-                "cliente": (pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A"),
+                "cliente": pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A",
                 "cuota": pago.numero_cuota,
             },
             "correcciones_aplicadas": correcciones_aplicadas,
@@ -676,6 +676,7 @@ def ping_validadores():
     # ============================================
     # CONFIGURACIÓN DE VALIDADORES
     # ============================================
+
 
 # ============================================
 # FUNCIONES AUXILIARES

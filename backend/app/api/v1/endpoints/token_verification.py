@@ -43,7 +43,7 @@ async def verificar_token_detallado(request: Request, db: Session = Depends(get_
                 "status": "error",
                 "error": "Invalid Authorization header format",
                 "expected_format": "Bearer <token>",
-                "received": (auth_header[:20] + "..." if len(auth_header) > 20 else auth_header),
+                "received": auth_header[:20] + "..." if len(auth_header) > 20 else auth_header,
             }
 
         token = auth_header.split(" ")[1]
@@ -105,7 +105,7 @@ async def verificar_token_detallado(request: Request, db: Session = Depends(get_
             token_analysis["expiration"] = {
                 "exp_datetime": exp_datetime.isoformat(),
                 "is_expired": is_expired,
-                "time_until_expiry": (str(exp_datetime - datetime.now()) if not is_expired else "EXPIRED"),
+                "time_until_expiry": str(exp_datetime - datetime.now()) if not is_expired else "EXPIRED",
             }
         else:
             token_analysis["expiration"] = {"error": "No expiration found in token"}

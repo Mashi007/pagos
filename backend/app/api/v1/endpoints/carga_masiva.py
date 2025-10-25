@@ -700,7 +700,9 @@ async def _analizar_archivo_clientes(
 # ============================================
 
 
-async def _analizar_archivo_pagos(contenido: bytes, nombre_archivo: str, db: Session, usuario_id: int) -> ResultadoCargaMasiva:
+async def _analizar_archivo_pagos(
+    contenido: bytes, nombre_archivo: str, db: Session, usuario_id: int
+) -> ResultadoCargaMasiva:
     """
     Analizar archivo de pagos y articular con clientes por cédula
     """
@@ -1009,7 +1011,9 @@ async def corregir_registro_en_linea(
             elif campo == "concesionario":
                 # Verificar que existe
                 concesionario = (
-                    db.query(Concesionario).filter(Concesionario.nombre.ilike(f"%{valor}%"), Concesionario.activo).first()
+                    db.query(Concesionario)
+                    .filter(Concesionario.nombre.ilike(f"%{valor}%"), Concesionario.activo)
+                    .first()
                 )
                 if not concesionario:
                     errores_validacion.append(f"Concesionario '{valor}' no existe en la BD")
@@ -1020,7 +1024,9 @@ async def corregir_registro_en_linea(
             elif campo == "modelo_vehiculo":
                 # Verificar que existe
                 modelo = (
-                    db.query(ModeloVehiculo).filter(ModeloVehiculo.modelo.ilike(f"%{valor}%"), ModeloVehiculo.activo).first()
+                    db.query(ModeloVehiculo)
+                    .filter(ModeloVehiculo.modelo.ilike(f"%{valor}%"), ModeloVehiculo.activo)
+                    .first()
                 )
                 if not modelo:
                     errores_validacion.append(f"Modelo '{valor}' no existe en la BD")
@@ -1040,7 +1046,9 @@ async def corregir_registro_en_linea(
             elif campo == "modalidad_pago":
                 modalidades_validas = ["SEMANAL", "QUINCENAL", "MENSUAL", "BIMENSUAL"]
                 if valor.upper() not in modalidades_validas:
-                    errores_validacion.append(f"Modalidad '{valor}' no es válida. Use: {', '.join(modalidades_validas)}")
+                    errores_validacion.append(
+                        f"Modalidad '{valor}' no es válida. Use: {', '.join(modalidades_validas)}"
+                    )
                 else:
                     datos_corregidos[campo] = valor.upper()
 
@@ -1185,7 +1193,9 @@ async def _guardar_cliente_desde_carga(datos: Dict[str, Any], db: Session, usuar
 
         # Buscar asesor_id
         if datos.get("asesor"):
-            asesor_obj = db.query(Analista).filter(Analista.nombre.ilike(f"%{datos['asesor']}%"), Analista.activo).first()
+            asesor_obj = (
+                db.query(Analista).filter(Analista.nombre.ilike(f"%{datos['asesor']}%"), Analista.activo).first()
+            )
             if asesor_obj:
                 asesor_id = asesor_obj.id
 
@@ -1207,12 +1217,12 @@ async def _guardar_cliente_desde_carga(datos: Dict[str, Any], db: Session, usuar
             # Campos legacy (mantener por compatibilidad)
             "concesionario": datos.get("concesionario", ""),
             "modelo_vehiculo": datos.get("modelo_vehiculo", ""),
-            "marca_vehiculo": (datos.get("modelo_vehiculo", "").split(" ")[0] if datos.get("modelo_vehiculo") else ""),
+            "marca_vehiculo": datos.get("modelo_vehiculo", "").split(" ")[0] if datos.get("modelo_vehiculo") else "",
             # Financiamiento
             "total_financiamiento": (
                 Decimal(str(datos.get("total_financiamiento", 0))) if datos.get("total_financiamiento") else None
             ),
-            "cuota_inicial": (Decimal(str(datos.get("cuota_inicial", 0))) if datos.get("cuota_inicial") else None),
+            "cuota_inicial": Decimal(str(datos.get("cuota_inicial", 0))) if datos.get("cuota_inicial") else None,
             "numero_amortizaciones": (
                 int(datos.get("numero_amortizaciones", 12)) if datos.get("numero_amortizaciones") else None
             ),
@@ -1300,7 +1310,7 @@ async def _guardar_pago_desde_carga(datos: Dict[str, Any], db: Session, usuario_
                 if isinstance(datos["fecha_pago"], str)
                 else datos["fecha_pago"]
             ),
-            "numero_cuota": (int(datos.get("numero_cuota", 1)) if datos.get("numero_cuota") else None),
+            "numero_cuota": int(datos.get("numero_cuota", 1)) if datos.get("numero_cuota") else None,
             "referencia": datos.get("documento_pago", ""),
             "metodo_pago": datos.get("metodo_pago", "TRANSFERENCIA").upper(),
             "estado": "CONFIRMADO",

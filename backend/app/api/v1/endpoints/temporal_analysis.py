@@ -66,7 +66,7 @@ class TemporalAnalysisSystem:
                 "timestamp": current_time,
                 "system_time": time.time(),
                 "datetime_now": current_time.isoformat(),
-                "timezone_offset": (current_time.utcoffset().total_seconds() if current_time.utcoffset() else 0),
+                "timezone_offset": current_time.utcoffset().total_seconds() if current_time.utcoffset() else 0,
             }
             self.clock_sync_data.append(clock_data)
 
@@ -184,8 +184,8 @@ class TemporalAnalysisSystem:
                     "issued_at": issued_time.isoformat() if issued_time else None,
                     "expires_at": expires_time.isoformat() if expires_time else None,
                     "current_time": current_time.isoformat(),
-                    "age_seconds": ((current_time - issued_time).total_seconds() if issued_time else None),
-                    "time_to_expiry_seconds": ((expires_time - current_time).total_seconds() if expires_time else None),
+                    "age_seconds": (current_time - issued_time).total_seconds() if issued_time else None,
+                    "time_to_expiry_seconds": (expires_time - current_time).total_seconds() if expires_time else None,
                     "is_expired": expires_time < current_time if expires_time else None,
                 },
                 "timing_issues": [],
@@ -263,7 +263,7 @@ class TemporalAnalysisSystem:
                 "clock_sync_status": "unknown",
                 "time_differences": time_diffs,
                 "avg_time_diff": statistics.mean(time_diffs) if time_diffs else 0,
-                "time_diff_std": (statistics.stdev(time_diffs) if len(time_diffs) > 1 else 0),
+                "time_diff_std": statistics.stdev(time_diffs) if len(time_diffs) > 1 else 0,
                 "max_deviation": max(time_diffs) - min(time_diffs) if time_diffs else 0,
                 "sync_issues": [],
                 "recommendations": [],
@@ -321,7 +321,9 @@ class TemporalAnalysisSystem:
             time_windows = defaultdict(list)
             for event in recent_events:
                 # Crear ventana de 5 minutos
-                window_key = event["timestamp"].replace(minute=(event["timestamp"].minute // 5) * 5, second=0, microsecond=0)
+                window_key = event["timestamp"].replace(
+                    minute=(event["timestamp"].minute // 5) * 5, second=0, microsecond=0
+                )
                 time_windows[window_key].append(event)
 
             # Analizar correlaciones
@@ -483,7 +485,9 @@ async def analyze_token_timing_endpoint(
 
 
 @router.get("/clock-synchronization")
-async def get_clock_synchronization_analysis(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_clock_synchronization_analysis(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🕐 Análisis de sincronización de reloj
     """
@@ -506,7 +510,9 @@ async def get_clock_synchronization_analysis(db: Session = Depends(get_db), curr
 
 
 @router.get("/temporal-correlations")
-async def get_temporal_correlations_analysis(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_temporal_correlations_analysis(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     🔗 Análisis de correlaciones temporales
     """

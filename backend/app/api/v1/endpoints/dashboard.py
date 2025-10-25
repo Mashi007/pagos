@@ -57,7 +57,9 @@ def dashboard_administrador(
     clientes_en_mora = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).count()
 
     tasa_morosidad = (
-        (clientes_en_mora / (clientes_al_dia + clientes_en_mora) * 100) if (clientes_al_dia + clientes_en_mora) > 0 else 0
+        (clientes_en_mora / (clientes_al_dia + clientes_en_mora) * 100)
+        if (clientes_al_dia + clientes_en_mora) > 0
+        else 0
     )
 
     # EVOLUCIÓN MENSUAL CARTERA (últimos 6 meses)
@@ -82,12 +84,12 @@ def dashboard_administrador(
     distribucion_clientes = {
         "al_dia": {
             "cantidad": clientes_al_dia,
-            "porcentaje": (round((clientes_al_dia / total_clientes * 100), 1) if total_clientes > 0 else 0),
+            "porcentaje": round((clientes_al_dia / total_clientes * 100), 1) if total_clientes > 0 else 0,
             "color": "#28a745",
         },
         "mora": {
             "cantidad": clientes_en_mora,
-            "porcentaje": (round((clientes_en_mora / total_clientes * 100), 1) if total_clientes > 0 else 0),
+            "porcentaje": round((clientes_en_mora / total_clientes * 100), 1) if total_clientes > 0 else 0,
             "color": "#ffc107",
         },
     }
@@ -123,7 +125,7 @@ def dashboard_administrador(
                         "monto": f"${float(cuota.monto_cuota):,.0f}",
                         "fecha": cuota.fecha_vencimiento.strftime("%d/%m/%Y"),
                         "dias": dias_hasta,
-                        "color": ("danger" if dias_hasta == 0 else ("warning" if dias_hasta <= 2 else "info")),
+                        "color": "danger" if dias_hasta == 0 else ("warning" if dias_hasta <= 2 else "info"),
                     }
                 )
 
@@ -163,7 +165,11 @@ def dashboard_administrador(
 
     # ALERTAS CRÍTICAS
     clientes_criticos = (
-        db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 30).order_by(Cliente.dias_mora.desc()).limit(5).all()
+        db.query(Cliente)
+        .filter(Cliente.activo, Cliente.dias_mora > 30)
+        .order_by(Cliente.dias_mora.desc())
+        .limit(5)
+        .all()
     )
 
     alertas_criticas = [
@@ -348,7 +354,7 @@ def dashboard_cobranzas(db: Session = Depends(get_db), current_user: User = Depe
                 "telefono": cliente.telefono,
                 "dias_mora": cliente.dias_mora,
                 "color": color,
-                "analista": (cliente.analista.full_name if cliente.analista else "Sin asignar"),
+                "analista": cliente.analista.full_name if cliente.analista else "Sin asignar",
             }
         )
 
@@ -579,7 +585,7 @@ def dashboard_comercial(db: Session = Depends(get_db), current_user: User = Depe
                         "cliente": cliente.nombre_completo,
                         "vehiculo": cliente.vehiculo_completo,
                         "monto": f"${float(cliente.total_financiamiento or 0):,.0f}",
-                        "analista": (cliente.analista.full_name if cliente.analista else "N/A"),
+                        "analista": cliente.analista.full_name if cliente.analista else "N/A",
                     }
                     for cliente in ultimas_ventas
                 ],
@@ -638,7 +644,7 @@ def dashboard_analista(
             "dias_mora": cliente.dias_mora,
             "monto_deuda": float(cliente.total_financiamiento or 0),
             "vehiculo": cliente.vehiculo_completo,
-            "prioridad": ("🔴 Alta" if cliente.dias_mora > 30 else ("🟡 Media" if cliente.dias_mora > 15 else "🟠 Baja")),
+            "prioridad": "🔴 Alta" if cliente.dias_mora > 30 else ("🟡 Media" if cliente.dias_mora > 15 else "🟠 Baja"),
         }
         for cliente in mis_clientes
         if cliente.dias_mora > 0
@@ -671,7 +677,7 @@ def dashboard_analista(
                 "total_analistaes": len(ranking_general),
                 "clientes": analista_rank.total_clientes,
                 "monto": float(analista_rank.monto_total or 0),
-                "percentil": (round((1 - idx / len(ranking_general)) * 100, 1) if len(ranking_general) > 0 else 0),
+                "percentil": round((1 - idx / len(ranking_general)) * 100, 1) if len(ranking_general) > 0 else 0,
             }
             break
 
@@ -852,7 +858,7 @@ def dashboard_por_rol(
         dashboard_data["info_acceso"] = {
             "rol": user_role,
             "descripcion": info_acceso.get(user_role, "Acceso básico"),
-            "filtros_aplicados": ("Solo sus clientes" if user_role in ["USER", "USER"] else "Sin filtros"),
+            "filtros_aplicados": "Solo sus clientes" if user_role in ["USER", "USER"] else "Sin filtros",
             "puede_ver_otros_analistaes": user_role in ["ADMIN", "COBRANZAS"],
         }
 
@@ -880,7 +886,9 @@ def obtener_datos_grafico(
         for i in range(12):  # Últimos 12 meses
             mes_fecha = hoy.replace(day=1) - timedelta(days=30 * i)
             # Simulación de datos históricos
-            cartera_mes = db.query(func.sum(Cliente.total_financiamiento)).filter(Cliente.activo).scalar() or Decimal("0")
+            cartera_mes = db.query(func.sum(Cliente.total_financiamiento)).filter(Cliente.activo).scalar() or Decimal(
+                "0"
+            )
 
             datos.append(
                 {
@@ -1136,7 +1144,7 @@ def obtener_detalle_tabla(
                             "monto": float(cuota.monto_cuota),
                             "fecha_vencimiento": cuota.fecha_vencimiento,
                             "dias_hasta": (cuota.fecha_vencimiento - date.today()).days,
-                            "analista": (cliente.analista.full_name if cliente.analista else "Sin asignar"),
+                            "analista": cliente.analista.full_name if cliente.analista else "Sin asignar",
                         }
                     )
 
@@ -1164,8 +1172,8 @@ def obtener_detalle_tabla(
                 "dias_mora": cliente.dias_mora,
                 "monto_financiamiento": float(cliente.total_financiamiento or 0),
                 "vehiculo": cliente.vehiculo_completo,
-                "analista": (cliente.analista.full_name if cliente.analista else "Sin asignar"),
-                "prioridad": ("CRITICA" if cliente.dias_mora > 60 else ("ALTA" if cliente.dias_mora > 30 else "MEDIA")),
+                "analista": cliente.analista.full_name if cliente.analista else "Sin asignar",
+                "prioridad": "CRITICA" if cliente.dias_mora > 60 else ("ALTA" if cliente.dias_mora > 30 else "MEDIA"),
             }
             for cliente in clientes
         ]
@@ -1246,7 +1254,9 @@ async def exportar_vista_dashboard(
                 output,
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 headers={
-                    "Content-Disposition": f"attachment; filename=dashboard_{tipo_vista}_{date.today().strftime('%Y%m%d')}.xlsx"
+                    "Content-Disposition": (
+                        f"attachment; filename=dashboard_{tipo_vista}_{date.today().strftime('%Y%m%d')}.xlsx"
+                    )
                 },
             )
 
@@ -1310,5 +1320,5 @@ def obtener_actualizacion_tiempo_real(
     return {
         "actualizaciones": actualizaciones,
         "timestamp_servidor": datetime.now(),
-        "componentes_actualizados": (componentes.split(",") if componentes else ["todos"]),
+        "componentes_actualizados": componentes.split(",") if componentes else ["todos"],
     }

@@ -52,7 +52,9 @@ class SolicitudAprobacionCompleta(BaseModel):
                 "tipo_solicitud": "MODIFICAR_PAGO",
                 "entidad_tipo": "pago",
                 "entidad_id": 123,
-                "justificacion": "El cliente pagó con transferencia pero se registró como efectivo por error. Necesito corregir el método de pago para cuadrar la conciliación bancaria.",
+                "justificacion": (
+                    "El cliente pagó con transferencia pero se registró como efectivo por error. Necesito corregir el método de pago para cuadrar la conciliación bancaria."
+                ),
                 "datos_solicitados": {
                     "metodo_pago": "TRANSFERENCIA",
                     "numero_operacion": "TRF-789456123",
@@ -304,7 +306,7 @@ async def solicitar_modificacion_pago_completo(
             "id": pago.id,
             "monto_actual": float(pago.monto_pagado),
             "fecha_actual": pago.fecha_pago,
-            "cliente": (pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A"),
+            "cliente": pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A",
         },
         "cambios_solicitados": datos_solicitados,
         "siguiente_paso": "Esperar aprobación del administrador",
@@ -391,7 +393,7 @@ async def solicitar_anulacion_pago_completo(
             "id": pago.id,
             "monto": float(pago.monto_pagado),
             "fecha": pago.fecha_pago,
-            "cliente": (pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A"),
+            "cliente": pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A",
         },
         "acciones_solicitadas": datos_solicitados,
     }
@@ -441,7 +443,7 @@ def solicitar_modificacion_pago(
         "pago_afectado": {
             "id": pago.id,
             "monto_actual": float(pago.monto_pagado),
-            "cliente": (pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A"),
+            "cliente": pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A",
         },
     }
 
@@ -490,7 +492,7 @@ def solicitar_anulacion_pago(
             "id": pago.id,
             "monto": float(pago.monto_pagado),
             "fecha": pago.fecha_pago,
-            "cliente": (pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A"),
+            "cliente": pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A",
         },
     }
 
@@ -706,7 +708,7 @@ def listar_solicitudes_pendientes(
                 "entidad_id": sol.entidad_id,
                 "estado": sol.estado,
                 "justificacion": sol.justificacion,
-                "datos_solicitados": (eval(sol.datos_solicitados) if sol.datos_solicitados else {}),
+                "datos_solicitados": eval(sol.datos_solicitados) if sol.datos_solicitados else {},
                 "solicitante": sol.solicitante.full_name if sol.solicitante else "N/A",
                 "fecha_solicitud": sol.fecha_solicitud,
                 "fecha_revision": sol.fecha_revision,
@@ -907,7 +909,9 @@ def estadisticas_solicitudes(db: Session = Depends(get_db), current_user: User =
 
     # Por tipo de solicitud
     por_tipo = (
-        db.query(Aprobacion.tipo_solicitud, func.count(Aprobacion.id).label("total")).group_by(Aprobacion.tipo_solicitud).all()
+        db.query(Aprobacion.tipo_solicitud, func.count(Aprobacion.id).label("total"))
+        .group_by(Aprobacion.tipo_solicitud)
+        .all()
     )
 
     # Por solicitante
@@ -966,7 +970,9 @@ def dashboard_aprobaciones(db: Session = Depends(get_db), current_user: User = D
     urgentes = db.query(Aprobacion).filter(Aprobacion.estado == "PENDIENTE", Aprobacion.prioridad == "URGENTE").count()
 
     # Solicitudes vencidas
-    vencidas = db.query(Aprobacion).filter(Aprobacion.estado == "PENDIENTE", Aprobacion.fecha_limite < date.today()).count()
+    vencidas = (
+        db.query(Aprobacion).filter(Aprobacion.estado == "PENDIENTE", Aprobacion.fecha_limite < date.today()).count()
+    )
 
     # Solicitudes por tipo
     por_tipo = (
@@ -989,7 +995,9 @@ def dashboard_aprobaciones(db: Session = Depends(get_db), current_user: User = D
 
     # Tiempo promedio de respuesta
     tiempo_promedio = (
-        db.query(func.avg(Aprobacion.tiempo_respuesta_horas)).filter(Aprobacion.tiempo_respuesta_horas.isnot(None)).scalar()
+        db.query(func.avg(Aprobacion.tiempo_respuesta_horas))
+        .filter(Aprobacion.tiempo_respuesta_horas.isnot(None))
+        .scalar()
         or 0
     )
 
@@ -1036,7 +1044,7 @@ def dashboard_aprobaciones(db: Session = Depends(get_db), current_user: User = D
             },
             "rendimiento": {
                 "tiempo_promedio_horas": round(tiempo_promedio, 1),
-                "eficiencia": ("Alta" if tiempo_promedio < 24 else "Media" if tiempo_promedio < 48 else "Baja"),
+                "eficiencia": "Alta" if tiempo_promedio < 24 else "Media" if tiempo_promedio < 48 else "Baja",
             },
         },
         "alertas": {
@@ -1053,7 +1061,7 @@ def dashboard_aprobaciones(db: Session = Depends(get_db), current_user: User = D
                     "tipo": tipo,
                     "total": int(total),
                     "pendientes": int(pendientes or 0),
-                    "porcentaje_pendiente": (round((pendientes or 0) / total * 100, 1) if total > 0 else 0),
+                    "porcentaje_pendiente": round((pendientes or 0) / total * 100, 1) if total > 0 else 0,
                 }
                 for tipo, total, pendientes in por_tipo
             ],
@@ -1061,12 +1069,14 @@ def dashboard_aprobaciones(db: Session = Depends(get_db), current_user: User = D
                 {
                     "prioridad": prioridad,
                     "cantidad": int(total),
-                    "color": {
-                        "URGENTE": "#dc3545",
-                        "ALTA": "#ffc107",
-                        "NORMAL": "#17a2b8",
-                        "BAJA": "#6c757d",
-                    }.get(prioridad, "#6c757d"),
+                    "color": (
+                        {
+                            "URGENTE": "#dc3545",
+                            "ALTA": "#ffc107",
+                            "NORMAL": "#17a2b8",
+                            "BAJA": "#6c757d",
+                        }.get(prioridad, "#6c757d")
+                    ),
                 }
                 for prioridad, total in por_prioridad
             ],

@@ -109,12 +109,16 @@ class ValidadorTelefono:
                 # Lógica original para otros países
                 if telefono_limpio.startswith(config["codigo_pais"].replace("+", "")):
                     # Ya tiene código de país: "584241234567"
-                    numero_formateado = "+" + telefono_limpio[:2] + " " + telefono_limpio[2:5] + " " + telefono_limpio[5:]
+                    numero_formateado = (
+                        "+" + telefono_limpio[:2] + " " + telefono_limpio[2:5] + " " + telefono_limpio[5:]
+                    )
 
                 elif telefono_limpio.startswith(config["codigo_pais"]):
                     # Ya tiene + y código: "+584241234567"
                     numero_sin_plus = telefono_limpio[1:]
-                    numero_formateado = "+" + numero_sin_plus[:2] + " " + numero_sin_plus[2:5] + " " + numero_sin_plus[5:]
+                    numero_formateado = (
+                        "+" + numero_sin_plus[:2] + " " + numero_sin_plus[2:5] + " " + numero_sin_plus[5:]
+                    )
 
                 elif len(telefono_limpio) == config["longitud_sin_codigo"]:
                     # Solo número local: "4241234567"
@@ -124,7 +128,9 @@ class ValidadorTelefono:
                     else:
                         return {
                             "valido": False,
-                            "error": f"Operadora '{operadora}' no válida para {pais}. Válidas: {', '.join(config['operadoras'])}",
+                            "error": (
+                                f"Operadora '{operadora}' no válida para {pais}. Válidas: {', '.join(config['operadoras'])}"
+                            ),
                             "valor_original": telefono,
                             "valor_formateado": None,
                             "sugerencia": f"Debe comenzar con: {', '.join(config['operadoras'])}",
@@ -193,7 +199,9 @@ class ValidadorTelefono:
                 else:
                     return {
                         "valido": False,
-                        "error": f"Longitud incorrecta. Debe tener 10 dígitos después de +58, tiene {len(numero_sin_codigo)}",
+                        "error": (
+                            f"Longitud incorrecta. Debe tener 10 dígitos después de +58, tiene {len(numero_sin_codigo)}"
+                        ),
                         "valor_original": telefono_limpio,
                         "valor_formateado": None,
                         "requisitos": config["requisitos"],
@@ -216,7 +224,9 @@ class ValidadorTelefono:
                 else:
                     return {
                         "valido": False,
-                        "error": f"Longitud incorrecta. Debe tener 10 dígitos después de +58, tiene {len(numero_sin_codigo)}",
+                        "error": (
+                            f"Longitud incorrecta. Debe tener 10 dígitos después de +58, tiene {len(numero_sin_codigo)}"
+                        ),
                         "valor_original": telefono_limpio,
                         "valor_formateado": None,
                         "requisitos": config["requisitos"],
@@ -238,7 +248,9 @@ class ValidadorTelefono:
             else:
                 return {
                     "valido": False,
-                    "error": "Longitud incorrecta. Formato esperado: +58 seguido de 10 dígitos (primer dígito no puede ser 0)",
+                    "error": (
+                        "Longitud incorrecta. Formato esperado: +58 seguido de 10 dígitos (primer dígito no puede ser 0)"
+                    ),
                     "valor_original": telefono_limpio,
                     "valor_formateado": None,
                     "longitud_actual": len(telefono_limpio),
@@ -390,7 +402,9 @@ class ValidadorCedula:
             # Si no tiene prefijo válido, rechazar inmediatamente
             return {
                 "valido": False,
-                "error": f"Prefijo '{cedula_limpia[0] if cedula_limpia else 'ninguno'}' no válido. DEBE empezar por V, E o J",
+                "error": (
+                    f"Prefijo '{cedula_limpia[0] if cedula_limpia else 'ninguno'}' no válido. DEBE empezar por V, E o J"
+                ),
                 "valor_original": cedula_limpia,
                 "valor_formateado": None,
                 "formato_esperado": config["descripcion"],
@@ -1095,7 +1109,9 @@ class ServicioCorreccionDatos:
     """
 
     @staticmethod
-    def corregir_datos_cliente(cliente_id: int, datos_correccion: Dict[str, Any], pais: str = "VENEZUELA") -> Dict[str, Any]:
+    def corregir_datos_cliente(
+        cliente_id: int, datos_correccion: Dict[str, Any], pais: str = "VENEZUELA"
+    ) -> Dict[str, Any]:
         """
         Corregir múltiples datos de un cliente
         """
@@ -1511,7 +1527,9 @@ class ValidadorEdad:
             if edad < ValidadorEdad.EDAD_MINIMA:
                 return {
                     "valido": False,
-                    "error": f"El cliente debe ser mayor de {ValidadorEdad.EDAD_MINIMA} años (edad actual: {edad} años)",
+                    "error": (
+                        f"El cliente debe ser mayor de {ValidadorEdad.EDAD_MINIMA} años (edad actual: {edad} años)"
+                    ),
                     "edad": edad,
                     "edad_minima": ValidadorEdad.EDAD_MINIMA,
                     "fecha_nacimiento": fecha.isoformat(),
@@ -1585,7 +1603,9 @@ class ValidadorCoherenciaFinanciera:
 
             # 2. Validar cuota inicial mínima (10%)
             cuota_minima = (
-                total_financiamiento * Decimal(ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE) / Decimal("100")
+                total_financiamiento
+                * Decimal(ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE)
+                / Decimal("100")
             )
             if cuota_inicial < cuota_minima:
                 errores.append(
@@ -1594,7 +1614,9 @@ class ValidadorCoherenciaFinanciera:
 
             # 3. Advertencia si cuota inicial es muy alta
             cuota_maxima_recomendada = (
-                total_financiamiento * Decimal(ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MAXIMA_PORCENTAJE) / Decimal("100")
+                total_financiamiento
+                * Decimal(ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MAXIMA_PORCENTAJE)
+                / Decimal("100")
             )
             if cuota_inicial > cuota_maxima_recomendada:
                 advertencias.append(
@@ -1696,7 +1718,9 @@ class ValidadorDuplicados:
             if existe:
                 return {
                     "valido": False,
-                    "error": f"El número de chasis ya está registrado para el cliente {existe.nombre_completo} (ID: {existe.id})",
+                    "error": (
+                        f"El número de chasis ya está registrado para el cliente {existe.nombre_completo} (ID: {existe.id})"
+                    ),
                     "chasis": chasis_limpio,
                     "cliente_existente": {
                         "id": existe.id,

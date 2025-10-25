@@ -48,7 +48,9 @@ class PredictiveAnalyzer:
             return {"trend": "insufficient_data", "slope": 0.0, "confidence": 0.0}
 
         recent_data = data_points[-window_size:]
-        older_data = data_points[-window_size * 2:-window_size] if len(data_points) >= window_size * 2 else recent_data
+        older_data = (
+            data_points[-window_size * 2:-window_size] if len(data_points) >= window_size * 2 else recent_data
+        )
 
         recent_avg = statistics.mean(recent_data)
         older_avg = statistics.mean(older_data)
@@ -118,7 +120,9 @@ class PredictiveAnalyzer:
                     {
                         "type": "error_spike",
                         "severity": "high",
-                        "description": f"Error count spike: {avg_recent_errors:.1f} vs {historical_avg:.1f} historical avg",
+                        "description": (
+                            f"Error count spike: {avg_recent_errors:.1f} vs {historical_avg:.1f} historical avg"
+                        ),
                         "confidence": 0.8,
                         "recommendation": "Investigate error patterns and root causes",
                     }
@@ -432,7 +436,7 @@ async def calculate_authentication_health_score():
             },
             "recommendations": recommendations,
             "analysis_period": f"{len(recent_metrics)} recent data points",
-            "last_updated": (recent_metrics[-1].timestamp.isoformat() if recent_metrics else None),
+            "last_updated": recent_metrics[-1].timestamp.isoformat() if recent_metrics else None,
         }
 
     except Exception as e:

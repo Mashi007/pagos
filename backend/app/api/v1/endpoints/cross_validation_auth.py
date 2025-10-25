@@ -218,7 +218,9 @@ class CrossValidationAuthChecker:
             context.get("user_agent", "")
 
             validation["status"] = "valid"
-            validation["details"]["endpoint_type"] = "admin" if is_admin_endpoint else "user" if is_user_endpoint else "public"
+            validation["details"]["endpoint_type"] = (
+                "admin" if is_admin_endpoint else "user" if is_user_endpoint else "public"
+            )
             validation["details"]["client_ip"] = client_ip
             validation["score"] = 1.0
 
@@ -457,7 +459,9 @@ async def get_validation_history(db: Session = Depends(get_db), current_user: Us
                 "total_validations": total_validations,
                 "failed_validations": failed_validations,
                 "success_rate": (
-                    ((total_validations - failed_validations) / total_validations * 100) if total_validations > 0 else 100
+                    ((total_validations - failed_validations) / total_validations * 100)
+                    if total_validations > 0
+                    else 100
                 ),
                 "common_patterns": sorted_patterns[:10],
             },

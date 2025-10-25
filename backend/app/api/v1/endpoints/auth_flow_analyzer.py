@@ -130,7 +130,7 @@ class CorrelationAnalyzer:
                     "user_id": payload.get("sub"),
                     "token_type": payload.get("type"),
                     "exp": payload.get("exp"),
-                    "is_expired": (datetime.now().timestamp() > payload.get("exp", 0) if payload.get("exp") else False),
+                    "is_expired": datetime.now().timestamp() > payload.get("exp", 0) if payload.get("exp") else False,
                 }
             except Exception:
                 token_analysis = {"error": "Invalid token format"}
@@ -167,7 +167,7 @@ async def trace_authentication_flow(request: Request, db: Session = Depends(get_
             {
                 "has_auth_header": bool(auth_header),
                 "auth_header_type": auth_header.split(" ")[0] if auth_header else None,
-                "user_agent": (user_agent[:50] + "..." if len(user_agent) > 50 else user_agent),
+                "user_agent": user_agent[:50] + "..." if len(user_agent) > 50 else user_agent,
                 "client_ip": ip,
             },
         )
@@ -200,7 +200,7 @@ async def trace_authentication_flow(request: Request, db: Session = Depends(get_
             "completed",
             {
                 "header_format": "Bearer",
-                "token_length": (len(auth_header.split(" ")[1]) if " " in auth_header else 0),
+                "token_length": len(auth_header.split(" ")[1]) if " " in auth_header else 0,
             },
         )
 
@@ -271,7 +271,7 @@ async def trace_authentication_flow(request: Request, db: Session = Depends(get_
                 {
                     "exp_datetime": exp_datetime.isoformat(),
                     "is_expired": is_expired,
-                    "time_until_expiry": (str(exp_datetime - datetime.now()) if not is_expired else "EXPIRED"),
+                    "time_until_expiry": str(exp_datetime - datetime.now()) if not is_expired else "EXPIRED",
                 },
             )
 
@@ -403,7 +403,9 @@ async def analyze_request_correlation(request: Request, minutes: int = 60):
     try:
         # Obtener traces recientes
         cutoff_time = datetime.now() - timedelta(minutes=minutes)
-        recent_traces = [trace for trace in auth_flow_traces if datetime.fromisoformat(trace["start_time"]) > cutoff_time]
+        recent_traces = [
+            trace for trace in auth_flow_traces if datetime.fromisoformat(trace["start_time"]) > cutoff_time
+        ]
 
         # Análisis de correlación
         correlation_analysis = {
@@ -453,7 +455,7 @@ async def analyze_request_correlation(request: Request, minutes: int = 60):
                     "avg_duration_ms": sum(durations) / len(durations),
                     "min_duration_ms": min(durations),
                     "max_duration_ms": max(durations),
-                    "p95_duration_ms": (sorted(durations)[int(len(durations) * 0.95)] if durations else 0),
+                    "p95_duration_ms": sorted(durations)[int(len(durations) * 0.95)] if durations else 0,
                 }
 
         return {
@@ -487,7 +489,9 @@ async def detect_authentication_anomalies():
     try:
         # Obtener traces de la última hora
         cutoff_time = datetime.now() - timedelta(hours=1)
-        recent_traces = [trace for trace in auth_flow_traces if datetime.fromisoformat(trace["start_time"]) > cutoff_time]
+        recent_traces = [
+            trace for trace in auth_flow_traces if datetime.fromisoformat(trace["start_time"]) > cutoff_time
+        ]
 
         anomalies = []
 
@@ -589,7 +593,9 @@ async def get_authentication_timeline(minutes: int = 30, limit: int = 50):
     """
     try:
         cutoff_time = datetime.now() - timedelta(minutes=minutes)
-        recent_traces = [trace for trace in auth_flow_traces if datetime.fromisoformat(trace["start_time"]) > cutoff_time]
+        recent_traces = [
+            trace for trace in auth_flow_traces if datetime.fromisoformat(trace["start_time"]) > cutoff_time
+        ]
 
         # Ordenar por tiempo
         recent_traces.sort(key=lambda x: x["start_time"])
@@ -631,7 +637,9 @@ async def get_authentication_timeline(minutes: int = 30, limit: int = 50):
         }
 
 
-def _generate_correlation_recommendations(error_groups: Dict, temporal_patterns: Dict, step_failures: Dict) -> List[str]:
+def _generate_correlation_recommendations(
+    error_groups: Dict, temporal_patterns: Dict, step_failures: Dict
+) -> List[str]:
     """Generar recomendaciones basadas en análisis de correlación"""
     recommendations = []
 

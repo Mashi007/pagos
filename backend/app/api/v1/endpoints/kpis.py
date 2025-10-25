@@ -121,7 +121,7 @@ def dashboard_kpis_principales(
         },
         "resumen": {
             "total_clientes": total_clientes,
-            "porcentaje_al_dia": (round((clientes_al_dia / total_clientes * 100), 2) if total_clientes > 0 else 0),
+            "porcentaje_al_dia": round((clientes_al_dia / total_clientes * 100), 2) if total_clientes > 0 else 0,
             "porcentaje_mora": round(tasa_morosidad, 2),
         },
     }
@@ -277,7 +277,9 @@ def kpis_cobranza(db: Session = Depends(get_db), current_user: User = Depends(ge
     )
 
     # Promedio de días de retraso
-    promedio_dias_mora = db.query(func.avg(Cliente.dias_mora)).filter(Cliente.activo, Cliente.dias_mora > 0).scalar() or 0
+    promedio_dias_mora = (
+        db.query(func.avg(Cliente.dias_mora)).filter(Cliente.activo, Cliente.dias_mora > 0).scalar() or 0
+    )
 
     # Porcentaje de cumplimiento de pagos (cuotas pagadas a tiempo)
     cuotas_vencidas = db.query(Cuota).filter(Cuota.fecha_vencimiento <= date.today()).count()
@@ -440,7 +442,9 @@ def kpis_analistaes(db: Session = Depends(get_db), current_user: User = Depends(
         },
         "comparativa": {
             "total_analistaes": len(ranking_ventas),
-            "promedio_ventas": (sum(r["total_ventas"] for r in ranking_ventas) / len(ranking_ventas) if ranking_ventas else 0),
+            "promedio_ventas": (
+                sum(r["total_ventas"] for r in ranking_ventas) / len(ranking_ventas) if ranking_ventas else 0
+            ),
             "promedio_tasa_cobro": (
                 sum(r["tasa_cobro"] for r in ranking_cobranza) / len(ranking_cobranza) if ranking_cobranza else 0
             ),
@@ -588,17 +592,21 @@ def kpis_concesionarios(db: Session = Depends(get_db), current_user: User = Depe
     return {
         "ventas_por_concesionario": concesionarios_data,
         "comparativa": {
-            "mejor_concesionario": (concesionarios_data[0] if concesionarios_data else None),
-            "peor_tasa_mora": (min(concesionarios_data, key=lambda x: x["tasa_mora"]) if concesionarios_data else None),
-            "mayor_volumen": (max(concesionarios_data, key=lambda x: x["monto_total"]) if concesionarios_data else None),
+            "mejor_concesionario": concesionarios_data[0] if concesionarios_data else None,
+            "peor_tasa_mora": min(concesionarios_data, key=lambda x: x["tasa_mora"]) if concesionarios_data else None,
+            "mayor_volumen": max(concesionarios_data, key=lambda x: x["monto_total"]) if concesionarios_data else None,
         },
         "estadisticas_generales": {
             "total_concesionarios": len(concesionarios_data),
             "ticket_promedio_general": (
-                sum(c["ticket_promedio"] for c in concesionarios_data) / len(concesionarios_data) if concesionarios_data else 0
+                sum(c["ticket_promedio"] for c in concesionarios_data) / len(concesionarios_data)
+                if concesionarios_data
+                else 0
             ),
             "tasa_mora_promedio": (
-                sum(c["tasa_mora"] for c in concesionarios_data) / len(concesionarios_data) if concesionarios_data else 0
+                sum(c["tasa_mora"] for c in concesionarios_data) / len(concesionarios_data)
+                if concesionarios_data
+                else 0
             ),
         },
     }

@@ -153,7 +153,9 @@ def analistas_backup1(
             return cached_result
 
         # Usar SQL directo para máxima compatibilidad
-        base_query = "SELECT id, nombre, activo, updated_at FROM analistas"  # ✅ CORREGIDO: updated_at en lugar de created_at
+        base_query = (
+            "SELECT id, nombre, activo, updated_at FROM analistas"  # ✅ CORREGIDO: updated_at en lugar de created_at
+        )
         count_query = "SELECT COUNT(*) FROM analistas"
         where_conditions = []
 
@@ -203,7 +205,7 @@ def analistas_backup1(
                     "notas": "",
                     "nombre_completo": nombre_completo,
                     "primer_nombre": primer_nombre,
-                    "updated_at": (row[3].isoformat() if row[3] else None),  # ✅ CORREGIDO: updated_at
+                    "updated_at": row[3].isoformat() if row[3] else None,  # ✅ CORREGIDO: updated_at
                 }
             )
 
@@ -326,7 +328,9 @@ def analistas_emergency(
     """
     try:
         # Usar SQL directo para máxima compatibilidad
-        base_query = "SELECT id, nombre, activo, updated_at FROM analistas"  # ✅ CORREGIDO: updated_at en lugar de created_at
+        base_query = (
+            "SELECT id, nombre, activo, updated_at FROM analistas"  # ✅ CORREGIDO: updated_at en lugar de created_at
+        )
         count_query = "SELECT COUNT(*) FROM analistas"
         where_conditions = []
 
@@ -376,7 +380,7 @@ def analistas_emergency(
                     "notas": "",
                     "nombre_completo": nombre_completo,
                     "primer_nombre": primer_nombre,
-                    "updated_at": (row[3].isoformat() if row[3] else None),  # ✅ CORREGIDO: updated_at
+                    "updated_at": row[3].isoformat() if row[3] else None,  # ✅ CORREGIDO: updated_at
                 }
             )
 
@@ -446,8 +450,8 @@ def listar_analistas(
                     "activo": analista.activo,
                     "nombre_completo": analista.nombre_completo,  # ✅ Usar propiedad calculada
                     "primer_nombre": analista.primer_nombre or "",  # ✅ Usar propiedad calculada
-                    "updated_at": (analista.updated_at.isoformat() if analista.updated_at else None),  # ✅ Campo correcto
-                    "fecha_eliminacion": (analista.fecha_eliminacion.isoformat() if analista.fecha_eliminacion else None),
+                    "updated_at": analista.updated_at.isoformat() if analista.updated_at else None,  # ✅ Campo correcto
+                    "fecha_eliminacion": analista.fecha_eliminacion.isoformat() if analista.fecha_eliminacion else None,
                 }
             )
 
@@ -524,7 +528,9 @@ def listar_asesores(
     """
     try:
         # Usar SQL directo para máxima compatibilidad
-        base_query = "SELECT id, nombre, activo, updated_at FROM analistas"  # ✅ CORREGIDO: updated_at en lugar de created_at
+        base_query = (
+            "SELECT id, nombre, activo, updated_at FROM analistas"  # ✅ CORREGIDO: updated_at en lugar de created_at
+        )
         count_query = "SELECT COUNT(*) FROM analistas"
         where_conditions = []
 
@@ -559,7 +565,7 @@ def listar_asesores(
             analista_data = {
                 "id": row[0],
                 "nombre": row[1],
-                "apellido": (" ".join(row[1].split()[1:]) if row[1] and len(row[1].split()) > 1 else ""),
+                "apellido": " ".join(row[1].split()[1:]) if row[1] and len(row[1].split()) > 1 else "",
                 "email": "",
                 "telefono": "",
                 "especialidad": "",

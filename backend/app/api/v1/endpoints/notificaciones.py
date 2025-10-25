@@ -193,7 +193,10 @@ def historial_notificaciones(cliente_id: int, db: Session = Depends(get_db)):
     Obtener historial de notificaciones de un cliente.
     """
     notificaciones = (
-        db.query(Notificacion).filter(Notificacion.cliente_id == cliente_id).order_by(Notificacion.creado_en.desc()).all()
+        db.query(Notificacion)
+        .filter(Notificacion.cliente_id == cliente_id)
+        .order_by(Notificacion.creado_en.desc())
+        .all()
     )
 
     return {
@@ -537,7 +540,9 @@ async def enviar_confirmacion_pago(pago_id: int, background_tasks: BackgroundTas
 
     proximo_vencimiento = "No hay cuotas pendientes"
     if proxima_cuota:
-        proximo_vencimiento = f"Cuota #{proxima_cuota.numero_cuota} - {proxima_cuota.fecha_vencimiento.strftime('%d/%m/%Y')}"
+        proximo_vencimiento = (
+            f"Cuota #{proxima_cuota.numero_cuota} - {proxima_cuota.fecha_vencimiento.strftime('%d/%m/%Y')}"
+        )
 
     mensaje = f"""
 Estimado/a {cliente.nombre_completo},
@@ -1007,7 +1012,7 @@ def historial_completo_notificaciones(
         "notificaciones": [
             {
                 "id": n.id,
-                "destinatario": (n.cliente.nombre_completo if n.cliente else (n.user.full_name if n.user else "N/A")),
+                "destinatario": n.cliente.nombre_completo if n.cliente else (n.user.full_name if n.user else "N/A"),
                 "tipo": n.tipo.value,
                 "categoria": n.categoria.value,
                 "asunto": n.asunto,

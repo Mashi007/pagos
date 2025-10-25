@@ -63,7 +63,7 @@ def verificar_rol_administracion(db: Session = Depends(get_db)):
                 "activo": sistema_funcional,
                 "total_admins": len(admins),
                 "admins_activos": len(admins_activos),
-                "estado": ("✅ FUNCIONAL" if sistema_funcional else "❌ SIN ADMINISTRADOR ACTIVO"),
+                "estado": "✅ FUNCIONAL" if sistema_funcional else "❌ SIN ADMINISTRADOR ACTIVO",
             },
             "administradores_registrados": [
                 {
@@ -216,7 +216,7 @@ def test_users_simple(db: Session = Depends(get_db)):
                     "apellido": user.apellido,
                     "is_admin": user.is_admin,  # Cambio clave: rol → is_admin
                     "is_active": user.is_active,
-                    "created_at": (user.created_at.isoformat() if user.created_at else None),
+                    "created_at": user.created_at.isoformat() if user.created_at else None,
                 }
             )
 

@@ -20,7 +20,6 @@ from app.models.configuracion_sistema import ConfiguracionSistema
 from app.models.prestamo import Prestamo
 from app.models.user import User
 
-
 # Funciones auxiliares para validación y pruebas
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -134,7 +133,7 @@ def obtener_configuracion_completa(
                 "tipo_dato": config.tipo_dato,
                 "requerido": config.requerido,
                 "solo_lectura": config.solo_lectura,
-                "opciones_validas": (json.loads(config.opciones_validas) if config.opciones_validas else None),
+                "opciones_validas": json.loads(config.opciones_validas) if config.opciones_validas else None,
                 "valor_minimo": config.valor_minimo,
                 "valor_maximo": config.valor_maximo,
                 "patron_validacion": config.patron_validacion,
@@ -399,7 +398,7 @@ def obtener_configuracion_categoria(
                 "tipo_dato": config.tipo_dato,
                 "requerido": config.requerido,
                 "solo_lectura": config.solo_lectura,
-                "opciones_validas": (json.loads(config.opciones_validas) if config.opciones_validas else None),
+                "opciones_validas": json.loads(config.opciones_validas) if config.opciones_validas else None,
                 "valor_minimo": config.valor_minimo,
                 "valor_maximo": config.valor_maximo,
                 "patron_validacion": config.patron_validacion,
@@ -589,17 +588,17 @@ def obtener_estado_servicios(db: Session = Depends(get_db), current_user: User =
             "ai": {
                 "habilitado": ConfigHelper.is_ai_enabled(db),
                 "configurado": bool(ConfigHelper.get_config(db, "AI", "OPENAI_API_KEY")),
-                "estado": ("✅ ACTIVO" if ConfigHelper.is_ai_enabled(db) else "❌ INACTIVO"),
+                "estado": "✅ ACTIVO" if ConfigHelper.is_ai_enabled(db) else "❌ INACTIVO",
             },
             "email": {
                 "habilitado": True,  # Siempre habilitado
                 "configurado": ConfigHelper.is_email_configured(db),
-                "estado": ("✅ CONFIGURADO" if ConfigHelper.is_email_configured(db) else "⚠️ PENDIENTE"),
+                "estado": "✅ CONFIGURADO" if ConfigHelper.is_email_configured(db) else "⚠️ PENDIENTE",
             },
             "whatsapp": {
                 "habilitado": ConfigHelper.is_whatsapp_enabled(db),
                 "configurado": bool(ConfigHelper.get_config(db, "WHATSAPP", "META_ACCESS_TOKEN")),
-                "estado": ("✅ ACTIVO" if ConfigHelper.is_whatsapp_enabled(db) else "❌ INACTIVO"),
+                "estado": "✅ ACTIVO" if ConfigHelper.is_whatsapp_enabled(db) else "❌ INACTIVO",
                 "provider": "META_CLOUD_API",
             },
             "database": {
@@ -610,7 +609,7 @@ def obtener_estado_servicios(db: Session = Depends(get_db), current_user: User =
             "monitoreo": {
                 "habilitado": bool(ConfigHelper.get_config(db, "MONITOREO", "SENTRY_DSN")),
                 "configurado": bool(ConfigHelper.get_config(db, "MONITOREO", "SENTRY_DSN")),
-                "estado": ("✅ ACTIVO" if ConfigHelper.get_config(db, "MONITOREO", "SENTRY_DSN") else "❌ INACTIVO"),
+                "estado": "✅ ACTIVO" if ConfigHelper.get_config(db, "MONITOREO", "SENTRY_DSN") else "❌ INACTIVO",
             },
         }
 
@@ -715,16 +714,18 @@ def obtener_configuracion_ia(db: Session = Depends(get_db), current_user: User =
             # Ocultar tokens completos por seguridad
             valor_mostrar = config.valor_procesado
             if config.tipo_dato == "PASSWORD" and config.valor:
-                valor_mostrar = f"{'*' * (len(config.valor) - 4)}{config.valor[-4:]}" if len(config.valor) > 4 else "****"
+                valor_mostrar = (
+                    f"{'*' * (len(config.valor) - 4)}{config.valor[-4:]}" if len(config.valor) > 4 else "****"
+                )
 
             configuracion[config.clave] = {
                 "valor": valor_mostrar,
-                "valor_real": (config.valor_procesado if config.tipo_dato != "PASSWORD" else None),
+                "valor_real": config.valor_procesado if config.tipo_dato != "PASSWORD" else None,
                 "descripcion": config.descripcion,
                 "tipo_dato": config.tipo_dato,
                 "requerido": config.requerido,
                 "configurado": bool(config.valor),
-                "opciones_validas": (json.loads(config.opciones_validas) if config.opciones_validas else None),
+                "opciones_validas": json.loads(config.opciones_validas) if config.opciones_validas else None,
             }
 
         # Estado de funcionalidades IA
@@ -1078,7 +1079,7 @@ def dashboard_configuracion_sistema(db: Session = Depends(get_db), current_user:
                 "total": total_cat,
                 "configuradas": configuradas_cat,
                 "porcentaje": porcentaje,
-                "estado": ("✅ COMPLETA" if porcentaje == 100 else "⚠️ PARCIAL" if porcentaje > 0 else "❌ PENDIENTE"),
+                "estado": "✅ COMPLETA" if porcentaje == 100 else "⚠️ PARCIAL" if porcentaje > 0 else "❌ PENDIENTE",
             }
 
         return {
@@ -1087,7 +1088,9 @@ def dashboard_configuracion_sistema(db: Session = Depends(get_db), current_user:
             "resumen_general": {
                 "total_configuraciones": total_configs,
                 "configuradas": configs_configuradas,
-                "porcentaje_configurado": (round(configs_configuradas / total_configs * 100, 1) if total_configs > 0 else 0),
+                "porcentaje_configurado": (
+                    round(configs_configuradas / total_configs * 100, 1) if total_configs > 0 else 0
+                ),
                 "configuraciones_requeridas": configs_requeridas,
                 "requeridas_configuradas": configs_requeridas_configuradas,
                 "sistema_listo": configs_requeridas_configuradas == configs_requeridas,
@@ -1103,15 +1106,15 @@ def dashboard_configuracion_sistema(db: Session = Depends(get_db), current_user:
                     "descripcion": "Sistema de autenticación JWT",
                 },
                 "email": {
-                    "estado": ("✅ CONFIGURADO" if ConfigHelper.is_email_configured(db) else "⚠️ PENDIENTE"),
+                    "estado": "✅ CONFIGURADO" if ConfigHelper.is_email_configured(db) else "⚠️ PENDIENTE",
                     "descripcion": "Servicio de email",
                 },
                 "ia": {
-                    "estado": ("✅ ACTIVA" if ConfigHelper.is_ai_enabled(db) else "❌ INACTIVA"),
+                    "estado": "✅ ACTIVA" if ConfigHelper.is_ai_enabled(db) else "❌ INACTIVA",
                     "descripcion": "Inteligencia Artificial",
                 },
                 "whatsapp": {
-                    "estado": ("✅ ACTIVO" if ConfigHelper.is_whatsapp_enabled(db) else "❌ INACTIVO"),
+                    "estado": "✅ ACTIVO" if ConfigHelper.is_whatsapp_enabled(db) else "❌ INACTIVO",
                     "descripcion": "WhatsApp Business",
                 },
             },
@@ -1231,7 +1234,9 @@ def actualizar_configuracion_tasas(config: ConfiguracionTasas, current_user: Use
     _config_cache["tasas"] = {
         "tasa_interes_base": float(config.tasa_interes_base),
         "tasa_mora": float(config.tasa_mora),
-        "tasa_descuento_pronto_pago": (float(config.tasa_descuento_pronto_pago) if config.tasa_descuento_pronto_pago else 0.0),
+        "tasa_descuento_pronto_pago": (
+            float(config.tasa_descuento_pronto_pago) if config.tasa_descuento_pronto_pago else 0.0
+        ),
     }
 
     logger.info(f"Tasas actualizadas por {current_user.email}: {_config_cache['tasas']}")
@@ -1493,7 +1498,9 @@ def validar_limites_cliente(
             raise HTTPException(status_code=403, detail="Solo administradores pueden validar límites")
 
         # Contar préstamos activos del cliente
-        prestamos_activos = db.query(Prestamo).filter(Prestamo.cliente_id == cliente_id, Prestamo.estado == "ACTIVO").count()
+        prestamos_activos = (
+            db.query(Prestamo).filter(Prestamo.cliente_id == cliente_id, Prestamo.estado == "ACTIVO").count()
+        )
 
         limite_prestamos = _config_cache["limites"]["limite_prestamos_activos"]
         limites_monto = _config_cache["limites"]

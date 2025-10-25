@@ -291,7 +291,10 @@ class ScoringCrediticio:
 
             # Analizar patrones de pago
             pagos_recientes = (
-                db.query(Pago).join(Prestamo).filter(Prestamo.cliente_id == cliente.id, Pago.fecha_pago >= fecha_limite).all()
+                db.query(Pago)
+                .join(Prestamo)
+                .filter(Prestamo.cliente_id == cliente.id, Pago.fecha_pago >= fecha_limite)
+                .all()
             )
 
             if not pagos_recientes:
@@ -504,7 +507,9 @@ class PrediccionMora:
             # Features financieras
             if cliente.total_financiamiento:
                 features["monto_financiado"] = float(cliente.total_financiamiento)
-                features["porcentaje_cuota_inicial"] = float(cliente.cuota_inicial or 0) / float(cliente.total_financiamiento)
+                features["porcentaje_cuota_inicial"] = float(cliente.cuota_inicial or 0) / float(
+                    cliente.total_financiamiento
+                )
 
             # Features de comportamiento de pago
             pagos_cliente = (
@@ -519,7 +524,9 @@ class PrediccionMora:
             if pagos_cliente:
                 features["pagos_ultimos_12_meses"] = len(pagos_cliente)
                 features["promedio_dias_mora"] = sum(p.dias_mora for p in pagos_cliente) / len(pagos_cliente)
-                features["pagos_puntuales_ratio"] = len([p for p in pagos_cliente if p.dias_mora == 0]) / len(pagos_cliente)
+                features["pagos_puntuales_ratio"] = len([p for p in pagos_cliente if p.dias_mora == 0]) / len(
+                    pagos_cliente
+                )
                 features["ultimo_pago_dias"] = (date.today() - pagos_cliente[0].fecha_pago).days
             else:
                 features["pagos_ultimos_12_meses"] = 0
@@ -1028,7 +1035,9 @@ class OptimizadorTasas:
                 "comparacion": {
                     "tasa_original": prestamo_data.get("tasa_interes", 0),
                     "tasa_optimizada": tasa_optimizada,
-                    "ahorro_cliente": OptimizadorTasas._calcular_ahorro(prestamo_data, tasa_optimizada, plazo_optimizado),
+                    "ahorro_cliente": OptimizadorTasas._calcular_ahorro(
+                        prestamo_data, tasa_optimizada, plazo_optimizado
+                    ),
                 },
                 "justificacion": OptimizadorTasas._justificar_condiciones(scoring),
             }
@@ -1157,7 +1166,7 @@ class ChatbotCobranza:
             "ultima_cuota": {
                 "numero": ultima_cuota.numero_cuota if ultima_cuota else 0,
                 "monto": float(ultima_cuota.monto_cuota) if ultima_cuota else 0,
-                "fecha_vencimiento": (ultima_cuota.fecha_vencimiento if ultima_cuota else None),
+                "fecha_vencimiento": ultima_cuota.fecha_vencimiento if ultima_cuota else None,
             },
             "tiene_whatsapp": bool(cliente.telefono),
             "tiene_email": bool(cliente.email),
@@ -1173,7 +1182,8 @@ class ChatbotCobranza:
 
         mensajes = {
             "RECORDATORIO_AMIGABLE": {
-                "whatsapp": f"""
+                "whatsapp": (
+                    f"""
  Hola {nombre}!
 
 Te recordamos que tu cuota #{contexto['ultima_cuota']['numero']} de tu {vehiculo} vence el {contexto['ultima_cuota']['fecha_vencimiento']}.
@@ -1186,8 +1196,10 @@ Puedes pagar por:
  App móvil
 
 Gracias por tu puntualidad! 😊
-                """,
-                "email": f"""
+                """
+                ),
+                "email": (
+                    f"""
 Estimado/a {nombre},
 
 Le recordamos que su cuota #{contexto['ultima_cuota']['numero']} correspondiente a su {vehiculo} vence el {contexto['ultima_cuota']['fecha_vencimiento']}.
@@ -1198,10 +1210,12 @@ Para mayor comodidad, puede realizar su pago a través de nuestros canales digit
 
 Saludos cordiales,
 Equipo de Cobranzas
-                """,
+                """
+                ),
             },
             "MORA_TEMPRANA": {
-                "whatsapp": f"""
+                "whatsapp": (
+                    f"""
 ️ {nombre}, tu cuota #{contexto['ultima_cuota']['numero']} está vencida.
 
  Vehículo: {vehiculo}
@@ -1211,11 +1225,15 @@ Equipo de Cobranzas
 Para evitar cargos adicionales, realiza tu pago hoy.
 
 Necesitas ayuda? Responde este mensaje.
-                """,
-                "sms": f"FINANCIERA: {nombre}, tu cuota está vencida ({contexto['dias_mora']} días). Monto: ${contexto['ultima_cuota']['monto']:,.0f}. Paga hoy para evitar cargos. Info: 809-XXX-XXXX",
+                """
+                ),
+                "sms": (
+                    f"FINANCIERA: {nombre}, tu cuota está vencida ({contexto['dias_mora']} días). Monto: ${contexto['ultima_cuota']['monto']:,.0f}. Paga hoy para evitar cargos. Info: 809-XXX-XXXX"
+                ),
             },
             "MORA_AVANZADA": {
-                "llamada_script": f"""
+                "llamada_script": (
+                    f"""
 Buenos días {nombre}, le habla [NOMBRE] de Cobranzas.
 
 Le contacto porque su cuota #{contexto['ultima_cuota']['numero']} de su {vehiculo} tiene {contexto['dias_mora']} días de mora.
@@ -1224,9 +1242,11 @@ Cuándo podría realizar el pago de ${contexto['ultima_cuota']['monto']:,.0f}?
 
 Podemos ofrecerle facilidades de pago si lo necesita.
                 """
+                )
             },
             "FELICITACION_PUNTUALIDAD": {
-                "whatsapp": f"""
+                "whatsapp": (
+                    f"""
  ¡Felicidades {nombre}!
 
 Has mantenido tu {vehiculo} al día con todos los pagos.
@@ -1238,6 +1258,7 @@ Como cliente puntual, tienes beneficios especiales:
 
 Gracias por ser un cliente ejemplar! ⭐
                 """
+                )
             },
         }
 
@@ -1437,7 +1458,9 @@ class DetectorPatrones:
         mora_por_mes = {}
 
         for mes in range(1, 13):
-            clientes_mes = db.query(Cliente).filter(func.extract("month", Cliente.fecha_registro) == mes, Cliente.activo).all()
+            clientes_mes = (
+                db.query(Cliente).filter(func.extract("month", Cliente.fecha_registro) == mes, Cliente.activo).all()
+            )
 
             if clientes_mes:
                 total_mora = sum(c.dias_mora or 0 for c in clientes_mes)
@@ -1528,7 +1551,7 @@ class AlertasInteligentes:
                 "fecha_generacion": datetime.now().isoformat(),
                 "total_alertas": len(alertas),
                 "alertas": alertas,
-                "nivel_sistema": ("CRITICO" if any(a["prioridad"] == "ALTA" for a in alertas) else "NORMAL"),
+                "nivel_sistema": "CRITICO" if any(a["prioridad"] == "ALTA" for a in alertas) else "NORMAL",
             }
 
         except Exception as e:

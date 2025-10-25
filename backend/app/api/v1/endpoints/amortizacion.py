@@ -196,7 +196,10 @@ def obtener_estado_cuenta(
 
     # Obtener cuotas por estado
     cuotas_pagadas = (
-        db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id, Cuota.estado == "PAGADA").order_by(Cuota.numero_cuota).all()
+        db.query(Cuota)
+        .filter(Cuota.prestamo_id == prestamo_id, Cuota.estado == "PAGADA")
+        .order_by(Cuota.numero_cuota)
+        .all()
     )
 
     cuotas_vencidas = (
@@ -483,7 +486,7 @@ def obtener_tabla_visual(
                 "dias_mora": cuota.dias_mora if cuota.dias_mora > 0 else None,
                 "monto_mora": float(cuota.monto_mora) if cuota.monto_mora > 0 else None,
                 "porcentaje_pagado": float(cuota.porcentaje_pagado),
-                "fecha_pago_real": (cuota.fecha_pago.strftime("%d/%m/%Y") if cuota.fecha_pago else None),
+                "fecha_pago_real": cuota.fecha_pago.strftime("%d/%m/%Y") if cuota.fecha_pago else None,
             }
         )
 

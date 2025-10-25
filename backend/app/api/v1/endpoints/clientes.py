@@ -155,15 +155,17 @@ def listar_clientes(
                     "telefono": cliente.telefono,
                     "email": cliente.email,
                     "direccion": cliente.direccion,
-                    "fecha_nacimiento": (cliente.fecha_nacimiento.isoformat() if cliente.fecha_nacimiento else None),
+                    "fecha_nacimiento": cliente.fecha_nacimiento.isoformat() if cliente.fecha_nacimiento else None,
                     "ocupacion": cliente.ocupacion,
                     "modelo_vehiculo": cliente.modelo_vehiculo,
                     "concesionario": cliente.concesionario,
                     "analista": cliente.analista,
                     "estado": cliente.estado,
                     "activo": cliente.activo,
-                    "fecha_registro": (cliente.fecha_registro.isoformat() if cliente.fecha_registro else None),
-                    "fecha_actualizacion": (cliente.fecha_actualizacion.isoformat() if cliente.fecha_actualizacion else None),
+                    "fecha_registro": cliente.fecha_registro.isoformat() if cliente.fecha_registro else None,
+                    "fecha_actualizacion": (
+                        cliente.fecha_actualizacion.isoformat() if cliente.fecha_actualizacion else None
+                    ),
                     "usuario_registro": cliente.usuario_registro,
                     "notas": cliente.notas,
                 }
@@ -253,7 +255,9 @@ def crear_cliente(
         if cliente_existente:
             # ✅ NUEVO: Si el usuario confirma el duplicado, actualizar el cliente existente
             if cliente_data.confirm_duplicate:
-                logger.info(f"✅ Cliente con cédula {cliente_data.cedula} " f"confirmado como duplicado - actualizando datos")
+                logger.info(
+                    f"✅ Cliente con cédula {cliente_data.cedula} " f"confirmado como duplicado - actualizando datos"
+                )
 
                 # Actualizar datos del cliente existente
                 cliente_existente.nombres = cliente_data.nombres
@@ -295,7 +299,9 @@ def crear_cliente(
                 return ClienteResponse.model_validate(cliente_existente)
             else:
                 # Si no confirma, mostrar popup de confirmación
-                logger.warning(f"⚠️ Cliente con cédula {cliente_data.cedula} " f"ya existe - activando popup de confirmación")
+                logger.warning(
+                    f"⚠️ Cliente con cédula {cliente_data.cedula} " f"ya existe - activando popup de confirmación"
+                )
 
                 # ✅ SOLUCIÓN LIGERA: HTTPException simplificado sin auditoría pesada
                 raise HTTPException(
@@ -481,7 +487,7 @@ def actualizar_cliente(
             "telefono": cliente.telefono,
             "email": cliente.email,
             "direccion": cliente.direccion,
-            "fecha_nacimiento": (cliente.fecha_nacimiento.isoformat() if cliente.fecha_nacimiento else None),
+            "fecha_nacimiento": cliente.fecha_nacimiento.isoformat() if cliente.fecha_nacimiento else None,
             "ocupacion": cliente.ocupacion,
             "modelo_vehiculo": cliente.modelo_vehiculo,
             "concesionario": cliente.concesionario,

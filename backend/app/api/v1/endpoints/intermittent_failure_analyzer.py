@@ -107,7 +107,7 @@ class IntermittentFailureAnalyzer:
             "total_requests": total_count,
             "successful_requests": successful_count,
             "failed_requests": failed_count,
-            "success_rate": ((successful_count / total_count * 100) if total_count > 0 else 0),
+            "success_rate": (successful_count / total_count * 100) if total_count > 0 else 0,
             "successful_endpoints": dict(successful_endpoints),
             "failed_endpoints": dict(failed_endpoints),
         }
@@ -136,8 +136,9 @@ class IntermittentFailureAnalyzer:
                 patterns["endpoint_intermittency"][endpoint] = {
                     "successful_count": len(successful_for_endpoint),
                     "failed_count": len(failed_for_endpoint),
-                    "intermittency_score": len(failed_for_endpoint)
-                    / (len(successful_for_endpoint) + len(failed_for_endpoint)),
+                    "intermittency_score": (
+                        len(failed_for_endpoint) / (len(successful_for_endpoint) + len(failed_for_endpoint))
+                    ),
                 }
 
         # Patrones por usuario
@@ -172,7 +173,9 @@ class IntermittentFailureAnalyzer:
         }
 
         # Patrones de longitud de token
-        successful_token_lengths = [req.get("token_length", 0) for req in self.successful_requests if req.get("token_length")]
+        successful_token_lengths = [
+            req.get("token_length", 0) for req in self.successful_requests if req.get("token_length")
+        ]
         failed_token_lengths = [req.get("token_length", 0) for req in self.failed_requests if req.get("token_length")]
 
         if successful_token_lengths and failed_token_lengths:
@@ -183,7 +186,9 @@ class IntermittentFailureAnalyzer:
             }
 
         # Patrones de timing
-        successful_times = [req.get("response_time_ms", 0) for req in self.successful_requests if req.get("response_time_ms")]
+        successful_times = [
+            req.get("response_time_ms", 0) for req in self.successful_requests if req.get("response_time_ms")
+        ]
         failed_times = [req.get("response_time_ms", 0) for req in self.failed_requests if req.get("response_time_ms")]
 
         if successful_times and failed_times:
@@ -252,8 +257,10 @@ class IntermittentFailureAnalyzer:
         timing_analysis = {
             "total_requests_analyzed": len(all_requests),
             "failure_sequences_count": len(failure_sequences),
-            "longest_failure_sequence": (max([len(seq) for seq in failure_sequences]) if failure_sequences else 0),
-            "average_sequence_length": (statistics.mean([len(seq) for seq in failure_sequences]) if failure_sequences else 0),
+            "longest_failure_sequence": max([len(seq) for seq in failure_sequences]) if failure_sequences else 0,
+            "average_sequence_length": (
+                statistics.mean([len(seq) for seq in failure_sequences]) if failure_sequences else 0
+            ),
         }
 
         # Buscar patrones de recuperación
@@ -420,7 +427,9 @@ async def get_intermittent_patterns(db: Session = Depends(get_db), current_user:
 router.get("/intermittent-summary")
 
 
-async def get_intermittent_summary_endpoint(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_intermittent_summary_endpoint(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     """
     📊 Resumen de análisis intermitente
     """
