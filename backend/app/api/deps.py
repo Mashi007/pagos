@@ -1,4 +1,6 @@
 """
+Dependencias de la API
+Funciones de dependencia para autenticación y autorización
 """
 
 import logging
@@ -21,6 +23,7 @@ security = HTTPBearer()
 def get_current_user(
     db: Session = Depends(get_db),
     credentials: HTTPAuthorizationCredentials = Depends(security),
+):
     """
     Obtiene el usuario actual desde el token JWT
 
@@ -33,7 +36,11 @@ def get_current_user(
     Raises:
         HTTPException: Si el token es inválido o el usuario no existe
     """
-    credentials_exception = HTTPException
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="No se pudieron validar las credenciales",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
     # Logging detallado para diagnóstico
     logger = logging.getLogger(__name__)
@@ -43,8 +50,7 @@ def get_current_user(
         logger.info(f"Validando token JWT - Longitud: {len(token)}")
 
         payload = decode_token(token)
-        logger.info
-            f"Payload keys: {list(payload.keys())}"
+        logger.info(f"Payload keys: {list(payload.keys())}")
 
         # Verificar que sea un access token
         if payload.get("type") != "access":
@@ -66,19 +72,24 @@ def get_current_user(
     user = db.query(User).filter(User.id == int(user_id)).first()
     if user is None:
         logger.error(f"Usuario no encontrado en BD - ID: {user_id}")
-        raise HTTPException
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario no encontrado"
+        )
 
     if not user.is_active:
         logger.warning(f"Usuario inactivo - Email: {user.email}")
-        raise HTTPException
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario inactivo"
+        )
 
     return user
 
 
-def get_current_active_user
+def get_current_active_user(
     current_user: User = Depends(get_current_user),
-    """Función temporal - TODO: implementar"""
-    return None
+):
     """
     Obtiene el usuario actual y verifica que esté activo
 
@@ -92,115 +103,72 @@ def get_current_active_user
         HTTPException: Si el usuario está inactivo
     """
     if not current_user.is_active:
-        raise HTTPException
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario inactivo"
+        )
     return current_user
 
 
-def require_role(require_admin: bool = True):
+def get_current_user_with_permissions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
-    Dependency para requerir rol de administrador
+    Obtiene el usuario actual con sus permisos
 
     Args:
-        require_admin: Si True, requiere admin.
-                    Si False, cualquier usuario activo.
+        current_user: Usuario actual
+        db: Sesión de base de datos
 
     Returns:
-        Función de dependencia
-
-    Usage:
-        @app.get("/admin", dependencies=[Depends(require_role(True))])
+        Usuario con permisos
     """
-
-
-    def role_checker(current_user: User = Depends(get_current_user)):
-    """Función temporal - TODO: implementar"""
-    return None
-        if require_admin and not current_user.is_admin:
-            raise HTTPException
-        return current_user
-
-    return role_checker
-
-
-def require_permission(*required_permissions: Permission):
-    """
-
-    Args:
-
-    Returns:
-        Función de dependencia
-
-    Usage:
-                dependencies=[Depends(require_permission(Permission.CLIENTE_CREATE))])
-    """
-
-
-    def permission_checker
-        current_user: User = Depends(get_current_user),
-    """Función temporal - TODO: implementar"""
-    return None
-        user_permissions = get_user_permissions(current_user.is_admin)
-
-        # Verificar cada permiso requerido
-        for perm in required_permissions:
-            if perm not in user_permissions:
-                raise HTTPException
-
-        return current_user
-
-    return permission_checker
-
-
-def get_admin_user(current_user: User = Depends(get_current_user)):
-    """Función temporal - TODO: implementar"""
-    return None
-    """
-    Dependency para endpoints que requieren usuario administrador
-
-    Returns:
-        Usuario con is_admin = True
-    """
-    if not current_user.is_admin:  # Cambio clave: rol → is_admin
-        raise HTTPException
+    permissions = get_user_permissions(db, current_user.id)
+    current_user.permissions = permissions
     return current_user
 
 
-# Dependency para paginación
-
-
-class PaginationParams:
-
-
-    def __init__
-        # Validaciones
-        if page < 1:
-            page = 1
-        if page_size < 1:
-            page_size = 10
-        if page_size > 100:
-            page_size = 100
-
-        self.page = page
-        self.page_size = page_size
-        self.skip = skip if skip is not None else (page - 1) * page_size
-        self.limit = limit if limit is not None else page_size
-
-
-def get_pagination_params
-) -> PaginationParams:
+def require_permission(permission: Permission):
     """
+    Decorador para requerir un permiso específico
 
     Args:
-        page: Número de página (default: 1)
-        page_size: Tamaño de página (default: 10, max: 100)
+        permission: Permiso requerido
 
     Returns:
-
-    Usage:
-        @app.get("/items")
-        def get_items
-            pagination: PaginationParams = Depends(get_pagination_params)
-            skip = pagination.skip
-            limit = pagination.limit
+        Función de dependencia
     """
-    return PaginationParams(page=page, page_size=page_size)
+    def permission_dependency(
+        current_user: User = Depends(get_current_user_with_permissions),
+    ):
+        if permission not in current_user.permissions:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permiso requerido: {permission.value}"
+            )
+        return current_user
+
+    return permission_dependency
+
+
+def get_optional_current_user(
+    db: Session = Depends(get_db),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
+):
+    """
+    Obtiene el usuario actual si está autenticado, sino retorna None
+
+    Args:
+        credentials: Credenciales opcionales
+
+    Returns:
+        Usuario actual o None
+    """
+    if not credentials:
+        return None
+
+    try:
+        return get_current_user(db, credentials)
+    except HTTPException:
+        return None
