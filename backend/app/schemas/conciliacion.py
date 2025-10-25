@@ -41,9 +41,9 @@ class MovimientoBancario(BaseModel):
     fecha: date
     referencia: str
     monto: Decimal
-    cedula_pagador: Optional[str] = Field
-    descripcion: Optional[str] = ""
-    cuenta_origen: Optional[str] = Field
+    cedula_pagador: Optional[str] = Field(None, description="Cédula del pagador")
+    descripcion: Optional[str] = Field("", description="Descripción del movimiento")
+    cuenta_origen: Optional[str] = Field(None, description="Cuenta de origen")
 
     model_config = ConfigDict(
         json_encoders={
