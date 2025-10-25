@@ -126,7 +126,9 @@ def health_check_analistas(db: Session = Depends(get_db)):
 
 @router.get("/backup1")
 def analistas_backup1(
+    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(
+        100, ge=1, le=1000, description="Número máximo de registros a retornar"
     ),
     activo: Optional[bool] = Query(
         None, description="Filtrar por estado activo"
@@ -232,7 +234,9 @@ def analistas_backup1(
 
 @router.get("/backup2")
 def analistas_backup2(
+    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(
+        100, ge=1, le=1000, description="Número máximo de registros a retornar"
     ),
     activo: Optional[bool] = Query(
         None, description="Filtrar por estado activo"
@@ -310,7 +314,9 @@ def analistas_backup2(
 
 @router.get("/emergency")
 def analistas_emergency(
+    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(
+        100, ge=1, le=1000, description="Número máximo de registros a retornar"
     ),
     activo: Optional[bool] = Query(
         None, description="Filtrar por estado activo"
@@ -406,7 +412,9 @@ def analistas_emergency(
 
 @router.get("/")
 def listar_analistas(
+    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(
+        100, ge=1, le=1000, description="Número máximo de registros a retornar"
     ),
     activo: Optional[bool] = Query(
         None, description="Filtrar por estado activo"
@@ -478,7 +486,9 @@ def listar_analistas(
 
 @router.get("/list-no-auth")
 def listar_analistas_no_auth(
+    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(
+        100, ge=1, le=1000, description="Número máximo de registros a retornar"
     ),
     activo: Optional[bool] = Query(
         None, description="Filtrar por estado activo"
@@ -523,11 +533,15 @@ def listar_analistas_no_auth(
         )
 
 
+@router.get("/activos")
+def listar_asesores_activos(
     db: Session = Depends(get_db),
     # TEMPORALMENTE SIN AUTENTICACIÓN PARA DROPDOWNS
     # current_user: User = Depends(get_current_user)
 ):
     """
+    Listar solo asesores activos (para formularios)
+    Simplificado: Sin filtros adicionales, solo asesores activos
     """
     try:
         query = db.query(Analista).filter(Analista.activo)
@@ -536,6 +550,7 @@ def listar_analistas_no_auth(
     except Exception as e:
         raise HTTPException(
             status_code=500,
+            detail=f"Error al listar asesores activos: {str(e)}",
         )
 
 
@@ -554,6 +569,7 @@ def obtener_asesor(
     return AnalistaResponse.model_validate(asesor)
 
 
+@router.post("/crear", response_model=AnalistaResponse)
 def crear_asesor(
     asesor_data: AnalistaCreate,
     db: Session = Depends(get_db),
@@ -668,6 +684,7 @@ def eliminar_asesor(
         db.delete(asesor)
         db.commit()
         return {
+            "message": "Analista eliminado completamente de la base de datos"
         }
 
     except HTTPException:
