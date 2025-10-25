@@ -35,12 +35,8 @@ async def debug_autenticacion(request: Request, db: Session = Depends(get_db)):
 
         if auth_header:
             headers_analysis["authorization_present"] = True
-            headers_analysis["authorization_type"] = (
-                auth_header.split(" ")[0] if " " in auth_header else "unknown"
-            )
-            headers_analysis["token_length"] = (
-                len(auth_header.split(" ")[1]) if " " in auth_header else 0
-            )
+            headers_analysis["authorization_type"] = auth_header.split(" ")[0] if " " in auth_header else "unknown"
+            headers_analysis["token_length"] = len(auth_header.split(" ")[1]) if " " in auth_header else 0
         else:
             headers_analysis["authorization_present"] = False
 
@@ -71,17 +67,10 @@ async def debug_autenticacion(request: Request, db: Session = Depends(get_db)):
         # 4. Verificar tokens recientes (simulado)
         recent_tokens_analysis = {
             "failed_requests_last_hour": len(
-                [
-                    r
-                    for r in failed_requests_cache
-                    if r.get("timestamp", datetime.min)
-                    > datetime.now() - timedelta(hours=1)
-                ]
+                [r for r in failed_requests_cache if r.get("timestamp", datetime.min) > datetime.now() - timedelta(hours=1)]
             ),
             "total_failed_requests": len(failed_requests_cache),
-            "last_failed_request": (
-                failed_requests_cache[-1] if failed_requests_cache else None
-            ),
+            "last_failed_request": (failed_requests_cache[-1] if failed_requests_cache else None),
         }
 
         # 5. Test de creación de token
@@ -90,9 +79,7 @@ async def debug_autenticacion(request: Request, db: Session = Depends(get_db)):
             # Buscar usuario admin para test
             admin_user = db.query(User).filter(User.is_admin).first()
             if admin_user:
-                test_token = create_access_token(
-                    subject=str(admin_user.id), additional_claims={"type": "access"}
-                )
+                test_token = create_access_token(subject=str(admin_user.id), additional_claims={"type": "access"})
                 token_test = {
                     "status": "success",
                     "token_created": True,
@@ -123,9 +110,7 @@ async def debug_autenticacion(request: Request, db: Session = Depends(get_db)):
                 "token_test": token_test,
                 "cors": cors_analysis,
             },
-            "recommendations": _generate_recommendations(
-                headers_analysis, jwt_config, users_analysis
-            ),
+            "recommendations": _generate_recommendations(headers_analysis, jwt_config, users_analysis),
         }
 
     except Exception as e:
@@ -150,9 +135,7 @@ async def test_autenticacion(request: Request, db: Session = Depends(get_db)):
             admin_user = db.query(User).filter(User.is_admin).first()
             if admin_user:
                 # Simular login
-                test_token = create_access_token(
-                    subject=str(admin_user.id), additional_claims={"type": "access"}
-                )
+                test_token = create_access_token(subject=str(admin_user.id), additional_claims={"type": "access"})
                 login_test = {
                     "status": "success",
                     "user_found": True,
@@ -221,10 +204,7 @@ async def test_autenticacion(request: Request, db: Session = Depends(get_db)):
             },
             "overall_status": (
                 "success"
-                if all(
-                    t.get("status") == "success"
-                    for t in [login_test, validation_test, protected_test]
-                )
+                if all(t.get("status") == "success" for t in [login_test, validation_test, protected_test])
                 else "failed"
             ),
         }
@@ -246,9 +226,7 @@ async def obtener_logs_autenticacion():
     try:
         # Filtrar logs de la última hora
         recent_logs = [
-            log
-            for log in failed_requests_cache
-            if log.get("timestamp", datetime.min) > datetime.now() - timedelta(hours=1)
+            log for log in failed_requests_cache if log.get("timestamp", datetime.min) > datetime.now() - timedelta(hours=1)
         ]
 
         # Agrupar por tipo de error
@@ -262,9 +240,7 @@ async def obtener_logs_autenticacion():
             "logs": {
                 "total_recent_logs": len(recent_logs),
                 "error_summary": error_summary,
-                "recent_requests": (
-                    recent_logs[-10:] if recent_logs else []
-                ),  # Últimos 10
+                "recent_requests": (recent_logs[-10:] if recent_logs else []),  # Últimos 10
             },
         }
 
@@ -333,36 +309,24 @@ async def aplicar_fix_autenticacion(request: Request, db: Session = Depends(get_
         }
 
 
-def _generate_recommendations(
-    headers_analysis: Dict, jwt_config: Dict, users_analysis: Dict
-) -> List[str]:
+def _generate_recommendations(headers_analysis: Dict, jwt_config: Dict, users_analysis: Dict) -> List[str]:
     """Generar recomendaciones basadas en el análisis"""
     recommendations = []
 
     if not headers_analysis.get("authorization_present"):
-        recommendations.append(
-            "🔑 No se encontró header Authorization - Verificar que el frontend esté enviando el token"
-        )
+        recommendations.append("🔑 No se encontró header Authorization - Verificar que el frontend esté enviando el token")
 
     if jwt_config.get("secret_key_length", 0) < 32:
-        recommendations.append(
-            "🔐 SECRET_KEY muy corta - Debe tener al menos 32 caracteres"
-        )
+        recommendations.append("🔐 SECRET_KEY muy corta - Debe tener al menos 32 caracteres")
 
     if users_analysis.get("admin_users", 0) == 0:
-        recommendations.append(
-            "👤 No hay usuarios administradores - Crear usuario admin"
-        )
+        recommendations.append("👤 No hay usuarios administradores - Crear usuario admin")
 
     if users_analysis.get("active_users", 0) == 0:
-        recommendations.append(
-            "⚠️ No hay usuarios activos - Verificar estado de usuarios"
-        )
+        recommendations.append("⚠️ No hay usuarios activos - Verificar estado de usuarios")
 
     if not recommendations:
-        recommendations.append(
-            "✅ Configuración parece correcta - Revisar logs de aplicación"
-        )
+        recommendations.append("✅ Configuración parece correcta - Revisar logs de aplicación")
 
     return recommendations
 

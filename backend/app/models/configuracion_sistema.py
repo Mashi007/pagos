@@ -25,23 +25,15 @@ class ConfiguracionSistema(Base):
     __tablename__ = "configuracion_sistema"
 
     id = Column(Integer, primary_key=True, index=True)
-    categoria = Column(
-        String(50), nullable=False, index=True
-    )  # AI, EMAIL, WHATSAPP, etc.
-    subcategoria = Column(
-        String(50), nullable=True, index=True
-    )  # OPENAI, GMAIL, TWILIO, etc.
-    clave = Column(
-        String(100), nullable=False, index=True
-    )  # Nombre de la configuración
+    categoria = Column(String(50), nullable=False, index=True)  # AI, EMAIL, WHATSAPP, etc.
+    subcategoria = Column(String(50), nullable=True, index=True)  # OPENAI, GMAIL, TWILIO, etc.
+    clave = Column(String(100), nullable=False, index=True)  # Nombre de la configuración
     valor = Column(Text, nullable=True)  # Valor de la configuración
     valor_json = Column(JSON, nullable=True)  # Para configuraciones complejas
 
     # Metadatos
     descripcion = Column(Text, nullable=True)
-    tipo_dato = Column(
-        String(20), default="STRING"
-    )  # STRING, INTEGER, BOOLEAN, JSON, PASSWORD
+    tipo_dato = Column(String(20), default="STRING")  # STRING, INTEGER, BOOLEAN, JSON, PASSWORD
     requerido = Column(Boolean, default=False)
     visible_frontend = Column(Boolean, default=True)
     solo_lectura = Column(Boolean, default=False)
@@ -64,11 +56,7 @@ class ConfiguracionSistema(Base):
     def valor_procesado(self):
         """Obtener valor procesado según el tipo de dato"""
         if self.tipo_dato == "BOOLEAN":
-            return (
-                self.valor.lower() in ["true", "1", "yes", "on"]
-                if self.valor
-                else False
-            )
+            return self.valor.lower() in ["true", "1", "yes", "on"] if self.valor else False
         elif self.tipo_dato == "INTEGER":
             try:
                 return int(self.valor) if self.valor else 0
@@ -110,9 +98,7 @@ class ConfiguracionSistema(Base):
             self.actualizado_por = usuario
 
     @staticmethod
-    def obtener_por_clave(
-        db, categoria: str, clave: str
-    ) -> Optional["ConfiguracionSistema"]:
+    def obtener_por_clave(db, categoria: str, clave: str) -> Optional["ConfiguracionSistema"]:
         """Obtener configuración por categoría y clave"""
         return (
             db.query(ConfiguracionSistema)
@@ -126,11 +112,7 @@ class ConfiguracionSistema(Base):
     @staticmethod
     def obtener_categoria(db, categoria: str) -> Dict[str, Any]:
         """Obtener todas las configuraciones de una categoría"""
-        configs = (
-            db.query(ConfiguracionSistema)
-            .filter(ConfiguracionSistema.categoria == categoria)
-            .all()
-        )
+        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == categoria).all()
 
         resultado = {}
         for config in configs:
@@ -694,37 +676,19 @@ class ConfigHelper:
     def get_financial_config(db) -> Dict:
         """Obtener configuración financiera completa"""
         return {
-            "tasa_base": ConfigHelper.get_config(
-                db, "FINANCIERO", "TASA_INTERES_BASE", 18.0
-            ),
-            "tasa_mora": ConfigHelper.get_config(
-                db, "FINANCIERO", "TASA_MORA_MENSUAL", 2.0
-            ),
-            "cuota_inicial_min": ConfigHelper.get_config(
-                db, "FINANCIERO", "CUOTA_INICIAL_MINIMA", 10.0
-            ),
-            "monto_maximo": ConfigHelper.get_config(
-                db, "FINANCIERO", "MONTO_MAXIMO_FINANCIAMIENTO", 5000000
-            ),
-            "plazo_maximo": ConfigHelper.get_config(
-                db, "FINANCIERO", "PLAZO_MAXIMO_MESES", 84
-            ),
+            "tasa_base": ConfigHelper.get_config(db, "FINANCIERO", "TASA_INTERES_BASE", 18.0),
+            "tasa_mora": ConfigHelper.get_config(db, "FINANCIERO", "TASA_MORA_MENSUAL", 2.0),
+            "cuota_inicial_min": ConfigHelper.get_config(db, "FINANCIERO", "CUOTA_INICIAL_MINIMA", 10.0),
+            "monto_maximo": ConfigHelper.get_config(db, "FINANCIERO", "MONTO_MAXIMO_FINANCIAMIENTO", 5000000),
+            "plazo_maximo": ConfigHelper.get_config(db, "FINANCIERO", "PLAZO_MAXIMO_MESES", 84),
         }
 
     @staticmethod
     def get_notification_config(db) -> Dict:
         """Obtener configuración de notificaciones"""
         return {
-            "recordatorios": ConfigHelper.get_config(
-                db, "NOTIFICACIONES", "RECORDATORIOS_HABILITADOS", True
-            ),
-            "dias_antes": ConfigHelper.get_config(
-                db, "NOTIFICACIONES", "DIAS_ANTES_RECORDATORIO", 3
-            ),
-            "mora_habilitada": ConfigHelper.get_config(
-                db, "NOTIFICACIONES", "NOTIFICACIONES_MORA_HABILITADAS", True
-            ),
-            "frecuencia_mora": ConfigHelper.get_config(
-                db, "NOTIFICACIONES", "FRECUENCIA_NOTIFICACIONES_MORA", "DIARIA"
-            ),
+            "recordatorios": ConfigHelper.get_config(db, "NOTIFICACIONES", "RECORDATORIOS_HABILITADOS", True),
+            "dias_antes": ConfigHelper.get_config(db, "NOTIFICACIONES", "DIAS_ANTES_RECORDATORIO", 3),
+            "mora_habilitada": ConfigHelper.get_config(db, "NOTIFICACIONES", "NOTIFICACIONES_MORA_HABILITADAS", True),
+            "frecuencia_mora": ConfigHelper.get_config(db, "NOTIFICACIONES", "FRECUENCIA_NOTIFICACIONES_MORA", "DIARIA"),
         }

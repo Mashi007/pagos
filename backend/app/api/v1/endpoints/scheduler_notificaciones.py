@@ -27,9 +27,7 @@ class ConfiguracionScheduler(BaseModel):
     """Configuración del scheduler de notificaciones"""
 
     habilitado: bool = Field(True, description="Habilitar scheduler automático")
-    frecuencia_minutos: int = Field(
-        60, ge=5, le=1440, description="Frecuencia en minutos"
-    )
+    frecuencia_minutos: int = Field(60, ge=5, le=1440, description="Frecuencia en minutos")
     hora_inicio: str = Field("06:00", description="Hora de inicio (HH:MM)")
     hora_fin: str = Field("22:00", description="Hora de fin (HH:MM)")
     dias_activos: list[str] = Field(
@@ -45,16 +43,12 @@ class ConfiguracionScheduler(BaseModel):
 
 
 @router.get("/configuracion")
-def obtener_configuracion_scheduler(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def obtener_configuracion_scheduler(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     ⚙️ Obtener configuración actual del scheduler de notificaciones
     """
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Sin permisos para ver configuración del scheduler"
-        )
+        raise HTTPException(status_code=403, detail="Sin permisos para ver configuración del scheduler")
 
     try:
         # Configuración actual (simulada - en producción sería de BD)
@@ -108,9 +102,7 @@ def obtener_configuracion_scheduler(
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error obteniendo configuración: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error obteniendo configuración: {str(e)}")
 
 
 @router.post("/configurar")
@@ -142,9 +134,7 @@ def configurar_scheduler(
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error configurando scheduler: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error configurando scheduler: {str(e)}")
 
 
 @router.get("/logs")
@@ -211,16 +201,12 @@ async def ejecutar_scheduler_manual(
     ▶️ Ejecutar scheduler manualmente (fuera del horario programado)
     """
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Sin permisos para ejecutar scheduler manual"
-        )
+        raise HTTPException(status_code=403, detail="Sin permisos para ejecutar scheduler manual")
 
     try:
         # Verificar si ya está ejecutándose
         if notification_scheduler.is_running:
-            raise HTTPException(
-                status_code=400, detail="Scheduler ya está ejecutándose"
-            )
+            raise HTTPException(status_code=400, detail="Scheduler ya está ejecutándose")
 
         # Ejecutar en background
         background_tasks.add_task(_ejecutar_scheduler_manual, db, current_user.id)
@@ -236,15 +222,11 @@ async def ejecutar_scheduler_manual(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error ejecutando scheduler: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error ejecutando scheduler: {str(e)}")
 
 
 @router.get("/estado")
-def obtener_estado_scheduler(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def obtener_estado_scheduler(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     📊 Obtener estado actual del scheduler
     """
@@ -279,9 +261,7 @@ def obtener_estado_scheduler(
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error obteniendo estado: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error obteniendo estado: {str(e)}")
 
 
 # ============================================
@@ -351,9 +331,7 @@ def _generar_expresion_cron(config: ConfiguracionScheduler) -> str:
 
 
 @router.get("/verificacion-completa")
-def verificar_sistema_notificaciones_completo(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def verificar_sistema_notificaciones_completo(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     🔍 Verificación completa del sistema de notificaciones multicanal
     """

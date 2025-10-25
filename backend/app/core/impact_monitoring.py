@@ -104,9 +104,7 @@ class ImpactAnalyzer:
             return
 
         self.monitoring_active = True
-        self.monitor_thread = threading.Thread(
-            target=self._monitoring_loop, daemon=True
-        )
+        self.monitor_thread = threading.Thread(target=self._monitoring_loop, daemon=True)
         self.monitor_thread.start()
         logger.info("Monitoreo de impacto iniciado")
 
@@ -146,11 +144,7 @@ class ImpactAnalyzer:
                     disk_percent=disk.percent,
                     disk_free_gb=disk.free // (1024 * 1024 * 1024),
                     process_count=len(psutil.pids()),
-                    load_average=(
-                        list(os.getloadavg())
-                        if hasattr(os, "getloadavg")
-                        else [0, 0, 0]
-                    ),
+                    load_average=(list(os.getloadavg()) if hasattr(os, "getloadavg") else [0, 0, 0]),
                     network_bytes_sent=network.bytes_sent,
                     network_bytes_recv=network.bytes_recv,
                 )
@@ -170,9 +164,7 @@ class ImpactAnalyzer:
                 )
 
             self.metrics_history.append(metrics)
-            logger.debug(
-                f"Métricas recolectadas: CPU {metrics.cpu_percent:.1f}%, Memory {metrics.memory_percent:.1f}%"
-            )
+            logger.debug(f"Métricas recolectadas: CPU {metrics.cpu_percent:.1f}%, Memory {metrics.memory_percent:.1f}%")
 
         except Exception as e:
             logger.error(f"Error recolectando métricas: {e}")
@@ -208,9 +200,7 @@ class ImpactAnalyzer:
         )
 
         self.performance_history.append(impact)
-        logger.debug(
-            f"Análisis de impacto: {impact_level}, CPU delta: {cpu_delta:.1f}%"
-        )
+        logger.debug(f"Análisis de impacto: {impact_level}, CPU delta: {cpu_delta:.1f}%")
 
     def _check_alerts(self):
         """Verificar condiciones de alerta"""
@@ -257,9 +247,7 @@ class ImpactAnalyzer:
         alert_id = f"{alert_type}_{int(time.time())}"
 
         # Verificar si ya existe una alerta similar no resuelta
-        existing_alert = next(
-            (a for a in self.alerts if a.type == alert_type and not a.resolved), None
-        )
+        existing_alert = next((a for a in self.alerts if a.type == alert_type and not a.resolved), None)
 
         if existing_alert:
             return  # No crear alertas duplicadas
@@ -331,9 +319,7 @@ class ImpactAnalyzer:
             "current_metrics": asdict(current),
             "trends": {"cpu_trend": cpu_trend, "memory_trend": memory_trend},
             "active_alerts": len(active_alerts),
-            "alerts": [
-                asdict(alert) for alert in active_alerts[-5:]
-            ],  # Últimas 5 alertas
+            "alerts": [asdict(alert) for alert in active_alerts[-5:]],  # Últimas 5 alertas
             "monitoring_active": self.monitoring_active,
         }
 
@@ -372,19 +358,13 @@ class ImpactAnalyzer:
         if not self.performance_history:
             return {"message": "No hay datos de performance disponibles"}
 
-        recent_performance = list(self.performance_history)[
-            -10:
-        ]  # Últimos 10 registros
+        recent_performance = list(self.performance_history)[-10:]  # Últimos 10 registros
 
         # Calcular estadísticas
-        response_times = [
-            p.response_time_ms for p in recent_performance if p.response_time_ms > 0
-        ]
+        response_times = [p.response_time_ms for p in recent_performance if p.response_time_ms > 0]
         impact_levels = [p.impact_level for p in recent_performance]
 
-        avg_response_time = (
-            sum(response_times) / len(response_times) if response_times else 0
-        )
+        avg_response_time = sum(response_times) / len(response_times) if response_times else 0
         max_response_time = max(response_times) if response_times else 0
 
         impact_counts = {
@@ -402,26 +382,18 @@ class ImpactAnalyzer:
                 "impact_distribution": impact_counts,
             },
             "recent_performance": [asdict(p) for p in recent_performance[-5:]],
-            "recommendations": self._generate_recommendations(
-                impact_counts, avg_response_time
-            ),
+            "recommendations": self._generate_recommendations(impact_counts, avg_response_time),
         }
 
-    def _generate_recommendations(
-        self, impact_counts: Dict[str, int], avg_response_time: float
-    ) -> List[str]:
+    def _generate_recommendations(self, impact_counts: Dict[str, int], avg_response_time: float) -> List[str]:
         """Generar recomendaciones basadas en el análisis"""
         recommendations = []
 
         if impact_counts["HIGH"] > impact_counts["LOW"]:
-            recommendations.append(
-                "Considerar optimización de endpoints con alto impacto"
-            )
+            recommendations.append("Considerar optimización de endpoints con alto impacto")
 
         if avg_response_time > 500:
-            recommendations.append(
-                "Implementar caching para reducir tiempos de respuesta"
-            )
+            recommendations.append("Implementar caching para reducir tiempos de respuesta")
 
         if impact_counts["MEDIUM"] + impact_counts["HIGH"] > impact_counts["LOW"]:
             recommendations.append("Revisar configuración de recursos del sistema")

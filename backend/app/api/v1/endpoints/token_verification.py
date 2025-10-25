@@ -43,9 +43,7 @@ async def verificar_token_detallado(request: Request, db: Session = Depends(get_
                 "status": "error",
                 "error": "Invalid Authorization header format",
                 "expected_format": "Bearer <token>",
-                "received": (
-                    auth_header[:20] + "..." if len(auth_header) > 20 else auth_header
-                ),
+                "received": (auth_header[:20] + "..." if len(auth_header) > 20 else auth_header),
             }
 
         token = auth_header.split(" ")[1]
@@ -107,9 +105,7 @@ async def verificar_token_detallado(request: Request, db: Session = Depends(get_
             token_analysis["expiration"] = {
                 "exp_datetime": exp_datetime.isoformat(),
                 "is_expired": is_expired,
-                "time_until_expiry": (
-                    str(exp_datetime - datetime.now()) if not is_expired else "EXPIRED"
-                ),
+                "time_until_expiry": (str(exp_datetime - datetime.now()) if not is_expired else "EXPIRED"),
             }
         else:
             token_analysis["expiration"] = {"error": "No expiration found in token"}
@@ -171,17 +167,13 @@ async def verificar_token_detallado(request: Request, db: Session = Depends(get_
         # Generar recomendaciones
         recommendations = []
         if not verification_result.get("verified"):
-            recommendations.append(
-                "🔐 Token no válido - Verificar SECRET_KEY o regenerar token"
-            )
+            recommendations.append("🔐 Token no válido - Verificar SECRET_KEY o regenerar token")
 
         if token_analysis.get("expiration", {}).get("is_expired"):
             recommendations.append("⏰ Token expirado - Hacer login nuevamente")
 
         if not user_verification.get("user_found"):
-            recommendations.append(
-                "👤 Usuario no encontrado en BD - Verificar datos de usuario"
-            )
+            recommendations.append("👤 Usuario no encontrado en BD - Verificar datos de usuario")
 
         if not user_verification.get("user_active"):
             recommendations.append("⚠️ Usuario inactivo - Contactar administrador")
@@ -197,10 +189,7 @@ async def verificar_token_detallado(request: Request, db: Session = Depends(get_
             "user_verification": user_verification,
             "recommendations": recommendations,
             "overall_status": (
-                "valid"
-                if verification_result.get("verified")
-                and user_verification.get("user_found")
-                else "invalid"
+                "valid" if verification_result.get("verified") and user_verification.get("user_found") else "invalid"
             ),
         }
 
@@ -288,9 +277,7 @@ async def generar_token_prueba(db: Session = Depends(get_db)):
             }
 
         # Generar token
-        test_token = create_access_token(
-            subject=str(admin_user.id), additional_claims={"type": "access"}
-        )
+        test_token = create_access_token(subject=str(admin_user.id), additional_claims={"type": "access"})
 
         return {
             "timestamp": datetime.now().isoformat(),

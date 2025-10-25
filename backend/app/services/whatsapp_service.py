@@ -30,9 +30,7 @@ class WhatsAppService:
         # Verificar configuración
         if not self.access_token or not self.phone_number_id:
             logger.warning("Credenciales de Meta Developers no configuradas")
-            logger.info(
-                "Variables requeridas: WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID"
-            )
+            logger.info("Variables requeridas: WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID")
 
     async def send_message(
         self,
@@ -94,10 +92,7 @@ class WhatsAppService:
                         "components": [
                             {
                                 "type": "body",
-                                "parameters": [
-                                    {"type": "text", "text": str(value)}
-                                    for value in template_params.values()
-                                ],
+                                "parameters": [{"type": "text", "text": str(value)} for value in template_params.values()],
                             }
                         ],
                     },
@@ -160,9 +155,7 @@ class WhatsAppService:
 
             # Actualizar notificación como fallida
             if notificacion_id:
-                self._actualizar_notificacion(
-                    notificacion_id, EstadoNotificacion.FALLIDA.value, error=error_msg
-                )
+                self._actualizar_notificacion(notificacion_id, EstadoNotificacion.FALLIDA.value, error=error_msg)
 
             return {"success": False, "error": error_msg, "message_id": None}
 
@@ -222,10 +215,7 @@ class WhatsAppService:
                     "components": [
                         {
                             "type": "body",
-                            "parameters": [
-                                {"type": "text", "text": str(value)}
-                                for value in variables.values()
-                            ],
+                            "parameters": [{"type": "text", "text": str(value)} for value in variables.values()],
                         }
                     ],
                 },
@@ -280,9 +270,7 @@ class WhatsAppService:
 
             # Actualizar notificación como fallida
             if notificacion_id:
-                self._actualizar_notificacion(
-                    notificacion_id, EstadoNotificacion.FALLIDA.value, error=error_msg
-                )
+                self._actualizar_notificacion(notificacion_id, EstadoNotificacion.FALLIDA.value, error=error_msg)
 
             return {"success": False, "error": error_msg, "message_id": None}
 
@@ -327,11 +315,7 @@ class WhatsAppService:
         """
         try:
             db = SessionLocal()
-            notificacion = (
-                db.query(Notificacion)
-                .filter(Notificacion.id == notificacion_id)
-                .first()
-            )
+            notificacion = db.query(Notificacion).filter(Notificacion.id == notificacion_id).first()
 
             if notificacion:
                 notificacion.estado = estado
@@ -383,8 +367,6 @@ class WhatsAppService:
             "api_url": self.api_url,
         }
 
-        config_status["ready"] = all(
-            [config_status["access_token"], config_status["phone_number_id"]]
-        )
+        config_status["ready"] = all([config_status["access_token"], config_status["phone_number_id"]])
 
         return config_status

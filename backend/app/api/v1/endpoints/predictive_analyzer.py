@@ -42,29 +42,19 @@ class PredictiveAnalyzer:
     """Analizador predictivo para problemas de autenticación"""
 
     @staticmethod
-    def calculate_trend(
-        data_points: List[float], window_size: int = 5
-    ) -> Dict[str, float]:
+    def calculate_trend(data_points: List[float], window_size: int = 5) -> Dict[str, float]:
         """Calcular tendencia de datos"""
         if len(data_points) < window_size:
             return {"trend": "insufficient_data", "slope": 0.0, "confidence": 0.0}
 
         recent_data = data_points[-window_size:]
-        older_data = (
-            data_points[-window_size * 2:-window_size]
-            if len(data_points) >= window_size * 2
-            else recent_data
-        )
+        older_data = data_points[-window_size * 2 : -window_size] if len(data_points) >= window_size * 2 else recent_data
 
         recent_avg = statistics.mean(recent_data)
         older_avg = statistics.mean(older_data)
 
         slope = recent_avg - older_avg
-        trend = (
-            "increasing"
-            if slope > 0.05
-            else "decreasing" if slope < -0.05 else "stable"
-        )
+        trend = "increasing" if slope > 0.05 else "decreasing" if slope < -0.05 else "stable"
 
         # Calcular confianza basada en variabilidad
         variance = statistics.variance(recent_data) if len(recent_data) > 1 else 0
@@ -106,10 +96,7 @@ class PredictiveAnalyzer:
 
         # Anomalía 2: Aumento en tiempo de respuesta
         response_trend = PredictiveAnalyzer.calculate_trend(response_times)
-        if (
-            response_trend["trend"] == "increasing"
-            and response_trend["confidence"] > 0.6
-        ):
+        if response_trend["trend"] == "increasing" and response_trend["confidence"] > 0.6:
             anomalies.append(
                 {
                     "type": "response_time_increase",
@@ -124,11 +111,7 @@ class PredictiveAnalyzer:
         if len(error_counts) >= 5:
             recent_errors = error_counts[-5:]
             avg_recent_errors = statistics.mean(recent_errors)
-            historical_avg = (
-                statistics.mean(error_counts[:-5])
-                if len(error_counts) > 5
-                else avg_recent_errors
-            )
+            historical_avg = statistics.mean(error_counts[:-5]) if len(error_counts) > 5 else avg_recent_errors
 
             if avg_recent_errors > historical_avg * 2:  # Doble del promedio histórico
                 anomalies.append(
@@ -160,18 +143,14 @@ class PredictiveAnalyzer:
         [m.error_count for m in metrics]
 
         # Predicción 1: Tasa de éxito
-        success_trend = PredictiveAnalyzer.calculate_trend(
-            success_rates, window_size=10
-        )
+        success_trend = PredictiveAnalyzer.calculate_trend(success_rates, window_size=10)
         if success_trend["trend"] == "decreasing":
             # Calcular cuándo podría llegar a un umbral crítico
             current_rate = success_rates[-1]
             critical_threshold = 0.7  # 70% success rate
 
             if current_rate > critical_threshold and success_trend["slope"] < 0:
-                days_to_critical = (current_rate - critical_threshold) / abs(
-                    success_trend["slope"]
-                )
+                days_to_critical = (current_rate - critical_threshold) / abs(success_trend["slope"])
                 predictions["success_rate_critical"] = {
                     "probability": min(0.9, success_trend["confidence"]),
                     "days_to_critical": max(1, int(days_to_critical)),
@@ -180,17 +159,13 @@ class PredictiveAnalyzer:
                 }
 
         # Predicción 2: Tiempo de respuesta
-        response_trend = PredictiveAnalyzer.calculate_trend(
-            response_times, window_size=10
-        )
+        response_trend = PredictiveAnalyzer.calculate_trend(response_times, window_size=10)
         if response_trend["trend"] == "increasing":
             current_time = response_times[-1]
             warning_threshold = 2000  # 2 segundos
 
             if current_time < warning_threshold and response_trend["slope"] > 0:
-                days_to_warning = (warning_threshold - current_time) / response_trend[
-                    "slope"
-                ]
+                days_to_warning = (warning_threshold - current_time) / response_trend["slope"]
                 predictions["response_time_warning"] = {
                     "probability": min(0.8, response_trend["confidence"]),
                     "days_to_warning": max(1, int(days_to_warning)),
@@ -312,19 +287,13 @@ async def get_predictive_analysis():
 
         # Recomendaciones basadas en tendencias
         if trends["success_rate"]["trend"] == "decreasing":
-            recommendations.append(
-                "📉 Tendencia: Tasa de éxito disminuyendo - Monitorear de cerca"
-            )
+            recommendations.append("📉 Tendencia: Tasa de éxito disminuyendo - Monitorear de cerca")
 
         if trends["response_time"]["trend"] == "increasing":
-            recommendations.append(
-                "⏱️ Tendencia: Tiempo de respuesta aumentando - Optimizar sistema"
-            )
+            recommendations.append("⏱️ Tendencia: Tiempo de respuesta aumentando - Optimizar sistema")
 
         if trends["error_count"]["trend"] == "increasing":
-            recommendations.append(
-                "❌ Tendencia: Errores aumentando - Investigar causas"
-            )
+            recommendations.append("❌ Tendencia: Errores aumentando - Investigar causas")
 
         if not recommendations:
             recommendations.append("✅ Sistema estable - Continuar monitoreo rutinario")
@@ -342,13 +311,9 @@ async def get_predictive_analysis():
             "recommendations": recommendations,
             "summary": {
                 "total_anomalies": len(anomalies),
-                "critical_anomalies": len(
-                    [a for a in anomalies if a["severity"] == "high"]
-                ),
+                "critical_anomalies": len([a for a in anomalies if a["severity"] == "high"]),
                 "predictions_count": (
-                    len(predictions.get("predictions", {}))
-                    if predictions.get("status") == "success"
-                    else 0
+                    len(predictions.get("predictions", {})) if predictions.get("status") == "success" else 0
                 ),
             },
         }
@@ -393,9 +358,7 @@ async def calculate_authentication_health_score():
         }
 
         # 2. Tiempo de respuesta (30% del score)
-        avg_response_time = statistics.mean(
-            [m.avg_response_time for m in recent_metrics]
-        )
+        avg_response_time = statistics.mean([m.avg_response_time for m in recent_metrics])
         # Score basado en tiempo de respuesta (mejor = más rápido)
         response_score = max(0, 100 - (avg_response_time / 50))  # Penalizar >5s
         components["response_time"] = {
@@ -406,9 +369,7 @@ async def calculate_authentication_health_score():
 
         # 3. Estabilidad de errores (20% del score)
         error_counts = [m.error_count for m in recent_metrics]
-        error_variance = (
-            statistics.variance(error_counts) if len(error_counts) > 1 else 0
-        )
+        error_variance = statistics.variance(error_counts) if len(error_counts) > 1 else 0
         avg_errors = statistics.mean(error_counts)
         stability_score = max(0, 100 - (error_variance / 10) - (avg_errors / 2))
         components["error_stability"] = {
@@ -471,9 +432,7 @@ async def calculate_authentication_health_score():
             },
             "recommendations": recommendations,
             "analysis_period": f"{len(recent_metrics)} recent data points",
-            "last_updated": (
-                recent_metrics[-1].timestamp.isoformat() if recent_metrics else None
-            ),
+            "last_updated": (recent_metrics[-1].timestamp.isoformat() if recent_metrics else None),
         }
 
     except Exception as e:

@@ -59,12 +59,8 @@ def registrar_auditoria_cliente(
     """Registrar auditoría para operaciones de cliente - VERSIÓN LIGERA"""
     try:
         # ✅ OPTIMIZACIÓN: Solo serializar si es necesario y simplificar datos
-        datos_anteriores_serializados = (
-            serializar_datos_auditoria(datos_anteriores) if datos_anteriores else None
-        )
-        datos_nuevos_serializados = (
-            serializar_datos_auditoria(datos_nuevos) if datos_nuevos else None
-        )
+        datos_anteriores_serializados = serializar_datos_auditoria(datos_anteriores) if datos_anteriores else None
+        datos_nuevos_serializados = serializar_datos_auditoria(datos_nuevos) if datos_nuevos else None
 
         # ✅ OPTIMIZACIÓN: Auditoría mínima para reducir uso de recursos
         auditoria = Auditoria(
@@ -81,9 +77,7 @@ def registrar_auditoria_cliente(
         )
         db.add(auditoria)
         db.commit()
-        logger.info(
-            f"Auditoría registrada: {accion} cliente {cliente_id} por {usuario_email}"
-        )
+        logger.info(f"Auditoría registrada: {accion} cliente {cliente_id} por {usuario_email}")
     except Exception as e:
         logger.error(f"Error registrando auditoría: {e}")
         # ✅ OPTIMIZACIÓN: No hacer rollback de auditoría para evitar
@@ -161,27 +155,15 @@ def listar_clientes(
                     "telefono": cliente.telefono,
                     "email": cliente.email,
                     "direccion": cliente.direccion,
-                    "fecha_nacimiento": (
-                        cliente.fecha_nacimiento.isoformat()
-                        if cliente.fecha_nacimiento
-                        else None
-                    ),
+                    "fecha_nacimiento": (cliente.fecha_nacimiento.isoformat() if cliente.fecha_nacimiento else None),
                     "ocupacion": cliente.ocupacion,
                     "modelo_vehiculo": cliente.modelo_vehiculo,
                     "concesionario": cliente.concesionario,
                     "analista": cliente.analista,
                     "estado": cliente.estado,
                     "activo": cliente.activo,
-                    "fecha_registro": (
-                        cliente.fecha_registro.isoformat()
-                        if cliente.fecha_registro
-                        else None
-                    ),
-                    "fecha_actualizacion": (
-                        cliente.fecha_actualizacion.isoformat()
-                        if cliente.fecha_actualizacion
-                        else None
-                    ),
+                    "fecha_registro": (cliente.fecha_registro.isoformat() if cliente.fecha_registro else None),
+                    "fecha_actualizacion": (cliente.fecha_actualizacion.isoformat() if cliente.fecha_actualizacion else None),
                     "usuario_registro": cliente.usuario_registro,
                     "notas": cliente.notas,
                 }
@@ -267,16 +249,11 @@ def crear_cliente(
         logger.info(f"Datos recibidos: {cliente_data}")
 
         # CORREGIDO: Detectar cédulas duplicadas y manejar confirmación
-        cliente_existente = (
-            db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
-        )
+        cliente_existente = db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
         if cliente_existente:
             # ✅ NUEVO: Si el usuario confirma el duplicado, actualizar el cliente existente
             if cliente_data.confirm_duplicate:
-                logger.info(
-                    f"✅ Cliente con cédula {cliente_data.cedula} "
-                    f"confirmado como duplicado - actualizando datos"
-                )
+                logger.info(f"✅ Cliente con cédula {cliente_data.cedula} " f"confirmado como duplicado - actualizando datos")
 
                 # Actualizar datos del cliente existente
                 cliente_existente.nombres = cliente_data.nombres
@@ -314,17 +291,11 @@ def crear_cliente(
                     ),
                 )
 
-                logger.info(
-                    f"Cliente actualizado exitosamente por confirmación: "
-                    f"{cliente_existente.id}"
-                )
+                logger.info(f"Cliente actualizado exitosamente por confirmación: " f"{cliente_existente.id}")
                 return ClienteResponse.model_validate(cliente_existente)
             else:
                 # Si no confirma, mostrar popup de confirmación
-                logger.warning(
-                    f"⚠️ Cliente con cédula {cliente_data.cedula} "
-                    f"ya existe - activando popup de confirmación"
-                )
+                logger.warning(f"⚠️ Cliente con cédula {cliente_data.cedula} " f"ya existe - activando popup de confirmación")
 
                 # ✅ SOLUCIÓN LIGERA: HTTPException simplificado sin auditoría pesada
                 raise HTTPException(
@@ -376,9 +347,7 @@ def crear_cliente(
             accion=TipoAccion.CREAR.value,
             cliente_id=nuevo_cliente.id,
             datos_nuevos=cliente_data.model_dump(),
-            descripcion=(
-                f"Cliente creado: {cliente_data.nombres} {cliente_data.apellidos}"
-            ),
+            descripcion=(f"Cliente creado: {cliente_data.nombres} {cliente_data.apellidos}"),
         )
 
         logger.info(f"Cliente creado exitosamente: {nuevo_cliente.id}")
@@ -413,10 +382,7 @@ def crear_cliente_con_confirmacion(
     try:
         logger.info(f"Crear cliente con confirmación - Usuario: {current_user.email}")
         logger.info(f"Datos recibidos: {request_data}")
-        logger.info(
-            f"Confirmación: {request_data.confirmacion}, "
-            f"Comentarios: {request_data.comentarios}"
-        )
+        logger.info(f"Confirmación: {request_data.confirmacion}, " f"Comentarios: {request_data.comentarios}")
 
         if not request_data.confirmacion:
             raise HTTPException(
@@ -440,10 +406,7 @@ def crear_cliente_con_confirmacion(
             concesionario=cliente_data.concesionario,
             analista=cliente_data.analista,
             estado=cliente_data.estado,
-            notas=(
-                f"{cliente_data.notas or 'NA'} | "
-                f"CONFIRMADO POR OPERADOR: {request_data.comentarios}"
-            ),
+            notas=(f"{cliente_data.notas or 'NA'} | " f"CONFIRMADO POR OPERADOR: {request_data.comentarios}"),
             usuario_registro=current_user.email,
             fecha_registro=datetime.now(),
             fecha_actualizacion=datetime.now(),
@@ -518,11 +481,7 @@ def actualizar_cliente(
             "telefono": cliente.telefono,
             "email": cliente.email,
             "direccion": cliente.direccion,
-            "fecha_nacimiento": (
-                cliente.fecha_nacimiento.isoformat()
-                if cliente.fecha_nacimiento
-                else None
-            ),
+            "fecha_nacimiento": (cliente.fecha_nacimiento.isoformat() if cliente.fecha_nacimiento else None),
             "ocupacion": cliente.ocupacion,
             "modelo_vehiculo": cliente.modelo_vehiculo,
             "concesionario": cliente.concesionario,
@@ -613,10 +572,7 @@ def eliminar_cliente(
             cliente_id=cliente_id,
             datos_anteriores=datos_anteriores,
             datos_nuevos={"eliminado": True},
-            descripcion=(
-                f"Cliente eliminado físicamente: "
-                f"{cliente.nombres} {cliente.apellidos}"
-            ),
+            descripcion=(f"Cliente eliminado físicamente: " f"{cliente.nombres} {cliente.apellidos}"),
         )
 
         logger.info(f"Cliente eliminado exitosamente: {cliente_id}")
@@ -681,14 +637,10 @@ def buscar_cliente_por_cedula(
         logger.info(f"Buscando cliente por cédula (MOCK): {cedula}")
 
         # Datos mock temporales hasta que se resuelva el problema de BD
-        raise HTTPException(
-            status_code=404, detail="Cliente no encontrado - Datos mock temporales"
-        )
+        raise HTTPException(status_code=404, detail="Cliente no encontrado - Datos mock temporales")
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error en buscar_cliente_por_cedula: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")

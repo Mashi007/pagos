@@ -57,33 +57,15 @@ class QualityStandards:
                 content = f.read()
 
             # Validaciones de estructura
-            results["validations"]["has_docstring"] = (
-                QualityStandards._has_module_docstring(content)
-            )
-            results["validations"]["proper_imports"] = (
-                QualityStandards._validate_imports(content)
-            )
-            results["validations"]["class_structure"] = (
-                QualityStandards._validate_class_structure(content)
-            )
-            results["validations"]["function_length"] = (
-                QualityStandards._validate_function_length(content)
-            )
-            results["validations"]["line_length"] = (
-                QualityStandards._validate_line_length(content)
-            )
-            results["validations"]["indentation"] = (
-                QualityStandards._validate_indentation(content)
-            )
-            results["validations"]["forbidden_words"] = (
-                QualityStandards._check_forbidden_words(content)
-            )
-            results["validations"]["error_handling"] = (
-                QualityStandards._validate_error_handling(content)
-            )
-            results["validations"]["logging"] = QualityStandards._validate_logging(
-                content
-            )
+            results["validations"]["has_docstring"] = QualityStandards._has_module_docstring(content)
+            results["validations"]["proper_imports"] = QualityStandards._validate_imports(content)
+            results["validations"]["class_structure"] = QualityStandards._validate_class_structure(content)
+            results["validations"]["function_length"] = QualityStandards._validate_function_length(content)
+            results["validations"]["line_length"] = QualityStandards._validate_line_length(content)
+            results["validations"]["indentation"] = QualityStandards._validate_indentation(content)
+            results["validations"]["forbidden_words"] = QualityStandards._check_forbidden_words(content)
+            results["validations"]["error_handling"] = QualityStandards._validate_error_handling(content)
+            results["validations"]["logging"] = QualityStandards._validate_logging(content)
 
             # Calcular score
             total_validations = len(results["validations"])
@@ -112,9 +94,7 @@ class QualityStandards:
     def _validate_imports(content: str) -> bool:
         """Validar organización de imports"""
         lines = content.split("\n")
-        import_lines = [
-            line for line in lines if line.strip().startswith(("import ", "from "))
-        ]
+        import_lines = [line for line in lines if line.strip().startswith(("import ", "from "))]
 
         if not import_lines:
             return True
@@ -146,11 +126,7 @@ class QualityStandards:
             for node in ast.walk(tree):
                 if isinstance(node, ast.ClassDef):
                     # Verificar que la clase tenga docstring
-                    if not (
-                        node.body
-                        and isinstance(node.body[0], ast.Expr)
-                        and isinstance(node.body[0].value, ast.Constant)
-                    ):
+                    if not (node.body and isinstance(node.body[0], ast.Expr) and isinstance(node.body[0].value, ast.Constant)):
                         return False
 
                     # Verificar métodos
@@ -302,9 +278,7 @@ class QualityStandards:
                 )
 
         if report["services_analyzed"] > 0:
-            report["overall_score"] = round(
-                total_score / report["services_analyzed"], 2
-            )
+            report["overall_score"] = round(total_score / report["services_analyzed"], 2)
 
         # Generar recomendaciones
         report["recommendations"] = QualityStandards._generate_recommendations(report)
@@ -317,31 +291,19 @@ class QualityStandards:
         recommendations = []
 
         if report["overall_score"] < 80:
-            recommendations.append(
-                "Implementar logging estructurado en todos los servicios"
-            )
-            recommendations.append(
-                "Agregar docstrings a todas las clases y métodos públicos"
-            )
+            recommendations.append("Implementar logging estructurado en todos los servicios")
+            recommendations.append("Agregar docstrings a todas las clases y métodos públicos")
             recommendations.append("Implementar manejo de errores consistente")
 
         if report["overall_score"] < 70:
             recommendations.append("Revisar longitud de funciones (máximo 50 líneas)")
             recommendations.append("Eliminar palabras prohibidas de producción")
-            recommendations.append(
-                "Implementar validación de entrada en todos los métodos"
-            )
+            recommendations.append("Implementar validación de entrada en todos los métodos")
 
         if report["overall_score"] < 60:
-            recommendations.append(
-                "Refactorizar código con alta complejidad ciclomática"
-            )
-            recommendations.append(
-                "Implementar tests unitarios para todos los servicios"
-            )
-            recommendations.append(
-                "Revisar arquitectura y separación de responsabilidades"
-            )
+            recommendations.append("Refactorizar código con alta complejidad ciclomática")
+            recommendations.append("Implementar tests unitarios para todos los servicios")
+            recommendations.append("Revisar arquitectura y separación de responsabilidades")
 
         return recommendations
 
@@ -375,16 +337,12 @@ class ServiceMetrics:
                     metrics["total_functions"] += 1
                     function_length = len(node.body)
                     function_lengths.append(function_length)
-                    metrics["max_function_length"] = max(
-                        metrics["max_function_length"], function_length
-                    )
+                    metrics["max_function_length"] = max(metrics["max_function_length"], function_length)
 
                     # Calcular complejidad ciclomática básica
                     complexity = 1  # Base complexity
                     for item in ast.walk(node):
-                        if isinstance(
-                            item, (ast.If, ast.While, ast.For, ast.ExceptHandler)
-                        ):
+                        if isinstance(item, (ast.If, ast.While, ast.For, ast.ExceptHandler)):
                             complexity += 1
                     metrics["cyclomatic_complexity"] += complexity
 
@@ -392,9 +350,7 @@ class ServiceMetrics:
                     metrics["total_classes"] += 1
 
             if function_lengths:
-                metrics["average_function_length"] = sum(function_lengths) / len(
-                    function_lengths
-                )
+                metrics["average_function_length"] = sum(function_lengths) / len(function_lengths)
 
             return metrics
 
@@ -409,19 +365,13 @@ class ServiceMetrics:
         recommendations = []
 
         if metrics.get("average_function_length", 0) > 30:
-            recommendations.append(
-                "Considerar dividir funciones largas en funciones más pequeñas"
-            )
+            recommendations.append("Considerar dividir funciones largas en funciones más pequeñas")
 
         if metrics.get("cyclomatic_complexity", 0) > 20:
-            recommendations.append(
-                "Reducir complejidad ciclomática usando patrones de diseño"
-            )
+            recommendations.append("Reducir complejidad ciclomática usando patrones de diseño")
 
         if metrics.get("max_function_length", 0) > 50:
-            recommendations.append(
-                "Refactorizar función más larga para mejorar legibilidad"
-            )
+            recommendations.append("Refactorizar función más larga para mejorar legibilidad")
 
         if metrics.get("total_functions", 0) > 20:
             recommendations.append("Considerar dividir el módulo en múltiples archivos")
@@ -444,9 +394,7 @@ def apply_quality_standards(services_dir: str) -> Dict[str, Any]:
             with open(service["file_path"], "r", encoding="utf-8") as f:
                 content = f.read()
             service["metrics"] = ServiceMetrics.calculate_complexity_metrics(content)
-            service["performance_recommendations"] = (
-                ServiceMetrics.generate_performance_recommendations(service["metrics"])
-            )
+            service["performance_recommendations"] = ServiceMetrics.generate_performance_recommendations(service["metrics"])
         except Exception as e:
             service["metrics"] = {"error": str(e)}
 

@@ -142,14 +142,10 @@ async def get_comprehensive_impact_analysis(
         error_summary = error_analyzer.get_endpoint_error_summary()
 
         # Calcular score general del sistema
-        system_score = _calculate_system_score(
-            health_status, performance_report, error_analysis
-        )
+        system_score = _calculate_system_score(health_status, performance_report, error_analysis)
 
         # Generar recomendaciones generales
-        general_recommendations = _generate_general_recommendations(
-            health_status, performance_report, error_analysis
-        )
+        general_recommendations = _generate_general_recommendations(health_status, performance_report, error_analysis)
 
         return {
             "status": "success",
@@ -234,9 +230,7 @@ async def stop_impact_monitoring(current_user: User = Depends(get_current_user))
         )
 
 
-def _calculate_system_score(
-    health_status: Dict, performance_report: Dict, error_analysis: Any
-) -> Dict[str, Any]:
+def _calculate_system_score(health_status: Dict, performance_report: Dict, error_analysis: Any) -> Dict[str, Any]:
     """Calcular score general del sistema"""
     score = 100
 
@@ -245,10 +239,7 @@ def _calculate_system_score(
         score -= health_status["active_alerts"] * 10
 
     # Penalizar por performance
-    if (
-        performance_report.get("performance_summary", {}).get("avg_response_time_ms", 0)
-        > 500
-    ):
+    if performance_report.get("performance_summary", {}).get("avg_response_time_ms", 0) > 500:
         score -= 20
 
     # Penalizar por tasa de error
@@ -278,18 +269,14 @@ def _calculate_system_score(
         "level": level,
         "factors": {
             "health_alerts": health_status.get("active_alerts", 0),
-            "avg_response_time": performance_report.get("performance_summary", {}).get(
-                "avg_response_time_ms", 0
-            ),
+            "avg_response_time": performance_report.get("performance_summary", {}).get("avg_response_time_ms", 0),
             "error_rate": error_analysis.error_rate,
             "consecutive_errors": error_analysis.consecutive_errors,
         },
     }
 
 
-def _generate_general_recommendations(
-    health_status: Dict, performance_report: Dict, error_analysis: Any
-) -> list:
+def _generate_general_recommendations(health_status: Dict, performance_report: Dict, error_analysis: Any) -> list:
     """Generar recomendaciones generales del sistema"""
     recommendations = []
 
@@ -298,9 +285,7 @@ def _generate_general_recommendations(
         recommendations.append("Revisar alertas activas del sistema")
 
     # Recomendaciones basadas en performance
-    avg_response_time = performance_report.get("performance_summary", {}).get(
-        "avg_response_time_ms", 0
-    )
+    avg_response_time = performance_report.get("performance_summary", {}).get("avg_response_time_ms", 0)
     if avg_response_time > 1000:
         recommendations.append("Optimizar endpoints con tiempo de respuesta > 1s")
 

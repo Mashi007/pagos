@@ -138,9 +138,7 @@ def health_check_analistas(db: Session = Depends(get_db)):
 @router.get("/backup1")
 def analistas_backup1(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
-    limit: int = Query(
-        100, ge=1, le=1000, description="Número máximo de registros a retornar"
-    ),
+    limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
@@ -205,9 +203,7 @@ def analistas_backup1(
                     "notas": "",
                     "nombre_completo": nombre_completo,
                     "primer_nombre": primer_nombre,
-                    "updated_at": (
-                        row[3].isoformat() if row[3] else None
-                    ),  # ✅ CORREGIDO: updated_at
+                    "updated_at": (row[3].isoformat() if row[3] else None),  # ✅ CORREGIDO: updated_at
                 }
             )
 
@@ -242,9 +238,7 @@ def analistas_backup1(
 @router.get("/backup2")
 def analistas_backup2(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
-    limit: int = Query(
-        100, ge=1, le=1000, description="Número máximo de registros a retornar"
-    ),
+    limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
@@ -254,9 +248,7 @@ def analistas_backup2(
     """
     try:
         # Consulta más simple para evitar problemas
-        query = (
-            "SELECT id, nombre, activo FROM analistas ORDER BY id OFFSET %s LIMIT %s"
-        )
+        query = "SELECT id, nombre, activo FROM analistas ORDER BY id OFFSET %s LIMIT %s"
         count_query = "SELECT COUNT(*) FROM analistas"
 
         # Obtener total
@@ -323,9 +315,7 @@ def analistas_backup2(
 @router.get("/emergency")
 def analistas_emergency(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
-    limit: int = Query(
-        100, ge=1, le=1000, description="Número máximo de registros a retornar"
-    ),
+    limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
@@ -386,9 +376,7 @@ def analistas_emergency(
                     "notas": "",
                     "nombre_completo": nombre_completo,
                     "primer_nombre": primer_nombre,
-                    "updated_at": (
-                        row[3].isoformat() if row[3] else None
-                    ),  # ✅ CORREGIDO: updated_at
+                    "updated_at": (row[3].isoformat() if row[3] else None),  # ✅ CORREGIDO: updated_at
                 }
             )
 
@@ -419,9 +407,7 @@ def analistas_emergency(
 @router.get("/")
 def listar_analistas(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
-    limit: int = Query(
-        100, ge=1, le=1000, description="Número máximo de registros a retornar"
-    ),
+    limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
@@ -438,10 +424,7 @@ def listar_analistas(
             query = query.filter(Analista.activo == activo)
 
         if search:
-            query = query.filter(
-                Analista.nombre.ilike(f"%{search}%")
-                | Analista.apellido.ilike(f"%{search}%")
-            )
+            query = query.filter(Analista.nombre.ilike(f"%{search}%") | Analista.apellido.ilike(f"%{search}%"))
 
         # Obtener total
         total = query.count()
@@ -462,16 +445,9 @@ def listar_analistas(
                     "apellido": analista.apellido or "",  # ✅ Usar propiedad calculada
                     "activo": analista.activo,
                     "nombre_completo": analista.nombre_completo,  # ✅ Usar propiedad calculada
-                    "primer_nombre": analista.primer_nombre
-                    or "",  # ✅ Usar propiedad calculada
-                    "updated_at": (
-                        analista.updated_at.isoformat() if analista.updated_at else None
-                    ),  # ✅ Campo correcto
-                    "fecha_eliminacion": (
-                        analista.fecha_eliminacion.isoformat()
-                        if analista.fecha_eliminacion
-                        else None
-                    ),
+                    "primer_nombre": analista.primer_nombre or "",  # ✅ Usar propiedad calculada
+                    "updated_at": (analista.updated_at.isoformat() if analista.updated_at else None),  # ✅ Campo correcto
+                    "fecha_eliminacion": (analista.fecha_eliminacion.isoformat() if analista.fecha_eliminacion else None),
                 }
             )
 
@@ -495,9 +471,7 @@ def listar_analistas(
 @router.get("/list-no-auth")
 def listar_analistas_no_auth(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
-    limit: int = Query(
-        100, ge=1, le=1000, description="Número máximo de registros a retornar"
-    ),
+    limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
@@ -513,10 +487,7 @@ def listar_analistas_no_auth(
             query = query.filter(Analista.activo == activo)
 
         if search:
-            query = query.filter(
-                Analista.nombre.ilike(f"%{search}%")
-                | Analista.apellido.ilike(f"%{search}%")
-            )
+            query = query.filter(Analista.nombre.ilike(f"%{search}%") | Analista.apellido.ilike(f"%{search}%"))
 
         # Obtener total
         total = query.count()
@@ -536,17 +507,13 @@ def listar_analistas_no_auth(
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error al listar analistas: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error al listar analistas: {str(e)}")
 
 
 @router.get("/", response_model=AnalistaListResponse)
 def listar_asesores(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
-    limit: int = Query(
-        100, ge=1, le=1000, description="Número máximo de registros a retornar"
-    ),
+    limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
@@ -592,11 +559,7 @@ def listar_asesores(
             analista_data = {
                 "id": row[0],
                 "nombre": row[1],
-                "apellido": (
-                    " ".join(row[1].split()[1:])
-                    if row[1] and len(row[1].split()) > 1
-                    else ""
-                ),
+                "apellido": (" ".join(row[1].split()[1:]) if row[1] and len(row[1].split()) > 1 else ""),
                 "email": "",
                 "telefono": "",
                 "especialidad": "",
@@ -610,15 +573,11 @@ def listar_asesores(
             }
             items.append(AnalistaResponse.model_validate(analista_data))
 
-        return AnalistaListResponse(
-            items=items, total=total, page=(skip // limit) + 1, size=limit, pages=pages
-        )
+        return AnalistaListResponse(items=items, total=total, page=(skip // limit) + 1, size=limit, pages=pages)
 
     except Exception as e:
         logger.error(f"Error en endpoint principal: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error al listar asesores: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error al listar asesores: {str(e)}")
 
 
 @router.get("/test-activos")
@@ -646,9 +605,7 @@ def listar_asesores_activos(
         return [AnalistaResponse.model_validate(a) for a in asesores]
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error al listar asesores activos: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error al listar asesores activos: {str(e)}")
 
 
 @router.get("/{asesor_id}", response_model=AnalistaResponse)
@@ -680,19 +637,13 @@ def crear_asesor(
     try:
         # Generar email automático si no se proporciona
         if not asesor_data.email:
-            asesor_data.email = (
-                f"{asesor_data.nombre.lower().replace(' ', '.')}@asesor.local"
-            )
+            asesor_data.email = f"{asesor_data.nombre.lower().replace(' ', '.')}@asesor.local"
 
         # Verificar que no exista un asesor con el mismo email (solo si se proporciona email)
         if asesor_data.email:
-            existing = (
-                db.query(Analista).filter(Analista.email == asesor_data.email).first()
-            )
+            existing = db.query(Analista).filter(Analista.email == asesor_data.email).first()
             if existing:
-                raise HTTPException(
-                    status_code=400, detail="Ya existe un asesor con este email"
-                )
+                raise HTTPException(status_code=400, detail="Ya existe un asesor con este email")
 
         # Crear nuevo asesor (nombre_completo es una propiedad, no se asigna)
         asesor_dict = asesor_data.model_dump()  # Pydantic v2
@@ -729,15 +680,9 @@ def actualizar_asesor(
 
         # Verificar email único si se está cambiando
         if asesor_data.email and asesor_data.email != asesor.email:
-            existing = (
-                db.query(Analista)
-                .filter(Analista.email == asesor_data.email, Analista.id != asesor_id)
-                .first()
-            )
+            existing = db.query(Analista).filter(Analista.email == asesor_data.email, Analista.id != asesor_id).first()
             if existing:
-                raise HTTPException(
-                    status_code=400, detail="Ya existe un asesor con este email"
-                )
+                raise HTTPException(status_code=400, detail="Ya existe un asesor con este email")
 
         # Actualizar campos
         update_data = asesor_data.model_dump(exclude_unset=True)
@@ -753,9 +698,7 @@ def actualizar_asesor(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Error al actualizar asesor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error al actualizar asesor: {str(e)}")
 
 
 @router.delete("/{asesor_id}")
@@ -783,6 +726,4 @@ def eliminar_asesor(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Error al eliminar analista: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error al eliminar analista: {str(e)}")

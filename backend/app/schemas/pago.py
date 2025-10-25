@@ -31,27 +31,17 @@ class PagoBase(BaseModel):
         max_length=MAX_DOCUMENTO_LENGTH,
         description="Número de documento",
     )
-    documento_nombre: Optional[str] = Field(
-        None, max_length=MAX_DOCUMENTO_NOMBRE_LENGTH, description="Nombre del documento"
-    )
-    documento_tipo: Optional[str] = Field(
-        None, max_length=MAX_DOCUMENTO_TIPO_LENGTH, description="Tipo de documento"
-    )
-    documento_tamaño: Optional[int] = Field(
-        None, ge=0, description="Tamaño del documento en bytes"
-    )
-    documento_ruta: Optional[str] = Field(
-        None, max_length=MAX_DOCUMENTO_RUTA_LENGTH, description="Ruta del documento"
-    )
+    documento_nombre: Optional[str] = Field(None, max_length=MAX_DOCUMENTO_NOMBRE_LENGTH, description="Nombre del documento")
+    documento_tipo: Optional[str] = Field(None, max_length=MAX_DOCUMENTO_TIPO_LENGTH, description="Tipo de documento")
+    documento_tamaño: Optional[int] = Field(None, ge=0, description="Tamaño del documento en bytes")
+    documento_ruta: Optional[str] = Field(None, max_length=MAX_DOCUMENTO_RUTA_LENGTH, description="Ruta del documento")
     notas: Optional[str] = Field(None, description="Notas adicionales")
 
     @field_validator("cedula_cliente")
     @classmethod
     def validate_cedula(cls, v):
         if not v or len(v.strip()) < MIN_CEDULA_LENGTH:
-            raise ValueError(
-                f"Cédula debe tener al menos {MIN_CEDULA_LENGTH} caracteres"
-            )
+            raise ValueError(f"Cédula debe tener al menos {MIN_CEDULA_LENGTH} caracteres")
         return v.strip().upper()
 
     @field_validator("numero_documento")

@@ -98,9 +98,7 @@ async def generar_template_conciliacion(current_user: User = Depends(get_current
 
         # Aplicar validaciones
         # Validación para fecha (formato YYYY-MM-DD)
-        dv_fecha = DataValidation(
-            type="date", formula1="2020-01-01", formula2="2030-12-31"
-        )
+        dv_fecha = DataValidation(type="date", formula1="2020-01-01", formula2="2030-12-31")
         dv_fecha.add("A2:A100")
         ws_template.add_data_validation(dv_fecha)
 
@@ -172,11 +170,7 @@ async def procesar_conciliacion(
             numero_documento = str(row["numero_documento"]).strip()
 
             # Buscar pago en BD
-            pago = (
-                db.query(Pago)
-                .filter(and_(Pago.activo, Pago.numero_documento == numero_documento))
-                .first()
-            )
+            pago = db.query(Pago).filter(and_(Pago.activo, Pago.numero_documento == numero_documento)).first()
 
             if pago:
                 # Marcar como conciliado
@@ -190,8 +184,7 @@ async def procesar_conciliacion(
 
             resultados.append(
                 {
-                    "fila": index
-                    + 2,  # +2 porque Excel es 1-indexed y primera fila es encabezado
+                    "fila": index + 2,  # +2 porque Excel es 1-indexed y primera fila es encabezado
                     "fecha": str(fecha),
                     "numero_documento": numero_documento,
                     "estado": estado,
@@ -202,9 +195,7 @@ async def procesar_conciliacion(
         # Guardar cambios
         db.commit()
 
-        logger.info(
-            f"Conciliación procesada: {conciliados} conciliados, {pendientes} pendientes"
-        )
+        logger.info(f"Conciliación procesada: {conciliados} conciliados, {pendientes} pendientes")
 
         return {
             "success": True,
@@ -240,9 +231,7 @@ async def desconciliar_pago(
 ):
     """Desconciliar un pago ya conciliado"""
     try:
-        logger.info(
-            f"Usuario {current_user.email} desconciliando pago {conciliacion_data.numero_documento_anterior}"
-        )
+        logger.info(f"Usuario {current_user.email} desconciliando pago {conciliacion_data.numero_documento_anterior}")
 
         # Buscar el pago a desconciliar
         pago = (
@@ -250,8 +239,7 @@ async def desconciliar_pago(
             .filter(
                 and_(
                     Pago.activo,
-                    Pago.numero_documento
-                    == conciliacion_data.numero_documento_anterior,
+                    Pago.numero_documento == conciliacion_data.numero_documento_anterior,
                     Pago.conciliado,
                 )
             )
@@ -283,9 +271,7 @@ async def desconciliar_pago(
 
         db.commit()
 
-        logger.info(
-            f"Pago {conciliacion_data.numero_documento_anterior} desconciliado exitosamente"
-        )
+        logger.info(f"Pago {conciliacion_data.numero_documento_anterior} desconciliado exitosamente")
 
         return conciliacion_record
 
@@ -301,22 +287,16 @@ async def desconciliar_pago(
 
 
 @router.get("/estado-conciliacion")
-async def obtener_estado_conciliacion(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def obtener_estado_conciliacion(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Obtener estado general de conciliación"""
     try:
         # Estadísticas generales
         total_pagos = db.query(Pago).filter(Pago.activo).count()
-        pagos_conciliados = (
-            db.query(Pago).filter(and_(Pago.activo, Pago.conciliado)).count()
-        )
+        pagos_conciliados = db.query(Pago).filter(and_(Pago.activo, Pago.conciliado)).count()
         pagos_pendientes = total_pagos - pagos_conciliados
 
         # Porcentaje de conciliación
-        porcentaje_conciliacion = (
-            (pagos_conciliados / total_pagos * 100) if total_pagos > 0 else 0
-        )
+        porcentaje_conciliacion = (pagos_conciliados / total_pagos * 100) if total_pagos > 0 else 0
 
         return {
             "success": True,

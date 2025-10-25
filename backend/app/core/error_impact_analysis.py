@@ -164,9 +164,7 @@ class ErrorImpactAnalyzer:
             # Actualizar circuit breaker
             self._update_circuit_breaker(endpoint, error)
 
-            logger.error(
-                f"Error registrado: {error_metrics.error_type} en {endpoint} - {severity.value}"
-            )
+            logger.error(f"Error registrado: {error_metrics.error_type} en {endpoint} - {severity.value}")
 
     def record_success(self, endpoint: str, response_time_ms: float):
         """Registrar request exitoso"""
@@ -177,9 +175,7 @@ class ErrorImpactAnalyzer:
             if endpoint in self.circuit_breakers:
                 self.circuit_breakers[endpoint]._on_success()
 
-    def _determine_severity(
-        self, error: Exception, response_time_ms: float
-    ) -> ErrorSeverity:
+    def _determine_severity(self, error: Exception, response_time_ms: float) -> ErrorSeverity:
         """Determinar severidad del error"""
         error_type = type(error).__name__
 
@@ -229,9 +225,7 @@ class ErrorImpactAnalyzer:
 
             # Calcular tiempo promedio de respuesta
             response_times = [e.response_time_ms for e in self.error_history]
-            avg_response_time = (
-                sum(response_times) / len(response_times) if response_times else 0
-            )
+            avg_response_time = sum(response_times) / len(response_times) if response_times else 0
 
             # Determinar nivel de impacto del sistema
             system_impact_level = "LOW"
@@ -245,25 +239,17 @@ class ErrorImpactAnalyzer:
             if self.error_history:
                 last_error_time = self.error_history[-1].timestamp
                 for error in reversed(self.error_history):
-                    if (
-                        last_error_time - error.timestamp
-                    ).total_seconds() < 60:  # Último minuto
+                    if (last_error_time - error.timestamp).total_seconds() < 60:  # Último minuto
                         consecutive_errors += 1
                     else:
                         break
 
             # Estado de circuit breakers
-            open_circuits = sum(
-                1 for cb in self.circuit_breakers.values() if cb.state == "OPEN"
-            )
-            circuit_breaker_status = (
-                f"{open_circuits} circuitos abiertos de {len(self.circuit_breakers)}"
-            )
+            open_circuits = sum(1 for cb in self.circuit_breakers.values() if cb.state == "OPEN")
+            circuit_breaker_status = f"{open_circuits} circuitos abiertos de {len(self.circuit_breakers)}"
 
             # Generar recomendaciones
-            recommendations = self._generate_recommendations(
-                error_rate, avg_response_time, consecutive_errors
-            )
+            recommendations = self._generate_recommendations(error_rate, avg_response_time, consecutive_errors)
 
             return ErrorImpactAnalysis(
                 error_rate=error_rate,
@@ -274,9 +260,7 @@ class ErrorImpactAnalyzer:
                 recommendations=recommendations,
             )
 
-    def _generate_recommendations(
-        self, error_rate: float, avg_response_time: float, consecutive_errors: int
-    ) -> list:
+    def _generate_recommendations(self, error_rate: float, avg_response_time: float, consecutive_errors: int) -> list:
         """Generar recomendaciones basadas en el análisis"""
         recommendations = []
 
@@ -289,9 +273,7 @@ class ErrorImpactAnalyzer:
             recommendations.append("Implementar caching para endpoints lentos")
 
         if consecutive_errors > MAX_CONSECUTIVE_ERRORS:
-            recommendations.append(
-                "Activar circuit breakers para endpoints problemáticos"
-            )
+            recommendations.append("Activar circuit breakers para endpoints problemáticos")
             recommendations.append("Implementar graceful degradation")
 
         if not recommendations:
@@ -309,22 +291,15 @@ class ErrorImpactAnalyzer:
                     continue
 
                 error_types = [e.error_type for e in errors]
-                error_counts = {
-                    error_type: error_types.count(error_type)
-                    for error_type in set(error_types)
-                }
+                error_counts = {error_type: error_types.count(error_type) for error_type in set(error_types)}
 
-                avg_response_time = sum(e.response_time_ms for e in errors) / len(
-                    errors
-                )
+                avg_response_time = sum(e.response_time_ms for e in errors) / len(errors)
 
                 summary[endpoint] = {
                     "total_errors": len(errors),
                     "error_types": error_counts,
                     "avg_response_time_ms": avg_response_time,
-                    "circuit_breaker_state": self.circuit_breakers.get(
-                        endpoint, {}
-                    ).get("state", "N/A"),
+                    "circuit_breaker_state": self.circuit_breakers.get(endpoint, {}).get("state", "N/A"),
                     "last_error": errors[-1].timestamp.isoformat() if errors else None,
                 }
 

@@ -43,9 +43,7 @@ def dashboard_administrador(
     # Verificar permisos
     if not current_user.is_admin:
 
-        raise HTTPException(
-            status_code=403, detail="Sin permisos para dashboard administrativo"
-        )
+        raise HTTPException(status_code=403, detail="Sin permisos para dashboard administrativo")
 
     hoy = date.today()
 
@@ -54,18 +52,12 @@ def dashboard_administrador(
         Cliente.activo, Cliente.total_financiamiento.isnot(None)
     ).scalar() or Decimal("0")
 
-    clientes_al_dia = (
-        db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora == 0).count()
-    )
+    clientes_al_dia = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora == 0).count()
 
-    clientes_en_mora = (
-        db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).count()
-    )
+    clientes_en_mora = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).count()
 
     tasa_morosidad = (
-        (clientes_en_mora / (clientes_al_dia + clientes_en_mora) * 100)
-        if (clientes_al_dia + clientes_en_mora) > 0
-        else 0
+        (clientes_en_mora / (clientes_al_dia + clientes_en_mora) * 100) if (clientes_al_dia + clientes_en_mora) > 0 else 0
     )
 
     # EVOLUCIÓN MENSUAL CARTERA (últimos 6 meses)
@@ -90,20 +82,12 @@ def dashboard_administrador(
     distribucion_clientes = {
         "al_dia": {
             "cantidad": clientes_al_dia,
-            "porcentaje": (
-                round((clientes_al_dia / total_clientes * 100), 1)
-                if total_clientes > 0
-                else 0
-            ),
+            "porcentaje": (round((clientes_al_dia / total_clientes * 100), 1) if total_clientes > 0 else 0),
             "color": "#28a745",
         },
         "mora": {
             "cantidad": clientes_en_mora,
-            "porcentaje": (
-                round((clientes_en_mora / total_clientes * 100), 1)
-                if total_clientes > 0
-                else 0
-            ),
+            "porcentaje": (round((clientes_en_mora / total_clientes * 100), 1) if total_clientes > 0 else 0),
             "color": "#ffc107",
         },
     }
@@ -129,9 +113,7 @@ def dashboard_administrador(
     for cuota in vencimientos_proximos:
         prestamo = db.query(Prestamo).filter(Prestamo.id == cuota.prestamo_id).first()
         if prestamo:
-            cliente = (
-                db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
-            )
+            cliente = db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
             if cliente:
                 dias_hasta = (cuota.fecha_vencimiento - hoy).days
                 tabla_vencimientos.append(
@@ -141,11 +123,7 @@ def dashboard_administrador(
                         "monto": f"${float(cuota.monto_cuota):,.0f}",
                         "fecha": cuota.fecha_vencimiento.strftime("%d/%m/%Y"),
                         "dias": dias_hasta,
-                        "color": (
-                            "danger"
-                            if dias_hasta == 0
-                            else ("warning" if dias_hasta <= 2 else "info")
-                        ),
+                        "color": ("danger" if dias_hasta == 0 else ("warning" if dias_hasta <= 2 else "info")),
                     }
                 )
 
@@ -162,9 +140,7 @@ def dashboard_administrador(
         .select_from(User)
         .outerjoin(
             Cliente,
-            and_(
-                Analista.id == Cliente.analista_id, Cliente.fecha_registro >= inicio_mes
-            ),
+            and_(Analista.id == Cliente.analista_id, Cliente.fecha_registro >= inicio_mes),
         )
         .filter(
             User.is_admin,
@@ -187,11 +163,7 @@ def dashboard_administrador(
 
     # ALERTAS CRÍTICAS
     clientes_criticos = (
-        db.query(Cliente)
-        .filter(Cliente.activo, Cliente.dias_mora > 30)
-        .order_by(Cliente.dias_mora.desc())
-        .limit(5)
-        .all()
+        db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 30).order_by(Cliente.dias_mora.desc()).limit(5).all()
     )
 
     alertas_criticas = [
@@ -280,9 +252,7 @@ def dashboard_administrador(
 
 
 @router.get("/cobranzas")
-def dashboard_cobranzas(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def dashboard_cobranzas(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     💰 DASHBOARD COBRANZAS - ACCESO COMPLETO (EXCEPTO GESTIÓN DE USUARIOS)
     ✅ Acceso: TODO el sistema (excepto gestión de usuarios)
@@ -297,9 +267,7 @@ def dashboard_cobranzas(
     # Verificar permisos
     if not current_user.is_admin:
 
-        raise HTTPException(
-            status_code=403, detail="Sin permisos para dashboard de cobranzas"
-        )
+        raise HTTPException(status_code=403, detail="Sin permisos para dashboard de cobranzas")
 
     hoy = date.today()
 
@@ -309,16 +277,10 @@ def dashboard_cobranzas(
     ).scalar() or Decimal("0")
 
     vencimientos_hoy = (
-        db.query(Cuota)
-        .filter(
-            Cuota.fecha_vencimiento == hoy, Cuota.estado.in_(["PENDIENTE", "PARCIAL"])
-        )
-        .count()
+        db.query(Cuota).filter(Cuota.fecha_vencimiento == hoy, Cuota.estado.in_(["PENDIENTE", "PARCIAL"])).count()
     )
 
-    clientes_mora = (
-        db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).count()
-    )
+    clientes_mora = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).count()
 
     # COBROS DIARIOS (últimos 30 días)
     cobros_diarios = []
@@ -386,9 +348,7 @@ def dashboard_cobranzas(
                 "telefono": cliente.telefono,
                 "dias_mora": cliente.dias_mora,
                 "color": color,
-                "analista": (
-                    cliente.analista.full_name if cliente.analista else "Sin asignar"
-                ),
+                "analista": (cliente.analista.full_name if cliente.analista else "Sin asignar"),
             }
         )
 
@@ -457,17 +417,13 @@ def dashboard_cobranzas(
         },
         "notificaciones": {
             "pagos_sin_conciliar": pagos_sin_conciliar,
-            "alertas_activas": len(
-                [c for c in clientes_contactar if c["dias_mora"] > 30]
-            ),
+            "alertas_activas": len([c for c in clientes_contactar if c["dias_mora"] > 30]),
         },
     }
 
 
 @router.get("/comercial")
-def dashboard_comercial(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def dashboard_comercial(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     👔 DASHBOARD USER - SOLO SUS CLIENTES
     ⚠️ Acceso: SOLO SUS CLIENTES
@@ -481,9 +437,7 @@ def dashboard_comercial(
     # Verificar permisos
     if not current_user.is_admin:
 
-        raise HTTPException(
-            status_code=403, detail="Sin permisos para dashboard comercial"
-        )
+        raise HTTPException(status_code=403, detail="Sin permisos para dashboard comercial")
 
     hoy = date.today()
     inicio_mes = hoy.replace(day=1)
@@ -508,11 +462,7 @@ def dashboard_comercial(
     # )
 
     # VENTAS DEL MES (solo sus clientes)
-    ventas_mes = (
-        db.query(Cliente)
-        .filter(filtro_clientes, Cliente.fecha_registro >= inicio_mes)
-        .count()
-    )
+    ventas_mes = db.query(Cliente).filter(filtro_clientes, Cliente.fecha_registro >= inicio_mes).count()
 
     monto_vendido_mes = db.query(func.sum(Cliente.total_financiamiento)).filter(
         filtro_clientes, Cliente.fecha_registro >= inicio_mes
@@ -555,9 +505,7 @@ def dashboard_comercial(
         .select_from(Analista)
         .outerjoin(
             Cliente,
-            and_(
-                Analista.id == Cliente.analista_id, Cliente.fecha_registro >= inicio_mes
-            ),
+            and_(Analista.id == Cliente.analista_id, Cliente.fecha_registro >= inicio_mes),
         )
         .filter(Analista.activo)
         .group_by(Analista.id, Analista.nombre, Analista.apellido)
@@ -576,13 +524,7 @@ def dashboard_comercial(
     ]
 
     # ÚLTIMAS VENTAS REGISTRADAS
-    ultimas_ventas = (
-        db.query(Cliente)
-        .filter(Cliente.activo)
-        .order_by(Cliente.fecha_registro.desc())
-        .limit(10)
-        .all()
-    )
+    ultimas_ventas = db.query(Cliente).filter(Cliente.activo).order_by(Cliente.fecha_registro.desc()).limit(10).all()
 
     return {
         "tipo_dashboard": "USER",
@@ -637,9 +579,7 @@ def dashboard_comercial(
                         "cliente": cliente.nombre_completo,
                         "vehiculo": cliente.vehiculo_completo,
                         "monto": f"${float(cliente.total_financiamiento or 0):,.0f}",
-                        "analista": (
-                            cliente.analista.full_name if cliente.analista else "N/A"
-                        ),
+                        "analista": (cliente.analista.full_name if cliente.analista else "N/A"),
                     }
                     for cliente in ultimas_ventas
                 ],
@@ -659,9 +599,7 @@ def dashboard_comercial(
 
 @router.get("/analista")
 def dashboard_analista(
-    analista_id: Optional[int] = Query(
-        None, description="ID del analista de configuración (default: usuario actual)"
-    ),
+    analista_id: Optional[int] = Query(None, description="ID del analista de configuración (default: usuario actual)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -685,12 +623,8 @@ def dashboard_analista(
     clientes_al_dia = len([c for c in mis_clientes if c.dias_mora == 0])
     clientes_mora = len([c for c in mis_clientes if c.dias_mora > 0])
 
-    porcentaje_al_dia = (
-        (clientes_al_dia / total_clientes * 100) if total_clientes > 0 else 0
-    )
-    porcentaje_mora = (
-        (clientes_mora / total_clientes * 100) if total_clientes > 0 else 0
-    )
+    porcentaje_al_dia = (clientes_al_dia / total_clientes * 100) if total_clientes > 0 else 0
+    porcentaje_mora = (clientes_mora / total_clientes * 100) if total_clientes > 0 else 0
 
     # ESTADO DE MI CARTERA
     total_financiado = sum(float(c.total_financiamiento or 0) for c in mis_clientes)
@@ -704,11 +638,7 @@ def dashboard_analista(
             "dias_mora": cliente.dias_mora,
             "monto_deuda": float(cliente.total_financiamiento or 0),
             "vehiculo": cliente.vehiculo_completo,
-            "prioridad": (
-                "🔴 Alta"
-                if cliente.dias_mora > 30
-                else ("🟡 Media" if cliente.dias_mora > 15 else "🟠 Baja")
-            ),
+            "prioridad": ("🔴 Alta" if cliente.dias_mora > 30 else ("🟡 Media" if cliente.dias_mora > 15 else "🟠 Baja")),
         }
         for cliente in mis_clientes
         if cliente.dias_mora > 0
@@ -741,11 +671,7 @@ def dashboard_analista(
                 "total_analistaes": len(ranking_general),
                 "clientes": analista_rank.total_clientes,
                 "monto": float(analista_rank.monto_total or 0),
-                "percentil": (
-                    round((1 - idx / len(ranking_general)) * 100, 1)
-                    if len(ranking_general) > 0
-                    else 0
-                ),
+                "percentil": (round((1 - idx / len(ranking_general)) * 100, 1) if len(ranking_general) > 0 else 0),
             }
             break
 
@@ -902,9 +828,7 @@ def obtener_matriz_acceso_roles(current_user: User = Depends(get_current_user)):
 @router.get("/por-rol")
 def dashboard_por_rol(
     filtro_fecha: Optional[str] = Query("mes", description="dia, semana, mes, año"),
-    filtro_analista: Optional[int] = Query(
-        None, description="Filtrar por analista específico"
-    ),
+    filtro_analista: Optional[int] = Query(None, description="Filtrar por analista específico"),
     filtro_estado: Optional[str] = Query(None, description="AL_DIA, MORA, TODOS"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -928,9 +852,7 @@ def dashboard_por_rol(
         dashboard_data["info_acceso"] = {
             "rol": user_role,
             "descripcion": info_acceso.get(user_role, "Acceso básico"),
-            "filtros_aplicados": (
-                "Solo sus clientes" if user_role in ["USER", "USER"] else "Sin filtros"
-            ),
+            "filtros_aplicados": ("Solo sus clientes" if user_role in ["USER", "USER"] else "Sin filtros"),
             "puede_ver_otros_analistaes": user_role in ["ADMIN", "COBRANZAS"],
         }
 
@@ -958,9 +880,7 @@ def obtener_datos_grafico(
         for i in range(12):  # Últimos 12 meses
             mes_fecha = hoy.replace(day=1) - timedelta(days=30 * i)
             # Simulación de datos históricos
-            cartera_mes = db.query(func.sum(Cliente.total_financiamiento)).filter(
-                Cliente.activo
-            ).scalar() or Decimal("0")
+            cartera_mes = db.query(func.sum(Cliente.total_financiamiento)).filter(Cliente.activo).scalar() or Decimal("0")
 
             datos.append(
                 {
@@ -977,22 +897,10 @@ def obtener_datos_grafico(
 
     elif tipo_grafico == "distribucion_mora":
         # Gráfico de dona/pie para distribución
-        al_dia = (
-            db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora == 0).count()
-        )
-        mora_1_30 = (
-            db.query(Cliente)
-            .filter(Cliente.activo, Cliente.dias_mora.between(1, 30))
-            .count()
-        )
-        mora_31_60 = (
-            db.query(Cliente)
-            .filter(Cliente.activo, Cliente.dias_mora.between(31, 60))
-            .count()
-        )
-        mora_60_plus = (
-            db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 60).count()
-        )
+        al_dia = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora == 0).count()
+        mora_1_30 = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora.between(1, 30)).count()
+        mora_31_60 = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora.between(31, 60)).count()
+        mora_60_plus = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 60).count()
 
         return {
             "tipo": "doughnut",
@@ -1030,9 +938,7 @@ def obtener_datos_grafico(
         for i in range(6):  # Últimos 6 meses
             mes_fecha = hoy.replace(day=1) - timedelta(days=30 * i)
             inicio_mes = mes_fecha.replace(day=1)
-            fin_mes = (inicio_mes + timedelta(days=32)).replace(day=1) - timedelta(
-                days=1
-            )
+            fin_mes = (inicio_mes + timedelta(days=32)).replace(day=1) - timedelta(days=1)
 
             cobros_mes = db.query(func.sum(Pago.monto_pagado)).filter(
                 Pago.fecha_pago >= inicio_mes,
@@ -1057,9 +963,7 @@ def obtener_datos_grafico(
 
 
 @router.get("/configuracion-dashboard")
-def obtener_configuracion_dashboard(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def obtener_configuracion_dashboard(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     ⚙️ Configuración del dashboard interactivo
     """
@@ -1067,9 +971,7 @@ def obtener_configuracion_dashboard(
         "usuario": {
             "nombre": current_user.full_name,
             "rol": "ADMIN" if current_user.is_admin else "USER",
-            "dashboards_disponibles": _get_dashboards_disponibles(
-                current_user.is_admin
-            ),
+            "dashboards_disponibles": _get_dashboards_disponibles(current_user.is_admin),
         },
         "configuracion_visual": {
             "tema_disponibles": ["claro", "oscuro"],
@@ -1081,10 +983,7 @@ def obtener_configuracion_dashboard(
         "filtros_disponibles": {
             "fechas": ["dia", "semana", "mes", "año", "personalizado"],
             "estados": ["TODOS", "AL_DIA", "MORA", "CRITICO"],
-            "analistaes": [
-                {"id": u.id, "nombre": u.full_name}
-                for u in db.query(User).filter(User.is_active).all()
-            ],
+            "analistaes": [{"id": u.id, "nombre": u.full_name} for u in db.query(User).filter(User.is_active).all()],
         },
         "opciones_exportacion": ["PDF", "Excel", "PNG", "CSV"],
         "responsive": {
@@ -1095,9 +994,7 @@ def obtener_configuracion_dashboard(
 
 
 @router.get("/alertas-tiempo-real")
-def obtener_alertas_tiempo_real(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def obtener_alertas_tiempo_real(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     🔔 Alertas en tiempo real para el dashboard
     """
@@ -1126,9 +1023,7 @@ def obtener_alertas_tiempo_real(
         )
 
     # Clientes críticos (>30 días mora)
-    clientes_criticos = (
-        db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 30).count()
-    )
+    clientes_criticos = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 30).count()
 
     if clientes_criticos > 0:
         alertas.append(
@@ -1224,19 +1119,13 @@ def obtener_detalle_tabla(
 
         total = query.count()
         skip = (page - 1) * page_size
-        resultados = (
-            query.order_by(Cuota.fecha_vencimiento).offset(skip).limit(page_size).all()
-        )
+        resultados = query.order_by(Cuota.fecha_vencimiento).offset(skip).limit(page_size).all()
 
         datos = []
         for cuota in resultados:
-            prestamo = (
-                db.query(Prestamo).filter(Prestamo.id == cuota.prestamo_id).first()
-            )
+            prestamo = db.query(Prestamo).filter(Prestamo.id == cuota.prestamo_id).first()
             if prestamo:
-                cliente = (
-                    db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
-                )
+                cliente = db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
                 if cliente:
                     datos.append(
                         {
@@ -1247,11 +1136,7 @@ def obtener_detalle_tabla(
                             "monto": float(cuota.monto_cuota),
                             "fecha_vencimiento": cuota.fecha_vencimiento,
                             "dias_hasta": (cuota.fecha_vencimiento - date.today()).days,
-                            "analista": (
-                                cliente.analista.full_name
-                                if cliente.analista
-                                else "Sin asignar"
-                            ),
+                            "analista": (cliente.analista.full_name if cliente.analista else "Sin asignar"),
                         }
                     )
 
@@ -1269,9 +1154,7 @@ def obtener_detalle_tabla(
 
         total = query.count()
         skip = (page - 1) * page_size
-        clientes = (
-            query.order_by(Cliente.dias_mora.desc()).offset(skip).limit(page_size).all()
-        )
+        clientes = query.order_by(Cliente.dias_mora.desc()).offset(skip).limit(page_size).all()
 
         datos = [
             {
@@ -1281,14 +1164,8 @@ def obtener_detalle_tabla(
                 "dias_mora": cliente.dias_mora,
                 "monto_financiamiento": float(cliente.total_financiamiento or 0),
                 "vehiculo": cliente.vehiculo_completo,
-                "analista": (
-                    cliente.analista.full_name if cliente.analista else "Sin asignar"
-                ),
-                "prioridad": (
-                    "CRITICA"
-                    if cliente.dias_mora > 60
-                    else ("ALTA" if cliente.dias_mora > 30 else "MEDIA")
-                ),
+                "analista": (cliente.analista.full_name if cliente.analista else "Sin asignar"),
+                "prioridad": ("CRITICA" if cliente.dias_mora > 60 else ("ALTA" if cliente.dias_mora > 30 else "MEDIA")),
             }
             for cliente in clientes
         ]
@@ -1335,9 +1212,7 @@ async def exportar_vista_dashboard(
 
             # Obtener datos según tipo de vista
             if tipo_vista == "admin":
-                dashboard_data = dashboard_administrador(
-                    db=db, current_user=current_user
-                )
+                dashboard_data = dashboard_administrador(db=db, current_user=current_user)
 
                 # KPIs
                 ws.append(["KPIs PRINCIPALES", "", "", ""])
@@ -1358,9 +1233,7 @@ async def exportar_vista_dashboard(
                 ws.append(["Cliente", "Monto", "Fecha", "Días"])
 
                 for venc in dashboard_data["tablas"]["vencimientos_proximos"]["datos"]:
-                    ws.append(
-                        [venc["cliente"], venc["monto"], venc["fecha"], venc["dias"]]
-                    )
+                    ws.append([venc["cliente"], venc["monto"], venc["fecha"], venc["dias"]])
 
             # Guardar en memoria
             output = io.BytesIO()
@@ -1379,22 +1252,16 @@ async def exportar_vista_dashboard(
 
         else:
 
-            raise HTTPException(
-                status_code=400, detail=f"Formato {formato} no soportado aún"
-            )
+            raise HTTPException(status_code=400, detail=f"Formato {formato} no soportado aún")
 
     except ImportError:
 
-        raise HTTPException(
-            status_code=500, detail="Dependencias de exportación no instaladas"
-        )
+        raise HTTPException(status_code=500, detail="Dependencias de exportación no instaladas")
 
 
 @router.get("/tiempo-real/actualizacion")
 def obtener_actualizacion_tiempo_real(
-    componentes: Optional[str] = Query(
-        None, description="Componentes a actualizar (separados por coma)"
-    ),
+    componentes: Optional[str] = Query(None, description="Componentes a actualizar (separados por coma)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1433,9 +1300,7 @@ def obtener_actualizacion_tiempo_real(
 
     if not componentes or "notificaciones" in componentes:
         # Actualizar notificaciones pendientes
-        notif_pendientes = (
-            db.query(Notificacion).filter(Notificacion.estado == "PENDIENTE").count()
-        )
+        notif_pendientes = db.query(Notificacion).filter(Notificacion.estado == "PENDIENTE").count()
 
         actualizaciones["notificaciones"] = {
             "pendientes": notif_pendientes,
@@ -1445,7 +1310,5 @@ def obtener_actualizacion_tiempo_real(
     return {
         "actualizaciones": actualizaciones,
         "timestamp_servidor": datetime.now(),
-        "componentes_actualizados": (
-            componentes.split(",") if componentes else ["todos"]
-        ),
+        "componentes_actualizados": (componentes.split(",") if componentes else ["todos"]),
     }

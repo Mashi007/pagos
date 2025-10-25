@@ -72,9 +72,7 @@ class ValidadorTelefono:
     }
 
     @staticmethod
-    def validar_y_formatear_telefono(
-        telefono: str, pais: str = "VENEZUELA"
-    ) -> Dict[str, Any]:
+    def validar_y_formatear_telefono(telefono: str, pais: str = "VENEZUELA") -> Dict[str, Any]:
         """
         📱 Validar y formatear número de teléfono
 
@@ -106,41 +104,23 @@ class ValidadorTelefono:
 
             # Casos de formateo específicos por país
             if pais.upper() == "VENEZUELA":
-                return ValidadorTelefono._formatear_telefono_venezolano(
-                    telefono_limpio, config
-                )
+                return ValidadorTelefono._formatear_telefono_venezolano(telefono_limpio, config)
             else:
                 # Lógica original para otros países
                 if telefono_limpio.startswith(config["codigo_pais"].replace("+", "")):
                     # Ya tiene código de país: "584241234567"
-                    numero_formateado = (
-                        "+"
-                        + telefono_limpio[:2]
-                        + " "
-                        + telefono_limpio[2:5]
-                        + " "
-                        + telefono_limpio[5:]
-                    )
+                    numero_formateado = "+" + telefono_limpio[:2] + " " + telefono_limpio[2:5] + " " + telefono_limpio[5:]
 
                 elif telefono_limpio.startswith(config["codigo_pais"]):
                     # Ya tiene + y código: "+584241234567"
                     numero_sin_plus = telefono_limpio[1:]
-                    numero_formateado = (
-                        "+"
-                        + numero_sin_plus[:2]
-                        + " "
-                        + numero_sin_plus[2:5]
-                        + " "
-                        + numero_sin_plus[5:]
-                    )
+                    numero_formateado = "+" + numero_sin_plus[:2] + " " + numero_sin_plus[2:5] + " " + numero_sin_plus[5:]
 
                 elif len(telefono_limpio) == config["longitud_sin_codigo"]:
                     # Solo número local: "4241234567"
                     operadora = telefono_limpio[:3]
                     if operadora in config["operadoras"]:
-                        numero_formateado = (
-                            f"{config['codigo_pais']} {operadora} {telefono_limpio[3:]}"
-                        )
+                        numero_formateado = f"{config['codigo_pais']} {operadora} {telefono_limpio[3:]}"
                     else:
                         return {
                             "valido": False,
@@ -187,9 +167,7 @@ class ValidadorTelefono:
             }
 
     @staticmethod
-    def _formatear_telefono_venezolano(
-        telefono_limpio: str, config: Dict
-    ) -> Dict[str, Any]:
+    def _formatear_telefono_venezolano(telefono_limpio: str, config: Dict) -> Dict[str, Any]:
         """
         📱 Formatear teléfono venezolano con nuevos requisitos:
         - Debe empezar por +58
@@ -344,9 +322,7 @@ class ValidadorCedula:
     }
 
     @staticmethod
-    def validar_y_formatear_cedula(
-        cedula: str, pais: str = "VENEZUELA"
-    ) -> Dict[str, Any]:
+    def validar_y_formatear_cedula(cedula: str, pais: str = "VENEZUELA") -> Dict[str, Any]:
         """
         📝 Validar y formatear cédula
 
@@ -377,15 +353,11 @@ class ValidadorCedula:
             cedula_limpia = re.sub(r"[^\w]", "", cedula.strip().upper())
 
             if pais.upper() == "VENEZUELA":
-                return ValidadorCedula._formatear_cedula_venezolana(
-                    cedula_limpia, config
-                )
+                return ValidadorCedula._formatear_cedula_venezolana(cedula_limpia, config)
             elif pais.upper() == "DOMINICANA":
                 return ValidadorCedula._formatear_cedula_dominicana(cedula, config)
             elif pais.upper() == "COLOMBIA":
-                return ValidadorCedula._formatear_cedula_colombiana(
-                    cedula_limpia, config
-                )
+                return ValidadorCedula._formatear_cedula_colombiana(cedula_limpia, config)
             else:
                 return {
                     "valido": False,
@@ -403,9 +375,7 @@ class ValidadorCedula:
             }
 
     @staticmethod
-    def _formatear_cedula_venezolana(
-        cedula_limpia: str, config: Dict
-    ) -> Dict[str, Any]:
+    def _formatear_cedula_venezolana(cedula_limpia: str, config: Dict) -> Dict[str, Any]:
         """
         Formatear cédula venezolana con validación estricta:
         - DEBE empezar por V, E o J (siempre)
@@ -478,9 +448,7 @@ class ValidadorCedula:
                 "valor_original": cedula_limpia,
                 "valor_formateado": cedula_formateada,
                 "pais": "VENEZUELA",
-                "tipo": {"V": "Venezolano", "E": "Extranjero", "J": "Jurídico"}.get(
-                    prefijo, "Desconocido"
-                ),
+                "tipo": {"V": "Venezolano", "E": "Extranjero", "J": "Jurídico"}.get(prefijo, "Desconocido"),
                 "cambio_realizado": cedula_limpia != cedula_formateada,
                 "prefijo": prefijo,
                 "numero": numero,
@@ -529,9 +497,7 @@ class ValidadorCedula:
         }
 
     @staticmethod
-    def _formatear_cedula_colombiana(
-        cedula_limpia: str, config: Dict
-    ) -> Dict[str, Any]:
+    def _formatear_cedula_colombiana(cedula_limpia: str, config: Dict) -> Dict[str, Any]:
         """Formatear cédula colombiana"""
         if cedula_limpia.isdigit() and len(cedula_limpia) in config["longitud_numero"]:
             return {
@@ -875,9 +841,7 @@ class ValidadorMonto:
                 }
 
             # Validar límites específicos por tipo
-            error_limite = ValidadorMonto._validar_limites_por_tipo(
-                monto_decimal, tipo_monto, saldo_maximo
-            )
+            error_limite = ValidadorMonto._validar_limites_por_tipo(monto_decimal, tipo_monto, saldo_maximo)
             if error_limite:
                 return {
                     "valido": False,
@@ -908,9 +872,7 @@ class ValidadorMonto:
             }
 
     @staticmethod
-    def _validar_limites_por_tipo(
-        monto: Decimal, tipo: str, saldo_maximo: Optional[Decimal]
-    ) -> Optional[str]:
+    def _validar_limites_por_tipo(monto: Decimal, tipo: str, saldo_maximo: Optional[Decimal]) -> Optional[str]:
         """Validar límites específicos por tipo de monto"""
         if tipo == "TOTAL_FINANCIAMIENTO":
             if monto < Decimal("1"):
@@ -922,9 +884,7 @@ class ValidadorMonto:
             if monto < Decimal("1"):
                 return "Monto mínimo de pago: $1"
             if saldo_maximo and monto > saldo_maximo:
-                return (
-                    f"Monto no puede exceder el saldo pendiente: ${saldo_maximo:,.2f}"
-                )
+                return f"Monto no puede exceder el saldo pendiente: ${saldo_maximo:,.2f}"
 
         elif tipo == "CUOTA_INICIAL":
             if monto < Decimal("0"):
@@ -1135,9 +1095,7 @@ class ServicioCorreccionDatos:
     """
 
     @staticmethod
-    def corregir_datos_cliente(
-        cliente_id: int, datos_correccion: Dict[str, Any], pais: str = "VENEZUELA"
-    ) -> Dict[str, Any]:
+    def corregir_datos_cliente(cliente_id: int, datos_correccion: Dict[str, Any], pais: str = "VENEZUELA") -> Dict[str, Any]:
         """
         Corregir múltiples datos de un cliente
         """
@@ -1154,14 +1112,10 @@ class ServicioCorreccionDatos:
             for campo, nuevo_valor in datos_correccion.items():
                 try:
                     if campo == "telefono":
-                        resultado = ValidadorTelefono.validar_y_formatear_telefono(
-                            nuevo_valor, pais
-                        )
+                        resultado = ValidadorTelefono.validar_y_formatear_telefono(nuevo_valor, pais)
 
                     elif campo == "cedula":
-                        resultado = ValidadorCedula.validar_y_formatear_cedula(
-                            nuevo_valor, pais
-                        )
+                        resultado = ValidadorCedula.validar_y_formatear_cedula(nuevo_valor, pais)
 
                     elif campo == "email":
                         resultado = ValidadorEmail.validar_email(nuevo_valor)
@@ -1169,9 +1123,7 @@ class ServicioCorreccionDatos:
                     elif campo == "fecha_entrega":
                         resultado = ValidadorFecha.validar_fecha_entrega(nuevo_valor)
                         if resultado.get("requiere_recalculo_amortizacion"):
-                            resultados_correccion["requiere_recalculo_amortizacion"] = (
-                                True
-                            )
+                            resultados_correccion["requiere_recalculo_amortizacion"] = True
 
                     elif campo == "fecha_pago":
                         resultado = ValidadorFecha.validar_fecha_pago(nuevo_valor)
@@ -1182,14 +1134,10 @@ class ServicioCorreccionDatos:
                         "cuota_inicial",
                     ]:
                         tipo_monto = campo.upper()
-                        resultado = ValidadorMonto.validar_y_formatear_monto(
-                            nuevo_valor, tipo_monto
-                        )
+                        resultado = ValidadorMonto.validar_y_formatear_monto(nuevo_valor, tipo_monto)
 
                     elif campo == "amortizaciones":
-                        resultado = ValidadorAmortizaciones.validar_amortizaciones(
-                            nuevo_valor
-                        )
+                        resultado = ValidadorAmortizaciones.validar_amortizaciones(nuevo_valor)
 
                     else:
                         # Campo no requiere validación especial
@@ -1207,9 +1155,7 @@ class ServicioCorreccionDatos:
                                 "campo": campo,
                                 "valor_anterior": resultado["valor_original"],
                                 "valor_nuevo": resultado["valor_formateado"],
-                                "cambio_realizado": resultado.get(
-                                    "cambio_realizado", False
-                                ),
+                                "cambio_realizado": resultado.get("cambio_realizado", False),
                             }
                         )
 
@@ -1221,8 +1167,7 @@ class ServicioCorreccionDatos:
                                 "campo": campo,
                                 "error": resultado["error"],
                                 "valor_intentado": nuevo_valor,
-                                "sugerencia": resultado.get("formato_esperado")
-                                or resultado.get("ejemplo_valido"),
+                                "sugerencia": resultado.get("formato_esperado") or resultado.get("ejemplo_valido"),
                             }
                         )
 
@@ -1253,9 +1198,7 @@ class ServicioCorreccionDatos:
         """
         try:
             # Obtener clientes con posibles errores
-            clientes = (
-                db.query(Cliente).filter(Cliente.activo.is_(True)).limit(limite).all()
-            )
+            clientes = db.query(Cliente).filter(Cliente.activo.is_(True)).limit(limite).all()
 
             clientes_con_errores = []
             tipos_errores = {
@@ -1317,12 +1260,7 @@ class ServicioCorreccionDatos:
                     )
 
             # Verificar pagos con errores
-            pagos_error = (
-                db.query(Pago)
-                .filter(Pago.observaciones.like("%ERROR%"))
-                .limit(50)
-                .all()
-            )
+            pagos_error = db.query(Pago).filter(Pago.observaciones.like("%ERROR%")).limit(50).all()
 
             for pago in pagos_error:
                 if "MONTO PAGADO" in pago.observaciones:
@@ -1333,9 +1271,7 @@ class ServicioCorreccionDatos:
                 "fecha_analisis": datetime.now().isoformat(),
                 "clientes_analizados": len(clientes),
                 "clientes_con_errores": len(clientes_con_errores),
-                "porcentaje_errores": round(
-                    len(clientes_con_errores) / len(clientes) * 100, 2
-                ),
+                "porcentaje_errores": round(len(clientes_con_errores) / len(clientes) * 100, 2),
                 "tipos_errores_encontrados": tipos_errores,
                 "clientes_requieren_correccion": clientes_con_errores[:20],  # Top 20
                 "acciones_recomendadas": [
@@ -1362,9 +1298,7 @@ class AutoFormateador:
     """
 
     @staticmethod
-    def formatear_mientras_escribe(
-        campo: str, valor: str, pais: str = "VENEZUELA"
-    ) -> Dict[str, Any]:
+    def formatear_mientras_escribe(campo: str, valor: str, pais: str = "VENEZUELA") -> Dict[str, Any]:
         """
         ✨ Formatear valor mientras el usuario escribe (para frontend)
         """
@@ -1447,11 +1381,7 @@ class AutoFormateador:
             elif len(limpio) >= 2:
                 prefijo = limpio[0]
                 numero = limpio[1:]
-                valido = (
-                    prefijo in ["V", "E", "J"]
-                    and numero.isdigit()
-                    and 7 <= len(numero) <= 10
-                )
+                valido = prefijo in ["V", "E", "J"] and numero.isdigit() and 7 <= len(numero) <= 10
             else:
                 valido = False
 
@@ -1566,11 +1496,7 @@ class ValidadorEdad:
 
             # Calcular edad
             hoy = date.today()
-            edad = (
-                hoy.year
-                - fecha.year
-                - ((hoy.month, hoy.day) < (fecha.month, fecha.day))
-            )
+            edad = hoy.year - fecha.year - ((hoy.month, hoy.day) < (fecha.month, fecha.day))
 
             # Validar que no sea fecha futura
             if fecha > hoy:
@@ -1655,15 +1581,11 @@ class ValidadorCoherenciaFinanciera:
 
             # 1. Cuota inicial no puede ser mayor al total
             if cuota_inicial > total_financiamiento:
-                errores.append(
-                    "La cuota inicial no puede ser mayor al total del financiamiento"
-                )
+                errores.append("La cuota inicial no puede ser mayor al total del financiamiento")
 
             # 2. Validar cuota inicial mínima (10%)
             cuota_minima = (
-                total_financiamiento
-                * Decimal(ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE)
-                / Decimal("100")
+                total_financiamiento * Decimal(ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE) / Decimal("100")
             )
             if cuota_inicial < cuota_minima:
                 errores.append(
@@ -1672,9 +1594,7 @@ class ValidadorCoherenciaFinanciera:
 
             # 3. Advertencia si cuota inicial es muy alta
             cuota_maxima_recomendada = (
-                total_financiamiento
-                * Decimal(ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MAXIMA_PORCENTAJE)
-                / Decimal("100")
+                total_financiamiento * Decimal(ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MAXIMA_PORCENTAJE) / Decimal("100")
             )
             if cuota_inicial > cuota_maxima_recomendada:
                 advertencias.append(
@@ -1687,30 +1607,16 @@ class ValidadorCoherenciaFinanciera:
                 errores.append("El monto a financiar debe ser mayor a cero")
 
             # 5. Validar número de amortizaciones coherente con modalidad
-            if (
-                modalidad_pago == "SEMANAL" and numero_amortizaciones > 208
-            ):  # 4 años máximo
-                advertencias.append(
-                    "Número de amortizaciones muy alto para modalidad semanal"
-                )
-            elif (
-                modalidad_pago == "QUINCENAL" and numero_amortizaciones > 96
-            ):  # 4 años máximo
-                advertencias.append(
-                    "Número de amortizaciones muy alto para modalidad quincenal"
-                )
-            elif (
-                modalidad_pago == "MENSUAL" and numero_amortizaciones > 84
-            ):  # 7 años máximo
-                advertencias.append(
-                    "Número de amortizaciones muy alto para modalidad mensual"
-                )
+            if modalidad_pago == "SEMANAL" and numero_amortizaciones > 208:  # 4 años máximo
+                advertencias.append("Número de amortizaciones muy alto para modalidad semanal")
+            elif modalidad_pago == "QUINCENAL" and numero_amortizaciones > 96:  # 4 años máximo
+                advertencias.append("Número de amortizaciones muy alto para modalidad quincenal")
+            elif modalidad_pago == "MENSUAL" and numero_amortizaciones > 84:  # 7 años máximo
+                advertencias.append("Número de amortizaciones muy alto para modalidad mensual")
 
             # Calcular cuota aproximada
             if monto_financiado > 0 and numero_amortizaciones > 0:
-                cuota_aproximada = monto_financiado / Decimal(
-                    str(numero_amortizaciones)
-                )
+                cuota_aproximada = monto_financiado / Decimal(str(numero_amortizaciones))
             else:
                 cuota_aproximada = Decimal("0")
 
@@ -1725,9 +1631,7 @@ class ValidadorCoherenciaFinanciera:
                         "cuota_inicial": float(cuota_inicial),
                         "monto_financiado": float(monto_financiado),
                         "porcentaje_cuota_inicial": (
-                            float((cuota_inicial / total_financiamiento * 100))
-                            if total_financiamiento > 0
-                            else 0
+                            float((cuota_inicial / total_financiamiento * 100)) if total_financiamiento > 0 else 0
                         ),
                         "cuota_aproximada": float(cuota_aproximada),
                     },
@@ -1742,9 +1646,7 @@ class ValidadorCoherenciaFinanciera:
                         "cuota_inicial": float(cuota_inicial),
                         "monto_financiado": float(monto_financiado),
                         "porcentaje_cuota_inicial": (
-                            float((cuota_inicial / total_financiamiento * 100))
-                            if total_financiamiento > 0
-                            else 0
+                            float((cuota_inicial / total_financiamiento * 100)) if total_financiamiento > 0 else 0
                         ),
                         "cuota_aproximada": float(cuota_aproximada),
                     },
@@ -1762,9 +1664,7 @@ class ValidadorDuplicados:
     """
 
     @staticmethod
-    def validar_chasis_unico(
-        chasis: str, db_session, cliente_id: Optional[int] = None
-    ) -> Dict[str, Any]:
+    def validar_chasis_unico(chasis: str, db_session, cliente_id: Optional[int] = None) -> Dict[str, Any]:
         """
         Validar que el número de chasis sea único en la BD
 
@@ -1816,9 +1716,7 @@ class ValidadorDuplicados:
             return {"valido": False, "error": f"Error al validar chasis: {str(e)}"}
 
     @staticmethod
-    def validar_email_unico(
-        email: str, db_session, cliente_id: Optional[int] = None
-    ) -> Dict[str, Any]:
+    def validar_email_unico(email: str, db_session, cliente_id: Optional[int] = None) -> Dict[str, Any]:
         """
         Validar que el email sea único (opcional, puede haber clientes sin email)
         """

@@ -74,16 +74,10 @@ def log_security_event(
         security_audit_logger.info(f"SECURITY EVENT: {event_data}")
 
 
-def log_login_attempt(
-    email: str, ip_address: str, success: bool, reason: Optional[str] = None
-):
+def log_login_attempt(email: str, ip_address: str, success: bool, reason: Optional[str] = None):
     """Registra un intento de login"""
     log_security_event(
-        event_type=(
-            SecurityEventType.LOGIN_SUCCESS
-            if success
-            else SecurityEventType.LOGIN_FAILED
-        ),
+        event_type=(SecurityEventType.LOGIN_SUCCESS if success else SecurityEventType.LOGIN_FAILED),
         user_email=email,
         ip_address=ip_address,
         details={"reason": reason} if reason else None,
@@ -102,9 +96,7 @@ def log_password_change(user_email: str, user_id: int, ip_address: str, success:
     )
 
 
-def log_unauthorized_access(
-    endpoint: str, user_email: Optional[str], ip_address: str, reason: str
-):
+def log_unauthorized_access(endpoint: str, user_email: Optional[str], ip_address: str, reason: str):
     """Registra un intento de acceso no autorizado"""
     log_security_event(
         event_type=SecurityEventType.UNAUTHORIZED_ACCESS,

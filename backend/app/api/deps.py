@@ -51,9 +51,7 @@ def get_current_user(
         logger.info(f"🔍 Validando token JWT - Longitud: {len(token)}")
 
         payload = decode_token(token)
-        logger.info(
-            f"✅ Token decodificado exitosamente - Payload keys: {list(payload.keys())}"
-        )
+        logger.info(f"✅ Token decodificado exitosamente - Payload keys: {list(payload.keys())}")
 
         # Verificar que sea un access token
         if payload.get("type") != "access":
@@ -76,15 +74,11 @@ def get_current_user(
 
     if user is None:
         logger.error(f"❌ Usuario no encontrado en BD - ID: {user_id}")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
 
     if not user.is_active:
         logger.warning(f"⚠️ Usuario inactivo - Email: {user.email}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo")
 
     logger.info(f"✅ Usuario autenticado exitosamente - Email: {user.email}")
     return user
@@ -106,9 +100,7 @@ def get_current_active_user(
         HTTPException: Si el usuario está inactivo
     """
     if not current_user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo")
     return current_user
 
 

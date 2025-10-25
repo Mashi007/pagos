@@ -8,9 +8,7 @@ class Analista(Base):
     __tablename__ = "analistas"
 
     id = Column(Integer, primary_key=True, index=True)
-    nombre = Column(
-        String(255), nullable=False, index=True
-    )  # Nombre completo (incluye apellido)
+    nombre = Column(String(255), nullable=False, index=True)  # Nombre completo (incluye apellido)
     activo = Column(Boolean, default=True, nullable=False)
 
     # Timestamps
@@ -58,7 +56,5 @@ class Analista(Base):
             "activo": self.activo,
             "notas": "",
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "fecha_eliminacion": (
-                self.fecha_eliminacion.isoformat() if self.fecha_eliminacion else None
-            ),
+            "fecha_eliminacion": (self.fecha_eliminacion.isoformat() if self.fecha_eliminacion else None),
         }

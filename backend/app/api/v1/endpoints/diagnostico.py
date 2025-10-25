@@ -78,12 +78,8 @@ def diagnostico_completo_sistema(db: Session = Depends(get_db)):
         # 3. Verificar datos de configuración
         try:
             analistas_activos = db.query(Analista).filter(Analista.activo).count()
-            concesionarios_activos = (
-                db.query(Concesionario).filter(Concesionario.activo).count()
-            )
-            modelos_activos = (
-                db.query(ModeloVehiculo).filter(ModeloVehiculo.activo).count()
-            )
+            concesionarios_activos = db.query(Concesionario).filter(Concesionario.activo).count()
+            modelos_activos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo).count()
 
             diagnostico["componentes"]["configuracion"] = {
                 "status": "ok",
@@ -129,9 +125,7 @@ def diagnostico_completo_sistema(db: Session = Depends(get_db)):
         errores = []
         for componente, info in diagnostico["componentes"].items():
             if info.get("status") == "error":
-                errores.append(
-                    f"{componente}: {info.get('message', 'Error desconocido')}"
-                )
+                errores.append(f"{componente}: {info.get('message', 'Error desconocido')}")
 
         if errores:
             diagnostico["status"] = "error"
@@ -225,9 +219,7 @@ def monitoreo_tiempo_real(db: Session = Depends(get_db)):
 
         # Verificar datos de configuración activos
         analistas_activos = db.query(Analista).filter(Analista.activo).count()
-        concesionarios_activos = (
-            db.query(Concesionario).filter(Concesionario.activo).count()
-        )
+        concesionarios_activos = db.query(Concesionario).filter(Concesionario.activo).count()
         modelos_activos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo).count()
 
         return {
@@ -243,11 +235,7 @@ def monitoreo_tiempo_real(db: Session = Depends(get_db)):
                     "activos": usuarios_activos,
                     "administradores": usuarios_admin,
                     "porcentaje_activos": round(
-                        (
-                            (usuarios_activos / usuarios_count * 100)
-                            if usuarios_count > 0
-                            else 0
-                        ),
+                        ((usuarios_activos / usuarios_count * 100) if usuarios_count > 0 else 0),
                         2,
                     ),
                 },

@@ -46,9 +46,7 @@ class MovimientoBancario(BaseModel):
     descripcion: Optional[str] = ""
     cuenta_origen: Optional[str] = Field(None, description="Número de cuenta origen")
 
-    model_config = ConfigDict(
-        json_encoders={Decimal: lambda v: float(v), date: lambda v: v.isoformat()}
-    )
+    model_config = ConfigDict(json_encoders={Decimal: lambda v: float(v), date: lambda v: v.isoformat()})
 
     @field_validator("monto")
     @classmethod
@@ -96,13 +94,9 @@ class ConciliacionMatch(BaseModel):
     monto_pago: Decimal
     fecha_pago: date
     tipo_match: TipoMatch
-    confianza: float = Field(
-        ge=0, le=MAX_CONFIDENCE, description="Porcentaje de confianza del match"
-    )
+    confianza: float = Field(ge=0, le=MAX_CONFIDENCE, description="Porcentaje de confianza del match")
 
-    model_config = ConfigDict(
-        json_encoders={Decimal: lambda v: float(v), date: lambda v: v.isoformat()}
-    )
+    model_config = ConfigDict(json_encoders={Decimal: lambda v: float(v), date: lambda v: v.isoformat()})
 
 
 class ResultadoConciliacion(BaseModel):
@@ -126,8 +120,7 @@ class ResultadoConciliacion(BaseModel):
     def calcular_porcentaje(cls, v, info):
         if "total_movimientos" in info.data and info.data["total_movimientos"] > 0:
             return round(
-                (info.data.get("conciliados", 0) / info.data["total_movimientos"])
-                * 100,
+                (info.data.get("conciliados", 0) / info.data["total_movimientos"]) * 100,
                 2,
             )
         return 0.0
@@ -337,15 +330,9 @@ class ValidacionArchivoBancario(BaseModel):
 class ConciliacionMasiva(BaseModel):
     """Schema para conciliación masiva"""
 
-    movimientos_a_aplicar: List[int] = Field(
-        ..., description="IDs de movimientos a aplicar"
-    )
-    aplicar_exactos: bool = Field(
-        True, description="Aplicar coincidencias exactas automáticamente"
-    )
-    aplicar_parciales: bool = Field(
-        False, description="Aplicar coincidencias parciales"
-    )
+    movimientos_a_aplicar: List[int] = Field(..., description="IDs de movimientos a aplicar")
+    aplicar_exactos: bool = Field(True, description="Aplicar coincidencias exactas automáticamente")
+    aplicar_parciales: bool = Field(False, description="Aplicar coincidencias parciales")
     observaciones: Optional[str] = None
 
 
@@ -388,6 +375,4 @@ class HistorialConciliacion(BaseModel):
     estado: EstadoConciliacion
     observaciones: Optional[str] = None
 
-    model_config = ConfigDict(
-        from_attributes=True, json_encoders={datetime: lambda v: v.isoformat()}
-    )
+    model_config = ConfigDict(from_attributes=True, json_encoders={datetime: lambda v: v.isoformat()})

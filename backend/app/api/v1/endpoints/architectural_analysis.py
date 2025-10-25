@@ -136,9 +136,7 @@ class ArchitecturalAnalysisSystem:
         with self.lock:
             for component_id, component_info in self.system_components.items():
                 try:
-                    health_status = self._check_component_health(
-                        component_id, component_info
-                    )
+                    health_status = self._check_component_health(component_id, component_info)
                     self.component_health[component_id] = health_status
 
                     # Registrar métricas
@@ -153,9 +151,7 @@ class ArchitecturalAnalysisSystem:
 
                     # Limitar historial de métricas
                     if len(self.component_metrics[component_id]) > 100:
-                        self.component_metrics[component_id] = self.component_metrics[
-                            component_id
-                        ][-100:]
+                        self.component_metrics[component_id] = self.component_metrics[component_id][-100:]
 
                 except Exception as e:
                     logger.error(f"Error monitoreando componente {component_id}: {e}")
@@ -165,9 +161,7 @@ class ArchitecturalAnalysisSystem:
                         "overall_health_score": 0,
                     }
 
-    def _check_component_health(
-        self, component_id: str, component_info: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _check_component_health(self, component_id: str, component_info: Dict[str, Any]) -> Dict[str, Any]:
         """Verificar salud de un componente específico"""
         health_checks = component_info.get("health_checks", [])
         health_results = {}
@@ -205,9 +199,7 @@ class ArchitecturalAnalysisSystem:
             "metrics": self._extract_component_metrics(component_id),
         }
 
-    def _perform_health_check(
-        self, component_id: str, check_name: str
-    ) -> Dict[str, Any]:
+    def _perform_health_check(self, component_id: str, check_name: str) -> Dict[str, Any]:
         """Realizar verificación de salud específica"""
         if component_id == "jwt_handler":
             return self._check_jwt_handler(check_name)
@@ -568,30 +560,22 @@ class ArchitecturalAnalysisSystem:
 
         # Identificar cuellos de botella
         for component_id in self.component_health:
-            health_score = self.component_health[component_id].get(
-                "overall_health_score", 0
-            )
+            health_score = self.component_health[component_id].get("overall_health_score", 0)
             if health_score < 0.7:
                 dependency_analysis["bottlenecks"].append(
                     {
                         "component": component_id,
                         "health_score": health_score,
-                        "impact": (
-                            "high" if component_id in critical_components else "medium"
-                        ),
+                        "impact": ("high" if component_id in critical_components else "medium"),
                     }
                 )
 
         # Generar recomendaciones
         if dependency_analysis["bottlenecks"]:
-            dependency_analysis["recommendations"].append(
-                "🔧 Revisar componentes con baja salud"
-            )
+            dependency_analysis["recommendations"].append("🔧 Revisar componentes con baja salud")
 
         if not dependency_analysis["bottlenecks"]:
-            dependency_analysis["recommendations"].append(
-                "✅ Arquitectura funcionando correctamente"
-            )
+            dependency_analysis["recommendations"].append("✅ Arquitectura funcionando correctamente")
 
         return dependency_analysis
 
@@ -602,23 +586,9 @@ class ArchitecturalAnalysisSystem:
 
             # Estadísticas generales
             total_components = len(self.system_components)
-            healthy_components = len(
-                [
-                    c
-                    for c in self.component_health.values()
-                    if c.get("status") in ["excellent", "good"]
-                ]
-            )
-            degraded_components = len(
-                [
-                    c
-                    for c in self.component_health.values()
-                    if c.get("status") == "degraded"
-                ]
-            )
-            poor_components = len(
-                [c for c in self.component_health.values() if c.get("status") == "poor"]
-            )
+            healthy_components = len([c for c in self.component_health.values() if c.get("status") in ["excellent", "good"]])
+            degraded_components = len([c for c in self.component_health.values() if c.get("status") == "degraded"])
+            poor_components = len([c for c in self.component_health.values() if c.get("status") == "poor"])
 
             # Análisis de dependencias
             dependency_analysis = self.analyze_component_dependencies()
@@ -631,21 +601,15 @@ class ArchitecturalAnalysisSystem:
                     "degraded_components": degraded_components,
                     "poor_components": poor_components,
                     "overall_health_percentage": (
-                        (healthy_components / total_components * 100)
-                        if total_components > 0
-                        else 0
+                        (healthy_components / total_components * 100) if total_components > 0 else 0
                     ),
                 },
                 "component_health": self.component_health,
                 "dependency_analysis": dependency_analysis,
                 "system_metrics": {
                     "cpu_usage": psutil.cpu_percent() if PSUTIL_AVAILABLE else 0,
-                    "memory_usage": (
-                        psutil.virtual_memory().percent if PSUTIL_AVAILABLE else 0
-                    ),
-                    "disk_usage": (
-                        psutil.disk_usage("/").percent if PSUTIL_AVAILABLE else 0
-                    ),
+                    "memory_usage": (psutil.virtual_memory().percent if PSUTIL_AVAILABLE else 0),
+                    "disk_usage": (psutil.disk_usage("/").percent if PSUTIL_AVAILABLE else 0),
                 },
             }
 
@@ -692,9 +656,7 @@ async def get_component_health(
 
 
 @router.get("/all-components-health")
-async def get_all_components_health(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def get_all_components_health(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     🏗️ Obtener salud de todos los componentes
     """
@@ -718,9 +680,7 @@ async def get_all_components_health(
 
 
 @router.get("/component-dependencies")
-async def get_component_dependencies(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def get_component_dependencies(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     🔗 Análisis de dependencias entre componentes
     """
@@ -743,9 +703,7 @@ async def get_component_dependencies(
 
 
 @router.get("/architectural-summary")
-async def get_architectural_summary_endpoint(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def get_architectural_summary_endpoint(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     📊 Resumen arquitectural general
     """
@@ -782,9 +740,7 @@ async def force_component_health_check(
                 raise HTTPException(status_code=404, detail="Componente no encontrado")
 
             component_info = architectural_system.system_components[component_id]
-            health_status = architectural_system._check_component_health(
-                component_id, component_info
-            )
+            health_status = architectural_system._check_component_health(component_id, component_info)
             architectural_system.component_health[component_id] = health_status
 
         return {

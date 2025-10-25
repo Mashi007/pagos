@@ -28,9 +28,7 @@ class AuditLogger:
     """Logger especializado para auditoría de autenticación"""
 
     @staticmethod
-    def log_request(
-        request: Request, response: Response, user_id: str = None, error: str = None
-    ):
+    def log_request(request: Request, response: Response, user_id: str = None, error: str = None):
         """Registrar request en auditoría"""
         timestamp = datetime.now()
 
@@ -45,9 +43,7 @@ class AuditLogger:
             "error": error,
             "auth_header_present": "authorization" in request.headers,
             "auth_header_type": (
-                request.headers.get("authorization", "").split(" ")[0]
-                if request.headers.get("authorization")
-                else None
+                request.headers.get("authorization", "").split(" ")[0] if request.headers.get("authorization") else None
             ),
         }
 
@@ -61,19 +57,13 @@ class AuditLogger:
 
         # Log específico para errores 401
         if response.status_code == 401:
-            logger.warning(
-                f"🔒 401 Unauthorized - {request.method} {request.url} - Error: {error}"
-            )
+            logger.warning(f"🔒 401 Unauthorized - {request.method} {request.url} - Error: {error}")
 
     @staticmethod
     def get_recent_logs(minutes: int = 60) -> List[Dict]:
         """Obtener logs recientes"""
         cutoff = datetime.now() - timedelta(minutes=minutes)
-        return [
-            log
-            for log in audit_logs
-            if datetime.fromisoformat(log["timestamp"]) > cutoff
-        ]
+        return [log for log in audit_logs if datetime.fromisoformat(log["timestamp"]) > cutoff]
 
     @staticmethod
     def get_error_summary() -> Dict[str, Any]:
@@ -133,17 +123,14 @@ async def dashboard_diagnostico(db: Session = Depends(get_db)):
         recent_logs = AuditLogger.get_recent_logs(60)[-20:]
 
         # 5. Patrones de error más comunes
-        top_errors = sorted(error_patterns.items(), key=lambda x: x[1], reverse=True)[
-            :5
-        ]
+        top_errors = sorted(error_patterns.items(), key=lambda x: x[1], reverse=True)[:5]
 
         # 6. Análisis de autenticación
         auth_analysis = {
             "total_401_errors": request_stats_summary["status_counts"].get(401, 0),
             "total_requests": request_stats_summary["total_requests"],
             "error_rate": (
-                request_stats_summary["status_counts"].get(401, 0)
-                / max(request_stats_summary["total_requests"], 1)
+                request_stats_summary["status_counts"].get(401, 0) / max(request_stats_summary["total_requests"], 1)
             )
             * 100,
         }
@@ -159,9 +146,7 @@ async def dashboard_diagnostico(db: Session = Depends(get_db)):
                 "top_errors": top_errors,
                 "recent_logs": recent_logs,
             },
-            "recommendations": _generate_dashboard_recommendations(
-                auth_analysis, user_stats
-            ),
+            "recommendations": _generate_dashboard_recommendations(auth_analysis, user_stats),
         }
 
     except Exception as e:
@@ -244,11 +229,7 @@ async def health_check_detallado(db: Session = Depends(get_db)):
             admin_ok = admin_count > 0
             checks["admin_users"] = {
                 "status": "healthy" if admin_ok else "unhealthy",
-                "message": (
-                    f"Found {admin_count} admin users"
-                    if admin_ok
-                    else "No admin users found"
-                ),
+                "message": (f"Found {admin_count} admin users" if admin_ok else "No admin users found"),
                 "count": admin_count,
             }
         except Exception as e:
@@ -259,9 +240,7 @@ async def health_check_detallado(db: Session = Depends(get_db)):
 
         # 4. Verificar logs de auditoría
         recent_logs = AuditLogger.get_recent_logs(5)  # Últimos 5 minutos
-        error_rate = len(
-            [log for log in recent_logs if log["status_code"] >= 400]
-        ) / max(len(recent_logs), 1)
+        error_rate = len([log for log in recent_logs if log["status_code"] >= 400]) / max(len(recent_logs), 1)
 
         checks["audit_logs"] = {
             "status": "healthy" if error_rate < 0.5 else "warning",
@@ -283,15 +262,9 @@ async def health_check_detallado(db: Session = Depends(get_db)):
             "checks": checks,
             "summary": {
                 "total_checks": len(checks),
-                "healthy_checks": len(
-                    [c for c in checks.values() if c["status"] == "healthy"]
-                ),
-                "warning_checks": len(
-                    [c for c in checks.values() if c["status"] == "warning"]
-                ),
-                "unhealthy_checks": len(
-                    [c for c in checks.values() if c["status"] == "unhealthy"]
-                ),
+                "healthy_checks": len([c for c in checks.values() if c["status"] == "healthy"]),
+                "warning_checks": len([c for c in checks.values() if c["status"] == "warning"]),
+                "unhealthy_checks": len([c for c in checks.values() if c["status"] == "unhealthy"]),
             },
         }
 
@@ -330,33 +303,23 @@ async def limpiar_logs_auditoria():
         }
 
 
-def _generate_dashboard_recommendations(
-    auth_analysis: Dict, user_stats: Dict
-) -> List[str]:
+def _generate_dashboard_recommendations(auth_analysis: Dict, user_stats: Dict) -> List[str]:
     """Generar recomendaciones basadas en el análisis del dashboard"""
     recommendations = []
 
     # Análisis de tasa de error
     error_rate = auth_analysis.get("error_rate", 0)
     if error_rate > 50:
-        recommendations.append(
-            "🚨 Tasa de error muy alta (>50%) - Revisar configuración de autenticación"
-        )
+        recommendations.append("🚨 Tasa de error muy alta (>50%) - Revisar configuración de autenticación")
     elif error_rate > 20:
-        recommendations.append(
-            "⚠️ Tasa de error elevada (>20%) - Monitorear logs de autenticación"
-        )
+        recommendations.append("⚠️ Tasa de error elevada (>20%) - Monitorear logs de autenticación")
 
     # Análisis de usuarios
     if user_stats.get("admin_users", 0) == 0:
-        recommendations.append(
-            "👤 No hay usuarios administradores - Crear usuario admin"
-        )
+        recommendations.append("👤 No hay usuarios administradores - Crear usuario admin")
 
     if user_stats.get("active_users", 0) == 0:
-        recommendations.append(
-            "⚠️ No hay usuarios activos - Verificar estado de usuarios"
-        )
+        recommendations.append("⚠️ No hay usuarios activos - Verificar estado de usuarios")
 
     # Recomendaciones generales
     if not recommendations:

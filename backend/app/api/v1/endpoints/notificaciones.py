@@ -114,9 +114,7 @@ async def enviar_notificacion(
             notificacion_id=nueva_notif.id,
         )
 
-    logger.info(
-        f"Notificación {nueva_notif.id} programada para envío por {notificacion.canal}"
-    )
+    logger.info(f"Notificación {nueva_notif.id} programada para envío por {notificacion.canal}")
     return nueva_notif
 
 
@@ -145,9 +143,7 @@ async def envio_masivo_notificaciones(
 
     for cliente in clientes:
         # Personalizar mensaje según template
-        mensaje = _generar_mensaje_template(
-            template=request.template, cliente=cliente, db=db
-        )
+        mensaje = _generar_mensaje_template(template=request.template, cliente=cliente, db=db)
 
         notif = Notificacion(
             cliente_id=cliente.id,
@@ -197,10 +193,7 @@ def historial_notificaciones(cliente_id: int, db: Session = Depends(get_db)):
     Obtener historial de notificaciones de un cliente.
     """
     notificaciones = (
-        db.query(Notificacion)
-        .filter(Notificacion.cliente_id == cliente_id)
-        .order_by(Notificacion.creado_en.desc())
-        .all()
+        db.query(Notificacion).filter(Notificacion.cliente_id == cliente_id).order_by(Notificacion.creado_en.desc()).all()
     )
 
     return {
@@ -251,9 +244,7 @@ def notificaciones_pendientes(db: Session = Depends(get_db)):
 
 
 @router.post("/recordatorios-automaticos")
-async def programar_recordatorios_automaticos(
-    background_tasks: BackgroundTasks, db: Session = Depends(get_db)
-):
+async def programar_recordatorios_automaticos(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
     Programar recordatorios automáticos para cuotas próximas a vencer.
     """
@@ -325,11 +316,7 @@ def _generar_mensaje_template(template: str, cliente: Cliente, db: Session) -> s
     """
     Generar mensaje personalizado según template.
     """
-    prestamos = (
-        db.query(Prestamo)
-        .filter(Prestamo.cliente_id == cliente.id, Prestamo.estado == "ACTIVO")
-        .all()
-    )
+    prestamos = db.query(Prestamo).filter(Prestamo.cliente_id == cliente.id, Prestamo.estado == "ACTIVO").all()
 
     if template == "RECORDATORIO_PAGO":
         total_deuda = sum(p.saldo_pendiente for p in prestamos)
@@ -362,9 +349,7 @@ Por favor, comuníquese con nosotros para regularizar su situación.
 
 
 @router.post("/programar-automaticas")
-async def programar_notificaciones_automaticas(
-    background_tasks: BackgroundTasks, db: Session = Depends(get_db)
-):
+async def programar_notificaciones_automaticas(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
     Programar todas las notificaciones automáticas del sistema
     Debe ejecutarse diariamente via cron job
@@ -503,11 +488,7 @@ Contacto inmediato: (021) 123-456
                 email_service.send_template_email,
                 to_email=cliente.email,
                 subject=notif.asunto,
-                template_name=(
-                    "recordatorio_pago"
-                    if "recordatorio" in notif.asunto.lower()
-                    else "mora"
-                ),
+                template_name=("recordatorio_pago" if "recordatorio" in notif.asunto.lower() else "mora"),
                 context={
                     "cliente_nombre": cliente.nombre_completo,
                     "empresa": "Financiera Automotriz",
@@ -519,19 +500,13 @@ Contacto inmediato: (021) 123-456
 
     return {
         "notificaciones_programadas": len(notificaciones_programadas),
-        "recordatorios_pre_vencimiento": len(
-            [n for n in notificaciones_programadas if n.categoria == "CUOTA_PROXIMA"]
-        ),
-        "avisos_vencidas": len(
-            [n for n in notificaciones_programadas if n.categoria == "CUOTA_VENCIDA"]
-        ),
+        "recordatorios_pre_vencimiento": len([n for n in notificaciones_programadas if n.categoria == "CUOTA_PROXIMA"]),
+        "avisos_vencidas": len([n for n in notificaciones_programadas if n.categoria == "CUOTA_VENCIDA"]),
     }
 
 
 @router.post("/confirmar-pago-recibido/{pago_id}")
-async def enviar_confirmacion_pago(
-    pago_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
-):
+async def enviar_confirmacion_pago(pago_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
     3. Confirmación de pago recibido (automática al registrar pago)
     """
@@ -622,9 +597,7 @@ Agradecemos su puntualidad y confianza.
 
 
 @router.post("/estado-cuenta-mensual")
-async def enviar_estados_cuenta_mensual(
-    background_tasks: BackgroundTasks, db: Session = Depends(get_db)
-):
+async def enviar_estados_cuenta_mensual(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
     4. Estado de cuenta mensual (primer día de cada mes)
     """
@@ -733,9 +706,7 @@ PRÓXIMOS VENCIMIENTOS:
 
 
 @router.post("/usuarios/resumen-diario")
-async def enviar_resumen_diario_usuarios(
-    background_tasks: BackgroundTasks, db: Session = Depends(get_db)
-):
+async def enviar_resumen_diario_usuarios(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
     Notificaciones diarias a usuarios
     - Resumen de vencimientos del día
@@ -751,15 +722,11 @@ async def enviar_resumen_diario_usuarios(
         db.query(Cuota)
         .join(Prestamo)
         .join(Cliente)
-        .filter(
-            Cuota.fecha_vencimiento == hoy, Cuota.estado.in_(["PENDIENTE", "PARCIAL"])
-        )
+        .filter(Cuota.fecha_vencimiento == hoy, Cuota.estado.in_(["PENDIENTE", "PARCIAL"]))
         .count()
     )
 
-    pagos_ayer = (
-        db.query(Pago).filter(Pago.fecha_pago == ayer, Pago.estado != "ANULADO").all()
-    )
+    pagos_ayer = db.query(Pago).filter(Pago.fecha_pago == ayer, Pago.estado != "ANULADO").all()
 
     total_cobrado_ayer = sum(float(p.monto_pagado) for p in pagos_ayer)
 
@@ -768,24 +735,16 @@ async def enviar_resumen_diario_usuarios(
         db.query(Cliente)
         .join(Prestamo)
         .join(Cuota)
-        .filter(
-            Cuota.fecha_vencimiento == ayer, Cuota.estado == "VENCIDA", Cliente.activo
-        )
+        .filter(Cuota.fecha_vencimiento == ayer, Cuota.estado == "VENCIDA", Cliente.activo)
         .distinct()
         .all()
     )
 
     # Clientes críticos (>30 días mora)
-    clientes_criticos = (
-        db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 30).count()
-    )
+    clientes_criticos = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 30).count()
 
     # Obtener usuarios para notificar
-    usuarios_notificar = (
-        db.query(User)
-        .filter(User.is_admin, User.is_active, User.email.isnot(None))
-        .all()
-    )
+    usuarios_notificar = db.query(User).filter(User.is_admin, User.is_active, User.email.isnot(None)).all()
 
     for usuario in usuarios_notificar:
         mensaje = f"""
@@ -842,9 +801,7 @@ Saludos.
 
 
 @router.post("/usuarios/reporte-semanal")
-async def enviar_reporte_semanal_usuarios(
-    background_tasks: BackgroundTasks, db: Session = Depends(get_db)
-):
+async def enviar_reporte_semanal_usuarios(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
     Notificaciones semanales (Lunes 9:00 AM):
     - Reporte semanal de cobranza
@@ -897,11 +854,7 @@ async def enviar_reporte_semanal_usuarios(
     )
 
     # Enviar a usuarios gerenciales
-    usuarios_gerenciales = (
-        db.query(User)
-        .filter(User.is_admin, User.is_active, User.email.isnot(None))
-        .all()
-    )
+    usuarios_gerenciales = db.query(User).filter(User.is_admin, User.is_active, User.email.isnot(None)).all()
 
     for usuario in usuarios_gerenciales:
         mensaje = f"""
@@ -963,9 +916,7 @@ Saludos.
 
 
 @router.get("/configuracion")
-def obtener_configuracion_notificaciones(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def obtener_configuracion_notificaciones(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     ⚙️ Obtener configuración de notificaciones
     """
@@ -1025,12 +976,7 @@ def historial_completo_notificaciones(
     - Estado: Enviado/Entregado/Rebotado/Error
     - Filtros por cliente, tipo, fecha
     """
-    query = (
-        db.query(Notificacion)
-        .select_from(Notificacion)
-        .outerjoin(Cliente)
-        .outerjoin(User)
-    )
+    query = db.query(Notificacion).select_from(Notificacion).outerjoin(Cliente).outerjoin(User)
 
     # Aplicar filtros
     if fecha_desde:
@@ -1051,12 +997,7 @@ def historial_completo_notificaciones(
     # Paginación
     total = query.count()
     skip = (page - 1) * page_size
-    notificaciones = (
-        query.order_by(Notificacion.creado_en.desc())
-        .offset(skip)
-        .limit(page_size)
-        .all()
-    )
+    notificaciones = query.order_by(Notificacion.creado_en.desc()).offset(skip).limit(page_size).all()
 
     return {
         "total": total,
@@ -1066,11 +1007,7 @@ def historial_completo_notificaciones(
         "notificaciones": [
             {
                 "id": n.id,
-                "destinatario": (
-                    n.cliente.nombre_completo
-                    if n.cliente
-                    else (n.user.full_name if n.user else "N/A")
-                ),
+                "destinatario": (n.cliente.nombre_completo if n.cliente else (n.user.full_name if n.user else "N/A")),
                 "tipo": n.tipo.value,
                 "categoria": n.categoria.value,
                 "asunto": n.asunto,
@@ -1084,15 +1021,9 @@ def historial_completo_notificaciones(
             for n in notificaciones
         ],
         "estadisticas": {
-            "total_enviadas": db.query(Notificacion)
-            .filter(Notificacion.estado == "ENVIADA")
-            .count(),
-            "total_fallidas": db.query(Notificacion)
-            .filter(Notificacion.estado == "FALLIDA")
-            .count(),
-            "total_pendientes": db.query(Notificacion)
-            .filter(Notificacion.estado == "PENDIENTE")
-            .count(),
+            "total_enviadas": db.query(Notificacion).filter(Notificacion.estado == "ENVIADA").count(),
+            "total_fallidas": db.query(Notificacion).filter(Notificacion.estado == "FALLIDA").count(),
+            "total_pendientes": db.query(Notificacion).filter(Notificacion.estado == "PENDIENTE").count(),
         },
     }
 

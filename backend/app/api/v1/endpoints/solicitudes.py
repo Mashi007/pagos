@@ -41,16 +41,10 @@ class SolicitudAprobacionCompleta(BaseModel):
     )
     entidad_tipo: str = Field(..., description="cliente, pago, prestamo")
     entidad_id: int = Field(..., description="ID de la entidad a modificar")
-    justificacion: str = Field(
-        ..., min_length=10, max_length=1000, description="Justificación detallada"
-    )
-    datos_solicitados: Dict[str, Any] = Field(
-        ..., description="Datos que se desean cambiar"
-    )
+    justificacion: str = Field(..., min_length=10, max_length=1000, description="Justificación detallada")
+    datos_solicitados: Dict[str, Any] = Field(..., description="Datos que se desean cambiar")
     prioridad: str = Field(default="NORMAL", description="BAJA, NORMAL, ALTA, URGENTE")
-    fecha_limite: Optional[date] = Field(
-        None, description="Fecha límite para respuesta"
-    )
+    fecha_limite: Optional[date] = Field(None, description="Fecha límite para respuesta")
 
     class Config:
         json_schema_extra = {
@@ -74,26 +68,16 @@ class FormularioModificarPago(BaseModel):
     """Formulario específico para modificar pago"""
 
     pago_id: int = Field(..., description="ID del pago a modificar")
-    motivo_modificacion: str = Field(
-        ..., description="ERROR_REGISTRO, CAMBIO_CLIENTE, AJUSTE_MONTO, OTRO"
-    )
-    justificacion: str = Field(
-        ..., min_length=20, description="Explicación detallada del motivo"
-    )
+    motivo_modificacion: str = Field(..., description="ERROR_REGISTRO, CAMBIO_CLIENTE, AJUSTE_MONTO, OTRO")
+    justificacion: str = Field(..., min_length=20, description="Explicación detallada del motivo")
 
     # Campos que se pueden modificar
     nuevo_monto: Optional[float] = Field(None, gt=0, description="Nuevo monto del pago")
-    nuevo_metodo_pago: Optional[str] = Field(
-        None, description="EFECTIVO, TRANSFERENCIA, TARJETA, CHEQUE"
-    )
+    nuevo_metodo_pago: Optional[str] = Field(None, description="EFECTIVO, TRANSFERENCIA, TARJETA, CHEQUE")
     nueva_fecha_pago: Optional[date] = Field(None, description="Nueva fecha de pago")
-    nuevo_numero_operacion: Optional[str] = Field(
-        None, description="Nuevo número de operación"
-    )
+    nuevo_numero_operacion: Optional[str] = Field(None, description="Nuevo número de operación")
     nuevo_banco: Optional[str] = Field(None, description="Nuevo banco")
-    nuevas_observaciones: Optional[str] = Field(
-        None, description="Nuevas observaciones"
-    )
+    nuevas_observaciones: Optional[str] = Field(None, description="Nuevas observaciones")
 
     prioridad: str = Field(default="NORMAL", description="BAJA, NORMAL, ALTA, URGENTE")
 
@@ -102,18 +86,10 @@ class FormularioAnularPago(BaseModel):
     """Formulario específico para anular pago"""
 
     pago_id: int = Field(..., description="ID del pago a anular")
-    motivo_anulacion: str = Field(
-        ..., description="PAGO_DUPLICADO, ERROR_CLIENTE, DEVOLUCION, FRAUDE, OTRO"
-    )
-    justificacion: str = Field(
-        ..., min_length=20, description="Explicación detallada del motivo"
-    )
-    revertir_amortizacion: bool = Field(
-        True, description="Si revertir cambios en tabla de amortización"
-    )
-    notificar_cliente: bool = Field(
-        True, description="Si notificar al cliente sobre la anulación"
-    )
+    motivo_anulacion: str = Field(..., description="PAGO_DUPLICADO, ERROR_CLIENTE, DEVOLUCION, FRAUDE, OTRO")
+    justificacion: str = Field(..., min_length=20, description="Explicación detallada del motivo")
+    revertir_amortizacion: bool = Field(True, description="Si revertir cambios en tabla de amortización")
+    notificar_cliente: bool = Field(True, description="Si notificar al cliente sobre la anulación")
     prioridad: str = Field(default="NORMAL", description="BAJA, NORMAL, ALTA, URGENTE")
 
 
@@ -125,20 +101,12 @@ class FormularioEditarCliente(BaseModel):
         ...,
         description="CORRECCION_DATOS, CAMBIO_VEHICULO, ACTUALIZACION_CONTACTO, OTRO",
     )
-    justificacion: str = Field(
-        ..., min_length=20, description="Explicación detallada del motivo"
-    )
+    justificacion: str = Field(..., min_length=20, description="Explicación detallada del motivo")
 
     # Campos que se pueden modificar
-    nuevos_datos_personales: Optional[Dict[str, Any]] = Field(
-        None, description="Datos personales a cambiar"
-    )
-    nuevos_datos_vehiculo: Optional[Dict[str, Any]] = Field(
-        None, description="Datos del vehículo a cambiar"
-    )
-    nuevos_datos_contacto: Optional[Dict[str, Any]] = Field(
-        None, description="Datos de contacto a cambiar"
-    )
+    nuevos_datos_personales: Optional[Dict[str, Any]] = Field(None, description="Datos personales a cambiar")
+    nuevos_datos_vehiculo: Optional[Dict[str, Any]] = Field(None, description="Datos del vehículo a cambiar")
+    nuevos_datos_contacto: Optional[Dict[str, Any]] = Field(None, description="Datos de contacto a cambiar")
 
     prioridad: str = Field(default="NORMAL", description="BAJA, NORMAL, ALTA, URGENTE")
 
@@ -147,26 +115,14 @@ class FormularioModificarAmortizacion(BaseModel):
     """Formulario específico para modificar amortización"""
 
     prestamo_id: int = Field(..., description="ID del préstamo")
-    motivo_modificacion: str = Field(
-        ..., description="CAMBIO_TASA, EXTENSION_PLAZO, REFINANCIAMIENTO, OTRO"
-    )
-    justificacion: str = Field(
-        ..., min_length=20, description="Explicación detallada del motivo"
-    )
+    motivo_modificacion: str = Field(..., description="CAMBIO_TASA, EXTENSION_PLAZO, REFINANCIAMIENTO, OTRO")
+    justificacion: str = Field(..., min_length=20, description="Explicación detallada del motivo")
 
     # Parámetros a modificar
-    nueva_tasa_interes: Optional[float] = Field(
-        None, ge=0, le=100, description="Nueva tasa de interés anual"
-    )
-    nuevo_numero_cuotas: Optional[int] = Field(
-        None, ge=1, le=360, description="Nuevo número de cuotas"
-    )
-    nueva_modalidad_pago: Optional[str] = Field(
-        None, description="SEMANAL, QUINCENAL, MENSUAL, BIMENSUAL"
-    )
-    nueva_fecha_inicio: Optional[date] = Field(
-        None, description="Nueva fecha de inicio"
-    )
+    nueva_tasa_interes: Optional[float] = Field(None, ge=0, le=100, description="Nueva tasa de interés anual")
+    nuevo_numero_cuotas: Optional[int] = Field(None, ge=1, le=360, description="Nuevo número de cuotas")
+    nueva_modalidad_pago: Optional[str] = Field(None, description="SEMANAL, QUINCENAL, MENSUAL, BIMENSUAL")
+    nueva_fecha_inicio: Optional[date] = Field(None, description="Nueva fecha de inicio")
 
     prioridad: str = Field(default="ALTA", description="BAJA, NORMAL, ALTA, URGENTE")
 
@@ -217,9 +173,7 @@ async def guardar_archivo_evidencia(archivo: UploadFile) -> tuple[str, str, int]
     # Leer contenido y verificar tamaño
     contenido = await archivo.read()
     if len(contenido) > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=400, detail="Archivo demasiado grande (máximo 10MB)"
-        )
+        raise HTTPException(status_code=400, detail="Archivo demasiado grande (máximo 10MB)")
 
     # Generar nombre único
     nombre_unico = f"{uuid.uuid4()}{extension}"
@@ -286,9 +240,7 @@ async def solicitar_modificacion_pago_completo(
     tamaño_archivo = None
 
     if archivo_evidencia and archivo_evidencia.filename:
-        archivo_path, tipo_archivo, tamaño_archivo = await guardar_archivo_evidencia(
-            archivo_evidencia
-        )
+        archivo_path, tipo_archivo, tamaño_archivo = await guardar_archivo_evidencia(archivo_evidencia)
 
     # Preparar datos solicitados
     datos_solicitados = {}
@@ -352,9 +304,7 @@ async def solicitar_modificacion_pago_completo(
             "id": pago.id,
             "monto_actual": float(pago.monto_pagado),
             "fecha_actual": pago.fecha_pago,
-            "cliente": (
-                pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A"
-            ),
+            "cliente": (pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A"),
         },
         "cambios_solicitados": datos_solicitados,
         "siguiente_paso": "Esperar aprobación del administrador",
@@ -389,9 +339,7 @@ async def solicitar_anulacion_pago_completo(
     tamaño_archivo = None
 
     if archivo_evidencia and archivo_evidencia.filename:
-        archivo_path, tipo_archivo, tamaño_archivo = await guardar_archivo_evidencia(
-            archivo_evidencia
-        )
+        archivo_path, tipo_archivo, tamaño_archivo = await guardar_archivo_evidencia(archivo_evidencia)
 
     # Preparar datos solicitados
     datos_solicitados = {
@@ -443,9 +391,7 @@ async def solicitar_anulacion_pago_completo(
             "id": pago.id,
             "monto": float(pago.monto_pagado),
             "fecha": pago.fecha_pago,
-            "cliente": (
-                pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A"
-            ),
+            "cliente": (pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A"),
         },
         "acciones_solicitadas": datos_solicitados,
     }
@@ -495,9 +441,7 @@ def solicitar_modificacion_pago(
         "pago_afectado": {
             "id": pago.id,
             "monto_actual": float(pago.monto_pagado),
-            "cliente": (
-                pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A"
-            ),
+            "cliente": (pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A"),
         },
     }
 
@@ -546,9 +490,7 @@ def solicitar_anulacion_pago(
             "id": pago.id,
             "monto": float(pago.monto_pagado),
             "fecha": pago.fecha_pago,
-            "cliente": (
-                pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A"
-            ),
+            "cliente": (pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A"),
         },
     }
 
@@ -620,9 +562,7 @@ def solicitar_edicion_cliente_comercial(
     """
     # Verificar permisos
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Solo administradores pueden usar este endpoint"
-        )
+        raise HTTPException(status_code=403, detail="Solo administradores pueden usar este endpoint")
 
     # Verificar que el cliente existe
     cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
@@ -676,25 +616,20 @@ def solicitar_edicion_cliente_propio(
     """
     # Verificar permisos
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Solo administradores pueden usar este endpoint"
-        )
+        raise HTTPException(status_code=403, detail="Solo administradores pueden usar este endpoint")
 
     # Verificar que el cliente existe y está asignado al analista
     cliente = (
         db.query(Cliente)
         .filter(
             Cliente.id == cliente_id,
-            Cliente.analista_id
-            == current_user.id,  # NOTA: Esto requiere mapeo User->Asesor
+            Cliente.analista_id == current_user.id,  # NOTA: Esto requiere mapeo User->Asesor
         )
         .first()
     )
 
     if not cliente:
-        raise HTTPException(
-            status_code=404, detail="Cliente no encontrado o no está asignado a usted"
-        )
+        raise HTTPException(status_code=404, detail="Cliente no encontrado o no está asignado a usted")
 
     # Crear solicitud de aprobación
     solicitud = Aprobacion(
@@ -758,12 +693,7 @@ def listar_solicitudes_pendientes(
     # Paginación
     query.count()
     skip = (page - 1) * page_size
-    solicitudes = (
-        query.order_by(Aprobacion.fecha_solicitud.desc())
-        .offset(skip)
-        .limit(page_size)
-        .all()
-    )
+    solicitudes = query.order_by(Aprobacion.fecha_solicitud.desc()).offset(skip).limit(page_size).all()
 
     # Formatear respuesta
     resultado = []
@@ -776,9 +706,7 @@ def listar_solicitudes_pendientes(
                 "entidad_id": sol.entidad_id,
                 "estado": sol.estado,
                 "justificacion": sol.justificacion,
-                "datos_solicitados": (
-                    eval(sol.datos_solicitados) if sol.datos_solicitados else {}
-                ),
+                "datos_solicitados": (eval(sol.datos_solicitados) if sol.datos_solicitados else {}),
                 "solicitante": sol.solicitante.full_name if sol.solicitante else "N/A",
                 "fecha_solicitud": sol.fecha_solicitud,
                 "fecha_revision": sol.fecha_revision,
@@ -802,9 +730,7 @@ async def aprobar_solicitud(
     """
     # Verificar permisos
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Sin permisos para aprobar solicitudes"
-        )
+        raise HTTPException(status_code=403, detail="Sin permisos para aprobar solicitudes")
 
     # Buscar solicitud
     solicitud = db.query(Aprobacion).filter(Aprobacion.id == solicitud_id).first()
@@ -847,9 +773,7 @@ async def rechazar_solicitud(
     """
     # Verificar permisos
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Sin permisos para rechazar solicitudes"
-        )
+        raise HTTPException(status_code=403, detail="Sin permisos para rechazar solicitudes")
 
     # Buscar solicitud
     solicitud = db.query(Aprobacion).filter(Aprobacion.id == solicitud_id).first()
@@ -942,9 +866,7 @@ def _ejecutar_accion_aprobada(solicitud: Aprobacion, db: Session) -> Dict[str, A
 
         elif solicitud.tipo_solicitud == "EDITAR_CLIENTE_USER":
             # Editar cliente (comercial)
-            cliente = (
-                db.query(Cliente).filter(Cliente.id == solicitud.entidad_id).first()
-            )
+            cliente = db.query(Cliente).filter(Cliente.id == solicitud.entidad_id).first()
             if cliente:
                 for campo, valor in datos.items():
                     setattr(cliente, campo, valor)
@@ -953,9 +875,7 @@ def _ejecutar_accion_aprobada(solicitud: Aprobacion, db: Session) -> Dict[str, A
 
         elif solicitud.tipo_solicitud == "EDITAR_CLIENTE_PROPIO":
             # Editar cliente propio (analista)
-            cliente = (
-                db.query(Cliente).filter(Cliente.id == solicitud.entidad_id).first()
-            )
+            cliente = db.query(Cliente).filter(Cliente.id == solicitud.entidad_id).first()
             if cliente:
                 for campo, valor in datos.items():
                     setattr(cliente, campo, valor)
@@ -972,9 +892,7 @@ def _ejecutar_accion_aprobada(solicitud: Aprobacion, db: Session) -> Dict[str, A
 
 
 @router.get("/estadisticas")
-def estadisticas_solicitudes(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def estadisticas_solicitudes(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     📊 Estadísticas de solicitudes de aprobación
     """
@@ -983,21 +901,13 @@ def estadisticas_solicitudes(
         raise HTTPException(status_code=403, detail="Sin permisos")
 
     # Estadísticas generales
-    total_pendientes = (
-        db.query(Aprobacion).filter(Aprobacion.estado == "PENDIENTE").count()
-    )
-    total_aprobadas = (
-        db.query(Aprobacion).filter(Aprobacion.estado == "APROBADA").count()
-    )
-    total_rechazadas = (
-        db.query(Aprobacion).filter(Aprobacion.estado == "RECHAZADA").count()
-    )
+    total_pendientes = db.query(Aprobacion).filter(Aprobacion.estado == "PENDIENTE").count()
+    total_aprobadas = db.query(Aprobacion).filter(Aprobacion.estado == "APROBADA").count()
+    total_rechazadas = db.query(Aprobacion).filter(Aprobacion.estado == "RECHAZADA").count()
 
     # Por tipo de solicitud
     por_tipo = (
-        db.query(Aprobacion.tipo_solicitud, func.count(Aprobacion.id).label("total"))
-        .group_by(Aprobacion.tipo_solicitud)
-        .all()
+        db.query(Aprobacion.tipo_solicitud, func.count(Aprobacion.id).label("total")).group_by(Aprobacion.tipo_solicitud).all()
     )
 
     # Por solicitante
@@ -1016,9 +926,7 @@ def estadisticas_solicitudes(
             "total": total_pendientes + total_aprobadas + total_rechazadas,
         },
         "por_tipo": [{"tipo": tipo, "total": total} for tipo, total in por_tipo],
-        "por_solicitante": [
-            {"solicitante": nombre, "total": total} for nombre, total in por_solicitante
-        ],
+        "por_solicitante": [{"solicitante": nombre, "total": total} for nombre, total in por_solicitante],
         "alertas": {
             "solicitudes_urgentes": total_pendientes,
             "requieren_atencion": total_pendientes > 5,
@@ -1027,9 +935,7 @@ def estadisticas_solicitudes(
 
 
 @router.get("/dashboard-aprobaciones")
-def dashboard_aprobaciones(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def dashboard_aprobaciones(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     📊 Dashboard visual completo del sistema de aprobaciones
     """
@@ -1038,9 +944,7 @@ def dashboard_aprobaciones(
         raise HTTPException(status_code=403, detail="Sin permisos para ver dashboard")
 
     # Estadísticas principales
-    total_pendientes = (
-        db.query(Aprobacion).filter(Aprobacion.estado == "PENDIENTE").count()
-    )
+    total_pendientes = db.query(Aprobacion).filter(Aprobacion.estado == "PENDIENTE").count()
     total_aprobadas_hoy = (
         db.query(Aprobacion)
         .filter(
@@ -1059,29 +963,17 @@ def dashboard_aprobaciones(
     )
 
     # Solicitudes urgentes
-    urgentes = (
-        db.query(Aprobacion)
-        .filter(Aprobacion.estado == "PENDIENTE", Aprobacion.prioridad == "URGENTE")
-        .count()
-    )
+    urgentes = db.query(Aprobacion).filter(Aprobacion.estado == "PENDIENTE", Aprobacion.prioridad == "URGENTE").count()
 
     # Solicitudes vencidas
-    vencidas = (
-        db.query(Aprobacion)
-        .filter(
-            Aprobacion.estado == "PENDIENTE", Aprobacion.fecha_limite < date.today()
-        )
-        .count()
-    )
+    vencidas = db.query(Aprobacion).filter(Aprobacion.estado == "PENDIENTE", Aprobacion.fecha_limite < date.today()).count()
 
     # Solicitudes por tipo
     por_tipo = (
         db.query(
             Aprobacion.tipo_solicitud,
             func.count(Aprobacion.id).label("total"),
-            func.sum(func.case([(Aprobacion.estado == "PENDIENTE", 1)], else_=0)).label(
-                "pendientes"
-            ),
+            func.sum(func.case([(Aprobacion.estado == "PENDIENTE", 1)], else_=0)).label("pendientes"),
         )
         .group_by(Aprobacion.tipo_solicitud)
         .all()
@@ -1097,9 +989,7 @@ def dashboard_aprobaciones(
 
     # Tiempo promedio de respuesta
     tiempo_promedio = (
-        db.query(func.avg(Aprobacion.tiempo_respuesta_horas))
-        .filter(Aprobacion.tiempo_respuesta_horas.isnot(None))
-        .scalar()
+        db.query(func.avg(Aprobacion.tiempo_respuesta_horas)).filter(Aprobacion.tiempo_respuesta_horas.isnot(None)).scalar()
         or 0
     )
 
@@ -1146,26 +1036,14 @@ def dashboard_aprobaciones(
             },
             "rendimiento": {
                 "tiempo_promedio_horas": round(tiempo_promedio, 1),
-                "eficiencia": (
-                    "Alta"
-                    if tiempo_promedio < 24
-                    else "Media" if tiempo_promedio < 48 else "Baja"
-                ),
+                "eficiencia": ("Alta" if tiempo_promedio < 24 else "Media" if tiempo_promedio < 48 else "Baja"),
             },
         },
         "alertas": {
             "criticas": [
-                (
-                    f"🚨 {urgentes} solicitudes URGENTES pendientes"
-                    if urgentes > 0
-                    else None
-                ),
+                (f"🚨 {urgentes} solicitudes URGENTES pendientes" if urgentes > 0 else None),
                 f"⏰ {vencidas} solicitudes VENCIDAS" if vencidas > 0 else None,
-                (
-                    f"📈 {total_pendientes} solicitudes acumuladas"
-                    if total_pendientes > 10
-                    else None
-                ),
+                (f"📈 {total_pendientes} solicitudes acumuladas" if total_pendientes > 10 else None),
             ],
             "nivel_alerta": "CRITICO" if urgentes > 0 or vencidas > 0 else "NORMAL",
         },
@@ -1175,9 +1053,7 @@ def dashboard_aprobaciones(
                     "tipo": tipo,
                     "total": int(total),
                     "pendientes": int(pendientes or 0),
-                    "porcentaje_pendiente": (
-                        round((pendientes or 0) / total * 100, 1) if total > 0 else 0
-                    ),
+                    "porcentaje_pendiente": (round((pendientes or 0) / total * 100, 1) if total > 0 else 0),
                 }
                 for tipo, total, pendientes in por_tipo
             ],
@@ -1250,12 +1126,8 @@ def obtener_matriz_permisos_actualizada(current_user: User = Depends(get_current
                 "anular_pagos": "POST /solicitudes/cobranzas/anular-pago",
                 "modificar_amortizacion": "POST /solicitudes/cobranzas/modificar-amortizacion",
             },
-            "comercial": {
-                "editar_clientes": "POST /solicitudes/comercial/editar-cliente"
-            },
-            "analista": {
-                "editar_clientes_propios": "POST /solicitudes/analista/editar-cliente-propio"
-            },
+            "comercial": {"editar_clientes": "POST /solicitudes/comercial/editar-cliente"},
+            "analista": {"editar_clientes_propios": "POST /solicitudes/analista/editar-cliente-propio"},
             "admin": {
                 "aprobar_solicitudes": "POST /solicitudes/aprobar/{solicitud_id}",
                 "rechazar_solicitudes": "POST /solicitudes/rechazar/{solicitud_id}",
@@ -1271,9 +1143,7 @@ def obtener_matriz_permisos_actualizada(current_user: User = Depends(get_current
         "usuario_actual": {
             "rol": "ADMIN" if current_user.is_admin else "USER",
             "puede_aprobar": current_user.is_admin,
-            "requiere_aprobacion_para": _get_actions_requiring_approval(
-                current_user.is_admin
-            ),
+            "requiere_aprobacion_para": _get_actions_requiring_approval(current_user.is_admin),
         },
     }
 
@@ -1437,9 +1307,7 @@ async def _enviar_email_nueva_solicitud(solicitud: Aprobacion, admins: List[User
         # Enviar a cada admin
         for admin in admins:
             if admin.email:
-                await EmailService.send_email(
-                    to_email=admin.email, subject=asunto, html_content=cuerpo_html
-                )
+                await EmailService.send_email(to_email=admin.email, subject=asunto, html_content=cuerpo_html)
 
     except Exception as e:
         logger.error(f"Error enviando emails: {e}")
@@ -1509,9 +1377,7 @@ async def _enviar_email_resultado_solicitud(solicitud: Aprobacion):
         emoji = estado_emoji.get(solicitud.estado, "📋")
         color = "#28a745" if solicitud.estado == "APROBADA" else "#dc3545"
 
-        asunto = (
-            f"{emoji} Solicitud {solicitud.estado.lower()} - {solicitud.tipo_solicitud}"
-        )
+        asunto = f"{emoji} Solicitud {solicitud.estado.lower()} - {solicitud.tipo_solicitud}"
 
         cuerpo_html = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

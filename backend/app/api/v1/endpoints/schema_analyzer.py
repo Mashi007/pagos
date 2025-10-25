@@ -62,9 +62,7 @@ class DatabaseSchemaAnalyzer:
                 analysis["schema_analysis"][table] = table_analysis
 
                 if table_analysis["critical_issues"]:
-                    analysis["critical_issues"].extend(
-                        table_analysis["critical_issues"]
-                    )
+                    analysis["critical_issues"].extend(table_analysis["critical_issues"])
 
             return analysis
 
@@ -196,9 +194,7 @@ schema_analyzer = DatabaseSchemaAnalyzer()
 
 
 @router.get("/schema-inconsistencies")
-async def get_schema_inconsistencies(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def get_schema_inconsistencies(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     🔍 Analizar inconsistencias específicas del esquema de BD
     """
@@ -221,9 +217,7 @@ async def get_schema_inconsistencies(
 
 
 @router.get("/schema-fixes")
-async def get_schema_fixes(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def get_schema_fixes(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     🔧 Generar fixes específicos para el esquema
     """
@@ -246,9 +240,7 @@ async def get_schema_fixes(
 
 
 @router.get("/schema-monitoring")
-async def get_schema_monitoring(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def get_schema_monitoring(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     📊 Monitorear estado actual del esquema
     """

@@ -43,22 +43,16 @@ class ValidacionCampo(BaseModel):
     campo: str = Field(..., description="Nombre del campo a validar")
     valor: str = Field(..., description="Valor a validar")
     pais: str = Field("VENEZUELA", description="País para validaciones específicas")
-    contexto: Optional[Dict[str, Any]] = Field(
-        None, description="Contexto adicional para validación"
-    )
+    contexto: Optional[Dict[str, Any]] = Field(None, description="Contexto adicional para validación")
 
 
 class CorreccionDatos(BaseModel):
     """Schema para corrección de datos de cliente"""
 
     cliente_id: int = Field(..., description="ID del cliente")
-    correcciones: Dict[str, str] = Field(
-        ..., description="Campos a corregir con nuevos valores"
-    )
+    correcciones: Dict[str, str] = Field(..., description="Campos a corregir con nuevos valores")
     pais: str = Field("VENEZUELA", description="País para validaciones")
-    recalcular_amortizacion: bool = Field(
-        True, description="Recalcular amortización si cambia fecha"
-    )
+    recalcular_amortizacion: bool = Field(True, description="Recalcular amortización si cambia fecha")
 
 
 # ============================================
@@ -176,9 +170,7 @@ def validar_campo_tiempo_real(validacion: ValidacionCampo):
             if validacion.contexto and "saldo_pendiente" in validacion.contexto:
                 saldo_maximo = Decimal(str(validacion.contexto["saldo_pendiente"]))
 
-            resultado = ValidadorMonto.validar_y_formatear_monto(
-                valor, campo.upper(), saldo_maximo
-            )
+            resultado = ValidadorMonto.validar_y_formatear_monto(valor, campo.upper(), saldo_maximo)
 
         elif campo == "amortizaciones":
             resultado = ValidadorAmortizaciones.validar_amortizaciones(valor)
@@ -240,9 +232,7 @@ def corregir_datos_cliente(
     cliente_id: int,
     correcciones: Dict[str, str],
     pais: str = Query("VENEZUELA", description="País para validaciones"),
-    recalcular_amortizacion: bool = Query(
-        True, description="Recalcular amortización si cambia fecha"
-    ),
+    recalcular_amortizacion: bool = Query(True, description="Recalcular amortización si cambia fecha"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -264,14 +254,10 @@ def corregir_datos_cliente(
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
         # Procesar correcciones
-        resultado_correccion = ServicioCorreccionDatos.corregir_datos_cliente(
-            cliente_id, correcciones, pais
-        )
+        resultado_correccion = ServicioCorreccionDatos.corregir_datos_cliente(cliente_id, correcciones, pais)
 
         if resultado_correccion.get("error_general"):
-            raise HTTPException(
-                status_code=400, detail=resultado_correccion["error_general"]
-            )
+            raise HTTPException(status_code=400, detail=resultado_correccion["error_general"])
 
         # Aplicar correcciones válidas a la base de datos
         cambios_aplicados = []
@@ -288,9 +274,7 @@ def corregir_datos_cliente(
                 elif campo == "email":
                     cliente.email = nuevo_valor
                 elif campo == "fecha_entrega":
-                    cliente.fecha_entrega = datetime.strptime(
-                        nuevo_valor, "%d/%m/%Y"
-                    ).date()
+                    cliente.fecha_entrega = datetime.strptime(nuevo_valor, "%d/%m/%Y").date()
                 elif campo == "total_financiamiento":
                     cliente.total_financiamiento = Decimal(nuevo_valor)
                 elif campo == "cuota_inicial":
@@ -323,10 +307,7 @@ def corregir_datos_cliente(
 
         # Manejar recálculo de amortización si es necesario
         mensaje_recalculo = None
-        if (
-            resultado_correccion["requiere_recalculo_amortizacion"]
-            and recalcular_amortizacion
-        ):
+        if resultado_correccion["requiere_recalculo_amortizacion"] and recalcular_amortizacion:
             # TODO: Integrar con servicio de amortización
             mensaje_recalculo = "⚠️ Se requiere recalcular la tabla de amortización"
 
@@ -343,8 +324,7 @@ def corregir_datos_cliente(
             "errores_encontrados": len(resultado_correccion["errores_encontrados"]),
             "recalculo_amortizacion": {
                 "requerido": resultado_correccion["requiere_recalculo_amortizacion"],
-                "aplicado": recalcular_amortizacion
-                and resultado_correccion["requiere_recalculo_amortizacion"],
+                "aplicado": recalcular_amortizacion and resultado_correccion["requiere_recalculo_amortizacion"],
                 "mensaje": mensaje_recalculo,
             },
             "fecha_correccion": datetime.now().isoformat(),
@@ -355,9 +335,7 @@ def corregir_datos_cliente(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Error corrigiendo datos: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error corrigiendo datos: {str(e)}")
 
 
 @router.post("/corregir-pago/{pago_id}")
@@ -385,9 +363,7 @@ def corregir_datos_pago(
 
         # Corregir monto pagado
         if monto_pagado is not None:
-            validacion_monto = ValidadorMonto.validar_y_formatear_monto(
-                monto_pagado, "MONTO_PAGO"
-            )
+            validacion_monto = ValidadorMonto.validar_y_formatear_monto(monto_pagado, "MONTO_PAGO")
 
             if validacion_monto["valido"]:
                 pago.monto_pagado = validacion_monto["valor_decimal"]
@@ -399,18 +375,14 @@ def corregir_datos_pago(
                     }
                 )
             else:
-                errores_validacion.append(
-                    {"campo": "monto_pagado", "error": validacion_monto["error"]}
-                )
+                errores_validacion.append({"campo": "monto_pagado", "error": validacion_monto["error"]})
 
         # Corregir fecha de pago
         if fecha_pago is not None:
             validacion_fecha = ValidadorFecha.validar_fecha_pago(fecha_pago)
 
             if validacion_fecha["valido"]:
-                fecha_parseada = datetime.strptime(
-                    validacion_fecha["fecha_iso"], "%Y-%m-%d"
-                ).date()
+                fecha_parseada = datetime.strptime(validacion_fecha["fecha_iso"], "%Y-%m-%d").date()
                 pago.fecha_pago = fecha_parseada
                 correcciones_aplicadas.append(
                     {
@@ -420,9 +392,7 @@ def corregir_datos_pago(
                     }
                 )
             else:
-                errores_validacion.append(
-                    {"campo": "fecha_pago", "error": validacion_fecha["error"]}
-                )
+                errores_validacion.append({"campo": "fecha_pago", "error": validacion_fecha["error"]})
 
         # Corregir número de operación
         if numero_operacion is not None:
@@ -440,9 +410,7 @@ def corregir_datos_pago(
         if correcciones_aplicadas:
             # Limpiar observaciones de error
             if pago.observaciones and "REQUIERE_VALIDACIÓN" in pago.observaciones:
-                usuario_nombre = (
-                    f"{current_user.nombre} {current_user.apellido}".strip()
-                )
+                usuario_nombre = f"{current_user.nombre} {current_user.apellido}".strip()
                 pago.observaciones = f"CORREGIDO - {datetime.now().strftime('%d/%m/%Y')} por {usuario_nombre}"
 
             db.commit()
@@ -462,9 +430,7 @@ def corregir_datos_pago(
             "mensaje": "✅ Corrección de pago procesada exitosamente",
             "pago": {
                 "id": pago_id,
-                "cliente": (
-                    pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A"
-                ),
+                "cliente": (pago.prestamo.cliente.nombre_completo if pago.prestamo else "N/A"),
                 "cuota": pago.numero_cuota,
             },
             "correcciones_aplicadas": correcciones_aplicadas,
@@ -488,9 +454,7 @@ def corregir_datos_pago(
 
 @router.get("/detectar-errores-masivo")
 def detectar_errores_masivo(
-    limite: int = Query(
-        100, ge=1, le=1000, description="Límite de registros a analizar"
-    ),
+    limite: int = Query(100, ge=1, le=1000, description="Límite de registros a analizar"),
     tipo_analisis: str = Query("CLIENTES", description="CLIENTES, PAGOS, AMBOS"),
     pais: str = Query("VENEZUELA", description="País para validaciones"),
     db: Session = Depends(get_db),
@@ -511,9 +475,7 @@ def detectar_errores_masivo(
         raise HTTPException(status_code=403, detail="Sin permisos para análisis masivo")
 
     try:
-        resultado = ServicioCorreccionDatos.detectar_datos_incorrectos_masivo(
-            db, limite
-        )
+        resultado = ServicioCorreccionDatos.detectar_datos_incorrectos_masivo(db, limite)
 
         return {
             "analisis_masivo": resultado,
@@ -532,9 +494,7 @@ def detectar_errores_masivo(
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error en análisis masivo: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error en análisis masivo: {str(e)}")
 
 
 @router.post("/corregir-masivo")
@@ -548,15 +508,11 @@ def corregir_datos_masivo(
     🔧 Corrección masiva de datos incorrectos
     """
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Sin permisos para corrección masiva"
-        )
+        raise HTTPException(status_code=403, detail="Sin permisos para corrección masiva")
 
     try:
         # Ejecutar correcciones en background
-        background_tasks.add_task(
-            _procesar_correcciones_masivas, correcciones_masivas, current_user.id, db
-        )
+        background_tasks.add_task(_procesar_correcciones_masivas, correcciones_masivas, current_user.id, db)
 
         return {
             "mensaje": "✅ Corrección masiva iniciada en background",
@@ -568,9 +524,7 @@ def corregir_datos_masivo(
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error iniciando corrección masiva: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error iniciando corrección masiva: {str(e)}")
 
 
 # ============================================
@@ -658,9 +612,7 @@ def obtener_ejemplos_correccion(
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error obteniendo ejemplos: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error obteniendo ejemplos: {str(e)}")
 
 
 # ============================================
@@ -733,9 +685,7 @@ def obtener_configuracion_validadores(current_user: User = Depends(get_current_u
     ⚙️ Obtener configuración de validadores para el frontend
     """
     try:
-        logger.info(
-            f"Obteniendo configuración de validadores para usuario: {current_user.email}"
-        )
+        logger.info(f"Obteniendo configuración de validadores para usuario: {current_user.email}")
         return {
             "titulo": "⚙️ CONFIGURACIÓN DE VALIDADORES",
             "paises_soportados": {
@@ -832,9 +782,7 @@ def obtener_configuracion_validadores(current_user: User = Depends(get_current_u
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error obteniendo configuración: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error obteniendo configuración: {str(e)}")
 
 
 # ============================================
@@ -842,9 +790,7 @@ def obtener_configuracion_validadores(current_user: User = Depends(get_current_u
 # ============================================
 
 
-async def _procesar_correcciones_masivas(
-    correcciones: List[CorreccionDatos], user_id: int, db_session: Session
-):
+async def _procesar_correcciones_masivas(correcciones: List[CorreccionDatos], user_id: int, db_session: Session):
     """Procesar correcciones masivas en background"""
     try:
         from app.db.session import SessionLocal
@@ -869,9 +815,7 @@ async def _procesar_correcciones_masivas(
                 logger.error(f"Error corrigiendo cliente {correccion.cliente_id}: {e}")
                 fallidas += 1
 
-        logger.info(
-            f"📊 Corrección masiva completada: {exitosas} exitosas, {fallidas} fallidas"
-        )
+        logger.info(f"📊 Corrección masiva completada: {exitosas} exitosas, {fallidas} fallidas")
 
         db.close()
 
@@ -888,12 +832,8 @@ def _generar_recomendaciones_campo(campo: str, resultado_validacion: Dict) -> Li
             recomendaciones.append("📱 Use formato internacional: +58 424 1234567")
             recomendaciones.append("🔍 Verifique que la operadora sea válida")
         elif campo == "cedula":
-            recomendaciones.append(
-                "📝 Agregue prefijo V para venezolanos, E para extranjeros"
-            )
-            recomendaciones.append(
-                "🔢 Verifique que tenga 7-8 dígitos después de la letra"
-            )
+            recomendaciones.append("📝 Agregue prefijo V para venezolanos, E para extranjeros")
+            recomendaciones.append("🔢 Verifique que tenga 7-8 dígitos después de la letra")
         elif campo == "email":
             recomendaciones.append("📧 Verifique formato: usuario@dominio.com")
             recomendaciones.append("🚫 Evite dominios de email temporal")

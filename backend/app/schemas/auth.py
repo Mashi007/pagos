@@ -39,15 +39,9 @@ class LoginRequest(BaseModel):
     """Schema para request de login"""
 
     email: EmailStr = Field(..., description="Email del usuario")
-    password: str = Field(
-        ..., min_length=MIN_PASSWORD_LENGTH, description="Contraseña del usuario"
-    )
+    password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, description="Contraseña del usuario")
 
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {"email": "admin@sistema.com", "password": "Admin123!"}
-        }
-    )
+    model_config = ConfigDict(json_schema_extra={"example": {"email": "admin@sistema.com", "password": "Admin123!"}})
 
 
 class RefreshTokenRequest(BaseModel):
@@ -59,15 +53,9 @@ class RefreshTokenRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     """Schema para cambio de contraseña"""
 
-    current_password: str = Field(
-        ..., min_length=MIN_PASSWORD_LENGTH, description="Contraseña actual"
-    )
-    new_password: str = Field(
-        ..., min_length=MIN_PASSWORD_LENGTH, description="Nueva contraseña"
-    )
-    confirm_password: str = Field(
-        ..., min_length=MIN_PASSWORD_LENGTH, description="Confirmar nueva contraseña"
-    )
+    current_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, description="Contraseña actual")
+    new_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, description="Nueva contraseña")
+    confirm_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, description="Confirmar nueva contraseña")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -90,12 +78,8 @@ class PasswordResetConfirm(BaseModel):
     """Schema para confirmar reset de contraseña"""
 
     token: str = Field(..., description="Token de reset")
-    new_password: str = Field(
-        ..., min_length=MIN_PASSWORD_LENGTH, description="Nueva contraseña"
-    )
-    confirm_password: str = Field(
-        ..., min_length=MIN_PASSWORD_LENGTH, description="Confirmar nueva contraseña"
-    )
+    new_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, description="Nueva contraseña")
+    confirm_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, description="Confirmar nueva contraseña")
 
 
 class LogoutRequest(BaseModel):

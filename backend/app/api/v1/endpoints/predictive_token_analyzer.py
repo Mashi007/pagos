@@ -229,9 +229,7 @@ class TokenPredictiveAnalyzer:
         recent_metrics = list(self.system_metrics)[-50:]  # Últimos 50 registros
 
         # Calcular tasa de error promedio
-        error_rate = sum(1 for m in recent_metrics if not m.get("success", True)) / len(
-            recent_metrics
-        )
+        error_rate = sum(1 for m in recent_metrics if not m.get("success", True)) / len(recent_metrics)
 
         if error_rate > 0.1:  # Más del 10% de errores
             predictions["predicted_failures"].append(
@@ -242,14 +240,10 @@ class TokenPredictiveAnalyzer:
                 }
             )
             predictions["system_health"] = "degraded"
-            predictions["recommendations"].append(
-                "Revisar configuración de autenticación"
-            )
+            predictions["recommendations"].append("Revisar configuración de autenticación")
 
         # Predecir sobrecarga
-        avg_response_time = statistics.mean(
-            [m.get("response_time", 0) for m in recent_metrics]
-        )
+        avg_response_time = statistics.mean([m.get("response_time", 0) for m in recent_metrics])
         if avg_response_time > 2.0:
             predictions["predicted_failures"].append(
                 {
@@ -306,9 +300,7 @@ async def analyze_token_predictive(
 
 
 @router.get("/predict-system-failures")
-async def predict_system_failures_endpoint(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def predict_system_failures_endpoint(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     🔮 Predicción de fallas del sistema
     """
@@ -418,15 +410,11 @@ async def token_health_check():
         # Generar recomendaciones
         if expiring_soon > total_tokens * 0.1:  # Más del 10% expirando pronto
             health_status["warnings"].append(f"{expiring_soon} tokens expirando pronto")
-            health_status["recommendations"].append(
-                "Implementar renovación automática más agresiva"
-            )
+            health_status["recommendations"].append("Implementar renovación automática más agresiva")
 
         if expired > 0:
             health_status["warnings"].append(f"{expired} tokens expirados")
-            health_status["recommendations"].append(
-                "Limpiar tokens expirados del sistema"
-            )
+            health_status["recommendations"].append("Limpiar tokens expirados del sistema")
 
         return health_status
 

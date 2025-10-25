@@ -52,19 +52,13 @@ class Auditoria(Base):
     usuario_email = Column(String(255), nullable=True, index=True)
 
     # Acción realizada
-    accion = Column(
-        String(50), nullable=False, index=True
-    )  # CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.
+    accion = Column(String(50), nullable=False, index=True)  # CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.
 
     # Módulo del sistema
-    modulo = Column(
-        String(50), nullable=False, index=True
-    )  # USUARIOS, CLIENTES, PRESTAMOS, PAGOS, etc.
+    modulo = Column(String(50), nullable=False, index=True)  # USUARIOS, CLIENTES, PRESTAMOS, PAGOS, etc.
 
     # Entidad afectada
-    tabla = Column(
-        String(50), nullable=False, index=True
-    )  # Cliente, Prestamo, Pago, User, etc.
+    tabla = Column(String(50), nullable=False, index=True)  # Cliente, Prestamo, Pago, User, etc.
 
     registro_id = Column(Integer, nullable=True, index=True)
 
@@ -80,16 +74,12 @@ class Auditoria(Base):
     user_agent = Column(String(255), nullable=True)
 
     # Resultado de la acción
-    resultado = Column(
-        String(20), nullable=False, default="EXITOSO"
-    )  # EXITOSO, FALLIDO, PARCIAL
+    resultado = Column(String(20), nullable=False, default="EXITOSO")  # EXITOSO, FALLIDO, PARCIAL
 
     mensaje_error = Column(Text, nullable=True)
 
     # Timestamp
-    fecha = Column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
-    )
+    fecha = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
     # Relaciones
     usuario = relationship("User", back_populates="auditorias")

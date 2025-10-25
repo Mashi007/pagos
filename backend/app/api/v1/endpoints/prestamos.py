@@ -23,9 +23,7 @@ DAYS_PER_MONTH = 30
 router = APIRouter()
 
 
-def calcular_proxima_fecha_pago(
-    fecha_inicio: datetime, modalidad: str, cuotas_pagadas: int
-) -> datetime:
+def calcular_proxima_fecha_pago(fecha_inicio: datetime, modalidad: str, cuotas_pagadas: int) -> datetime:
     """Calcula la próxima fecha de pago según la modalidad"""
     if modalidad == "SEMANAL":
         return fecha_inicio + timedelta(weeks=cuotas_pagadas + 1)
@@ -49,9 +47,7 @@ def crear_prestamo(
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
     # Calcular próxima fecha de pago
-    proxima_fecha = calcular_proxima_fecha_pago(
-        prestamo.fecha_inicio, prestamo.modalidad.value, 0
-    )
+    proxima_fecha = calcular_proxima_fecha_pago(prestamo.fecha_inicio, prestamo.modalidad.value, 0)
 
     # ✅ CORRECCIÓN: usar model_dump() en lugar de dict()
     db_prestamo = Prestamo(
@@ -99,9 +95,7 @@ def obtener_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{prestamo_id}", response_model=PrestamoResponse)
-def actualizar_prestamo(
-    prestamo_id: int, prestamo_data: PrestamoUpdate, db: Session = Depends(get_db)
-):
+def actualizar_prestamo(prestamo_id: int, prestamo_data: PrestamoUpdate, db: Session = Depends(get_db)):
     """Actualizar datos de un préstamo"""
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:
@@ -162,6 +156,4 @@ def obtener_estadisticas_prestamos(db: Session = Depends(get_db)):
             "monto_total_pendiente": 0.0,
         }
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error al obtener estadísticas: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error al obtener estadísticas: {str(e)}")

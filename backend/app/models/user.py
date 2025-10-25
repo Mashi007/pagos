@@ -25,18 +25,12 @@ class User(Base):
     nombre = Column(String(NAME_LENGTH), nullable=False)
     apellido = Column(String(NAME_LENGTH), nullable=False)
     hashed_password = Column(String(PASSWORD_LENGTH), nullable=False)
-    is_admin = Column(
-        Boolean, default=False, nullable=False
-    )  # Cambio clave: rol → is_admin
-    cargo = Column(
-        String(NAME_LENGTH), nullable=True
-    )  # Campo separado para cargo en la empresa
+    is_admin = Column(Boolean, default=False, nullable=False)  # Cambio clave: rol → is_admin
+    cargo = Column(String(NAME_LENGTH), nullable=True)  # Campo separado para cargo en la empresa
     is_active = Column(Boolean, default=True, nullable=False)
 
     # Timestamps
-    created_at = Column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     last_login = Column(DateTime(timezone=True))
 
@@ -46,9 +40,7 @@ class User(Base):
         foreign_keys="Aprobacion.solicitante_id",
         back_populates="solicitante",
     )
-    aprobaciones_revisadas = relationship(
-        "Aprobacion", foreign_keys="Aprobacion.revisor_id", back_populates="revisor"
-    )
+    aprobaciones_revisadas = relationship("Aprobacion", foreign_keys="Aprobacion.revisor_id", back_populates="revisor")
 
     # Relación removida: Los préstamos pertenecen a Cliente, no a User
 

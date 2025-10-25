@@ -114,9 +114,7 @@ class IntelligentAlertSystem:
         thread.start()
         logger.info("🚨 Sistema de alertas inteligentes iniciado")
 
-    def add_metric(
-        self, metric_type: str, value: float, metadata: Dict[str, Any] = None
-    ):
+    def add_metric(self, metric_type: str, value: float, metadata: Dict[str, Any] = None):
         """Agregar métrica para análisis"""
         with self.lock:
             metric = {
@@ -139,27 +137,20 @@ class IntelligentAlertSystem:
 
                 # Verificar cooldown
                 last_alert = self._get_last_alert_time(alert_type)
-                if (
-                    last_alert
-                    and (current_time - last_alert).total_seconds() < rule["cooldown"]
-                ):
+                if last_alert and (current_time - last_alert).total_seconds() < rule["cooldown"]:
                     continue
 
                 # Verificar condición específica
                 if self._check_alert_condition(alert_type, rule):
                     self._trigger_alert(alert_type, rule, current_time)
 
-    def _check_alert_condition(
-        self, alert_type: AlertType, rule: Dict[str, Any]
-    ) -> bool:
+    def _check_alert_condition(self, alert_type: AlertType, rule: Dict[str, Any]) -> bool:
         """Verificar condición específica de alerta"""
         current_time = datetime.now()
         cutoff_time = current_time - timedelta(minutes=5)  # Últimos 5 minutos
 
         # Filtrar métricas recientes
-        recent_metrics = [
-            m for m in self.metrics_buffer if m["timestamp"] > cutoff_time
-        ]
+        recent_metrics = [m for m in self.metrics_buffer if m["timestamp"] > cutoff_time]
 
         if alert_type == AlertType.AUTH_FAILURE:
             # Contar fallos de autenticación
@@ -168,34 +159,24 @@ class IntelligentAlertSystem:
 
         elif alert_type == AlertType.TOKEN_EXPIRY:
             # Contar tokens expirando pronto
-            expiring_tokens = [
-                m
-                for m in recent_metrics
-                if m["type"] == "token_expiry" and m["value"] <= rule["threshold"]
-            ]
+            expiring_tokens = [m for m in recent_metrics if m["type"] == "token_expiry" and m["value"] <= rule["threshold"]]
             return len(expiring_tokens) >= 1
 
         elif alert_type == AlertType.SUSPICIOUS_ACTIVITY:
             # Contar actividades sospechosas
-            suspicious_activities = [
-                m for m in recent_metrics if m["type"] == "suspicious_activity"
-            ]
+            suspicious_activities = [m for m in recent_metrics if m["type"] == "suspicious_activity"]
             return len(suspicious_activities) >= rule["threshold"]
 
         elif alert_type == AlertType.PERFORMANCE_DEGRADATION:
             # Verificar tiempo de respuesta promedio
-            response_times = [
-                m["value"] for m in recent_metrics if m["type"] == "response_time"
-            ]
+            response_times = [m["value"] for m in recent_metrics if m["type"] == "response_time"]
             if response_times:
                 avg_response_time = sum(response_times) / len(response_times)
                 return avg_response_time >= rule["threshold"]
 
         return False
 
-    def _trigger_alert(
-        self, alert_type: AlertType, rule: Dict[str, Any], timestamp: datetime
-    ):
+    def _trigger_alert(self, alert_type: AlertType, rule: Dict[str, Any], timestamp: datetime):
         """Disparar alerta"""
         alert_id = f"{alert_type.value}_{timestamp.strftime('%Y%m%d_%H%M%S')}"
 
@@ -218,9 +199,7 @@ class IntelligentAlertSystem:
 
         logger.warning(f"🚨 Alerta disparada: {alert_type.value} - {alert['message']}")
 
-    def _generate_alert_message(
-        self, alert_type: AlertType, rule: Dict[str, Any]
-    ) -> str:
+    def _generate_alert_message(self, alert_type: AlertType, rule: Dict[str, Any]) -> str:
         """Generar mensaje de alerta"""
         messages = {
             AlertType.TOKEN_EXPIRY: f"Token expirando en menos de {rule['threshold']} minutos",
@@ -236,9 +215,7 @@ class IntelligentAlertSystem:
         current_time = datetime.now()
         cutoff_time = current_time - timedelta(minutes=5)
 
-        recent_metrics = [
-            m for m in self.metrics_buffer if m["timestamp"] > cutoff_time
-        ]
+        recent_metrics = [m for m in self.metrics_buffer if m["timestamp"] > cutoff_time]
 
         details = {
             "timestamp": current_time.isoformat(),
@@ -337,9 +314,7 @@ class IntelligentAlertSystem:
                 "resolved_alerts": resolved_alerts,
                 "severity_distribution": dict(severity_counts),
                 "type_distribution": dict(type_counts),
-                "last_alert_time": (
-                    self.alert_history[-1]["timestamp"] if self.alert_history else None
-                ),
+                "last_alert_time": (self.alert_history[-1]["timestamp"] if self.alert_history else None),
             }
 
 
@@ -352,9 +327,7 @@ alert_system = IntelligentAlertSystem()
 
 
 @router.get("/active-alerts")
-async def get_active_alerts(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def get_active_alerts(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     🚨 Obtener alertas activas
     """
@@ -378,9 +351,7 @@ async def get_active_alerts(
 
 
 @router.get("/alert-statistics")
-async def get_alert_statistics(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def get_alert_statistics(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     📊 Estadísticas de alertas
     """
@@ -451,9 +422,7 @@ async def add_metric_endpoint(
         metadata = metric_data.get("metadata", {})
 
         if not metric_type or value is None:
-            raise HTTPException(
-                status_code=400, detail="Tipo y valor de métrica requeridos"
-            )
+            raise HTTPException(status_code=400, detail="Tipo y valor de métrica requeridos")
 
         alert_system.add_metric(metric_type, value, metadata)
 
@@ -530,9 +499,7 @@ async def configure_alert_rule(
 
         # Validar severidad
         try:
-            severity_enum = (
-                AlertSeverity(severity) if severity else AlertSeverity.MEDIUM
-            )
+            severity_enum = AlertSeverity(severity) if severity else AlertSeverity.MEDIUM
         except ValueError:
             raise HTTPException(status_code=400, detail="Severidad inválida")
 

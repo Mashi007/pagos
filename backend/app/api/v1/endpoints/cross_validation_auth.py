@@ -32,9 +32,7 @@ class CrossValidationAuthChecker:
         self.failed_validations = defaultdict(list)  # Historial de fallos
         self.validation_patterns = defaultdict(int)  # Patrones de validación
 
-    def cross_validate_token(
-        self, token: str, request_context: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def cross_validate_token(self, token: str, request_context: Dict[str, Any]) -> Dict[str, Any]:
         """Validación cruzada completa de un token"""
         validation_results = {
             "timestamp": datetime.now().isoformat(),
@@ -67,9 +65,7 @@ class CrossValidationAuthChecker:
             validation_results["validations"]["user_consistency"] = user_validation
 
             # 6. Validación de seguridad
-            security_validation = self._validate_security_patterns(
-                token, request_context
-            )
+            security_validation = self._validate_security_patterns(token, request_context)
             validation_results["validations"]["security_patterns"] = security_validation
 
             # Calcular resultado general
@@ -140,9 +136,7 @@ class CrossValidationAuthChecker:
 
             # Verificar campos requeridos
             required_fields = ["sub", "exp", "type"]
-            missing_fields = [
-                field for field in required_fields if field not in payload
-            ]
+            missing_fields = [field for field in required_fields if field not in payload]
 
             if missing_fields:
                 validation["status"] = "invalid"
@@ -153,9 +147,7 @@ class CrossValidationAuthChecker:
             # Verificar tipo de token
             if payload.get("type") != "access":
                 validation["status"] = "invalid"
-                validation["details"][
-                    "error"
-                ] = f'Tipo de token incorrecto: {payload.get("type")}'
+                validation["details"]["error"] = f'Tipo de token incorrecto: {payload.get("type")}'
                 validation["score"] = 0.0
                 return validation
 
@@ -179,9 +171,7 @@ class CrossValidationAuthChecker:
                 time_to_expiry = (exp_time - current_time).total_seconds()
                 validation["status"] = "valid"
                 validation["details"]["expires_at"] = exp_time.isoformat()
-                validation["details"]["time_to_expiry_minutes"] = int(
-                    time_to_expiry / 60
-                )
+                validation["details"]["time_to_expiry_minutes"] = int(time_to_expiry / 60)
                 validation["score"] = 1.0
 
             return validation
@@ -191,9 +181,7 @@ class CrossValidationAuthChecker:
             validation["details"]["error"] = str(e)
             return validation
 
-    def _validate_request_context(
-        self, token: str, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _validate_request_context(self, token: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Validar contexto de la request"""
         validation = {"status": "unknown", "details": {}, "score": 0.0}
 
@@ -213,21 +201,15 @@ class CrossValidationAuthChecker:
             }
 
             # Verificar si el endpoint requiere admin
-            is_admin_endpoint = any(
-                admin_ep in endpoint for admin_ep in context_rules["admin_endpoints"]
-            )
-            is_user_endpoint = any(
-                user_ep in endpoint for user_ep in context_rules["user_endpoints"]
-            )
+            is_admin_endpoint = any(admin_ep in endpoint for admin_ep in context_rules["admin_endpoints"])
+            is_user_endpoint = any(user_ep in endpoint for user_ep in context_rules["user_endpoints"])
 
             if is_admin_endpoint:
                 # Verificar si el token tiene claims de admin
                 is_admin = payload.get("is_admin", False)
                 if not is_admin:
                     validation["status"] = "insufficient_privileges"
-                    validation["details"][
-                        "error"
-                    ] = "Endpoint requiere privilegios de admin"
+                    validation["details"]["error"] = "Endpoint requiere privilegios de admin"
                     validation["score"] = 0.0
                     return validation
 
@@ -236,11 +218,7 @@ class CrossValidationAuthChecker:
             context.get("user_agent", "")
 
             validation["status"] = "valid"
-            validation["details"]["endpoint_type"] = (
-                "admin"
-                if is_admin_endpoint
-                else "user" if is_user_endpoint else "public"
-            )
+            validation["details"]["endpoint_type"] = "admin" if is_admin_endpoint else "user" if is_user_endpoint else "public"
             validation["details"]["client_ip"] = client_ip
             validation["score"] = 1.0
 
@@ -275,9 +253,7 @@ class CrossValidationAuthChecker:
                 age_hours = (current_time - issued_time).total_seconds() / 3600
                 if age_hours > 24:
                     validation["status"] = "suspicious"
-                    validation["details"][
-                        "warning"
-                    ] = f"Token muy antiguo: {age_hours:.1f} horas"
+                    validation["details"]["warning"] = f"Token muy antiguo: {age_hours:.1f} horas"
                     validation["score"] = 0.5
                 else:
                     validation["status"] = "valid"
@@ -294,9 +270,7 @@ class CrossValidationAuthChecker:
             validation["details"]["error"] = str(e)
             return validation
 
-    def _validate_user_consistency(
-        self, token: str, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _validate_user_consistency(self, token: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Validar consistencia del usuario"""
         validation = {"status": "unknown", "details": {}, "score": 0.0}
 
@@ -331,9 +305,7 @@ class CrossValidationAuthChecker:
             validation["details"]["error"] = str(e)
             return validation
 
-    def _validate_security_patterns(
-        self, token: str, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _validate_security_patterns(self, token: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Validar patrones de seguridad"""
         validation = {"status": "unknown", "details": {}, "score": 0.0}
 
@@ -354,9 +326,7 @@ class CrossValidationAuthChecker:
             for pattern in suspicious_patterns:
                 if pattern in token_str.lower():
                     validation["status"] = "suspicious"
-                    validation["details"][
-                        "warning"
-                    ] = f"Patrón sospechoso detectado: {pattern}"
+                    validation["details"]["warning"] = f"Patrón sospechoso detectado: {pattern}"
                     validation["score"] = 0.5
                     return validation
 
@@ -370,9 +340,7 @@ class CrossValidationAuthChecker:
             validation["details"]["error"] = str(e)
             return validation
 
-    def _calculate_overall_result(
-        self, validation_results: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _calculate_overall_result(self, validation_results: Dict[str, Any]) -> Dict[str, Any]:
         """Calcular resultado general de la validación"""
         validations = validation_results["validations"]
 
@@ -381,12 +349,8 @@ class CrossValidationAuthChecker:
         avg_score = sum(scores) / len(scores) if scores else 0.0
 
         # Determinar estado general
-        failed_validations = [
-            k for k, v in validations.items() if v.get("status") in ["invalid", "error"]
-        ]
-        suspicious_validations = [
-            k for k, v in validations.items() if v.get("status") == "suspicious"
-        ]
+        failed_validations = [k for k, v in validations.items() if v.get("status") in ["invalid", "error"]]
+        suspicious_validations = [k for k, v in validations.items() if v.get("status") == "suspicious"]
 
         if failed_validations:
             overall_status = "failed"
@@ -402,13 +366,9 @@ class CrossValidationAuthChecker:
         if "jwt_structure" in failed_validations:
             recommendations.append("Token JWT malformado - regenerar token")
         if "token_content" in failed_validations:
-            recommendations.append(
-                "Contenido del token inválido - verificar configuración"
-            )
+            recommendations.append("Contenido del token inválido - verificar configuración")
         if "timing" in failed_validations:
-            recommendations.append(
-                "Problema temporal - verificar sincronización de reloj"
-            )
+            recommendations.append("Problema temporal - verificar sincronización de reloj")
         if "user_consistency" in failed_validations:
             recommendations.append("Inconsistencia de usuario - verificar datos")
         if "security_patterns" in suspicious_validations:
@@ -477,9 +437,7 @@ async def cross_validate_token_endpoint(
 
 
 @router.get("/validation-history")
-async def get_validation_history(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def get_validation_history(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     📊 Historial de validaciones cruzadas
     """
@@ -490,9 +448,7 @@ async def get_validation_history(
 
         # Patrones más comunes
         common_patterns = dict(cross_validator.validation_patterns)
-        sorted_patterns = sorted(
-            common_patterns.items(), key=lambda x: x[1], reverse=True
-        )
+        sorted_patterns = sorted(common_patterns.items(), key=lambda x: x[1], reverse=True)
 
         return {
             "timestamp": datetime.now().isoformat(),
@@ -501,15 +457,11 @@ async def get_validation_history(
                 "total_validations": total_validations,
                 "failed_validations": failed_validations,
                 "success_rate": (
-                    ((total_validations - failed_validations) / total_validations * 100)
-                    if total_validations > 0
-                    else 100
+                    ((total_validations - failed_validations) / total_validations * 100) if total_validations > 0 else 100
                 ),
                 "common_patterns": sorted_patterns[:10],
             },
-            "recent_validations": list(cross_validator.validation_cache.values())[
-                -10:
-            ],  # Últimas 10
+            "recent_validations": list(cross_validator.validation_cache.values())[-10:],  # Últimas 10
         }
 
     except Exception as e:
@@ -556,9 +508,7 @@ async def validate_user_token_comprehensive(
         }
 
         # Realizar validación cruzada
-        validation_result = cross_validator.cross_validate_token(
-            test_token, test_context
-        )
+        validation_result = cross_validator.cross_validate_token(test_token, test_context)
 
         return {
             "timestamp": datetime.now().isoformat(),

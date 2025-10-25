@@ -94,8 +94,7 @@ def check_database_cached() -> Dict[str, Any]:
     # Si no hay cache o expiró, hacer check real
     if (
         _last_db_check["timestamp"] is None
-        or (now - _last_db_check["timestamp"]).total_seconds()
-        > _last_db_check["cache_duration"]
+        or (now - _last_db_check["timestamp"]).total_seconds() > _last_db_check["cache_duration"]
     ):
 
         try:
@@ -117,14 +116,10 @@ def check_database_cached() -> Dict[str, Any]:
                 }
             )
 
-            logger.info(
-                f"DB Check realizado: {db_status}, Response time: {response_time:.2f}ms"
-            )
+            logger.info(f"DB Check realizado: {db_status}, Response time: {response_time:.2f}ms")
         except Exception as e:
             response_time = (time.time() - start_time) * 1000
-            logger.error(
-                f"Error en DB check: {e}, Response time: {response_time:.2f}ms"
-            )
+            logger.error(f"Error en DB check: {e}, Response time: {response_time:.2f}ms")
             _last_db_check.update(
                 {
                     "timestamp": now,
@@ -198,14 +193,11 @@ async def detailed_health_check(response: Response):
                 "response_time_ms": total_response_time,
                 "cpu_usage_percent": system_metrics["cpu_percent"],
                 "memory_usage_percent": system_metrics["memory_percent"],
-                "impact_level": (
-                    "LOW" if total_response_time < MAX_RESPONSE_TIME_MS else "MEDIUM"
-                ),
+                "impact_level": ("LOW" if total_response_time < MAX_RESPONSE_TIME_MS else "MEDIUM"),
             },
             "system_status": {
                 "cpu_healthy": system_metrics["cpu_percent"] < CPU_THRESHOLD_PERCENT,
-                "memory_healthy": system_metrics["memory_percent"]
-                < MEMORY_THRESHOLD_PERCENT,
+                "memory_healthy": system_metrics["memory_percent"] < MEMORY_THRESHOLD_PERCENT,
                 "disk_healthy": system_metrics["disk_percent"] < DISK_THRESHOLD_PERCENT,
             },
             "alerts": [],
@@ -304,11 +296,7 @@ async def health_check_full(response: Response):
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
         "database": "connected",
-        "database_last_check": (
-            _last_db_check["timestamp"].isoformat()
-            if _last_db_check["timestamp"]
-            else None
-        ),
+        "database_last_check": (_last_db_check["timestamp"].isoformat() if _last_db_check["timestamp"] else None),
         "timestamp": datetime.utcnow().isoformat(),
     }
 

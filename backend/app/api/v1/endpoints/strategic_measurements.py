@@ -134,17 +134,11 @@ class StrategicMeasurements:
                 "timestamp": datetime.now(),
                 "category": "system_performance",
                 "metrics": {
-                    "memory_usage": (
-                        psutil.virtual_memory().percent if PSUTIL_AVAILABLE else 0
-                    ),
+                    "memory_usage": (psutil.virtual_memory().percent if PSUTIL_AVAILABLE else 0),
                     "cpu_usage": psutil.cpu_percent() if PSUTIL_AVAILABLE else 0,
-                    "disk_usage": (
-                        psutil.disk_usage("/").percent if PSUTIL_AVAILABLE else 0
-                    ),
+                    "disk_usage": (psutil.disk_usage("/").percent if PSUTIL_AVAILABLE else 0),
                     "process_count": len(psutil.pids()) if PSUTIL_AVAILABLE else 0,
-                    "load_average": (
-                        os.getloadavg() if hasattr(os, "getloadavg") else [0, 0, 0]
-                    ),
+                    "load_average": (os.getloadavg() if hasattr(os, "getloadavg") else [0, 0, 0]),
                 },
             }
 
@@ -180,12 +174,8 @@ class StrategicMeasurements:
 
         return {
             "total_imports": len(critical_imports),
-            "valid_imports": len(
-                [v for v in validation_results.values() if v == "valid"]
-            ),
-            "invalid_imports": len(
-                [v for v in validation_results.values() if v != "valid"]
-            ),
+            "valid_imports": len([v for v in validation_results.values() if v == "valid"]),
+            "invalid_imports": len([v for v in validation_results.values() if v != "valid"]),
             "details": validation_results,
         }
 
@@ -279,15 +269,11 @@ class StrategicMeasurements:
                 )
 
         except Exception as e:
-            consistency_issues.append(
-                {"table": "analistas", "error": str(e), "severity": "error"}
-            )
+            consistency_issues.append({"table": "analistas", "error": str(e), "severity": "error"})
 
         return {
             "total_issues": len(consistency_issues),
-            "critical_issues": len(
-                [i for i in consistency_issues if i.get("severity") == "critical"]
-            ),
+            "critical_issues": len([i for i in consistency_issues if i.get("severity") == "critical"]),
             "issues": consistency_issues,
         }
 
@@ -392,9 +378,7 @@ class StrategicMeasurements:
                     "deployment_measurements": len(self.deployment_metrics),
                     "schema_measurements": len(self.schema_metrics),
                     "performance_measurements": len(self.performance_metrics),
-                    "last_measurement": (
-                        self.measurements[-1] if self.measurements else None
-                    ),
+                    "last_measurement": (self.measurements[-1] if self.measurements else None),
                 },
             }
 
@@ -408,9 +392,7 @@ strategic_measurements = StrategicMeasurements()
 
 
 @router.get("/deployment-health")
-async def get_deployment_health(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def get_deployment_health(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     🚀 Medir salud del despliegue
     """
@@ -433,9 +415,7 @@ async def get_deployment_health(
 
 
 @router.get("/schema-consistency")
-async def get_schema_consistency(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def get_schema_consistency(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     📊 Medir consistencia del esquema
     """
@@ -458,9 +438,7 @@ async def get_schema_consistency(
 
 
 @router.get("/frontend-stability")
-async def get_frontend_stability(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def get_frontend_stability(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     🎨 Medir estabilidad del frontend
     """
@@ -483,9 +461,7 @@ async def get_frontend_stability(
 
 
 @router.get("/system-performance")
-async def get_system_performance(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def get_system_performance(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     ⚡ Medir rendimiento del sistema
     """
@@ -508,9 +484,7 @@ async def get_system_performance(
 
 
 @router.get("/measurement-summary")
-async def get_measurement_summary_endpoint(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def get_measurement_summary_endpoint(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     📋 Resumen de mediciones estratégicas
     """

@@ -54,14 +54,10 @@ def reporte_cartera(fecha_corte: Optional[date] = None, db: Session = Depends(ge
     ).scalar() or Decimal("0")
 
     # Préstamos activos
-    total_activos = (
-        db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.ACTIVO).count()
-    )
+    total_activos = db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.ACTIVO).count()
 
     # Préstamos en mora
-    total_mora = (
-        db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.EN_MORA).count()
-    )
+    total_mora = db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.EN_MORA).count()
 
     # Tasa de morosidad
     tasa_morosidad = (total_mora / total_activos * 100) if total_activos > 0 else 0
@@ -92,9 +88,7 @@ def reporte_cartera(fecha_corte: Optional[date] = None, db: Session = Depends(ge
         total_prestamos_activos=total_activos,
         total_prestamos_mora=total_mora,
         tasa_morosidad=round(tasa_morosidad, 2),
-        distribucion_montos=[
-            {"rango": d[0], "cantidad": d[1], "monto": d[2]} for d in distribucion
-        ],
+        distribucion_montos=[{"rango": d[0], "cantidad": d[1], "monto": d[2]} for d in distribucion],
     )
 
 
@@ -129,14 +123,10 @@ def reporte_morosidad(dias_mora_minimo: int = 1, db: Session = Depends(get_db)):
         cantidad = len(prestamos)
         monto_mora = sum(p.saldo_pendiente for p in prestamos)
 
-        detalle_rangos.append(
-            {"rango": rango["nombre"], "cantidad": cantidad, "monto_total": monto_mora}
-        )
+        detalle_rangos.append({"rango": rango["nombre"], "cantidad": cantidad, "monto_total": monto_mora})
 
     # Total general
-    total_mora = (
-        db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.EN_MORA).count()
-    )
+    total_mora = db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.EN_MORA).count()
 
     monto_total_mora = db.query(func.sum(Prestamo.saldo_pendiente)).filter(
         Prestamo.estado == EstadoPrestamo.EN_MORA
@@ -151,18 +141,12 @@ def reporte_morosidad(dias_mora_minimo: int = 1, db: Session = Depends(get_db)):
 
 
 @router.get("/cobranza", response_model=ReporteCobranza)
-def reporte_cobranza(
-    fecha_inicio: date, fecha_fin: date, db: Session = Depends(get_db)
-):
+def reporte_cobranza(fecha_inicio: date, fecha_fin: date, db: Session = Depends(get_db)):
     """
     Genera reporte de gestión de cobranza.
     """
     # Pagos recibidos en el período
-    pagos = (
-        db.query(Pago)
-        .filter(Pago.fecha_pago >= fecha_inicio, Pago.fecha_pago <= fecha_fin)
-        .all()
-    )
+    pagos = db.query(Pago).filter(Pago.fecha_pago >= fecha_inicio, Pago.fecha_pago <= fecha_fin).all()
 
     total_recaudado = sum(p.monto for p in pagos)
     cantidad_pagos = len(pagos)
@@ -191,12 +175,8 @@ def reporte_cobranza(
         fecha_fin=fecha_fin,
         total_recaudado=total_recaudado,
         cantidad_pagos=cantidad_pagos,
-        promedio_pago=(
-            total_recaudado / cantidad_pagos if cantidad_pagos > 0 else Decimal("0")
-        ),
-        detalle_por_concepto=[
-            {"concepto": c[0], "cantidad": c[1], "monto": c[2]} for c in por_concepto
-        ],
+        promedio_pago=(total_recaudado / cantidad_pagos if cantidad_pagos > 0 else Decimal("0")),
+        detalle_por_concepto=[{"concepto": c[0], "cantidad": c[1], "monto": c[2]} for c in por_concepto],
         eficiencia_cobranza=round(eficiencia, 2),
     )
 
@@ -224,9 +204,7 @@ async def exportar_excel(
     ws = wb.active
 
     # Estilo de encabezados
-    header_fill = PatternFill(
-        start_color="366092", end_color="366092", fill_type="solid"
-    )
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True)
 
     if tipo_reporte == "cartera":
@@ -250,13 +228,7 @@ async def exportar_excel(
             cell.fill = header_fill
             cell.font = header_font
 
-        prestamos = (
-            db.query(Prestamo)
-            .filter(
-                Prestamo.estado.in_([EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA])
-            )
-            .all()
-        )
+        prestamos = db.query(Prestamo).filter(Prestamo.estado.in_([EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA])).all()
 
         for p in prestamos:
             ws.append(
@@ -283,11 +255,7 @@ async def exportar_excel(
             cell.fill = header_fill
             cell.font = header_font
 
-        pagos = (
-            db.query(Pago)
-            .filter(Pago.fecha_pago >= fecha_inicio, Pago.fecha_pago <= fecha_fin)
-            .all()
-        )
+        pagos = db.query(Pago).filter(Pago.fecha_pago >= fecha_inicio, Pago.fecha_pago <= fecha_fin).all()
 
         for p in pagos:
             ws.append(
@@ -407,9 +375,7 @@ async def generar_estado_cuenta_pdf(cliente_id: int, db: Session = Depends(get_d
             y_pos - 30,
             f"Total Financiado: ${float(resumen['total_financiado']):,.2f}",
         )
-        p.drawString(
-            50, y_pos - 50, f"Total Pagado: ${float(resumen['total_pagado']):,.2f}"
-        )
+        p.drawString(50, y_pos - 50, f"Total Pagado: ${float(resumen['total_pagado']):,.2f}")
         p.drawString(
             50,
             y_pos - 70,
@@ -430,9 +396,7 @@ async def generar_estado_cuenta_pdf(cliente_id: int, db: Session = Depends(get_d
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"attachment; filename=estado_cuenta_{cliente.cedula}.pdf"
-            },
+            headers={"Content-Disposition": f"attachment; filename=estado_cuenta_{cliente.cedula}.pdf"},
         )
 
     except ImportError:
@@ -440,9 +404,7 @@ async def generar_estado_cuenta_pdf(cliente_id: int, db: Session = Depends(get_d
 
 
 @router.get("/tabla-amortizacion/{cliente_id}/pdf")
-async def generar_tabla_amortizacion_pdf(
-    cliente_id: int, db: Session = Depends(get_db)
-):
+async def generar_tabla_amortizacion_pdf(cliente_id: int, db: Session = Depends(get_db)):
     """
     2. Tabla de amortización por cliente (PDF)
     - Plan de pagos completo
@@ -473,12 +435,7 @@ async def generar_tabla_amortizacion_pdf(
         if not prestamo:
             raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
-        cuotas = (
-            db.query(Cuota)
-            .filter(Cuota.prestamo_id == prestamo.id)
-            .order_by(Cuota.numero_cuota)
-            .all()
-        )
+        cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
 
         # Crear PDF
         buffer = io.BytesIO()
@@ -552,9 +509,7 @@ async def generar_tabla_amortizacion_pdf(
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"attachment; filename=amortizacion_{cliente.cedula}.pdf"
-            },
+            headers={"Content-Disposition": f"attachment; filename=amortizacion_{cliente.cedula}.pdf"},
         )
 
     except ImportError:
@@ -590,9 +545,7 @@ async def reporte_cobranza_diaria_pdf(
         .select_from(Cuota)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .filter(
-            Cuota.fecha_vencimiento == fecha, Cuota.estado.in_(["PENDIENTE", "PARCIAL"])
-        )
+        .filter(Cuota.fecha_vencimiento == fecha, Cuota.estado.in_(["PENDIENTE", "PARCIAL"]))
         .all()
     )
 
@@ -633,12 +586,8 @@ def generar_reporte_personalizado(
     fecha_inicio: Optional[date] = Query(None),
     fecha_fin: Optional[date] = Query(None),
     cliente_ids: Optional[str] = Query(None, description="IDs separados por coma"),
-    asesor_ids: Optional[str] = Query(
-        None, description="IDs de asesores de configuración separados por coma"
-    ),
-    concesionarios: Optional[str] = Query(
-        None, description="Nombres separados por coma"
-    ),
+    asesor_ids: Optional[str] = Query(None, description="IDs de asesores de configuración separados por coma"),
+    concesionarios: Optional[str] = Query(None, description="Nombres separados por coma"),
     modelos: Optional[str] = Query(None, description="Modelos separados por coma"),
     estado: Optional[str] = Query(None, description="AL_DIA, MORA, TODOS"),
     modalidad: Optional[str] = Query(None, description="SEMANAL, QUINCENAL, MENSUAL"),
@@ -815,16 +764,8 @@ async def reporte_mensual_cartera_pdf(
 
         # KPIs principales
         total_clientes = db.query(Cliente).filter(Cliente.activo).count()
-        clientes_al_dia = (
-            db.query(Cliente)
-            .filter(Cliente.activo, Cliente.estado_financiero == "AL_DIA")
-            .count()
-        )
-        clientes_mora = (
-            db.query(Cliente)
-            .filter(Cliente.activo, Cliente.estado_financiero == "EN_MORA")
-            .count()
-        )
+        clientes_al_dia = db.query(Cliente).filter(Cliente.activo, Cliente.estado_financiero == "AL_DIA").count()
+        clientes_mora = db.query(Cliente).filter(Cliente.activo, Cliente.estado_financiero == "EN_MORA").count()
 
         # Pagos del mes
         pagos_mes = (
@@ -845,9 +786,7 @@ async def reporte_mensual_cartera_pdf(
         story = []
 
         # Título
-        title = Paragraph(
-            f"<b>REPORTE MENSUAL DE CARTERA</b><br/>{mes:02d}/{anio}", styles["Title"]
-        )
+        title = Paragraph(f"<b>REPORTE MENSUAL DE CARTERA</b><br/>{mes:02d}/{anio}", styles["Title"])
         story.append(title)
         story.append(Spacer(1, 30))
 
@@ -858,20 +797,12 @@ async def reporte_mensual_cartera_pdf(
             [
                 "Clientes al Día",
                 f"{clientes_al_dia:,}",
-                (
-                    f"{(clientes_al_dia/total_clientes*100):.1f}%"
-                    if total_clientes > 0
-                    else "0%"
-                ),
+                (f"{(clientes_al_dia/total_clientes*100):.1f}%" if total_clientes > 0 else "0%"),
             ],
             [
                 "Clientes en Mora",
                 f"{clientes_mora:,}",
-                (
-                    f"{(clientes_mora/total_clientes*100):.1f}%"
-                    if total_clientes > 0
-                    else "0%"
-                ),
+                (f"{(clientes_mora/total_clientes*100):.1f}%" if total_clientes > 0 else "0%"),
             ],
             ["Total Cobrado", f"${float(pagos_mes):,.2f}", "-"],
         ]
@@ -902,11 +833,7 @@ async def reporte_mensual_cartera_pdf(
             [
                 "0 días (Al día)",
                 str(clientes_al_dia),
-                (
-                    f"{(clientes_al_dia/total_clientes*100):.1f}%"
-                    if total_clientes > 0
-                    else "0%"
-                ),
+                (f"{(clientes_al_dia/total_clientes*100):.1f}%" if total_clientes > 0 else "0%"),
             ],
             ["1-30 días", "0", "0%"],  # Placeholder - calcular real
             ["31-60 días", "0", "0%"],  # Placeholder - calcular real
@@ -935,9 +862,7 @@ async def reporte_mensual_cartera_pdf(
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"attachment; filename=cartera_mensual_{mes:02d}_{anio}.pdf"
-            },
+            headers={"Content-Disposition": f"attachment; filename=cartera_mensual_{mes:02d}_{anio}.pdf"},
         )
 
     except ImportError:
@@ -986,11 +911,7 @@ async def reporte_asesor_pdf(
             fecha_fin = date.today()
 
         # Obtener clientes del asesor
-        clientes_asesor = (
-            db.query(Cliente)
-            .filter(Cliente.asesor_id == asesor_id, Cliente.activo)
-            .all()
-        )
+        clientes_asesor = db.query(Cliente).filter(Cliente.asesor_id == asesor_id, Cliente.activo).all()
 
         # Ventas del período
         ventas_periodo = (
@@ -1007,12 +928,8 @@ async def reporte_asesor_pdf(
         monto_cartera = sum(float(c.total_financiamiento or 0) for c in clientes_asesor)
 
         # Estado de cobranza
-        clientes_al_dia = len(
-            [c for c in clientes_asesor if c.estado_financiero == "AL_DIA"]
-        )
-        clientes_mora = len(
-            [c for c in clientes_asesor if c.estado_financiero == "EN_MORA"]
-        )
+        clientes_al_dia = len([c for c in clientes_asesor if c.estado_financiero == "AL_DIA"])
+        clientes_mora = len([c for c in clientes_asesor if c.estado_financiero == "EN_MORA"])
 
         # Crear PDF
         buffer = io.BytesIO()
@@ -1021,9 +938,7 @@ async def reporte_asesor_pdf(
         story = []
 
         # Título
-        title = Paragraph(
-            f"<b>REPORTE DE USER</b><br/>{asesor.full_name}", styles["Title"]
-        )
+        title = Paragraph(f"<b>REPORTE DE USER</b><br/>{asesor.full_name}", styles["Title"])
         story.append(title)
         story.append(Spacer(1, 30))
 
@@ -1045,19 +960,11 @@ async def reporte_asesor_pdf(
             ["Monto Total Cartera", f"${monto_cartera:,.2f}"],
             [
                 "Clientes al Día",
-                (
-                    f"{clientes_al_dia} ({(clientes_al_dia/len(clientes_asesor)*100):.1f}%)"
-                    if clientes_asesor
-                    else "0"
-                ),
+                (f"{clientes_al_dia} ({(clientes_al_dia/len(clientes_asesor)*100):.1f}%)" if clientes_asesor else "0"),
             ],
             [
                 "Clientes en Mora",
-                (
-                    f"{clientes_mora} ({(clientes_mora/len(clientes_asesor)*100):.1f}%)"
-                    if clientes_asesor
-                    else "0"
-                ),
+                (f"{clientes_mora} ({(clientes_mora/len(clientes_asesor)*100):.1f}%)" if clientes_asesor else "0"),
             ],
         ]
 
@@ -1112,9 +1019,7 @@ async def reporte_asesor_pdf(
                 )
             )
 
-            story.append(
-                Paragraph("<b>Clientes Asignados (Top 20)</b>", styles["Heading2"])
-            )
+            story.append(Paragraph("<b>Clientes Asignados (Top 20)</b>", styles["Heading2"]))
             story.append(clientes_table)
 
         doc.build(story)
@@ -1123,9 +1028,7 @@ async def reporte_asesor_pdf(
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"attachment; filename=reporte_asesor_{asesor.full_name.replace(' ', '_')}.pdf"
-            },
+            headers={"Content-Disposition": f"attachment; filename=reporte_asesor_{asesor.full_name.replace(' ', '_')}.pdf"},
         )
 
     except ImportError:

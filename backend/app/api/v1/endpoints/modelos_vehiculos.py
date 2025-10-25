@@ -61,9 +61,7 @@ def listar_modelos_vehiculos(
         modelos = query.offset(offset).limit(limit).all()
 
         # Serializar respuesta
-        modelos_response = [
-            ModeloVehiculoResponse.model_validate(modelo) for modelo in modelos
-        ]
+        modelos_response = [ModeloVehiculoResponse.model_validate(modelo) for modelo in modelos]
 
         return ModeloVehiculoListResponse(
             items=modelos_response,
@@ -88,12 +86,7 @@ def listar_modelos_activos(
     📋 Listar solo modelos de vehículos activos (para formularios)
     """
     try:
-        modelos = (
-            db.query(ModeloVehiculo)
-            .filter(ModeloVehiculo.activo)
-            .order_by(ModeloVehiculo.modelo)
-            .all()
-        )
+        modelos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo).order_by(ModeloVehiculo.modelo).all()
 
         return [ModeloVehiculoResponse.model_validate(modelo) for modelo in modelos]
 
@@ -115,9 +108,7 @@ def obtener_modelo_vehiculo(
         modelo = db.query(ModeloVehiculo).filter(ModeloVehiculo.id == modelo_id).first()
 
         if not modelo:
-            raise HTTPException(
-                status_code=404, detail="Modelo de vehículo no encontrado"
-            )
+            raise HTTPException(status_code=404, detail="Modelo de vehículo no encontrado")
 
         return ModeloVehiculoResponse.model_validate(modelo)
 
@@ -139,29 +130,19 @@ def crear_modelo_vehiculo(
     """
     try:
         # Verificar si ya existe un modelo con el mismo nombre
-        existing_modelo = (
-            db.query(ModeloVehiculo)
-            .filter(ModeloVehiculo.modelo.ilike(modelo_data.modelo))
-            .first()
-        )
+        existing_modelo = db.query(ModeloVehiculo).filter(ModeloVehiculo.modelo.ilike(modelo_data.modelo)).first()
 
         if existing_modelo:
-            raise HTTPException(
-                status_code=400, detail="Ya existe un modelo de vehículo con ese nombre"
-            )
+            raise HTTPException(status_code=400, detail="Ya existe un modelo de vehículo con ese nombre")
 
         # Crear nuevo modelo
-        nuevo_modelo = ModeloVehiculo(
-            modelo=modelo_data.modelo.strip(), activo=modelo_data.activo
-        )
+        nuevo_modelo = ModeloVehiculo(modelo=modelo_data.modelo.strip(), activo=modelo_data.activo)
 
         db.add(nuevo_modelo)
         db.commit()
         db.refresh(nuevo_modelo)
 
-        logger.info(
-            f"Modelo de vehículo creado: {nuevo_modelo.modelo} (ID: {nuevo_modelo.id})"
-        )
+        logger.info(f"Modelo de vehículo creado: {nuevo_modelo.modelo} (ID: {nuevo_modelo.id})")
 
         return ModeloVehiculoResponse.model_validate(nuevo_modelo)
 
@@ -188,9 +169,7 @@ def actualizar_modelo_vehiculo(
         modelo = db.query(ModeloVehiculo).filter(ModeloVehiculo.id == modelo_id).first()
 
         if not modelo:
-            raise HTTPException(
-                status_code=404, detail="Modelo de vehículo no encontrado"
-            )
+            raise HTTPException(status_code=404, detail="Modelo de vehículo no encontrado")
 
         # Verificar nombre único si se está cambiando
         if modelo_data.modelo and modelo_data.modelo != modelo.modelo:
@@ -218,9 +197,7 @@ def actualizar_modelo_vehiculo(
         db.commit()
         db.refresh(modelo)
 
-        logger.info(
-            f"Modelo de vehículo actualizado: {modelo.modelo} (ID: {modelo.id})"
-        )
+        logger.info(f"Modelo de vehículo actualizado: {modelo.modelo} (ID: {modelo.id})")
 
         return ModeloVehiculoResponse.model_validate(modelo)
 
@@ -246,22 +223,16 @@ def eliminar_modelo_vehiculo(
         modelo = db.query(ModeloVehiculo).filter(ModeloVehiculo.id == modelo_id).first()
 
         if not modelo:
-            raise HTTPException(
-                status_code=404, detail="Modelo de vehículo no encontrado"
-            )
+            raise HTTPException(status_code=404, detail="Modelo de vehículo no encontrado")
 
         # HARD DELETE - eliminar completamente de la base de datos
         modelo_nombre = modelo.modelo  # Guardar nombre para log
         db.delete(modelo)
         db.commit()
 
-        logger.info(
-            f"Modelo de vehículo ELIMINADO COMPLETAMENTE: {modelo_nombre} (ID: {modelo_id})"
-        )
+        logger.info(f"Modelo de vehículo ELIMINADO COMPLETAMENTE: {modelo_nombre} (ID: {modelo_id})")
 
-        return {
-            "message": "Modelo de vehículo eliminado completamente de la base de datos"
-        }
+        return {"message": "Modelo de vehículo eliminado completamente de la base de datos"}
 
     except HTTPException:
         raise

@@ -12,16 +12,12 @@ router = APIRouter()
 
 
 @router.post("/ejecutar-migracion-concesionario-analista")
-async def ejecutar_migracion_emergencia(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def ejecutar_migracion_emergencia(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Endpoint de emergencia para ejecutar la migración de concesionario y analista
     """
     try:
-        logger.info(
-            f"Ejecutando migración de emergencia - Usuario: {current_user.email}"
-        )
+        logger.info(f"Ejecutando migración de emergencia - Usuario: {current_user.email}")
 
         # Verificar si las columnas ya existen
         from sqlalchemy import inspect
@@ -34,14 +30,8 @@ async def ejecutar_migracion_emergencia(
         # Agregar concesionario si no existe
         if "concesionario" not in columns:
             logger.info("Agregando columna 'concesionario'")
-            db.execute(
-                text("ALTER TABLE clientes ADD COLUMN concesionario VARCHAR(100)")
-            )
-            db.execute(
-                text(
-                    "CREATE INDEX idx_clientes_concesionario ON clientes (concesionario)"
-                )
-            )
+            db.execute(text("ALTER TABLE clientes ADD COLUMN concesionario VARCHAR(100)"))
+            db.execute(text("CREATE INDEX idx_clientes_concesionario ON clientes (concesionario)"))
             logger.info("✅ Columna 'concesionario' agregada")
         else:
             logger.info("ℹ️ Columna 'concesionario' ya existe")
@@ -50,9 +40,7 @@ async def ejecutar_migracion_emergencia(
         if "analista" not in columns:
             logger.info("Agregando columna 'analista'")
             db.execute(text("ALTER TABLE clientes ADD COLUMN analista VARCHAR(100)"))
-            db.execute(
-                text("CREATE INDEX idx_clientes_analista ON clientes (analista)")
-            )
+            db.execute(text("CREATE INDEX idx_clientes_analista ON clientes (analista)"))
             logger.info("✅ Columna 'analista' agregada")
         else:
             logger.info("ℹ️ Columna 'analista' ya existe")
@@ -79,6 +67,4 @@ async def ejecutar_migracion_emergencia(
     except Exception as e:
         logger.error(f"Error en migración de emergencia: {e}")
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Error ejecutando migración: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error ejecutando migración: {str(e)}")

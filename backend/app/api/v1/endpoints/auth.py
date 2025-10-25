@@ -59,9 +59,7 @@ def add_cors_headers(request: Request, response: Response) -> None:
             logger.info(f"CORS Debug - Usando fallback: {settings.CORS_ORIGINS[0]}")
 
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = (
-        "Content-Type, Authorization, X-Requested-With"
-    )
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
     response.headers["Access-Control-Allow-Credentials"] = "true"
 
 
@@ -128,9 +126,7 @@ async def login(
 
 
 @router.get("/me", response_model=UserMeResponse)
-async def get_current_user_info(
-    request: Request, response: Response, current_user: User = Depends(get_current_user)
-):
+async def get_current_user_info(request: Request, response: Response, current_user: User = Depends(get_current_user)):
     """
     👤 Obtener información del usuario actual
     """
@@ -149,9 +145,7 @@ async def get_current_user_info(
 
 
 @router.post("/logout")
-async def logout(
-    request: Request, response: Response, current_user: User = Depends(get_current_user)
-):
+async def logout(request: Request, response: Response, current_user: User = Depends(get_current_user)):
     """
     🚪 Logout de usuario
     """
@@ -187,9 +181,7 @@ async def refresh_token(
 
         # Validar token de refresh usando el método correcto
         try:
-            token_data = AuthService.refresh_access_token(
-                db, refresh_data.refresh_token
-            )
+            token_data = AuthService.refresh_access_token(db, refresh_data.refresh_token)
             return token_data
         except HTTPException as e:
             raise e
@@ -220,9 +212,7 @@ async def change_password(
         add_cors_headers(request, response)
 
         # Verificar contraseña actual
-        if not verify_password(
-            password_data.current_password, current_user.hashed_password
-        ):
+        if not verify_password(password_data.current_password, current_user.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Contraseña actual incorrecta",

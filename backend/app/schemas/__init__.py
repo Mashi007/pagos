@@ -138,6 +138,4 @@ __all__ = [
 # ============================================
 __version__ = "1.0.0"
 __author__ = "Sistema de Gestión de Préstamos"
-__description__ = (
-    "Schemas Pydantic v2 para validación de API - SIMPLIFICADO (sin UserRole)"
-)
+__description__ = "Schemas Pydantic v2 para validación de API - SIMPLIFICADO (sin UserRole)"

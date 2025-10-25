@@ -85,9 +85,7 @@ class AuthFlowTracer:
         # Detectar anomalías
         self._detect_anomalies(trace_data)
 
-        logger.info(
-            f"🏁 AUTH_TRACE [{self.trace_id}] COMPLETED: {overall_status} ({total_duration:.2f}ms)"
-        )
+        logger.info(f"🏁 AUTH_TRACE [{self.trace_id}] COMPLETED: {overall_status} ({total_duration:.2f}ms)")
 
     def _detect_anomalies(self, trace_data: Dict):
         """Detectar patrones anómalos en el trace"""
@@ -101,13 +99,7 @@ class AuthFlowTracer:
             anomaly_patterns["multiple_failures"] += 1
 
         # Anomalía 3: Token inválido repetido
-        token_errors = len(
-            [
-                s
-                for s in trace_data["steps"]
-                if "token" in s["step"].lower() and s["status"] == "failed"
-            ]
-        )
+        token_errors = len([s for s in trace_data["steps"] if "token" in s["step"].lower() and s["status"] == "failed"])
         if token_errors > 0:
             anomaly_patterns["token_validation_failure"] += 1
 
@@ -138,11 +130,7 @@ class CorrelationAnalyzer:
                     "user_id": payload.get("sub"),
                     "token_type": payload.get("type"),
                     "exp": payload.get("exp"),
-                    "is_expired": (
-                        datetime.now().timestamp() > payload.get("exp", 0)
-                        if payload.get("exp")
-                        else False
-                    ),
+                    "is_expired": (datetime.now().timestamp() > payload.get("exp", 0) if payload.get("exp") else False),
                 }
             except Exception:
                 token_analysis = {"error": "Invalid token format"}
@@ -179,9 +167,7 @@ async def trace_authentication_flow(request: Request, db: Session = Depends(get_
             {
                 "has_auth_header": bool(auth_header),
                 "auth_header_type": auth_header.split(" ")[0] if auth_header else None,
-                "user_agent": (
-                    user_agent[:50] + "..." if len(user_agent) > 50 else user_agent
-                ),
+                "user_agent": (user_agent[:50] + "..." if len(user_agent) > 50 else user_agent),
                 "client_ip": ip,
             },
         )
@@ -190,9 +176,7 @@ async def trace_authentication_flow(request: Request, db: Session = Depends(get_
         tracer.add_step("header_validation", "started")
 
         if not auth_header:
-            tracer.add_step(
-                "header_validation", "failed", {"error": "No Authorization header"}
-            )
+            tracer.add_step("header_validation", "failed", {"error": "No Authorization header"})
             tracer.finalize("failed", "Missing Authorization header")
             return {
                 "trace_id": tracer.trace_id,
@@ -202,9 +186,7 @@ async def trace_authentication_flow(request: Request, db: Session = Depends(get_
             }
 
         if not auth_header.startswith("Bearer "):
-            tracer.add_step(
-                "header_validation", "failed", {"error": "Invalid Authorization format"}
-            )
+            tracer.add_step("header_validation", "failed", {"error": "Invalid Authorization format"})
             tracer.finalize("failed", "Invalid Authorization format")
             return {
                 "trace_id": tracer.trace_id,
@@ -218,9 +200,7 @@ async def trace_authentication_flow(request: Request, db: Session = Depends(get_
             "completed",
             {
                 "header_format": "Bearer",
-                "token_length": (
-                    len(auth_header.split(" ")[1]) if " " in auth_header else 0
-                ),
+                "token_length": (len(auth_header.split(" ")[1]) if " " in auth_header else 0),
             },
         )
 
@@ -232,9 +212,7 @@ async def trace_authentication_flow(request: Request, db: Session = Depends(get_
         # Análisis básico del token
         token_parts = token.split(".")
         if len(token_parts) != 3:
-            tracer.add_step(
-                "token_extraction", "failed", {"error": "Invalid JWT structure"}
-            )
+            tracer.add_step("token_extraction", "failed", {"error": "Invalid JWT structure"})
             tracer.finalize("failed", "Invalid JWT structure")
             return {
                 "trace_id": tracer.trace_id,
@@ -293,11 +271,7 @@ async def trace_authentication_flow(request: Request, db: Session = Depends(get_
                 {
                     "exp_datetime": exp_datetime.isoformat(),
                     "is_expired": is_expired,
-                    "time_until_expiry": (
-                        str(exp_datetime - datetime.now())
-                        if not is_expired
-                        else "EXPIRED"
-                    ),
+                    "time_until_expiry": (str(exp_datetime - datetime.now()) if not is_expired else "EXPIRED"),
                 },
             )
 
@@ -310,9 +284,7 @@ async def trace_authentication_flow(request: Request, db: Session = Depends(get_
                     "steps": tracer.steps,
                 }
         else:
-            tracer.add_step(
-                "expiration_check", "warning", {"error": "No expiration found in token"}
-            )
+            tracer.add_step("expiration_check", "warning", {"error": "No expiration found in token"})
 
         # Paso 6: Verificación con SECRET_KEY
         tracer.add_step("signature_verification", "started")
@@ -339,9 +311,7 @@ async def trace_authentication_flow(request: Request, db: Session = Depends(get_
 
         user_id = verified_payload.get("sub")
         if not user_id:
-            tracer.add_step(
-                "user_verification", "failed", {"error": "No user_id in token"}
-            )
+            tracer.add_step("user_verification", "failed", {"error": "No user_id in token"})
             tracer.finalize("failed", "No user_id in token")
             return {
                 "trace_id": tracer.trace_id,
@@ -367,9 +337,7 @@ async def trace_authentication_flow(request: Request, db: Session = Depends(get_
                 }
 
             if not user.is_active:
-                tracer.add_step(
-                    "user_verification", "failed", {"error": "User inactive"}
-                )
+                tracer.add_step("user_verification", "failed", {"error": "User inactive"})
                 tracer.finalize("failed", "User inactive")
                 return {
                     "trace_id": tracer.trace_id,
@@ -435,25 +403,15 @@ async def analyze_request_correlation(request: Request, minutes: int = 60):
     try:
         # Obtener traces recientes
         cutoff_time = datetime.now() - timedelta(minutes=minutes)
-        recent_traces = [
-            trace
-            for trace in auth_flow_traces
-            if datetime.fromisoformat(trace["start_time"]) > cutoff_time
-        ]
+        recent_traces = [trace for trace in auth_flow_traces if datetime.fromisoformat(trace["start_time"]) > cutoff_time]
 
         # Análisis de correlación
         correlation_analysis = {
             "time_range_minutes": minutes,
             "total_traces": len(recent_traces),
-            "successful_traces": len(
-                [t for t in recent_traces if t["overall_status"] == "success"]
-            ),
-            "failed_traces": len(
-                [t for t in recent_traces if t["overall_status"] == "failed"]
-            ),
-            "error_traces": len(
-                [t for t in recent_traces if t["overall_status"] == "error"]
-            ),
+            "successful_traces": len([t for t in recent_traces if t["overall_status"] == "success"]),
+            "failed_traces": len([t for t in recent_traces if t["overall_status"] == "failed"]),
+            "error_traces": len([t for t in recent_traces if t["overall_status"] == "error"]),
         }
 
         # Agrupar por tipo de error
@@ -468,10 +426,7 @@ async def analyze_request_correlation(request: Request, minutes: int = 60):
             if len(traces) > 1:
                 # Calcular intervalo promedio entre errores
                 timestamps = [datetime.fromisoformat(t["start_time"]) for t in traces]
-                intervals = [
-                    (timestamps[i + 1] - timestamps[i]).total_seconds()
-                    for i in range(len(timestamps) - 1)
-                ]
+                intervals = [(timestamps[i + 1] - timestamps[i]).total_seconds() for i in range(len(timestamps) - 1)]
                 avg_interval = sum(intervals) / len(intervals) if intervals else 0
 
                 temporal_patterns[error_type] = {
@@ -498,11 +453,7 @@ async def analyze_request_correlation(request: Request, minutes: int = 60):
                     "avg_duration_ms": sum(durations) / len(durations),
                     "min_duration_ms": min(durations),
                     "max_duration_ms": max(durations),
-                    "p95_duration_ms": (
-                        sorted(durations)[int(len(durations) * 0.95)]
-                        if durations
-                        else 0
-                    ),
+                    "p95_duration_ms": (sorted(durations)[int(len(durations) * 0.95)] if durations else 0),
                 }
 
         return {
@@ -516,9 +467,7 @@ async def analyze_request_correlation(request: Request, minutes: int = 60):
                 "timing_analysis": timing_analysis,
                 "anomaly_patterns": dict(anomaly_patterns),
             },
-            "recommendations": _generate_correlation_recommendations(
-                error_groups, temporal_patterns, step_failures
-            ),
+            "recommendations": _generate_correlation_recommendations(error_groups, temporal_patterns, step_failures),
         }
 
     except Exception as e:
@@ -538,19 +487,13 @@ async def detect_authentication_anomalies():
     try:
         # Obtener traces de la última hora
         cutoff_time = datetime.now() - timedelta(hours=1)
-        recent_traces = [
-            trace
-            for trace in auth_flow_traces
-            if datetime.fromisoformat(trace["start_time"]) > cutoff_time
-        ]
+        recent_traces = [trace for trace in auth_flow_traces if datetime.fromisoformat(trace["start_time"]) > cutoff_time]
 
         anomalies = []
 
         # Anomalía 1: Tasa de error alta
         total_traces = len(recent_traces)
-        failed_traces = len(
-            [t for t in recent_traces if t["overall_status"] == "failed"]
-        )
+        failed_traces = len([t for t in recent_traces if t["overall_status"] == "failed"])
         error_rate = (failed_traces / total_traces * 100) if total_traces > 0 else 0
 
         if error_rate > 50:
@@ -575,9 +518,7 @@ async def detect_authentication_anomalies():
         # Anomalía 2: Duración excesiva
         slow_traces = [t for t in recent_traces if t["total_duration_ms"] > 3000]
         if slow_traces:
-            avg_slow_duration = sum(t["total_duration_ms"] for t in slow_traces) / len(
-                slow_traces
-            )
+            avg_slow_duration = sum(t["total_duration_ms"] for t in slow_traces) / len(slow_traces)
             anomalies.append(
                 {
                     "type": "slow_authentication",
@@ -648,11 +589,7 @@ async def get_authentication_timeline(minutes: int = 30, limit: int = 50):
     """
     try:
         cutoff_time = datetime.now() - timedelta(minutes=minutes)
-        recent_traces = [
-            trace
-            for trace in auth_flow_traces
-            if datetime.fromisoformat(trace["start_time"]) > cutoff_time
-        ]
+        recent_traces = [trace for trace in auth_flow_traces if datetime.fromisoformat(trace["start_time"]) > cutoff_time]
 
         # Ordenar por tiempo
         recent_traces.sort(key=lambda x: x["start_time"])
@@ -671,9 +608,7 @@ async def get_authentication_timeline(minutes: int = 30, limit: int = 50):
                 "duration_ms": trace["total_duration_ms"],
                 "error": trace.get("error"),
                 "steps_count": len(trace["steps"]),
-                "failed_steps": len(
-                    [s for s in trace["steps"] if s["status"] == "failed"]
-                ),
+                "failed_steps": len([s for s in trace["steps"] if s["status"] == "failed"]),
             }
             timeline.append(timeline_entry)
 
@@ -696,18 +631,14 @@ async def get_authentication_timeline(minutes: int = 30, limit: int = 50):
         }
 
 
-def _generate_correlation_recommendations(
-    error_groups: Dict, temporal_patterns: Dict, step_failures: Dict
-) -> List[str]:
+def _generate_correlation_recommendations(error_groups: Dict, temporal_patterns: Dict, step_failures: Dict) -> List[str]:
     """Generar recomendaciones basadas en análisis de correlación"""
     recommendations = []
 
     # Recomendaciones basadas en errores más comunes
     if step_failures:
         most_failed_step = max(step_failures.items(), key=lambda x: x[1])
-        recommendations.append(
-            f"🔧 Paso más problemático: '{most_failed_step[0]}' ({most_failed_step[1]} fallos)"
-        )
+        recommendations.append(f"🔧 Paso más problemático: '{most_failed_step[0]}' ({most_failed_step[1]} fallos)")
 
     # Recomendaciones basadas en patrones temporales
     for error_type, pattern in temporal_patterns.items():
@@ -718,9 +649,7 @@ def _generate_correlation_recommendations(
 
     # Recomendaciones generales
     if not recommendations:
-        recommendations.append(
-            "✅ No se detectaron patrones problemáticos significativos"
-        )
+        recommendations.append("✅ No se detectaron patrones problemáticos significativos")
 
     return recommendations
 

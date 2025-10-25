@@ -24,9 +24,7 @@ class NotificacionBase(BaseModel):
 
     # Tipo y categoría
     tipo: str = Field(..., description="EMAIL, SMS, WHATSAPP, PUSH")
-    categoria: str = Field(
-        ..., description="RECORDATORIO_PAGO, PRESTAMO_APROBADO, etc."
-    )
+    categoria: str = Field(..., description="RECORDATORIO_PAGO, PRESTAMO_APROBADO, etc.")
 
     # Contenido
     asunto: Optional[str] = Field(None, max_length=255)
@@ -117,9 +115,7 @@ class NotificacionRecordatorioPago(BaseModel):
     tipo: str = Field(..., description="EMAIL, SMS, WHATSAPP")
     mensaje: str
     programada_para: Optional[datetime] = None
-    extra_data: Optional[Dict[str, Any]] = Field(
-        None, description="Datos adicionales como monto, fecha_vencimiento, etc."
-    )
+    extra_data: Optional[Dict[str, Any]] = Field(None, description="Datos adicionales como monto, fecha_vencimiento, etc.")
 
 
 # ============================================================================

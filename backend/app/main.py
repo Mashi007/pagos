@@ -66,9 +66,7 @@ app_logger.addHandler(logging.StreamHandler(sys.stdout))
 
 # Log de inicio
 logger.info("🚀 Iniciando aplicación FastAPI - Sistema de Préstamos y Cobranza")
-logger.info(
-    f"📊 Configuración: Environment={settings.ENVIRONMENT}, Log Level={settings.LOG_LEVEL}"
-)
+logger.info(f"📊 Configuración: Environment={settings.ENVIRONMENT}, Log Level={settings.LOG_LEVEL}")
 logger.info(f"🌐 CORS Origins: {settings.CORS_ORIGINS}")
 logger.info(f"🔗 Database URL configurada: {bool(settings.DATABASE_URL)}")
 
@@ -167,18 +165,10 @@ app.add_middleware(
 # Registrar routers
 app.include_router(health.router, prefix=f"{settings.API_V1_PREFIX}", tags=["Health"])
 app.include_router(auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["Auth"])
-app.include_router(
-    users.router, prefix=f"{settings.API_V1_PREFIX}/usuarios", tags=["Usuarios"]
-)
-app.include_router(
-    clientes.router, prefix=f"{settings.API_V1_PREFIX}/clientes", tags=["Clientes"]
-)
-app.include_router(
-    prestamos.router, prefix=f"{settings.API_V1_PREFIX}/prestamos", tags=["Prestamos"]
-)
-app.include_router(
-    pagos.router, prefix=f"{settings.API_V1_PREFIX}/pagos", tags=["Pagos"]
-)
+app.include_router(users.router, prefix=f"{settings.API_V1_PREFIX}/usuarios", tags=["Usuarios"])
+app.include_router(clientes.router, prefix=f"{settings.API_V1_PREFIX}/clientes", tags=["Clientes"])
+app.include_router(prestamos.router, prefix=f"{settings.API_V1_PREFIX}/prestamos", tags=["Prestamos"])
+app.include_router(pagos.router, prefix=f"{settings.API_V1_PREFIX}/pagos", tags=["Pagos"])
 app.include_router(
     conciliacion_bancaria.router,
     prefix=f"{settings.API_V1_PREFIX}/conciliacion-bancaria",
@@ -194,9 +184,7 @@ app.include_router(
     prefix=f"{settings.API_V1_PREFIX}/conciliacion",
     tags=["Conciliacion"],
 )
-app.include_router(
-    reportes.router, prefix=f"{settings.API_V1_PREFIX}/reportes", tags=["Reportes"]
-)
+app.include_router(reportes.router, prefix=f"{settings.API_V1_PREFIX}/reportes", tags=["Reportes"])
 app.include_router(kpis.router, prefix=f"{settings.API_V1_PREFIX}/kpis", tags=["KPIs"])
 app.include_router(
     notificaciones.router,
@@ -208,17 +196,13 @@ app.include_router(
     prefix=f"{settings.API_V1_PREFIX}/aprobaciones",
     tags=["Aprobaciones"],
 )
-app.include_router(
-    auditoria.router, prefix=f"{settings.API_V1_PREFIX}/auditoria", tags=["Auditoria"]
-)
+app.include_router(auditoria.router, prefix=f"{settings.API_V1_PREFIX}/auditoria", tags=["Auditoria"])
 app.include_router(
     configuracion.router,
     prefix=f"{settings.API_V1_PREFIX}/configuracion",
     tags=["Configuracion"],
 )
-app.include_router(
-    dashboard.router, prefix=f"{settings.API_V1_PREFIX}/dashboard", tags=["Dashboard"]
-)
+app.include_router(dashboard.router, prefix=f"{settings.API_V1_PREFIX}/dashboard", tags=["Dashboard"])
 app.include_router(
     solicitudes.router,
     prefix=f"{settings.API_V1_PREFIX}/solicitudes",
@@ -254,9 +238,7 @@ app.include_router(
     prefix=f"{settings.API_V1_PREFIX}/concesionarios",
     tags=["Concesionarios"],
 )
-app.include_router(
-    analistas.router, prefix=f"{settings.API_V1_PREFIX}/analistas", tags=["Analistas"]
-)
+app.include_router(analistas.router, prefix=f"{settings.API_V1_PREFIX}/analistas", tags=["Analistas"])
 app.include_router(
     modelos_vehiculos.router,
     prefix=f"{settings.API_V1_PREFIX}/modelos-vehiculos",

@@ -33,9 +33,7 @@ class ForensicTraceSystem:
         self.failed_sequences = deque(maxlen=1000)  # Secuencias que fallaron
         self.lock = threading.Lock()
 
-    def start_trace_session(
-        self, session_id: str, user_id: str = None
-    ) -> Dict[str, Any]:
+    def start_trace_session(self, session_id: str, user_id: str = None) -> Dict[str, Any]:
         """Iniciar sesión de trazado"""
         with self.lock:
             trace_session = {
@@ -60,9 +58,7 @@ class ForensicTraceSystem:
 
             return trace_session
 
-    def log_auth_event(
-        self, session_id: str, event_type: str, event_data: Dict[str, Any]
-    ):
+    def log_auth_event(self, session_id: str, event_type: str, event_data: Dict[str, Any]):
         """Registrar evento de autenticación"""
         with self.lock:
             if session_id not in self.trace_sessions:
@@ -117,9 +113,7 @@ class ForensicTraceSystem:
         """Finalizar sesión de trazado"""
         with self.lock:
             if session_id in self.trace_sessions:
-                self.trace_sessions[session_id]["status"] = (
-                    "completed" if success else "failed"
-                )
+                self.trace_sessions[session_id]["status"] = "completed" if success else "failed"
                 self.trace_sessions[session_id]["end_time"] = datetime.now()
 
                 self._log_event(
@@ -128,8 +122,7 @@ class ForensicTraceSystem:
                         "session_id": session_id,
                         "success": success,
                         "duration_seconds": (
-                            self.trace_sessions[session_id]["end_time"]
-                            - self.trace_sessions[session_id]["start_time"]
+                            self.trace_sessions[session_id]["end_time"] - self.trace_sessions[session_id]["start_time"]
                         ).total_seconds(),
                     },
                 )
@@ -152,9 +145,7 @@ class ForensicTraceSystem:
                 "session_id": session_id,
                 "failure_analysis": self._analyze_failure_pattern(failed_seq),
                 "timeline": self._build_timeline(failed_seq),
-                "root_cause_hypothesis": self._generate_root_cause_hypothesis(
-                    failed_seq
-                ),
+                "root_cause_hypothesis": self._generate_root_cause_hypothesis(failed_seq),
                 "evidence": self._extract_evidence(failed_seq),
             }
 
@@ -167,9 +158,7 @@ class ForensicTraceSystem:
 
         # Análisis temporal
         if len(events) >= 2:
-            time_to_failure = (
-                failure_event["timestamp"] - events[0]["timestamp"]
-            ).total_seconds()
+            time_to_failure = (failure_event["timestamp"] - events[0]["timestamp"]).total_seconds()
         else:
             time_to_failure = 0
 
@@ -210,8 +199,7 @@ class ForensicTraceSystem:
                 "event_type": event["event_type"],
                 "event_id": event["event_id"],
                 "summary": self._summarize_event(event),
-                "is_failure": event["event_id"]
-                == failed_seq["failure_event"]["event_id"],
+                "is_failure": event["event_id"] == failed_seq["failure_event"]["event_id"],
             }
             timeline.append(timeline_entry)
 
@@ -241,12 +229,8 @@ class ForensicTraceSystem:
 
         # Hipótesis basadas en el tipo de fallo
         if failure_event["event_type"] == "token_expired":
-            hypotheses.append(
-                "Token JWT expirado - problema de sincronización de tiempo"
-            )
-            hypotheses.append(
-                "Token JWT expirado - configuración de expiración incorrecta"
-            )
+            hypotheses.append("Token JWT expirado - problema de sincronización de tiempo")
+            hypotheses.append("Token JWT expirado - configuración de expiración incorrecta")
 
         elif failure_event["event_type"] == "auth_failure":
             hypotheses.append("Credenciales inválidas - usuario no existe o inactivo")
@@ -261,9 +245,7 @@ class ForensicTraceSystem:
         # Hipótesis basadas en patrones de eventos
         event_types = [e["event_type"] for e in events]
         if "token_received" in event_types and "token_validation" not in event_types:
-            hypotheses.append(
-                "Token recibido pero no validado - problema en middleware"
-            )
+            hypotheses.append("Token recibido pero no validado - problema en middleware")
 
         if len(events) == 1:
             hypotheses.append("Fallo inmediato - problema en configuración inicial")
@@ -299,10 +281,7 @@ class ForensicTraceSystem:
             evidence["timing_evidence"] = {
                 "first_event_time": events[0]["timestamp"].isoformat(),
                 "failure_time": failure_event["timestamp"].isoformat(),
-                "total_duration_ms": (
-                    failure_event["timestamp"] - events[0]["timestamp"]
-                ).total_seconds()
-                * 1000,
+                "total_duration_ms": (failure_event["timestamp"] - events[0]["timestamp"]).total_seconds() * 1000,
             }
 
         # Evidencia del sistema
@@ -321,9 +300,7 @@ class ForensicTraceSystem:
             cutoff_time = current_time - timedelta(hours=24)  # Últimas 24 horas
 
             # Filtrar eventos recientes
-            recent_events = [
-                event for event in self.event_log if event["timestamp"] > cutoff_time
-            ]
+            recent_events = [event for event in self.event_log if event["timestamp"] > cutoff_time]
 
             # Contar tipos de eventos
             event_type_counts = defaultdict(int)
@@ -331,11 +308,7 @@ class ForensicTraceSystem:
                 event_type_counts[event["event_type"]] += 1
 
             # Análisis de secuencias fallidas
-            recent_failures = [
-                seq
-                for seq in self.failed_sequences
-                if seq["failure_time"] > cutoff_time
-            ]
+            recent_failures = [seq for seq in self.failed_sequences if seq["failure_time"] > cutoff_time]
 
             # Patrones de fallo más comunes
             failure_patterns = defaultdict(int)
@@ -347,25 +320,15 @@ class ForensicTraceSystem:
                 "summary": {
                     "total_events_24h": len(recent_events),
                     "total_failures_24h": len(recent_failures),
-                    "active_trace_sessions": len(
-                        [
-                            s
-                            for s in self.trace_sessions.values()
-                            if s["status"] == "active"
-                        ]
-                    ),
+                    "active_trace_sessions": len([s for s in self.trace_sessions.values() if s["status"] == "active"]),
                     "event_type_distribution": dict(event_type_counts),
                     "failure_pattern_distribution": dict(failure_patterns),
                 },
                 "recent_failures": recent_failures[-10:] if recent_failures else [],
-                "recommendations": self._generate_forensic_recommendations(
-                    recent_failures
-                ),
+                "recommendations": self._generate_forensic_recommendations(recent_failures),
             }
 
-    def _generate_forensic_recommendations(
-        self, recent_failures: List[Dict[str, Any]]
-    ) -> List[str]:
+    def _generate_forensic_recommendations(self, recent_failures: List[Dict[str, Any]]) -> List[str]:
         """Generar recomendaciones basadas en evidencia forense"""
         recommendations = []
 
@@ -377,19 +340,13 @@ class ForensicTraceSystem:
         failure_types = [f["failure_event"]["event_type"] for f in recent_failures]
 
         if failure_types.count("token_expired") > len(failure_types) * 0.5:
-            recommendations.append(
-                "🔴 Más del 50% de fallos son por tokens expirados - revisar configuración de expiración"
-            )
+            recommendations.append("🔴 Más del 50% de fallos son por tokens expirados - revisar configuración de expiración")
 
         if failure_types.count("auth_failure") > len(failure_types) * 0.3:
-            recommendations.append(
-                "🟡 Más del 30% de fallos son de autenticación - revisar validación de usuarios"
-            )
+            recommendations.append("🟡 Más del 30% de fallos son de autenticación - revisar validación de usuarios")
 
         if failure_types.count("validation_failed") > len(failure_types) * 0.2:
-            recommendations.append(
-                "🟡 Más del 20% de fallos son de validación - revisar configuración JWT"
-            )
+            recommendations.append("🟡 Más del 20% de fallos son de validación - revisar configuración JWT")
 
         # Recomendaciones de timing
         avg_time_to_failure = sum(
@@ -399,9 +356,7 @@ class ForensicTraceSystem:
         ) / len(recent_failures)
 
         if avg_time_to_failure < 1:
-            recommendations.append(
-                "⚡ Fallos muy rápidos - posible problema de configuración inicial"
-            )
+            recommendations.append("⚡ Fallos muy rápidos - posible problema de configuración inicial")
 
         return recommendations
 
@@ -459,9 +414,7 @@ async def log_auth_event_endpoint(
         event_data_dict = event_data.get("data", {})
 
         if not session_id or not event_type:
-            raise HTTPException(
-                status_code=400, detail="session_id y event_type requeridos"
-            )
+            raise HTTPException(status_code=400, detail="session_id y event_type requeridos")
 
         forensic_system.log_auth_event(session_id, event_type, event_data_dict)
 
@@ -506,9 +459,7 @@ async def analyze_failure_sequence(
 
 
 @router.get("/forensic-summary")
-async def get_forensic_summary_endpoint(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def get_forensic_summary_endpoint(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     📊 Resumen forense general
     """

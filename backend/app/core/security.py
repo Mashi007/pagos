@@ -144,9 +144,7 @@ def generate_password_reset_token(email: str) -> str:
     """
     Genera un token para reset de contraseña
     """
-    expire = datetime.utcnow() + timedelta(
-        hours=PASSWORD_RESET_EXPIRE_HOURS
-    )  # Expira en 1 hora
+    expire = datetime.utcnow() + timedelta(hours=PASSWORD_RESET_EXPIRE_HOURS)  # Expira en 1 hora
 
     to_encode = {"exp": expire, "sub": email, "type": "password_reset"}
 

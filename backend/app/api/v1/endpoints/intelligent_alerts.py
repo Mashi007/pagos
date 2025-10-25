@@ -140,9 +140,7 @@ class IntelligentAlertSystem:
             # Verificar cooldown
             if rule_name in alert_cooldowns:
                 last_alert_time = alert_cooldowns[rule_name]
-                if current_time - last_alert_time < timedelta(
-                    minutes=rule.cooldown_minutes
-                ):
+                if current_time - last_alert_time < timedelta(minutes=rule.cooldown_minutes):
                     continue
 
             # Evaluar condición
@@ -221,9 +219,7 @@ class IntelligentAlertSystem:
         alert_history.append(alert)
 
         # Log de alerta
-        logger.warning(
-            f"🚨 ALERT [{rule.severity.value.upper()}] {rule.name}: {message}"
-        )
+        logger.warning(f"🚨 ALERT [{rule.severity.value.upper()}] {rule.name}: {message}")
 
         return alert
 
@@ -240,9 +236,7 @@ class IntelligentAlertSystem:
             "unusual_user_patterns": f"Patrones de usuario inusuales: {current_value:.1%} (umbral: {rule.threshold:.1%})",
         }
 
-        return messages.get(
-            rule.name, f"Alerta {rule.name}: {current_value} > {rule.threshold}"
-        )
+        return messages.get(rule.name, f"Alerta {rule.name}: {current_value} > {rule.threshold}")
 
     def _get_current_value(self, rule_name: str, metrics: Dict[str, Any]) -> float:
         """Obtener valor actual para la regla"""
@@ -322,9 +316,7 @@ async def get_active_alerts():
     """
     try:
         # Filtrar alertas activas
-        current_alerts = [
-            alert for alert in active_alerts if alert.status == AlertStatus.ACTIVE
-        ]
+        current_alerts = [alert for alert in active_alerts if alert.status == AlertStatus.ACTIVE]
 
         # Agrupar por severidad
         alerts_by_severity = defaultdict(list)
@@ -532,12 +524,8 @@ async def get_alert_summary():
     try:
         # Estadísticas de alertas activas
         active_count = len([a for a in active_alerts if a.status == AlertStatus.ACTIVE])
-        acknowledged_count = len(
-            [a for a in active_alerts if a.status == AlertStatus.ACKNOWLEDGED]
-        )
-        resolved_count = len(
-            [a for a in alert_history if a.status == AlertStatus.RESOLVED]
-        )
+        acknowledged_count = len([a for a in active_alerts if a.status == AlertStatus.ACKNOWLEDGED])
+        resolved_count = len([a for a in alert_history if a.status == AlertStatus.RESOLVED])
 
         # Estadísticas por severidad
         severity_stats = defaultdict(int)
@@ -550,9 +538,7 @@ async def get_alert_summary():
         for alert in alert_history:
             rule_frequency[alert.rule_name] += 1
 
-        most_frequent = sorted(
-            rule_frequency.items(), key=lambda x: x[1], reverse=True
-        )[:5]
+        most_frequent = sorted(rule_frequency.items(), key=lambda x: x[1], reverse=True)[:5]
 
         return {
             "timestamp": datetime.now().isoformat(),

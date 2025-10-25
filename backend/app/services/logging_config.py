@@ -90,9 +90,7 @@ class ServiceLogger:
         Log con contexto de trazabilidad
         """
         # Crear record con datos adicionales
-        record = self.logger.makeRecord(
-            self.logger.name, level, "", 0, message, (), None
-        )
+        record = self.logger.makeRecord(self.logger.name, level, "", 0, message, (), None)
 
         if extra_data:
             record.extra_data = extra_data
@@ -310,9 +308,7 @@ def log_method_calls(logger_name: str):
                 result = func(*args, **kwargs)
 
                 duration = (datetime.utcnow() - start_time).total_seconds() * 1000
-                logger.info(
-                    f"Method call completed: {func.__name__}", duration_ms=duration
-                )
+                logger.info(f"Method call completed: {func.__name__}", duration_ms=duration)
 
                 return result
             except Exception as e:

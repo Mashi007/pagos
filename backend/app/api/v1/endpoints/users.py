@@ -38,14 +38,8 @@ def verificar_rol_administracion(db: Session = Depends(get_db)):
     """
     try:
         # Buscar todos los administradores
-        admins = (
-            db.query(User).filter(User.is_admin).all()
-        )  # Cambio clave: rol → is_admin
-        admins_activos = (
-            db.query(User)
-            .filter(User.is_admin, User.is_active)  # Cambio clave: rol → is_admin
-            .all()
-        )
+        admins = db.query(User).filter(User.is_admin).all()  # Cambio clave: rol → is_admin
+        admins_activos = db.query(User).filter(User.is_admin, User.is_active).all()  # Cambio clave: rol → is_admin
 
         # Estadísticas de usuarios por tipo
         tipos_stats = {
@@ -55,9 +49,7 @@ def verificar_rol_administracion(db: Session = Depends(get_db)):
             },
             "USER": {
                 "total": db.query(User).filter(~User.is_admin).count(),
-                "activos": db.query(User)
-                .filter(~User.is_admin, User.is_active)
-                .count(),
+                "activos": db.query(User).filter(~User.is_admin, User.is_active).count(),
             },
         }
 
@@ -71,11 +63,7 @@ def verificar_rol_administracion(db: Session = Depends(get_db)):
                 "activo": sistema_funcional,
                 "total_admins": len(admins),
                 "admins_activos": len(admins_activos),
-                "estado": (
-                    "✅ FUNCIONAL"
-                    if sistema_funcional
-                    else "❌ SIN ADMINISTRADOR ACTIVO"
-                ),
+                "estado": ("✅ FUNCIONAL" if sistema_funcional else "❌ SIN ADMINISTRADOR ACTIVO"),
             },
             "administradores_registrados": [
                 {
@@ -103,21 +91,13 @@ def verificar_rol_administracion(db: Session = Depends(get_db)):
             "estadisticas_usuarios": {
                 "por_tipo": tipos_stats,
                 "total_usuarios": sum(stats["total"] for stats in tipos_stats.values()),
-                "usuarios_activos": sum(
-                    stats["activos"] for stats in tipos_stats.values()
-                ),
+                "usuarios_activos": sum(stats["activos"] for stats in tipos_stats.values()),
             },
             "recomendaciones": [
-                (
-                    "✅ Sistema funcional"
-                    if sistema_funcional
-                    else "❌ Crear usuario administrador"
-                ),
+                ("✅ Sistema funcional" if sistema_funcional else "❌ Crear usuario administrador"),
                 (
                     "🔐 Cambiar contraseñas por defecto"
-                    if any(
-                        admin.email == "itmaster@rapicreditca.com" for admin in admins
-                    )
+                    if any(admin.email == "itmaster@rapicreditca.com" for admin in admins)
                     else None
                 ),
                 "👥 Crear usuarios para otros roles según necesidades",
@@ -140,9 +120,7 @@ def verificar_rol_administracion(db: Session = Depends(get_db)):
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error verificando administración: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error verificando administración: {str(e)}")
 
 
 @router.post(
@@ -238,9 +216,7 @@ def test_users_simple(db: Session = Depends(get_db)):
                     "apellido": user.apellido,
                     "is_admin": user.is_admin,  # Cambio clave: rol → is_admin
                     "is_active": user.is_active,
-                    "created_at": (
-                        user.created_at.isoformat() if user.created_at else None
-                    ),
+                    "created_at": (user.created_at.isoformat() if user.created_at else None),
                 }
             )
 
@@ -256,9 +232,7 @@ def test_users_simple(db: Session = Depends(get_db)):
 
 
 @router.get("/test")
-def test_users_endpoint(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def test_users_endpoint(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Test endpoint para verificar usuarios
     """
@@ -320,9 +294,7 @@ def list_users(
     # Paginación
     users = query.offset(pagination.skip).limit(pagination.limit).all()
 
-    return UserListResponse(
-        items=users, total=total, page=pagination.page, page_size=pagination.page_size
-    )
+    return UserListResponse(items=users, total=total, page=pagination.page, page_size=pagination.page_size)
 
 
 @router.get("/{user_id}", response_model=UserResponse, summary="Obtener usuario")
@@ -337,9 +309,7 @@ def get_user(
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
 
     return user
 
@@ -359,9 +329,7 @@ def update_user(
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
 
     # Verificar email único si se está actualizando
     if user_data.email and user_data.email != user.email:
@@ -408,9 +376,7 @@ def delete_user(
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
 
     # No permitir eliminar el propio usuario
     if user.id == current_user.id:
@@ -445,14 +411,10 @@ def delete_user(
     db.delete(user)
     db.commit()
 
-    return {
-        "message": f"Usuario {user_email} eliminado completamente de la base de datos"
-    }
+    return {"message": f"Usuario {user_email} eliminado completamente de la base de datos"}
 
 
-@router.post(
-    "/{user_id}/activate", response_model=UserResponse, summary="Activar usuario"
-)
+@router.post("/{user_id}/activate", response_model=UserResponse, summary="Activar usuario")
 def activate_user(
     user_id: int,
     db: Session = Depends(get_db),
@@ -464,9 +426,7 @@ def activate_user(
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
 
     user.is_active = True
     user.updated_at = datetime.utcnow()
@@ -477,9 +437,7 @@ def activate_user(
     return user
 
 
-@router.post(
-    "/{user_id}/deactivate", response_model=UserResponse, summary="Desactivar usuario"
-)
+@router.post("/{user_id}/deactivate", response_model=UserResponse, summary="Desactivar usuario")
 def deactivate_user(
     user_id: int,
     db: Session = Depends(get_db),
@@ -491,9 +449,7 @@ def deactivate_user(
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
 
     user.is_active = False
     user.updated_at = datetime.utcnow()

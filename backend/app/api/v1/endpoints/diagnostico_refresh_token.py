@@ -44,9 +44,7 @@ async def diagnosticar_refresh_token(request: Request, db: Session = Depends(get
         # 1. Verificar formato del token
         try:
             # Decodificar sin verificar para obtener información básica
-            payload_unverified = jwt.decode(
-                refresh_token, options={"verify_signature": False}
-            )
+            payload_unverified = jwt.decode(refresh_token, options={"verify_signature": False})
 
             token_info = {
                 "formato_valido": True,
@@ -65,9 +63,7 @@ async def diagnosticar_refresh_token(request: Request, db: Session = Depends(get
 
                 token_info["expired"] = now > exp_datetime
                 token_info["expires_at"] = exp_datetime.isoformat()
-                token_info["time_until_expiry"] = (
-                    str(exp_datetime - now) if not token_info["expired"] else "EXPIRED"
-                )
+                token_info["time_until_expiry"] = str(exp_datetime - now) if not token_info["expired"] else "EXPIRED"
 
         except Exception as e:
             return {
@@ -197,16 +193,12 @@ async def diagnosticar_refresh_token(request: Request, db: Session = Depends(get
 
 
 @router.get("/estado-refresh-tokens")
-async def estado_refresh_tokens(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+async def estado_refresh_tokens(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     📊 Estado general de los refresh tokens en el sistema
     """
     try:
-        logger.info(
-            f"📊 Verificando estado de refresh tokens - Usuario: {current_user.email}"
-        )
+        logger.info(f"📊 Verificando estado de refresh tokens - Usuario: {current_user.email}")
 
         # Información del usuario actual
         user_info = {
@@ -235,9 +227,7 @@ async def estado_refresh_tokens(
                 "refresh_token": test_refresh_token,
             },
             "configuracion": {
-                "jwt_secret_key": (
-                    "CONFIGURED" if settings.SECRET_KEY else "NOT_CONFIGURED"
-                ),
+                "jwt_secret_key": ("CONFIGURED" if settings.SECRET_KEY else "NOT_CONFIGURED"),
                 "jwt_algorithm": "HS256",
                 "access_token_expire_minutes": 30,
                 "refresh_token_expire_days": 7,

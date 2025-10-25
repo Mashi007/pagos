@@ -59,9 +59,7 @@ class AprobacionResponse(BaseModel):
 # ============================================
 
 
-@router.post(
-    "/", response_model=AprobacionResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/", response_model=AprobacionResponse, status_code=status.HTTP_201_CREATED)
 def crear_aprobacion(
     aprobacion_data: AprobacionCreate,
     db: Session = Depends(get_db),
@@ -118,9 +116,7 @@ def obtener_aprobacion(
     aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
 
     if not aprobacion:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Aprobación no encontrada"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aprobación no encontrada")
 
     return aprobacion
 
@@ -136,9 +132,7 @@ def actualizar_aprobacion(
     aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
 
     if not aprobacion:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Aprobación no encontrada"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aprobación no encontrada")
 
     if not aprobacion.esta_pendiente:
         raise HTTPException(
@@ -159,9 +153,7 @@ def actualizar_aprobacion(
     elif aprobacion_update.estado == EstadoAprobacion.CANCELADA.value:
         aprobacion.cancelar()
     else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Estado no válido"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Estado no válido")
 
     db.commit()
     db.refresh(aprobacion)
@@ -179,9 +171,7 @@ def eliminar_aprobacion(
     aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
 
     if not aprobacion:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Aprobación no encontrada"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aprobación no encontrada")
 
     # Solo el solicitante puede eliminar su propia solicitud pendiente
     if aprobacion.solicitante_id != current_user.id or not aprobacion.esta_pendiente:

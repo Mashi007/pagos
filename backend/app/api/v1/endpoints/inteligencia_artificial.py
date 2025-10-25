@@ -40,21 +40,13 @@ class SolicitudScoring(BaseModel):
 
     # Datos del cliente
     cedula: str = Field(..., description="Cédula del cliente")
-    ingresos_mensuales: Decimal = Field(
-        ..., gt=0, description="Ingresos mensuales comprobables"
-    )
+    ingresos_mensuales: Decimal = Field(..., gt=0, description="Ingresos mensuales comprobables")
     ocupacion: str = Field(..., description="Ocupación del cliente")
-    antiguedad_laboral_meses: int = Field(
-        ..., ge=0, description="Antigüedad laboral en meses"
-    )
-    tipo_empleo: str = Field(
-        ..., description="EMPLEADO_PUBLICO, EMPLEADO_PRIVADO, INDEPENDIENTE"
-    )
+    antiguedad_laboral_meses: int = Field(..., ge=0, description="Antigüedad laboral en meses")
+    tipo_empleo: str = Field(..., description="EMPLEADO_PUBLICO, EMPLEADO_PRIVADO, INDEPENDIENTE")
 
     # Datos del préstamo
-    monto_total: Decimal = Field(
-        ..., gt=0, description="Monto total del financiamiento"
-    )
+    monto_total: Decimal = Field(..., gt=0, description="Monto total del financiamiento")
     cuota_inicial: Decimal = Field(..., ge=0, description="Cuota inicial")
     plazo_meses: int = Field(..., ge=12, le=84, description="Plazo en meses")
 
@@ -120,14 +112,11 @@ def calcular_scoring_crediticio(
             "monto_total": float(solicitud.monto_total),
             "monto_financiado": float(solicitud.monto_total - solicitud.cuota_inicial),
             "plazo_meses": solicitud.plazo_meses,
-            "cuota_mensual": float(solicitud.monto_total - solicitud.cuota_inicial)
-            / solicitud.plazo_meses,
+            "cuota_mensual": float(solicitud.monto_total - solicitud.cuota_inicial) / solicitud.plazo_meses,
         }
 
         # Calcular scoring
-        resultado = ScoringCrediticio.calcular_score_completo(
-            cliente_data, prestamo_data, db
-        )
+        resultado = ScoringCrediticio.calcular_score_completo(cliente_data, prestamo_data, db)
 
         # Registrar en auditoría
         from app.models.auditoria import Auditoria, TipoAccion
@@ -145,17 +134,13 @@ def calcular_scoring_crediticio(
         return ResultadoScoring(**resultado)
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error calculando scoring: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error calculando scoring: {str(e)}")
 
 
 @router.get("/scoring-masivo")
 def calcular_scoring_masivo_cartera(
     background_tasks: BackgroundTasks,
-    limite: int = Query(
-        100, ge=1, le=1000, description="Límite de clientes a procesar"
-    ),
+    limite: int = Query(100, ge=1, le=1000, description="Límite de clientes a procesar"),
     solo_activos: bool = Query(True, description="Solo clientes activos"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -192,9 +177,7 @@ def calcular_scoring_masivo_cartera(
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error iniciando scoring masivo: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error iniciando scoring masivo: {str(e)}")
 
 
 # ============================================
@@ -205,9 +188,7 @@ def calcular_scoring_masivo_cartera(
 @router.get("/prediccion-mora/{cliente_id}")
 def predecir_mora_cliente(
     cliente_id: int,
-    horizonte_dias: int = Query(
-        30, ge=1, le=365, description="Días a futuro para predicción"
-    ),
+    horizonte_dias: int = Query(30, ge=1, le=365, description="Días a futuro para predicción"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -226,9 +207,7 @@ def predecir_mora_cliente(
     • Recomendaciones específicas
     """
     try:
-        resultado = PrediccionMora.predecir_probabilidad_mora(
-            cliente_id, horizonte_dias, db
-        )
+        resultado = PrediccionMora.predecir_probabilidad_mora(cliente_id, horizonte_dias, db)
 
         if "error" in resultado:
             raise HTTPException(status_code=404, detail=resultado["error"])
@@ -237,9 +216,7 @@ def predecir_mora_cliente(
             "prediccion": resultado,
             "interpretacion": {
                 "nivel_riesgo": resultado["clasificacion_riesgo"],
-                "accion_recomendada": _interpretar_prediccion_mora(
-                    resultado["probabilidad_mora"]
-                ),
+                "accion_recomendada": _interpretar_prediccion_mora(resultado["probabilidad_mora"]),
                 "confianza_modelo": resultado["confianza_modelo"],
             },
             "fecha_prediccion": datetime.now().isoformat(),
@@ -254,9 +231,7 @@ def predecir_mora_cliente(
 @router.get("/clientes-riesgo")
 def listar_clientes_alto_riesgo(
     limite: int = Query(50, ge=1, le=200),
-    umbral_riesgo: float = Query(
-        0.5, ge=0.1, le=0.9, description="Umbral de probabilidad de mora"
-    ),
+    umbral_riesgo: float = Query(0.5, ge=0.1, le=0.9, description="Umbral de probabilidad de mora"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -265,10 +240,7 @@ def listar_clientes_alto_riesgo(
     """
     try:
         clientes_activos = (
-            db.query(Cliente)
-            .filter(Cliente.activo, Cliente.estado_financiero == "AL_DIA")
-            .limit(limite * 2)
-            .all()
+            db.query(Cliente).filter(Cliente.activo, Cliente.estado_financiero == "AL_DIA").limit(limite * 2).all()
         )  # Obtener más para filtrar
 
         clientes_riesgo = []
@@ -285,26 +257,18 @@ def listar_clientes_alto_riesgo(
                             "cedula": cliente.cedula,
                             "telefono": cliente.telefono,
                             "vehiculo": cliente.vehiculo_completo,
-                            "analista": (
-                                cliente.analista.full_name
-                                if cliente.analista
-                                else "N/A"
-                            ),
+                            "analista": (cliente.analista.full_name if cliente.analista else "N/A"),
                         },
                         "riesgo": {
                             "probabilidad_mora": prediccion["probabilidad_mora"],
                             "clasificacion": prediccion["clasificacion_riesgo"],
-                            "factores_principales": prediccion.get(
-                                "recomendaciones", []
-                            )[:3],
+                            "factores_principales": prediccion.get("recomendaciones", [])[:3],
                         },
                     }
                 )
 
         # Ordenar por riesgo descendente
-        clientes_riesgo.sort(
-            key=lambda x: x["riesgo"]["probabilidad_mora"], reverse=True
-        )
+        clientes_riesgo.sort(key=lambda x: x["riesgo"]["probabilidad_mora"], reverse=True)
 
         return {
             "titulo": "🚨 Clientes en Alto Riesgo de Mora",
@@ -316,9 +280,7 @@ def listar_clientes_alto_riesgo(
             },
             "resultados": {
                 "total_alto_riesgo": len(clientes_riesgo),
-                "porcentaje_cartera": round(
-                    len(clientes_riesgo) / len(clientes_activos) * 100, 2
-                ),
+                "porcentaje_cartera": round(len(clientes_riesgo) / len(clientes_activos) * 100, 2),
                 "clientes": clientes_riesgo[:limite],
             },
             "acciones_recomendadas": [
@@ -330,9 +292,7 @@ def listar_clientes_alto_riesgo(
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error listando clientes de riesgo: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error listando clientes de riesgo: {str(e)}")
 
 
 # ============================================
@@ -351,9 +311,7 @@ def obtener_recomendaciones_cobranza(
     💡 Recomendaciones inteligentes de estrategia de cobranza
     """
     try:
-        recomendaciones = SistemaRecomendaciones.recomendar_estrategia_cobranza(
-            cliente_id, db
-        )
+        recomendaciones = SistemaRecomendaciones.recomendar_estrategia_cobranza(cliente_id, db)
 
         if "error" in recomendaciones:
             raise HTTPException(status_code=404, detail=recomendaciones["error"])
@@ -363,9 +321,7 @@ def obtener_recomendaciones_cobranza(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error generando recomendaciones: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error generando recomendaciones: {str(e)}")
 
 
 router.get("/optimizar-condiciones")
@@ -373,13 +329,9 @@ router.get("/optimizar-condiciones")
 
 def optimizar_condiciones_prestamo(
     cedula: str = Query(..., description="Cédula del cliente"),
-    monto_total: Decimal = Query(
-        ..., gt=0, description="Monto total del financiamiento"
-    ),
+    monto_total: Decimal = Query(..., gt=0, description="Monto total del financiamiento"),
     cuota_inicial: Decimal = Query(..., ge=0, description="Cuota inicial"),
-    plazo_solicitado: int = Query(
-        ..., ge=12, le=84, description="Plazo solicitado en meses"
-    ),
+    plazo_solicitado: int = Query(..., ge=12, le=84, description="Plazo solicitado en meses"),
     ingresos_mensuales: Decimal = Query(..., gt=0, description="Ingresos mensuales"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -400,9 +352,7 @@ def optimizar_condiciones_prestamo(
             "cuota_inicial": float(cuota_inicial),
         }
 
-        condiciones_optimizadas = OptimizadorTasas.optimizar_condiciones_prestamo(
-            cliente_data, prestamo_data, db
-        )
+        condiciones_optimizadas = OptimizadorTasas.optimizar_condiciones_prestamo(cliente_data, prestamo_data, db)
 
         return {
             "cliente_cedula": cedula,
@@ -422,9 +372,7 @@ def optimizar_condiciones_prestamo(
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error optimizando condiciones: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error optimizando condiciones: {str(e)}")
 
 
 # ============================================
@@ -448,9 +396,7 @@ def generar_mensaje_chatbot(
     🤖 Generar mensaje personalizado con IA para cobranza
     """
     try:
-        mensaje = ChatbotCobranza.generar_mensaje_personalizado(
-            cliente_id, tipo_mensaje, db
-        )
+        mensaje = ChatbotCobranza.generar_mensaje_personalizado(cliente_id, tipo_mensaje, db)
 
         if "error" in mensaje:
             raise HTTPException(status_code=404, detail=mensaje["error"])
@@ -473,9 +419,7 @@ def generar_mensaje_chatbot(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error generando mensaje: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error generando mensaje: {str(e)}")
 
 
 # ============================================
@@ -486,9 +430,7 @@ router.get("/analisis-predictivo")
 
 
 def analisis_predictivo_cartera(
-    horizonte_meses: int = Query(
-        6, ge=1, le=24, description="Meses a futuro para análisis"
-    ),
+    horizonte_meses: int = Query(6, ge=1, le=24, description="Meses a futuro para análisis"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -497,14 +439,10 @@ def analisis_predictivo_cartera(
     """
     # Solo roles gerenciales pueden ver análisis predictivo
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Sin permisos para análisis predictivo"
-        )
+        raise HTTPException(status_code=403, detail="Sin permisos para análisis predictivo")
 
     try:
-        analisis = AnalisisPredictivoCartera.analizar_tendencias_cartera(
-            horizonte_meses, db
-        )
+        analisis = AnalisisPredictivoCartera.analizar_tendencias_cartera(horizonte_meses, db)
 
         return {
             "titulo": "📈 ANÁLISIS PREDICTIVO DE CARTERA",
@@ -517,9 +455,7 @@ def analisis_predictivo_cartera(
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error en análisis predictivo: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error en análisis predictivo: {str(e)}")
 
 
 # ============================================
@@ -529,9 +465,7 @@ def analisis_predictivo_cartera(
 router.get("/detectar-anomalias")
 
 
-def detectar_anomalias_sistema(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def detectar_anomalias_sistema(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     🔍 Detectar anomalías y patrones inusuales en la cartera
     """
@@ -548,9 +482,7 @@ def detectar_anomalias_sistema(
             "patrones_detectados": patrones,
             "alertas_inteligentes": alertas,
             "resumen_ejecutivo": {
-                "anomalias_criticas": len(
-                    [a for a in alertas.get("alertas", []) if a["prioridad"] == "ALTA"]
-                ),
+                "anomalias_criticas": len([a for a in alertas.get("alertas", []) if a["prioridad"] == "ALTA"]),
                 "patrones_identificados": patrones.get("total_anomalias", 0),
                 "nivel_sistema": alertas.get("nivel_sistema", "NORMAL"),
                 "requiere_atencion": alertas.get("nivel_sistema") == "CRITICO",
@@ -558,9 +490,7 @@ def detectar_anomalias_sistema(
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error detectando anomalías: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error detectando anomalías: {str(e)}")
 
 
 # ============================================
@@ -570,9 +500,7 @@ def detectar_anomalias_sistema(
 router.get("/dashboard-ia")
 
 
-def dashboard_inteligencia_artificial(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def dashboard_inteligencia_artificial(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     🤖 Dashboard principal de Inteligencia Artificial
     """
@@ -683,13 +611,9 @@ async def _procesar_scoring_masivo(cliente_ids: List[int], user_id: int):
             if cliente:
                 # Simular datos para scoring
                 cliente_data = {"cedula": cliente.cedula}
-                prestamo_data = {
-                    "monto_total": float(cliente.total_financiamiento or 0)
-                }
+                prestamo_data = {"monto_total": float(cliente.total_financiamiento or 0)}
 
-                scoring = ScoringCrediticio.calcular_score_completo(
-                    cliente_data, prestamo_data, db
-                )
+                scoring = ScoringCrediticio.calcular_score_completo(cliente_data, prestamo_data, db)
 
                 resultados.append(
                     {
@@ -757,9 +681,7 @@ def _identificar_alertas_criticas(analisis: Dict) -> List[str]:
     # Revisar proyección de mora
     proyeccion_mora = analisis.get("tendencia_mora", {}).get("proyeccion_3_meses", 0)
     if proyeccion_mora > 15:  # >15% de mora proyectada
-        alertas.append(
-            f"🚨 Mora proyectada: {proyeccion_mora:.1f}% - Acción inmediata requerida"
-        )
+        alertas.append(f"🚨 Mora proyectada: {proyeccion_mora:.1f}% - Acción inmediata requerida")
 
     return alertas
 

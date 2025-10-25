@@ -35,9 +35,7 @@ class EstadoPrestamo(str, Enum):
     """Estados posibles de un préstamo."""
 
     PENDIENTE = "PENDIENTE"  # Solicitud inicial
-    EN_APROBACION = (
-        "EN_APROBACION"  # <== AÑADIDO: Usado por el endpoint de aprobaciones
-    )
+    EN_APROBACION = "EN_APROBACION"  # <== AÑADIDO: Usado por el endpoint de aprobaciones
     APROBADO = "APROBADO"  # <== USADO por el endpoint
     RECHAZADO = "RECHAZADO"  # <== AÑADIDO: Usado por el endpoint al rechazar
     CANCELADO = "CANCELADO"
@@ -79,9 +77,7 @@ class Prestamo(Base):
     cuotas_pendientes = Column(Integer)
 
     # Fechas
-    fecha_aprobacion = Column(
-        Date, nullable=True
-    )  # Hacemos nullable, ya que solo se llena al ser APROBADO
+    fecha_aprobacion = Column(Date, nullable=True)  # Hacemos nullable, ya que solo se llena al ser APROBADO
     fecha_desembolso = Column(Date)
     fecha_primer_vencimiento = Column(Date, nullable=False)
     fecha_ultimo_vencimiento = Column(Date)

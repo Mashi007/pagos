@@ -75,18 +75,14 @@ class PreferenciasNotificacion:
             return CanalNotificacion.NINGUNO
 
     @staticmethod
-    def actualizar_preferencias_cliente(
-        cliente_id: int, canal_preferido: CanalNotificacion, db: Session
-    ) -> bool:
+    def actualizar_preferencias_cliente(cliente_id: int, canal_preferido: CanalNotificacion, db: Session) -> bool:
         """Actualizar preferencias de notificación del cliente"""
         try:
             # TODO: Implementar tabla de preferencias
             # Por ahora, guardar en observaciones del cliente
             cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
             if cliente:
-                cliente.observaciones = (
-                    f"PREFERENCIA_NOTIFICACION: {canal_preferido.value}"
-                )
+                cliente.observaciones = f"PREFERENCIA_NOTIFICACION: {canal_preferido.value}"
                 db.commit()
                 return True
             return False
@@ -158,9 +154,7 @@ class NotificacionMulticanal:
             if self._es_hora_reporte_diario():
                 await self._generar_reporte_diario(resultados)
 
-            logger.info(
-                f"✅ Procesamiento completado: {resultados['exitosas']} exitosas, {resultados['fallidas']} fallidas"
-            )
+            logger.info(f"✅ Procesamiento completado: {resultados['exitosas']} exitosas, {resultados['fallidas']} fallidas")
 
             return resultados
 
@@ -189,19 +183,13 @@ class NotificacionMulticanal:
                         continue
 
                     # Obtener preferencias del cliente
-                    preferencias = (
-                        PreferenciasNotificacion.obtener_preferencias_cliente(
-                            cliente_data["cliente_id"], self.db
-                        )
-                    )
+                    preferencias = PreferenciasNotificacion.obtener_preferencias_cliente(cliente_data["cliente_id"], self.db)
 
                     if preferencias == CanalNotificacion.NINGUNO:
                         continue
 
                     # Enviar por canales según preferencias
-                    resultado_envio = await self._enviar_notificacion_multicanal(
-                        cliente_data, tipo, preferencias
-                    )
+                    resultado_envio = await self._enviar_notificacion_multicanal(cliente_data, tipo, preferencias)
 
                     if resultado_envio["exitoso"]:
                         resultado["exitosas"] += 1
@@ -211,9 +199,7 @@ class NotificacionMulticanal:
                     resultado["detalles"].append(resultado_envio)
 
                 except Exception as e:
-                    logger.error(
-                        f"Error enviando notificación a cliente {cliente_data.get('cliente_id')}: {e}"
-                    )
+                    logger.error(f"Error enviando notificación a cliente {cliente_data.get('cliente_id')}: {e}")
                     resultado["fallidas"] += 1
 
             return resultado
@@ -228,9 +214,7 @@ class NotificacionMulticanal:
                 "error": str(e),
             }
 
-    def _obtener_clientes_para_notificacion(
-        self, tipo: TipoNotificacionCliente
-    ) -> List[Dict]:
+    def _obtener_clientes_para_notificacion(self, tipo: TipoNotificacionCliente) -> List[Dict]:
         """Obtener clientes que requieren notificación específica"""
         try:
             hoy = date.today()
@@ -339,14 +323,8 @@ class NotificacionMulticanal:
                         "cuota_numero": cuota.numero_cuota,
                         "monto_cuota": float(cuota.monto_cuota),
                         "fecha_vencimiento": cuota.fecha_vencimiento,
-                        "dias_mora": (
-                            (hoy - cuota.fecha_vencimiento).days
-                            if cuota.fecha_vencimiento < hoy
-                            else 0
-                        ),
-                        "saldo_pendiente": float(
-                            cuota.capital_pendiente + cuota.interes_pendiente
-                        ),
+                        "dias_mora": ((hoy - cuota.fecha_vencimiento).days if cuota.fecha_vencimiento < hoy else 0),
+                        "saldo_pendiente": float(cuota.capital_pendiente + cuota.interes_pendiente),
                         "vehiculo": cliente.vehiculo_completo or "Vehículo",
                     }
                 )
@@ -394,18 +372,14 @@ class NotificacionMulticanal:
 
                 try:
                     if canal == "EMAIL":
-                        exito_email = await self._enviar_email_cliente(
-                            cliente_data, tipo
-                        )
+                        exito_email = await self._enviar_email_cliente(cliente_data, tipo)
                         if exito_email:
                             resultado["canales_exitosos"].append("EMAIL")
                         else:
                             resultado["canales_fallidos"].append("EMAIL")
 
                     elif canal == "WHATSAPP":
-                        exito_whatsapp = await self._enviar_whatsapp_cliente(
-                            cliente_data, tipo
-                        )
+                        exito_whatsapp = await self._enviar_whatsapp_cliente(cliente_data, tipo)
                         if exito_whatsapp:
                             resultado["canales_exitosos"].append("WHATSAPP")
                         else:
@@ -431,9 +405,7 @@ class NotificacionMulticanal:
                 "error": str(e),
             }
 
-    async def _enviar_email_cliente(
-        self, cliente_data: Dict, tipo: TipoNotificacionCliente
-    ) -> bool:
+    async def _enviar_email_cliente(self, cliente_data: Dict, tipo: TipoNotificacionCliente) -> bool:
         """Enviar notificación por email"""
         try:
             # Obtener template de email
@@ -452,9 +424,7 @@ class NotificacionMulticanal:
             logger.error(f"Error enviando email: {e}")
             return False
 
-    async def _enviar_whatsapp_cliente(
-        self, cliente_data: Dict, tipo: TipoNotificacionCliente
-    ) -> bool:
+    async def _enviar_whatsapp_cliente(self, cliente_data: Dict, tipo: TipoNotificacionCliente) -> bool:
         """Enviar notificación por WhatsApp"""
         try:
             # Obtener template de WhatsApp
@@ -471,9 +441,7 @@ class NotificacionMulticanal:
             logger.error(f"Error enviando WhatsApp: {e}")
             return False
 
-    def _obtener_template_email(
-        self, tipo: TipoNotificacionCliente, cliente_data: Dict
-    ) -> Dict[str, str]:
+    def _obtener_template_email(self, tipo: TipoNotificacionCliente, cliente_data: Dict) -> Dict[str, str]:
         """Obtener template de email según tipo de notificación"""
 
         # Variables comunes
@@ -621,9 +589,7 @@ class NotificacionMulticanal:
             },
         )
 
-    def _obtener_template_whatsapp(
-        self, tipo: TipoNotificacionCliente, cliente_data: Dict
-    ) -> Dict[str, str]:
+    def _obtener_template_whatsapp(self, tipo: TipoNotificacionCliente, cliente_data: Dict) -> Dict[str, str]:
         """Obtener template de WhatsApp según tipo (más cortos que email)"""
 
         # Variables comunes
@@ -735,17 +701,14 @@ Financiamiento Automotriz"""
             notificaciones_hoy = (
                 self.db.query(Notificacion)
                 .filter(
-                    Notificacion.usuario_id
-                    == cliente_id,  # Asumiendo que cliente_id = usuario_id
+                    Notificacion.usuario_id == cliente_id,  # Asumiendo que cliente_id = usuario_id
                     func.date(Notificacion.creado_en) == hoy,
                 )
                 .count()
             )
 
             if notificaciones_hoy >= self.LIMITE_NOTIFICACIONES_DIA:
-                logger.warning(
-                    f"Cliente {cliente_id} alcanzó límite diario de notificaciones"
-                )
+                logger.warning(f"Cliente {cliente_id} alcanzó límite diario de notificaciones")
                 return False
 
             # Verificar intervalo mínimo
@@ -758,9 +721,7 @@ Financiamiento Automotriz"""
 
             if ultima_notificacion:
                 tiempo_transcurrido = datetime.now() - ultima_notificacion.creado_en
-                if tiempo_transcurrido.total_seconds() < (
-                    self.INTERVALO_MINIMO_HORAS * 3600
-                ):
+                if tiempo_transcurrido.total_seconds() < (self.INTERVALO_MINIMO_HORAS * 3600):
                     logger.warning(f"Cliente {cliente_id} no cumple intervalo mínimo")
                     return False
 
@@ -770,21 +731,15 @@ Financiamiento Automotriz"""
             logger.error(f"Error verificando límites: {e}")
             return True  # En caso de error, permitir envío
 
-    async def _registrar_en_historial(
-        self, cliente_data: Dict, tipo: TipoNotificacionCliente, resultado: Dict
-    ):
+    async def _registrar_en_historial(self, cliente_data: Dict, tipo: TipoNotificacionCliente, resultado: Dict):
         """Registrar notificación en historial completo"""
         try:
             # Registrar para cada canal intentado
             for canal in resultado["canales_intentados"]:
-                estado = (
-                    "ENTREGADO" if canal in resultado["canales_exitosos"] else "ERROR"
-                )
+                estado = "ENTREGADO" if canal in resultado["canales_exitosos"] else "ERROR"
 
                 notificacion = Notificacion(
-                    usuario_id=cliente_data[
-                        "cliente_id"
-                    ],  # Asumiendo cliente_id = usuario_id
+                    usuario_id=cliente_data["cliente_id"],  # Asumiendo cliente_id = usuario_id
                     tipo=tipo.value,
                     categoria="CLIENTE",
                     prioridad="NORMAL",
@@ -792,20 +747,14 @@ Financiamiento Automotriz"""
                     mensaje=f"Notificación enviada por {canal} al cliente {cliente_data['nombre']}",
                     canal=canal,
                     estado=estado,
-                    destinatario_email=(
-                        cliente_data["email"] if canal == "EMAIL" else None
-                    ),
-                    destinatario_telefono=(
-                        cliente_data["telefono"] if canal == "WHATSAPP" else None
-                    ),
+                    destinatario_email=(cliente_data["email"] if canal == "EMAIL" else None),
+                    destinatario_telefono=(cliente_data["telefono"] if canal == "WHATSAPP" else None),
                     destinatario_nombre=cliente_data["nombre"],
                     extra_data=str(
                         {
                             "cuota_numero": cliente_data["cuota_numero"],
                             "monto_cuota": cliente_data["monto_cuota"],
-                            "fecha_vencimiento": cliente_data[
-                                "fecha_vencimiento"
-                            ].isoformat(),
+                            "fecha_vencimiento": cliente_data["fecha_vencimiento"].isoformat(),
                             "tipo_notificacion": tipo.value,
                         }
                     ),
@@ -979,8 +928,7 @@ class GestorReintentos:
                 .filter(
                     Notificacion.estado == "ERROR",
                     Notificacion.intentos < Notificacion.max_intentos,
-                    Notificacion.creado_en
-                    >= datetime.now() - timedelta(hours=24),  # Solo últimas 24h
+                    Notificacion.creado_en >= datetime.now() - timedelta(hours=24),  # Solo últimas 24h
                 )
                 .all()
             )
@@ -1001,9 +949,7 @@ class GestorReintentos:
                     if notificacion.canal == "EMAIL":
                         exito = await GestorReintentos._reintentar_email(notificacion)
                     elif notificacion.canal == "WHATSAPP":
-                        exito = await GestorReintentos._reintentar_whatsapp(
-                            notificacion
-                        )
+                        exito = await GestorReintentos._reintentar_whatsapp(notificacion)
                     else:
                         exito = False
 
@@ -1016,16 +962,12 @@ class GestorReintentos:
 
                         # Si agotó reintentos, notificar a admin
                         if notificacion.intentos >= notificacion.max_intentos:
-                            await GestorReintentos._notificar_admin_fallo_critico(
-                                notificacion, db
-                            )
+                            await GestorReintentos._notificar_admin_fallo_critico(notificacion, db)
 
                     db.commit()
 
                 except Exception as e:
-                    logger.error(
-                        f"Error en reintento de notificación {notificacion.id}: {e}"
-                    )
+                    logger.error(f"Error en reintento de notificación {notificacion.id}: {e}")
                     resultados["fallidos"] += 1
 
             return resultados
