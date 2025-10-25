@@ -838,6 +838,56 @@ def obtener_configuracion_ia(
         raise HTTPException(status_code=500, detail=f"Error obteniendo configuración IA: {str(e)}")
 
 
+def _actualizar_config_api_key(openai_api_key: str, current_user: User, db: Session) -> Optional[str]:
+    """Actualizar API Key de OpenAI"""
+    if openai_api_key is not None:
+        config = ConfiguracionSistema.obtener_por_clave(db, "AI", "OPENAI_API_KEY")
+        if config:
+            config.actualizar_valor(openai_api_key, current_user.full_name)
+            return "OPENAI_API_KEY"
+    return None
+
+
+def _actualizar_config_modelo(openai_model: str, current_user: User, db: Session) -> Optional[str]:
+    """Actualizar modelo de OpenAI"""
+    if openai_model is not None:
+        config = ConfiguracionSistema.obtener_por_clave(db, "AI", "OPENAI_MODEL")
+        if config:
+            config.actualizar_valor(openai_model, current_user.full_name)
+            return "OPENAI_MODEL"
+    return None
+
+
+def _actualizar_config_scoring(scoring_enabled: bool, current_user: User, db: Session) -> Optional[str]:
+    """Actualizar configuración de scoring"""
+    if scoring_enabled is not None:
+        config = ConfiguracionSistema.obtener_por_clave(db, "AI", "AI_SCORING_ENABLED")
+        if config:
+            config.actualizar_valor(scoring_enabled, current_user.full_name)
+            return "AI_SCORING_ENABLED"
+    return None
+
+
+def _actualizar_config_prediction(prediction_enabled: bool, current_user: User, db: Session) -> Optional[str]:
+    """Actualizar configuración de predicción"""
+    if prediction_enabled is not None:
+        config = ConfiguracionSistema.obtener_por_clave(db, "AI", "AI_PREDICTION_ENABLED")
+        if config:
+            config.actualizar_valor(prediction_enabled, current_user.full_name)
+            return "AI_PREDICTION_ENABLED"
+    return None
+
+
+def _actualizar_config_chatbot(chatbot_enabled: bool, current_user: User, db: Session) -> Optional[str]:
+    """Actualizar configuración de chatbot"""
+    if chatbot_enabled is not None:
+        config = ConfiguracionSistema.obtener_por_clave(db, "AI", "AI_CHATBOT_ENABLED")
+        if config:
+            config.actualizar_valor(chatbot_enabled, current_user.full_name)
+            return "AI_CHATBOT_ENABLED"
+    return None
+
+
 @router.post("/ia/actualizar")
 def actualizar_configuracion_ia(
     openai_api_key: Optional[str] = None,
@@ -849,7 +899,7 @@ def actualizar_configuracion_ia(
     current_user: User = Depends(get_current_user),
 ):
     """
-    🤖 Actualizar configuración de IA
+    🤖 Actualizar configuración de IA (VERSIÓN REFACTORIZADA)
     """
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores pueden configurar IA")
@@ -857,38 +907,26 @@ def actualizar_configuracion_ia(
     try:
         actualizaciones = []
 
-        # Actualizar API Key de OpenAI
-        if openai_api_key is not None:
-            config = ConfiguracionSistema.obtener_por_clave(db, "AI", "OPENAI_API_KEY")
-            if config:
-                config.actualizar_valor(openai_api_key, current_user.full_name)
-                actualizaciones.append("OPENAI_API_KEY")
+        # Actualizar configuraciones individuales
+        config_api_key = _actualizar_config_api_key(openai_api_key, current_user, db)
+        if config_api_key:
+            actualizaciones.append(config_api_key)
 
-        # Actualizar modelo
-        if openai_model is not None:
-            config = ConfiguracionSistema.obtener_por_clave(db, "AI", "OPENAI_MODEL")
-            if config:
-                config.actualizar_valor(openai_model, current_user.full_name)
-                actualizaciones.append("OPENAI_MODEL")
+        config_modelo = _actualizar_config_modelo(openai_model, current_user, db)
+        if config_modelo:
+            actualizaciones.append(config_modelo)
 
-        # Actualizar habilitaciones
-        if scoring_enabled is not None:
-            config = ConfiguracionSistema.obtener_por_clave(db, "AI", "AI_SCORING_ENABLED")
-            if config:
-                config.actualizar_valor(scoring_enabled, current_user.full_name)
-                actualizaciones.append("AI_SCORING_ENABLED")
+        config_scoring = _actualizar_config_scoring(scoring_enabled, current_user, db)
+        if config_scoring:
+            actualizaciones.append(config_scoring)
 
-        if prediction_enabled is not None:
-            config = ConfiguracionSistema.obtener_por_clave(db, "AI", "AI_PREDICTION_ENABLED")
-            if config:
-                config.actualizar_valor(prediction_enabled, current_user.full_name)
-                actualizaciones.append("AI_PREDICTION_ENABLED")
+        config_prediction = _actualizar_config_prediction(prediction_enabled, current_user, db)
+        if config_prediction:
+            actualizaciones.append(config_prediction)
 
-        if chatbot_enabled is not None:
-            config = ConfiguracionSistema.obtener_por_clave(db, "AI", "AI_CHATBOT_ENABLED")
-            if config:
-                config.actualizar_valor(chatbot_enabled, current_user.full_name)
-                actualizaciones.append("AI_CHATBOT_ENABLED")
+        config_chatbot = _actualizar_config_chatbot(chatbot_enabled, current_user, db)
+        if config_chatbot:
+            actualizaciones.append(config_chatbot)
 
         db.commit()
 

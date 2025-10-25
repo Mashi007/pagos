@@ -227,6 +227,94 @@ def _buscar_matching_automatico(cedula: str, monto: Decimal, db: Session) -> dic
     return {}
 
 
+def _procesar_fila_movimiento(fila: pd.Series, index: int, referencias_vistas: set, db: Session) -> tuple[Optional[MovimientoBancarioExtendido], List[str], List[str], List[str]]:
+    """Procesar una fila individual del archivo bancario"""
+    advertencias = []
+    errores = []
+    duplicados = []
+
+    try:
+        # Validar fecha
+        fecha, fecha_advertencias = _validar_fecha(fila, index)
+        advertencias.extend(fecha_advertencias)
+        if fecha is None:
+            return None, advertencias, errores, duplicados
+
+        # Validar monto
+        monto, monto_advertencias = _validar_monto(fila, index)
+        advertencias.extend(monto_advertencias)
+        if monto is None:
+            return None, advertencias, errores, duplicados
+
+        # Validar referencia
+        referencia, ref_advertencias, ref_duplicados = _validar_referencia(fila, index, referencias_vistas)
+        advertencias.extend(ref_advertencias)
+        duplicados.extend(ref_duplicados)
+        if referencia is None:
+            return None, advertencias, errores, duplicados
+
+        # Validar cédula
+        cedula = str(fila["cedula_pagador"]).strip()
+        if cedula and cedula != "nan":
+            cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
+            if not cliente:
+                advertencias.append(f"Fila {index + 1}: Cédula {cedula} no registrada en sistema")
+
+        # Crear movimiento
+        movimiento = MovimientoBancarioExtendido(
+            fecha=fecha,
+            referencia=referencia,
+            monto=monto,
+            cedula_pagador=cedula if cedula != "nan" else None,
+            descripcion=str(fila.get("descripcion", "")),
+            cuenta_origen=str(fila.get("cuenta_origen", "")) if "cuenta_origen" in fila else None,
+            id=index + 1,
+        )
+
+        # Buscar matching automático
+        matching_data = _buscar_matching_automatico(cedula, monto, db)
+        if matching_data:
+            movimiento.tipo_match = matching_data.get("tipo_match")
+            movimiento.confianza_match = matching_data.get("confianza_match")
+            movimiento.requiere_revision = matching_data.get("requiere_revision", False)
+            movimiento.cliente_encontrado = matching_data.get("cliente_encontrado")
+            movimiento.pago_sugerido = matching_data.get("pago_sugerido")
+
+        return movimiento, advertencias, errores, duplicados
+
+    except Exception as e:
+        errores.append(f"Fila {index + 1}: {str(e)}")
+        return None, advertencias, errores, duplicados
+
+
+def _procesar_archivo_completo(df: pd.DataFrame, db: Session) -> tuple[List[MovimientoBancarioExtendido], List[str], List[str], List[str], List[str]]:
+    """Procesar archivo completo y extraer movimientos válidos"""
+    advertencias = []
+    movimientos_validos = []
+    duplicados = []
+    cedulas_no_registradas = []
+    errores = []
+    referencias_vistas = set()
+
+    for index, fila in df.iterrows():
+        movimiento, fila_advertencias, fila_errores, fila_duplicados = _procesar_fila_movimiento(fila, index, referencias_vistas, db)
+
+        advertencias.extend(fila_advertencias)
+        errores.extend(fila_errores)
+        duplicados.extend(fila_duplicados)
+
+        if movimiento:
+            movimientos_validos.append(movimiento)
+
+            # Verificar cédulas no registradas
+            if movimiento.cedula_pagador:
+                cliente = db.query(Cliente).filter(Cliente.cedula == movimiento.cedula_pagador).first()
+                if not cliente and movimiento.cedula_pagador not in cedulas_no_registradas:
+                    cedulas_no_registradas.append(movimiento.cedula_pagador)
+
+    return movimientos_validos, advertencias, errores, duplicados, cedulas_no_registradas
+
+
 @router.post("/validar-archivo", response_model=ValidacionArchivoBancario)
 async def validar_archivo_bancario(
     archivo: UploadFile = File(...),
@@ -268,72 +356,15 @@ async def validar_archivo_bancario(
                 vista_previa=[],
             )
 
-        # 4. Procesar cada fila
-        advertencias = []
-        movimientos_validos = []
-        duplicados = []
-        cedulas_no_registradas = []
-        referencias_vistas = set()
-
-        for index, fila in df.iterrows():
-            try:
-                # Validar fecha
-                fecha, fecha_advertencias = _validar_fecha(fila, index)
-                advertencias.extend(fecha_advertencias)
-                if fecha is None:
-                    continue
-
-                # Validar monto
-                monto, monto_advertencias = _validar_monto(fila, index)
-                advertencias.extend(monto_advertencias)
-                if monto is None:
-                    continue
-
-                # Validar referencia
-                referencia, ref_advertencias, ref_duplicados = _validar_referencia(fila, index, referencias_vistas)
-                advertencias.extend(ref_advertencias)
-                duplicados.extend(ref_duplicados)
-                if referencia is None:
-                    continue
-
-                # Validar cédula
-                cedula = str(fila["cedula_pagador"]).strip()
-                if cedula and cedula != "nan":
-                    cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
-                    if not cliente and cedula not in cedulas_no_registradas:
-                        cedulas_no_registradas.append(cedula)
-
-                # Crear movimiento
-                movimiento = MovimientoBancarioExtendido(
-                    fecha=fecha,
-                    referencia=referencia,
-                    monto=monto,
-                    cedula_pagador=cedula if cedula != "nan" else None,
-                    descripcion=str(fila.get("descripcion", "")),
-                    cuenta_origen=str(fila.get("cuenta_origen", "")) if "cuenta_origen" in fila else None,
-                    id=len(movimientos_validos) + 1,
-                )
-
-                # Buscar matching automático
-                matching_data = _buscar_matching_automatico(cedula, monto, db)
-                if matching_data:
-                    movimiento.tipo_match = matching_data.get("tipo_match")
-                    movimiento.confianza_match = matching_data.get("confianza_match")
-                    movimiento.requiere_revision = matching_data.get("requiere_revision", False)
-                    movimiento.cliente_encontrado = matching_data.get("cliente_encontrado")
-                    movimiento.pago_sugerido = matching_data.get("pago_sugerido")
-
-                movimientos_validos.append(movimiento)
-
-            except Exception as e:
-                errores.append(f"Fila {index + 1}: {str(e)}")
+        # 4. Procesar archivo completo
+        movimientos_validos, advertencias, errores_procesamiento, duplicados, cedulas_no_registradas = _procesar_archivo_completo(df, db)
 
         return ValidacionArchivoBancario(
-            archivo_valido=len(errores) == 0,
+            archivo_valido=len(errores_procesamiento) == 0,
             formato_detectado=formato,
             total_filas=len(df),
             filas_validas=len(movimientos_validos),
-            errores=errores,
+            errores=errores_procesamiento,
             advertencias=advertencias,
             duplicados_encontrados=duplicados,
             cedulas_no_registradas=cedulas_no_registradas,

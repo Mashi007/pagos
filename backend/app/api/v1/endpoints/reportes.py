@@ -189,103 +189,85 @@ def reporte_cobranza(fecha_inicio: date, fecha_fin: date, db: Session = Depends(
     )
 
 
-@router.get("/exportar/excel")
-async def exportar_excel(
-    tipo_reporte: str,
-    fecha_inicio: Optional[date] = None,
-    fecha_fin: Optional[date] = None,
-    db: Session = Depends(get_db),
-):
-    """
-    Exporta reportes a Excel.
-    """
-    try:
-        import openpyxl
-
-    except ImportError:
-        raise HTTPException(
-            status_code=500,
-            detail="openpyxl no está instalado. Ejecuta: pip install openpyxl",
-        )
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-
-    # Estilo de encabezados
+def _crear_estilos_excel():
+    """Crear estilos para el archivo Excel"""
     header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True)
+    return header_fill, header_font
 
-    if tipo_reporte == "cartera":
-        ws.title = "Reporte de Cartera"
-        ws.append(["Reporte de Cartera", "", "", ""])
-        ws.append(["Fecha:", date.today().strftime("%d/%m/%Y"), "", ""])
-        ws.append([])
 
-        headers = [
-            "ID",
-            "Cliente",
-            "Monto Total",
-            "Saldo Pendiente",
-            "Estado",
-            "Días Mora",
-        ]
-        ws.append(headers)
+def _crear_reporte_cartera(ws, header_fill, header_font, db):
+    """Crear reporte de cartera"""
+    ws.title = "Reporte de Cartera"
+    ws.append(["Reporte de Cartera", "", "", ""])
+    ws.append(["Fecha:", date.today().strftime("%d/%m/%Y"), "", ""])
+    ws.append([])
 
-        # Aplicar estilo a encabezados
-        for cell in ws[4]:
-            cell.fill = header_fill
-            cell.font = header_font
+    headers = [
+        "ID",
+        "Cliente",
+        "Monto Total",
+        "Saldo Pendiente",
+        "Estado",
+        "Días Mora",
+    ]
+    ws.append(headers)
 
-        prestamos = (
-            db.query(Prestamo)
-            .filter(Prestamo.estado.in_([EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA]))
-            .all()
-        )
+    # Aplicar estilo a encabezados
+    for cell in ws[4]:
+        cell.fill = header_fill
+        cell.font = header_font
 
-        for p in prestamos:
-            ws.append(
-                [
-                    p.id,
-                    f"{p.cliente.nombres} {p.cliente.apellidos}",
-                    float(p.monto_total),
-                    float(p.saldo_pendiente),
-                    p.estado.value,
-                    p.dias_mora or 0,
-                ]
-            )
+    prestamos = (
+        db.query(Prestamo)
+        .filter(Prestamo.estado.in_([EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA]))
+        .all()
+    )
 
-    elif tipo_reporte == "pagos":
-        ws.title = "Reporte de Pagos"
-        ws.append(["Reporte de Pagos", "", "", ""])
-        ws.append(["Período:", f"{fecha_inicio} - {fecha_fin}", "", ""])
-        ws.append([])
+    for p in prestamos:
+        ws.append([
+            p.id,
+            f"{p.cliente.nombres} {p.cliente.apellidos}",
+            float(p.monto_total),
+            float(p.saldo_pendiente),
+            p.estado.value,
+            p.dias_mora or 0,
+        ])
 
-        headers = ["Fecha", "Préstamo ID", "Cliente", "Monto", "Concepto", "Referencia"]
-        ws.append(headers)
 
-        for cell in ws[4]:
-            cell.fill = header_fill
-            cell.font = header_font
+def _crear_reporte_pagos(ws, header_fill, header_font, fecha_inicio, fecha_fin, db):
+    """Crear reporte de pagos"""
+    ws.title = "Reporte de Pagos"
+    ws.append(["Reporte de Pagos", "", "", ""])
+    ws.append(["Período:", f"{fecha_inicio} - {fecha_fin}", "", ""])
+    ws.append([])
 
-        pagos = (
-            db.query(Pago)
-            .filter(Pago.fecha_pago >= fecha_inicio, Pago.fecha_pago <= fecha_fin)
-            .all()
-        )
+    headers = ["Fecha", "Préstamo ID", "Cliente", "Monto", "Concepto", "Referencia"]
+    ws.append(headers)
 
-        for p in pagos:
-            ws.append(
-                [
-                    p.fecha_pago.strftime("%d/%m/%Y"),
-                    p.prestamo_id,
-                    f"{p.prestamo.cliente.nombres} {p.prestamo.cliente.apellidos}",
-                    float(p.monto),
-                    p.concepto,
-                    p.referencia_bancaria or "",
-                ]
-            )
+    for cell in ws[4]:
+        cell.fill = header_fill
+        cell.font = header_font
 
-    # Ajustar ancho de columnas
+    pagos = (
+        db.query(Pago)
+        .filter(Pago.fecha_pago >= fecha_inicio, Pago.fecha_pago <= fecha_fin)
+        .all()
+    )
+
+    for p in pagos:
+        ws.append([
+            p.fecha_pago.strftime("%d/%m/%Y"),
+            p.prestamo_id,
+            f"{p.prestamo.cliente.nombres} {p.prestamo.cliente.apellidos}",
+            float(p.monto),
+            p.concepto,
+            p.referencia_bancaria or "",
+        ])
+
+
+def _ajustar_ancho_columnas(ws):
+    """Ajustar ancho de columnas"""
     for column in ws.columns:
         max_length = 0
         column_letter = column[0].column_letter
@@ -299,10 +281,50 @@ async def exportar_excel(
         adjusted_width = min(max_length + 2, 50)
         ws.column_dimensions[column_letter].width = adjusted_width
 
-    # Guardar en memoria
+
+def _guardar_excel_en_memoria(wb):
+    """Guardar Excel en memoria"""
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
+    return output
+
+
+@router.get("/exportar/excel")
+async def exportar_excel(
+    tipo_reporte: str,
+    fecha_inicio: Optional[date] = None,
+    fecha_fin: Optional[date] = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Exporta reportes a Excel (VERSIÓN REFACTORIZADA).
+    """
+    try:
+        import openpyxl
+    except ImportError:
+        raise HTTPException(
+            status_code=500,
+            detail="openpyxl no está instalado. Ejecuta: pip install openpyxl",
+        )
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+
+    # Crear estilos
+    header_fill, header_font = _crear_estilos_excel()
+
+    # Crear reporte según tipo
+    if tipo_reporte == "cartera":
+        _crear_reporte_cartera(ws, header_fill, header_font, db)
+    elif tipo_reporte == "pagos":
+        _crear_reporte_pagos(ws, header_fill, header_font, fecha_inicio, fecha_fin, db)
+
+    # Ajustar ancho de columnas
+    _ajustar_ancho_columnas(ws)
+
+    # Guardar en memoria
+    output = _guardar_excel_en_memoria(wb)
 
     filename = f"reporte_{tipo_reporte}_{date.today().strftime('%Y%m%d')}.xlsx"
 
@@ -311,6 +333,9 @@ async def exportar_excel(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+except Exception as e:
+    raise HTTPException(status_code=500, detail=f"Error generando Excel: {str(e)}")
 
 
 @router.get("/clientes-top")
