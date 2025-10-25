@@ -26,7 +26,7 @@ from app.schemas.auth import LoginRequest, Token
 logger = logging.getLogger(__name__)
 
 
-# Servicio de autenticación principal
+# Servicio de autenticación principal - Versión corregida
 class AuthService:
     """Servicio de autenticación"""
 
