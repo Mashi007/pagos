@@ -85,18 +85,16 @@ async def enviar_notificacion(
             email_service = EmailService()
             background_tasks.add_task(
                 email_service.send_email,
-                to_email=cliente.email,
+                to_emails=[str(cliente.email)],
                 subject=notificacion.asunto or "Notificación",
                 body=notificacion.mensaje,
-                notificacion_id=nueva_notif.id,
             )
         elif notificacion.canal == "WHATSAPP":
             whatsapp_service = WhatsAppService()
             background_tasks.add_task(
                 whatsapp_service.send_message,
-                phone_number=cliente.telefono,
+                to_number=str(cliente.telefono),
                 message=notificacion.mensaje,
-                notificacion_id=nueva_notif.id,
             )
 
         logger.info(f"Notificación programada para cliente {cliente.id}")
@@ -157,18 +155,16 @@ async def envio_masivo(
                 email_service = EmailService()
                 background_tasks.add_task(
                     email_service.send_email,
-                    to_email=cliente.email,
+                    to_emails=[str(cliente.email)],
                     subject="Notificación Importante",
                     body=request.template,
-                    notificacion_id=notif.id,
                 )
             elif request.canal == "WHATSAPP":
                 whatsapp_service = WhatsAppService()
                 background_tasks.add_task(
                     whatsapp_service.send_message,
-                    phone_number=cliente.telefono,
+                    to_number=str(cliente.telefono),
                     message=request.template,
-                    notificacion_id=notif.id,
                 )
 
         logger.info(f"Enviadas {len(notificaciones_creadas)} notificaciones masivas")

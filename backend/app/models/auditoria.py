@@ -5,6 +5,7 @@ Registra todas las acciones importantes del sistema para trazabilidad
 
 from datetime import datetime
 from enum import Enum
+from typing import Any, Dict, Optional
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
@@ -73,12 +74,12 @@ class Auditoria(Base):
         usuario_id: int,
         accion: str,
         entidad: str,
-        entidad_id: int = None,
-        detalles: str = None,
-        ip_address: str = None,
-        user_agent: str = None,
+        entidad_id: Optional[int] = None,
+        detalles: Optional[str] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
         exito: bool = True,
-        mensaje_error: str = None,
+        mensaje_error: Optional[str] = None,
     ):
         """
         Registra una acción en el sistema de auditoría

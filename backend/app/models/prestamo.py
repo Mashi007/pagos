@@ -110,17 +110,17 @@ class Prestamo(Base):
     @property
     def esta_aprobado(self) -> bool:
         """Verifica si el préstamo está aprobado"""
-        return self.estado == EstadoPrestamo.APROBADO
+        return str(self.estado) == EstadoPrestamo.APROBADO.value
 
     @property
     def esta_pagado(self) -> bool:
         """Verifica si el préstamo está completamente pagado"""
-        return self.estado == EstadoPrestamo.PAGADO
+        return str(self.estado) == EstadoPrestamo.PAGADO.value
 
     @property
     def esta_vencido(self) -> bool:
         """Verifica si el préstamo está vencido"""
-        return self.estado == EstadoPrestamo.VENCIDO
+        return str(self.estado) == EstadoPrestamo.VENCIDO.value
 
     def calcular_saldo_pendiente(self) -> float:
         """Calcula el saldo pendiente del préstamo"""

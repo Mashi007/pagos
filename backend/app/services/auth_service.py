@@ -47,7 +47,7 @@ class AuthService:
             logger.warning(f"Usuario no encontrado o inactivo: {email_normalized}")
             return None
 
-        if not verify_password(password, user.hashed_password):
+        if not verify_password(password, str(user.hashed_password)):
             logger.warning(f"Contraseña incorrecta para usuario: {email_normalized}")
             return None
 
@@ -75,8 +75,8 @@ class AuthService:
             raise ValueError("Credenciales inválidas")
 
         # Crear tokens
-        access_token = create_access_token(subject=user.id)
-        refresh_token = create_refresh_token(subject=user.id)
+        access_token = create_access_token(subject=str(user.id))
+        refresh_token = create_refresh_token(subject=str(user.id))
 
         token_response = TokenResponse(
             access_token=access_token,
@@ -127,8 +127,8 @@ class AuthService:
                 raise ValueError("Usuario no encontrado o inactivo")
 
             # Crear nuevo token de acceso
-            new_access_token = create_access_token(subject=user.id)
-            new_refresh_token = create_refresh_token(subject=user.id)
+            new_access_token = create_access_token(subject=str(user.id))
+            new_refresh_token = create_refresh_token(subject=str(user.id))
 
             token_response = TokenResponse(
                 access_token=new_access_token,
@@ -170,7 +170,7 @@ class AuthService:
             raise ValueError("Usuario no encontrado")
 
         # Verificar contraseña actual
-        if not verify_password(current_password, user.hashed_password):
+        if not verify_password(current_password, str(user.hashed_password)):
             raise ValueError("Contraseña actual incorrecta")
 
         # Actualizar contraseña

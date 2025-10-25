@@ -4,6 +4,7 @@ Modelo de Notificación
 
 from datetime import datetime
 from enum import Enum
+from typing import Optional
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
@@ -71,43 +72,43 @@ class Notificacion(Base):
     @property
     def esta_pendiente(self) -> bool:
         """Verifica si la notificación está pendiente"""
-        return self.estado == EstadoNotificacion.PENDIENTE
+        return str(self.estado) == EstadoNotificacion.PENDIENTE.value
 
     @property
     def fue_enviada(self) -> bool:
         """Verifica si la notificación fue enviada"""
-        return self.estado == EstadoNotificacion.ENVIADA
+        return str(self.estado) == EstadoNotificacion.ENVIADA.value
 
     @property
     def fallo(self) -> bool:
         """Verifica si la notificación falló"""
-        return self.estado == EstadoNotificacion.FALLIDA
+        return str(self.estado) == EstadoNotificacion.FALLIDA.value
 
     @property
     def puede_reintentar(self) -> bool:
         """Verifica si se puede reintentar el envío"""
-        return self.estado == EstadoNotificacion.FALLIDA and self.intentos < 3
+        return str(self.estado) == EstadoNotificacion.FALLIDA.value and self.intentos < 3
 
     def marcar_enviada(self, respuesta: str = None):
         """Marca la notificación como enviada"""
-        self.estado = EstadoNotificacion.ENVIADA
+        self.estado = EstadoNotificacion.ENVIADA.value
         self.respuesta_servicio = respuesta
         self.enviada_en = datetime.utcnow()
 
     def marcar_fallida(self, error: str):
         """Marca la notificación como fallida"""
-        self.estado = EstadoNotificacion.FALLIDA
+        self.estado = EstadoNotificacion.FALLIDA.value
         self.error_mensaje = error
         self.intentos += 1
 
     def marcar_leida(self):
         """Marca la notificación como leída"""
-        if self.estado == EstadoNotificacion.ENVIADA:
+        if str(self.estado) == EstadoNotificacion.ENVIADA.value:
             self.leida = True
 
     @classmethod
     def crear_recordatorio_pago(
-        cls, cliente_id: int, tipo: str, mensaje: str, programada_para: datetime = None
+        cls, cliente_id: int, tipo: str, mensaje: str, programada_para: Optional[datetime] = None
     ):
         """
         Helper para crear notificaciones de recordatorio de pago
