@@ -9,8 +9,6 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from sqlalchemy import Enum
-
 # Configurar logger específico para auditoría de seguridad
 security_audit_logger = logging.getLogger("security_audit")
 

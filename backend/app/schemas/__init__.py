@@ -65,8 +65,6 @@ from app.schemas.kpis import (
 # SCHEMAS DE PAGO
 # ============================================
 from app.schemas.pago import (
-    ConciliacionCreate,
-    ConciliacionResponse,
     KPIsPagos,
     PagoCreate,
     PagoListResponse,

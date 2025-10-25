@@ -1677,7 +1677,6 @@ class AlertasInteligentes:
     def _detectar_deterioro_cartera(db: Session) -> Dict:
         """Detectar deterioro en la calidad de la cartera"""
         # Comparar mora actual vs mes anterior
-        hoy = date.today()
 
         mora_actual = (
             db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).count()

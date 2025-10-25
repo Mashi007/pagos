@@ -15,7 +15,6 @@ from functools import wraps
 from typing import Any, Callable, Dict, Optional
 
 import psutil
-from sqlalchemy import Enum
 
 # Constantes de configuración
 ERROR_RETENTION_HOURS = 24
