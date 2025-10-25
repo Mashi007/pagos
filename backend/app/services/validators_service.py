@@ -1193,7 +1193,7 @@ class ValidadorEmail:
         return None
 
     @staticmethod
-    def _calcular_cambios_realizados(email_str: str, email_limpio: str) -> List[str]:
+    def _calcular_cambios_realizados(email_str: str, email_limpio: str) -> list[str]:
         """Calcular qué cambios se realizaron"""
         cambios_realizados = []
         if email_str != email_limpio:
