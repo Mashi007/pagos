@@ -412,78 +412,112 @@ async def trace_authentication_flow(request: Request, db: Session = Depends(get_
         }
 
 
+def _obtener_traces_recientes(minutes: int) -> list:
+    """Obtener traces recientes basados en el tiempo"""
+    cutoff_time = datetime.now() - timedelta(minutes=minutes)
+    return [
+        trace
+        for trace in auth_flow_traces
+        if datetime.fromisoformat(trace["start_time"]) > cutoff_time
+    ]
+
+
+def _analizar_correlacion_basica(recent_traces: list, minutes: int) -> dict:
+    """Análisis básico de correlación"""
+    return {
+        "time_range_minutes": minutes,
+        "total_traces": len(recent_traces),
+        "successful_traces": len(
+            [t for t in recent_traces if t["overall_status"] == "success"]
+        ),
+        "failed_traces": len([t for t in recent_traces if t["overall_status"] == "failed"]),
+        "error_traces": len([t for t in recent_traces if t["overall_status"] == "error"]),
+    }
+
+
+def _agrupar_errores_por_tipo(recent_traces: list) -> dict:
+    """Agrupar traces por tipo de error"""
+    error_groups = defaultdict(list)
+    for trace in recent_traces:
+        if trace["overall_status"] != "success":
+            error_groups[trace["error"]].append(trace)
+    return error_groups
+
+
+def _analizar_patrones_temporales(error_groups: dict) -> dict:
+    """Analizar patrones temporales de errores"""
+    temporal_patterns = {}
+    for error_type, traces in error_groups.items():
+        if len(traces) > 1:
+            # Calcular intervalo promedio entre errores
+            timestamps = [datetime.fromisoformat(t["start_time"]) for t in traces]
+            intervals = [
+                (timestamps[i + 1] - timestamps[i]).total_seconds()
+                for i in range(len(timestamps) - 1)
+            ]
+            avg_interval = sum(intervals) / len(intervals) if intervals else 0
+
+            temporal_patterns[error_type] = {
+                "count": len(traces),
+                "avg_interval_seconds": avg_interval,
+                "first_occurrence": min(timestamps).isoformat(),
+                "last_occurrence": max(timestamps).isoformat(),
+            }
+    return temporal_patterns
+
+
+def _analizar_fallos_por_paso(recent_traces: list) -> dict:
+    """Analizar fallos por paso"""
+    step_failures = defaultdict(int)
+    for trace in recent_traces:
+        for step in trace["steps"]:
+            if step["status"] == "failed":
+                step_failures[step["step"]] += 1
+    return step_failures
+
+
+def _analizar_timing_por_estado() -> dict:
+    """Analizar estadísticas de timing por estado"""
+    timing_analysis = {}
+    for status in ["success", "failed", "error"]:
+        durations = timing_stats.get(status, [])
+        if durations:
+            timing_analysis[status] = {
+                "count": len(durations),
+                "avg_duration_ms": sum(durations) / len(durations),
+                "min_duration_ms": min(durations),
+                "max_duration_ms": max(durations),
+                "p95_duration_ms": (
+                    sorted(durations)[int(len(durations) * 0.95)] if durations else 0
+                ),
+            }
+    return timing_analysis
+
+
 @router.get("/analyze-correlation")
 async def analyze_request_correlation(request: Request, minutes: int = 60):
     """
-    🔗 Análisis de correlación entre requests
+    🔗 Análisis de correlación entre requests (VERSIÓN REFACTORIZADA)
     Identifica patrones y relaciones entre requests fallidos
     """
     try:
-        # Obtener traces recientes
-        cutoff_time = datetime.now() - timedelta(minutes=minutes)
-        recent_traces = [
-            trace
-            for trace in auth_flow_traces
-            if datetime.fromisoformat(trace["start_time"]) > cutoff_time
-        ]
+        # 1. Obtener traces recientes
+        recent_traces = _obtener_traces_recientes(minutes)
 
-        # Análisis de correlación
-        correlation_analysis = {
-            "time_range_minutes": minutes,
-            "total_traces": len(recent_traces),
-            "successful_traces": len(
-                [t for t in recent_traces if t["overall_status"] == "success"]
-            ),
-            "failed_traces": len([t for t in recent_traces if t["overall_status"] == "failed"]),
-            "error_traces": len([t for t in recent_traces if t["overall_status"] == "error"]),
-        }
+        # 2. Análisis de correlación básico
+        correlation_analysis = _analizar_correlacion_basica(recent_traces, minutes)
 
-        # Agrupar por tipo de error
-        error_groups = defaultdict(list)
-        for trace in recent_traces:
-            if trace["overall_status"] != "success":
-                error_groups[trace["error"]].append(trace)
+        # 3. Agrupar por tipo de error
+        error_groups = _agrupar_errores_por_tipo(recent_traces)
 
-        # Análisis de patrones temporales
-        temporal_patterns = {}
-        for error_type, traces in error_groups.items():
-            if len(traces) > 1:
-                # Calcular intervalo promedio entre errores
-                timestamps = [datetime.fromisoformat(t["start_time"]) for t in traces]
-                intervals = [
-                    (timestamps[i + 1] - timestamps[i]).total_seconds()
-                    for i in range(len(timestamps) - 1)
-                ]
-                avg_interval = sum(intervals) / len(intervals) if intervals else 0
+        # 4. Análisis de patrones temporales
+        temporal_patterns = _analizar_patrones_temporales(error_groups)
 
-                temporal_patterns[error_type] = {
-                    "count": len(traces),
-                    "avg_interval_seconds": avg_interval,
-                    "first_occurrence": min(timestamps).isoformat(),
-                    "last_occurrence": max(timestamps).isoformat(),
-                }
+        # 5. Análisis de pasos más problemáticos
+        step_failures = _analizar_fallos_por_paso(recent_traces)
 
-        # Análisis de pasos más problemáticos
-        step_failures = defaultdict(int)
-        for trace in recent_traces:
-            for step in trace["steps"]:
-                if step["status"] == "failed":
-                    step_failures[step["step"]] += 1
-
-        # Estadísticas de timing
-        timing_analysis = {}
-        for status in ["success", "failed", "error"]:
-            durations = timing_stats.get(status, [])
-            if durations:
-                timing_analysis[status] = {
-                    "count": len(durations),
-                    "avg_duration_ms": sum(durations) / len(durations),
-                    "min_duration_ms": min(durations),
-                    "max_duration_ms": max(durations),
-                    "p95_duration_ms": (
-                        sorted(durations)[int(len(durations) * 0.95)] if durations else 0
-                    ),
-                }
+        # 6. Estadísticas de timing
+        timing_analysis = _analizar_timing_por_estado()
 
         return {
             "timestamp": datetime.now().isoformat(),
@@ -510,10 +544,85 @@ async def analyze_request_correlation(request: Request, minutes: int = 60):
         }
 
 
+def _detectar_anomalia_tasa_error(recent_traces: list) -> list:
+    """Detectar anomalías de tasa de error alta"""
+    anomalies = []
+    total_traces = len(recent_traces)
+    failed_traces = len([t for t in recent_traces if t["overall_status"] == "failed"])
+    error_rate = (failed_traces / total_traces * 100) if total_traces > 0 else 0
+
+    if error_rate > 50:
+        anomalies.append({
+            "type": "high_error_rate",
+            "severity": "critical",
+            "description": f"Error rate is {error_rate:.1f}% (>{total_traces} traces analyzed)",
+            "recommendation": "Investigate authentication configuration and token generation",
+        })
+    elif error_rate > 20:
+        anomalies.append({
+            "type": "elevated_error_rate",
+            "severity": "warning",
+            "description": f"Error rate is {error_rate:.1f}% (>{total_traces} traces analyzed)",
+            "recommendation": "Monitor authentication patterns closely",
+        })
+
+    return anomalies
+
+
+def _detectar_anomalia_duracion_excesiva(recent_traces: list) -> list:
+    """Detectar anomalías de duración excesiva"""
+    anomalies = []
+    slow_traces = [t for t in recent_traces if t["total_duration_ms"] > 3000]
+    if slow_traces:
+        avg_slow_duration = sum(t["total_duration_ms"] for t in slow_traces) / len(slow_traces)
+        anomalies.append({
+            "type": "slow_authentication",
+            "severity": "warning",
+            "description": f"{len(slow_traces)} traces took >3s (avg: {avg_slow_duration:.0f}ms)",
+            "recommendation": "Check database performance and network latency",
+        })
+    return anomalies
+
+
+def _detectar_anomalia_patrones_repetitivos(recent_traces: list) -> list:
+    """Detectar anomalías de patrones repetitivos de error"""
+    anomalies = []
+    error_patterns_count = defaultdict(int)
+    for trace in recent_traces:
+        if trace["overall_status"] == "failed":
+            error_patterns_count[trace["error"]] += 1
+
+    for error, count in error_patterns_count.items():
+        if count > 5:  # Más de 5 ocurrencias del mismo error
+            anomalies.append({
+                "type": "repetitive_error",
+                "severity": "warning",
+                "description": f"Error '{error}' occurred {count} times",
+                "recommendation": f"Investigate root cause of: {error}",
+            })
+    return anomalies
+
+
+def _detectar_anomalia_timing_exitoso() -> list:
+    """Detectar anomalías de timing en autenticaciones exitosas"""
+    anomalies = []
+    success_durations = timing_stats.get("success", [])
+    if success_durations:
+        avg_success_duration = sum(success_durations) / len(success_durations)
+        if avg_success_duration > 1000:  # Más de 1 segundo para éxito
+            anomalies.append({
+                "type": "slow_successful_auth",
+                "severity": "info",
+                "description": f"Successful authentications average {avg_success_duration:.0f}ms",
+                "recommendation": "Consider optimizing authentication flow",
+            })
+    return anomalies
+
+
 @router.get("/detect-anomalies")
 async def detect_authentication_anomalies():
     """
-    🚨 Detección de patrones anómalos en autenticación
+    🚨 Detección de patrones anómalos en autenticación (VERSIÓN REFACTORIZADA)
     """
     try:
         # Obtener traces de la última hora
@@ -526,83 +635,13 @@ async def detect_authentication_anomalies():
 
         anomalies = []
 
-        # Anomalía 1: Tasa de error alta
+        # Detectar diferentes tipos de anomalías
+        anomalies.extend(_detectar_anomalia_tasa_error(recent_traces))
+        anomalies.extend(_detectar_anomalia_duracion_excesiva(recent_traces))
+        anomalies.extend(_detectar_anomalia_patrones_repetitivos(recent_traces))
+        anomalies.extend(_detectar_anomalia_timing_exitoso())
+
         total_traces = len(recent_traces)
-        failed_traces = len([t for t in recent_traces if t["overall_status"] == "failed"])
-        error_rate = (failed_traces / total_traces * 100) if total_traces > 0 else 0
-
-        if error_rate > 50:
-            anomalies.append(
-                {
-                    "type": "high_error_rate",
-                    "severity": "critical",
-                    "description": (
-                        f"Error rate is {error_rate:.1f}% (>{total_traces} traces analyzed)"
-                    ),
-                    "recommendation": (
-                        "Investigate authentication configuration and token generation"
-                    ),
-                }
-            )
-        elif error_rate > 20:
-            anomalies.append(
-                {
-                    "type": "elevated_error_rate",
-                    "severity": "warning",
-                    "description": (
-                        f"Error rate is {error_rate:.1f}% (>{total_traces} traces analyzed)"
-                    ),
-                    "recommendation": "Monitor authentication patterns closely",
-                }
-            )
-
-        # Anomalía 2: Duración excesiva
-        slow_traces = [t for t in recent_traces if t["total_duration_ms"] > 3000]
-        if slow_traces:
-            avg_slow_duration = sum(t["total_duration_ms"] for t in slow_traces) / len(slow_traces)
-            anomalies.append(
-                {
-                    "type": "slow_authentication",
-                    "severity": "warning",
-                    "description": (
-                        f"{len(slow_traces)} traces took >3s (avg: {avg_slow_duration:.0f}ms)"
-                    ),
-                    "recommendation": "Check database performance and network latency",
-                }
-            )
-
-        # Anomalía 3: Patrones repetitivos de error
-        error_patterns_count = defaultdict(int)
-        for trace in recent_traces:
-            if trace["overall_status"] == "failed":
-                error_patterns_count[trace["error"]] += 1
-
-        for error, count in error_patterns_count.items():
-            if count > 5:  # Más de 5 ocurrencias del mismo error
-                anomalies.append(
-                    {
-                        "type": "repetitive_error",
-                        "severity": "warning",
-                        "description": f"Error '{error}' occurred {count} times",
-                        "recommendation": f"Investigate root cause of: {error}",
-                    }
-                )
-
-        # Anomalía 4: Patrones de timing anómalos
-        success_durations = timing_stats.get("success", [])
-        if success_durations:
-            avg_success_duration = sum(success_durations) / len(success_durations)
-            if avg_success_duration > 1000:  # Más de 1 segundo para éxito
-                anomalies.append(
-                    {
-                        "type": "slow_successful_auth",
-                        "severity": "info",
-                        "description": (
-                            f"Successful authentications average {avg_success_duration:.0f}ms"
-                        ),
-                        "recommendation": "Consider optimizing authentication flow",
-                    }
-                )
 
         return {
             "timestamp": datetime.now().isoformat(),
