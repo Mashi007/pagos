@@ -65,9 +65,7 @@ app_logger.handlers.clear()
 app_logger.addHandler(logging.StreamHandler(sys.stdout))
 
 # Log de inicio
-logger.info(
-    "🚀 Iniciando aplicación FastAPI - Sistema de Préstamos y Cobranza"
-)
+logger.info("🚀 Iniciando aplicación FastAPI - Sistema de Préstamos y Cobranza")
 logger.info(
     f"📊 Configuración: Environment={settings.ENVIRONMENT}, "
     f"Log Level={settings.LOG_LEVEL}"
@@ -118,9 +116,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "no-referrer-when-downgrade"
 
         # Permissions Policy más permisivo
-        response.headers["Permissions-Policy"] = (
-            "geolocation=*, microphone=*, camera=*"
-        )
+        response.headers["Permissions-Policy"] = "geolocation=*, microphone=*, camera=*"
 
         return response
 
@@ -156,9 +152,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 # CORS - MIDDLEWARE SIMPLE PARA OPTIONS
 
 logger.info(f"🌐 CORS Origins configurados: {settings.CORS_ORIGINS}")
-logger.info(
-    "✅ CORS: Middleware simple para OPTIONS + Headers directos en POST"
-)
+logger.info("✅ CORS: Middleware simple para OPTIONS + Headers directos en POST")
 
 # MIDDLEWARE CORS CENTRALIZADO - USANDO CONFIGURACIÓN DE SETTINGS
 app.add_middleware(
@@ -176,12 +170,8 @@ app.add_middleware(
 )
 
 # Registrar routers
-app.include_router(
-    health.router, prefix=f"{settings.API_V1_PREFIX}", tags=["Health"]
-)
-app.include_router(
-    auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["Auth"]
-)
+app.include_router(health.router, prefix=f"{settings.API_V1_PREFIX}", tags=["Health"])
+app.include_router(auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["Auth"])
 app.include_router(
     users.router,
     prefix=f"{settings.API_V1_PREFIX}/usuarios",
@@ -220,9 +210,7 @@ app.include_router(
     prefix=f"{settings.API_V1_PREFIX}/reportes",
     tags=["Reportes"],
 )
-app.include_router(
-    kpis.router, prefix=f"{settings.API_V1_PREFIX}/kpis", tags=["KPIs"]
-)
+app.include_router(kpis.router, prefix=f"{settings.API_V1_PREFIX}/kpis", tags=["KPIs"])
 app.include_router(
     notificaciones.router,
     prefix=f"{settings.API_V1_PREFIX}/notificaciones",
@@ -303,7 +291,7 @@ app.include_router(
     prefix=f"{settings.API_V1_PREFIX}/impact",
     tags=["Análisis de Impacto"],
 )
-# app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", 
+# app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock",
 #                   tags=["Mock Data"])  # Removido - se usarán datos reales
 
 

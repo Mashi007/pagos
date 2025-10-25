@@ -119,7 +119,7 @@ def require_role(require_admin: bool = True):
     Dependency para requerir rol de administrador
 
     Args:
-        require_admin: Si True, requiere admin. 
+        require_admin: Si True, requiere admin.
                       Si False, cualquier usuario activo.
 
     Returns:
@@ -151,7 +151,7 @@ def require_permission(*required_permissions: Permission):
         Función de dependencia
 
     Usage:
-        @app.post("/clientes", 
+        @app.post("/clientes",
                  dependencies=[Depends(require_permission(Permission.CLIENTE_CREATE))])
     """
 
@@ -214,9 +214,7 @@ class PaginationParams:
         self.limit = limit if limit is not None else page_size
 
 
-def get_pagination_params(
-    page: int = 1, page_size: int = 10
-) -> PaginationParams:
+def get_pagination_params(page: int = 1, page_size: int = 10) -> PaginationParams:
     """
     Dependency para obtener parámetros de paginación
 
@@ -229,7 +227,9 @@ def get_pagination_params(
 
     Usage:
         @app.get("/items")
-        def get_items(pagination: PaginationParams = Depends(get_pagination_params)):
+        def get_items(
+            pagination: PaginationParams = Depends(get_pagination_params)
+        ):
             skip = pagination.skip
             limit = pagination.limit
     """

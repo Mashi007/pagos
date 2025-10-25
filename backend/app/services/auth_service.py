@@ -29,9 +29,7 @@ class AuthService:
     """Servicio de autenticación"""
 
     @staticmethod
-    def authenticate_user(
-        db: Session, email: str, password: str
-    ) -> Optional[User]:
+    def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
         """
         Autentica un usuario con email y contraseña
 
@@ -60,12 +58,14 @@ class AuthService:
 
         if not user:
             logger.warning(
-                f"AuthService.authenticate_user - Usuario no encontrado: {email_normalized}")
+                f"AuthService.authenticate_user - Usuario no encontrado: {email_normalized}"
+            )
             return None
 
         if not verify_password(password, user.hashed_password):
             logger.warning(
-                f"AuthService.authenticate_user - Contraseña incorrecta para: {email_normalized}")
+                f"AuthService.authenticate_user - Contraseña incorrecta para: {email_normalized}"
+            )
             return None
 
         logger.info(
@@ -93,9 +93,7 @@ class AuthService:
             f"AuthService.login - Iniciando proceso de login para: {login_data.email}"
         )
 
-        user = AuthService.authenticate_user(
-            db, login_data.email, login_data.password
-        )
+        user = AuthService.authenticate_user(db, login_data.email, login_data.password)
 
         if not user:
             logger.warning(
@@ -109,9 +107,7 @@ class AuthService:
 
         # Verificar que el usuario esté activo
         if not user.is_active:
-            logger.warning(
-                f"AuthService.login - Usuario inactivo: {login_data.email}"
-            )
+            logger.warning(f"AuthService.login - Usuario inactivo: {login_data.email}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Usuario inactivo. Contacte al administrador.",
@@ -121,9 +117,7 @@ class AuthService:
         user.last_login = datetime.utcnow()
         db.commit()
 
-        logger.info(
-            f"AuthService.login - Login exitoso para: {login_data.email}"
-        )
+        logger.info(f"AuthService.login - Login exitoso para: {login_data.email}")
 
         # Crear tokens
         access_token = create_access_token(
@@ -241,9 +235,7 @@ class AuthService:
         # Validar fortaleza de nueva contraseña
         is_valid, message = validate_password_strength(new_password)
         if not is_valid:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=message
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
         # Actualizar contraseña
         user.hashed_password = get_password_hash(new_password)

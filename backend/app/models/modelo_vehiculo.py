@@ -23,18 +23,18 @@ class ModeloVehiculo(Base):
     )
 
     def __repr__(self):
-        return f"<ModeloVehiculo(id=" f"{self.id}" f", modelo='{self.modelo}', activo={
+        return (
+            f"<ModeloVehiculo(id="
+            f"{self.id}"
+            f", modelo='{self.modelo}', activo={
             self.activo})>"
+        )
 
     def to_dict(self):
         return {
             "id": self.id,
             "modelo": self.modelo,
             "activo": self.activo,
-            "created_at": (
-                self.created_at.isoformat() if self.created_at else None
-            ),
-            "updated_at": (
-                self.updated_at.isoformat() if self.updated_at else None
-            ),
+            "created_at": (self.created_at.isoformat() if self.created_at else None),
+            "updated_at": (self.updated_at.isoformat() if self.updated_at else None),
         }

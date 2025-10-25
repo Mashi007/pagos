@@ -21,9 +21,7 @@ class User(Base):
     __tablename__ = "usuarios"
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(
-        String(EMAIL_LENGTH), unique=True, index=True, nullable=False
-    )
+    email = Column(String(EMAIL_LENGTH), unique=True, index=True, nullable=False)
     nombre = Column(String(NAME_LENGTH), nullable=False)
     apellido = Column(String(NAME_LENGTH), nullable=False)
     hashed_password = Column(String(PASSWORD_LENGTH), nullable=False)
@@ -60,8 +58,12 @@ class User(Base):
     notificaciones = relationship("Notificacion", back_populates="user")
 
     def __repr__(self):
-        return f"<User(id=" f"{self.id}" f", email='{self.email}', is_admin={
+        return (
+            f"<User(id="
+            f"{self.id}"
+            f", email='{self.email}', is_admin={
             self.is_admin})>"
+        )
 
     @property
     def full_name(self) -> str:

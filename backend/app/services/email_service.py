@@ -298,8 +298,6 @@ class EmailService:
                 db.commit()
 
         except Exception as e:
-            logger.error(
-                f"Error actualizando notificación {notificacion_id}: {str(e)}"
-            )
+            logger.error(f"Error actualizando notificación {notificacion_id}: {str(e)}")
         finally:
             db.close()

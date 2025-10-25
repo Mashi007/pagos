@@ -19,23 +19,21 @@ class Concesionario(Base):
     fecha_eliminacion = Column(DateTime(timezone=True), nullable=True)
 
     def __repr__(self):
-        return f"<Concesionario(id=" f"{self.id}" f", nombre='{self.nombre}', activo={
+        return (
+            f"<Concesionario(id="
+            f"{self.id}"
+            f", nombre='{self.nombre}', activo={
             self.activo})>"
+        )
 
     def to_dict(self):
         return {
             "id": self.id,
             "nombre": self.nombre,
             "activo": self.activo,
-            "created_at": (
-                self.created_at.isoformat() if self.created_at else None
-            ),
-            "updated_at": (
-                self.updated_at.isoformat() if self.updated_at else None
-            ),
+            "created_at": (self.created_at.isoformat() if self.created_at else None),
+            "updated_at": (self.updated_at.isoformat() if self.updated_at else None),
             "fecha_eliminacion": (
-                self.fecha_eliminacion.isoformat()
-                if self.fecha_eliminacion
-                else None
+                self.fecha_eliminacion.isoformat() if self.fecha_eliminacion else None
             ),
         }

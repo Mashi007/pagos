@@ -49,31 +49,25 @@ class ConfiguracionSistema(Base):
     # Validaciones
     valor_minimo = Column(String(100), nullable=True)
     valor_maximo = Column(String(100), nullable=True)
-    opciones_validas = Column(
-        Text, nullable=True
-    )  # JSON array de opciones válidas
-    patron_validacion = Column(
-        String(200), nullable=True
-    )  # Regex para validación
+    opciones_validas = Column(Text, nullable=True)  # JSON array de opciones válidas
+    patron_validacion = Column(String(200), nullable=True)  # Regex para validación
 
     # Auditoría
     creado_en = Column(DateTime, server_default=func.now())
-    actualizado_en = Column(
-        DateTime, server_default=func.now(), onupdate=func.now()
-    )
+    actualizado_en = Column(DateTime, server_default=func.now(), onupdate=func.now())
     actualizado_por = Column(String(100), nullable=True)
 
     def __repr__(self):
-        return f"<ConfiguracionSistema(" f"{self.categoria}" f".{self.clave}={
+        return (
+            f"<ConfiguracionSistema("
+            f"{self.categoria}"
+            f".{self.clave}={
             self.valor})>"
+        )
 
     def _procesar_valor_boolean(self) -> bool:
         """Procesar valor de tipo BOOLEAN"""
-        return (
-            self.valor.lower() in ["true", "1", "yes", "on"]
-            if self.valor
-            else False
-        )
+        return self.valor.lower() in ["true", "1", "yes", "on"] if self.valor else False
 
     def _procesar_valor_integer(self) -> int:
         """Procesar valor de tipo INTEGER"""
@@ -669,20 +663,14 @@ class ConfiguracionPorDefecto:
                             descripcion=config_data.get("descripcion", ""),
                             tipo_dato=config_data.get("tipo_dato", "STRING"),
                             requerido=config_data.get("requerido", False),
-                            visible_frontend=config_data.get(
-                                "visible_frontend", True
-                            ),
-                            solo_lectura=config_data.get(
-                                "solo_lectura", False
-                            ),
+                            visible_frontend=config_data.get("visible_frontend", True),
+                            solo_lectura=config_data.get("solo_lectura", False),
                             opciones_validas=(
                                 json.dumps(config_data.get("opciones_validas"))
                                 if config_data.get("opciones_validas")
                                 else None
                             ),
-                            patron_validacion=config_data.get(
-                                "patron_validacion"
-                            ),
+                            patron_validacion=config_data.get("patron_validacion"),
                             valor_minimo=config_data.get("valor_minimo"),
                             valor_maximo=config_data.get("valor_maximo"),
                         )
@@ -732,9 +720,7 @@ class ConfigHelper:
     @staticmethod
     def is_whatsapp_enabled(db) -> bool:
         """Verificar si WhatsApp está habilitado"""
-        return ConfigHelper.get_config(
-            db, "WHATSAPP", "WHATSAPP_ENABLED", False
-        )
+        return ConfigHelper.get_config(db, "WHATSAPP", "WHATSAPP_ENABLED", False)
 
     @staticmethod
     def get_financial_config(db) -> Dict:
