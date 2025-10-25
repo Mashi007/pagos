@@ -18,12 +18,9 @@ from app.models.user import User
 security = HTTPBearer()
 
 
-def get_current_user
+def get_current_user(
     db: Session = Depends(get_db),
     credentials: HTTPAuthorizationCredentials = Depends(security),
-):
-    """Función temporal - TODO: implementar"""
-    return None
     """
     Obtiene el usuario actual desde el token JWT
 
@@ -80,7 +77,6 @@ def get_current_user
 
 def get_current_active_user
     current_user: User = Depends(get_current_user),
-):
     """Función temporal - TODO: implementar"""
     return None
     """
@@ -141,7 +137,6 @@ def require_permission(*required_permissions: Permission):
 
     def permission_checker
         current_user: User = Depends(get_current_user),
-    ):
     """Función temporal - TODO: implementar"""
     return None
         user_permissions = get_user_permissions(current_user.is_admin)
