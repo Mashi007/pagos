@@ -16,10 +16,8 @@ from app.services.quality_standards import apply_quality_standards
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 
-def main():
-    """
-    Función principal del script de validación
-    """
+def _configurar_logging_y_directorio():
+    """Configurar logging y verificar directorio"""
     print("APLICANDO NORMAS DE CALIDAD A BACKEND/APP/SERVICES")
     print("=" * 60)
 
@@ -31,12 +29,15 @@ def main():
 
     if not services_dir.exists():
         print(f"Error: Directorio {services_dir} no existe")
-        return 1
+        return None
 
     print(f"Analizando directorio: {services_dir}")
     print()
+    return services_dir
 
-    # Aplicar normas de calidad
+
+def _ejecutar_analisis_calidad(services_dir: Path):
+    """Ejecutar análisis de calidad"""
     print("Ejecutando analisis de calidad...")
     report = apply_quality_standards(str(services_dir))
 
@@ -48,7 +49,11 @@ def main():
     print(f"Timestamp: {report['timestamp']}")
     print()
 
-    # Mostrar detalles por servicio
+    return report
+
+
+def _mostrar_detalles_por_servicio(report: dict):
+    """Mostrar detalles por servicio"""
     print("DETALLES POR SERVICIO")
     print("-" * 40)
 
@@ -84,7 +89,9 @@ def main():
 
         print()
 
-    # Mostrar problemas críticos
+
+def _mostrar_problemas_criticos(report: dict):
+    """Mostrar problemas críticos"""
     if report["critical_issues"]:
         print("PROBLEMAS CRITICOS")
         print("-" * 40)
@@ -94,7 +101,9 @@ def main():
                 print(f"   • {problem}")
         print()
 
-    # Mostrar recomendaciones
+
+def _mostrar_recomendaciones(report: dict):
+    """Mostrar recomendaciones"""
     if report["recommendations"]:
         print("RECOMENDACIONES")
         print("-" * 40)
@@ -102,7 +111,9 @@ def main():
             print(f"{i}. {recommendation}")
         print()
 
-    # Guardar reporte
+
+def _guardar_reporte(report: dict) -> Path:
+    """Guardar reporte en archivo"""
     report_file = (
         Path(__file__).parent / f"quality_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     )
@@ -110,17 +121,44 @@ def main():
         json.dump(report, f, indent=2, ensure_ascii=False)
 
     print(f"Reporte guardado en: {report_file}")
+    return report_file
 
-    # Determinar código de salida
-    if report["overall_score"] >= 80:
+
+def _determinar_codigo_salida(overall_score: float) -> int:
+    """Determinar código de salida según score"""
+    if overall_score >= 80:
         print("Calidad aceptable")
         return 0
-    elif report["overall_score"] >= 70:
+    elif overall_score >= 70:
         print("Calidad mejorable")
         return 1
     else:
         print("Calidad insuficiente")
         return 2
+
+
+def main():
+    """
+    Función principal del script de validación (VERSIÓN REFACTORIZADA)
+    """
+    # Configurar logging y directorio
+    services_dir = _configurar_logging_y_directorio()
+    if services_dir is None:
+        return 1
+
+    # Ejecutar análisis de calidad
+    report = _ejecutar_analisis_calidad(services_dir)
+
+    # Mostrar detalles
+    _mostrar_detalles_por_servicio(report)
+    _mostrar_problemas_criticos(report)
+    _mostrar_recomendaciones(report)
+
+    # Guardar reporte
+    _guardar_reporte(report)
+
+    # Determinar código de salida
+    return _determinar_codigo_salida(report["overall_score"])
 
 
 if __name__ == "__main__":

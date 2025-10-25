@@ -334,8 +334,8 @@ async def exportar_excel(
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
-except Exception as e:
-    raise HTTPException(status_code=500, detail=f"Error generando Excel: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generando Excel: {str(e)}")
 
 
 @router.get("/clientes-top")

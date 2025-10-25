@@ -217,24 +217,9 @@ async def guardar_archivo_evidencia(archivo: UploadFile) -> tuple[str, str, int]
 # ============================================
 
 
-@router.post("/cobranzas/modificar-pago-completo")
-async def solicitar_modificacion_pago_completo(
-    formulario: FormularioModificarPago,
-    archivo_evidencia: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    ⚠️ COBRANZAS: Solicitar modificación de pago con formulario completo
-
-    FLUJO COMPLETO:
-    1. ✅ Usuario completa formulario detallado
-    2. ✅ Adjunta evidencia (opcional)
-    3. ✅ Sistema registra solicitud
-    4. ✅ Notifica al Admin (in-app + email)
-    5. ✅ Bloquea temporalmente el registro
-    """
-    # Verificar permisos - Todos los usuarios pueden usar este endpoint
+def _validar_solicitud_modificacion_pago(formulario: FormularioModificarPago, current_user: User, db: Session) -> tuple[Pago, Optional[Aprobacion]]:
+    """Validar solicitud de modificación de pago"""
+    # Verificar permisos
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Usuario no autorizado")
 
@@ -260,17 +245,23 @@ async def solicitar_modificacion_pago_completo(
             detail=f"Ya existe una solicitud pendiente para este pago (ID: {solicitud_existente.id})",
         )
 
-    # Procesar archivo de evidencia si existe
+    return pago, solicitud_existente
+
+
+def _procesar_archivo_evidencia(archivo_evidencia: Optional[UploadFile]) -> tuple[Optional[str], Optional[str], Optional[int]]:
+    """Procesar archivo de evidencia"""
     archivo_path = None
     tipo_archivo = None
     tamaño_archivo = None
 
     if archivo_evidencia and archivo_evidencia.filename:
-        archivo_path, tipo_archivo, tamaño_archivo = await guardar_archivo_evidencia(
-            archivo_evidencia
-        )
+        archivo_path, tipo_archivo, tamaño_archivo = await guardar_archivo_evidencia(archivo_evidencia)
 
-    # Preparar datos solicitados
+    return archivo_path, tipo_archivo, tamaño_archivo
+
+
+def _preparar_datos_solicitados(formulario: FormularioModificarPago) -> Dict[str, Any]:
+    """Preparar datos solicitados"""
     datos_solicitados = {}
     if formulario.nuevo_monto:
         datos_solicitados["monto_pagado"] = formulario.nuevo_monto
@@ -285,17 +276,23 @@ async def solicitar_modificacion_pago_completo(
     if formulario.nuevas_observaciones:
         datos_solicitados["observaciones"] = formulario.nuevas_observaciones
 
-    # Establecer fecha límite según prioridad
-    fecha_limite = None
-    if formulario.prioridad == "URGENTE":
-        fecha_limite = date.today() + timedelta(days=1)
-    elif formulario.prioridad == "ALTA":
-        fecha_limite = date.today() + timedelta(days=2)
-    elif formulario.prioridad == "NORMAL":
-        fecha_limite = date.today() + timedelta(days=5)
+    return datos_solicitados
 
-    # Crear solicitud de aprobación
-    solicitud = Aprobacion(
+
+def _calcular_fecha_limite(prioridad: str) -> Optional[date]:
+    """Calcular fecha límite según prioridad"""
+    if prioridad == "URGENTE":
+        return date.today() + timedelta(days=1)
+    elif prioridad == "ALTA":
+        return date.today() + timedelta(days=2)
+    elif prioridad == "NORMAL":
+        return date.today() + timedelta(days=5)
+    return None
+
+
+def _crear_solicitud_aprobacion(formulario: FormularioModificarPago, datos_solicitados: Dict[str, Any], current_user: User, fecha_limite: Optional[date]) -> Aprobacion:
+    """Crear solicitud de aprobación"""
+    return Aprobacion(
         solicitante_id=current_user.id,
         tipo_solicitud=f"MODIFICAR_PAGO_{formulario.motivo_modificacion}",
         entidad="pago",
@@ -308,6 +305,9 @@ async def solicitar_modificacion_pago_completo(
         bloqueado_temporalmente=True,
     )
 
+
+def _guardar_solicitud_con_archivo(solicitud: Aprobacion, archivo_path: Optional[str], tipo_archivo: Optional[str], tamaño_archivo: Optional[int], db: Session) -> Aprobacion:
+    """Guardar solicitud con archivo adjunto"""
     # Adjuntar archivo si existe
     if archivo_path:
         solicitud.adjuntar_archivo(archivo_path, tipo_archivo, tamaño_archivo)
@@ -315,10 +315,11 @@ async def solicitar_modificacion_pago_completo(
     db.add(solicitud)
     db.commit()
     db.refresh(solicitud)
+    return solicitud
 
-    # Notificar al admin (implementar después)
-    await _notificar_nueva_solicitud_admin(solicitud, db)
 
+def _generar_respuesta_solicitud(solicitud: Aprobacion, pago: Pago, datos_solicitados: Dict[str, Any], archivo_path: Optional[str]) -> Dict[str, Any]:
+    """Generar respuesta de la solicitud"""
     return {
         "solicitud_id": solicitud.id,
         "mensaje": "✅ Solicitud de modificación de pago enviada exitosamente",
@@ -337,6 +338,48 @@ async def solicitar_modificacion_pago_completo(
         "cambios_solicitados": datos_solicitados,
         "siguiente_paso": "Esperar aprobación del administrador",
     }
+
+
+@router.post("/cobranzas/modificar-pago-completo")
+async def solicitar_modificacion_pago_completo(
+    formulario: FormularioModificarPago,
+    archivo_evidencia: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    ⚠️ COBRANZAS: Solicitar modificación de pago con formulario completo (VERSIÓN REFACTORIZADA)
+
+    FLUJO COMPLETO:
+    1. ✅ Usuario completa formulario detallado
+    2. ✅ Adjunta evidencia (opcional)
+    3. ✅ Sistema registra solicitud
+    4. ✅ Notifica al Admin (in-app + email)
+    5. ✅ Bloquea temporalmente el registro
+    """
+    # Validar solicitud
+    pago, solicitud_existente = _validar_solicitud_modificacion_pago(formulario, current_user, db)
+
+    # Procesar archivo de evidencia
+    archivo_path, tipo_archivo, tamaño_archivo = await _procesar_archivo_evidencia(archivo_evidencia)
+
+    # Preparar datos solicitados
+    datos_solicitados = _preparar_datos_solicitados(formulario)
+
+    # Calcular fecha límite
+    fecha_limite = _calcular_fecha_limite(formulario.prioridad)
+
+    # Crear solicitud de aprobación
+    solicitud = _crear_solicitud_aprobacion(formulario, datos_solicitados, current_user, fecha_limite)
+
+    # Guardar solicitud con archivo
+    solicitud = _guardar_solicitud_con_archivo(solicitud, archivo_path, tipo_archivo, tamaño_archivo, db)
+
+    # Notificar al admin
+    await _notificar_nueva_solicitud_admin(solicitud, db)
+
+    # Generar respuesta
+    return _generar_respuesta_solicitud(solicitud, pago, datos_solicitados, archivo_path)
 
 
 @router.post("/cobranzas/anular-pago-completo")
