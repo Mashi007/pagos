@@ -138,7 +138,7 @@ class AuthService:
         access_token = create_access_token(
             subject=user.id,
             additional_claims={
-                "is_admin": user.is_admin,
+                "is_admin": user.is_admin,  # Cambio clave: rol → is_admin
                 "email": user.email,
             },
         )
@@ -202,7 +202,7 @@ class AuthService:
             new_access_token = create_access_token(
                 subject=user.id,
                 additional_claims={
-                    "is_admin": user.is_admin,
+                    "is_admin": user.is_admin,  # Cambio clave: rol → is_admin
                     "email": user.email,
                 },
             )
