@@ -426,6 +426,97 @@ def obtener_configuracion_categoria(
         )
 
 
+def _buscar_configuracion_existente(categoria: str, clave: str, db: Session) -> Optional[ConfiguracionSistema]:
+    """Buscar configuración existente en la base de datos"""
+    return (
+        db.query(ConfiguracionSistema)
+        .filter(
+            ConfiguracionSistema.categoria == categoria.upper(),
+            ConfiguracionSistema.clave == clave.upper(),
+        )
+        .first()
+    )
+
+
+def _validar_configuracion_para_actualizacion(config: ConfiguracionSistema, categoria: str, clave: str) -> Optional[str]:
+    """Validar si la configuración puede ser actualizada"""
+    if not config:
+        return f"Configuración {categoria}.{clave} no encontrada"
+
+    if config.solo_lectura:
+        return f"Configuración {categoria}.{clave} es de solo lectura"
+
+    return None
+
+
+def _procesar_actualizacion_configuracion(config: ConfiguracionSistema, nuevo_valor: Any,
+                                          categoria: str, clave: str) -> Optional[Dict[str, Any]]:
+    """Procesar la actualización de una configuración"""
+    try:
+        # Validar nuevo valor
+        error_validacion = _validar_configuracion(config, nuevo_valor)
+        if error_validacion:
+            return None  # Error será manejado por el llamador
+
+        # Actualizar valor
+        valor_anterior = config.valor_procesado
+        config.actualizar_valor(nuevo_valor, "SISTEMA")  # Usuario será pasado desde el contexto
+
+        return {
+            "categoria": categoria,
+            "clave": clave,
+            "valor_anterior": valor_anterior,
+            "valor_nuevo": config.valor_procesado,
+        }
+    except Exception:
+        return None  # Error será manejado por el llamador
+
+
+def _procesar_categoria_configuraciones(categoria: str, configs: Dict[str, Any],
+                                        db: Session, actualizaciones_exitosas: list,
+                                        errores: list, current_user: User):
+    """Procesar todas las configuraciones de una categoría"""
+    for clave, nuevo_valor in configs.items():
+        try:
+            # Buscar configuración existente
+            config = _buscar_configuracion_existente(categoria, clave, db)
+
+            # Validar configuración
+            error_validacion = _validar_configuracion_para_actualizacion(config, categoria, clave)
+            if error_validacion:
+                errores.append(error_validacion)
+                continue
+
+            # Procesar actualización
+            resultado = _procesar_actualizacion_configuracion(config, nuevo_valor, categoria, clave)
+            if resultado:
+                # Actualizar con el usuario real
+                config.actualizar_valor(nuevo_valor, current_user.full_name)
+                actualizaciones_exitosas.append(resultado)
+            else:
+                error_validacion = _validar_configuracion(config, nuevo_valor)
+                if error_validacion:
+                    errores.append(f"{categoria}.{clave}: {error_validacion}")
+
+        except Exception as e:
+            errores.append(f"Error actualizando {categoria}.{clave}: {str(e)}")
+
+
+def _registrar_auditoria_configuracion(actualizaciones_exitosas: list, current_user: User, db: Session):
+    """Registrar operación en auditoría"""
+    from app.core.constants import TipoAccion
+    from app.models.auditoria import Auditoria
+
+    auditoria = Auditoria.registrar(
+        usuario_id=current_user.id,
+        accion=TipoAccion.ACTUALIZACION,
+        entidad="configuracion_sistema",
+        entidad_id=None,
+        detalles=f"Actualizadas {len(actualizaciones_exitosas)} configuraciones",
+    )
+    db.add(auditoria)
+
+
 @router.post("/sistema/actualizar")
 def actualizar_configuracion_sistema(
     configuraciones: Dict[str, Dict[str, Any]],
@@ -433,7 +524,7 @@ def actualizar_configuracion_sistema(
     current_user: User = Depends(get_current_user),
 ):
     """
-    ✏️ Actualizar configuraciones del sistema
+    ✏️ Actualizar configuraciones del sistema (VERSIÓN REFACTORIZADA)
 
     Formato:
     {
@@ -458,65 +549,16 @@ def actualizar_configuracion_sistema(
         actualizaciones_exitosas = []
         errores = []
 
+        # Procesar cada categoría
         for categoria, configs in configuraciones.items():
-            for clave, nuevo_valor in configs.items():
-                try:
-                    # Buscar configuración existente
-                    config = (
-                        db.query(ConfiguracionSistema)
-                        .filter(
-                            ConfiguracionSistema.categoria == categoria.upper(),
-                            ConfiguracionSistema.clave == clave.upper(),
-                        )
-                        .first()
-                    )
-
-                    if not config:
-                        errores.append(f"Configuración {categoria}.{clave} no encontrada")
-                        continue
-
-                    if config.solo_lectura:
-                        errores.append(f"Configuración {categoria}.{clave} es de solo lectura")
-                        continue
-
-                    # Validar nuevo valor
-                    error_validacion = _validar_configuracion(config, nuevo_valor)
-                    if error_validacion:
-                        errores.append(f"{categoria}.{clave}: {error_validacion}")
-                        continue
-
-                    # Actualizar valor
-                    valor_anterior = config.valor_procesado
-                    config.actualizar_valor(nuevo_valor, current_user.full_name)
-
-                    actualizaciones_exitosas.append(
-                        {
-                            "categoria": categoria,
-                            "clave": clave,
-                            "valor_anterior": valor_anterior,
-                            "valor_nuevo": config.valor_procesado,
-                        }
-                    )
-
-                except Exception as e:
-                    errores.append(f"Error actualizando {categoria}.{clave}: {str(e)}")
+            _procesar_categoria_configuraciones(
+                categoria, configs, db, actualizaciones_exitosas, errores, current_user
+            )
 
         # Confirmar cambios si no hay errores críticos
         if len(errores) < len(actualizaciones_exitosas):
             db.commit()
-
-            # Registrar en auditoría
-            from app.core.constants import TipoAccion
-            from app.models.auditoria import Auditoria
-
-            auditoria = Auditoria.registrar(
-                usuario_id=current_user.id,
-                accion=TipoAccion.ACTUALIZACION,
-                entidad="configuracion_sistema",
-                entidad_id=None,
-                detalles=f"Actualizadas {len(actualizaciones_exitosas)} configuraciones",
-            )
-            db.add(auditoria)
+            _registrar_auditoria_configuracion(actualizaciones_exitosas, current_user, db)
             db.commit()
         else:
             db.rollback()

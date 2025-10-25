@@ -1247,135 +1247,159 @@ async def guardar_registros_corregidos(
 # ============================================
 
 
+def _buscar_concesionario_id(datos: Dict[str, Any], db: Session) -> Optional[int]:
+    """Buscar ID del concesionario por nombre"""
+    if not datos.get("concesionario"):
+        return None
+
+    concesionario_obj = (
+        db.query(Concesionario)
+        .filter(
+            Concesionario.nombre.ilike(f"%{datos['concesionario']}%"),
+            Concesionario.activo,
+        )
+        .first()
+    )
+    return concesionario_obj.id if concesionario_obj else None
+
+
+def _buscar_modelo_vehiculo_id(datos: Dict[str, Any], db: Session) -> Optional[int]:
+    """Buscar ID del modelo de vehículo por nombre"""
+    if not datos.get("modelo_vehiculo"):
+        return None
+
+    modelo_obj = (
+        db.query(ModeloVehiculo)
+        .filter(
+            ModeloVehiculo.modelo.ilike(f"%{datos['modelo_vehiculo']}%"),
+            ModeloVehiculo.activo,
+        )
+        .first()
+    )
+    return modelo_obj.id if modelo_obj else None
+
+
+def _buscar_asesor_id(datos: Dict[str, Any], db: Session) -> Optional[int]:
+    """Buscar ID del asesor por nombre"""
+    if not datos.get("asesor"):
+        return None
+
+    asesor_obj = (
+        db.query(Analista)
+        .filter(Analista.nombre.ilike(f"%{datos['asesor']}%"), Analista.activo)
+        .first()
+    )
+    return asesor_obj.id if asesor_obj else None
+
+
+def _crear_datos_cliente(datos: Dict[str, Any], concesionario_id: Optional[int],
+                         modelo_vehiculo_id: Optional[int], asesor_id: Optional[int],
+                         usuario_id: int) -> Dict[str, Any]:
+    """Crear diccionario de datos del cliente"""
+    return {
+        "cedula": datos["cedula"],
+        "nombres": datos["nombre"],
+        "apellidos": datos.get("apellido", ""),
+        "telefono": datos.get("movil", ""),
+        "email": datos.get("email", ""),
+        "direccion": datos.get("direccion", ""),
+        # ForeignKeys
+        "concesionario_id": concesionario_id,
+        "modelo_vehiculo_id": modelo_vehiculo_id,
+        "asesor_id": asesor_id,
+        # Campos legacy (mantener por compatibilidad)
+        "concesionario": datos.get("concesionario", ""),
+        "modelo_vehiculo": datos.get("modelo_vehiculo", ""),
+        "marca_vehiculo": (
+            datos.get("modelo_vehiculo", "").split(" ")[0]
+            if datos.get("modelo_vehiculo")
+            else ""
+        ),
+        # Financiamiento
+        "total_financiamiento": (
+            Decimal(str(datos.get("total_financiamiento", 0)))
+            if datos.get("total_financiamiento")
+            else None
+        ),
+        "cuota_inicial": (
+            Decimal(str(datos.get("cuota_inicial", 0))) if datos.get("cuota_inicial") else None
+        ),
+        "numero_amortizaciones": (
+            int(datos.get("numero_amortizaciones", 12))
+            if datos.get("numero_amortizaciones")
+            else None
+        ),
+        "modalidad_pago": datos.get("modalidad_pago", "MENSUAL").upper(),
+        "fecha_entrega": (
+            datetime.strptime(datos["fecha_entrega"], "%Y-%m-%d").date()
+            if datos.get("fecha_entrega")
+            else None
+        ),
+        # Estado
+        "estado": "ACTIVO",
+        "activo": True,
+        "fecha_registro": datetime.utcnow(),
+        "usuario_registro": f"CARGA_MASIVA_USER_{usuario_id}",
+    }
+
+
+def _guardar_o_actualizar_cliente(cliente_data: Dict[str, Any], datos: Dict[str, Any],
+                                  db: Session) -> Cliente:
+    """Guardar nuevo cliente o actualizar existente"""
+    cliente_existente = db.query(Cliente).filter(Cliente.cedula == datos["cedula"]).first()
+
+    if cliente_existente:
+        # Actualizar cliente existente
+        for key, value in cliente_data.items():
+            if key not in ["cedula", "fecha_registro"]:
+                setattr(cliente_existente, key, value)
+        cliente_existente.fecha_actualizacion = datetime.utcnow()
+        logger.info(f"Cliente actualizado: {datos['cedula']}")
+        return cliente_existente
+    else:
+        # Crear nuevo cliente
+        nuevo_cliente = Cliente(**cliente_data)
+        db.add(nuevo_cliente)
+        db.flush()
+        logger.info(f"Cliente creado: {datos['cedula']} (ID: {nuevo_cliente.id})")
+        return nuevo_cliente
+
+
+def _registrar_auditoria_cliente(cliente: Cliente, datos: Dict[str, Any],
+                                 cliente_data: Dict[str, Any], usuario_id: int,
+                                 es_actualizacion: bool, db: Session):
+    """Registrar operación en auditoría"""
+    auditoria = Auditoria.registrar(
+        usuario_id=usuario_id,
+        accion=TipoAccion.ACTUALIZAR if es_actualizacion else TipoAccion.CREAR,
+        tabla="Cliente",
+        registro_id=cliente.id,
+        descripcion=f"Cliente {'actualizado' if es_actualizacion else 'creado'} desde carga masiva: {datos['cedula']}",
+        datos_nuevos=cliente_data,
+        resultado="EXITOSO",
+    )
+    db.add(auditoria)
+
+
 async def _guardar_cliente_desde_carga(datos: Dict[str, Any], db: Session, usuario_id: int):
     """
-    Guardar cliente usando MISMO proceso que crear_cliente
+    Guardar cliente usando MISMO proceso que crear_cliente (VERSIÓN REFACTORIZADA)
     """
     try:
-        # ============================================
-        # MAPEAR NOMBRES A FOREIGNKEYS
-        # ============================================
+        # 1. Buscar ForeignKeys
+        concesionario_id = _buscar_concesionario_id(datos, db)
+        modelo_vehiculo_id = _buscar_modelo_vehiculo_id(datos, db)
+        asesor_id = _buscar_asesor_id(datos, db)
 
-        concesionario_id = None
-        modelo_vehiculo_id = None
-        asesor_id = None
+        # 2. Crear datos del cliente
+        cliente_data = _crear_datos_cliente(datos, concesionario_id, modelo_vehiculo_id, asesor_id, usuario_id)
 
-        # Buscar concesionario_id
-        if datos.get("concesionario"):
-            concesionario_obj = (
-                db.query(Concesionario)
-                .filter(
-                    Concesionario.nombre.ilike(f"%{datos['concesionario']}%"),
-                    Concesionario.activo,
-                )
-                .first()
-            )
-            if concesionario_obj:
-                concesionario_id = concesionario_obj.id
-
-        # Buscar modelo_vehiculo_id
-        if datos.get("modelo_vehiculo"):
-            modelo_obj = (
-                db.query(ModeloVehiculo)
-                .filter(
-                    ModeloVehiculo.modelo.ilike(f"%{datos['modelo_vehiculo']}%"),
-                    ModeloVehiculo.activo,
-                )
-                .first()
-            )
-            if modelo_obj:
-                modelo_vehiculo_id = modelo_obj.id
-
-        # Buscar asesor_id
-        if datos.get("asesor"):
-            asesor_obj = (
-                db.query(Analista)
-                .filter(Analista.nombre.ilike(f"%{datos['asesor']}%"), Analista.activo)
-                .first()
-            )
-            if asesor_obj:
-                asesor_id = asesor_obj.id
-
-        # ============================================
-        # CREAR CLIENTE CON FOREIGNKEYS
-        # ============================================
-
-        cliente_data = {
-            "cedula": datos["cedula"],
-            "nombres": datos["nombre"],
-            "apellidos": datos.get("apellido", ""),
-            "telefono": datos.get("movil", ""),
-            "email": datos.get("email", ""),
-            "direccion": datos.get("direccion", ""),
-            # ForeignKeys
-            "concesionario_id": concesionario_id,
-            "modelo_vehiculo_id": modelo_vehiculo_id,
-            "asesor_id": asesor_id,
-            # Campos legacy (mantener por compatibilidad)
-            "concesionario": datos.get("concesionario", ""),
-            "modelo_vehiculo": datos.get("modelo_vehiculo", ""),
-            "marca_vehiculo": (
-                datos.get("modelo_vehiculo", "").split(" ")[0]
-                if datos.get("modelo_vehiculo")
-                else ""
-            ),
-            # Financiamiento
-            "total_financiamiento": (
-                Decimal(str(datos.get("total_financiamiento", 0)))
-                if datos.get("total_financiamiento")
-                else None
-            ),
-            "cuota_inicial": (
-                Decimal(str(datos.get("cuota_inicial", 0))) if datos.get("cuota_inicial") else None
-            ),
-            "numero_amortizaciones": (
-                int(datos.get("numero_amortizaciones", 12))
-                if datos.get("numero_amortizaciones")
-                else None
-            ),
-            "modalidad_pago": datos.get("modalidad_pago", "MENSUAL").upper(),
-            "fecha_entrega": (
-                datetime.strptime(datos["fecha_entrega"], "%Y-%m-%d").date()
-                if datos.get("fecha_entrega")
-                else None
-            ),
-            # Estado
-            "estado": "ACTIVO",
-            "activo": True,
-            "fecha_registro": datetime.utcnow(),
-            "usuario_registro": f"CARGA_MASIVA_USER_{usuario_id}",
-        }
-
-        # Verificar si ya existe
+        # 3. Verificar si existe y guardar/actualizar
         cliente_existente = db.query(Cliente).filter(Cliente.cedula == datos["cedula"]).first()
+        cliente = _guardar_o_actualizar_cliente(cliente_data, datos, db)
 
-        if cliente_existente:
-            # Actualizar cliente existente
-            for key, value in cliente_data.items():
-                if key not in ["cedula", "fecha_registro"]:
-                    setattr(cliente_existente, key, value)
-            cliente_existente.fecha_actualizacion = datetime.utcnow()
-
-            logger.info(f"Cliente actualizado: {datos['cedula']}")
-        else:
-            # Crear nuevo cliente
-            nuevo_cliente = Cliente(**cliente_data)
-            db.add(nuevo_cliente)
-            db.flush()
-
-            logger.info(f"Cliente creado: {datos['cedula']} (ID: {nuevo_cliente.id})")
-
-        # Registrar en auditoría
-        auditoria = Auditoria.registrar(
-            usuario_id=usuario_id,
-            accion=TipoAccion.CREAR if not cliente_existente else TipoAccion.ACTUALIZAR,
-            tabla="Cliente",
-            registro_id=cliente_existente.id if cliente_existente else nuevo_cliente.id,
-            descripcion=f"Cliente {'actualizado' if cliente_existente else 'creado'} desde carga masiva: {datos['cedula']}",
-            datos_nuevos=cliente_data,
-            resultado="EXITOSO",
-        )
-        db.add(auditoria)
+        # 4. Registrar en auditoría
+        _registrar_auditoria_cliente(cliente, datos, cliente_data, usuario_id, bool(cliente_existente), db)
 
     except Exception as e:
         raise Exception(f"Error guardando cliente {datos.get('cedula')}: {str(e)}")
