@@ -17,6 +17,7 @@ class Pago(Base):
     Modelo para pagos
     Representa los pagos realizados por los clientes
     """
+
     __tablename__ = "pagos"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -26,12 +27,8 @@ class Pago(Base):
 
     # DATOS DEL PAGO
     fecha_pago = Column(DateTime, nullable=False)
-    monto_pagado = Column(
-        Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False
-    )
-    numero_documento = Column(
-        String(DOCUMENTO_LENGTH), nullable=False, index=True
-    )
+    monto_pagado = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
+    numero_documento = Column(String(DOCUMENTO_LENGTH), nullable=False, index=True)
 
     # DOCUMENTO ADJUNTO
     documento_nombre = Column(String(DOCUMENTO_NOMBRE_LENGTH), nullable=True)
@@ -54,7 +51,6 @@ class Pago(Base):
     )
 
     # cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True)
-
 
     def __repr__(self):
         return f"<Pago(id={self.id}, cedula={self.cedula_cliente}, monto={self.monto_pagado}, conciliado={self.conciliado})>"

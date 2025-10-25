@@ -16,17 +16,11 @@ logger = logging.getLogger(__name__)
 
 # Configuración de la base de datos
 DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://user:password@localhost/pagos_db"
+    "DATABASE_URL", "postgresql://user:password@localhost/pagos_db"
 )
 
 # Crear engine
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,
-    pool_recycle=300,
-    echo=False
-)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300, echo=False)
 
 # Crear SessionLocal
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -50,12 +44,8 @@ def get_db() -> Generator:
     except Exception as e:
         # Verificar si es un error de autenticación HTTP
         error_str = str(e)
-        auth_errors = [
-            "401",
-            "Not authenticated",
-            "Unauthorized"
-        ]
-        
+        auth_errors = ["401", "Not authenticated", "Unauthorized"]
+
         if any(auth_error in error_str for auth_error in auth_errors):
             # Re-lanzar errores de autenticación sin modificar
             raise e
@@ -67,11 +57,10 @@ def get_db() -> Generator:
 
         # Solo manejar errores reales de DB
         logger.error(f"Error de base de datos: {type(e).__name__}: {str(e)}")
-        
+
         # Crear HTTPException para errores de DB
         raise HTTPException(
-            status_code=500,
-            detail="Error de conexión a la base de datos"
+            status_code=500, detail="Error de conexión a la base de datos"
         )
     finally:
         if db:
@@ -92,7 +81,7 @@ def close_db_connections():
 def test_connection() -> bool:
     """
     Prueba la conexión a la base de datos
-    
+
     Returns:
         True si la conexión es exitosa, False en caso contrario
     """

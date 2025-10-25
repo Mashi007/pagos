@@ -1,27 +1,18 @@
-from datetime import date, datetime
-from decimal import Decimal
 from typing import Optional
 
 import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.core.config import settings
-from app.models.amortizacion import Cuota
-from app.models.analista import Analista
-from app.models.cliente import Cliente
 from app.models.notificacion import Notificacion
-from app.models.pago import Pago
-from app.models.prestamo import Prestamo
 from app.models.user import User
-from app.services.email_service import EmailService
 from app.services.whatsapp_service import WhatsAppService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
 
 # Schemas
 class NotificacionCreate(BaseModel):
@@ -64,8 +55,10 @@ async def enviar_notificacion(
     """Enviar notificación individual."""
     try:
         # Obtener cliente
-        cliente = db.query(Cliente).filter(Cliente.id == notificacion.cliente_id).first()
-        
+        cliente = (
+            db.query(Cliente).filter(Cliente.id == notificacion.cliente_id).first()
+        )
+
         if not cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
@@ -76,9 +69,9 @@ async def enviar_notificacion(
             canal=notificacion.canal,
             mensaje=notificacion.mensaje,
             asunto=notificacion.asunto,
-            estado="PENDIENTE"
+            estado="PENDIENTE",
         )
-        
+
         db.add(nueva_notif)
         db.commit()
         db.refresh(nueva_notif)
@@ -111,8 +104,7 @@ async def enviar_notificacion(
         db.rollback()
         logger.error(f"Error enviando notificación: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -127,27 +119,27 @@ async def envio_masivo(
     try:
         # Obtener clientes según filtros
         query = db.query(Cliente).join(Prestamo, Cliente.id == Prestamo.cliente_id)
-        
+
         if request.tipo_cliente == "MOROSO":
             query = query.filter(Prestamo.dias_mora > 0)
-        
+
         if request.dias_mora_min:
             query = query.filter(Prestamo.dias_mora >= request.dias_mora_min)
-        
+
         clientes = query.all()
 
         # Crear notificaciones masivas
         notificaciones_creadas = []
-        
+
         for cliente in clientes:
             nueva_notif = Notificacion(
                 cliente_id=cliente.id,
                 tipo="MASIVA",
                 canal=request.canal,
                 mensaje=request.template,
-                estado="PENDIENTE"
+                estado="PENDIENTE",
             )
-            
+
             db.add(nueva_notif)
             notificaciones_creadas.append(nueva_notif)
 
@@ -156,7 +148,7 @@ async def envio_masivo(
         # Programar envíos
         for notif in notificaciones_creadas:
             cliente = next(c for c in clientes if c.id == notif.cliente_id)
-            
+
             if request.canal == "EMAIL":
                 email_service = EmailService()
                 background_tasks.add_task(
@@ -176,18 +168,17 @@ async def envio_masivo(
                 )
 
         logger.info(f"Enviadas {len(notificaciones_creadas)} notificaciones masivas")
-        
+
         return {
             "message": f"Enviadas {len(notificaciones_creadas)} notificaciones",
-            "count": len(notificaciones_creadas)
+            "count": len(notificaciones_creadas),
         }
 
     except Exception as e:
         db.rollback()
         logger.error(f"Error en envío masivo: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -202,18 +193,17 @@ def listar_notificaciones(
     """Listar notificaciones con filtros."""
     try:
         query = db.query(Notificacion)
-        
+
         if estado:
             query = query.filter(Notificacion.estado == estado)
-        
+
         notificaciones = query.offset(skip).limit(limit).all()
         return notificaciones
 
     except Exception as e:
         logger.error(f"Error listando notificaciones: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -225,14 +215,13 @@ def obtener_notificacion(
 ):
     """Obtener notificación específica."""
     try:
-        notificacion = db.query(Notificacion).filter(Notificacion.id == notificacion_id).first()
-        
+        notificacion = (
+            db.query(Notificacion).filter(Notificacion.id == notificacion_id).first()
+        )
+
         if not notificacion:
-            raise HTTPException(
-                status_code=404,
-                detail="Notificación no encontrada"
-            )
-        
+            raise HTTPException(status_code=404, detail="Notificación no encontrada")
+
         return notificacion
 
     except HTTPException:
@@ -240,8 +229,7 @@ def obtener_notificacion(
     except Exception as e:
         logger.error(f"Error obteniendo notificación: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -253,21 +241,26 @@ def obtener_estadisticas_notificaciones(
     """Obtener estadísticas de notificaciones."""
     try:
         total = db.query(Notificacion).count()
-        enviadas = db.query(Notificacion).filter(Notificacion.estado == "ENVIADA").count()
-        pendientes = db.query(Notificacion).filter(Notificacion.estado == "PENDIENTE").count()
-        fallidas = db.query(Notificacion).filter(Notificacion.estado == "FALLIDA").count()
-        
+        enviadas = (
+            db.query(Notificacion).filter(Notificacion.estado == "ENVIADA").count()
+        )
+        pendientes = (
+            db.query(Notificacion).filter(Notificacion.estado == "PENDIENTE").count()
+        )
+        fallidas = (
+            db.query(Notificacion).filter(Notificacion.estado == "FALLIDA").count()
+        )
+
         return {
             "total": total,
             "enviadas": enviadas,
             "pendientes": pendientes,
             "fallidas": fallidas,
-            "tasa_exito": (enviadas / total * 100) if total > 0 else 0
+            "tasa_exito": (enviadas / total * 100) if total > 0 else 0,
         }
 
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )

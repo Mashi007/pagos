@@ -1,4 +1,5 @@
 from datetime import date
+
 # import Any, Dict, Optionalfrom pydantic import BaseModel, ConfigDict, EmailStr, Field#
 # ============================================================================# Schemas Base#
 # ============================================================================class NotificacionBase(BaseModel): """Schema"""

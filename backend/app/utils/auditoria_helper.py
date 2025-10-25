@@ -3,8 +3,6 @@ Helper para registrar acciones de auditoría
 """
 
 import logging
-from typing import Any, Dict, Optional
-
 from sqlalchemy.orm import Session
 
 from app.models.auditoria import Auditoria
@@ -60,7 +58,7 @@ def registrar_auditoria(
             ip_address=ip_address,
             user_agent=user_agent,
             resultado=resultado,
-            mensaje_error=mensaje_error
+            mensaje_error=mensaje_error,
         )
 
         db.add(auditoria)
@@ -89,7 +87,7 @@ def registrar_login(
         tabla="users",
         descripcion="Inicio de sesión",
         ip_address=ip_address,
-        user_agent=user_agent
+        user_agent=user_agent,
     )
 
 
@@ -108,7 +106,7 @@ def registrar_logout(
         tabla="users",
         descripcion="Cierre de sesión",
         ip_address=ip_address,
-        user_agent=user_agent
+        user_agent=user_agent,
     )
 
 
@@ -128,7 +126,7 @@ def registrar_creacion(
         modulo=modulo,
         tabla=tabla,
         registro_id=registro_id,
-        descripcion=descripcion or f"Creación de registro en {tabla}"
+        descripcion=descripcion or f"Creación de registro en {tabla}",
     )
 
 
@@ -148,7 +146,7 @@ def registrar_actualizacion(
         modulo=modulo,
         tabla=tabla,
         registro_id=registro_id,
-        descripcion=descripcion or f"Actualización de registro en {tabla}"
+        descripcion=descripcion or f"Actualización de registro en {tabla}",
     )
 
 
@@ -168,7 +166,7 @@ def registrar_eliminacion(
         modulo=modulo,
         tabla=tabla,
         registro_id=registro_id,
-        descripcion=descripcion or f"Eliminación de registro en {tabla}"
+        descripcion=descripcion or f"Eliminación de registro en {tabla}",
     )
 
 
@@ -190,5 +188,5 @@ def registrar_error(
         registro_id=registro_id,
         resultado="ERROR",
         mensaje_error=error,
-        descripcion=f"Error en {modulo}"
+        descripcion=f"Error en {modulo}",
     )

@@ -18,11 +18,7 @@ class AuthService:
     """Servicio de autenticación"""
 
     @staticmethod
-    def authenticate_user(
-        db: Session,
-        email: str,
-        password: str
-    ) -> Optional[User]:
+    def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
         """
         Autentica un usuario con email y contraseña
 
@@ -72,9 +68,7 @@ class AuthService:
         Raises:
             ValueError: Si las credenciales son inválidas
         """
-        user = AuthService.authenticate_user(
-            db, login_data.email, login_data.password
-        )
+        user = AuthService.authenticate_user(db, login_data.email, login_data.password)
 
         if not user:
             raise ValueError("Credenciales inválidas")
@@ -87,7 +81,7 @@ class AuthService:
             access_token=access_token,
             refresh_token=refresh_token,
             token_type="bearer",
-            expires_in=1800  # 30 minutos
+            expires_in=1800,  # 30 minutos
         )
 
         logger.info(f"Login exitoso para usuario: {user.email}")
@@ -113,7 +107,7 @@ class AuthService:
         try:
             # Decodificar el refresh token
             payload = decode_token(refresh_token)
-            
+
             # Verificar que sea un refresh token
             if payload.get("type") != "refresh":
                 raise ValueError("Token inválido: no es un refresh token")
@@ -124,10 +118,11 @@ class AuthService:
                 raise ValueError("Token inválido: no se puede obtener el usuario")
 
             # Verificar que el usuario existe y está activo
-            user = db.query(User).filter(
-                User.id == int(user_id),
-                User.is_active == True
-            ).first()
+            user = (
+                db.query(User)
+                .filter(User.id == int(user_id), User.is_active == True)
+                .first()
+            )
 
             if not user:
                 raise ValueError("Usuario no encontrado o inactivo")
@@ -140,7 +135,7 @@ class AuthService:
                 access_token=new_access_token,
                 refresh_token=new_refresh_token,
                 token_type="bearer",
-                expires_in=1800
+                expires_in=1800,
             )
 
             logger.info(f"Token renovado exitosamente para usuario: {user.email}")
@@ -152,10 +147,7 @@ class AuthService:
 
     @staticmethod
     def change_password(
-        db: Session,
-        user_id: int,
-        current_password: str,
-        new_password: str
+        db: Session, user_id: int, current_password: str, new_password: str
     ) -> bool:
         """
         Cambia la contraseña de un usuario
@@ -201,10 +193,7 @@ class AuthService:
         Returns:
             User: Usuario encontrado o None
         """
-        return db.query(User).filter(
-            User.id == user_id,
-            User.is_active == True
-        ).first()
+        return db.query(User).filter(User.id == user_id, User.is_active == True).first()
 
     @staticmethod
     def get_user_by_email(db: Session, email: str) -> Optional[User]:
@@ -219,7 +208,8 @@ class AuthService:
             User: Usuario encontrado o None
         """
         email_normalized = email.lower().strip()
-        return db.query(User).filter(
-            func.lower(User.email) == email_normalized,
-            User.is_active == True
-        ).first()
+        return (
+            db.query(User)
+            .filter(func.lower(User.email) == email_normalized, User.is_active == True)
+            .first()
+        )

@@ -1,4 +1,5 @@
 from datetime import date
+
 # Endpoints de Aprobaciones
 # Sistema de workflow para solicitudes que requieren aprobación
 
@@ -11,12 +12,18 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.aprobacion import Aprobacion
 from app.models.user import User
-from app.schemas.aprobacion import AprobacionCreate, AprobacionResponse, AprobacionUpdate
+from app.schemas.aprobacion import (
+    AprobacionCreate,
+    AprobacionResponse,
+    AprobacionUpdate,
+)
 
 router = APIRouter()
 
 
-@router.post("/", response_model=AprobacionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", response_model=AprobacionResponse, status_code=status.HTTP_201_CREATED
+)
 def crear_aprobacion(
     aprobacion_data: AprobacionCreate,
     db: Session = Depends(get_db),
@@ -26,18 +33,17 @@ def crear_aprobacion(
     try:
         nueva_aprobacion = Aprobacion(**aprobacion_data.model_dump())
         nueva_aprobacion.solicitado_por = current_user.id
-        
+
         db.add(nueva_aprobacion)
         db.commit()
         db.refresh(nueva_aprobacion)
-        
+
         return nueva_aprobacion
-        
+
     except Exception as e:
         db.rollback()
         raise HTTPException(
-            status_code=500,
-            detail=f"Error creando aprobación: {str(e)}"
+            status_code=500, detail=f"Error creando aprobación: {str(e)}"
         )
 
 
@@ -50,16 +56,16 @@ def listar_aprobaciones(
 ):
     # Listar aprobaciones con filtros
     query = db.query(Aprobacion)
-    
+
     if estado:
         query = query.filter(Aprobacion.estado == estado)
     if tipo:
         query = query.filter(Aprobacion.tipo == tipo)
-    
+
     # Si no es admin, solo ver las propias
     if not current_user.is_admin:
         query = query.filter(Aprobacion.solicitado_por == current_user.id)
-    
+
     return query.all()
 
 
@@ -71,20 +77,16 @@ def obtener_aprobacion(
 ):
     # Obtener aprobación específica
     aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
-    
+
     if not aprobacion:
-        raise HTTPException(
-            status_code=404,
-            detail="Aprobación no encontrada"
-        )
-    
+        raise HTTPException(status_code=404, detail="Aprobación no encontrada")
+
     # Verificar permisos
     if not current_user.is_admin and aprobacion.solicitado_por != current_user.id:
         raise HTTPException(
-            status_code=403,
-            detail="No tienes permisos para ver esta aprobación"
+            status_code=403, detail="No tienes permisos para ver esta aprobación"
         )
-    
+
     return aprobacion
 
 
@@ -97,27 +99,26 @@ def actualizar_aprobacion(
 ):
     # Actualizar aprobación
     aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
-    
+
     if not aprobacion:
-        raise HTTPException(
-            status_code=404,
-            detail="Aprobación no encontrada"
-        )
-    
+        raise HTTPException(status_code=404, detail="Aprobación no encontrada")
+
     # Solo el solicitante puede actualizar si está pendiente
-    if aprobacion.estado != "PENDIENTE" and aprobacion.solicitado_por != current_user.id:
+    if (
+        aprobacion.estado != "PENDIENTE"
+        and aprobacion.solicitado_por != current_user.id
+    ):
         raise HTTPException(
-            status_code=403,
-            detail="No puedes actualizar esta aprobación"
+            status_code=403, detail="No puedes actualizar esta aprobación"
         )
-    
+
     # Actualizar campos
     for field, value in aprobacion_data.model_dump(exclude_unset=True).items():
         setattr(aprobacion, field, value)
-    
+
     db.commit()
     db.refresh(aprobacion)
-    
+
     return aprobacion
 
 
@@ -132,31 +133,25 @@ def aprobar_solicitud(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=403,
-            detail="Solo los administradores pueden aprobar solicitudes"
+            detail="Solo los administradores pueden aprobar solicitudes",
         )
-    
+
     aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
-    
+
     if not aprobacion:
-        raise HTTPException(
-            status_code=404,
-            detail="Aprobación no encontrada"
-        )
-    
+        raise HTTPException(status_code=404, detail="Aprobación no encontrada")
+
     if aprobacion.estado != "PENDIENTE":
-        raise HTTPException(
-            status_code=400,
-            detail="Esta solicitud ya fue procesada"
-        )
-    
+        raise HTTPException(status_code=400, detail="Esta solicitud ya fue procesada")
+
     aprobacion.estado = "APROBADA"
     aprobacion.aprobado_por = current_user.id
     aprobacion.fecha_aprobacion = date.today()
     aprobacion.observaciones_aprobacion = observaciones
-    
+
     db.commit()
     db.refresh(aprobacion)
-    
+
     return aprobacion
 
 
@@ -171,31 +166,25 @@ def rechazar_solicitud(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=403,
-            detail="Solo los administradores pueden rechazar solicitudes"
+            detail="Solo los administradores pueden rechazar solicitudes",
         )
-    
+
     aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
-    
+
     if not aprobacion:
-        raise HTTPException(
-            status_code=404,
-            detail="Aprobación no encontrada"
-        )
-    
+        raise HTTPException(status_code=404, detail="Aprobación no encontrada")
+
     if aprobacion.estado != "PENDIENTE":
-        raise HTTPException(
-            status_code=400,
-            detail="Esta solicitud ya fue procesada"
-        )
-    
+        raise HTTPException(status_code=400, detail="Esta solicitud ya fue procesada")
+
     aprobacion.estado = "RECHAZADA"
     aprobacion.aprobado_por = current_user.id
     aprobacion.fecha_aprobacion = date.today()
     aprobacion.observaciones_aprobacion = observaciones
-    
+
     db.commit()
     db.refresh(aprobacion)
-    
+
     return aprobacion
 
 
@@ -207,21 +196,17 @@ def eliminar_aprobacion(
 ):
     # Eliminar aprobación
     aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
-    
+
     if not aprobacion:
-        raise HTTPException(
-            status_code=404,
-            detail="Aprobación no encontrada"
-        )
-    
+        raise HTTPException(status_code=404, detail="Aprobación no encontrada")
+
     # Solo el solicitante puede eliminar si está pendiente
     if aprobacion.estado != "PENDIENTE" or aprobacion.solicitado_por != current_user.id:
         raise HTTPException(
-            status_code=403,
-            detail="No puedes eliminar esta aprobación"
+            status_code=403, detail="No puedes eliminar esta aprobación"
         )
-    
+
     db.delete(aprobacion)
     db.commit()
-    
+
     return {"message": "Aprobación eliminada exitosamente"}

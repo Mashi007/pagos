@@ -1,4 +1,3 @@
-from datetime import date
 # backend/app/utils/__init__.py
 """Utilidades del sistema"""
 

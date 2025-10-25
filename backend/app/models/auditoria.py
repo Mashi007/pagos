@@ -5,9 +5,7 @@ Registra todas las acciones importantes del sistema para trazabilidad
 
 from datetime import datetime
 from enum import Enum
-from sqlalchemy import (
-    Boolean, Column, DateTime, ForeignKey, Integer, String, Text
-)
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -16,6 +14,7 @@ from app.db.session import Base
 
 class TipoAccion(str, Enum):
     """Tipos de acciones que se pueden auditar"""
+
     CREATE = "CREATE"
     UPDATE = "UPDATE"
     DELETE = "DELETE"
@@ -32,33 +31,33 @@ class Auditoria(Base):
     Modelo para registrar auditoría del sistema
     Registra todas las acciones importantes para trazabilidad
     """
+
     __tablename__ = "auditoria"
 
     id = Column(Integer, primary_key=True, index=True)
-    
+
     # Usuario que realizó la acción
     usuario_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    
+
     # Detalles de la acción
-    accion = Column(String(50), nullable=False, index=True)  # CREATE, UPDATE, DELETE, etc.
+    accion = Column(
+        String(50), nullable=False, index=True
+    )  # CREATE, UPDATE, DELETE, etc.
     entidad = Column(String(50), nullable=False, index=True)  # Cliente, Prestamo, etc.
     entidad_id = Column(Integer, nullable=True, index=True)  # ID del registro afectado
-    
+
     # Información adicional
     detalles = Column(Text, nullable=True)  # Descripción detallada
     ip_address = Column(String(45), nullable=True)  # IPv4 o IPv6
     user_agent = Column(Text, nullable=True)  # Navegador/dispositivo
-    
+
     # Resultado de la acción
     exito = Column(Boolean, default=True, nullable=False)  # Si la acción fue exitosa
     mensaje_error = Column(Text, nullable=True)  # Mensaje de error si falló
-    
+
     # Timestamps
     fecha = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-        index=True
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
 
     # Relaciones
@@ -78,7 +77,7 @@ class Auditoria(Base):
         ip_address: str = None,
         user_agent: str = None,
         exito: bool = True,
-        mensaje_error: str = None
+        mensaje_error: str = None,
     ):
         """
         Registra una acción en el sistema de auditoría
@@ -106,7 +105,7 @@ class Auditoria(Base):
             ip_address=ip_address,
             user_agent=user_agent,
             exito=exito,
-            mensaje_error=mensaje_error
+            mensaje_error=mensaje_error,
         )
 
     def to_dict(self):
@@ -122,5 +121,5 @@ class Auditoria(Base):
             "user_agent": self.user_agent,
             "exito": self.exito,
             "mensaje_error": self.mensaje_error,
-            "fecha": self.fecha.isoformat() if self.fecha else None
+            "fecha": self.fecha.isoformat() if self.fecha else None,
         }

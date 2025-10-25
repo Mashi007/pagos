@@ -1,5 +1,6 @@
 from datetime import date
-# backend/app/schemas/user_simple.py"""Schemas de usuario simplificado.Solo 2 roles: ADMIN (acceso completo) y USER 
+
+# backend/app/schemas/user_simple.py"""Schemas de usuario simplificado.Solo 2 roles: ADMIN (acceso completo) y USER
 # email: EmailStr nombre: str = Field(..., min_length=1, max_length=100) apellido: str = Field
 # max_length=100) cargo: Optional[str] = Field(None, max_length=100) is_admin: bool = Field(default=False) # Cambio clave:
 # rol → is_admin is_active: bool = Field(default=True)class UserCreate(UserBase): """Schema para crear usuario.""" password:

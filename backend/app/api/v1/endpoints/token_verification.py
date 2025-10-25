@@ -22,45 +22,33 @@ def verificar_token(
     try:
         # Decodificar token
         payload = decode_token(token)
-        
+
         if not payload:
-            return {
-                "valid": False,
-                "message": "Token inválido o expirado"
-            }
-        
+            return {"valid": False, "message": "Token inválido o expirado"}
+
         # Obtener usuario
         user_id = payload.get("sub")
         if not user_id:
-            return {
-                "valid": False,
-                "message": "Token malformado"
-            }
-        
+            return {"valid": False, "message": "Token malformado"}
+
         user = db.query(User).filter(User.id == int(user_id)).first()
         if not user:
-            return {
-                "valid": False,
-                "message": "Usuario no encontrado"
-            }
-        
+            return {"valid": False, "message": "Usuario no encontrado"}
+
         return {
             "valid": True,
             "user": {
                 "id": user.id,
                 "email": user.email,
                 "is_admin": user.is_admin,
-                "activo": user.activo
+                "activo": user.activo,
             },
-            "expires_at": datetime.fromtimestamp(payload.get("exp", 0)).isoformat()
+            "expires_at": datetime.fromtimestamp(payload.get("exp", 0)).isoformat(),
         }
-        
+
     except Exception as e:
         logger.error(f"Error verificando token: {e}")
-        return {
-            "valid": False,
-            "message": f"Error interno: {str(e)}"
-        }
+        return {"valid": False, "message": f"Error interno: {str(e)}"}
 
 
 @router.post("/refresh-token")
@@ -71,10 +59,9 @@ def renovar_token(
     try:
         # Generar nuevo token
         new_token = create_access_token(
-            subject=str(current_user.id),
-            additional_claims={"type": "access"}
+            subject=str(current_user.id), additional_claims={"type": "access"}
         )
-        
+
         return {
             "access_token": new_token,
             "token_type": "bearer",
@@ -82,15 +69,14 @@ def renovar_token(
             "user": {
                 "id": current_user.id,
                 "email": current_user.email,
-                "is_admin": current_user.is_admin
-            }
+                "is_admin": current_user.is_admin,
+            },
         }
-        
+
     except Exception as e:
         logger.error(f"Error renovando token: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -105,17 +91,16 @@ def obtener_info_token(
                 "id": current_user.id,
                 "email": current_user.email,
                 "is_admin": current_user.is_admin,
-                "activo": current_user.activo
+                "activo": current_user.activo,
             },
             "token_type": "bearer",
-            "authenticated": True
+            "authenticated": True,
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo info del token: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -126,9 +111,7 @@ async def generar_token_prueba(db: Session = Depends(get_db)):
         # Buscar usuario admin
         admin_user = db.query(User).filter(User.is_admin).first()
         if not admin_user:
-            return {
-                "error": "No se encontró usuario administrador"
-            }
+            return {"error": "No se encontró usuario administrador"}
 
         # Generar token
         test_token = create_access_token(
@@ -140,15 +123,14 @@ async def generar_token_prueba(db: Session = Depends(get_db)):
             "user": {
                 "id": admin_user.id,
                 "email": admin_user.email,
-                "is_admin": admin_user.is_admin
+                "is_admin": admin_user.is_admin,
             },
             "usage": "Use this token in Authorization header: Bearer <token>",
-            "expires_in": "1 hour"
+            "expires_in": "1 hour",
         }
 
     except Exception as e:
         logger.error(f"Error generando token de prueba: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )

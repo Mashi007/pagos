@@ -5,12 +5,12 @@
 # record.funcName, "line": record.lineno, "thread": record.thread, "process": record.process, } # Agregar contexto de
 # trazabilidad if request_id.get(): log_data["request_id"] = request_id.get() if user_id.get(): log_data["user_id"] =
 # user_id.get() if session_id.get(): log_data["session_id"] = session_id.get() # Agregar excepción si existe if
-# record.exc_info: log_data["exception"] = 
+# record.exc_info: log_data["exception"] =
 # log_data["error"] = error if success: logger.info( f"Service call completed: {service_name}.{method_name}", **log_data )
 # else: logger.error( f"Service call failed: {service_name}.{method_name}", **log_data )def log_business_event
 # metadata or {}, } logger.info(f"Business event: {event_type}", **event_data)def log_performance_metric
 # value: float, unit: str = "ms", tags: Optional[Dict[str, str]] = None,): """ Log de métricas de rendimiento """ logger =
-# get_service_logger("performance") metric_data = 
+# get_service_logger("performance") metric_data =
 # {}, } logger.info(f"Performance metric: {metric_name}", **metric_data)def log_security_event
 # """ logger = get_service_logger("security") security_data = """
 # "threat_level": threat_level, "details": details or {}, } if severity in ["HIGH", "CRITICAL"]: logger.critical

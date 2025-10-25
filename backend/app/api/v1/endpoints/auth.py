@@ -23,7 +23,7 @@ router = APIRouter()
 def add_cors_headers(request: Request, response: Response):
     """Agregar headers CORS manualmente"""
     origin = request.headers.get("origin")
-    
+
     if origin in settings.CORS_ORIGINS:
         response.headers["Access-Control-Allow-Origin"] = origin
         logger.info(f"CORS Debug - Origin permitido: {origin}")
@@ -32,7 +32,9 @@ def add_cors_headers(request: Request, response: Response):
         # En caso de origin no permitido, usar el primer origin válido
         if settings.CORS_ORIGINS:
             response.headers["Access-Control-Allow-Origin"] = settings.CORS_ORIGINS[0]
-            logger.info(f"CORS Debug - Usando origin por defecto: {settings.CORS_ORIGINS[0]}")
+            logger.info(
+                f"CORS Debug - Usando origin por defecto: {settings.CORS_ORIGINS[0]}"
+            )
 
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
@@ -67,7 +69,7 @@ async def login(
             logger.warning(f"Login fallido para: {login_data.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Credenciales inválidas"
+                detail="Credenciales inválidas",
             )
 
         # Generar tokens
@@ -85,7 +87,7 @@ async def login(
             access_token=access_token,
             refresh_token=refresh_token,
             token_type="bearer",
-            user=user_dict
+            user=user_dict,
         )
 
     except HTTPException:
@@ -94,7 +96,7 @@ async def login(
         logger.error(f"Error en login: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error interno del servidor"
+            detail="Error interno del servidor",
         )
 
 
@@ -110,11 +112,11 @@ async def refresh_token(
     """
     try:
         refresh_token = refresh_data.get("refresh_token")
-        
+
         if not refresh_token:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Refresh token requerido"
+                detail="Refresh token requerido",
             )
 
         # Agregar headers CORS
@@ -122,25 +124,26 @@ async def refresh_token(
 
         # Validar refresh token (simplificado)
         user_id = AuthService.validate_refresh_token(refresh_token)
-        
+
         if not user_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Refresh token inválido"
+                detail="Refresh token inválido",
             )
 
         # Obtener usuario
         user = db.query(User).filter(User.id == user_id).first()
-        
+
         if not user:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuario no encontrado"
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado"
             )
 
         # Generar nuevo access token
         new_access_token = create_access_token(subject=user.id)
-        new_refresh_token = create_access_token(subject=user.id, expires_delta_minutes=1440)
+        new_refresh_token = create_access_token(
+            subject=user.id, expires_delta_minutes=1440
+        )
 
         # Convertir usuario a diccionario
         user_dict = UserMeResponse.model_validate(user).model_dump()
@@ -149,7 +152,7 @@ async def refresh_token(
             access_token=new_access_token,
             refresh_token=new_refresh_token,
             token_type="bearer",
-            user=user_dict
+            user=user_dict,
         )
 
     except HTTPException:
@@ -158,7 +161,7 @@ async def refresh_token(
         logger.error(f"Error en refresh token: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error interno del servidor"
+            detail="Error interno del servidor",
         )
 
 
@@ -183,17 +186,19 @@ async def change_password(
     """
     try:
         # Validar contraseña actual
-        if not verify_password(password_data.current_password, current_user.password_hash):
+        if not verify_password(
+            password_data.current_password, current_user.password_hash
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Contraseña actual incorrecta"
+                detail="Contraseña actual incorrecta",
             )
 
         # Validar nueva contraseña
         if not validate_password_strength(password_data.new_password):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="La nueva contraseña no cumple con los requisitos de seguridad"
+                detail="La nueva contraseña no cumple con los requisitos de seguridad",
             )
 
         # Actualizar contraseña
@@ -210,7 +215,7 @@ async def change_password(
         logger.error(f"Error cambiando contraseña: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error interno del servidor"
+            detail="Error interno del servidor",
         )
 
 

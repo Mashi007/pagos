@@ -1,7 +1,6 @@
 # Archivo corregido - Contenido básico funcional
 
 import logging
-from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
@@ -24,17 +23,16 @@ def get_alerts(
                 "id": 1,
                 "type": "INFO",
                 "message": "Sistema funcionando correctamente",
-                "timestamp": "2024-01-01T00:00:00Z"
+                "timestamp": "2024-01-01T00:00:00Z",
             }
         ]
-        
+
         return {"alerts": alerts}
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo alertas: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -47,10 +45,9 @@ def acknowledge_alert(
     # Reconocer una alerta
     try:
         return {"message": f"Alerta {alert_id} reconocida por {current_user.email}"}
-        
+
     except Exception as e:
         logger.error(f"Error reconociendo alerta: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )

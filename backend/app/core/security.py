@@ -23,11 +23,11 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     Verifica una contraseña contra su hash
-    
+
     Args:
         plain_password: Contraseña en texto plano
         hashed_password: Hash de la contraseña
-        
+
     Returns:
         True si la contraseña es correcta, False en caso contrario
     """
@@ -37,10 +37,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     """
     Genera un hash de una contraseña
-    
+
     Args:
         password: Contraseña en texto plano
-        
+
     Returns:
         Hash de la contraseña
     """
@@ -50,16 +50,16 @@ def get_password_hash(password: str) -> str:
 def create_access_token(
     subject: Union[str, int],
     expires_delta: Optional[timedelta] = None,
-    additional_claims: Optional[Dict[str, Any]] = None
+    additional_claims: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
     Crea un token de acceso JWT
-    
+
     Args:
         subject: ID del usuario (subject del token)
         expires_delta: Tiempo de expiración personalizado
         additional_claims: Claims adicionales para el token
-        
+
     Returns:
         Token JWT codificado
     """
@@ -81,10 +81,10 @@ def create_access_token(
 def create_refresh_token(subject: Union[str, int]) -> str:
     """
     Crea un token de refresh JWT
-    
+
     Args:
         subject: ID del usuario
-        
+
     Returns:
         Token de refresh JWT codificado
     """
@@ -97,13 +97,13 @@ def create_refresh_token(subject: Union[str, int]) -> str:
 def decode_token(token: str) -> Dict[str, Any]:
     """
     Decodifica y valida un token JWT
-    
+
     Args:
         token: Token JWT a decodificar
-        
+
     Returns:
         Payload del token decodificado
-        
+
     Raises:
         JWTError: Si el token es inválido o expiró
     """
@@ -119,11 +119,11 @@ def decode_token(token: str) -> Dict[str, Any]:
 def verify_token_type(token: str, expected_type: str) -> bool:
     """
     Verifica que un token sea del tipo esperado
-    
+
     Args:
         token: Token JWT
         expected_type: Tipo esperado ("access" o "refresh")
-        
+
     Returns:
         True si el token es del tipo esperado, False en caso contrario
     """
@@ -137,10 +137,10 @@ def verify_token_type(token: str, expected_type: str) -> bool:
 def get_token_subject(token: str) -> Optional[str]:
     """
     Obtiene el subject (ID del usuario) de un token
-    
+
     Args:
         token: Token JWT
-        
+
     Returns:
         ID del usuario o None si el token es inválido
     """
@@ -154,10 +154,10 @@ def get_token_subject(token: str) -> Optional[str]:
 def is_token_expired(token: str) -> bool:
     """
     Verifica si un token ha expirado
-    
+
     Args:
         token: Token JWT
-        
+
     Returns:
         True si el token ha expirado, False en caso contrario
     """
@@ -174,14 +174,14 @@ def is_token_expired(token: str) -> bool:
 def create_token_pair(subject: Union[str, int]) -> Dict[str, str]:
     """
     Crea un par de tokens (access + refresh)
-    
+
     Args:
         subject: ID del usuario
-        
+
     Returns:
         Diccionario con access_token y refresh_token
     """
     return {
         "access_token": create_access_token(subject),
-        "refresh_token": create_refresh_token(subject)
+        "refresh_token": create_refresh_token(subject),
     }

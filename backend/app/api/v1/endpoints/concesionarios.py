@@ -1,4 +1,5 @@
 from datetime import date
+
 # Endpoints de gestion de concesionarios
 
 import logging
@@ -11,7 +12,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.concesionario import Concesionario
 from app.models.user import User
-from app.schemas.concesionario import ConcesionarioCreate, ConcesionarioUpdate, ConcesionarioResponse, ConcesionarioListResponse
+from app.schemas.concesionario import (
+    ConcesionarioCreate,
+    ConcesionarioUpdate,
+    ConcesionarioResponse,
+    ConcesionarioListResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -50,9 +56,9 @@ def test_auth(
     except Exception as e:
         logger.error(f"Error en test_auth: {e}")
         return {"error": "Error interno"}
-        return 
+        return
     except Exception as e:
-        return 
+        return
 
 
 @router.get("/list-no-auth")
@@ -151,9 +157,7 @@ def obtener_concesionario(
 ):
     # Obtener un concesionario por ID
     concesionario = (
-        db.query(Concesionario)
-        .filter(Concesionario.id == concesionario_id)
-        .first()
+        db.query(Concesionario).filter(Concesionario.id == concesionario_id).first()
     )
     if not concesionario:
         raise HTTPException(status_code=404, detail="Concesionario no encontrado")
@@ -199,15 +203,16 @@ def actualizar_concesionario(
     # Actualizar un concesionario existente
     try:
         concesionario = (
-            db.query(Concesionario)
-            .filter(Concesionario.id == concesionario_id)
-            .first()
+            db.query(Concesionario).filter(Concesionario.id == concesionario_id).first()
         )
         if not concesionario:
             raise HTTPException(status_code=404, detail="Concesionario no encontrado")
 
         # Verificar nombre unico si se esta cambiando
-        if concesionario_data.nombre and concesionario_data.nombre != concesionario.nombre:
+        if (
+            concesionario_data.nombre
+            and concesionario_data.nombre != concesionario.nombre
+        ):
             existing = (
                 db.query(Concesionario)
                 .filter(Concesionario.nombre == concesionario_data.nombre)
@@ -243,9 +248,7 @@ def eliminar_concesionario(
     # Eliminar un concesionario (HARD DELETE - borrado completo de BD)
     try:
         concesionario = (
-            db.query(Concesionario)
-            .filter(Concesionario.id == concesionario_id)
-            .first()
+            db.query(Concesionario).filter(Concesionario.id == concesionario_id).first()
         )
         if not concesionario:
             raise HTTPException(status_code=404, detail="Concesionario no encontrado")

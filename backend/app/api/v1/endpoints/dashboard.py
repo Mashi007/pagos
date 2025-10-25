@@ -30,8 +30,7 @@ def dashboard_administrador(
     # - Estadísticas globales
     if not current_user.is_admin:
         raise HTTPException(
-            status_code=403,
-            detail="Acceso denegado. Solo administradores."
+            status_code=403, detail="Acceso denegado. Solo administradores."
         )
 
     hoy = date.today()
@@ -42,9 +41,7 @@ def dashboard_administrador(
     ).scalar() or Decimal("0")
 
     clientes_al_dia = (
-        db.query(Cliente)
-        .filter(Cliente.activo, Cliente.dias_mora == 0)
-        .count()
+        db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora == 0).count()
     )
 
     clientes_en_mora = (
@@ -61,10 +58,12 @@ def dashboard_administrador(
     evolucion_cartera = []
     for i in range(6):
         fecha_mes = hoy - timedelta(days=30 * i)
-        evolucion_cartera.append({
-            "mes": fecha_mes.strftime("%Y-%m"),
-            "cartera": float(cartera_total) - (i * 50000),
-        })
+        evolucion_cartera.append(
+            {
+                "mes": fecha_mes.strftime("%Y-%m"),
+                "cartera": float(cartera_total) - (i * 50000),
+            }
+        )
 
     # Top 5 clientes con mayor financiamiento
     top_clientes = (
@@ -77,12 +76,14 @@ def dashboard_administrador(
 
     top_clientes_data = []
     for cliente in top_clientes:
-        top_clientes_data.append({
-            "cedula": cliente.cedula,
-            "nombre": cliente.nombre,
-            "total_financiamiento": float(cliente.total_financiamiento or 0),
-            "dias_mora": cliente.dias_mora or 0,
-        })
+        top_clientes_data.append(
+            {
+                "cedula": cliente.cedula,
+                "nombre": cliente.nombre,
+                "total_financiamiento": float(cliente.total_financiamiento or 0),
+                "dias_mora": cliente.dias_mora or 0,
+            }
+        )
 
     # Estadísticas de préstamos
     prestamos_activos = db.query(Prestamo).filter(Prestamo.activo).count()
@@ -148,26 +149,26 @@ def dashboard_analista(
     clientes_en_mora = len([c for c in clientes_asignados if (c.dias_mora or 0) > 0])
 
     porcentaje_mora = (
-        (clientes_en_mora / len(clientes_asignados) * 100)
-        if clientes_asignados
-        else 0
+        (clientes_en_mora / len(clientes_asignados) * 100) if clientes_asignados else 0
     )
 
     # Top 5 clientes con mayor financiamiento (del analista)
     top_clientes = sorted(
         clientes_asignados,
         key=lambda x: float(x.total_financiamiento or 0),
-        reverse=True
+        reverse=True,
     )[:5]
 
     top_clientes_data = []
     for cliente in top_clientes:
-        top_clientes_data.append({
-            "cedula": cliente.cedula,
-            "nombre": cliente.nombre,
-            "total_financiamiento": float(cliente.total_financiamiento or 0),
-            "dias_mora": cliente.dias_mora or 0,
-        })
+        top_clientes_data.append(
+            {
+                "cedula": cliente.cedula,
+                "nombre": cliente.nombre,
+                "total_financiamiento": float(cliente.total_financiamiento or 0),
+                "dias_mora": cliente.dias_mora or 0,
+            }
+        )
 
     return {
         "kpis": {
@@ -192,16 +193,16 @@ def resumen_general(
         # Estadísticas básicas
         total_clientes = db.query(Cliente).filter(Cliente.activo).count()
         total_prestamos = db.query(Prestamo).filter(Prestamo.activo).count()
-        
+
         # Cartera total
         cartera_total = db.query(func.sum(Cliente.total_financiamiento)).filter(
             Cliente.activo, Cliente.total_financiamiento.isnot(None)
         ).scalar() or Decimal("0")
 
         # Clientes en mora
-        clientes_mora = db.query(Cliente).filter(
-            Cliente.activo, Cliente.dias_mora > 0
-        ).count()
+        clientes_mora = (
+            db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).count()
+        )
 
         return {
             "total_clientes": total_clientes,
@@ -214,6 +215,5 @@ def resumen_general(
     except Exception as e:
         logger.error(f"Error obteniendo resumen: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )

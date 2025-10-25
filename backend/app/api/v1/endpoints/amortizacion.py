@@ -35,10 +35,7 @@ def generar_tabla_amortizacion(
         tabla = AmortizacionService.generar_tabla_amortizacion(request)
         return tabla
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/prestamo/{prestamo_id}/cuotas", response_model=List[CuotaResponse])
@@ -58,9 +55,7 @@ def crear_cuotas_prestamo(
         )
 
     # Verificar que no tenga cuotas ya creadas
-    cuotas_existentes = (
-        db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id).count()
-    )
+    cuotas_existentes = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id).count()
     if cuotas_existentes > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -70,17 +65,12 @@ def crear_cuotas_prestamo(
     try:
         # Generar tabla
         tabla = AmortizacionService.generar_tabla_amortizacion(request_data)
-        
+
         # Crear cuotas en BD
-        cuotas = AmortizacionService.crear_cuotas_prestamo(
-            db, prestamo_id, tabla
-        )
+        cuotas = AmortizacionService.crear_cuotas_prestamo(db, prestamo_id, tabla)
         return cuotas
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/prestamo/{prestamo_id}/cuotas", response_model=List[CuotaResponse])
@@ -101,9 +91,7 @@ def obtener_cuotas_prestamo(
             detail="Préstamo no encontrado",
         )
 
-    cuotas = AmortizacionService.obtener_cuotas_prestamo(
-        db, prestamo_id, estado
-    )
+    cuotas = AmortizacionService.obtener_cuotas_prestamo(db, prestamo_id, estado)
 
     # Agregar propiedades calculadas
     for cuota in cuotas:
@@ -124,8 +112,7 @@ def obtener_cuota(
     cuota = db.query(Cuota).filter(Cuota.id == cuota_id).first()
     if not cuota:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cuota no encontrada"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Cuota no encontrada"
         )
 
     # Agregar propiedades calculadas
@@ -136,7 +123,9 @@ def obtener_cuota(
     return cuota
 
 
-@router.post("/prestamo/{prestamo_id}/recalcular-mora", response_model=RecalcularMoraResponse)
+@router.post(
+    "/prestamo/{prestamo_id}/recalcular-mora", response_model=RecalcularMoraResponse
+)
 def recalcular_mora(
     prestamo_id: int,
     request: RecalcularMoraRequest,
@@ -191,7 +180,9 @@ def recalcular_mora(
         )
 
 
-@router.get("/prestamo/{prestamo_id}/estado-cuenta", response_model=EstadoCuentaResponse)
+@router.get(
+    "/prestamo/{prestamo_id}/estado-cuenta", response_model=EstadoCuentaResponse
+)
 def obtener_estado_cuenta(
     prestamo_id: int,
     db: Session = Depends(get_db),
@@ -243,7 +234,7 @@ def obtener_estado_cuenta(
 
     # Calcular resumen
     total_mora = sum(c.monto_mora for c in cuotas_vencidas)
-    
+
     resumen = {
         "cuotas_pagadas": len(cuotas_pagadas),
         "cuotas_vencidas": len(cuotas_vencidas),
@@ -270,7 +261,9 @@ def obtener_estado_cuenta(
     )
 
 
-@router.post("/prestamo/{prestamo_id}/proyectar-pago", response_model=ProyeccionPagoResponse)
+@router.post(
+    "/prestamo/{prestamo_id}/proyectar-pago", response_model=ProyeccionPagoResponse
+)
 def proyectar_pago(
     prestamo_id: int,
     request: ProyeccionPagoRequest,
@@ -375,7 +368,9 @@ def obtener_informacion_adicional(
     # Calcular estadísticas
     cuotas_pagadas = len([c for c in todas_cuotas if c.estado == "PAGADA"])
     cuotas_totales = len(todas_cuotas)
-    porcentaje_avance = round((cuotas_pagadas / cuotas_totales * 100), 2) if cuotas_totales > 0 else 0
+    porcentaje_avance = (
+        round((cuotas_pagadas / cuotas_totales * 100), 2) if cuotas_totales > 0 else 0
+    )
 
     # Próximo vencimiento
     proxima_cuota = (
@@ -418,9 +413,11 @@ def obtener_informacion_adicional(
         "financiero": {
             "total_pagado": float(total_pagado),
             "saldo_pendiente": float(prestamo.saldo_pendiente),
-            "porcentaje_pagado": round(
-                (float(total_pagado) / float(prestamo.monto_total) * 100), 2
-            ) if prestamo.monto_total > 0 else 0,
+            "porcentaje_pagado": (
+                round((float(total_pagado) / float(prestamo.monto_total) * 100), 2)
+                if prestamo.monto_total > 0
+                else 0
+            ),
         },
         "proximo_vencimiento": proximo_vencimiento,
         "dias_mora_maximo": dias_mora_maximo,
@@ -433,7 +430,7 @@ def obtener_tabla_visual(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-        # Obtener tabla de amortización en formato visual como el diagrama
+    # Obtener tabla de amortización en formato visual como el diagrama
     # Verificar préstamo
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:
@@ -475,20 +472,22 @@ def obtener_tabla_visual(
             emoji = "🚀"
             color = "primary"
 
-        tabla_visual.append({
-            "numero_cuota": cuota.numero_cuota,
-            "fecha_vencimiento": cuota.fecha_vencimiento,
-            "monto_cuota": f"${float(cuota.monto_cuota):,.2f}",
-            "estado": cuota.estado,
-            "estado_visual": f"{emoji} {cuota.estado}",
-            "color": color,
-            "dias_mora": cuota.dias_mora if cuota.dias_mora > 0 else None,
-            "monto_mora": (
-                float(cuota.monto_mora) if cuota.monto_mora > 0 else None
-            ),
-            "porcentaje_pagado": float(cuota.porcentaje_pagado),
-            "fecha_pago_real": cuota.fecha_pago,
-        })
+        tabla_visual.append(
+            {
+                "numero_cuota": cuota.numero_cuota,
+                "fecha_vencimiento": cuota.fecha_vencimiento,
+                "monto_cuota": f"${float(cuota.monto_cuota):,.2f}",
+                "estado": cuota.estado,
+                "estado_visual": f"{emoji} {cuota.estado}",
+                "color": color,
+                "dias_mora": cuota.dias_mora if cuota.dias_mora > 0 else None,
+                "monto_mora": (
+                    float(cuota.monto_mora) if cuota.monto_mora > 0 else None
+                ),
+                "porcentaje_pagado": float(cuota.porcentaje_pagado),
+                "fecha_pago_real": cuota.fecha_pago,
+            }
+        )
 
     return {
         "prestamo_id": prestamo_id,

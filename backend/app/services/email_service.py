@@ -26,11 +26,7 @@ class EmailService:
         self.from_name = settings.FROM_NAME
 
     def send_email(
-        self,
-        to_emails: List[str],
-        subject: str,
-        body: str,
-        is_html: bool = False
+        self, to_emails: List[str], subject: str, body: str, is_html: bool = False
     ) -> Dict[str, Any]:
         """
         Enviar email
@@ -47,22 +43,22 @@ class EmailService:
         try:
             # Crear mensaje
             msg = MIMEMultipart()
-            msg['From'] = f"{self.from_name} <{self.from_email}>"
-            msg['To'] = ', '.join(to_emails)
-            msg['Subject'] = subject
+            msg["From"] = f"{self.from_name} <{self.from_email}>"
+            msg["To"] = ", ".join(to_emails)
+            msg["Subject"] = subject
 
             # Agregar cuerpo
             if is_html:
-                msg.attach(MIMEText(body, 'html'))
+                msg.attach(MIMEText(body, "html"))
             else:
-                msg.attach(MIMEText(body, 'plain'))
+                msg.attach(MIMEText(body, "plain"))
 
             # Enviar email
             server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-            
+
             if settings.SMTP_USE_TLS:
                 server.starttls()
-            
+
             if self.smtp_username and self.smtp_password:
                 server.login(self.smtp_username, self.smtp_password)
 
@@ -74,7 +70,7 @@ class EmailService:
             return {
                 "success": True,
                 "message": "Email enviado exitosamente",
-                "recipients": to_emails
+                "recipients": to_emails,
             }
 
         except Exception as e:
@@ -82,7 +78,7 @@ class EmailService:
             return {
                 "success": False,
                 "message": f"Error enviando email: {str(e)}",
-                "recipients": to_emails
+                "recipients": to_emails,
             }
 
     def send_welcome_email(self, email: str, name: str) -> Dict[str, Any]:
@@ -107,14 +103,11 @@ class EmailService:
         </body>
         </html>
         """
-        
+
         return self.send_email([email], subject, body, is_html=True)
 
     def send_password_reset_email(
-        self, 
-        email: str, 
-        reset_token: str,
-        name: str
+        self, email: str, reset_token: str, name: str
     ) -> Dict[str, Any]:
         """
         Enviar email de reset de contraseña
@@ -129,7 +122,7 @@ class EmailService:
         """
         subject = f"Reset de contraseña - {settings.APP_NAME}"
         reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
-        
+
         body = f"""
         <html>
         <body>
@@ -143,15 +136,11 @@ class EmailService:
         </body>
         </html>
         """
-        
+
         return self.send_email([email], subject, body, is_html=True)
 
     def send_payment_reminder_email(
-        self,
-        email: str,
-        name: str,
-        loan_amount: float,
-        due_date: str
+        self, email: str, name: str, loan_amount: float, due_date: str
     ) -> Dict[str, Any]:
         """
         Enviar email de recordatorio de pago
@@ -166,7 +155,7 @@ class EmailService:
             Dict con resultado del envío
         """
         subject = f"Recordatorio de pago - {settings.APP_NAME}"
-        
+
         body = f"""
         <html>
         <body>
@@ -182,7 +171,7 @@ class EmailService:
         </body>
         </html>
         """
-        
+
         return self.send_email([email], subject, body, is_html=True)
 
     def test_connection(self) -> Dict[str, Any]:
@@ -194,23 +183,17 @@ class EmailService:
         """
         try:
             server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-            
+
             if settings.SMTP_USE_TLS:
                 server.starttls()
-            
+
             if self.smtp_username and self.smtp_password:
                 server.login(self.smtp_username, self.smtp_password)
-            
+
             server.quit()
-            
-            return {
-                "success": True,
-                "message": "Conexión SMTP exitosa"
-            }
-            
+
+            return {"success": True, "message": "Conexión SMTP exitosa"}
+
         except Exception as e:
             logger.error(f"Error probando conexión SMTP: {str(e)}")
-            return {
-                "success": False,
-                "message": f"Error de conexión SMTP: {str(e)}"
-            }
+            return {"success": False, "message": f"Error de conexión SMTP: {str(e)}"}

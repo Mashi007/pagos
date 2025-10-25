@@ -25,11 +25,7 @@ class DatabaseSchemaAnalyzer:
 
     def analyze_schema_inconsistencies(self, db: Session) -> Dict[str, Any]:
         """Analizar inconsistencias específicas del esquema"""
-        analysis = {
-            "schema_analysis": {},
-            "recommendations": [],
-            "critical_issues": []
-        }
+        analysis = {"schema_analysis": {}, "recommendations": [], "critical_issues": []}
 
         for table in self.critical_tables:
             table_analysis = self._analyze_table_schema(db, table)
@@ -50,23 +46,23 @@ class DatabaseSchemaAnalyzer:
             WHERE table_name = '{table_name}'
             ORDER BY ordinal_position
             """
-            
+
             result = db.execute(query)
             columns = result.fetchall()
-            
+
             return {
                 "table_name": table_name,
                 "columns": [dict(row) for row in columns],
                 "column_count": len(columns),
-                "critical_issues": []
+                "critical_issues": [],
             }
-            
+
         except Exception as e:
             logger.error(f"Error analizando tabla {table_name}: {e}")
             return {
                 "table_name": table_name,
                 "error": str(e),
-                "critical_issues": [f"Error accediendo a tabla {table_name}"]
+                "critical_issues": [f"Error accediendo a tabla {table_name}"],
             }
 
 
@@ -76,8 +72,7 @@ schema_analyzer = DatabaseSchemaAnalyzer()
 
 @router.get("/schema-analysis")
 async def get_schema_analysis(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Obtener análisis de esquema de base de datos"""
     try:
@@ -85,13 +80,12 @@ async def get_schema_analysis(
         return {
             "success": True,
             "analysis": analysis,
-            "message": "Análisis de esquema completado"
+            "message": "Análisis de esquema completado",
         }
     except Exception as e:
         logger.error(f"Error en análisis de esquema: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error analizando esquema: {str(e)}"
+            status_code=500, detail=f"Error analizando esquema: {str(e)}"
         )
 
 
@@ -102,11 +96,8 @@ async def schema_analysis_health():
         return {
             "status": "healthy",
             "analyzer": "DatabaseSchemaAnalyzer",
-            "message": "Analizador de esquema funcionando correctamente"
+            "message": "Analizador de esquema funcionando correctamente",
         }
     except Exception as e:
         logger.error(f"Error en health check de esquema: {e}")
-        return {
-            "status": "unhealthy",
-            "error": str(e)
-        }
+        return {"status": "unhealthy", "error": str(e)}

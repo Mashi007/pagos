@@ -20,7 +20,7 @@
 # logger_name in loggers_to_configure: logger = logging.getLogger(logger_name) logger.setLevel(log_level) logger.handlers =
 # [] logger.addHandler(log_handler) logger.propagate = False logging.info
 # {log_level}")def setup_monitoring(app: FastAPI) -> dict: """ Configura todo el sistema de monitoreo Args: app: Instancia de
-# FastAPI Returns: dict con configuración aplicada """ config_applied = 
+# FastAPI Returns: dict con configuración aplicada """ config_applied =
 # "structured_logging": False, } try: # Logging estructurado configure_structured_logging()
 # config_applied["structured_logging"] = True # Sentry if settings.SENTRY_DSN: configure_sentry(app) config_applied["sentry"]
 # = True # Prometheus if settings.PROMETHEUS_ENABLED: instrumentator = configure_prometheus(app) if instrumentator:
@@ -34,7 +34,7 @@
 # e: logging.error(f"Error registrando métrica de negocio: {e}")def track_financial_operation
 # float, client_id: int, user_id: int, additional_data: Optional[dict] = None,) -> None: """ Trackear operaciones financieras
 # específicas Args: operation_type: PAGO, PRESTAMO, ANULACION, MODIFICACION amount: Monto de la operación client_id: ID del
-# f"financial_operation_{operation_type.lower()}", amount, 
+# f"financial_operation_{operation_type.lower()}", amount,
 # "user_id": user_id, **(additional_data or {}), }, )def track_approval_workflow
 # "request_type": request_type, "user_role": user_role, }, )def track_bulk_migration
 # failed: int, warnings: int, migration_type: str,) -> None: """ Trackear migraciones masivas """ track_business_metrics
@@ -51,9 +51,9 @@
 # ============================================def get_monitoring_status() -> dict: """ Obtener estado actual del sistema de
 # bool(getattr(settings, "SENTRY_DSN", None)), "environment": getattr(settings, "ENVIRONMENT", "production"),
 # "traces_sample_rate": getattr( settings, "SENTRY_TRACES_SAMPLE_RATE", 0.1 ), "descripcion": "Tracking de errores y
-# performance", }, "prometheus": 
-# "descripcion": "Métricas de aplicación y negocio", }, "logging_estructurado": 
-# "http_requests_total", "http_request_duration_seconds", "database_connections", ], }, "integracion_actual": 
+# performance", }, "prometheus":
+# "descripcion": "Métricas de aplicación y negocio", }, "logging_estructurado":
+# "http_requests_total", "http_request_duration_seconds", "database_connections", ], }, "integracion_actual":
 # No integrado", "endpoints": "❌ No utilizado", "recomendacion": "Integrar en main.py para habilitar monitoreo completo", },
 # Importar setup_monitoring en main.py", "3. Llamar setup_monitoring(app) al inicio", "4. Usar track_operation en endpoints
 # "Debugging de migraciones masivas", ], }, }

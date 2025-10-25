@@ -15,6 +15,7 @@ class ConfiguracionSistema(Base):
     """
     Configuración centralizada del sistema
     """
+
     __tablename__ = "configuracion_sistema"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -42,15 +43,11 @@ class ConfiguracionSistema(Base):
     valor_minimo = Column(String(100), nullable=True)
     valor_maximo = Column(String(100), nullable=True)
     opciones_validas = Column(Text, nullable=True)  # JSON array de opciones válidas
-    patron_validacion = Column(
-        String(200), nullable=True
-    )  # Regex para validación
+    patron_validacion = Column(String(200), nullable=True)  # Regex para validación
 
     # Auditoría
     creado_en = Column(DateTime, server_default=func.now())
-    actualizado_en = Column(
-        DateTime, server_default=func.now(), onupdate=func.now()
-    )
+    actualizado_en = Column(DateTime, server_default=func.now(), onupdate=func.now())
     creado_por = Column(String(100), nullable=True)
     actualizado_por = Column(String(100), nullable=True)
 
@@ -93,13 +90,15 @@ class ConfiguracionSistema(Base):
             self.actualizado_por = usuario
 
     @staticmethod
-    def obtener_por_clave(db, categoria: str, clave: str) -> Optional["ConfiguracionSistema"]:
+    def obtener_por_clave(
+        db, categoria: str, clave: str
+    ) -> Optional["ConfiguracionSistema"]:
         """Obtener configuración por categoría y clave"""
         return (
             db.query(ConfiguracionSistema)
             .filter(
                 ConfiguracionSistema.categoria == categoria,
-                ConfiguracionSistema.clave == clave
+                ConfiguracionSistema.clave == clave,
             )
             .first()
         )
@@ -136,7 +135,9 @@ class ConfiguracionSistema(Base):
             "opciones_validas": self.opciones_validas,
             "patron_validacion": self.patron_validacion,
             "creado_en": self.creado_en.isoformat() if self.creado_en else None,
-            "actualizado_en": self.actualizado_en.isoformat() if self.actualizado_en else None,
+            "actualizado_en": (
+                self.actualizado_en.isoformat() if self.actualizado_en else None
+            ),
             "creado_por": self.creado_por,
-            "actualizado_por": self.actualizado_por
+            "actualizado_por": self.actualizado_por,
         }

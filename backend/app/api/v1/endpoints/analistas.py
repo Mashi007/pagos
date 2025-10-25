@@ -21,21 +21,23 @@ def test_analistas_no_auth(db: Session = Depends(get_db)):
         total_analistas = db.query(Analista).count()
         analistas = db.query(Analista).limit(5).all()
         analistas_data = []
-        
+
         for analista in analistas:
-            analistas_data.append({
-                "id": analista.id,
-                "nombre": analista.nombre,
-                "email": analista.email,
-                "activo": analista.activo
-            })
-        
+            analistas_data.append(
+                {
+                    "id": analista.id,
+                    "nombre": analista.nombre,
+                    "email": analista.email,
+                    "activo": analista.activo,
+                }
+            )
+
         return {
             "message": "Test exitoso - Analistas",
             "total_analistas": total_analistas,
-            "analistas_muestra": analistas_data
+            "analistas_muestra": analistas_data,
         }
-        
+
     except Exception as e:
         logger.error(f"Error en test_analistas_no_auth: {e}")
         return {"error": "Error interno"}
@@ -50,18 +52,17 @@ def listar_analistas(
     # Listar analistas con filtros
     try:
         query = db.query(Analista)
-        
+
         if activo is not None:
             query = query.filter(Analista.activo == activo)
-        
+
         analistas = query.all()
         return analistas
-        
+
     except Exception as e:
         logger.error(f"Error listando analistas: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -74,22 +75,18 @@ def obtener_analista(
     # Obtener analista específico
     try:
         analista = db.query(Analista).filter(Analista.id == analista_id).first()
-        
+
         if not analista:
-            raise HTTPException(
-                status_code=404,
-                detail="Analista no encontrado"
-            )
-        
+            raise HTTPException(status_code=404, detail="Analista no encontrado")
+
         return analista
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error obteniendo analista: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -102,32 +99,30 @@ def crear_analista(
     # Crear nuevo analista
     try:
         # Verificar que no exista un analista con el mismo email
-        analista_existente = db.query(Analista).filter(
-            Analista.email == analista_data.email
-        ).first()
-        
+        analista_existente = (
+            db.query(Analista).filter(Analista.email == analista_data.email).first()
+        )
+
         if analista_existente:
             raise HTTPException(
-                status_code=400,
-                detail="Ya existe un analista con este email"
+                status_code=400, detail="Ya existe un analista con este email"
             )
-        
+
         nuevo_analista = Analista(**analista_data.model_dump())
-        
+
         db.add(nuevo_analista)
         db.commit()
         db.refresh(nuevo_analista)
-        
+
         return nuevo_analista
-        
+
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         logger.error(f"Error creando analista: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -141,43 +136,41 @@ def actualizar_analista(
     # Actualizar analista
     try:
         analista = db.query(Analista).filter(Analista.id == analista_id).first()
-        
+
         if not analista:
-            raise HTTPException(
-                status_code=404,
-                detail="Analista no encontrado"
-            )
-        
+            raise HTTPException(status_code=404, detail="Analista no encontrado")
+
         # Verificar email único si se está cambiando
         if analista_data.email and analista_data.email != analista.email:
-            analista_existente = db.query(Analista).filter(
-                Analista.email == analista_data.email,
-                Analista.id != analista_id
-            ).first()
-            
+            analista_existente = (
+                db.query(Analista)
+                .filter(
+                    Analista.email == analista_data.email, Analista.id != analista_id
+                )
+                .first()
+            )
+
             if analista_existente:
                 raise HTTPException(
-                    status_code=400,
-                    detail="Ya existe un analista con este email"
+                    status_code=400, detail="Ya existe un analista con este email"
                 )
-        
+
         # Actualizar campos
         for field, value in analista_data.model_dump(exclude_unset=True).items():
             setattr(analista, field, value)
-        
+
         db.commit()
         db.refresh(analista)
-        
+
         return analista
-        
+
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         logger.error(f"Error actualizando analista: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -190,13 +183,10 @@ def eliminar_analista(
     # Eliminar analista
     try:
         asesor = db.query(Analista).filter(Analista.id == analista_id).first()
-        
+
         if not asesor:
-            raise HTTPException(
-                status_code=404,
-                detail="Analista no encontrado"
-            )
-        
+            raise HTTPException(status_code=404, detail="Analista no encontrado")
+
         db.delete(asesor)
         db.commit()
         return {"message": "Analista eliminado exitosamente"}

@@ -3,6 +3,7 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from datetime import date
+
 # Constantes de validación
 MIN_CEDULA_LENGTH = 8
 MAX_CEDULA_LENGTH = 20
@@ -104,8 +105,6 @@ class ConciliacionResponse(ConciliacionBase):
     pago_id: int
 
     model_config = ConfigDict(from_attributes=True)
-
-
 
     total_dolares: float
     cantidad_conciliada: int

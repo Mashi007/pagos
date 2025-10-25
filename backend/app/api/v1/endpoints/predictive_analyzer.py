@@ -16,12 +16,12 @@ router = APIRouter()
 
 class PredictiveAnalyzer:
     """Analizador predictivo para detectar patrones sospechosos"""
-    
+
     def __init__(self):
         self.user_data = {}
         self.predictions = deque(maxlen=1000)
         self.model_accuracy = {}
-    
+
     def _get_user_data(self, user_id: str) -> Dict[str, Any]:
         """Obtener o crear datos de usuario"""
         if user_id not in self.user_data:
@@ -31,26 +31,25 @@ class PredictiveAnalyzer:
                 "failed_logins": deque(maxlen=1000),
                 "ip_addresses": deque(maxlen=100),
                 "user_agents": deque(maxlen=100),
-                "session_durations": deque(maxlen=1000)
+                "session_durations": deque(maxlen=1000),
             }
         return self.user_data[user_id]
 
     def record_authentication_event(
-        self, 
-        user_id: str, 
-        success: bool, 
-        request_context: Dict[str, Any]
+        self, user_id: str, success: bool, request_context: Dict[str, Any]
     ) -> None:
         # Registrar evento de autenticación para análisis
         user_data = self._get_user_data(user_id)
 
         # Registrar intento de login
-        user_data["login_attempts"].append({
-            "timestamp": datetime.now(),
-            "success": success,
-            "ip": request_context.get("client_ip"),
-            "user_agent": request_context.get("user_agent")
-        })
+        user_data["login_attempts"].append(
+            {
+                "timestamp": datetime.now(),
+                "success": success,
+                "ip": request_context.get("client_ip"),
+                "user_agent": request_context.get("user_agent"),
+            }
+        )
 
         if success:
             user_data["successful_logins"].append(datetime.now())
@@ -66,19 +65,20 @@ class PredictiveAnalyzer:
     def analyze_login_patterns(self, user_id: str) -> Dict[str, Any]:
         """Analizar patrones de login de un usuario"""
         user_data = self._get_user_data(user_id)
-        
+
         if not user_data["login_attempts"]:
             return {"message": "No hay datos de login para este usuario"}
 
         # Análisis de frecuencia
         recent_attempts = [
-            attempt for attempt in user_data["login_attempts"]
+            attempt
+            for attempt in user_data["login_attempts"]
             if attempt["timestamp"] > datetime.now() - timedelta(hours=24)
         ]
 
         # Análisis de IPs
         unique_ips = len(set(user_data["ip_addresses"]))
-        
+
         # Análisis de User Agents
         unique_user_agents = len(set(user_data["user_agents"]))
 
@@ -118,7 +118,7 @@ class PredictiveAnalyzer:
             "unique_user_agents": unique_user_agents,
             "risk_score": min(risk_score, 100),
             "risk_factors": risk_factors,
-            "risk_level": self._get_risk_level(risk_score)
+            "risk_level": self._get_risk_level(risk_score),
         }
 
     def _get_risk_level(self, score: int) -> str:
@@ -133,17 +133,19 @@ class PredictiveAnalyzer:
     def predict_future_risk(self, user_id: str) -> Dict[str, Any]:
         """Predecir riesgo futuro basado en patrones históricos"""
         user_data = self._get_user_data(user_id)
-        
+
         if len(user_data["login_attempts"]) < 10:
             return {"message": "Insuficientes datos para predicción"}
 
         # Análisis de tendencias
         recent_attempts = user_data["login_attempts"][-20:]  # Últimos 20 intentos
-        
+
         # Calcular tasa de éxito reciente
-        recent_success_rate = len([
-            a for a in recent_attempts if a["success"]
-        ]) / len(recent_attempts) * 100
+        recent_success_rate = (
+            len([a for a in recent_attempts if a["success"]])
+            / len(recent_attempts)
+            * 100
+        )
 
         # Predicción basada en tendencias
         if recent_success_rate < 50:
@@ -161,7 +163,7 @@ class PredictiveAnalyzer:
             "prediction": prediction,
             "confidence": confidence,
             "recent_success_rate": recent_success_rate,
-            "recommendation": self._get_recommendation(prediction)
+            "recommendation": self._get_recommendation(prediction),
         }
 
     def _get_recommendation(self, prediction: str) -> str:
@@ -169,7 +171,7 @@ class PredictiveAnalyzer:
         recommendations = {
             "HIGH_RISK": "Considerar bloqueo temporal o verificación adicional",
             "MEDIUM_RISK": "Monitorear actividad de cerca",
-            "LOW_RISK": "Actividad normal, continuar monitoreo"
+            "LOW_RISK": "Actividad normal, continuar monitoreo",
         }
         return recommendations.get(prediction, "Sin recomendación específica")
 
@@ -187,18 +189,17 @@ def analyze_user_patterns(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=403,
-            detail="Solo administradores pueden acceder a este análisis"
+            detail="Solo administradores pueden acceder a este análisis",
         )
-    
+
     try:
         analysis = analyzer.analyze_login_patterns(user_id)
         return analysis
-        
+
     except Exception as e:
         logger.error(f"Error analizando patrones de usuario {user_id}: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -210,19 +211,17 @@ def get_user_prediction(
     # Obtener predicción de riesgo para un usuario
     if not current_user.is_admin:
         raise HTTPException(
-            status_code=403,
-            detail="Solo administradores pueden acceder a predicciones"
+            status_code=403, detail="Solo administradores pueden acceder a predicciones"
         )
-    
+
     try:
         prediction = analyzer.predict_future_risk(user_id)
         return prediction
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo predicción para usuario {user_id}: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -236,19 +235,17 @@ def record_auth_event(
     # Registrar evento de autenticación
     if not current_user.is_admin:
         raise HTTPException(
-            status_code=403,
-            detail="Solo administradores pueden registrar eventos"
+            status_code=403, detail="Solo administradores pueden registrar eventos"
         )
-    
+
     try:
         analyzer.record_authentication_event(user_id, success, request_context)
         return {"message": "Evento registrado exitosamente"}
-        
+
     except Exception as e:
         logger.error(f"Error registrando evento: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -259,44 +256,42 @@ def get_system_overview(
     # Obtener resumen del sistema de análisis predictivo
     if not current_user.is_admin:
         raise HTTPException(
-            status_code=403,
-            detail="Solo administradores pueden acceder a este resumen"
+            status_code=403, detail="Solo administradores pueden acceder a este resumen"
         )
-    
+
     try:
         total_users = len(analyzer.user_data)
         total_predictions = len(analyzer.predictions)
-        
+
         # Calcular estadísticas generales
         high_risk_users = 0
         medium_risk_users = 0
         low_risk_users = 0
-        
+
         for user_id in analyzer.user_data.keys():
             analysis = analyzer.analyze_login_patterns(user_id)
             risk_level = analysis.get("risk_level", "LOW")
-            
+
             if risk_level == "HIGH":
                 high_risk_users += 1
             elif risk_level == "MEDIUM":
                 medium_risk_users += 1
             else:
                 low_risk_users += 1
-        
+
         return {
             "total_users_monitored": total_users,
             "total_predictions": total_predictions,
             "risk_distribution": {
                 "high_risk": high_risk_users,
                 "medium_risk": medium_risk_users,
-                "low_risk": low_risk_users
+                "low_risk": low_risk_users,
             },
-            "system_status": "ACTIVE"
+            "system_status": "ACTIVE",
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo resumen del sistema: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )

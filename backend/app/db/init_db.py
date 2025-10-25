@@ -22,20 +22,20 @@ def init_db_startup() -> None:
     """Initialize database on startup."""
     try:
         logger.info("Starting database initialization...")
-        
+
         # Create database if it doesn't exist
         engine = create_engine(settings.DATABASE_URL)
-        
+
         with engine.connect() as conn:
             # Test connection
             conn.execute(text("SELECT 1"))
             logger.info("Database connection successful")
-        
+
         # Create admin user if it doesn't exist
         create_admin_user()
-        
+
         logger.info("Database initialization completed successfully")
-        
+
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")
         logger.error(traceback.format_exc())
@@ -54,10 +54,10 @@ def create_admin_user() -> None:
     """Create admin user if it doesn't exist."""
     try:
         db = SessionLocal()
-        
+
         # Check if admin user exists
         admin_user = db.query(User).filter(User.email == "admin@example.com").first()
-        
+
         if not admin_user:
             # Create admin user
             admin_user = User(
@@ -66,15 +66,15 @@ def create_admin_user() -> None:
                 is_admin=True,
                 is_active=True,
                 nombre="Administrador",
-                apellido="Sistema"
+                apellido="Sistema",
             )
-            
+
             db.add(admin_user)
             db.commit()
             logger.info("Admin user created successfully")
         else:
             logger.info("Admin user already exists")
-            
+
     except Exception as e:
         logger.error(f"Error creating admin user: {e}")
         db.rollback()

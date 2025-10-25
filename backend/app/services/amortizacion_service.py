@@ -27,10 +27,10 @@ class AmortizacionService:
     ) -> TablaAmortizacionResponse:
         """
         Genera una tabla de amortización completa
-        
+
         Args:
             request: Parámetros para generar la tabla
-            
+
         Returns:
             TablaAmortizacionResponse: Tabla de amortización completa
         """
@@ -41,7 +41,9 @@ class AmortizacionService:
         elif request.sistema_amortizacion == "AMERICANO":
             return AmortizacionService._generar_americano(request)
         else:
-            raise ValueError(f"Sistema de amortización no soportado: {request.sistema_amortizacion}")
+            raise ValueError(
+                f"Sistema de amortización no soportado: {request.sistema_amortizacion}"
+            )
 
     @staticmethod
     def _generar_frances(
@@ -79,9 +81,7 @@ class AmortizacionService:
             # Sin interés, solo dividir el monto
             cuota_fija = monto / Decimal(n_cuotas)
 
-        cuota_fija = cuota_fija.quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
-        )
+        cuota_fija = cuota_fija.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         # Generar fechas de vencimiento
         fechas = calculate_payment_dates(
@@ -299,23 +299,21 @@ class AmortizacionService:
 
     @staticmethod
     def crear_cuotas_prestamo(
-        db: Session,
-        prestamo_id: int,
-        tabla: TablaAmortizacionResponse
+        db: Session, prestamo_id: int, tabla: TablaAmortizacionResponse
     ) -> List[Cuota]:
         """
         Crea las cuotas en la BD para un préstamo
-        
+
         Args:
             db: Sesión de base de datos
             prestamo_id: ID del préstamo
             tabla: Tabla de amortización generada
-            
+
         Returns:
             List[Cuota]: Lista de cuotas creadas
         """
         cuotas_creadas = []
-        
+
         for cuota_detalle in tabla.cuotas:
             cuota = Cuota(
                 prestamo_id=prestamo_id,
@@ -338,16 +336,14 @@ class AmortizacionService:
 
     @staticmethod
     def obtener_cuotas_prestamo(
-        db: Session,
-        prestamo_id: int,
-        estado: Optional[str] = None
+        db: Session, prestamo_id: int, estado: Optional[str] = None
     ) -> List[Cuota]:
         """Obtiene las cuotas de un préstamo"""
         query = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id)
-        
+
         if estado:
             query = query.filter(Cuota.estado == estado)
-            
+
         return query.order_by(Cuota.numero_cuota).all()
 
     @staticmethod
@@ -359,13 +355,13 @@ class AmortizacionService:
     ) -> dict:
         """
         Recalcula la mora de todas las cuotas vencidas
-        
+
         Args:
             db: Sesión de base de datos
             prestamo_id: ID del préstamo
             tasa_mora_diaria: Tasa de mora diaria (%)
             fecha_calculo: Fecha para el cálculo
-            
+
         Returns:
             dict: Resumen del recálculo
         """

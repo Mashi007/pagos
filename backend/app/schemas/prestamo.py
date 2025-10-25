@@ -20,9 +20,7 @@ class PrestamoBase(BaseModel):
     monto_total: Decimal = Field(..., ge=0, description="Monto total del préstamo")
     monto_financiado: Decimal = Field(..., ge=0, description="Monto financiado")
     monto_inicial: Decimal = Field(
-        default=Decimal("0.00"),
-        ge=0,
-        description="Monto inicial pagado"
+        default=Decimal("0.00"), ge=0, description="Monto inicial pagado"
     )
     tasa_interes: Decimal = Field(
         ..., ge=0, le=100, description="Tasa de interés anual (%)"

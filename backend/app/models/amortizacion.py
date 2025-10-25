@@ -4,7 +4,14 @@ Modelo de Amortización - Tabla de cuotas de préstamos
 
 from decimal import Decimal
 from sqlalchemy import (
-    Boolean, Column, ForeignKey, Integer, Numeric, String, Table, Text
+    Boolean,
+    Column,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Table,
+    Text,
 )
 from sqlalchemy.orm import relationship
 
@@ -16,11 +23,14 @@ class Cuota(Base):
     Modelo para las cuotas de un préstamo
     Representa cada pago periódico que debe hacer el cliente
     """
+
     __tablename__ = "cuotas"
 
     # Claves primarias y foráneas
     id = Column(Integer, primary_key=True, index=True)
-    prestamo_id = Column(Integer, ForeignKey("prestamos.id"), nullable=False, index=True)
+    prestamo_id = Column(
+        Integer, ForeignKey("prestamos.id"), nullable=False, index=True
+    )
     numero_cuota = Column(Integer, nullable=False)  # 1, 2, 3, etc.
 
     # Fechas
@@ -71,7 +81,9 @@ class Cuota(Base):
     es_cuota_especial = Column(Boolean, default=False)
 
     def __repr__(self):
-        return f"<Cuota {self.numero_cuota} - Préstamo {self.prestamo_id} - {self.estado}>"
+        return (
+            f"<Cuota {self.numero_cuota} - Préstamo {self.prestamo_id} - {self.estado}>"
+        )
 
     @property
     def total_pendiente(self) -> Decimal:
@@ -82,6 +94,7 @@ class Cuota(Base):
     def esta_vencida(self) -> bool:
         """Verifica si la cuota está vencida"""
         from datetime import date
+
         if self.fecha_vencimiento:
             fecha_venc = date.fromisoformat(self.fecha_vencimiento)
             return fecha_venc < date.today() and self.estado != "PAGADA"
@@ -90,22 +103,23 @@ class Cuota(Base):
     def calcular_mora(self, tasa_mora_diaria: Decimal) -> Decimal:
         """
         Calcula la mora acumulada hasta la fecha actual
-        
+
         Args:
             tasa_mora_diaria: Tasa de mora por día (ej: 0.001 para 0.1% diario)
-            
+
         Returns:
             Monto de mora calculado
         """
         if self.esta_vencida:
             from datetime import date
+
             fecha_venc = date.fromisoformat(self.fecha_vencimiento)
             dias_vencido = (date.today() - fecha_venc).days
-            
+
             # Calcular mora sobre el saldo pendiente
             saldo_mora = self.capital_pendiente + self.interes_pendiente
             mora_calculada = saldo_mora * tasa_mora_diaria * dias_vencido
-            
+
             return mora_calculada
         return Decimal("0.00")
 

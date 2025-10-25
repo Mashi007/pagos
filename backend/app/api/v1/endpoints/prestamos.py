@@ -28,19 +28,18 @@ def crear_prestamo(
     try:
         nuevo_prestamo = Prestamo(**prestamo_data.model_dump())
         nuevo_prestamo.creado_por = current_user.id
-        
+
         db.add(nuevo_prestamo)
         db.commit()
         db.refresh(nuevo_prestamo)
-        
+
         return nuevo_prestamo
-        
+
     except Exception as e:
         db.rollback()
         logger.error(f"Error creando préstamo: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -55,12 +54,11 @@ def listar_prestamos(
     try:
         prestamos = db.query(Prestamo).offset(skip).limit(limit).all()
         return prestamos
-        
+
     except Exception as e:
         logger.error(f"Error listando préstamos: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -73,22 +71,18 @@ def obtener_prestamo(
     # Obtener préstamo específico
     try:
         prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
-        
+
         if not prestamo:
-            raise HTTPException(
-                status_code=404,
-                detail="Préstamo no encontrado"
-            )
-        
+            raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
         return prestamo
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error obteniendo préstamo: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -102,30 +96,26 @@ def actualizar_prestamo(
     # Actualizar préstamo
     try:
         prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
-        
+
         if not prestamo:
-            raise HTTPException(
-                status_code=404,
-                detail="Préstamo no encontrado"
-            )
-        
+            raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
         # Actualizar campos
         for field, value in prestamo_data.model_dump(exclude_unset=True).items():
             setattr(prestamo, field, value)
-        
+
         db.commit()
         db.refresh(prestamo)
-        
+
         return prestamo
-        
+
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         logger.error(f"Error actualizando préstamo: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -138,24 +128,20 @@ def eliminar_prestamo(
     # Eliminar préstamo
     try:
         prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
-        
+
         if not prestamo:
-            raise HTTPException(
-                status_code=404,
-                detail="Préstamo no encontrado"
-            )
-        
+            raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
         db.delete(prestamo)
         db.commit()
-        
+
         return {"message": "Préstamo eliminado exitosamente"}
-        
+
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         logger.error(f"Error eliminando préstamo: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )

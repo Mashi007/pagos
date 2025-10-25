@@ -10,5 +10,4 @@
 # marcar_conciliado(self, usuario_id: int, observaciones: str = None): """Marca como conciliado""" self.estado_match =
 # marcar_rechazado(self, usuario_id: int, motivo: str): """Marca como rechazado""" self.estado_match = "RECHAZADO"
 
-"""
-"""
+""" """

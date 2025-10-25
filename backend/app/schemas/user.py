@@ -1,4 +1,5 @@
 from datetime import date
+
 # backend/app/schemas/user.py
 """
 Schemas de usuario simplificado.
@@ -25,11 +26,13 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     """Schema para crear usuario."""
+
     password: str = Field(..., min_length=8)
 
 
 class UserUpdate(BaseModel):
     """Schema para actualizar usuario."""
+
     email: Optional[EmailStr] = None
     nombre: Optional[str] = Field(None, min_length=1, max_length=100)
     apellido: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -51,6 +54,7 @@ class UserUpdate(BaseModel):
                 raise ValueError("La contraseña debe tener al menos 8 caracteres")
         return v
 
+
 # ============================================
 # SCHEMAS DE RESPUESTA
 # ============================================
@@ -58,6 +62,7 @@ class UserUpdate(BaseModel):
 
 class UserResponse(UserBase):
     """Schema de respuesta de usuario."""
+
     id: int
 
     model_config = ConfigDict(from_attributes=True)
@@ -74,6 +79,7 @@ class UserListResponse(BaseModel):
     page: int
     page_size: int
 
+
 # ============================================
 # SCHEMAS DE AUTENTICACIÓN
 # ============================================
@@ -81,6 +87,7 @@ class UserListResponse(BaseModel):
 
 class LoginRequest(BaseModel):
     """Schema para login."""
+
     email: EmailStr
     password: str
     remember_me: bool = Field(default=False)
@@ -88,6 +95,7 @@ class LoginRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     """Schema de respuesta de login."""
+
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
@@ -95,6 +103,7 @@ class LoginResponse(BaseModel):
 
 class UserMeResponse(UserResponse):
     """Schema para respuesta de usuario actual (/me endpoint)."""
+
     permissions: list[str] = Field(default_factory=list)
 
     @property
@@ -105,6 +114,7 @@ class UserMeResponse(UserResponse):
 
 class TokenPayload(BaseModel):
     """Schema del payload del token JWT."""
+
     sub: str  # email del usuario
     is_admin: bool  # Cambio clave: rol → is_admin
     exp: int

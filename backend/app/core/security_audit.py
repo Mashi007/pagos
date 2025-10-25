@@ -13,6 +13,7 @@ security_audit_logger = logging.getLogger("security_audit")
 
 class SecurityEventType(Enum):
     """Tipos de eventos de seguridad"""
+
     LOGIN_SUCCESS = "LOGIN_SUCCESS"
     LOGIN_FAILED = "LOGIN_FAILED"
     LOGOUT = "LOGOUT"
@@ -36,7 +37,7 @@ def log_security_event(
 ):
     """
     Registra un evento de seguridad
-    
+
     Args:
         event_type: Tipo de evento de seguridad
         user_email: Email del usuario (si aplica)
@@ -53,7 +54,7 @@ def log_security_event(
         "success": success,
         "details": details or {},
     }
-    
+
     # Nivel de log según tipo de evento
     if not success or event_type in [
         SecurityEventType.LOGIN_FAILED,
@@ -67,10 +68,7 @@ def log_security_event(
 
 
 def log_login_attempt(
-    email: str,
-    ip_address: str,
-    success: bool,
-    reason: Optional[str] = None
+    email: str, ip_address: str, success: bool, reason: Optional[str] = None
 ):
     """Registra un intento de login"""
     log_security_event(
@@ -82,12 +80,7 @@ def log_login_attempt(
     )
 
 
-def log_password_change(
-    user_email: str,
-    user_id: int,
-    ip_address: str,
-    success: bool
-):
+def log_password_change(user_email: str, user_id: int, ip_address: str, success: bool):
     """Registra un cambio de contraseña"""
     log_security_event(
         SecurityEventType.PASSWORD_CHANGE,
@@ -99,20 +92,14 @@ def log_password_change(
 
 
 def log_unauthorized_access(
-    endpoint: str,
-    user_email: Optional[str],
-    ip_address: str,
-    reason: str
+    endpoint: str, user_email: Optional[str], ip_address: str, reason: str
 ):
     """Registra un intento de acceso no autorizado"""
     log_security_event(
         SecurityEventType.UNAUTHORIZED_ACCESS,
         user_email=user_email,
         ip_address=ip_address,
-        details={
-            "endpoint": endpoint,
-            "reason": reason
-        },
+        details={"endpoint": endpoint, "reason": reason},
         success=False,
     )
 
@@ -123,7 +110,7 @@ def log_data_modification(
     resource: str,
     resource_id: int,
     action: str,
-    ip_address: str
+    ip_address: str,
 ):
     """Registra una modificación de datos"""
     log_security_event(

@@ -1,4 +1,5 @@
 from datetime import date
+
 # backend/app/schemas/cliente.py
 
 from decimal import Decimal
@@ -28,7 +29,7 @@ class ClienteBase(BaseModel):
         ...,
         min_length=MIN_CEDULA_LENGTH,
         max_length=MAX_CEDULA_LENGTH,
-        description="Cédula del cliente"
+        description="Cédula del cliente",
     )
     nombres: str = Field(
         ...,
@@ -40,40 +41,31 @@ class ClienteBase(BaseModel):
         ...,
         min_length=MIN_PHONE_LENGTH,
         max_length=MAX_PHONE_LENGTH,
-        description="Teléfono del cliente"
+        description="Teléfono del cliente",
     )
     email: EmailStr = Field(..., description="Validado por validadores")
     direccion: str = Field(
         ...,
         min_length=MIN_ADDRESS_LENGTH,
         max_length=MAX_ADDRESS_LENGTH,
-        description="Dirección del cliente"
+        description="Dirección del cliente",
     )
     fecha_nacimiento: date = Field(..., description="Validado por validadores")
     ocupacion: str = Field(
         ...,
         min_length=MIN_NAME_LENGTH,
         max_length=MAX_NAME_LENGTH,
-        description="Ocupación del cliente"
+        description="Ocupación del cliente",
     )
 
     modelo_vehiculo: str = Field(
-        ...,
-        min_length=1,
-        max_length=100,
-        description="Modelo del vehículo"
+        ..., min_length=1, max_length=100, description="Modelo del vehículo"
     )
     concesionario: str = Field(
-        ...,
-        min_length=1,
-        max_length=100,
-        description="Concesionario"
+        ..., min_length=1, max_length=100, description="Concesionario"
     )
     analista: str = Field(
-        ...,
-        min_length=1,
-        max_length=100,
-        description="Analista asignado"
+        ..., min_length=1, max_length=100, description="Analista asignado"
     )
 
     # Estado - OBLIGATORIO
@@ -85,9 +77,7 @@ class ClienteBase(BaseModel):
 
     # Notas - OPCIONAL
     notas: Optional[str] = Field(
-        None,
-        max_length=MAX_NOTES_LENGTH,
-        description="Notas adicionales"
+        None, max_length=MAX_NOTES_LENGTH, description="Notas adicionales"
     )
 
     @classmethod
@@ -119,24 +109,16 @@ class ClienteBase(BaseModel):
 
 
 class ClienteCreate(ClienteBase):
-    confirm_duplicate: bool = Field(
-        False,
-        description="Confirmar si es duplicado"
-    )
+    confirm_duplicate: bool = Field(False, description="Confirmar si es duplicado")
 
 
 class ClienteCreateWithConfirmation(BaseModel):
     """Schema para crear cliente con confirmación de duplicado"""
 
     cliente_data: ClienteCreate
-    confirmacion: bool = Field(
-        False,
-        description="Confirmación de duplicado"
-    )
+    confirmacion: bool = Field(False, description="Confirmación de duplicado")
     comentarios: Optional[str] = Field(
-        None,
-        max_length=MAX_COMMENTS_LENGTH,
-        description="Comentarios adicionales"
+        None, max_length=MAX_COMMENTS_LENGTH, description="Comentarios adicionales"
     )
 
 
@@ -145,9 +127,7 @@ class ClienteUpdate(BaseModel):
     cedula: Optional[str] = Field(None, min_length=8, max_length=20)
     nombres: Optional[str] = Field(None, min_length=2, max_length=100)
     telefono: Optional[str] = Field(
-        None,
-        min_length=MIN_PHONE_LENGTH,
-        max_length=MAX_PHONE_LENGTH
+        None, min_length=MIN_PHONE_LENGTH, max_length=MAX_PHONE_LENGTH
     )
     email: Optional[EmailStr] = None
     direccion: Optional[str] = Field(None, min_length=5, max_length=500)
@@ -159,10 +139,7 @@ class ClienteUpdate(BaseModel):
     analista: Optional[str] = Field(None, min_length=1, max_length=100)
 
     # Estado
-    estado: Optional[str] = Field(
-        None, 
-        pattern="^(ACTIVO|INACTIVO|FINALIZADO)$"
-    )
+    estado: Optional[str] = Field(None, pattern="^(ACTIVO|INACTIVO|FINALIZADO)$")
     activo: Optional[bool] = None
 
     # Notas
@@ -214,15 +191,9 @@ class ClienteList(BaseModel):
 class ClienteSearchFilters(BaseModel):
 
     # Búsqueda de texto
-    search_text: Optional[str] = Field(
-        None,
-        description="Texto de búsqueda"
-    )
+    search_text: Optional[str] = Field(None, description="Texto de búsqueda")
 
-    estado: Optional[str] = Field(
-        None, 
-        pattern="^(ACTIVO|INACTIVO|FINALIZADO)$"
-    )
+    estado: Optional[str] = Field(None, pattern="^(ACTIVO|INACTIVO|FINALIZADO)$")
     activo: Optional[bool] = None
     analista: Optional[str] = None
     concesionario: Optional[str] = None
@@ -232,14 +203,8 @@ class ClienteSearchFilters(BaseModel):
     fecha_registro_hasta: Optional[date] = None
 
     # Ordenamiento
-    order_by: Optional[str] = Field(
-        None,
-        description="Campo por el cual ordenar"
-    )
-    order_direction: Optional[str] = Field(
-        "asc", 
-        pattern="^(asc|desc)$"
-    )
+    order_by: Optional[str] = Field(None, description="Campo por el cual ordenar")
+    order_direction: Optional[str] = Field("asc", pattern="^(asc|desc)$")
 
 
 class ClienteDetallado(ClienteResponse):
@@ -256,26 +221,13 @@ class ClienteDetallado(ClienteResponse):
 class ClienteCreateWithLoan(ClienteBase):
     """Schema para crear cliente con préstamo automático"""
 
-
-    total_financiamiento: Decimal = Field(
-        ...,
-        description="Total del financiamiento"
-    )
+    total_financiamiento: Decimal = Field(..., description="Total del financiamiento")
     cuota_inicial: Decimal = Field(default=Decimal("0.00"), ge=0)
-    fecha_entrega: date = Field(
-        ...,
-        description="Fecha de entrega del vehículo"
-    )
+    fecha_entrega: date = Field(..., description="Fecha de entrega del vehículo")
     numero_amortizaciones: int = Field(
-        ...,
-        ge=1,
-        le=MAX_AMORTIZACIONES,
-        description="Número de amortizaciones"
+        ..., ge=1, le=MAX_AMORTIZACIONES, description="Número de amortizaciones"
     )
-    modalidad_pago: str = Field(
-        ..., 
-        pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$"
-    )
+    modalidad_pago: str = Field(..., pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$")
 
     # Configuración del préstamo
     tasa_interes_anual: Optional[Decimal] = Field(
@@ -285,8 +237,7 @@ class ClienteCreateWithLoan(ClienteBase):
         description="Tasa de interés anual (%)",
     )
     generar_tabla_automatica: bool = Field(
-        True,
-        description="Generar tabla de amortización automáticamente"
+        True, description="Generar tabla de amortización automáticamente"
     )
 
 

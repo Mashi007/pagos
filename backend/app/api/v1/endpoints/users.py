@@ -20,13 +20,13 @@ def verificar_rol_administracion(db: Session = Depends(get_db)):
     # Verificar estado del rol de administración en el sistema
     try:
         admin = db.query(User).filter(User.is_admin == True).first()
-        
+
         if not admin:
             return {
                 "tiene_admin": False,
-                "mensaje": "No hay administradores en el sistema"
+                "mensaje": "No hay administradores en el sistema",
             }
-        
+
         return {
             "tiene_admin": True,
             "admin_info": {
@@ -38,15 +38,12 @@ def verificar_rol_administracion(db: Session = Depends(get_db)):
                 "fecha_creacion": admin.created_at,
                 "ultimo_login": getattr(admin, "last_login", None),
             },
-            "mensaje": "Sistema tiene administrador"
+            "mensaje": "Sistema tiene administrador",
         }
-        
+
     except Exception as e:
         logger.error(f"Error verificando administrador: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor"
-        )
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
 @router.post(
@@ -63,8 +60,7 @@ def create_user(
     # Crear un nuevo usuario (solo ADMIN)
     if not current_user.is_admin:
         raise HTTPException(
-            status_code=403,
-            detail="Solo administradores pueden crear usuarios"
+            status_code=403, detail="Solo administradores pueden crear usuarios"
         )
     # - email: Email único del usuario
     # - nombre: Nombre del usuario
@@ -73,25 +69,20 @@ def create_user(
     # - rol: Rol del usuario (ADMIN/USER)
     # - password: Contraseña (mínimo 8 caracteres)
     # - is_active: Si el usuario está activo
-    
+
     # Verificar que el email no exista
-    existing_user = (
-        db.query(User).filter(User.email == user_data.email).first()
-    )
+    existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El email ya está registrado",
         )
-    
+
     # Validar fortaleza de contraseña
     is_valid, message = validate_password_strength(user_data.password)
     if not is_valid:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=message
-        )
-    
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
     # Crear usuario
     new_user = User(
         email=user_data.email,
@@ -102,11 +93,11 @@ def create_user(
         hashed_password=get_password_hash(user_data.password),
         activo=user_data.activo,
     )
-    
+
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    
+
     return new_user
 
 
@@ -122,28 +113,19 @@ def list_users(
         # Solo admins pueden ver todos los usuarios
         if not current_user.is_admin:
             raise HTTPException(
-                status_code=403,
-                detail="Solo administradores pueden listar usuarios"
+                status_code=403, detail="Solo administradores pueden listar usuarios"
             )
-        
+
         users = db.query(User).offset(skip).limit(limit).all()
         total = db.query(User).count()
-        
-        return UserListResponse(
-            users=users,
-            total=total,
-            skip=skip,
-            limit=limit
-        )
-        
+
+        return UserListResponse(users=users, total=total, skip=skip, limit=limit)
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error listando usuarios: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor"
-        )
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
 @router.get("/{user_id}", response_model=UserResponse)
@@ -155,30 +137,23 @@ def get_user(
     # Obtener usuario específico
     try:
         user = db.query(User).filter(User.id == user_id).first()
-        
+
         if not user:
-            raise HTTPException(
-                status_code=404,
-                detail="Usuario no encontrado"
-            )
-        
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
         # Solo admins pueden ver otros usuarios, o el usuario puede verse a sí mismo
         if not current_user.is_admin and current_user.id != user_id:
             raise HTTPException(
-                status_code=403,
-                detail="No tienes permisos para ver este usuario"
+                status_code=403, detail="No tienes permisos para ver este usuario"
             )
-        
+
         return user
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error obteniendo usuario: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor"
-        )
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
 @router.put("/{user_id}", response_model=UserResponse)
@@ -191,20 +166,17 @@ def update_user(
     # Actualizar usuario
     try:
         user = db.query(User).filter(User.id == user_id).first()
-        
+
         if not user:
-            raise HTTPException(
-                status_code=404,
-                detail="Usuario no encontrado"
-            )
-        
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
         # Solo admins pueden actualizar otros usuarios, o el usuario puede actualizarse a sí mismo
         if not current_user.is_admin and current_user.id != user_id:
             raise HTTPException(
                 status_code=403,
-                detail="No tienes permisos para actualizar este usuario"
+                detail="No tienes permisos para actualizar este usuario",
             )
-        
+
         # Actualizar campos
         for field, value in user_data.model_dump(exclude_unset=True).items():
             if field == "password" and value:
@@ -212,27 +184,23 @@ def update_user(
                 is_valid, message = validate_password_strength(value)
                 if not is_valid:
                     raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=message
+                        status_code=status.HTTP_400_BAD_REQUEST, detail=message
                     )
                 setattr(user, "hashed_password", get_password_hash(value))
             else:
                 setattr(user, field, value)
-        
+
         db.commit()
         db.refresh(user)
-        
+
         return user
-        
+
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         logger.error(f"Error actualizando usuario: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor"
-        )
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
 @router.delete("/{user_id}")
@@ -244,38 +212,31 @@ def delete_user(
     # Eliminar usuario (solo ADMIN)
     if not current_user.is_admin:
         raise HTTPException(
-            status_code=403,
-            detail="Solo administradores pueden eliminar usuarios"
+            status_code=403, detail="Solo administradores pueden eliminar usuarios"
         )
     try:
         user = db.query(User).filter(User.id == user_id).first()
-        
+
         if not user:
-            raise HTTPException(
-                status_code=404,
-                detail="Usuario no encontrado"
-            )
-        
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
         # No permitir eliminar el último admin
         if user.is_admin:
             admin_count = db.query(User).filter(User.is_admin == True).count()
             if admin_count <= 1:
                 raise HTTPException(
                     status_code=400,
-                    detail="No se puede eliminar el último administrador"
+                    detail="No se puede eliminar el último administrador",
                 )
-        
+
         db.delete(user)
         db.commit()
-        
+
         return {"message": "Usuario eliminado exitosamente"}
-        
+
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         logger.error(f"Error eliminando usuario: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor"
-        )
+        raise HTTPException(status_code=500, detail="Error interno del servidor")

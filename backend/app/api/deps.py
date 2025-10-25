@@ -73,15 +73,13 @@ def get_current_user(
     if user is None:
         logger.error(f"Usuario no encontrado en BD - ID: {user_id}")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuario no encontrado"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado"
         )
 
     if not user.is_active:
         logger.warning(f"Usuario inactivo - Email: {user.email}")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuario inactivo"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario inactivo"
         )
 
     return user
@@ -104,8 +102,7 @@ def get_current_active_user(
     """
     if not current_user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuario inactivo"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario inactivo"
         )
     return current_user
 
@@ -139,13 +136,14 @@ def require_permission(permission: Permission):
     Returns:
         Función de dependencia
     """
+
     def permission_dependency(
         current_user: User = Depends(get_current_user_with_permissions),
     ):
         if permission not in current_user.permissions:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permiso requerido: {permission.value}"
+                detail=f"Permiso requerido: {permission.value}",
             )
         return current_user
 
@@ -154,7 +152,9 @@ def require_permission(permission: Permission):
 
 def get_optional_current_user(
     db: Session = Depends(get_db),
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(
+        HTTPBearer(auto_error=False)
+    ),
 ):
     """
     Obtiene el usuario actual si está autenticado, sino retorna None

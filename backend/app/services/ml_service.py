@@ -32,8 +32,8 @@ class MLService:
             # Cargar modelo de riesgo
             risk_model_path = self.model_path / "risk_model.pkl"
             if risk_model_path.exists():
-                with open(risk_model_path, 'rb') as f:
-                    self.models['risk_model'] = pickle.load(f)
+                with open(risk_model_path, "rb") as f:
+                    self.models["risk_model"] = pickle.load(f)
                 logger.info("Modelo de riesgo cargado exitosamente")
             else:
                 logger.warning("Modelo de riesgo no encontrado")
@@ -41,8 +41,8 @@ class MLService:
             # Cargar scaler de riesgo
             risk_scaler_path = self.model_path / "risk_scaler.pkl"
             if risk_scaler_path.exists():
-                with open(risk_scaler_path, 'rb') as f:
-                    self.scalers['risk_scaler'] = pickle.load(f)
+                with open(risk_scaler_path, "rb") as f:
+                    self.scalers["risk_scaler"] = pickle.load(f)
                 logger.info("Scaler de riesgo cargado exitosamente")
             else:
                 logger.warning("Scaler de riesgo no encontrado")
@@ -64,36 +64,44 @@ class MLService:
             Dict con predicción de riesgo
         """
         try:
-            if 'risk_model' not in self.models:
+            if "risk_model" not in self.models:
                 return {
                     "risk_level": "Desconocido",
                     "confidence": 0.0,
-                    "recommendation": "Modelo no disponible"
+                    "recommendation": "Modelo no disponible",
                 }
 
             # Preparar características
-            features = np.array([[
-                client_data.get('age', 0),
-                client_data.get('income', 0),
-                client_data.get('debt_ratio', 0),
-                client_data.get('credit_score', 0)
-            ]])
+            features = np.array(
+                [
+                    [
+                        client_data.get("age", 0),
+                        client_data.get("income", 0),
+                        client_data.get("debt_ratio", 0),
+                        client_data.get("credit_score", 0),
+                    ]
+                ]
+            )
 
             # Escalar características
-            if 'risk_scaler' in self.scalers:
-                scaler = self.scalers['risk_scaler']
+            if "risk_scaler" in self.scalers:
+                scaler = self.scalers["risk_scaler"]
                 features_scaled = scaler.transform(features)
             else:
                 features_scaled = features
 
             # Predecir
-            model = self.models['risk_model']
+            model = self.models["risk_model"]
             prediction = model.predict(features_scaled)[0]
             probability = model.predict_proba(features_scaled)[0]
 
             # Mapear predicción a nivel de riesgo
-            risk_levels = ['Bajo', 'Medio', 'Alto']
-            risk_level = risk_levels[prediction] if prediction < len(risk_levels) else 'Desconocido'
+            risk_levels = ["Bajo", "Medio", "Alto"]
+            risk_level = (
+                risk_levels[prediction]
+                if prediction < len(risk_levels)
+                else "Desconocido"
+            )
 
             # Obtener confianza (probabilidad máxima)
             confidence = float(np.max(probability))
@@ -106,11 +114,11 @@ class MLService:
                 "confidence": confidence,
                 "recommendation": recommendation,
                 "features_used": {
-                    "age": client_data.get('age', 0),
-                    "income": client_data.get('income', 0),
-                    "debt_ratio": client_data.get('debt_ratio', 0),
-                    "credit_score": client_data.get('credit_score', 0)
-                }
+                    "age": client_data.get("age", 0),
+                    "income": client_data.get("income", 0),
+                    "debt_ratio": client_data.get("debt_ratio", 0),
+                    "credit_score": client_data.get("credit_score", 0),
+                },
             }
 
         except Exception as e:
@@ -118,7 +126,7 @@ class MLService:
             return {
                 "risk_level": "Error",
                 "confidence": 0.0,
-                "recommendation": f"Error en predicción: {str(e)}"
+                "recommendation": f"Error en predicción: {str(e)}",
             }
 
     def _get_risk_recommendation(self, risk_level: str) -> str:
@@ -128,7 +136,7 @@ class MLService:
             "Medio": "Aprobar préstamo con condiciones revisadas.",
             "Alto": "Revisar caso manualmente antes de aprobar.",
             "Desconocido": "Revisar caso manualmente.",
-            "Error": "Error en análisis, revisar manualmente."
+            "Error": "Error en análisis, revisar manualmente.",
         }
         return recommendations.get(risk_level, "Revisar caso manualmente.")
 
@@ -144,7 +152,7 @@ class MLService:
             "scalers_loaded": len(self.scalers),
             "available_models": list(self.models.keys()),
             "available_scalers": list(self.scalers.keys()),
-            "model_path": str(self.model_path)
+            "model_path": str(self.model_path),
         }
 
     def train_risk_model(self, training_data: list) -> bool:
@@ -175,17 +183,17 @@ class MLService:
         """
         try:
             # Guardar modelo de riesgo
-            if 'risk_model' in self.models:
+            if "risk_model" in self.models:
                 risk_model_path = self.model_path / "risk_model.pkl"
-                with open(risk_model_path, 'wb') as f:
-                    pickle.dump(self.models['risk_model'], f)
+                with open(risk_model_path, "wb") as f:
+                    pickle.dump(self.models["risk_model"], f)
                 logger.info("Modelo de riesgo guardado")
 
             # Guardar scaler de riesgo
-            if 'risk_scaler' in self.scalers:
+            if "risk_scaler" in self.scalers:
                 risk_scaler_path = self.model_path / "risk_scaler.pkl"
-                with open(risk_scaler_path, 'wb') as f:
-                    pickle.dump(self.scalers['risk_scaler'], f)
+                with open(risk_scaler_path, "wb") as f:
+                    pickle.dump(self.scalers["risk_scaler"], f)
                 logger.info("Scaler de riesgo guardado")
 
             return True

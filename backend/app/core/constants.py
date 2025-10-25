@@ -44,6 +44,7 @@ class TipoPrestamo(str, Enum):
 
 class FrecuenciaPago(str, Enum):
     """Frecuencia de pago"""
+
     SEMANAL = "SEMANAL"
     QUINCENAL = "QUINCENAL"
     MENSUAL = "MENSUAL"
@@ -84,6 +85,7 @@ class TipoPago(str, Enum):
     CHEQUE = "CHEQUE"
     TARJETA = "TARJETA"
 
+
 # ✅ AGREGADAS LAS CLASES FALTANTES
 
 
@@ -110,6 +112,7 @@ class EstadoConciliacion(str, Enum):
     CONCILIADO = "CONCILIADO"
     DESCUADRADO = "DESCUADRADO"
     REVISADO = "REVISADO"
+
 
 # Constantes de valores por defecto
 DEFAULT_INTEREST_RATE = 0.02  # 2% mensual

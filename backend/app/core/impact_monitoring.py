@@ -10,7 +10,4 @@ logger = logging.getLogger(__name__)
 
 def monitor_impact() -> Dict[str, Any]:
     """Monitorear impacto del sistema"""
-    return {
-        "status": "monitoring",
-        "impact_level": "normal"
-    }
+    return {"status": "monitoring", "impact_level": "normal"}

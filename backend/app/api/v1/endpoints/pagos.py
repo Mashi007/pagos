@@ -23,9 +23,7 @@ MAX_FILE_SIZE_MB = 5
 MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024
 
 
-@router.post(
-    "/crear", response_model=PagoResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/crear", response_model=PagoResponse, status_code=status.HTTP_201_CREATED)
 async def crear_pago(
     pago_data: PagoCreate,
     db: Session = Depends(get_db),
@@ -64,12 +62,11 @@ def listar_pagos(
     try:
         pagos = db.query(Pago).offset(skip).limit(limit).all()
         return pagos
-        
+
     except Exception as e:
         logger.error(f"Error listando pagos: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -82,22 +79,18 @@ def obtener_pago(
     # Obtener pago específico
     try:
         pago = db.query(Pago).filter(Pago.id == pago_id).first()
-        
+
         if not pago:
-            raise HTTPException(
-                status_code=404,
-                detail="Pago no encontrado"
-            )
-        
+            raise HTTPException(status_code=404, detail="Pago no encontrado")
+
         return pago
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error obteniendo pago: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -111,30 +104,26 @@ def actualizar_pago(
     # Actualizar pago
     try:
         pago = db.query(Pago).filter(Pago.id == pago_id).first()
-        
+
         if not pago:
-            raise HTTPException(
-                status_code=404,
-                detail="Pago no encontrado"
-            )
-        
+            raise HTTPException(status_code=404, detail="Pago no encontrado")
+
         # Actualizar campos
         for field, value in pago_data.model_dump(exclude_unset=True).items():
             setattr(pago, field, value)
-        
+
         db.commit()
         db.refresh(pago)
-        
+
         return pago
-        
+
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         logger.error(f"Error actualizando pago: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -147,26 +136,22 @@ def eliminar_pago(
     # Eliminar pago
     try:
         pago = db.query(Pago).filter(Pago.id == pago_id).first()
-        
+
         if not pago:
-            raise HTTPException(
-                status_code=404,
-                detail="Pago no encontrado"
-            )
-        
+            raise HTTPException(status_code=404, detail="Pago no encontrado")
+
         db.delete(pago)
         db.commit()
-        
+
         return {"message": "Pago eliminado exitosamente"}
-        
+
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         logger.error(f"Error eliminando pago: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -183,20 +168,20 @@ async def subir_documento(
         if file_extension not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400,
-                detail=f"Tipo de archivo no permitido. Solo se permiten: {', '.join(ALLOWED_EXTENSIONS)}"
+                detail=f"Tipo de archivo no permitido. Solo se permiten: {', '.join(ALLOWED_EXTENSIONS)}",
             )
 
         # Validar tamaño
         if file.size > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=400,
-                detail=f"Archivo demasiado grande. Máximo: {MAX_FILE_SIZE / 1024 / 1024:.1f}MB"
+                detail=f"Archivo demasiado grande. Máximo: {MAX_FILE_SIZE / 1024 / 1024:.1f}MB",
             )
 
         # Generar nombre único
         file_id = str(uuid.uuid4())
         filename = f"{file_id}{file_extension}"
-        
+
         # Guardar archivo
         file_path = UPLOAD_DIR / filename
         with open(file_path, "wb") as buffer:
@@ -207,14 +192,11 @@ async def subir_documento(
             "message": "Archivo subido exitosamente",
             "file_id": file_id,
             "filename": filename,
-            "size": len(content)
+            "size": len(content),
         }
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error subiendo archivo: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor"
-        )
+        raise HTTPException(status_code=500, detail="Error interno del servidor")

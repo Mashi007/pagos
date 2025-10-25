@@ -23,16 +23,15 @@ def analyze_tokens(
             "total_tokens": 100,
             "active_tokens": 50,
             "expired_tokens": 50,
-            "last_analysis": "2024-01-01T00:00:00Z"
+            "last_analysis": "2024-01-01T00:00:00Z",
         }
-        
+
         return analysis
-        
+
     except Exception as e:
         logger.error(f"Error analizando tokens: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -44,10 +43,9 @@ def cleanup_tokens(
     # Limpiar tokens expirados
     try:
         return {"message": "Limpieza de tokens completada"}
-        
+
     except Exception as e:
         logger.error(f"Error limpiando tokens: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )

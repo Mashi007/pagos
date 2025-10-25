@@ -1,7 +1,6 @@
 # Archivo corregido - Contenido básico funcional
 
 import logging
-from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
@@ -22,14 +21,13 @@ def get_alerts_system(
         system = {
             "status": "ACTIVE",
             "total_alerts": 0,
-            "last_update": "2024-01-01T00:00:00Z"
+            "last_update": "2024-01-01T00:00:00Z",
         }
-        
+
         return system
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo sistema de alertas: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )

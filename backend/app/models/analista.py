@@ -12,6 +12,7 @@ class Analista(Base):
     Modelo para analistas del sistema
     Representa a los analistas que pueden gestionar clientes y préstamos
     """
+
     __tablename__ = "analistas"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -30,8 +31,4 @@ class Analista(Base):
 
     def to_dict(self):
         """Convierte el analista a diccionario"""
-        return {
-            "id": self.id,
-            "nombre": self.nombre,
-            "activo": self.activo
-        }
+        return {"id": self.id, "nombre": self.nombre, "activo": self.activo}

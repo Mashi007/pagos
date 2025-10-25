@@ -1,7 +1,6 @@
 # Archivo corregido - Contenido básico funcional
 
 import logging
-from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
@@ -22,14 +21,13 @@ def get_intermittent_failure_analysis(
         analysis = {
             "status": "READY",
             "total_failures": 0,
-            "last_analysis": "2024-01-01T00:00:00Z"
+            "last_analysis": "2024-01-01T00:00:00Z",
         }
-        
+
         return analysis
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo análisis de fallos intermitentes: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )

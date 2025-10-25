@@ -4,9 +4,7 @@ Modelo de Notificación
 
 from datetime import datetime
 from enum import Enum
-from sqlalchemy import (
-    Boolean, Column, DateTime, ForeignKey, Integer, String, Text
-)
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -15,6 +13,7 @@ from app.db.session import Base
 
 class TipoNotificacion(str, Enum):
     """Tipos de notificación disponibles"""
+
     EMAIL = "EMAIL"
     SMS = "SMS"
     WHATSAPP = "WHATSAPP"
@@ -23,6 +22,7 @@ class TipoNotificacion(str, Enum):
 
 class EstadoNotificacion(str, Enum):
     """Estados posibles de una notificación"""
+
     PENDIENTE = "PENDIENTE"
     ENVIADA = "ENVIADA"
     FALLIDA = "FALLIDA"
@@ -34,29 +34,30 @@ class Notificacion(Base):
     Modelo para notificaciones del sistema
     Maneja el envío de notificaciones por diferentes canales
     """
+
     __tablename__ = "notificaciones"
 
     id = Column(Integer, primary_key=True, index=True)
-    
+
     # Destinatario
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    
+
     # Contenido
     tipo = Column(String(20), nullable=False, index=True)  # EMAIL, SMS, WHATSAPP
     mensaje = Column(Text, nullable=False)
-    
+
     # Estado y control
     estado = Column(String(20), nullable=False, default="PENDIENTE", index=True)
     programada_para = Column(DateTime, nullable=True, index=True)
     enviada_en = Column(DateTime, nullable=True)
     leida = Column(Boolean, default=False, nullable=False)
-    
+
     # Reintentos y errores
     intentos = Column(Integer, default=0, nullable=False)
     respuesta_servicio = Column(Text, nullable=True)
     error_mensaje = Column(Text, nullable=True)
-    
+
     # Timestamps
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
@@ -105,11 +106,7 @@ class Notificacion(Base):
 
     @classmethod
     def crear_recordatorio_pago(
-        cls,
-        cliente_id: int,
-        tipo: str,
-        mensaje: str,
-        programada_para: datetime = None
+        cls, cliente_id: int, tipo: str, mensaje: str, programada_para: datetime = None
     ):
         """
         Helper para crear notificaciones de recordatorio de pago
@@ -127,7 +124,7 @@ class Notificacion(Base):
             cliente_id=cliente_id,
             tipo=tipo,
             mensaje=mensaje,
-            programada_para=programada_para or datetime.utcnow()
+            programada_para=programada_para or datetime.utcnow(),
         )
 
     def to_dict(self):
@@ -139,11 +136,13 @@ class Notificacion(Base):
             "tipo": self.tipo,
             "mensaje": self.mensaje,
             "estado": self.estado,
-            "programada_para": self.programada_para.isoformat() if self.programada_para else None,
+            "programada_para": (
+                self.programada_para.isoformat() if self.programada_para else None
+            ),
             "enviada_en": self.enviada_en.isoformat() if self.enviada_en else None,
             "leida": self.leida,
             "intentos": self.intentos,
             "respuesta_servicio": self.respuesta_servicio,
             "error_mensaje": self.error_mensaje,
-            "created_at": self.created_at.isoformat() if self.created_at else None
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }

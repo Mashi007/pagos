@@ -26,10 +26,7 @@ class WhatsAppService:
             logger.warning("Credenciales de Meta Developers no configuradas")
 
     async def send_message(
-        self,
-        to_number: str,
-        message: str,
-        template_name: Optional[str] = None
+        self, to_number: str, message: str, template_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Enviar mensaje WhatsApp usando Meta Developers API
@@ -46,17 +43,14 @@ class WhatsAppService:
             if not self.access_token or not self.phone_number_id:
                 return {
                     "success": False,
-                    "message": "Credenciales de WhatsApp no configuradas"
+                    "message": "Credenciales de WhatsApp no configuradas",
                 }
 
             # Formatear número
             clean_number = to_number.replace("+", "").replace(" ", "").replace("-", "")
 
             if not clean_number.isdigit():
-                return {
-                    "success": False,
-                    "message": "Número de teléfono inválido"
-                }
+                return {"success": False, "message": "Número de teléfono inválido"}
 
             # URL del endpoint de Meta
             url = f"{self.api_url}/{self.phone_number_id}/messages"
@@ -80,10 +74,10 @@ class WhatsAppService:
                         "components": [
                             {
                                 "type": "body",
-                                "parameters": [{"type": "text", "text": message}]
+                                "parameters": [{"type": "text", "text": message}],
                             }
-                        ]
-                    }
+                        ],
+                    },
                 }
             else:
                 # Mensaje de texto simple
@@ -91,13 +85,13 @@ class WhatsAppService:
                     "messaging_product": "whatsapp",
                     "to": clean_number,
                     "type": "text",
-                    "text": {"body": message}
+                    "text": {"body": message},
                 }
 
             # Enviar mensaje
             async with httpx.AsyncClient() as client:
                 response = await client.post(url, headers=headers, json=payload)
-                
+
                 if response.status_code == 200:
                     result = response.json()
                     logger.info(f"Mensaje WhatsApp enviado exitosamente a: {to_number}")
@@ -105,7 +99,7 @@ class WhatsAppService:
                         "success": True,
                         "message": "Mensaje enviado exitosamente",
                         "message_id": result.get("messages", [{}])[0].get("id"),
-                        "recipient": to_number
+                        "recipient": to_number,
                     }
                 else:
                     error_data = response.json()
@@ -113,7 +107,7 @@ class WhatsAppService:
                     return {
                         "success": False,
                         "message": f"Error de API: {error_data.get('error', {}).get('message', 'Error desconocido')}",
-                        "recipient": to_number
+                        "recipient": to_number,
                     }
 
         except Exception as e:
@@ -121,15 +115,11 @@ class WhatsAppService:
             return {
                 "success": False,
                 "message": f"Error enviando mensaje: {str(e)}",
-                "recipient": to_number
+                "recipient": to_number,
             }
 
     async def send_payment_reminder(
-        self,
-        phone_number: str,
-        client_name: str,
-        loan_amount: float,
-        due_date: str
+        self, phone_number: str, client_name: str, loan_amount: float, due_date: str
     ) -> Dict[str, Any]:
         """
         Enviar recordatorio de pago por WhatsApp
@@ -160,9 +150,7 @@ Equipo de {settings.APP_NAME}
         return await self.send_message(phone_number, message)
 
     async def send_welcome_message(
-        self,
-        phone_number: str,
-        client_name: str
+        self, phone_number: str, client_name: str
     ) -> Dict[str, Any]:
         """
         Enviar mensaje de bienvenida por WhatsApp
@@ -200,7 +188,7 @@ Equipo de {settings.APP_NAME}
             bool: True si es válido
         """
         # Patrón para números de teléfono internacionales
-        pattern = r'^\+?[1-9]\d{1,14}$'
+        pattern = r"^\+?[1-9]\d{1,14}$"
         return bool(re.match(pattern, phone_number))
 
     async def test_connection(self) -> Dict[str, Any]:
@@ -212,10 +200,7 @@ Equipo de {settings.APP_NAME}
         """
         try:
             if not self.access_token or not self.phone_number_id:
-                return {
-                    "success": False,
-                    "message": "Credenciales no configuradas"
-                }
+                return {"success": False, "message": "Credenciales no configuradas"}
 
             # URL para obtener información del número de teléfono
             url = f"{self.api_url}/{self.phone_number_id}"
@@ -226,21 +211,18 @@ Equipo de {settings.APP_NAME}
 
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, headers=headers)
-                
+
                 if response.status_code == 200:
                     return {
                         "success": True,
-                        "message": "Conexión exitosa con Meta Developers API"
+                        "message": "Conexión exitosa con Meta Developers API",
                     }
                 else:
                     return {
                         "success": False,
-                        "message": f"Error de conexión: {response.status_code}"
+                        "message": f"Error de conexión: {response.status_code}",
                     }
 
         except Exception as e:
             logger.error(f"Error probando conexión WhatsApp: {str(e)}")
-            return {
-                "success": False,
-                "message": f"Error de conexión: {str(e)}"
-            }
+            return {"success": False, "message": f"Error de conexión: {str(e)}"}

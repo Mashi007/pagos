@@ -5,7 +5,14 @@ Modelo de Aprobación
 from datetime import date, datetime
 from enum import Enum
 from sqlalchemy import (
-    Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
 )
 
 from app.db.session import Base
@@ -13,6 +20,7 @@ from app.db.session import Base
 
 class EstadoAprobacion(str, Enum):
     """Estados posibles de una aprobación"""
+
     PENDIENTE = "PENDIENTE"
     APROBADA = "APROBADA"
     RECHAZADA = "RECHAZADA"
@@ -21,6 +29,7 @@ class EstadoAprobacion(str, Enum):
 
 class TipoSolicitud(str, Enum):
     """Tipos de solicitud que requieren aprobación"""
+
     PRESTAMO = "PRESTAMO"
     MODIFICACION_MONTO = "MODIFICACION_MONTO"
     ANULACION = "ANULACION"
@@ -30,6 +39,7 @@ class TipoSolicitud(str, Enum):
 
 class Prioridad(str, Enum):
     """Niveles de prioridad para aprobaciones"""
+
     BAJA = "BAJA"
     NORMAL = "NORMAL"
     ALTA = "ALTA"
@@ -41,10 +51,11 @@ class Aprobacion(Base):
     Modelo para solicitudes de aprobación
     Maneja el flujo de aprobaciones para diferentes tipos de solicitudes
     """
+
     __tablename__ = "aprobaciones"
 
     id = Column(Integer, primary_key=True, index=True)
-    
+
     # Usuarios involucrados
     solicitante_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     revisor_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
@@ -53,17 +64,13 @@ class Aprobacion(Base):
     tipo_solicitud = Column(
         String(50), nullable=False, index=True
     )  # PRESTAMO, MODIFICACION_MONTO, ANULACION, etc.
-    entidad = Column(
-        String(50), nullable=False
-    )  # Cliente, Prestamo, Pago, etc.
+    entidad = Column(String(50), nullable=False)  # Cliente, Prestamo, Pago, etc.
     entidad_id = Column(Integer, nullable=False, index=True)
 
     justificacion = Column(Text, nullable=False)
 
     # Estado y resultado
-    estado = Column(
-        String(20), nullable=False, default="PENDIENTE", index=True
-    )
+    estado = Column(String(20), nullable=False, default="PENDIENTE", index=True)
     resultado = Column(Text, nullable=True)  # Comentarios del revisor
     fecha_aprobacion = Column(DateTime, nullable=True)
 
@@ -71,32 +78,34 @@ class Aprobacion(Base):
     fecha_solicitud = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Archivos y evidencia
-    archivo_evidencia = Column(
-        String(255), nullable=True
-    )  # Path del archivo adjunto
+    archivo_evidencia = Column(String(255), nullable=True)  # Path del archivo adjunto
     tipo_archivo = Column(String(50), nullable=True)  # PDF, IMG, DOC, etc.
     tamaño_archivo = Column(Integer, nullable=True)  # Tamaño en bytes
 
     # Configuración de la solicitud
-    prioridad = Column(
-        String(20), default="NORMAL"
-    )  # BAJA, NORMAL, ALTA, URGENTE
+    prioridad = Column(String(20), default="NORMAL")  # BAJA, NORMAL, ALTA, URGENTE
     fecha_limite = Column(Date, nullable=True)  # Fecha límite para respuesta
 
     # Notificaciones
     notificado_admin = Column(Boolean, default=False)  # Si ya se notificó al admin
-    notificado_solicitante = Column(Boolean, default=False)  # Si ya se notificó resultado
+    notificado_solicitante = Column(
+        Boolean, default=False
+    )  # Si ya se notificó resultado
     visto_por_admin = Column(Boolean, default=False)
 
     # Control de bloqueo
-    bloqueado_temporalmente = Column(Boolean, default=False)  # Si está bloqueado el registro
+    bloqueado_temporalmente = Column(
+        Boolean, default=False
+    )  # Si está bloqueado el registro
 
     # Métricas
     tiempo_respuesta_horas = Column(Integer, nullable=True)  # Tiempo que tomó responder
 
     # Auditoría
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
 
     def __repr__(self):
         return f"<Aprobacion(id={self.id}, tipo={self.tipo_solicitud}, estado={self.estado})>"
@@ -154,11 +163,17 @@ class Aprobacion(Base):
             "justificacion": self.justificacion,
             "estado": self.estado,
             "resultado": self.resultado,
-            "fecha_solicitud": self.fecha_solicitud.isoformat() if self.fecha_solicitud else None,
-            "fecha_aprobacion": self.fecha_aprobacion.isoformat() if self.fecha_aprobacion else None,
+            "fecha_solicitud": (
+                self.fecha_solicitud.isoformat() if self.fecha_solicitud else None
+            ),
+            "fecha_aprobacion": (
+                self.fecha_aprobacion.isoformat() if self.fecha_aprobacion else None
+            ),
             "prioridad": self.prioridad,
-            "fecha_limite": self.fecha_limite.isoformat() if self.fecha_limite else None,
+            "fecha_limite": (
+                self.fecha_limite.isoformat() if self.fecha_limite else None
+            ),
             "dias_pendiente": self.dias_pendiente,
             "esta_vencida": self.esta_vencida,
-            "tiempo_respuesta_horas": self.tiempo_respuesta_horas
+            "tiempo_respuesta_horas": self.tiempo_respuesta_horas,
         }

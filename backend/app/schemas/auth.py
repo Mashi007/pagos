@@ -10,6 +10,7 @@ MIN_PASSWORD_LENGTH = 8
 
 class Token(BaseModel):
     """Schema para respuesta de token"""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -17,6 +18,7 @@ class Token(BaseModel):
 
 class LoginResponse(BaseModel):
     """Schema para respuesta de login (tokens + usuario)"""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -25,6 +27,7 @@ class LoginResponse(BaseModel):
 
 class TokenPayload(BaseModel):
     """Schema para el payload del token"""
+
     sub: Optional[str] = None
     exp: Optional[int] = None
     type: Optional[str] = None
@@ -32,6 +35,7 @@ class TokenPayload(BaseModel):
 
 class TokenResponse(BaseModel):
     """Schema para respuesta de token"""
+
     access_token: str = Field(..., description="Token de acceso")
     refresh_token: str = Field(..., description="Token de refresh")
     token_type: str = Field(default="bearer", description="Tipo de token")
@@ -43,7 +47,7 @@ class TokenResponse(BaseModel):
                 "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
                 "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
                 "token_type": "bearer",
-                "expires_in": 1800
+                "expires_in": 1800,
             }
         }
     )
@@ -51,26 +55,26 @@ class TokenResponse(BaseModel):
 
 class LoginRequest(BaseModel):
     """Schema para request de login"""
+
     email: EmailStr = Field(..., description="Email del usuario")
     password: str = Field(..., min_length=6, description="Contraseña del usuario")
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "email": "usuario@ejemplo.com",
-                "password": "contraseña123"
-            }
+            "example": {"email": "usuario@ejemplo.com", "password": "contraseña123"}
         }
     )
 
 
 class RefreshTokenRequest(BaseModel):
     """Schema para refresh token"""
+
     refresh_token: str = Field(..., description="Refresh token")
 
 
 class ChangePasswordRequest(BaseModel):
     """Schema para cambio de contraseña"""
+
     current_password: str = Field(..., description="Contraseña actual")
     new_password: str = Field(..., min_length=6, description="Nueva contraseña")
     confirm_password: str = Field(..., description="Confirmar nueva contraseña")
@@ -80,7 +84,7 @@ class ChangePasswordRequest(BaseModel):
             "example": {
                 "current_password": "contraseña_actual",
                 "new_password": "nueva_contraseña123",
-                "confirm_password": "nueva_contraseña123"
+                "confirm_password": "nueva_contraseña123",
             }
         }
     )
@@ -88,11 +92,13 @@ class ChangePasswordRequest(BaseModel):
 
 class PasswordResetRequest(BaseModel):
     """Schema para solicitud de reset de contraseña"""
+
     email: EmailStr = Field(..., description="Email del usuario")
 
 
 class PasswordResetConfirm(BaseModel):
     """Schema para confirmar reset de contraseña"""
+
     token: str = Field(..., description="Token de reset")
     new_password: str = Field(..., min_length=6, description="Nueva contraseña")
     confirm_password: str = Field(..., description="Confirmar nueva contraseña")
@@ -100,4 +106,5 @@ class PasswordResetConfirm(BaseModel):
 
 class LogoutRequest(BaseModel):
     """Schema para logout (opcional, por si se implementa blacklist)"""
+
     refresh_token: Optional[str] = None

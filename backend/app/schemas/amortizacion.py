@@ -3,6 +3,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional, List
 from pydantic import BaseModel, Field, field_validator
 
+
 class CuotaBase(BaseModel):
     # Schema base para Cuota
     numero_cuota: int = Field(..., gt=0, description="Número de la cuota")
@@ -10,13 +11,20 @@ class CuotaBase(BaseModel):
     monto_cuota: Decimal = Field(..., gt=0, description="Monto total de la cuota")
     monto_capital: Decimal = Field(..., ge=0, description="Monto de capital")
     monto_interes: Decimal = Field(..., ge=0, description="Monto de interés")
-    saldo_capital_inicial: Decimal = Field(..., ge=0, description="Saldo inicial de capital")
-    saldo_capital_final: Decimal = Field(..., ge=0, description="Saldo final de capital")
+    saldo_capital_inicial: Decimal = Field(
+        ..., ge=0, description="Saldo inicial de capital"
+    )
+    saldo_capital_final: Decimal = Field(
+        ..., ge=0, description="Saldo final de capital"
+    )
 
     @field_validator(
-        "monto_cuota", "monto_capital", "monto_interes", 
-        "saldo_capital_inicial", "saldo_capital_final", 
-        mode="before"
+        "monto_cuota",
+        "monto_capital",
+        "monto_interes",
+        "saldo_capital_inicial",
+        "saldo_capital_final",
+        mode="before",
     )
     @classmethod
     def validate_decimal_places(cls, v):
@@ -24,9 +32,11 @@ class CuotaBase(BaseModel):
             v = Decimal(str(v))
         return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
+
 class CuotaCreate(CuotaBase):
     # Schema para crear una cuota
     prestamo_id: int
+
 
 class CuotaUpdate(BaseModel):
     # Schema para actualizar una cuota
@@ -37,15 +47,13 @@ class CuotaUpdate(BaseModel):
     estado: Optional[str] = None
     observaciones: Optional[str] = None
 
-    @field_validator(
-        "capital_pagado", "interes_pagado", "mora_pagada", 
-        mode="before"
-    )
+    @field_validator("capital_pagado", "interes_pagado", "mora_pagada", mode="before")
     @classmethod
     def validate_decimal_places(cls, v):
         if v is not None and not isinstance(v, Decimal):
             v = Decimal(str(v))
         return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if v else v
+
 
 class CuotaResponse(CuotaBase):
     # Schema para respuesta de cuota
@@ -69,13 +77,16 @@ class CuotaResponse(CuotaBase):
 
     model_config = {"from_attributes": True}
 
+
 class TablaAmortizacionRequest(BaseModel):
     # Schema para solicitar generación de tabla de amortización
     monto_financiado: Decimal = Field(..., gt=0, description="Monto a financiar")
     tasa_interes: Decimal = Field(..., ge=0, description="Tasa de interés anual")
     numero_cuotas: int = Field(..., gt=0, description="Número de cuotas")
     fecha_inicio: date = Field(..., description="Fecha de inicio del préstamo")
-    tipo_amortizacion: str = Field(default="FRANCESA", description="Tipo de amortización")
+    tipo_amortizacion: str = Field(
+        default="FRANCESA", description="Tipo de amortización"
+    )
     tasa_mora: Optional[Decimal] = Field(None, ge=0, description="Tasa de mora diaria")
 
     @field_validator("monto_financiado", "tasa_interes", "tasa_mora", mode="before")
@@ -85,14 +96,18 @@ class TablaAmortizacionRequest(BaseModel):
             v = Decimal(str(v))
         return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if v else v
 
+
 class TablaAmortizacionResponse(BaseModel):
     # Schema para respuesta de tabla de amortización
     cuotas: List[CuotaResponse]
     resumen: dict
 
+
 class RecalcularMoraRequest(BaseModel):
     # Schema para recalcular mora
-    tasa_mora_diaria: Optional[Decimal] = Field(None, ge=0, description="Tasa de mora diaria")
+    tasa_mora_diaria: Optional[Decimal] = Field(
+        None, ge=0, description="Tasa de mora diaria"
+    )
     fecha_calculo: Optional[date] = Field(None, description="Fecha de cálculo")
 
     @field_validator("tasa_mora_diaria", mode="before")
@@ -102,11 +117,13 @@ class RecalcularMoraRequest(BaseModel):
             v = Decimal(str(v))
         return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if v else v
 
+
 class RecalcularMoraResponse(BaseModel):
     # Schema para respuesta de recálculo de mora
     cuotas_actualizadas: int
     total_mora_calculada: Decimal
     mensaje: str
+
 
 class EstadoCuentaResponse(BaseModel):
     # Schema para respuesta de estado de cuenta
@@ -117,6 +134,7 @@ class EstadoCuentaResponse(BaseModel):
     cuotas_vencidas: List[CuotaResponse]
     proximas_cuotas: List[CuotaResponse]
     total_mora: float
+
 
 class ProyeccionPagoRequest(BaseModel):
     # Schema para proyectar pago
@@ -130,11 +148,14 @@ class ProyeccionPagoRequest(BaseModel):
             v = Decimal(str(v))
         return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
+
 class ProyeccionPagoResponse(BaseModel):
     # Schema para respuesta de proyección de pago
     cuotas_afectadas: List[CuotaResponse]
     nuevo_saldo_pendiente: float
     mensaje: str
+
+
 # tasa_interes_anual: Decimal = Field( ..., ge=0, le=100, description="Tasa de interés anual (%)" ) numero_cuotas: int =
 # Field( ..., gt=0, le=360, description="Número de cuotas" ) fecha_primer_vencimiento: date = Field
 # del primer vencimiento" ) modalidad: str = Field( default="MENSUAL", description="SEMANAL, QUINCENAL, MENSUAL" )

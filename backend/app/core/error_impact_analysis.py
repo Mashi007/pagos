@@ -10,8 +10,4 @@ logger = logging.getLogger(__name__)
 
 def analyze_error_impact(error_type: str) -> Dict[str, Any]:
     """Analizar impacto de errores"""
-    return {
-        "error_type": error_type,
-        "impact": "low",
-        "status": "analyzed"
-    }
+    return {"error_type": error_type, "impact": "low", "status": "analyzed"}

@@ -1,4 +1,5 @@
 from datetime import date
+
 # backend/app/utils/validators.py
 """"""
 
@@ -281,10 +282,7 @@ def validate_cuenta_bancaria(cuenta: str) -> bool:
     if not cuenta_clean.isdigit():
         return False
 
-    if (
-        len(cuenta_clean) < MIN_CUENTA_LENGTH
-        or len(cuenta_clean) > MAX_CUENTA_LENGTH
-    ):
+    if len(cuenta_clean) < MIN_CUENTA_LENGTH or len(cuenta_clean) > MAX_CUENTA_LENGTH:
         return False
 
     return True
@@ -351,10 +349,16 @@ def _validate_password_length(password: str) -> tuple[bool, str]:
         return False, "La contraseña es requerida"
 
     if len(password) < MIN_PASSWORD_LENGTH:
-        return False, f"La contraseña debe tener al menos {MIN_PASSWORD_LENGTH} caracteres"
+        return (
+            False,
+            f"La contraseña debe tener al menos {MIN_PASSWORD_LENGTH} caracteres",
+        )
 
     if len(password) > MAX_PASSWORD_LENGTH:
-        return False, f"La contraseña no puede tener más de {MAX_PASSWORD_LENGTH} caracteres"
+        return (
+            False,
+            f"La contraseña no puede tener más de {MAX_PASSWORD_LENGTH} caracteres",
+        )
 
     return True, ""
 
@@ -431,8 +435,14 @@ def normalize_text(text: str) -> str:
     text = text.lower()
 
     replacements = {
-        "á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u",
-        "ñ": "n", "ü": "u", "ç": "c"
+        "á": "a",
+        "é": "e",
+        "í": "i",
+        "ó": "o",
+        "ú": "u",
+        "ñ": "n",
+        "ü": "u",
+        "ç": "c",
     }
 
     for old, new in replacements.items():

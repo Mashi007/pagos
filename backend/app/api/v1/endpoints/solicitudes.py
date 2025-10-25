@@ -24,27 +24,22 @@ router = APIRouter()
 # SCHEMAS PARA SOLICITUDES
 # ============================================
 
+
 class SolicitudAprobacionCompleta(BaseModel):
     """Schema completo para crear solicitud de aprobación"""
+
     tipo_solicitud: str = Field(
-        ..., 
-        description="MODIFICAR_PAGO, ANULAR_PAGO, EDITAR_CLIENTE, MODIFICAR_AMORTIZACION"
+        ...,
+        description="MODIFICAR_PAGO, ANULAR_PAGO, EDITAR_CLIENTE, MODIFICAR_AMORTIZACION",
     )
     entidad_tipo: str = Field(..., description="cliente, pago, prestamo")
     entidad_id: int = Field(..., description="ID de la entidad a modificar")
     justificacion: str = Field(
-        ..., 
-        min_length=10, 
-        max_length=1000, 
-        description="Justificación detallada"
+        ..., min_length=10, max_length=1000, description="Justificación detallada"
     )
-    prioridad: str = Field(
-        default="NORMAL", 
-        description="BAJA, NORMAL, ALTA, URGENTE"
-    )
+    prioridad: str = Field(default="NORMAL", description="BAJA, NORMAL, ALTA, URGENTE")
     fecha_limite: Optional[date] = Field(
-        None, 
-        description="Fecha límite para respuesta"
+        None, description="Fecha límite para respuesta"
     )
 
     class Config:
@@ -55,74 +50,64 @@ class SolicitudAprobacionCompleta(BaseModel):
                 "entidad_id": 123,
                 "justificacion": "Error en el registro del pago",
                 "prioridad": "ALTA",
-                "fecha_limite": "2025-10-15"
+                "fecha_limite": "2025-10-15",
             }
         }
 
 
 class FormularioModificarPago(BaseModel):
     """Formulario específico para modificar pago"""
+
     pago_id: int = Field(..., description="ID del pago a modificar")
     motivo_modificacion: str = Field(
-        ..., 
-        description="ERROR_REGISTRO, CAMBIO_CLIENTE, AJUSTE_MONTO, OTRO"
+        ..., description="ERROR_REGISTRO, CAMBIO_CLIENTE, AJUSTE_MONTO, OTRO"
     )
-    nuevo_monto: Optional[float] = Field(
-        None, 
-        gt=0, 
-        description="Nuevo monto del pago"
-    )
+    nuevo_monto: Optional[float] = Field(None, gt=0, description="Nuevo monto del pago")
     nuevo_metodo_pago: Optional[str] = Field(
-        None, 
-        description="EFECTIVO, TRANSFERENCIA, TARJETA, CHEQUE"
+        None, description="EFECTIVO, TRANSFERENCIA, TARJETA, CHEQUE"
     )
-    nueva_fecha_pago: Optional[date] = Field(
-        None, 
-        description="Nueva fecha del pago"
-    )
+    nueva_fecha_pago: Optional[date] = Field(None, description="Nueva fecha del pago")
 
 
 class FormularioAnularPago(BaseModel):
     """Formulario específico para anular pago"""
+
     pago_id: int = Field(..., description="ID del pago a anular")
     motivo_anulacion: str = Field(
-        ..., 
-        description="ERROR_REGISTRO, DUPLICADO, FRAUDE, OTRO"
+        ..., description="ERROR_REGISTRO, DUPLICADO, FRAUDE, OTRO"
     )
     devolver_dinero: bool = Field(
-        default=True, 
-        description="Si se debe devolver el dinero"
+        default=True, description="Si se debe devolver el dinero"
     )
 
 
 class FormularioEditarCliente(BaseModel):
     """Formulario específico para editar cliente"""
+
     cliente_id: int = Field(..., description="ID del cliente a editar")
     campos_modificar: Dict[str, Any] = Field(
-        ..., 
-        description="Campos específicos a modificar"
+        ..., description="Campos específicos a modificar"
     )
     motivo_edicion: str = Field(
-        ..., 
-        description="ACTUALIZACION_DATOS, CORRECCION_ERROR, OTRO"
+        ..., description="ACTUALIZACION_DATOS, CORRECCION_ERROR, OTRO"
     )
 
 
 class FormularioModificarAmortizacion(BaseModel):
     """Formulario específico para modificar amortización"""
+
     prestamo_id: int = Field(..., description="ID del préstamo")
     tipo_modificacion: str = Field(
-        ..., 
-        description="CAMBIO_PLAZO, AJUSTE_TASA, REESTRUCTURACION"
+        ..., description="CAMBIO_PLAZO, AJUSTE_TASA, REESTRUCTURACION"
     )
     nuevos_parametros: Dict[str, Any] = Field(
-        ..., 
-        description="Nuevos parámetros de la amortización"
+        ..., description="Nuevos parámetros de la amortización"
     )
 
 
 class SolicitudResponse(BaseModel):
     """Response para solicitudes"""
+
     id: int
     tipo_solicitud: str
     entidad_tipo: str
@@ -145,6 +130,7 @@ class SolicitudResponse(BaseModel):
 # ENDPOINTS PARA SOLICITUDES
 # ============================================
 
+
 @router.post("/crear", response_model=SolicitudResponse)
 async def crear_solicitud(
     solicitud: SolicitudAprobacionCompleta,
@@ -164,7 +150,7 @@ async def crear_solicitud(
             prioridad=solicitud.prioridad,
             fecha_limite=solicitud.fecha_limite,
             solicitante_id=current_user.id,
-            estado="PENDIENTE"
+            estado="PENDIENTE",
         )
 
         db.add(nueva_solicitud)
@@ -177,8 +163,7 @@ async def crear_solicitud(
         db.rollback()
         logger.error(f"Error creando solicitud: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -193,18 +178,17 @@ def listar_solicitudes(
     """Listar solicitudes con filtros"""
     try:
         query = db.query(Aprobacion)
-        
+
         if estado:
             query = query.filter(Aprobacion.estado == estado)
-        
+
         solicitudes = query.offset(skip).limit(limit).all()
         return solicitudes
 
     except Exception as e:
         logger.error(f"Error listando solicitudes: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -217,13 +201,10 @@ def obtener_solicitud(
     """Obtener solicitud específica"""
     try:
         solicitud = db.query(Aprobacion).filter(Aprobacion.id == solicitud_id).first()
-        
+
         if not solicitud:
-            raise HTTPException(
-                status_code=404,
-                detail="Solicitud no encontrada"
-            )
-        
+            raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
         return solicitud
 
     except HTTPException:
@@ -231,8 +212,7 @@ def obtener_solicitud(
     except Exception as e:
         logger.error(f"Error obteniendo solicitud: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -246,26 +226,20 @@ def aprobar_solicitud(
     """Aprobar una solicitud"""
     try:
         solicitud = db.query(Aprobacion).filter(Aprobacion.id == solicitud_id).first()
-        
+
         if not solicitud:
-            raise HTTPException(
-                status_code=404,
-                detail="Solicitud no encontrada"
-            )
-        
+            raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
         if solicitud.estado != "PENDIENTE":
-            raise HTTPException(
-                status_code=400,
-                detail="La solicitud ya fue procesada"
-            )
-        
+            raise HTTPException(status_code=400, detail="La solicitud ya fue procesada")
+
         # Actualizar estado
         solicitud.estado = "APROBADA"
         solicitud.revisor_id = current_user.id
         solicitud.comentarios_revisor = comentarios
-        
+
         db.commit()
-        
+
         return {"message": "Solicitud aprobada exitosamente"}
 
     except HTTPException:
@@ -274,8 +248,7 @@ def aprobar_solicitud(
         db.rollback()
         logger.error(f"Error aprobando solicitud: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -289,26 +262,20 @@ def rechazar_solicitud(
     """Rechazar una solicitud"""
     try:
         solicitud = db.query(Aprobacion).filter(Aprobacion.id == solicitud_id).first()
-        
+
         if not solicitud:
-            raise HTTPException(
-                status_code=404,
-                detail="Solicitud no encontrada"
-            )
-        
+            raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
         if solicitud.estado != "PENDIENTE":
-            raise HTTPException(
-                status_code=400,
-                detail="La solicitud ya fue procesada"
-            )
-        
+            raise HTTPException(status_code=400, detail="La solicitud ya fue procesada")
+
         # Actualizar estado
         solicitud.estado = "RECHAZADA"
         solicitud.revisor_id = current_user.id
         solicitud.comentarios_revisor = comentarios
-        
+
         db.commit()
-        
+
         return {"message": "Solicitud rechazada exitosamente"}
 
     except HTTPException:
@@ -317,8 +284,7 @@ def rechazar_solicitud(
         db.rollback()
         logger.error(f"Error rechazando solicitud: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -335,6 +301,5 @@ def contar_solicitudes_pendientes(
     except Exception as e:
         logger.error(f"Error contando solicitudes: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )

@@ -1,4 +1,5 @@
 from datetime import date
+
 # backend/app/schemas/conciliacion.py
 """Schemas para el módulo de conciliación bancaria"""
 
@@ -36,6 +37,7 @@ class TipoMatch(str, Enum):
 
 class MovimientoBancario(BaseModel):
     """Representa un movimiento del extracto bancario"""
+
     fecha: date
     referencia: str
     monto: Decimal
@@ -60,6 +62,7 @@ class MovimientoBancario(BaseModel):
 
 class MovimientoBancarioResponse(MovimientoBancario):
     """Response con información adicional del movimiento"""
+
     id: Optional[int] = None
     conciliado: bool = False
     pago_id: Optional[int] = None
@@ -74,6 +77,7 @@ class MovimientoBancarioResponse(MovimientoBancario):
 
 class ConciliacionCreate(BaseModel):
     """Schema para crear una conciliación"""
+
     fecha_inicio: date
     fecha_fin: date
 
@@ -87,6 +91,7 @@ class ConciliacionCreate(BaseModel):
 
 class ConciliacionMatch(BaseModel):
     """Detalle de un match de conciliación"""
+
     movimiento_bancario: MovimientoBancario
     pago_id: int
     monto_pago: Decimal
@@ -104,6 +109,7 @@ class ConciliacionMatch(BaseModel):
 
 class ResultadoConciliacion(BaseModel):
     """Resultado del proceso de conciliación"""
+
     sin_conciliar_banco: int
     sin_conciliar_sistema: int
     porcentaje_conciliacion: float = 0.0
@@ -115,7 +121,11 @@ class ResultadoConciliacion(BaseModel):
     def calcular_porcentaje(cls, v, info):
         if info.data.get("total_movimientos", 0) > 0:
             return round(
-                (info.data.get("movimientos_conciliados", 0) / info.data.get("total_movimientos", 1)) * 100,
+                (
+                    info.data.get("movimientos_conciliados", 0)
+                    / info.data.get("total_movimientos", 1)
+                )
+                * 100,
                 2,
             )
         return 0.0
@@ -123,6 +133,7 @@ class ResultadoConciliacion(BaseModel):
 
 class ConciliacionResponse(BaseModel):
     """Response de conciliación guardada"""
+
     id: int
     fecha_inicio: date
     fecha_fin: date
@@ -142,6 +153,7 @@ class ConciliacionResponse(BaseModel):
 
 class ConfirmacionConciliacion(BaseModel):
     """Schema para confirmar manualmente una conciliación"""
+
     pago_id: int
     movimiento_id: Optional[int] = None
     referencia_bancaria: str
@@ -157,6 +169,7 @@ class ConfirmacionConciliacion(BaseModel):
 
 class ConfirmacionResponse(BaseModel):
     """Response de confirmación de conciliación"""
+
     success: bool
     message: str
     pago_id: int
@@ -170,13 +183,13 @@ class ConfirmacionResponse(BaseModel):
 
 class ReporteConciliacionMensual(BaseModel):
     """Reporte mensual de conciliación"""
+
     mes: int = Field(ge=1, le=12)
     anio: int = Field(ge=MIN_YEAR, le=MAX_YEAR)
     pendientes: int
     porcentaje_conciliacion: float
     monto_total: Decimal = DECIMAL_ZERO
     monto_conciliado: Decimal = DECIMAL_ZERO
-
 
     class Config:
         json_encoders = {Decimal: lambda v: float(v)}
@@ -190,9 +203,10 @@ class FiltroConciliacion(BaseModel):
     monto_max: Optional[Decimal] = None
     referencia: Optional[str] = None
 
-
     class Config:
         json_encoders = None
+
+
 # ============================================
 # PENDIENTES
 # ============================================
@@ -200,6 +214,7 @@ class FiltroConciliacion(BaseModel):
 
 class PagoPendienteConciliacion(BaseModel):
     """Pago pendiente de conciliar"""
+
     id: int
     prestamo_id: int
     cuota_id: Optional[int] = None
@@ -223,6 +238,7 @@ class PagoPendienteConciliacion(BaseModel):
 
 class ExtractoBancarioUpload(BaseModel):
     """Configuración para carga de extracto"""
+
     banco: str
     formato: str = "CSV"
     separador: str = ","
@@ -233,6 +249,7 @@ class ExtractoBancarioUpload(BaseModel):
 
 class ValidacionExtracto(BaseModel):
     """Resultado de validación de extracto"""
+
     valido: bool
     errores: List[str] = []
     advertencias: List[str] = []
@@ -245,13 +262,13 @@ class ValidacionExtracto(BaseModel):
 
 class EstadisticasConciliacion(BaseModel):
     """Estadísticas generales de conciliación"""
+
     total_procesado: int
     tasa_conciliacion: float  # Porcentaje
     tiempo_promedio_conciliacion: float  # En días
     total_diferencias: Decimal
     por_estado: Dict[str, int] = {}
     por_mes: Dict[str, int] = {}
-
 
     class Config:
         json_encoders = {Decimal: lambda v: float(v)}
@@ -264,6 +281,7 @@ class EstadisticasConciliacion(BaseModel):
 
 class MovimientoBancarioExtendido(MovimientoBancario):
     """Movimiento bancario con información de matching"""
+
     id: Optional[int] = None
     tipo_match: Optional[TipoMatch] = None
     confianza_match: Optional[float] = None
@@ -276,6 +294,7 @@ class MovimientoBancarioExtendido(MovimientoBancario):
 
 class ValidacionArchivoBancario(BaseModel):
     """Resultado de validación de archivo bancario"""
+
     archivo_valido: bool
     formato_detectado: str  # CSV, EXCEL
     total_filas: int
@@ -299,6 +318,7 @@ class ConciliacionMasiva(BaseModel):
 
 class ResultadoConciliacionMasiva(BaseModel):
     """Resultado de conciliación masiva"""
+
     errores: List[dict] = []
     resumen_financiero: dict
     reporte_generado: bool = True
@@ -306,6 +326,7 @@ class ResultadoConciliacionMasiva(BaseModel):
 
 class RevisionManual(BaseModel):
     """Schema para revisión manual de movimiento"""
+
     movimiento_id: int
     cliente_cedula: str
     cuota_id: Optional[int] = None
@@ -316,6 +337,7 @@ class RevisionManual(BaseModel):
 
 class HistorialConciliacion(BaseModel):
     """Historial de conciliaciones"""
+
     id: int
     usuario_proceso: str
     archivo_original: str

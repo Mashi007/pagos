@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, fecha_desde, fecha_hasta):
+def _aplicar_filtros_auditoria(
+    query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
+):
     # Aplicar filtros a la query de auditoría
     if usuario_email:
         query = query.filter(Auditoria.usuario_email.ilike(f"%{usuario_email}%"))
@@ -54,9 +56,12 @@ def _calcular_paginacion_auditoria(total, limit, skip):
     current_page = (skip // limit) + 1
     return total_pages, current_page
 
+
 @router.get("/auditoria")
 def listar_auditoria(
-    usuario_email: Optional[str] = Query(None, description="Filtrar por email de usuario"),
+    usuario_email: Optional[str] = Query(
+        None, description="Filtrar por email de usuario"
+    ),
     modulo: Optional[str] = Query(None, description="Filtrar por módulo"),
     accion: Optional[str] = Query(None, description="Filtrar por acción"),
     ordenar_por: str = Query("fecha", description="Campo para ordenar"),
@@ -100,15 +105,14 @@ def listar_auditoria(
                 "total_pages": total_pages,
                 "current_page": current_page,
                 "has_next": skip + limit < total,
-                "has_prev": skip > 0
-            }
+                "has_prev": skip > 0,
+            },
         }
 
     except Exception as e:
         logger.error(f"Error listando auditoría: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
@@ -140,21 +144,20 @@ def exportar_auditoria(
         return Response(
             content=output.getvalue(),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": "attachment; filename=auditoria.xlsx"}
+            headers={"Content-Disposition": "attachment; filename=auditoria.xlsx"},
         )
 
     except Exception as e:
         logger.error(f"Error exportando auditoría: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
 
 def _crear_excel_auditoria(registros):
     # Crear archivo Excel en memoria
     from openpyxl import Workbook
-    
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Auditoría"
@@ -177,5 +180,5 @@ def _crear_excel_auditoria(registros):
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
-    
+
     return output

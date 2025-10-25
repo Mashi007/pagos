@@ -1,4 +1,5 @@
 from datetime import date
+
 # Sistema de Conciliación Bancaria
 
 import io
@@ -24,7 +25,9 @@ async def generar_template_conciliacion(
 ):
     # Generar template Excel para conciliación bancaria
     try:
-        logger.info(f"Generando template de conciliación - Usuario: {current_user.email}")
+        logger.info(
+            f"Generando template de conciliación - Usuario: {current_user.email}"
+        )
 
         # Crear workbook
         from openpyxl import Workbook
@@ -48,7 +51,7 @@ async def generar_template_conciliacion(
             ["- FECHA: Fecha del movimiento bancario"],
             ["- MONTO: Monto del movimiento"],
             ["- CONCILIAR: SI/NO para indicar si conciliar"],
-            ["- OBSERVACIONES: Comentarios adicionales"]
+            ["- OBSERVACIONES: Comentarios adicionales"],
         ]
 
         for row, instruction in enumerate(instrucciones, 1):
@@ -56,7 +59,7 @@ async def generar_template_conciliacion(
 
         # HOJA 2: DATOS PARA CONCILIAR
         ws_datos = wb.create_sheet("Datos Conciliación")
-        
+
         # Encabezados
         headers = ["FECHA", "MONTO", "CONCILIAR", "OBSERVACIONES"]
         for col, header in enumerate(headers, 1):
@@ -75,7 +78,9 @@ async def generar_template_conciliacion(
         return Response(
             content=output.getvalue(),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": "attachment; filename=template_conciliacion.xlsx"}
+            headers={
+                "Content-Disposition": "attachment; filename=template_conciliacion.xlsx"
+            },
         )
 
     except Exception as e:
@@ -105,9 +110,7 @@ async def procesar_conciliacion(
 
         # Leer archivo Excel
         file_content = await file.read()
-        df = pd.read_excel(
-            io.BytesIO(file_content), sheet_name=1
-        )  # Segunda hoja
+        df = pd.read_excel(io.BytesIO(file_content), sheet_name=1)  # Segunda hoja
 
         # Validar columnas requeridas
         required_columns = ["FECHA", "MONTO", "CONCILIAR"]
@@ -115,7 +118,7 @@ async def procesar_conciliacion(
         if missing_columns:
             raise HTTPException(
                 status_code=400,
-                detail=f"Faltan columnas requeridas: {', '.join(missing_columns)}"
+                detail=f"Faltan columnas requeridas: {', '.join(missing_columns)}",
             )
 
         # Procesar conciliaciones
@@ -128,14 +131,18 @@ async def procesar_conciliacion(
                     # Buscar pago por fecha y monto
                     fecha = pd.to_datetime(row["FECHA"]).date()
                     monto = float(row["MONTO"])
-                    
-                    pago = db.query(Pago).filter(
-                        and_(
-                            Pago.fecha_pago == fecha,
-                            Pago.monto == monto,
-                            Pago.conciliado == False
+
+                    pago = (
+                        db.query(Pago)
+                        .filter(
+                            and_(
+                                Pago.fecha_pago == fecha,
+                                Pago.monto == monto,
+                                Pago.conciliado == False,
+                            )
                         )
-                    ).first()
+                        .first()
+                    )
 
                     if pago:
                         pago.conciliado = True
@@ -143,7 +150,9 @@ async def procesar_conciliacion(
                         pago.usuario_conciliacion = current_user.id
                         conciliaciones_procesadas += 1
                     else:
-                        errores.append(f"Fila {index + 2}: No se encontró pago para fecha {fecha} y monto {monto}")
+                        errores.append(
+                            f"Fila {index + 2}: No se encontró pago para fecha {fecha} y monto {monto}"
+                        )
 
             except Exception as e:
                 errores.append(f"Fila {index + 2}: Error procesando - {str(e)}")
@@ -154,7 +163,7 @@ async def procesar_conciliacion(
             "mensaje": "Conciliación procesada exitosamente",
             "conciliaciones_procesadas": conciliaciones_procesadas,
             "errores": errores,
-            "total_errores": len(errores)
+            "total_errores": len(errores),
         }
 
     except HTTPException:
@@ -183,23 +192,13 @@ async def desconciliar_pago(
         logger.info(f"Desconciliando pago {pago_id} - Usuario: {current_user.email}")
 
         # Buscar el pago a desconciliar
-        pago = (
-            db.query(Pago)
-            .filter(Pago.id == pago_id)
-            .first()
-        )
+        pago = db.query(Pago).filter(Pago.id == pago_id).first()
 
         if not pago:
-            raise HTTPException(
-                status_code=404,
-                detail="Pago no encontrado"
-            )
+            raise HTTPException(status_code=404, detail="Pago no encontrado")
 
         if not pago.conciliado:
-            raise HTTPException(
-                status_code=400,
-                detail="El pago no está conciliado"
-            )
+            raise HTTPException(status_code=400, detail="El pago no está conciliado")
 
         # Desconciliar
         pago.conciliado = False
@@ -213,7 +212,7 @@ async def desconciliar_pago(
             conciliado=False,
             fecha_conciliacion=None,
             usuario_conciliacion=None,
-            mensaje="Pago desconciliado exitosamente"
+            mensaje="Pago desconciliado exitosamente",
         )
 
     except HTTPException:
@@ -236,15 +235,19 @@ async def obtener_estado_conciliacion(
     try:
         # Estadísticas generales
         total_pagos = db.query(Pago).filter(Pago.activo).count()
-        pagos_conciliados = db.query(Pago).filter(and_(Pago.activo, Pago.conciliado)).count()
+        pagos_conciliados = (
+            db.query(Pago).filter(and_(Pago.activo, Pago.conciliado)).count()
+        )
 
         # Porcentaje de conciliación
-        porcentaje_conciliacion = (pagos_conciliados / total_pagos * 100) if total_pagos > 0 else 0
+        porcentaje_conciliacion = (
+            (pagos_conciliados / total_pagos * 100) if total_pagos > 0 else 0
+        )
 
         return {
             "total_pagos": total_pagos,
             "pagos_conciliados": pagos_conciliados,
-            "porcentaje_conciliacion": round(porcentaje_conciliacion, 2)
+            "porcentaje_conciliacion": round(porcentaje_conciliacion, 2),
         }
 
     except Exception as e:

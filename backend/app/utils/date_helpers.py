@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+
 # backend/app/utils/date_helpers.py
 # Utilidades para manejo de fechas
 
@@ -27,7 +28,9 @@ def add_weeks(start_date: date, weeks: int) -> date:
     return start_date + timedelta(weeks=weeks)
 
 
-def calculate_payment_dates(start_date: date, num_payments: int, frequency: str) -> List[date]:
+def calculate_payment_dates(
+    start_date: date, num_payments: int, frequency: str
+) -> List[date]:
     # Args:
     #     start_date: Fecha del primer pago
     #     frequency: Frecuencia (SEMANAL, QUINCENAL, MENSUAL, BIMENSUAL)
@@ -190,7 +193,9 @@ def next_business_day(start_date: date, holidays: List[date] = None) -> date:
     return next_day
 
 
-def calculate_interest_days(start_date: date, end_date: date, day_count_convention: str = "ACT/365") -> int:
+def calculate_interest_days(
+    start_date: date, end_date: date, day_count_convention: str = "ACT/365"
+) -> int:
     # Calcula días para cálculo de intereses según convención
     # Args:
     #     start_date: Fecha inicial
@@ -226,9 +231,18 @@ def format_date_es(date_obj: date) -> str:
     # Returns:
     #     str: Fecha formateada (ej: "15 de enero de 2024")
     months_es = {
-        1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
-        5: "mayo", 6: "junio", 7: "julio", 8: "agosto",
-        9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"
+        1: "enero",
+        2: "febrero",
+        3: "marzo",
+        4: "abril",
+        5: "mayo",
+        6: "junio",
+        7: "julio",
+        8: "agosto",
+        9: "septiembre",
+        10: "octubre",
+        11: "noviembre",
+        12: "diciembre",
     }
 
     return f"{date_obj.day} de {months_es[date_obj.month]} de {date_obj.year}"
@@ -247,7 +261,9 @@ def get_age_in_days(birth_date: date, reference_date: date = None) -> int:
     return (reference_date - birth_date).days
 
 
-def get_notification_dates(due_date: date, days_before: List[int]) -> List[tuple[date, str]]:
+def get_notification_dates(
+    due_date: date, days_before: List[int]
+) -> List[tuple[date, str]]:
     # Calcula fechas para envío de notificaciones
     # Args:
     #     due_date: Fecha de vencimiento
@@ -258,7 +274,7 @@ def get_notification_dates(due_date: date, days_before: List[int]) -> List[tuple
 
     for days in sorted(days_before, reverse=True):
         notification_date = due_date - timedelta(days=days)
-        
+
         if days > 1:
             notification_type = f"RECORDATORIO_{days}D"
         elif days == 1:
