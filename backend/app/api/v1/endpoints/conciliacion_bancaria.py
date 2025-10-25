@@ -138,7 +138,7 @@ async def procesar_conciliacion(
                             and_(
                                 Pago.fecha_pago == fecha,
                                 Pago.monto == monto,
-                                Pago.conciliado == False,
+                                ~Pago.conciliado,
                             )
                         )
                         .first()

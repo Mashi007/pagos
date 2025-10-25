@@ -26,6 +26,7 @@ router = APIRouter()
 # SCHEMAS PARA CARGA MASIVA
 # ============================================
 
+
 class ErrorCargaMasiva(BaseModel):
     """Error encontrado en carga masiva"""
     

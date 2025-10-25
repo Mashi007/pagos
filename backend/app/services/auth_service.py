@@ -38,7 +38,7 @@ class AuthService:
 
         user = (
             db.query(User)
-            .filter(func.lower(User.email) == email_normalized, User.is_active == True)
+            .filter(func.lower(User.email) == email_normalized, User.is_active)
             .first()
         )
 
@@ -120,7 +120,7 @@ class AuthService:
             # Verificar que el usuario existe y está activo
             user = (
                 db.query(User)
-                .filter(User.id == int(user_id), User.is_active == True)
+                .filter(User.id == int(user_id), User.is_active)
                 .first()
             )
 
@@ -193,7 +193,7 @@ class AuthService:
         Returns:
             User: Usuario encontrado o None
         """
-        return db.query(User).filter(User.id == user_id, User.is_active == True).first()
+        return db.query(User).filter(User.id == user_id, User.is_active).first()
 
     @staticmethod
     def get_user_by_email(db: Session, email: str) -> Optional[User]:
@@ -210,6 +210,6 @@ class AuthService:
         email_normalized = email.lower().strip()
         return (
             db.query(User)
-            .filter(func.lower(User.email) == email_normalized, User.is_active == True)
+            .filter(func.lower(User.email) == email_normalized, User.is_active)
             .first()
         )

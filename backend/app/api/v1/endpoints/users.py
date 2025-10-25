@@ -19,7 +19,7 @@ router = APIRouter()
 def verificar_rol_administracion(db: Session = Depends(get_db)):
     # Verificar estado del rol de administración en el sistema
     try:
-        admin = db.query(User).filter(User.is_admin == True).first()
+        admin = db.query(User).filter(User.is_admin).first()
 
         if not admin:
             return {
@@ -227,7 +227,7 @@ def delete_user(
 
         # No permitir eliminar el último admin
         if user.is_admin:
-            admin_count = db.query(User).filter(User.is_admin == True).count()
+            admin_count = db.query(User).filter(User.is_admin).count()
             if admin_count <= 1:
                 raise HTTPException(
                     status_code=400,
