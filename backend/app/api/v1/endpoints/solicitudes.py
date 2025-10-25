@@ -248,7 +248,7 @@ def _validar_solicitud_modificacion_pago(formulario: FormularioModificarPago, cu
     return pago, solicitud_existente
 
 
-def _procesar_archivo_evidencia(archivo_evidencia: Optional[UploadFile]) -> tuple[Optional[str], Optional[str], Optional[int]]:
+async def _procesar_archivo_evidencia(archivo_evidencia: Optional[UploadFile]) -> tuple[Optional[str], Optional[str], Optional[int]]:
     """Procesar archivo de evidencia"""
     archivo_path = None
     tipo_archivo = None
