@@ -114,16 +114,11 @@ class IntermittentFailureAnalyzer:
             "failed_endpoints": dict(failed_endpoints),
         }
 
-    def _identify_intermittent_patterns(self) -> Dict[str, Any]:
-        """Identificar patrones intermitentes específicos"""
-        patterns = {
-            "endpoint_intermittency": {},
-            "user_specific_patterns": {},
-            "timing_patterns": {},
-            "token_patterns": {},
-        }
+    def _analizar_patrones_endpoint(self) -> Dict[str, Any]:
+        """Analizar patrones intermitentes por endpoint"""
+        endpoint_patterns = {}
 
-        # Patrones por endpoint
+        # Obtener todos los endpoints únicos
         all_endpoints = set()
         for req in self.successful_requests:
             all_endpoints.add(req["endpoint"])
@@ -139,7 +134,7 @@ class IntermittentFailureAnalyzer:
             ]
 
             if successful_for_endpoint and failed_for_endpoint:
-                patterns["endpoint_intermittency"][endpoint] = {
+                endpoint_patterns[endpoint] = {
                     "successful_count": len(successful_for_endpoint),
                     "failed_count": len(failed_for_endpoint),
                     "intermittency_score": (
@@ -148,7 +143,13 @@ class IntermittentFailureAnalyzer:
                     ),
                 }
 
-        # Patrones por usuario
+        return endpoint_patterns
+
+    def _analizar_patrones_usuario(self) -> Dict[str, Any]:
+        """Analizar patrones intermitentes por usuario"""
+        user_patterns = {}
+
+        # Obtener todos los usuarios únicos
         all_users = set()
         for req in self.successful_requests:
             if req.get("user_id"):
@@ -164,7 +165,7 @@ class IntermittentFailureAnalyzer:
             failed_for_user = [req for req in self.failed_requests if req.get("user_id") == user_id]
 
             if successful_for_user and failed_for_user:
-                patterns["user_specific_patterns"][str(user_id)] = {
+                user_patterns[str(user_id)] = {
                     "successful_count": len(successful_for_user),
                     "failed_count": len(failed_for_user),
                     "failure_rate": (
@@ -173,6 +174,17 @@ class IntermittentFailureAnalyzer:
                         * 100
                     ),
                 }
+
+        return user_patterns
+
+    def _identify_intermittent_patterns(self) -> Dict[str, Any]:
+        """Identificar patrones intermitentes específicos (VERSIÓN REFACTORIZADA)"""
+        patterns = {
+            "endpoint_intermittency": self._analizar_patrones_endpoint(),
+            "user_specific_patterns": self._analizar_patrones_usuario(),
+            "timing_patterns": {},
+            "token_patterns": {},
+        }
 
         return patterns
 

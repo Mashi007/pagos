@@ -244,89 +244,126 @@ async def collect_authentication_metrics(db: Session = Depends(get_db)):
 router.get("/predictive-analysis")
 
 
-async def get_predictive_analysis():
-    """
-    🔮 Análisis predictivo de problemas de autenticación
-    """
-    try:
-        if len(historical_metrics) < 5:
-            return {
-                "timestamp": datetime.now().isoformat(),
-                "status": "insufficient_data",
-                "message": "Need at least 5 data points for analysis",
-                "current_points": len(historical_metrics),
-            }
-
-        # Convertir a lista para análisis
-        metrics_list = list(historical_metrics)
-
-        # Detectar anomalías
-        anomalies = PredictiveAnalyzer.detect_anomaly_patterns(metrics_list)
-
-        # Generar predicciones
-        predictions = PredictiveAnalyzer.predict_future_issues(metrics_list)
-
-        # Análisis de tendencias
-        success_rates = [m.success_rate for m in metrics_list]
-        response_times = [m.avg_response_time for m in metrics_list]
-        error_counts = [m.error_count for m in metrics_list]
-
-        trends = {
-            "success_rate": PredictiveAnalyzer.calculate_trend(success_rates),
-            "response_time": PredictiveAnalyzer.calculate_trend(response_times),
-            "error_count": PredictiveAnalyzer.calculate_trend(error_counts),
+def _validar_datos_suficientes(historical_metrics: list) -> Optional[Dict[str, Any]]:
+    """Validar que hay suficientes datos para análisis"""
+    if len(historical_metrics) < 5:
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "status": "insufficient_data",
+            "message": "Need at least 5 data points for analysis",
+            "current_points": len(historical_metrics),
         }
+    return None
 
-        # Generar recomendaciones predictivas
-        recommendations = []
 
-        if predictions.get("status") == "success":
-            pred_data = predictions.get("predictions", {})
+def _generar_analisis_basico(metrics_list: list) -> Dict[str, Any]:
+    """Generar análisis básico de anomalías y predicciones"""
+    anomalies = PredictiveAnalyzer.detect_anomaly_patterns(metrics_list)
+    predictions = PredictiveAnalyzer.predict_future_issues(metrics_list)
 
-            if "success_rate_critical" in pred_data:
-                pred = pred_data["success_rate_critical"]
-                recommendations.append(
-                    f"🚨 Predicción: Tasa de éxito crítica en {pred['days_to_critical']} días (probabilidad: {pred['probability']:.1%})"
-                )
+    return {
+        "anomalies": anomalies,
+        "predictions": predictions,
+    }
 
-            if "response_time_warning" in pred_data:
-                pred = pred_data["response_time_warning"]
-                recommendations.append(
-                    f"⚠️ Predicción: Tiempo de respuesta alto en {pred['days_to_warning']} días (probabilidad: {pred['probability']:.1%})"
-                )
 
-        # Recomendaciones basadas en tendencias
-        if trends["success_rate"]["trend"] == "decreasing":
-            recommendations.append("📉 Tendencia: Tasa de éxito disminuyendo - Monitorear de cerca")
+def _calcular_tendencias(metrics_list: list) -> Dict[str, Any]:
+    """Calcular tendencias de métricas clave"""
+    success_rates = [m.success_rate for m in metrics_list]
+    response_times = [m.avg_response_time for m in metrics_list]
+    error_counts = [m.error_count for m in metrics_list]
 
-        if trends["response_time"]["trend"] == "increasing":
+    return {
+        "success_rate": PredictiveAnalyzer.calculate_trend(success_rates),
+        "response_time": PredictiveAnalyzer.calculate_trend(response_times),
+        "error_count": PredictiveAnalyzer.calculate_trend(error_counts),
+    }
+
+
+def _generar_recomendaciones_predictivas(predictions: Dict[str, Any]) -> List[str]:
+    """Generar recomendaciones basadas en predicciones"""
+    recommendations = []
+
+    if predictions.get("status") == "success":
+        pred_data = predictions.get("predictions", {})
+
+        if "success_rate_critical" in pred_data:
+            pred = pred_data["success_rate_critical"]
             recommendations.append(
-                "⏱️ Tendencia: Tiempo de respuesta aumentando - Optimizar sistema"
+                f"🚨 Predicción: Tasa de éxito crítica en {pred['days_to_critical']} días (probabilidad: {pred['probability']:.1%})"
             )
 
-        if trends["error_count"]["trend"] == "increasing":
-            recommendations.append("❌ Tendencia: Errores aumentando - Investigar causas")
+        if "response_time_warning" in pred_data:
+            pred = pred_data["response_time_warning"]
+            recommendations.append(
+                f"⚠️ Predicción: Tiempo de respuesta alto en {pred['days_to_warning']} días (probabilidad: {pred['probability']:.1%})"
+            )
 
-        if not recommendations:
-            recommendations.append("✅ Sistema estable - Continuar monitoreo rutinario")
+    return recommendations
+
+
+def _generar_recomendaciones_tendencias(trends: Dict[str, Any]) -> List[str]:
+    """Generar recomendaciones basadas en tendencias"""
+    recommendations = []
+
+    if trends["success_rate"]["trend"] == "decreasing":
+        recommendations.append("📉 Tendencia: Tasa de éxito disminuyendo - Monitorear de cerca")
+
+    if trends["response_time"]["trend"] == "increasing":
+        recommendations.append(
+            "⏱️ Tendencia: Tiempo de respuesta aumentando - Optimizar sistema"
+        )
+
+    if trends["error_count"]["trend"] == "increasing":
+        recommendations.append("❌ Tendencia: Errores aumentando - Investigar causas")
+
+    if not recommendations:
+        recommendations.append("✅ Sistema estable - Continuar monitoreo rutinario")
+
+    return recommendations
+
+
+async def get_predictive_analysis():
+    """
+    🔮 Análisis predictivo de problemas de autenticación (VERSIÓN REFACTORIZADA)
+    """
+    try:
+        # 1. Validar datos suficientes
+        validation_error = _validar_datos_suficientes(historical_metrics)
+        if validation_error:
+            return validation_error
+
+        # 2. Convertir a lista para análisis
+        metrics_list = list(historical_metrics)
+
+        # 3. Generar análisis básico
+        analysis = _generar_analisis_basico(metrics_list)
+
+        # 4. Calcular tendencias
+        trends = _calcular_tendencias(metrics_list)
+
+        # 5. Generar recomendaciones
+        recommendations = []
+        recommendations.extend(_generar_recomendaciones_predictivas(analysis["predictions"]))
+        recommendations.extend(_generar_recomendaciones_tendencias(trends))
 
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
             "analysis": {
-                "anomalies": anomalies,
-                "predictions": predictions,
+                "anomalies": analysis["anomalies"],
+                "predictions": analysis["predictions"],
                 "trends": trends,
                 "data_points": len(metrics_list),
                 "analysis_period": f"{len(metrics_list)} data points",
             },
             "recommendations": recommendations,
             "summary": {
-                "total_anomalies": len(anomalies),
-                "critical_anomalies": len([a for a in anomalies if a["severity"] == "high"]),
+                "total_anomalies": len(analysis["anomalies"]),
+                "critical_anomalies": len([a for a in analysis["anomalies"] if a["severity"] == "high"]),
                 "predictions_count": (
-                    len(predictions.get("predictions", {}))
-                    if predictions.get("status") == "success"
+                    len(analysis["predictions"].get("predictions", {}))
+                    if analysis["predictions"].get("status") == "success"
                     else 0
                 ),
             },

@@ -344,6 +344,115 @@ async def validar_archivo_bancario(
         raise HTTPException(status_code=500, detail=f"Error procesando archivo: {str(e)}")
 
 
+def _buscar_cliente_por_cedula(cedula: str, db: Session) -> Optional[Cliente]:
+    """Buscar cliente por cédula"""
+    return db.query(Cliente).filter(Cliente.cedula == cedula).first()
+
+
+def _buscar_cuota_exacta(cliente_id: int, monto: Decimal, db: Session) -> Optional[Cuota]:
+    """Buscar cuota con monto exacto"""
+    return (
+        db.query(Cuota)
+        .join(Prestamo)
+        .filter(
+            Prestamo.cliente_id == cliente_id,
+            Cuota.estado.in_(["PENDIENTE", "VENCIDA", "PARCIAL"]),
+            Cuota.monto_cuota == monto,
+        )
+        .first()
+    )
+
+
+def _buscar_cuota_aproximada(cliente_id: int, monto: Decimal, tolerancia: Decimal, db: Session) -> Optional[Cuota]:
+    """Buscar cuota con monto aproximado"""
+    return (
+        db.query(Cuota)
+        .join(Prestamo)
+        .filter(
+            Prestamo.cliente_id == cliente_id,
+            Cuota.estado.in_(["PENDIENTE", "VENCIDA", "PARCIAL"]),
+            Cuota.monto_cuota >= (monto - tolerancia),
+            Cuota.monto_cuota <= (monto + tolerancia),
+        )
+        .first()
+    )
+
+
+def _crear_match_exacto(mov: MovimientoBancarioExtendido, cliente: Cliente, cuota: Cuota) -> Dict[str, Any]:
+    """Crear resultado de match exacto"""
+    return {
+        "movimiento": mov,
+        "cliente": {
+            "id": cliente.id,
+            "nombre": cliente.nombre_completo,
+            "cedula": cliente.cedula,
+        },
+        "cuota": {
+            "id": cuota.id,
+            "numero": cuota.numero_cuota,
+            "monto": float(cuota.monto_cuota),
+            "fecha_vencimiento": cuota.fecha_vencimiento,
+        },
+        "tipo_match": "CEDULA_MONTO_EXACTO",
+        "confianza": 100.0,
+        "estado_visual": "✅ EXACTO",
+    }
+
+
+def _crear_match_aproximado(mov: MovimientoBancarioExtendido, cliente: Cliente, cuota: Cuota) -> Dict[str, Any]:
+    """Crear resultado de match aproximado"""
+    diferencia = abs(cuota.monto_cuota - mov.monto)
+    porcentaje_diferencia = (diferencia / mov.monto) * 100
+
+    return {
+        "movimiento": mov,
+        "cliente": {
+            "id": cliente.id,
+            "nombre": cliente.nombre_completo,
+            "cedula": cliente.cedula,
+        },
+        "cuota": {
+            "id": cuota.id,
+            "numero": cuota.numero_cuota,
+            "monto": float(cuota.monto_cuota),
+            "diferencia": float(diferencia),
+            "porcentaje_diferencia": float(porcentaje_diferencia),
+        },
+        "tipo_match": "CEDULA_MONTO_APROXIMADO",
+        "confianza": 80.0,
+        "estado_visual": "⚠️ REVISAR",
+    }
+
+
+def _buscar_pago_por_referencia(referencia: str, db: Session) -> Optional[Pago]:
+    """Buscar pago por número de referencia"""
+    return db.query(Pago).filter(Pago.numero_operacion == referencia).first()
+
+
+def _crear_match_referencia(mov: MovimientoBancarioExtendido, pago: Pago) -> Dict[str, Any]:
+    """Crear resultado de match por referencia"""
+    return {
+        "movimiento": mov,
+        "pago_existente": {
+            "id": pago.id,
+            "monto": float(pago.monto_pagado),
+            "fecha": pago.fecha_pago,
+        },
+        "tipo_match": "REFERENCIA_CONOCIDA",
+        "confianza": 90.0,
+        "estado_visual": "✅ EXACTO",
+    }
+
+
+def _crear_sin_match(mov: MovimientoBancarioExtendido) -> Dict[str, Any]:
+    """Crear resultado sin match"""
+    return {
+        "movimiento": mov,
+        "estado_visual": "❌ MANUAL",
+        "requiere_busqueda_manual": True,
+    }
+
+
 @router.post("/matching-automatico", response_model=ResultadoConciliacion)
 def matching_automatico(
     movimientos: List[MovimientoBancarioExtendido],
@@ -351,7 +460,7 @@ def matching_automatico(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Realizar matching automático avanzado con prioridades:
+    Realizar matching automático avanzado con prioridades (VERSIÓN REFACTORIZADA):
     1° Cédula + Monto exacto
     2° Cédula + Monto aproximado (±2%)
     3° Nº Referencia conocido
@@ -365,116 +474,33 @@ def matching_automatico(
 
         # 1° PRIORIDAD: Cédula + Monto exacto
         if mov.cedula_pagador and not match_encontrado:
-            cliente = db.query(Cliente).filter(Cliente.cedula == mov.cedula_pagador).first()
-
+            cliente = _buscar_cliente_por_cedula(mov.cedula_pagador, db)
             if cliente:
-                # Buscar cuota con monto exacto
-                cuota_exacta = (
-                    db.query(Cuota)
-                    .join(Prestamo)
-                    .filter(
-                        Prestamo.cliente_id == cliente.id,
-                        Cuota.estado.in_(["PENDIENTE", "VENCIDA", "PARCIAL"]),
-                        Cuota.monto_cuota == mov.monto,
-                    )
-                    .first()
-                )
-
+                cuota_exacta = _buscar_cuota_exacta(cliente.id, mov.monto, db)
                 if cuota_exacta:
-                    exactos.append(
-                        {
-                            "movimiento": mov,
-                            "cliente": {
-                                "id": cliente.id,
-                                "nombre": cliente.nombre_completo,
-                                "cedula": cliente.cedula,
-                            },
-                            "cuota": {
-                                "id": cuota_exacta.id,
-                                "numero": cuota_exacta.numero_cuota,
-                                "monto": float(cuota_exacta.monto_cuota),
-                                "fecha_vencimiento": cuota_exacta.fecha_vencimiento,
-                            },
-                            "tipo_match": "CEDULA_MONTO_EXACTO",
-                            "confianza": 100.0,
-                            "estado_visual": "✅ EXACTO",
-                        }
-                    )
+                    exactos.append(_crear_match_exacto(mov, cliente, cuota_exacta))
                     match_encontrado = True
 
         # 2° PRIORIDAD: Cédula + Monto aproximado (±2%)
         if mov.cedula_pagador and not match_encontrado:
-            cliente = db.query(Cliente).filter(Cliente.cedula == mov.cedula_pagador).first()
-
+            cliente = _buscar_cliente_por_cedula(mov.cedula_pagador, db)
             if cliente:
                 tolerancia = mov.monto * Decimal("0.02")
-                cuota_aproximada = (
-                    db.query(Cuota)
-                    .join(Prestamo)
-                    .filter(
-                        Prestamo.cliente_id == cliente.id,
-                        Cuota.estado.in_(["PENDIENTE", "VENCIDA", "PARCIAL"]),
-                        Cuota.monto_cuota >= (mov.monto - tolerancia),
-                        Cuota.monto_cuota <= (mov.monto + tolerancia),
-                    )
-                    .first()
-                )
-
+                cuota_aproximada = _buscar_cuota_aproximada(cliente.id, mov.monto, tolerancia, db)
                 if cuota_aproximada:
-                    diferencia = abs(cuota_aproximada.monto_cuota - mov.monto)
-                    porcentaje_diferencia = (diferencia / mov.monto) * 100
-
-                    parciales.append(
-                        {
-                            "movimiento": mov,
-                            "cliente": {
-                                "id": cliente.id,
-                                "nombre": cliente.nombre_completo,
-                                "cedula": cliente.cedula,
-                            },
-                            "cuota": {
-                                "id": cuota_aproximada.id,
-                                "numero": cuota_aproximada.numero_cuota,
-                                "monto": float(cuota_aproximada.monto_cuota),
-                                "diferencia": float(diferencia),
-                                "porcentaje_diferencia": float(porcentaje_diferencia),
-                            },
-                            "tipo_match": "CEDULA_MONTO_APROXIMADO",
-                            "confianza": 80.0,
-                            "estado_visual": "⚠️ REVISAR",
-                        }
-                    )
+                    parciales.append(_crear_match_aproximado(mov, cliente, cuota_aproximada))
                     match_encontrado = True
 
         # 3° PRIORIDAD: Referencia conocida
         if not match_encontrado:
-            pago_existente = db.query(Pago).filter(Pago.numero_operacion == mov.referencia).first()
-
+            pago_existente = _buscar_pago_por_referencia(mov.referencia, db)
             if pago_existente:
-                exactos.append(
-                    {
-                        "movimiento": mov,
-                        "pago_existente": {
-                            "id": pago_existente.id,
-                            "monto": float(pago_existente.monto_pagado),
-                            "fecha": pago_existente.fecha_pago,
-                        },
-                        "tipo_match": "REFERENCIA_CONOCIDA",
-                        "confianza": 90.0,
-                        "estado_visual": "✅ EXACTO",
-                    }
-                )
+                exactos.append(_crear_match_referencia(mov, pago_existente))
                 match_encontrado = True
 
         # Sin coincidencia
         if not match_encontrado:
-            sin_match.append(
-                {
-                    "movimiento": mov,
-                    "estado_visual": "❌ MANUAL",
-                    "requiere_busqueda_manual": True,
-                }
-            )
+            sin_match.append(_crear_sin_match(mov))
 
     return ResultadoConciliacion(
         total_movimientos=len(movimientos),
