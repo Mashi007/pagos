@@ -1842,7 +1842,11 @@ def calcular_cuota_ejemplo(
     ):
         raise HTTPException(
             status_code=400,
-            detail=f"Monto fuera de límites permitidos: ${limites['monto_minimo_prestamo']:,.2f} - ${limites['monto_maximo_prestamo']:,.2f}",
+            detail=(
+                f"Monto fuera de límites permitidos: "
+                f"${limites['monto_minimo_prestamo']:,.2f} - "
+                f"${limites['monto_maximo_prestamo']:,.2f}"
+            ),
         )
 
     if (
@@ -1851,7 +1855,11 @@ def calcular_cuota_ejemplo(
     ):
         raise HTTPException(
             status_code=400,
-            detail=f"Plazo fuera de límites permitidos: {limites['plazo_minimo_meses']} - {limites['plazo_maximo_meses']} meses",
+            detail=(
+                f"Plazo fuera de límites permitidos: "
+                f"{limites['plazo_minimo_meses']} - "
+                f"{limites['plazo_maximo_meses']} meses"
+            ),
         )
 
     # Cálculo de cuota (método francés)

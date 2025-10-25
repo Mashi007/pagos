@@ -1044,7 +1044,8 @@ async def _generar_reporte_conciliacion(
         # Simulación de generación de reporte
         logger = logging.getLogger(__name__)
         logger.info(
-            f"Generando reporte de conciliación - Usuario: {user_id}, Pagos: {len(pagos_creados)}, Monto: ${total_monto}"
+            f"Generando reporte de conciliación - Usuario: {user_id}, "
+            f"Pagos: {len(pagos_creados)}, Monto: ${total_monto}"
         )
 
         # En implementación real:

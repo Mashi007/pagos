@@ -532,7 +532,9 @@ class NotificacionMulticanal:
                         <div style="background: white; padding: 20px; border-radius: 8px;">
                             <h2>Hola {variables['nombre']},</h2>
 
-                            <p>Te recordamos que tu cuota #{variables['cuota']} de tu <strong>{variables['vehiculo']}</strong> vence el <strong>{variables['fecha']}</strong>.</p>
+                            <p>Te recordamos que tu cuota #{variables['cuota']} de tu 
+                               <strong>{variables['vehiculo']}</strong> vence el 
+                               <strong>{variables['fecha']}</strong>.</p>
 
                             <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0;">
                                 <h3 style="margin-top: 0;">💰 Detalles del Pago:</h3>
@@ -576,7 +578,8 @@ class NotificacionMulticanal:
                         <div style="background: white; padding: 20px; border-radius: 8px;">
                             <h2>Estimado/a {variables['nombre']},</h2>
 
-                            <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                            <div style="background: #fff3cd; border: 1px solid #ffeaa7; 
+                                        padding: 15px; border-radius: 5px; margin: 20px 0;">
                                 <p><strong>⚠️ Tu cuota #{variables['cuota']} está vencida desde ayer.</strong></p>
                             </div>
 
@@ -618,7 +621,8 @@ class NotificacionMulticanal:
                         <div style="background: white; padding: 20px; border-radius: 8px;">
                             <h2>¡Gracias {variables['nombre']}!</h2>
 
-                            <div style="background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                            <div style="background: #d4edda; border: 1px solid #c3e6cb; 
+                                        padding: 15px; border-radius: 5px; margin: 20px 0;">
                                 <p><strong>✅ Hemos recibido tu pago de la cuota #{variables['cuota']}.</strong></p>
                             </div>
 
@@ -1212,7 +1216,9 @@ class WhatsAppTemplateManager:
                 {
                     "tipo": "BODY",
                     "texto": (
-                        "👋 Hola {{1}},\n\n🚗 Te recordamos que tu cuota #{{2}} de tu {{3}} vence el {{4}}.\n\n💰 Monto: {{5}}\n\nPor favor realiza tu pago a tiempo. 💳\n\n¿Dudas? Responde este mensaje."
+                        "👋 Hola {{1}},\n\n🚗 Te recordamos que tu cuota #{{2}} de tu {{3}} "
+                        "vence el {{4}}.\n\n💰 Monto: {{5}}\n\nPor favor realiza tu pago a tiempo. "
+                        "💳\n\n¿Dudas? Responde este mensaje."
                     ),
                 },
                 {"tipo": "FOOTER", "texto": "Financiamiento Automotriz"},
@@ -1257,7 +1263,8 @@ class WhatsAppTemplateManager:
                 {
                     "tipo": "BODY",
                     "texto": (
-                        "¡Gracias {{1}}!\n\nHemos recibido tu pago de {{2}}.\n\n🚗 {{3}}\n📅 Cuota #{{4}}: ✅ PAGADA\n\n¡Tu cuenta está al día!"
+                        "¡Gracias {{1}}!\n\nHemos recibido tu pago de {{2}}.\n\n🚗 {{3}}\n"
+                        "📅 Cuota #{{4}}: ✅ PAGADA\n\n¡Tu cuenta está al día!"
                     ),
                 },
                 {"tipo": "FOOTER", "texto": "Financiamiento Automotriz"},

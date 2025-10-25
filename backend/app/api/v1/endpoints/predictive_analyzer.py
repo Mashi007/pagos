@@ -57,7 +57,7 @@ class PredictiveAnalyzer:
 
         recent_data = data_points[-window_size:]
         older_data = (
-            data_points[-window_size * 2:-window_size]
+            data_points[-window_size * 2 : -window_size]
             if len(data_points) >= window_size * 2
             else recent_data
         )

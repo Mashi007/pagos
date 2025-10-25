@@ -148,7 +148,10 @@ class ValidadorTelefono:
                 "numero_formateado": None,
                 "error": {
                     "valido": False,
-                    "error": f"Operadora '{operadora}' no válida para {pais}. Válidas: {', '.join(config['operadoras'])}",
+                    "error": (
+                        f"Operadora '{operadora}' no válida para {pais}. "
+                        f"Válidas: {', '.join(config['operadoras'])}"
+                    ),
                     "valor_original": telefono_original,
                     "valor_formateado": None,
                     "sugerencia": f"Debe comenzar con: {', '.join(config['operadoras'])}",
@@ -2028,7 +2031,9 @@ class ValidadorCoherenciaFinanciera:
             )
             if cuota_inicial < cuota_minima:
                 errores.append(
-                    f"La cuota inicial debe ser al menos el {ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE}% del total (mínimo: ${cuota_minima:.2f})"
+                    f"La cuota inicial debe ser al menos el "
+                    f"{ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE}% "
+                    f"del total (mínimo: ${cuota_minima:.2f})"
                 )
 
             # 3. Advertencia si cuota inicial es muy alta
@@ -2165,7 +2170,8 @@ class ValidadorDuplicados:
                 return {
                     "valido": False,
                     "error": (
-                        f"El número de chasis ya está registrado para el cliente {existe.nombre_completo} (ID: {existe.id})"
+                        f"El número de chasis ya está registrado para el cliente "
+                        f"{existe.nombre_completo} (ID: {existe.id})"
                     ),
                     "chasis": chasis_limpio,
                     "cliente_existente": {

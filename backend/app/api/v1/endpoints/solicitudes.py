@@ -64,7 +64,9 @@ class SolicitudAprobacionCompleta(BaseModel):
                 "entidad_tipo": "pago",
                 "entidad_id": 123,
                 "justificacion": (
-                    "El cliente pagó con transferencia pero se registró como efectivo por error. Necesito corregir el método de pago para cuadrar la conciliación bancaria."
+                    "El cliente pagó con transferencia pero se registró como "
+                    "efectivo por error. Necesito corregir el método de pago "
+                    "para cuadrar la conciliación bancaria."
                 ),
                 "datos_solicitados": {
                     "metodo_pago": "TRANSFERENCIA",
@@ -1560,13 +1562,15 @@ async def _enviar_email_nueva_solicitud(
 
         cuerpo_html = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                        color: white; padding: 20px; text-align: center;">
                 <h1>{emoji} Nueva Solicitud de Aprobación</h1>
                 <p style="margin: 0; font-size: 18px;">{solicitud.tipo_solicitud}</p>
             </div>
 
             <div style="padding: 20px; background: #f8f9fa;">
-                <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <div style="background: white; padding: 20px; border-radius: 8px; 
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                     <h2 style="color: #333; margin-top: 0;">📋 Detalles de la Solicitud</h2>
 
                     <table style="width: 100%; border-collapse: collapse;">
