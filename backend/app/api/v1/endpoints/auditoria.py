@@ -232,11 +232,11 @@ def exportar_auditoria_excel(
         # Construir query y aplicar filtros
         query = db.query(Auditoria)
         query = _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, fecha_desde, fecha_hasta)
-        
+
         # Obtener registros y crear DataFrame
         auditorias = query.order_by(desc(Auditoria.fecha)).all()
         df = _crear_dataframe_auditoria(auditorias)
-        
+
         # Crear Excel y generar respuesta
         output = _crear_excel_auditoria(df)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
