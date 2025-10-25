@@ -190,7 +190,7 @@ def analyze_intermittent_patterns(self) -> Dict[str, Any]:
         
         return hourly_analysis
     
-        def _analyze_token_patterns(self) -> Dict[str, Any]:
+    def _analyze_token_patterns(self) -> Dict[str, Any]:
         """Analizar patrones de token"""
         token_lengths_successful = [r["token_length"] for r in self.successful_requests if r["token_length"]]
         token_lengths_failed = [r["token_length"] for r in self.failed_requests if r["token_length"]]
@@ -198,35 +198,35 @@ def analyze_intermittent_patterns(self) -> Dict[str, Any]:
         analysis = {}
         
         if token_lengths_successful:
-        analysis["successful_tokens"] = {
+            analysis["successful_tokens"] = {
                 "avg_length": round(statistics.mean(token_lengths_successful), 2),
                 "min_length": min(token_lengths_successful),
                 "max_length": max(token_lengths_successful),
                 "count": len(token_lengths_successful),
-        }
+            }
         
         if token_lengths_failed:
-        analysis["failed_tokens"] = {
+            analysis["failed_tokens"] = {
                 "avg_length": round(statistics.mean(token_lengths_failed), 2),
                 "min_length": min(token_lengths_failed),
                 "max_length": max(token_lengths_failed),
                 "count": len(token_lengths_failed),
-        }
+            }
         
         # Comparar longitudes
         if token_lengths_successful and token_lengths_failed:
-        avg_successful = statistics.mean(token_lengths_successful)
-        avg_failed = statistics.mean(token_lengths_failed)
-        
-        analysis["comparison"] = {
+            avg_successful = statistics.mean(token_lengths_successful)
+            avg_failed = statistics.mean(token_lengths_failed)
+            
+            analysis["comparison"] = {
                 "length_difference": round(abs(avg_successful - avg_failed), 2),
                 "failed_tokens_shorter": avg_failed < avg_successful,
                 "potential_issue": abs(avg_successful - avg_failed) > 50,
-        }
+            }
         
         return analysis
     
-        def _generate_recommendations(self, patterns: Dict[str, Any]) -> List[str]:
+    def _generate_recommendations(self, patterns: Dict[str, Any]) -> List[str]:
         """Generar recomendaciones basadas en patrones"""
         recommendations = []
         
