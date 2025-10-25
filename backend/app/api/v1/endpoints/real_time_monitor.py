@@ -423,19 +423,22 @@ def _generate_performance_recommendations(status: Dict[str, Any]) -> List[str]:
     success_rate = metrics.get("success_rate_percent", 100)
     if success_rate < 95:
         recommendations.append(
-            f"⚠️ Tasa de éxito baja ({success_rate}%) - Revisar configuración de tokens")
+            f"⚠️ Tasa de éxito baja ({success_rate}%) - Revisar configuración de tokens"
+        )
 
     expiring_tokens = metrics.get("expiring_tokens", 0)
     if expiring_tokens > 0:
         recommendations.append(
-            f"🔄 {expiring_tokens} tokens expirando pronto - Verificar auto-refresh")
+            f"🔄 {expiring_tokens} tokens expirando pronto - Verificar auto-refresh"
+        )
 
     avg_response_time = status.get("performance", {}).get(
         "avg_response_time", 0
     )
     if avg_response_time > 2.0:
         recommendations.append(
-            f"🐌 Tiempo de respuesta alto ({avg_response_time}s) - Optimizar queries")
+            f"🐌 Tiempo de respuesta alto ({avg_response_time}s) - Optimizar queries"
+        )
 
     if not recommendations:
         recommendations.append("✅ Sistema funcionando correctamente")

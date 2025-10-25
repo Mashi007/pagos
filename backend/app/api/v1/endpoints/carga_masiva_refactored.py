@@ -52,7 +52,9 @@ def _validar_columnas_requeridas(df: pd.DataFrame) -> None:
 
     if columnas_faltantes:
         raise HTTPException(
-            status_code=400, detail=f"❌ Faltan columnas requeridas: {', '.join(columnas_faltantes)}", )
+            status_code=400,
+            detail=f"❌ Faltan columnas requeridas: {', '.join(columnas_faltantes)}",
+        )
 
 
 def _extraer_datos_fila(row: pd.Series, fila_numero: int) -> Dict[str, str]:

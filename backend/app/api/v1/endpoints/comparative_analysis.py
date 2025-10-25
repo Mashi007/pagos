@@ -495,7 +495,8 @@ class ComparativeAnalysisSystem:
                                 f"Diferencia significativa en tiempo de expiración: {expiry_diff:.1f} segundos"
                             ),
                             "confidence": "high",
-                        })
+                        }
+                    )
 
         # Indicadores de confianza media
         if "user_analysis" in analysis_results:
@@ -510,9 +511,11 @@ class ComparativeAnalysisSystem:
                         {
                             "indicator": "user_active_status",
                             "description": (
-                                f"Diferencia significativa en tasa de usuarios activos: {active_rate_diff:.1f}%"),
+                                f"Diferencia significativa en tasa de usuarios activos: {active_rate_diff:.1f}%"
+                            ),
                             "confidence": "medium",
-                        })
+                        }
+                    )
 
         # Generar recomendaciones
         if indicators["high_confidence_indicators"]:

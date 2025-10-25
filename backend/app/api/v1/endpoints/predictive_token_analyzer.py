@@ -272,11 +272,10 @@ class TokenPredictiveAnalyzer:
             predictions["predicted_failures"].append(
                 {
                     "type": "performance_degradation",
-                    "probability": min(
-                        avg_response_time / 5.0,
-                        1.0),
+                    "probability": min(avg_response_time / 5.0, 1.0),
                     "description": f"Tiempo de respuesta alto: {avg_response_time:.2f}s",
-                })
+                }
+            )
             predictions["system_health"] = "degraded"
             predictions["recommendations"].append(
                 "Optimizar queries de base de datos"

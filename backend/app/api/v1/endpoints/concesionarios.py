@@ -371,7 +371,8 @@ def eliminar_concesionario(
         db.commit()
 
         return {
-            "message": "Concesionario eliminado completamente de la base de datos"}
+            "message": "Concesionario eliminado completamente de la base de datos"
+        }
 
     except HTTPException:
         raise

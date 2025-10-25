@@ -613,7 +613,8 @@ def _detectar_anomalia_tasa_error(recent_traces: list) -> list:
                 "description": f"Error rate is {error_rate:.1f}% "
                 f"(>{total_traces} traces analyzed)",
                 "recommendation": "Investigate authentication configuration and token generation",
-            })
+            }
+        )
     elif error_rate > 20:
         anomalies.append(
             {
@@ -622,7 +623,8 @@ def _detectar_anomalia_tasa_error(recent_traces: list) -> list:
                 "description": f"Error rate is {error_rate:.1f}% "
                 f"(>{total_traces} traces analyzed)",
                 "recommendation": "Monitor authentication patterns closely",
-            })
+            }
+        )
 
     return anomalies
 
@@ -642,7 +644,8 @@ def _detectar_anomalia_duracion_excesiva(recent_traces: list) -> list:
                 "description": f"{len(slow_traces)} traces took >3s "
                 f"(avg: {avg_slow_duration:.0f}ms)",
                 "recommendation": "Check database performance and network latency",
-            })
+            }
+        )
     return anomalies
 
 
@@ -681,7 +684,8 @@ def _detectar_anomalia_timing_exitoso() -> list:
                     "description": f"Successful authentications average "
                     f"{avg_success_duration:.0f}ms",
                     "recommendation": "Consider optimizing authentication flow",
-                })
+                }
+            )
     return anomalies
 
 

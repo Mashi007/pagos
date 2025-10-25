@@ -457,16 +457,16 @@ router.post("/chatbot/generar-mensaje")
 
 
 def generar_mensaje_chatbot(
-        cliente_id: int,
-        tipo_mensaje: str = Query(
-            ...,
-            description="RECORDATORIO_AMIGABLE, MORA_TEMPRANA, MORA_AVANZADA, FELICITACION_PUNTUALIDAD",
-        ),
+    cliente_id: int,
+    tipo_mensaje: str = Query(
+        ...,
+        description="RECORDATORIO_AMIGABLE, MORA_TEMPRANA, MORA_AVANZADA, FELICITACION_PUNTUALIDAD",
+    ),
     canal: str = Query(
-            "WHATSAPP",
-            description="WHATSAPP, EMAIL, SMS, LLAMADA"),
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user),
+        "WHATSAPP", description="WHATSAPP, EMAIL, SMS, LLAMADA"
+    ),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     🤖 Generar mensaje personalizado con IA para cobranza
@@ -798,7 +798,8 @@ def _identificar_alertas_criticas(analisis: Dict) -> List[str]:
     )
     if proyeccion_mora > 15:  # >15% de mora proyectada
         alertas.append(
-            f"🚨 Mora proyectada: {proyeccion_mora:.1f}% - Acción inmediata requerida")
+            f"🚨 Mora proyectada: {proyeccion_mora:.1f}% - Acción inmediata requerida"
+        )
 
     return alertas
 

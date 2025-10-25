@@ -36,7 +36,10 @@ async def ejecutar_migracion_emergencia(
         if "concesionario" not in columns:
             logger.info("Agregando columna 'concesionario'")
             db.execute(
-                text("ALTER TABLE clientes ADD COLUMN concesionario VARCHAR(100)"))
+                text(
+                    "ALTER TABLE clientes ADD COLUMN concesionario VARCHAR(100)"
+                )
+            )
             db.execute(
                 text(
                     "CREATE INDEX idx_clientes_concesionario ON clientes (concesionario)"

@@ -90,7 +90,8 @@ class TemporalAnalysisSystem:
                     abs(time_diff - expected_diff) > 5
                 ):  # Más de 5 segundos de desviación
                     logger.warning(
-                        f"⚠️ Desviación de tiempo detectada: {time_diff - expected_diff:.2f} segundos")
+                        f"⚠️ Desviación de tiempo detectada: {time_diff - expected_diff:.2f} segundos"
+                    )
 
     def _analyze_timing_patterns(self):
         """Analizar patrones temporales"""
@@ -357,7 +358,8 @@ class TemporalAnalysisSystem:
                         "issue": "high_time_variability",
                         "description": "Alta variabilidad en intervalos de tiempo",
                         "severity": "medium",
-                    })
+                    }
+                )
 
             if sync_analysis["max_deviation"] > 30.0:
                 sync_analysis["sync_issues"].append(
@@ -365,7 +367,8 @@ class TemporalAnalysisSystem:
                         "issue": "large_time_deviation",
                         "description": "Gran desviación en intervalos de tiempo",
                         "severity": "high",
-                    })
+                    }
+                )
 
             # Generar recomendaciones
             if sync_analysis["clock_sync_status"] == "poor":
@@ -388,7 +391,8 @@ class TemporalAnalysisSystem:
         with self.lock:
             if len(self.timing_events) < 20:
                 return {
-                    "error": "Datos de eventos insuficientes para análisis de correlaciones"}
+                    "error": "Datos de eventos insuficientes para análisis de correlaciones"
+                }
 
             recent_events = list(self.timing_events)[
                 -200:

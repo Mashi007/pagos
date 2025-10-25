@@ -57,7 +57,7 @@ class PredictiveAnalyzer:
 
         recent_data = data_points[-window_size:]
         older_data = (
-            data_points[-window_size * 2: -window_size]
+            data_points[-window_size * 2 : -window_size]
             if len(data_points) >= window_size * 2
             else recent_data
         )
@@ -153,10 +153,12 @@ class PredictiveAnalyzer:
                         "type": "error_spike",
                         "severity": "high",
                         "description": (
-                            f"Error count spike: {avg_recent_errors:.1f} vs {historical_avg:.1f} historical avg"),
+                            f"Error count spike: {avg_recent_errors:.1f} vs {historical_avg:.1f} historical avg"
+                        ),
                         "confidence": 0.8,
                         "recommendation": "Investigate error patterns and root causes",
-                    })
+                    }
+                )
 
         return anomalies
 
@@ -334,12 +336,14 @@ def _generar_recomendaciones_predictivas(
         if "success_rate_critical" in pred_data:
             pred = pred_data["success_rate_critical"]
             recommendations.append(
-                f"🚨 Predicción: Tasa de éxito crítica en {pred['days_to_critical']} días (probabilidad: {pred['probability']:.1%})")
+                f"🚨 Predicción: Tasa de éxito crítica en {pred['days_to_critical']} días (probabilidad: {pred['probability']:.1%})"
+            )
 
         if "response_time_warning" in pred_data:
             pred = pred_data["response_time_warning"]
             recommendations.append(
-                f"⚠️ Predicción: Tiempo de respuesta alto en {pred['days_to_warning']} días (probabilidad: {pred['probability']:.1%})")
+                f"⚠️ Predicción: Tiempo de respuesta alto en {pred['days_to_warning']} días (probabilidad: {pred['probability']:.1%})"
+            )
 
     return recommendations
 
