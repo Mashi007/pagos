@@ -1,4 +1,4 @@
-﻿"""Decorator Específico para Análisis de Impacto por Endpoint
+"""Decorator Específico para Análisis de Impacto por Endpoint
 """
 
 import logging
@@ -21,8 +21,7 @@ class EndpointSpecificAnalyzer:
         self.business_metrics = {}
 
 
-    def record_business_metric(
-        self, endpoint: str, metric_name: str, value: Any
+    def record_business_metric
     ):
         """Registrar métrica de negocio específica"""
         if endpoint not in self.business_metrics:
@@ -30,15 +29,14 @@ class EndpointSpecificAnalyzer:
         if metric_name not in self.business_metrics[endpoint]:
             self.business_metrics[endpoint][metric_name] = []
 
-        self.business_metrics[endpoint][metric_name].append(
+        self.business_metrics[endpoint][metric_name].append
         )
 
 
     def get_endpoint_analysis(self, endpoint: str) -> Dict[str, Any]:
         """Obtener análisis específico del endpoint"""
         if endpoint not in self.business_metrics:
-            return {
-                "message": "No hay métricas específicas para este endpoint"
+            return 
             }
 
         metrics = self.business_metrics[endpoint]
@@ -46,19 +44,7 @@ class EndpointSpecificAnalyzer:
 
         for metric_name, values in metrics.items():
             if values:
-                analysis[metric_name] = {
-                    "current": recent_values[-1]["value"],
-                    "average": sum(v["value"] for v in recent_values)
-                    / len(recent_values),
-                    "max": max(v["value"] for v in recent_values),
-                    "min": min(v["value"] for v in recent_values),
-                    "trend": (
-                        "increasing"
-                        if len(recent_values) > 1
-                        and recent_values[-1]["value"]
-                        > recent_values[0]["value"]
-                        else "stable"
-                    ),
+                analysis[metric_name] = 
                 }
 
         return analysis
@@ -68,8 +54,7 @@ class EndpointSpecificAnalyzer:
 endpoint_analyzer = EndpointSpecificAnalyzer()
 
 
-def endpoint_impact_analysis(
-    endpoint_name: str, business_metrics: Optional[Dict[str, str]] = None
+def endpoint_impact_analysis
 ):
     """
     Decorator para análisis de impacto específico por endpoint
@@ -93,20 +78,16 @@ def endpoint_impact_analysis(
 
                 # Registrar métricas específicas si se proporcionan
                 if business_metrics and result:
-                    for (
-                        metric_name,
-                        metric_path,
+                    for 
                     ) in business_metrics.items():
                         try:
                             # Extraer valor de la métrica usando el path
                             value = _extract_metric_value(result, metric_path)
                             if value is not None:
-                                endpoint_analyzer.record_business_metric(
-                                    endpoint_name, metric_name, value
+                                endpoint_analyzer.record_business_metric
                                 )
                         except Exception as e:
-                            logger.warning(
-                                f"Error extrayendo métrica {metric_name}: {e}"
+                            logger.warning
                             )
 
                 return result
@@ -152,13 +133,9 @@ def auth_endpoint_analysis(func: Callable):
 
             # Métricas específicas de autenticación
             if result and hasattr(result, "access_token"):
-                endpoint_analyzer.record_business_metric(
-                    "auth",
-                    "tokens_generated",
-                    1,
+                endpoint_analyzer.record_business_metric
                 )
-                endpoint_analyzer.record_business_metric(
-                    "auth", "auth_success", 1
+                endpoint_analyzer.record_business_metric
                 )
 
             return result
@@ -178,21 +155,17 @@ def carga_masiva_endpoint_analysis(func: Callable):
 
             # Métricas específicas de carga masiva
             if result and isinstance(result, dict):
-                    endpoint_analyzer.record_business_metric(
-                        "carga_masiva",
+                    endpoint_analyzer.record_business_metric
                     )
-                    endpoint_analyzer.record_business_metric(
-                        "carga_masiva",
+                    endpoint_analyzer.record_business_metric
                     )
-                    endpoint_analyzer.record_business_metric(
-                        "carga_masiva",
+                    endpoint_analyzer.record_business_metric
                     )
 
             return result
         except Exception as e:
             # Métricas de error de carga masiva
-            endpoint_analyzer.record_business_metric(
-                "carga_masiva", "carga_failed", 1
+            endpoint_analyzer.record_business_metric
             )
             raise e
     return wrapper
@@ -208,17 +181,16 @@ def clientes_endpoint_analysis(func: Callable):
             # Métricas específicas de clientes
             if result:
                 if hasattr(result, "__len__"):
-                    endpoint_analyzer.record_business_metric(
+                    endpoint_analyzer.record_business_metric
                     )
                 elif isinstance(result, dict) and "total" in result:
-                    endpoint_analyzer.record_business_metric(
+                    endpoint_analyzer.record_business_metric
                     )
 
             return result
         except Exception as e:
             # Métricas de error de clientes
-            endpoint_analyzer.record_business_metric(
-                "clientes", "clientes_failed", 1
+            endpoint_analyzer.record_business_metric
             )
             raise e
     return wrapper
@@ -231,15 +203,15 @@ def clientes_endpoint_analysis(func: Callable):
 
             if result:
                 if isinstance(result, dict) and "monto_total" in result:
-                    endpoint_analyzer.record_business_metric(
+                    endpoint_analyzer.record_business_metric
                     )
                 elif hasattr(result, "monto_pagado"):
-                    endpoint_analyzer.record_business_metric(
+                    endpoint_analyzer.record_business_metric
                     )
 
             return result
         except Exception as e:
-            endpoint_analyzer.record_business_metric(
+            endpoint_analyzer.record_business_metric
             )
             raise e
     return wrapper
@@ -258,7 +230,7 @@ if __name__ == "__main__":
 
     @carga_masiva_endpoint_analysis
     def carga_masiva_example():
-        return {
+        return 
         }
 
     login_result = login_example()
@@ -271,3 +243,5 @@ if __name__ == "__main__":
 
     print("Análisis de auth:", auth_analysis)
     print("Análisis de carga masiva:", carga_analysis)
+
+"""

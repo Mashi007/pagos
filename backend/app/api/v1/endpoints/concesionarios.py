@@ -1,3 +1,4 @@
+from datetime import date
 """
 """
 
@@ -11,11 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.concesionario import Concesionario
 from app.models.user import User
-from app.schemas.concesionario import (
-    ConcesionarioCreate,
-    ConcesionarioListResponse,
-    ConcesionarioResponse,
-    ConcesionarioUpdate,
+from app.schemas.concesionario import 
 )
 
 logger = logging.getLogger(__name__)
@@ -28,15 +25,12 @@ router = APIRouter()
     try:
 
 
-        return {
-            "success": True,
+        return 
         }
     except Exception as e:
-        logger.error(
+        logger.error
         )
-        return {
-            "success": False,
-            "error": str(e),
+        return 
         }
 
 
@@ -46,13 +40,10 @@ router = APIRouter()
     try:
 
 
-        return {
-            "success": True,
+        return 
         }
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
+        return 
         }
 
 
@@ -63,22 +54,17 @@ router = APIRouter()
     """
     """
     try:
-        return {
-            "success": True,
-            "user": current_user.email,
+        return 
         }
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
+        return 
         }
 
 
 @router.get("/list-no-auth")
-    limit: int = Query(
+    limit: int = Query
     ),
-    activo: Optional[bool] = Query(
-        None, description="Filtrar por estado activo"
+    activo: Optional[bool] = Query
     ),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
@@ -101,24 +87,17 @@ router = APIRouter()
         # Calcular páginas
         pages = (total + limit - 1) // limit
 
-        return {
-            "items": [
-            ],
-            "total": total,
-            "page": (skip // limit) + 1,
-            "size": limit,
-            "pages": pages,
+        return 
         }
     except Exception as e:
-        raise HTTPException(
+        raise HTTPException
         )
 
 
 @router.get("/", response_model=ConcesionarioListResponse)
-    limit: int = Query(
+    limit: int = Query
     ),
-    activo: Optional[bool] = Query(
-        None, description="Filtrar por estado activo"
+    activo: Optional[bool] = Query
     ),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
@@ -142,16 +121,13 @@ router = APIRouter()
         # Calcular páginas
         pages = (total + limit - 1) // limit
 
-        return ConcesionarioListResponse(
-            items=[
-            ],
-            total=total,
+        return ConcesionarioListResponse
             page=(skip // limit) + 1,
             size=limit,
             pages=pages,
         )
     except Exception as e:
-        raise HTTPException(
+        raise HTTPException
         )
 
 
@@ -165,34 +141,30 @@ router = APIRouter()
             db.query(Concesionario).filter(Concesionario.activo).all()
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
         )
 
 
 @router.get("/{concesionario_id}", response_model=ConcesionarioResponse)
-def obtener_concesionario(
-    concesionario_id: int,
+def obtener_concesionario
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     🔍 Obtener un concesionario por ID
     """
-    concesionario = (
+    concesionario = 
         db.query(Concesionario)
         .filter(Concesionario.id == concesionario_id)
         .first()
     )
     if not concesionario:
-        raise HTTPException(
-            status_code=404, detail="Concesionario no encontrado"
+        raise HTTPException
         )
     return ConcesionarioResponse.model_validate(concesionario)
 
 
-def crear_concesionario(
-    concesionario_data: ConcesionarioCreate,
+def crear_concesionario
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -201,9 +173,7 @@ def crear_concesionario(
     """
     try:
         # Crear nuevo concesionario
-        concesionario = Concesionario(
-            nombre=concesionario_data.nombre,
-            activo=concesionario_data.activo,
+        concesionario = Concesionario
         )
 
         db.add(concesionario)
@@ -219,15 +189,13 @@ def crear_concesionario(
         logger.error(f"Error creando concesionario: {e}")
         traceback.print_exc()
         db.rollback()
-        raise HTTPException(
+        raise HTTPException
             status_code=500, detail=f"Error al crear concesionario: {str(e)}"
         )
 
 
 @router.put("/{concesionario_id}", response_model=ConcesionarioResponse)
-def actualizar_concesionario(
-    concesionario_id: int,
-    concesionario_data: ConcesionarioUpdate,
+def actualizar_concesionario
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -235,33 +203,26 @@ def actualizar_concesionario(
     ✏️ Actualizar un concesionario existente
     """
     try:
-        concesionario = (
+        concesionario = 
             db.query(Concesionario)
             .filter(Concesionario.id == concesionario_id)
             .first()
         )
         if not concesionario:
-            raise HTTPException(
-                status_code=404, detail="Concesionario no encontrado"
+            raise HTTPException
             )
 
         # Verificar nombre único si se está cambiando
-        if (
-            concesionario_data.nombre
-            and concesionario_data.nombre != concesionario.nombre
+        if 
         ):
-            existing = (
+            existing = 
                 db.query(Concesionario)
-                .filter(
-                    Concesionario.nombre == concesionario_data.nombre,
-                    Concesionario.id != concesionario_id,
+                .filter
                 )
                 .first()
             )
             if existing:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Ya existe un concesionario con este nombre",
+                raise HTTPException
                 )
 
         update_data = concesionario_data.model_dump(exclude_unset=True)
@@ -276,15 +237,13 @@ def actualizar_concesionario(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error al actualizar concesionario: {str(e)}",
         )
 
 
 @router.delete("/{concesionario_id}")
-def eliminar_concesionario(
-    concesionario_id: int,
+def eliminar_concesionario
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -292,27 +251,25 @@ def eliminar_concesionario(
     🗑️ Eliminar un concesionario (HARD DELETE - borrado completo de BD)
     """
     try:
-        concesionario = (
+        concesionario = 
             db.query(Concesionario)
             .filter(Concesionario.id == concesionario_id)
             .first()
         )
         if not concesionario:
-            raise HTTPException(
-                status_code=404, detail="Concesionario no encontrado"
+            raise HTTPException
             )
 
         db.delete(concesionario)
         db.commit()
 
-        return {
+        return 
         }
 
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error al eliminar concesionario: {str(e)}",
         )

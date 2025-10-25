@@ -24,7 +24,7 @@ def upgrade():
 
     # Agregar concesionario si no existe
     if "concesionario" not in columns:
-        op.add_column(
+        op.add_column
             "clientes", sa.Column("concesionario", sa.String(100), nullable=True)
         )
         op.create_index("idx_clientes_concesionario", "clientes", ["concesionario"])
@@ -58,3 +58,5 @@ def downgrade():
         op.drop_index("idx_clientes_concesionario", "clientes")
         op.drop_column("clientes", "concesionario")
         print("Columna 'concesionario' eliminada de la tabla 'clientes'")
+
+"""

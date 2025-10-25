@@ -1,3 +1,4 @@
+from datetime import date
 # backend/app/schemas/prestamo.py
 
 from decimal import ROUND_HALF_UP, Decimal
@@ -24,18 +25,16 @@ DecimalPercentage = Annotated[
 class PrestamoBase(BaseModel):
     """Schema base para Préstamo"""
     cliente_id: int
-    monto_total: Decimal = Field(
-        ..., gt=0, description="Monto total del préstamo"
+    monto_total: Decimal = Field
     )
-    monto_financiado: Decimal = Field(
-        ..., gt=0, description="Monto financiado"
+    monto_financiado: Decimal = Field
     )
-    monto_inicial: Decimal = Field(
+    monto_inicial: Decimal = Field
         default=Decimal("0.00"),
         ge=0,
         description="Monto inicial/cuota inicial",
     )
-    tasa_interes: Decimal = Field(
+    tasa_interes: Decimal = Field
         default=Decimal("0.00"),
         ge=0,
         le=MAX_PERCENTAGE,
@@ -47,19 +46,12 @@ class PrestamoBase(BaseModel):
     fecha_desembolso: Optional[date] = None
     fecha_primer_vencimiento: date
     fecha_ultimo_vencimiento: Optional[date] = None
-    modalidad: str = Field(
-        default="MENSUAL", description="SEMANAL, QUINCENAL, MENSUAL"
+    modalidad: str = Field
     )
     destino_credito: Optional[str] = None
     observaciones: Optional[str] = None
 
-    @field_validator(
-        "monto_total",
-        "monto_financiado",
-        "monto_inicial",
-        "monto_cuota",
-        "tasa_interes",
-        mode="before",
+    @field_validator
     )
     @classmethod
     def validate_decimal_places(cls, v):
@@ -77,10 +69,9 @@ class PrestamoCreate(PrestamoBase):
 
 class PrestamoUpdate(BaseModel):
     """Schema para actualizar un préstamo"""
-    monto_total: Optional[Decimal] = Field(
-        None, gt=0, description="Monto total del préstamo"
+    monto_total: Optional[Decimal] = Field
     )
-    tasa_interes: Optional[Decimal] = Field(
+    tasa_interes: Optional[Decimal] = Field
         None, ge=0, le=MAX_PERCENTAGE, description="Tasa de interés anual (%)"
     )
     estado: Optional[str] = None
@@ -112,12 +103,7 @@ class PrestamoResponse(PrestamoBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-    @field_validator(
-        "saldo_pendiente",
-        "saldo_capital",
-        "saldo_interes",
-        "total_pagado",
-        mode="before",
+    @field_validator
     )
     @classmethod
     def validate_decimal_places(cls, v):

@@ -3,12 +3,9 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
+from datetime import date
 class ConcesionarioBase(BaseModel):
-    nombre: str = Field(
-        ...,
-        min_length=2,
-        max_length=255,
-        description="Nombre del concesionario",
+    nombre: str = Field
     )
     activo: bool = Field(True, description="Estado activo del concesionario")
 

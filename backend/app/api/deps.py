@@ -18,7 +18,7 @@ from app.models.user import User
 security = HTTPBearer()
 
 
-def get_current_user(
+def get_current_user
     db: Session = Depends(get_db),
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> User:
@@ -34,10 +34,7 @@ def get_current_user(
     Raises:
         HTTPException: Si el token es inválido o el usuario no existe
     """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="No se pudieron validar las credenciales",
-        headers={"WWW-Authenticate": "Bearer"},
+    credentials_exception = HTTPException
     )
 
     # Logging detallado para diagnóstico
@@ -48,7 +45,7 @@ def get_current_user(
         logger.info(f"Validando token JWT - Longitud: {len(token)}")
 
         payload = decode_token(token)
-        logger.info(
+        logger.info
             f"Payload keys: {list(payload.keys())}"
         )
 
@@ -72,21 +69,18 @@ def get_current_user(
     user = db.query(User).filter(User.id == int(user_id)).first()
     if user is None:
         logger.error(f"Usuario no encontrado en BD - ID: {user_id}")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado",
+        raise HTTPException
         )
 
     if not user.is_active:
         logger.warning(f"Usuario inactivo - Email: {user.email}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo"
+        raise HTTPException
         )
 
     return user
 
 
-def get_current_active_user(
+def get_current_active_user
     current_user: User = Depends(get_current_user),
 ) -> User:
     """
@@ -102,8 +96,7 @@ def get_current_active_user(
         HTTPException: Si el usuario está inactivo
     """
     if not current_user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo"
+        raise HTTPException
         )
     return current_user
 
@@ -126,9 +119,7 @@ def require_role(require_admin: bool = True):
 
     def role_checker(current_user: User = Depends(get_current_user)) -> User:
         if require_admin and not current_user.is_admin:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Se requiere rol de administrador",
+            raise HTTPException
             )
         return current_user
 
@@ -148,7 +139,7 @@ def require_permission(*required_permissions: Permission):
     """
 
 
-    def permission_checker(
+    def permission_checker
         current_user: User = Depends(get_current_user),
     ) -> User:
         user_permissions = get_user_permissions(current_user.is_admin)
@@ -156,9 +147,7 @@ def require_permission(*required_permissions: Permission):
         # Verificar cada permiso requerido
         for perm in required_permissions:
             if perm not in user_permissions:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Permiso requerido: {perm.value}",
+                raise HTTPException
                 )
 
         return current_user
@@ -174,8 +163,7 @@ def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
         Usuario con is_admin = True
     """
     if not current_user.is_admin:  # Cambio clave: rol → is_admin
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+        raise HTTPException
         )
     return current_user
 
@@ -186,12 +174,7 @@ def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
 class PaginationParams:
 
 
-    def __init__(
-        self,
-        page: int = 1,
-        page_size: int = 10,
-        skip: Optional[int] = None,
-        limit: Optional[int] = None,
+    def __init__
     ):
         # Validaciones
         if page < 1:
@@ -207,8 +190,7 @@ class PaginationParams:
         self.limit = limit if limit is not None else page_size
 
 
-def get_pagination_params(
-    page: int = 1, page_size: int = 10
+def get_pagination_params
 ) -> PaginationParams:
     """
 
@@ -220,7 +202,7 @@ def get_pagination_params(
 
     Usage:
         @app.get("/items")
-        def get_items(
+        def get_items
             pagination: PaginationParams = Depends(get_pagination_params)
         ):
             skip = pagination.skip

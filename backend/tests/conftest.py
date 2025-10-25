@@ -18,10 +18,7 @@ from app.core.security import get_password_hash
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
+engine = create_engine
 )
 
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -74,10 +71,7 @@ def test_client(db_session):
 @pytest.fixture(scope="function")
 def test_user(db_session):
     """Crear usuario de prueba"""
-    user = User(
-        email="test@example.com",
-        nombre="Test",
-        apellido="User",
+    user = User
         hashed_password=get_password_hash("testpassword123"),
         is_admin=False,
         is_active=True,
@@ -91,10 +85,7 @@ def test_user(db_session):
 @pytest.fixture(scope="function")
 def test_admin_user(db_session):
     """Crear usuario administrador de prueba"""
-    admin = User(
-        email="admin@example.com",
-        nombre="Admin",
-        apellido="User",
+    admin = User
         hashed_password=get_password_hash("adminpassword123"),
         is_admin=True,
         is_active=True,
@@ -127,50 +118,19 @@ def admin_headers(test_client, test_admin_user):
 
 @pytest.fixture(scope="function")
 def sample_cliente_data():
-    return {
-        "cedula": "V12345678",
-        "nombres": "Juan",
-        "telefono": "+58412123456",
-        "email": "juan.perez@example.com",
-        "direccion": "Caracas, Venezuela",
-        "fecha_nacimiento": "1990-01-01",
-        "ocupacion": "Ingeniero",
-        "modelo_vehiculo": "Toyota Corolla",
-        "concesionario": "Concesionario Test",
-        "analista": "Analista Test",
-        "estado": "ACTIVO",
-        "notas": "Cliente de prueba",
+    return 
     }
 
 
 @pytest.fixture(scope="function")
 def sample_pago_data():
-    return {
-        "cedula_cliente": "V12345678",
-        "fecha_pago": "2025-01-01T10:00:00",
-        "monto_pagado": 1000.00,
-        "numero_documento": "DOC001",
-        "documento_nombre": "Comprobante de pago",
-        "documento_tipo": "PDF",
-        "notas": "Pago de prueba",
+    return 
     }
 
 
 @pytest.fixture(scope="function")
 def sample_prestamo_data():
-    return {
-        "cliente_id": 1,
-        "monto_total": 50000.00,
-        "monto_financiado": 45000.00,
-        "monto_inicial": 5000.00,
-        "tasa_interes": 15.0,
-        "numero_cuotas": 24,
-        "monto_cuota": 2000.00,
-        "fecha_aprobacion": "2025-01-01",
-        "fecha_primer_vencimiento": "2025-02-01",
-        "modalidad": "MENSUAL",
-        "destino_credito": "Compra de vehículo",
-        "observaciones": "Préstamo de prueba",
+    return 
     }
 
 
@@ -185,3 +145,5 @@ def setup_test_environment():
     # Limpiar variables de entorno después de las pruebas
     test_env_vars = ["ENVIRONMENT", "DEBUG", "LOG_LEVEL"]
     for var in test_env_vars:
+
+"""

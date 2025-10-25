@@ -18,11 +18,7 @@ logger = logging.getLogger(__name__)
 
         with engine.connect() as conn:
             # Verificar si la tabla existe
-            result = conn.execute(
-                text(
-                    """
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables
+            result = conn.execute
                 );
             """
                 )
@@ -34,21 +30,22 @@ logger = logging.getLogger(__name__)
 
 
 
-            result = conn.execute(
+            result = conn.execute
             )
 
-            result = conn.execute(
+            result = conn.execute
             )
 
                 estado = "✅ Activo" if registro.activo else "❌ Inactivo"
-                logger.info(
-                    f"  ID: {registro.id} | Nombre: {registro.nombre} | {estado}"
+                logger.info
                 )
 
-                logger.warning(
+                logger.warning
                 )
 
     except Exception as e:
 
 
 if __name__ == "__main__":
+
+"""

@@ -1,4 +1,4 @@
-﻿"""Helper para registrar acciones de auditoría
+"""Helper para registrar acciones de auditoría
 """
 
 import logging
@@ -12,18 +12,7 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 
 
-def registrar_auditoria(
-    db: Session,
-    usuario: User,
-    accion: str,
-    modulo: str,
-    tabla: str,
-    registro_id: Optional[int] = None,
-    descripcion: Optional[str] = None,
-    ip_address: Optional[str] = None,
-    user_agent: Optional[str] = None,
-    resultado: str = "EXITOSO",
-    mensaje_error: Optional[str] = None,
+def registrar_auditoria
 ) -> Auditoria:
     """
     Registrar una acción en la auditoría del sistema
@@ -45,35 +34,20 @@ def registrar_auditoria(
     """
     # Validar que el usuario no sea None
     if usuario is None:
-        logger.warning(
-            "Intento de registrar auditoría sin"
-            + f"usuario válido: {accion} - {modulo}"
+        logger.warning
         )
-        raise ValueError(
-            "No se puede registrar auditoría sin un usuario válido"
+        raise ValueError
         )
 
     try:
-        auditoria = Auditoria.registrar(
-            usuario_id=usuario.id,
-            usuario_email=usuario.email,
-            accion=accion,
-            modulo=modulo,
-            tabla=tabla,
-            registro_id=registro_id,
-            descripcion=descripcion,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            resultado=resultado,
-            mensaje_error=mensaje_error,
+        auditoria = Auditoria.registrar
         )
 
         db.add(auditoria)
         db.commit()
         db.refresh(auditoria)
 
-        logger.info(
-            f"Auditoría registrada: {usuario.email} - {accion} - {modulo}"
+        logger.info
         )
         return auditoria
     except Exception as e:
@@ -87,136 +61,42 @@ def registrar_auditoria(
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> Auditoria:
-    return registrar_auditoria(
-        db=db,
-        usuario=usuario,
-        accion="LOGIN",
-        modulo="AUTH",
-        registro_id=usuario.id,
-        ip_address=ip_address,
-        user_agent=user_agent,
-        resultado="EXITOSO",
+    return registrar_auditoria
     )
 
 
-def registrar_logout(
-    db: Session,
-    usuario: User,
-    ip_address: Optional[str] = None,
-    user_agent: Optional[str] = None,
+def registrar_logout
 ) -> Auditoria:
     """Registrar logout"""
-    return registrar_auditoria(
-        db=db,
-        usuario=usuario,
-        accion="LOGOUT",
-        modulo="AUTH",
-        registro_id=usuario.id,
-        descripcion=f"Cierre de sesión para {usuario.email}",
-        ip_address=ip_address,
-        user_agent=user_agent,
-        resultado="EXITOSO",
+    return registrar_auditoria
     )
 
 
-def registrar_creacion(
-    db: Session,
-    usuario: User,
-    modulo: str,
-    tabla: str,
-    registro_id: int,
-    descripcion: str,
-    ip_address: Optional[str] = None,
-    user_agent: Optional[str] = None,
+def registrar_creacion
 ) -> Auditoria:
     """Registrar creación de registro"""
-    return registrar_auditoria(
-        db=db,
-        usuario=usuario,
-        accion="CREAR",
-        modulo=modulo,
-        tabla=tabla,
-        registro_id=registro_id,
-        descripcion=descripcion,
-        ip_address=ip_address,
-        user_agent=user_agent,
-        resultado="EXITOSO",
+    return registrar_auditoria
     )
 
 
-def registrar_actualizacion(
-    db: Session,
-    usuario: User,
-    modulo: str,
-    tabla: str,
-    registro_id: int,
-    descripcion: str,
-    ip_address: Optional[str] = None,
-    user_agent: Optional[str] = None,
+def registrar_actualizacion
 ) -> Auditoria:
     """Registrar actualización de registro"""
-    return registrar_auditoria(
-        db=db,
-        usuario=usuario,
-        accion="ACTUALIZAR",
-        modulo=modulo,
-        tabla=tabla,
-        registro_id=registro_id,
-        descripcion=descripcion,
-        ip_address=ip_address,
-        user_agent=user_agent,
-        resultado="EXITOSO",
+    return registrar_auditoria
     )
 
 
-def registrar_eliminacion(
-    db: Session,
-    usuario: User,
-    modulo: str,
-    tabla: str,
-    registro_id: int,
-    descripcion: str,
-    ip_address: Optional[str] = None,
-    user_agent: Optional[str] = None,
+def registrar_eliminacion
 ) -> Auditoria:
     """Registrar eliminación de registro"""
-    return registrar_auditoria(
-        db=db,
-        usuario=usuario,
-        accion="ELIMINAR",
-        modulo=modulo,
-        tabla=tabla,
-        registro_id=registro_id,
-        descripcion=descripcion,
-        ip_address=ip_address,
-        user_agent=user_agent,
-        resultado="EXITOSO",
+    return registrar_auditoria
     )
 
 
-def registrar_error(
-    db: Session,
-    usuario: User,
-    accion: str,
-    modulo: str,
-    tabla: str,
-    descripcion: str,
-    mensaje_error: str,
-    registro_id: Optional[int] = None,
-    ip_address: Optional[str] = None,
-    user_agent: Optional[str] = None,
+def registrar_error
 ) -> Auditoria:
     """Registrar error en acción"""
-    return registrar_auditoria(
-        db=db,
-        usuario=usuario,
-        accion=accion,
-        modulo=modulo,
-        tabla=tabla,
-        registro_id=registro_id,
-        descripcion=descripcion,
-        ip_address=ip_address,
-        user_agent=user_agent,
-        resultado="FALLIDO",
-        mensaje_error=mensaje_error,
+    return registrar_auditoria
     )
+
+"""

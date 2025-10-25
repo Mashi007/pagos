@@ -1,3 +1,4 @@
+from datetime import date
 """Endpoints de auditoría del sistema
 """
 
@@ -13,10 +14,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.auditoria import Auditoria
 from app.models.user import User
-from app.schemas.auditoria import (
-    AuditoriaListResponse,
-    AuditoriaResponse,
-    AuditoriaStatsResponse,
+from app.schemas.auditoria import 
 )
 
 router = APIRouter()
@@ -30,7 +28,7 @@ logger = logging.getLogger(__name__)
     query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
 ):
     if usuario_email:
-        query = query.filter(
+        query = query.filter
             Auditoria.usuario_email.ilike(f"%{usuario_email}%")
         )
     if modulo:
@@ -67,16 +65,13 @@ def _calcular_paginacion_auditoria(total, limit, skip):
     current_page = (skip // limit) + 1
     return total_pages, current_page
 
-@router.get(
-    "/", response_model=AuditoriaListResponse, summary="Listar auditoría"
+@router.get
 )
 
 
-def listar_auditoria(
-    limit: int = Query(
+def listar_auditoria
     ),
-    usuario_email: Optional[str] = Query(
-        None, description="Filtrar por email de usuario"
+    usuario_email: Optional[str] = Query
     ),
     modulo: Optional[str] = Query(None, description="Filtrar por módulo"),
     accion: Optional[str] = Query(None, description="Filtrar por acción"),
@@ -105,31 +100,21 @@ def listar_auditoria(
         auditorias = query.offset(skip).limit(limit).all()
 
         # Calcular páginas
-        total_pages, current_page = _calcular_paginacion_auditoria(
-            total, limit, skip
+        total_pages, current_page = _calcular_paginacion_auditoria
         )
 
-        return AuditoriaListResponse(
-            items=auditorias,
-            total=total,
-            page=current_page,
-            page_size=limit,
-            total_pages=total_pages,
+        return AuditoriaListResponse
         )
     except Exception as e:
         logger.error(f"Error listando auditoría: {e}")
-        raise HTTPException(
-            status_code=500, detail="Error interno del servidor"
+        raise HTTPException
         )
 
-@router.get(
-    "/stats",
-    response_model=AuditoriaStatsResponse,
-    summary="Estadísticas de auditoría",
+@router.get
 )
 
 
-def obtener_estadisticas_auditoria(
+def obtener_estadisticas_auditoria
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -161,53 +146,34 @@ def obtener_estadisticas_auditoria(
 
         # Acciones por período
 
-        acciones_hoy = (
+        acciones_hoy = 
             db.query(Auditoria)
             .filter(func.date(Auditoria.fecha) == hoy)
             .count()
         )
-        acciones_esta_semana = (
+        acciones_esta_semana = 
             db.query(Auditoria)
             .filter(func.date(Auditoria.fecha) >= esta_semana)
             .count()
         )
-        acciones_este_mes = (
+        acciones_este_mes = 
             db.query(Auditoria)
             .filter(func.date(Auditoria.fecha) >= este_mes)
             .count()
         )
 
-        return AuditoriaStatsResponse(
-            total_acciones=total_acciones,
-            acciones_por_modulo=acciones_por_modulo,
-            acciones_por_usuario=acciones_por_usuario,
-            acciones_hoy=acciones_hoy,
-            acciones_esta_semana=acciones_esta_semana,
-            acciones_este_mes=acciones_este_mes,
+        return AuditoriaStatsResponse
         )
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas: {e}")
-        raise HTTPException(
-            status_code=500, detail="Error interno del servidor"
+        raise HTTPException
         )
 
 
 def _crear_dataframe_auditoria(auditorias):
     data = []
     for auditoria in auditorias:
-        data.append(
-            {
-                "ID": auditoria.id,
-                "Email Usuario": auditoria.usuario_email or "N/A",
-                "Acción": auditoria.accion,
-                "Módulo": auditoria.modulo,
-                "Tabla": auditoria.tabla,
-                "ID Registro": auditoria.registro_id or "N/A",
-                "Descripción": auditoria.descripcion or "N/A",
-                "IP Address": auditoria.ip_address or "N/A",
-                "Resultado": auditoria.resultado,
-                "Mensaje Error": auditoria.mensaje_error or "N/A",
-            }
+        data.append
         )
     return pd.DataFrame(data)
 
@@ -221,9 +187,7 @@ def _crear_excel_auditoria(df):
     return output
 
 @router.get("/export/excel", summary="Exportar auditoría a Excel")
-def exportar_auditoria_excel(
-    usuario_email: Optional[str] = Query(
-        None, description="Filtrar por email de usuario"
+def exportar_auditoria_excel
     ),
     modulo: Optional[str] = Query(None, description="Filtrar por módulo"),
     accion: Optional[str] = Query(None, description="Filtrar por acción"),
@@ -235,8 +199,7 @@ def exportar_auditoria_excel(
     """
     try:
         if not current_user.is_admin:
-            raise HTTPException(
-                status_code=403,
+            raise HTTPException
             )
 
         query = db.query(Auditoria)
@@ -250,34 +213,28 @@ def exportar_auditoria_excel(
         output = _crear_excel_auditoria(df)
 
         # Registrar la exportación
-        logger.info(
-            f"Usuario {current_user.email} exportó auditoría: {filename}"
+        logger.info
         )
 
-        return Response(
+        return Response
             content=output.getvalue(),
             media_type="application/vnd.openxmlformats-officedocument. \
             spreadsheetml.sheet",
-            headers={
+            headers=
             },
         )
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error exportando auditoría: {e}")
-        raise HTTPException(
-            status_code=500, detail="Error interno del servidor"
+        raise HTTPException
         )
 
-@router.get(
-    "/{auditoria_id}",
-    response_model=AuditoriaResponse,
-    summary="Obtener auditoría",
+@router.get
 )
 
 
-def obtener_auditoria(
-    auditoria_id: int,
+def obtener_auditoria
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -285,18 +242,18 @@ def obtener_auditoria(
     🔍 Obtener un registro de auditoría por ID
     """
     try:
-        auditoria = (
+        auditoria = 
             db.query(Auditoria).filter(Auditoria.id == auditoria_id).first()
         )
         if not auditoria:
-            raise HTTPException(
-                status_code=404, detail="Registro de auditoría no encontrado"
+            raise HTTPException
             )
         return auditoria
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error obteniendo auditoría {auditoria_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail="Error interno del servidor"
+        raise HTTPException
         )
+
+"""

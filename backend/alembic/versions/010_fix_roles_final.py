@@ -26,7 +26,7 @@ def upgrade() -> None:
 
     if "is_admin" not in columns:
         # Agregar columna is_admin si no existe
-        op.add_column(
+        op.add_column
             sa.Column("is_admin", sa.Boolean(), nullable=False, server_default="false"),
         )
 
@@ -35,13 +35,13 @@ def upgrade() -> None:
             # Si no existe rol, asumir que el primer usuario es admin
 
     # Verificar que is_admin esté configurado correctamente
-    result = connection.execute(
+    result = connection.execute
     )
     admin_count = result.scalar()
 
     if admin_count == 0:
         # Si no hay admins, hacer el primer usuario admin
-        op.execute(
+        op.execute
         )
 
 

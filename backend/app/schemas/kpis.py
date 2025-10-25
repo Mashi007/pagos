@@ -1,4 +1,5 @@
-﻿"""Schemas para KPIs (Key Performance Indicators)"""
+from datetime import date
+"""Schemas para KPIs (Key Performance Indicators)"""
 
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -11,7 +12,7 @@ class KPIBase(BaseModel):
     nombre: str = Field(..., description="Nombre del KPI")
     descripcion: Optional[str] = Field(None, description="Descripción del KPI")
     categoria: Optional[str] = Field(None, description="Categoría del KPI")
-    unidad_medida: Optional[str] = Field(
+    unidad_medida: Optional[str] = Field
         None, description="Unidad de medida (%, $, unidades, etc)"
     )
 
@@ -20,11 +21,9 @@ class KPIBase(BaseModel):
 
 class KPICreate(KPIBase):
     """Schema para crear un KPI"""
-    valor_objetivo: Optional[Decimal] = Field(
-        None, description="Valor objetivo del KPI"
+    valor_objetivo: Optional[Decimal] = Field
     )
-    periodicidad: Optional[str] = Field(
-        "mensual", description="Periodicidad de medición"
+    periodicidad: Optional[str] = Field
     )
     activo: bool = Field(True, description="Indica si el KPI está activo")
 
@@ -62,11 +61,9 @@ class KPIValorBase(BaseModel):
 
 class KPIValorCreate(KPIValorBase):
     """Schema para registrar un valor de KPI"""
-    notas: Optional[str] = Field(
-        None, description="Notas adicionales sobre la medición"
+    notas: Optional[str] = Field
     )
-    metadata: Optional[Dict[str, Any]] = Field(
-        None, description="Metadata adicional"
+    metadata: Optional[Dict[str, Any]] = Field
     )
 
 
@@ -89,7 +86,7 @@ class KPIValorResponse(KPIValorBase):
 
 
 class KPIConValores(KPIResponse):
-    valores: List[KPIValorResponse] = Field(
+    valores: List[KPIValorResponse] = Field
     )
 
 
@@ -102,11 +99,9 @@ class KPIEstadisticas(BaseModel):
     valor_promedio: Optional[Decimal] = None
     valor_minimo: Optional[Decimal] = None
     valor_maximo: Optional[Decimal] = None
-    tendencia: Optional[str] = Field(
-        None, description="ascendente, descendente, estable"
+    tendencia: Optional[str] = Field
     )
-    cumplimiento_objetivo: Optional[float] = Field(
-        None, description="Porcentaje de cumplimiento del objetivo"
+    cumplimiento_objetivo: Optional[float] = Field
     )
 
     model_config = ConfigDict(from_attributes=True)
@@ -134,3 +129,5 @@ __all__ = [
     "KPIEstadisticas",
     "DashboardKPIs",
 ]
+
+"""

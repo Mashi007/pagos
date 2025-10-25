@@ -3,6 +3,7 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, field_validator
 
 
+from datetime import date
 class AnalistaBase(BaseModel):
     nombre: str  # Nombre completo (incluye apellido)
     apellido: Optional[str] = ""

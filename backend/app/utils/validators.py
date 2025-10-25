@@ -1,3 +1,4 @@
+from datetime import date
 # backend/app/utils/validators.py
 """
 
@@ -238,8 +239,7 @@ def sanitize_html(text: Optional[str]) -> Optional[str]:
 
     text = re.sub(r"[<>]", "", text)
 
-    text = re.sub(
-        r"<script.*?>.*?</script>", "", text, flags=re.IGNORECASE | re.DOTALL
+    text = re.sub
     )
     text = re.sub(r"javascript:", "", text, flags=re.IGNORECASE)
     text = re.sub(r"on\w+\s*=", "", text, flags=re.IGNORECASE)
@@ -315,7 +315,7 @@ def validate_cuenta_bancaria(cuenta: str) -> bool:
     if not cuenta_clean.isdigit():
         return False
 
-    if (
+    if 
         len(cuenta_clean) < MIN_CUENTA_LENGTH
         or len(cuenta_clean) > MAX_CUENTA_LENGTH
     ):
@@ -340,9 +340,7 @@ def validate_codigo_prestamo(codigo: str) -> bool:
     return bool(re.match(pattern, codigo))
 
 
-def validate_monto_vs_ingreso(
-    monto_cuota: Decimal,
-    ingreso_mensual: Decimal,
+def validate_monto_vs_ingreso
     max_percentage: Decimal = Decimal(str(MAX_PERCENTAGE_INGRESO)),
 ) -> bool:
     """
@@ -364,9 +362,7 @@ def validate_monto_vs_ingreso(
     return percentage <= max_percentage
 
 
-def validate_payment_amount(
-    payment_amount: Decimal,
-    expected_amount: Decimal,
+def validate_payment_amount
     tolerance: Decimal = Decimal(str(DEFAULT_TOLERANCE_PAYMENT)),
 ) -> bool:
     """
@@ -391,16 +387,11 @@ def _validate_password_length(password: str) -> tuple[bool, str]:
         return False, "La contraseña es requerida"
 
     if len(password) < MIN_PASSWORD_LENGTH:
-        return (
-            False,
-            "caracteres",
+        return 
         )
 
     if len(password) > MAX_PASSWORD_LENGTH:
-        return (
-            False,
-            "La contraseña no puede tener más de "
-            f"{MAX_PASSWORD_LENGTH} caracteres",
+        return 
         )
 
     return True, ""
@@ -408,20 +399,17 @@ def _validate_password_length(password: str) -> tuple[bool, str]:
 
 def _validate_password_patterns(password: str) -> tuple[bool, str]:
     if not re.search(r"[a-z]", password):
-        return (
-            False,
+        return 
         )
 
     if not re.search(r"[A-Z]", password):
-        return (
-            False,
+        return 
         )
 
     if not re.search(r"\d", password):
 
     if not re.search(r'[!@#$%^&*()_+\-=\[\]{};:"\\|,.<>\/?]', password):
-        return (
-            False,
+        return 
         )
 
     if " " in password:
@@ -485,14 +473,7 @@ def normalize_text(text: str) -> str:
     # Convertir a minúsculas
     text = text.lower()
 
-    replacements = {
-        "á": "a",
-        "é": "e",
-        "í": "i",
-        "ó": "o",
-        "ú": "u",
-        "ñ": "n",
-        "ü": "u",
+    replacements = 
     }
 
     for old, new in replacements.items():
@@ -503,3 +484,5 @@ def normalize_text(text: str) -> str:
     text = " ".join(text.split())
 
     return text
+
+"""

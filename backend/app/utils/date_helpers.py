@@ -1,3 +1,4 @@
+from datetime import date, timedelta as delta
 # backend/app/utils/date_helpers.py
 """Utilidades para manejo de fechas
 """
@@ -30,8 +31,7 @@ def add_weeks(start_date: date, weeks: int) -> date:
     """
 
 
-def calculate_payment_dates(
-    start_date: date, num_payments: int, frequency: str = "MENSUAL"
+def calculate_payment_dates
 ) -> List[date]:
     """
     Args:
@@ -128,8 +128,7 @@ def get_first_day_of_month(year: int, month: int) -> date:
     return date(year, month, 1)
 
 
-def get_month_range(
-    reference_date: Optional[date] = None,
+def get_month_range
 ) -> tuple[date, date]:
     """
     Obtiene el rango de fechas del mes
@@ -141,16 +140,14 @@ def get_month_range(
     if reference_date is None:
         reference_date = date.today()
 
-    first_day = get_first_day_of_month(
-        reference_date.year, reference_date.month
+    first_day = get_first_day_of_month
     )
     last_day = get_last_day_of_month(reference_date.year, reference_date.month)
 
     return first_day, last_day
 
 
-def get_quarter_range(
-    reference_date: Optional[date] = None,
+def get_quarter_range
 ) -> tuple[date, date]:
     """
     Obtiene el rango de fechas del trimestre
@@ -189,8 +186,7 @@ def get_year_range(year: Optional[int] = None) -> tuple[date, date]:
     return first_day, last_day
 
 
-def is_business_day(
-    check_date: date, holidays: Optional[List[date]] = None
+def is_business_day
 ) -> bool:
     """
     Args:
@@ -210,8 +206,7 @@ def is_business_day(
     return True
 
 
-def next_business_day(
-    start_date: date, holidays: Optional[List[date]] = None
+def next_business_day
 ) -> date:
     """
     Obtiene el siguiente día hábil
@@ -225,8 +220,7 @@ def next_business_day(
     return next_day
 
 
-def calculate_interest_days(
-    start_date: date, end_date: date, day_count_convention: str = "30/360"
+def calculate_interest_days
 ) -> int:
     """
     Calcula días para cálculo de intereses según convención
@@ -241,7 +235,7 @@ def calculate_interest_days(
         # Convención 30/360 (cada mes tiene 30 días)
         d1 = min(start_date.day, 30)
         d2 = min(end_date.day, 30)
-        days = (
+        days = 
             (end_date.year - start_date.year) * 360
             + (end_date.month - start_date.month) * 30
             + (d2 - d1)
@@ -266,25 +260,13 @@ def format_date_es(date_obj: date) -> str:
     Returns:
         str: Fecha formateada (ej: "15 de enero de 2024")
     """
-    months_es = {
-        1: "enero",
-        2: "febrero",
-        3: "marzo",
-        4: "abril",
-        5: "mayo",
-        6: "junio",
-        7: "julio",
-        9: "septiembre",
-        10: "octubre",
-        11: "noviembre",
-        12: "diciembre",
+    months_es = 
     }
 
     return f"{date_obj.day} de {months_es[date_obj.month]} de {date_obj.year}"
 
 
-def get_age_in_days(
-    birth_date: date, reference_date: Optional[date] = None
+def get_age_in_days
 ) -> int:
     """
     Calcula la edad en días
@@ -300,8 +282,7 @@ def get_age_in_days(
     return (reference_date - birth_date).days
 
 
-def get_notification_dates(
-    due_date: date, days_before: List[int] = [3, 1, 0]
+def get_notification_dates
 ) -> List[tuple[date, str]]:
     """
     Calcula fechas para envío de notificaciones
@@ -327,8 +308,7 @@ def get_notification_dates(
     return notification_dates
 
 
-def calculate_days_in_period(
-    start_date: date, end_date: date, frequency: str = "MENSUAL"
+def calculate_days_in_period
 ) -> int:
     """
     Calcula el número esperado de días en un período según frecuencia

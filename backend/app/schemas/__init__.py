@@ -1,3 +1,4 @@
+from datetime import date
 # backend/app/schemas/__init__.py
 
 
@@ -19,61 +20,26 @@ from app.schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
 # ============================================
 # SCHEMAS DE CONCILIACIÓN BANCARIA
 # ============================================
-from app.schemas.conciliacion import (
-    ConciliacionCreate,
-    ConciliacionMatch,
-    ConciliacionResponse,
-    ConfirmacionConciliacion,
-    ConfirmacionResponse,
-    EstadisticasConciliacion,
-    EstadoConciliacion,
-    ExtractoBancarioUpload,
-    FiltroConciliacion,
-    MovimientoBancario,
-    MovimientoBancarioResponse,
-    PagoPendienteConciliacion,
-    ReporteConciliacionMensual,
-    ResultadoConciliacion,
-    TipoMatch,
-    ValidacionExtracto,
+from app.schemas.conciliacion import 
 )
 
 # ============================================
 # SCHEMAS DE KPIs
 # ============================================
 # ACTUALIZADO: Importaciones corregidas para coincidir con kpis.py
-from app.schemas.kpis import (
-    DashboardKPIs,
-    KPIBase,
-    KPIConValores,
-    KPICreate,
-    KPIEstadisticas,
-    KPIResponse,
-    KPIUpdate,
-    KPIValorBase,
-    KPIValorCreate,
-    KPIValorResponse,
-    KPIValorUpdate,
+from app.schemas.kpis import 
 )
 
 # ============================================
 # SCHEMAS DE PAGO
 # ============================================
-from app.schemas.pago import (
-    PagoCreate,
-    PagoListResponse,
-    PagoResponse,
-    PagoUpdate,
-    ResumenCliente,
+from app.schemas.pago import 
 )
 
 # ============================================
 # SCHEMAS DE PRÉSTAMO
 # ============================================
-from app.schemas.prestamo import (
-    PrestamoCreate,
-    PrestamoResponse,
-    PrestamoUpdate,
+from app.schemas.prestamo import 
 )
 
 # ============================================
@@ -132,6 +98,8 @@ __all__ = [
 # INFORMACIÓN DEL MÓDULO
 # ============================================
 __version__ = "1.0.0"
-__description__ = (
+__description__ = 
     "Schemas Pydantic v2 para validación de API - SIMPLIFICADO (sin UserRole)"
 )
+
+"""

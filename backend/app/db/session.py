@@ -25,16 +25,7 @@ DEFAULT_STATEMENT_TIMEOUT = 30000
 logger = logging.getLogger(__name__)
 
 # Crear engine de SQLAlchemy con configuración optimizada para producción
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,  # Verifica conexión antes de usar
-    pool_size=DEFAULT_POOL_SIZE,  # Conexiones permanentes
-    max_overflow=DEFAULT_MAX_OVERFLOW,  # Conexiones adicionales
-    pool_recycle=DEFAULT_POOL_RECYCLE,  # Reciclar conexiones
-    echo=settings.DB_ECHO,
-    connect_args={
-        "application_name": "rapicredit_backend",
-    },
+engine = create_engine
 )
 
 # SessionLocal para crear sesiones de BD
@@ -78,8 +69,7 @@ def get_db():
         logger.error(f"Tipo de error: {type(e).__name__}")
 
         # Solo para errores que NO son HTTPException
-        raise HTTPException(
-            status_code=503,
+        raise HTTPException
         )
     finally:
         if db:
@@ -89,3 +79,5 @@ def get_db():
 
 
     """Cierra todas las conexiones de la pool al shutdown"""
+
+"""

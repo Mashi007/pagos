@@ -1,4 +1,5 @@
 from app.core.security import decode_token
+from datetime import date, timedelta as delta
 """
 Sistema de seguridad: JWT, hashing de passwords, tokens y dependencias de
 FastAPI
@@ -46,9 +47,7 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_access_token(
-    subject: str | int,
-    additional_claims: Optional[dict[str, Any]] = None,
+def create_access_token
 ) -> str:
     """
     Crea un token de acceso JWT
@@ -64,8 +63,7 @@ def create_access_token(
     if additional_claims:
         to_encode.update(additional_claims)
 
-    encoded_jwt = jwt.encode(
-        to_encode, settings.SECRET_KEY, algorithm=ALGORITHM
+    encoded_jwt = jwt.encode
     )
     return encoded_jwt
 
@@ -75,8 +73,7 @@ def create_refresh_token(subject: str | int) -> str:
     Crea un token de refresh JWT
     """
     to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
-    encoded_jwt = jwt.encode(
-        to_encode, settings.SECRET_KEY, algorithm=ALGORITHM
+    encoded_jwt = jwt.encode
     )
     return encoded_jwt
 
@@ -89,8 +86,7 @@ def decode_token(token: str) -> dict:
         PyJWTError: Si el token es inválido o expiró
     """
     try:
-        payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[ALGORITHM]
+        payload = jwt.decode
         )
         return payload
     except PyJWTError as e:
@@ -134,8 +130,7 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
 
     special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
     if not any(c in special_chars for c in password):
-        return (
-            False,
+        return 
         )
 
     return True, "Contraseña válida"
@@ -148,8 +143,7 @@ def generate_password_reset_token(email: str) -> str:
         hours=PASSWORD_RESET_EXPIRE_HOURS
     )  # Expira en 1 hora
     to_encode = {"exp": expire, "sub": email, "type": "password_reset"}
-    encoded_jwt = jwt.encode(
-        to_encode, settings.SECRET_KEY, algorithm=ALGORITHM
+    encoded_jwt = jwt.encode
     )
     return encoded_jwt
 

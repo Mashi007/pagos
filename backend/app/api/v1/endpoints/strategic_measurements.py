@@ -1,4 +1,4 @@
-﻿"""Sistema de Mediciones Estratégicas
+"""Sistema de Mediciones Estratégicas
 """
 
 import logging
@@ -32,22 +32,13 @@ class StrategicMeasurements:
     def __init__(self):
         self.measurements = deque(maxlen=1000)  # Mediciones almacenadas
         self.lock = threading.Lock()
-        self.measurement_intervals = {
-            "memory_usage": 30,
-            "disk_usage": 60,  # Cada minuto
-            "network_io": 30,
-            "database_connections": 60,
+        self.measurement_intervals = 
         }
 
 
     def collect_system_metrics(self) -> Dict[str, Any]:
         """Recopilar métricas del sistema"""
-        metrics = {
-            "cpu_usage": self._get_cpu_usage(),
-            "memory_usage": self._get_memory_usage(),
-            "disk_usage": self._get_disk_usage(),
-            "network_io": self._get_network_io(),
-            "database_connections": self._get_db_connections(),
+        metrics = 
         }
 
         with self.lock:
@@ -66,11 +57,7 @@ class StrategicMeasurements:
             cpu_count = psutil.cpu_count()
             cpu_freq = psutil.cpu_freq()
 
-            return {
-                "usage_percent": cpu_percent,
-                "core_count": cpu_count,
-                "frequency_mhz": cpu_freq.current if cpu_freq else None,
-                "status": "ok" if cpu_percent < 80 else "warning",
+            return 
             }
         except Exception as e:
             return {"error": str(e)}
@@ -85,13 +72,7 @@ class StrategicMeasurements:
             memory = psutil.virtual_memory()
             swap = psutil.swap_memory()
 
-            return {
-                "total_gb": round(memory.total / (1024**3), 2),
-                "available_gb": round(memory.available / (1024**3), 2),
-                "used_percent": memory.percent,
-                "swap_total_gb": round(swap.total / (1024**3), 2),
-                "swap_used_percent": swap.percent,
-                "status": "ok" if memory.percent < 80 else "warning",
+            return 
             }
         except Exception as e:
             return {"error": str(e)}
@@ -105,12 +86,7 @@ class StrategicMeasurements:
         try:
             disk_usage = psutil.disk_usage('/')
 
-            return {
-                "total_gb": round(disk_usage.total / (1024**3), 2),
-                "used_gb": round(disk_usage.used / (1024**3), 2),
-                "free_gb": round(disk_usage.free / (1024**3), 2),
-                "used_percent": round((disk_usage.used / disk_usage.total) * 100, 2),
-                "status": "ok" if (disk_usage.free / disk_usage.total) > 0.1 else "warning",
+            return 
             }
         except Exception as e:
             return {"error": str(e)}
@@ -124,12 +100,7 @@ class StrategicMeasurements:
         try:
             net_io = psutil.net_io_counters()
 
-            return {
-                "bytes_sent": net_io.bytes_sent,
-                "bytes_recv": net_io.bytes_recv,
-                "packets_sent": net_io.packets_sent,
-                "packets_recv": net_io.packets_recv,
-                "status": "ok",
+            return 
             }
         except Exception as e:
             return {"error": str(e)}
@@ -138,11 +109,7 @@ class StrategicMeasurements:
     def _get_db_connections(self) -> Dict[str, Any]:
         """Obtener estadísticas de conexiones de BD"""
         # Simulación - en un sistema real se consultaría la BD
-        return {
-            "active_connections": 5,
-            "max_connections": 100,
-            "connection_pool_size": 20,
-            "status": "ok",
+        return 
         }
 
 
@@ -151,9 +118,7 @@ class StrategicMeasurements:
         with self.lock:
             recent_measurements = list(self.measurements)[-limit:]
 
-            return {
-                "measurements": recent_measurements,
-                "total_count": len(self.measurements),
+            return 
             }
 
 # Instancia global del sistema de mediciones
@@ -164,7 +129,7 @@ strategic_measurements = StrategicMeasurements()
 # ============================================
 
 @router.get("/measurements/system-metrics", response_model=Dict[str, Any])
-async def get_system_metrics(
+async def get_system_metrics
     current_user: User = Depends(get_current_user),
 ):
     """Obtener métricas del sistema"""
@@ -172,8 +137,7 @@ async def get_system_metrics(
     return metrics
 
 @router.get("/measurements/history", response_model=Dict[str, Any])
-async def get_measurement_history(
-    limit: int = 100,
+async def get_measurement_history
     current_user: User = Depends(get_current_user),
 ):
     """Obtener historial de mediciones"""

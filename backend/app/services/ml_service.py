@@ -33,8 +33,7 @@ class MLService:
         """
         try:
             if not data:
-                return {
-                    "success": False,
+                return 
                 }
 
             X = []
@@ -53,8 +52,7 @@ class MLService:
             X = np.array(X)
             y = np.array(y)
 
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=0.2, random_state=42
+            X_train, X_test, y_train, y_test = train_test_split
             )
 
             # Escalar características
@@ -76,16 +74,12 @@ class MLService:
 
             logger.info(f"Modelo de riesgo entrenado con precisión: {accuracy:.2f}")
 
-            return {
-                "success": True,
-                "accuracy": accuracy,
+            return 
             }
 
         except Exception as e:
             logger.error(f"Error entrenando modelo: {e}")
-            return {
-                "success": False,
-                "error": str(e)
+            return 
             }
 
 
@@ -100,13 +94,11 @@ class MLService:
         """
         try:
             if not self.is_trained:
-                return {
-                    "success": False,
-                    "error": "Modelo no entrenado"
+                return 
                 }
 
             # Preparar características
-            features = np.array([[
+            features = np.array
                 client_data.get('age', 0),
                 client_data.get('income', 0),
                 client_data.get('debt_ratio', 0),
@@ -126,35 +118,22 @@ class MLService:
             risk_levels = ['Bajo', 'Medio', 'Alto']
             risk_level = risk_levels[prediction] if prediction < len(risk_levels) else 'Desconocido'
 
-            return {
-                "success": True,
-                "risk_level": risk_level,
-                "risk_score": prediction,
-                "probabilities": probability.tolist(),
-                "recommendation": self._get_risk_recommendation(risk_level)
+            return 
             }
 
         except Exception as e:
             logger.error(f"Error prediciendo riesgo: {e}")
-            return {
-                "success": False,
-                "error": str(e)
+            return 
             }
 
 
     def _get_risk_recommendation(self, risk_level: str) -> str:
         """Obtener recomendación basada en nivel de riesgo"""
-        recommendations = {
-            'Bajo': 'Cliente de bajo riesgo. Aprobar financiamiento.',
-            'Medio': 'Cliente de riesgo medio. Revisar documentación adicional.',
-            'Alto': 'Cliente de alto riesgo. Requiere análisis detallado.'
+        recommendations = 
         }
         return recommendations.get(risk_level, 'Revisar caso manualmente.')
 
 
     def get_model_status(self) -> Dict[str, any]:
-        return {
-            "is_trained": self.is_trained,
-            "models_available": list(self.models.keys()),
-            "scalers_available": list(self.scalers.keys())
+        return 
         }

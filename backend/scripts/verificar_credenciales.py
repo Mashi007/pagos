@@ -14,7 +14,7 @@ TOKEN_PREFIX_LENGTH = 20
 
 load_dotenv()
 
-logging.basicConfig(
+logging.basicConfig
 )
 logger = logging.getLogger(__name__)
 
@@ -47,8 +47,7 @@ def probar_credenciales_admin():
                 data = response.json()
                 logger.info("   ✅ LOGIN EXITOSO!")
                 logger.info(f"   📊 Usuario: {data['user']['email']}")
-                logger.info(
-                    f"   📊 Rol: {'Administrador' if data['user']['is_admin'] else 'Usuario'}"
+                logger.info
                 )
                 logger.info(f"   📊 Token obtenido: {data['access_token'][:20]}...")
                 return data["access_token"]
@@ -89,11 +88,9 @@ def probar_login_usuario_prueba():
                 data = response.json()
                 logger.info("   ✅ LOGIN EXITOSO!")
                 logger.info(f"   📊 Usuario: {data['user']['email']}")
-                logger.info(
-                    f"   📊 Rol: {'Administrador' if data['user']['is_admin'] else 'Usuario'}"
+                logger.info
                 )
-                logger.info(
-                    f"   📊 Estado: {'Activo' if data['user']['is_active'] else 'Inactivo'}"
+                logger.info
                 )
                 return True
             else:

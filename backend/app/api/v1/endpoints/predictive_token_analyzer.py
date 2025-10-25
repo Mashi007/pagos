@@ -26,9 +26,7 @@ class TokenPredictiveAnalyzer:
     def __init__(self):
         self.token_history = deque(maxlen=10000)  # Historial de tokens
         self.accuracy_metrics = defaultdict(list)  # Métricas de precisión
-        self.prediction_thresholds = {
-            "usage_anomaly": 0.8,  # 80% de probabilidad de anomalía
-            "security_risk": 0.9,  # 90% de probabilidad de riesgo
+        self.prediction_thresholds = 
         }
 
 
@@ -40,30 +38,23 @@ class TokenPredictiveAnalyzer:
             # Calcular tiempo hasta expiración
 
             # Análisis predictivo
-            predictions = {
-                "usage_pattern": self._analyze_usage_pattern(token),
-                "security_risk_score": self._calculate_security_risk(token),
-                "recommendations": [],
+            predictions = 
             }
 
             # Generar recomendaciones
             if predictions["will_expire_soon"]:
-                predictions["recommendations"].append(
-                    "Token expirará pronto. Considerar renovación."
+                predictions["recommendations"].append
                 )
 
             if predictions["security_risk_score"] > self.prediction_thresholds["security_risk"]:
-                predictions["recommendations"].append(
-                    "Alto riesgo de seguridad detectado. Considerar revocación."
+                predictions["recommendations"].append
                 )
 
             return predictions
 
         except Exception as e:
             logger.error(f"Error analizando token: {e}")
-            return {
-                "error": str(e),
-                "recommendations": ["Token inválido o corrupto"],
+            return 
             }
 
 
@@ -126,9 +117,7 @@ class TokenPredictiveAnalyzer:
 
     def log_token_event(self, token: str, event_type: str, details: Dict[str, Any] = None):
         """Registrar evento relacionado con token"""
-        event = {
-            "token_hash": hash(token),
-            "event_type": event_type,
+        event = 
             "details": details or {},
         }
         self.token_history.append(event)
@@ -136,9 +125,7 @@ class TokenPredictiveAnalyzer:
 
     def get_prediction_accuracy(self) -> Dict[str, Any]:
         """Obtener métricas de precisión de predicciones"""
-        return {
-            "total_predictions": len(self.token_history),
-            "accuracy_by_type": dict(self.accuracy_metrics),
+        return 
         }
 
 # Instancia global del analizador predictivo
@@ -148,18 +135,14 @@ predictive_analyzer = TokenPredictiveAnalyzer()
 # ENDPOINTS DEL ANÁLISIS PREDICTIVO
 # ============================================
 
-async def analyze_token_predictive(
-    token: str,
+async def analyze_token_predictive
     current_user: User = Depends(get_current_user),
 ):
     """Analizar token de forma predictiva"""
     analysis = predictive_analyzer.analyze_token_lifecycle(token)
     return analysis
 
-async def log_token_event(
-    token: str,
-    event_type: str,
-    details: Dict[str, Any] = None,
+async def log_token_event
     current_user: User = Depends(get_current_user),
 ):
     """Registrar evento relacionado con token"""
@@ -167,8 +150,10 @@ async def log_token_event(
     return {"message": "Evento de token registrado"}
 
 @router.get("/predictive/accuracy", response_model=Dict[str, Any])
-async def get_prediction_accuracy(
+async def get_prediction_accuracy
     current_user: User = Depends(get_current_user),
 ):
     """Obtener métricas de precisión de predicciones"""
     return predictive_analyzer.get_prediction_accuracy()
+
+"""

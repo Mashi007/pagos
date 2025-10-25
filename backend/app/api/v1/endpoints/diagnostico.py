@@ -1,4 +1,4 @@
-﻿"""Endpoint de diagnóstico completo del sistema
+"""Endpoint de diagnóstico completo del sistema
 """
 
 import logging
@@ -22,13 +22,10 @@ router = APIRouter()
 def _verificar_conexion_bd(db: Session) -> Dict[str, Any]:
     try:
         db.execute(text("SELECT 1"))
-        return {
-            "status": "ok",
-            "url_configurada": bool(settings.DATABASE_URL),
+        return 
         }
     except Exception as e:
-        return {
-            "status": "error",
+        return 
             "message": f"Error de conexión: {str(e)}",
         }
 
@@ -51,8 +48,7 @@ def _verificar_tablas_criticas(db: Session) -> Dict[str, Any]:
             }
             todas_existen = False
 
-    return {
-        "todas_las_tablas_existen": todas_existen,
+    return 
     }
 
 
@@ -77,25 +73,18 @@ def _verificar_tablas_criticas(db: Session) -> Dict[str, Any]:
                 "tabla": getattr(modelo, '__tablename__', 'unknown')
             }
 
-    return {
+    return 
     }
 
 
 def _verificar_configuracion() -> Dict[str, Any]:
     """Verificar configuración del sistema"""
-    config_checks = {
-        "database_url": bool(settings.DATABASE_URL),
-        "secret_key": bool(settings.SECRET_KEY),
-        "algorithm": bool(settings.ALGORITHM),
-        "access_token_expire_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES > 0,
+    config_checks = 
     }
 
     config_ok = all(config_checks.values())
 
-    return {
-        "configuracion_completa": config_ok,
-        "checks": config_checks,
-        "access_token_expire_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+    return 
     }
 
 
@@ -108,8 +97,7 @@ def _verificar_configuracion() -> Dict[str, Any]:
         "/api/v1/analistas/",
     ]
 
-    return {
-        "nota": "Verificación simulada - en producción se harían requests reales"
+    return 
     }
 
     """🔍 Diagnóstico completo del sistema"""
@@ -117,10 +105,7 @@ def _verificar_configuracion() -> Dict[str, Any]:
         logger.info("🔍 Iniciando diagnóstico completo del sistema")
 
         # Ejecutar todas las verificaciones
-        verificaciones = {
-            "conexion_bd": _verificar_conexion_bd(db),
-            "tablas_criticas": _verificar_tablas_criticas(db),
-            "configuracion": _verificar_configuracion(),
+        verificaciones = 
         }
 
         # Determinar estado general
@@ -139,32 +124,22 @@ def _verificar_configuracion() -> Dict[str, Any]:
 
         # Generar recomendaciones
         recomendaciones = []
-            recomendaciones.extend([
-                "Revisar logs del sistema para más detalles",
-                "Ejecutar migraciones si es necesario"
+            recomendaciones.extend
             ])
         else:
             recomendaciones.append("Sistema funcionando correctamente")
 
-        resultado = {
-            "estado_general": estado_general,
-            "recomendaciones": recomendaciones,
-            "verificaciones": verificaciones,
+        resultado = 
         }
 
         logger.info(f"🔍 Diagnóstico completado - Estado: {estado_general}")
 
-        return {
-            "success": True,
+        return 
         }
 
     except Exception as e:
         logger.error(f"🔍 Error en diagnóstico completo: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-                "estado_general": "error",
-                "recomendaciones": ["Contactar administrador del sistema"]
+        return 
             }
         }
 
@@ -178,26 +153,17 @@ def _verificar_configuracion() -> Dict[str, Any]:
 
         estado = "ok" if conexion_ok and config_ok else "error"
 
-        resultado = {
-            "estado": estado,
-            "conexion_bd": "ok" if conexion_ok else "error",
-            "configuracion": "ok" if config_ok else "error",
-            "tiempo_respuesta": "< 1 segundo"
+        resultado = 
         }
 
         logger.info(f"⚡ Diagnóstico rápido completado - Estado: {estado}")
 
-        return {
-            "success": True,
+        return 
         }
 
     except Exception as e:
         logger.error(f"⚡ Error en diagnóstico rápido: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-                "estado": "error",
-                "error": str(e)
+        return 
             }
         }
 
@@ -207,26 +173,22 @@ def _verificar_configuracion() -> Dict[str, Any]:
 
         verificacion_tablas = _verificar_tablas_criticas(db)
 
-        return {
-            "success": True,
+        return 
         }
 
     except Exception as e:
         logger.error(f"📊 Error en diagnóstico de tablas: {e}")
-        return {
-            "success": False,
-            "error": str(e)
+        return 
         }
 
     try:
 
 
-        return {
-            "success": True,
+        return 
         }
 
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
+        return 
         }
+
+"""

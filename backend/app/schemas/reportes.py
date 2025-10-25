@@ -1,3 +1,4 @@
+from datetime import date
 # backend/app/schemas/reportes.py
 
 from decimal import Decimal

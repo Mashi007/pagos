@@ -21,7 +21,7 @@ def upgrade() -> None:
     # Verificar si la tabla ya existe
         return
 
-    op.create_table(
+    op.create_table
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("cedula_cliente", sa.String(length=20), nullable=False),
         sa.Column("fecha_pago", sa.DateTime(), nullable=False),
@@ -35,14 +35,12 @@ def upgrade() -> None:
         sa.Column("fecha_conciliacion", sa.DateTime(), nullable=True),
         sa.Column("activo", sa.Boolean(), nullable=False, default=True),
         sa.Column("notas", sa.Text(), nullable=True),
-        sa.Column(
-            "fecha_registro",
+        sa.Column
             sa.DateTime(),
             nullable=False,
             server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
-        sa.Column(
-            "fecha_actualizacion",
+        sa.Column
             sa.DateTime(),
             nullable=False,
             server_default=sa.text("CURRENT_TIMESTAMP"),
@@ -55,3 +53,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+
+"""

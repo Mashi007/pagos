@@ -28,8 +28,7 @@ def get_url() -> str:
             return database_url
 
         if attempt < MAX_ATTEMPTS:
-            logger.warning(
-                f"DATABASE_URL no encontrada, esperando {WAIT_SECONDS}s... "
+            logger.warning
                 f"(intento {attempt}/{MAX_ATTEMPTS})"
             )
 
@@ -41,8 +40,7 @@ def get_url() -> str:
         if any(term in key.upper() for term in terms):
             # Enmascarar valores sensibles
             if len(value) > MASK_THRESHOLD:
-                masked = (
-                    f"{value[:MASK_PREFIX_LENGTH]}..." f"{value[-MASK_SUFFIX_LENGTH:]}"
+                masked = 
                 )
             else:
                 masked = "***"
@@ -52,13 +50,7 @@ def get_url() -> str:
     if not found_vars:
         logger.warning("No se encontraron variables de entorno relacionadas con BD")
 
-    raise ValueError(
-        "SOLUCIÓN EN RAILWAY:\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "2. Ve a: Settings -> Variables\n"
-        "DESARROLLO LOCAL:\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "1. Crea archivo .env con:\n"
+    raise ValueError
         "2. Asegúrate de cargar dotenv antes de llamar get_url()\n\n"
     )
 
@@ -86,11 +78,7 @@ target_metadata = Base.metadata
 def run_migrations_offline():
     """Ejecutar migraciones en modo offline"""
     url = config.get_main_option("sqlalchemy.url")
-    context.configure(
-        url=url,
-        target_metadata=target_metadata,
-        literal_binds=True,
-        dialect_opts={"paramstyle": "named"},
+    context.configure
     )
 
     with context.begin_transaction():
@@ -99,7 +87,7 @@ def run_migrations_offline():
 
 def run_migrations_online():
     """Ejecutar migraciones en modo online"""
-    connectable = engine_from_config(
+    connectable = engine_from_config
         config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,

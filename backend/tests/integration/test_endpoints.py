@@ -70,8 +70,7 @@ class TestClientesEndpoints:
         assert data["nombres"] == sample_cliente_data["nombres"]
 
 
-    def test_crear_cliente_cedula_duplicada(
-        self, test_client: TestClient, auth_headers, sample_cliente_data, db_session
+    def test_crear_cliente_cedula_duplicada
     ):
         """Probar creación de cliente con cédula duplicada"""
         # Crear primer cliente
@@ -99,8 +98,7 @@ class TestClientesEndpoints:
         assert "per_page" in data
 
 
-    def test_obtener_cliente_por_id(
-        self, test_client: TestClient, auth_headers, sample_cliente_data, db_session
+    def test_obtener_cliente_por_id
     ):
         """Probar obtener cliente por ID"""
         # Crear cliente primero
@@ -109,8 +107,7 @@ class TestClientesEndpoints:
         cliente_id = create_response.json()["id"]
 
         # Obtener cliente por ID
-        response = test_client.get(
-            f"/api/v1/clientes/{cliente_id}", headers=auth_headers
+        response = test_client.get
         )
 
         assert response.status_code == 200
@@ -127,8 +124,7 @@ class TestClientesEndpoints:
         assert "no encontrado" in response.json()["detail"].lower()
 
 
-    def test_actualizar_cliente(
-        self, test_client: TestClient, auth_headers, sample_cliente_data, db_session
+    def test_actualizar_cliente
     ):
         """Probar actualización de cliente"""
         # Crear cliente primero
@@ -138,17 +134,14 @@ class TestClientesEndpoints:
 
         # Actualizar cliente
 
-        response = test_client.put(
-            f"/api/v1/clientes/{cliente_id}",
-            headers=auth_headers,
+        response = test_client.put
         )
 
         assert response.status_code == 200
         data = response.json()
 
 
-    def test_eliminar_cliente(
-        self, test_client: TestClient, auth_headers, sample_cliente_data, db_session
+    def test_eliminar_cliente
     ):
         """Probar eliminación de cliente"""
         # Crear cliente primero
@@ -157,8 +150,7 @@ class TestClientesEndpoints:
         cliente_id = create_response.json()["id"]
 
         # Eliminar cliente
-        response = test_client.delete(
-            f"/api/v1/clientes/{cliente_id}", headers=auth_headers
+        response = test_client.delete
         )
 
         assert response.status_code == 200
@@ -276,12 +268,7 @@ class TestCargaMasivaEndpoints:
 
     def test_upload_tipo_carga_invalido(self, test_client: TestClient, auth_headers):
         """Probar upload con tipo de carga inválido"""
-        files = {
-            "archivo": (
-                "test.xlsx",
-                b"test content",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
+        files = 
         }
         data = {"tipo_carga": "invalid_type"}
 
@@ -342,3 +329,5 @@ class TestAnalistasEndpoints:
 
         assert response.status_code == 201
         data = response.json()
+
+"""

@@ -1,4 +1,4 @@
-﻿"""Endpoint de migración de emergencia
+"""Endpoint de migración de emergencia
 Migración de emergencia para agregar columnas concesionario y analista
 """
 
@@ -12,7 +12,7 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-async def ejecutar_migracion_emergencia(
+async def ejecutar_migracion_emergencia
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -30,13 +30,11 @@ async def ejecutar_migracion_emergencia(
         # Agregar concesionario si no existe
         if "concesionario" not in columns:
             logger.info("Agregando columna 'concesionario'")
-            db.execute(
-                text(
+            db.execute
                     "ALTER TABLE clientes ADD COLUMN concesionario VARCHAR(100)"
                 )
             )
-            db.execute(
-                text(
+            db.execute
                     "CREATE INDEX idx_clientes_concesionario ON clientes (concesionario)"
                 )
             )
@@ -47,11 +45,10 @@ async def ejecutar_migracion_emergencia(
         # Agregar analista si no existe
         if "analista" not in columns:
             logger.info("Agregando columna 'analista'")
-            db.execute(
+            db.execute
                 text("ALTER TABLE clientes ADD COLUMN analista VARCHAR(100)")
             )
-            db.execute(
-                text(
+            db.execute
                     "CREATE INDEX idx_clientes_analista ON clientes (analista)"
                 )
             )
@@ -68,19 +65,12 @@ async def ejecutar_migracion_emergencia(
         ]
         logger.info(f"Columnas finales en clientes: {final_columns}")
 
-        return {
-            "success": True,
-            "columns_added": [
-                col for col in ["concesionario", "analista"]
-                if col not in columns
-            ],
-            "final_columns": final_columns,
+        return 
         }
 
     except Exception as e:
         db.rollback()
         logger.error(f"Error en migración de emergencia: {e}")
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error ejecutando migración: {str(e)}"
         )

@@ -1,4 +1,5 @@
 from collections import deque
+from datetime import date
 ﻿"""Sistema de Manejo de Errores con Análisis de Impacto en Performance
 Implementa manejo robusto de errores con métricas de impacto
 """
@@ -64,9 +65,7 @@ class CircuitBreaker:
     """
 
 
-    def __init__(
-        self,
-        failure_threshold: int = MAX_CONSECUTIVE_ERRORS,
+    def __init__
     ):
         self.failure_threshold = failure_threshold
         self.failure_count = 0
@@ -110,7 +109,7 @@ class ErrorImpactAnalyzer:
 
     def __init__(self):
         self.error_history: deque = deque(maxlen=MAX_ERROR_HISTORY)
-        self.endpoint_errors: Dict[str, deque] = defaultdict(
+        self.endpoint_errors: Dict[str, deque] = defaultdict
             lambda: deque(maxlen=100)
         )
         self.circuit_breakers: Dict[str, CircuitBreaker] = {}
@@ -119,12 +118,7 @@ class ErrorImpactAnalyzer:
         self.lock = threading.Lock()
 
 
-    def record_error(
-        self,
-        error: Exception,
-        endpoint: str,
-        user_id: Optional[str] = None,
-        request_id: Optional[str] = None,
+    def record_error
     ):
         """Registrar un error con métricas de impacto"""
         with self.lock:
@@ -135,7 +129,7 @@ class ErrorImpactAnalyzer:
             # Determinar severidad
 
             # Crear métricas de error
-            error_metrics = ErrorMetrics(
+            error_metrics = ErrorMetrics
                 error_type=type(error).__name__,
                 error_message=str(error),
                 endpoint=endpoint,
@@ -156,8 +150,7 @@ class ErrorImpactAnalyzer:
             # Actualizar circuit breaker
             self._update_circuit_breaker(endpoint, error)
 
-            logger.error(
-                f"Error registrado: {error_metrics.error_type} en {endpoint} - {severity.value}"
+            logger.error
             )
 
 
@@ -168,7 +161,7 @@ class ErrorImpactAnalyzer:
                 self.circuit_breakers[endpoint]._on_success()
 
 
-    def _determine_severity(
+    def _determine_severity
     ) -> ErrorSeverity:
         """Determinar severidad del error"""
         error_type = type(error).__name__
@@ -204,11 +197,7 @@ class ErrorImpactAnalyzer:
         """Obtener análisis de impacto de errores"""
         with self.lock:
             if not self.error_history:
-                return ErrorImpactAnalysis(
-                    error_rate=0,
-                    system_impact_level="UNKNOWN",
-                    consecutive_errors=0,
-                    circuit_breaker_status="NO_DATA",
+                return ErrorImpactAnalysis
                 )
 
             # Calcular tasa de error
@@ -228,55 +217,45 @@ class ErrorImpactAnalyzer:
             consecutive_errors = 0
             if self.error_history:
                 for error in reversed(self.error_history):
-                    if (
+                    if 
                     ).total_seconds() < 60:  # Último minuto
                         consecutive_errors += 1
                     else:
                         break
 
             # Estado de circuit breakers
-            open_circuits = sum(
-                1
+            open_circuits = sum
                 for cb in self.circuit_breakers.values()
                 if cb.state == "OPEN"
             )
 
             # Generar recomendaciones
-            recommendations = self._generate_recommendations(
+            recommendations = self._generate_recommendations
             )
 
-            return ErrorImpactAnalysis(
-                error_rate=error_rate,
-                system_impact_level=system_impact_level,
-                consecutive_errors=consecutive_errors,
-                circuit_breaker_status=circuit_breaker_status,
-                recommendations=recommendations,
+            return ErrorImpactAnalysis
             )
 
 
-    def _generate_recommendations(
-        self,
-        error_rate: float,
-        consecutive_errors: int,
+    def _generate_recommendations
     ) -> list:
         """Generar recomendaciones basadas en el análisis"""
         recommendations = []
 
         if error_rate > ERROR_RATE_THRESHOLD:
-            recommendations.append(
-                "Implementar retry logic con exponential backof"
+            recommendations.append
             )
-            recommendations.append(
+            recommendations.append
             )
 
 
         if consecutive_errors > MAX_CONSECUTIVE_ERRORS:
-            recommendations.append(
+            recommendations.append
             )
             recommendations.append("Implementar graceful degradation")
 
         if not recommendations:
-            recommendations.append(
+            recommendations.append
             )
 
         return recommendations
@@ -291,22 +270,16 @@ class ErrorImpactAnalyzer:
                     continue
 
                 error_types = [e.error_type for e in errors]
-                error_counts = {
-                    error_type: error_types.count(error_type)
-                    for error_type in set(error_types)
+                error_counts = 
                 }
 
                 ) / len(errors)
 
-                summary[endpoint] = {
-                    "total_errors": len(errors),
-                    "error_types": error_counts,
-                    "circuit_breaker_state": (
-                        self.circuit_breakers.get(endpoint, {}).get(
-                            "state", "N/A"
+                summary[endpoint] = 
+                        self.circuit_breakers.get(endpoint, {}).get
                         )
                     ),
-                    "last_error": (
+                    "last_error": 
                     ),
                 }
 
@@ -357,14 +330,12 @@ def get_error_analyzer() -> ErrorImpactAnalyzer:
     return error_analyzer
 
 
-def record_error(
-    error: Exception,
-    endpoint: str,
-    user_id: Optional[str] = None,
-    request_id: Optional[str] = None,
+def record_error
 ):
     """Registrar un error"""
-    error_analyzer.record_error(
+    error_analyzer.record_error
     )
 
 
+
+"""

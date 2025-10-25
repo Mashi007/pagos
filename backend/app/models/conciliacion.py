@@ -9,3 +9,5 @@
 # monto del sistema y banco""" if self.pago: return abs(self.monto_banco - self.pago.monto_pagado) return Decimal("0.00") def
 # marcar_conciliado(self, usuario_id: int, observaciones: str = None): """Marca como conciliado""" self.estado_match =
 # marcar_rechazado(self, usuario_id: int, motivo: str): """Marca como rechazado""" self.estado_match = "RECHAZADO"
+
+"""

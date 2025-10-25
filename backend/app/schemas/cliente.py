@@ -1,3 +1,4 @@
+from datetime import date
 # backend/app/schemas/cliente.py
 
 from decimal import Decimal
@@ -23,73 +24,39 @@ MAX_COMMENTS_LENGTH = 500
 
 
 class ClienteBase(BaseModel):
-    cedula: str = Field(
-        ...,
-        min_length=MIN_CEDULA_LENGTH,
-        max_length=MAX_CEDULA_LENGTH,
-        description="Cédula validada por validadores",
+    cedula: str = Field
     )
-    nombres: str = Field(
-        ...,
-        min_length=MIN_NAME_LENGTH,
-        max_length=MAX_NAME_LENGTH,
-        description="1-2 palabras máximo",
+    nombres: str = Field
     )
         ...,
         min_length=MIN_NAME_LENGTH,
         max_length=MAX_NAME_LENGTH,
         description="1-2 palabras máximo",
     )
-    telefono: str = Field(
-        ...,
-        min_length=MIN_PHONE_LENGTH,
-        max_length=MAX_PHONE_LENGTH,
-        pattern=r"^\+58[1-9]\d{9}$",
+    telefono: str = Field
     )
     email: EmailStr = Field(..., description="Validado por validadores")
-    direccion: str = Field(
-        ...,
-        min_length=MIN_ADDRESS_LENGTH,
-        max_length=MAX_ADDRESS_LENGTH,
-        description="Dirección libre",
+    direccion: str = Field
     )
     fecha_nacimiento: date = Field(..., description="Validado por validadores")
-    ocupacion: str = Field(
-        ...,
-        min_length=MIN_NAME_LENGTH,
-        max_length=MAX_NAME_LENGTH,
-        description="Texto libre",
+    ocupacion: str = Field
     )
 
-    modelo_vehiculo: str = Field(
-        ...,
-        min_length=1,
-        max_length=MAX_NAME_LENGTH,
-        description="De configuración",
+    modelo_vehiculo: str = Field
     )
-    concesionario: str = Field(
-        ...,
-        min_length=1,
-        max_length=MAX_NAME_LENGTH,
-        description="De configuración",
+    concesionario: str = Field
     )
-    analista: str = Field(
-        ...,
-        min_length=1,
-        max_length=MAX_NAME_LENGTH,
-        description="De configuración",
+    analista: str = Field
     )
 
     # Estado - OBLIGATORIO
-    estado: str = Field(
-        ...,
+    estado: str = Field
         pattern="^(ACTIVO|INACTIVO|FINALIZADO)$",
         description="Activo/Inactivo/Finalizado",
     )
 
     # Notas - OPCIONAL
-    notas: Optional[str] = Field(
-        "NA", max_length=MAX_NOTES_LENGTH, description="Si no llena 'NA'"
+    notas: Optional[str] = Field
     )
 
     @classmethod
@@ -122,8 +89,7 @@ class ClienteBase(BaseModel):
 
 class ClienteCreate(ClienteBase):
 
-    confirm_duplicate: bool = Field(
-        False, description="Indica si el usuario confirma crear un duplicado"
+    confirm_duplicate: bool = Field
     )
 
 
@@ -131,8 +97,7 @@ class ClienteCreateWithConfirmation(BaseModel):
     """Schema para crear cliente con confirmación de duplicado"""
 
     cliente_data: ClienteCreate
-    confirmacion: bool = Field(
-        True, description="Confirmación del operador"
+    confirmacion: bool = Field
     )
         "",
         max_length=MAX_COMMENTS_LENGTH,
@@ -143,8 +108,7 @@ class ClienteUpdate(BaseModel):
 
     cedula: Optional[str] = Field(None, min_length=8, max_length=20)
     nombres: Optional[str] = Field(None, min_length=2, max_length=100)
-    telefono: Optional[str] = Field(
-        None, min_length=13, max_length=13, pattern=r"^\+58[1-9]\d{9}$"
+    telefono: Optional[str] = Field
     )
     email: Optional[EmailStr] = None
     direccion: Optional[str] = Field(None, min_length=5, max_length=500)
@@ -156,7 +120,7 @@ class ClienteUpdate(BaseModel):
     analista: Optional[str] = Field(None, min_length=1, max_length=100)
 
     # Estado
-    estado: Optional[str] = Field(
+    estado: Optional[str] = Field
         None, pattern="^(ACTIVO|INACTIVO|FINALIZADO)$"
     )
     activo: Optional[bool] = None
@@ -210,11 +174,10 @@ class ClienteList(BaseModel):
 class ClienteSearchFilters(BaseModel):
 
     # Búsqueda de texto
-    search_text: Optional[str] = Field(
-        None, description="Búsqueda en nombre, cédula o móvil"
+    search_text: Optional[str] = Field
     )
 
-    estado: Optional[str] = Field(
+    estado: Optional[str] = Field
         None, pattern="^(ACTIVO|INACTIVO|FINALIZADO)$"
     )
     activo: Optional[bool] = None
@@ -226,7 +189,7 @@ class ClienteSearchFilters(BaseModel):
     fecha_registro_hasta: Optional[date] = None
 
     # Ordenamiento
-    order_by: Optional[str] = Field(
+    order_by: Optional[str] = Field
     )
     order_direction: Optional[str] = Field("asc", pattern="^(asc|desc)$")
 
@@ -246,29 +209,22 @@ class ClienteCreateWithLoan(ClienteBase):
     """Schema para crear cliente con préstamo automático"""
 
 
-    total_financiamiento: Decimal = Field(
-        ..., gt=0, description="Total del financiamiento"
+    total_financiamiento: Decimal = Field
     )
     cuota_inicial: Decimal = Field(default=Decimal("0.00"), ge=0)
-    fecha_entrega: date = Field(
-        ..., description="Fecha de entrega del vehículo"
+    fecha_entrega: date = Field
     )
-    numero_amortizaciones: int = Field(
-        ..., ge=1, le=MAX_AMORTIZACIONES, description="Número de cuotas"
+    numero_amortizaciones: int = Field
     )
-    modalidad_pago: str = Field(
+    modalidad_pago: str = Field
         ..., pattern="^(SEMANAL|QUINCENAL|MENSUAL|BIMENSUAL)$"
     )
 
     # Configuración del préstamo
-    tasa_interes_anual: Optional[Decimal] = Field(
-        None,
-        ge=0,
-        le=MAX_TASA_INTERES,
+    tasa_interes_anual: Optional[Decimal] = Field
         description="Tasa de interés anual (%)",
     )
-    generar_tabla_automatica: bool = Field(
-        True, description="Generar tabla de amortización automáticamente"
+    generar_tabla_automatica: bool = Field
     )
 
 
@@ -282,3 +238,5 @@ class ClienteQuickActions(BaseModel):
     puede_reasignar_analista: bool
 
     model_config = ConfigDict(from_attributes=True)
+
+"""

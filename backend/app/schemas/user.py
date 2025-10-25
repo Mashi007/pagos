@@ -1,3 +1,4 @@
+from datetime import date
 # backend/app/schemas/user.py
 """Schemas de usuario simplificado.
 
@@ -35,8 +36,7 @@ class UserUpdate(BaseModel):
     cargo: Optional[str] = Field(None, max_length=100)
     is_admin: Optional[bool] = None  # Cambio clave: rol → is_admin
     is_active: Optional[bool] = None
-    password: Optional[str] = Field(
-        None,
+    password: Optional[str] = Field
         description="Nueva contraseña (opcional, solo se valida si se provee)",
     )
 
@@ -46,7 +46,7 @@ class UserUpdate(BaseModel):
         """Validar contraseña solo si se proporciona un valor no vacío"""
         if v is not None and v.strip() != "":
             if len(v) < 8:
-                raise ValueError(
+                raise ValueError
                 )
         return v
 

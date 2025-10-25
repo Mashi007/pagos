@@ -3,6 +3,7 @@ from sqlalchemy.sql import func
 
 from app.db.session import Base
 
+from datetime import date
 CEDULA_LENGTH = 20
 NAME_LENGTH = 100
 PHONE_LENGTH = 15
@@ -28,45 +29,45 @@ class Cliente(Base):
     nombres = Column(String(NAME_LENGTH), nullable=False)  # 1-2 palabras máximo
         String(NAME_LENGTH), nullable=False
     )  # 1-2 palabras máximo
-    telefono = Column(
+    telefono = Column
         String(PHONE_LENGTH), nullable=False, index=True
     )  # Validado por validadores
-    email = Column(
+    email = Column
         String(EMAIL_LENGTH), nullable=False, index=True
     )  # Validado por validadores
     direccion = Column(Text, nullable=False)  # Libre
     fecha_nacimiento = Column(Date, nullable=False)  # Validado por validadores
-    ocupacion = Column(
+    ocupacion = Column
         String(OCCUPATION_LENGTH), nullable=False
     )  # Texto libre
 
     # ============================================
     # DATOS DEL VEHÍCULO Y FINANCIAMIENTO - OBLIGATORIOS
     # ============================================
-    modelo_vehiculo = Column(
+    modelo_vehiculo = Column
         String(VEHICLE_MODEL_LENGTH), nullable=False, index=True
     )  # Configuración
-    concesionario = Column(
+    concesionario = Column
         String(DEALER_LENGTH), nullable=False, index=True
     )  # Configuración
-    analista = Column(
+    analista = Column
         String(ANALYST_LENGTH), nullable=False, index=True
     )  # Configuración
 
     # Estado y control - OBLIGATORIOS
-    estado = Column(
+    estado = Column
         String(STATE_LENGTH), nullable=False, default="ACTIVO", index=True
     )  # Activo/Inactivo/Finalizado
     activo = Column(Boolean, nullable=False, default=True, index=True)
 
     # Auditoría - OBLIGATORIOS
-    fecha_registro = Column(
+    fecha_registro = Column
         TIMESTAMP, nullable=False, default=func.now()
     )  # Validado por validadores
-    fecha_actualizacion = Column(
+    fecha_actualizacion = Column
         TIMESTAMP, nullable=False, default=func.now(), onupdate=func.now()
     )  # Automático
-    usuario_registro = Column(
+    usuario_registro = Column
         String(USER_LENGTH), nullable=False
     )  # Email del usuario logueado (automático)
 

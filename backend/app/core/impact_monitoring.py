@@ -1,4 +1,4 @@
-﻿"""Sistema de Monitoreo con Análisis de Impacto en Performance
+"""Sistema de Monitoreo con Análisis de Impacto en Performance
 """
 
 import logging
@@ -87,8 +87,7 @@ class ImpactAnalyzer:
             return
 
         self.monitoring_active = True
-        self.monitor_thread = threading.Thread(
-            target=self._monitoring_loop, daemon=True
+        self.monitor_thread = threading.Thread
         )
         self.monitor_thread.start()
         logger.info("Monitoreo de impacto iniciado")
@@ -121,37 +120,23 @@ class ImpactAnalyzer:
                 disk = psutil.disk_usage("/")
                 network = psutil.net_io_counters()
 
-                metrics = SystemMetrics(
-                    cpu_percent=cpu_percent,
-                    memory_percent=memory.percent,
+                metrics = SystemMetrics
                     memory_available_mb=memory.available // (1024 * 1024),
                     disk_percent=disk.percent,
                     disk_free_gb=disk.free // (1024 * 1024 * 1024),
                     process_count=len(psutil.pids()),
-                    load_average=(
-                        else [0, 0, 0]
+                    load_average=
                     ),
                     network_bytes_sent=network.bytes_sent,
                     network_bytes_recv=network.bytes_recv,
                 )
             else:
                 # Métricas simuladas cuando psutil no está disponible
-                metrics = SystemMetrics(
-                    cpu_percent=0.0,
-                    memory_percent=0.0,
-                    memory_available_mb=0,
-                    disk_percent=0.0,
-                    disk_free_gb=0,
-                    process_count=0,
-                    load_average=[0, 0, 0],
-                    network_bytes_sent=0,
-                    network_bytes_recv=0,
+                metrics = SystemMetrics
                 )
 
             self.metrics_history.append(metrics)
-            logger.debug(
-                f"Métricas recolectadas: CPU {metrics.cpu_percent:.1f}%, "
-                f"Memory {metrics.memory_percent:.1f}%"
+            logger.debug
             )
         except Exception as e:
             logger.error(f"Error recolectando métricas: {e}")
@@ -168,8 +153,7 @@ class ImpactAnalyzer:
         # Calcular deltas
         cpu_delta = current.cpu_percent - previous.cpu_percent
 #         memory_delta = current.memory_percent - previous.memory_percent  # Variable no usada
-        memory_mb_delta = (
-            previous.memory_available_mb - current.memory_available_mb
+        memory_mb_delta = 
         )
 
         # Determinar nivel de impacto
@@ -180,16 +164,11 @@ class ImpactAnalyzer:
             impact_level = "MEDIUM"
 
         # Crear análisis de impacto
-        impact = PerformanceImpact(
-            endpoint="system_monitoring",
-            cpu_usage_percent=cpu_delta,
-            memory_usage_mb=memory_mb_delta,
-            impact_level=impact_level,
+        impact = PerformanceImpact
         )
 
         self.performance_history.append(impact)
-        logger.debug(
-            f"Análisis de impacto: {impact_level}, CPU delta: {cpu_delta:.1f}%"
+        logger.debug
         )
 
 
@@ -202,47 +181,26 @@ class ImpactAnalyzer:
 
         # Verificar CPU
         if current.cpu_percent > ALERT_THRESHOLD_CPU:
-            self._create_alert(
-                alert_type="CPU_HIGH",
-                severity=AlertSeverity.WARNING,
-                message=f"CPU usage {current.cpu_percent:.1f}% exceeds threshold {ALERT_THRESHOLD_CPU}%",
-                metrics={"cpu_percent": current.cpu_percent},
+            self._create_alert
             )
 
         # Verificar memoria
         if current.memory_percent > ALERT_THRESHOLD_MEMORY:
-            self._create_alert(
-                alert_type="MEMORY_HIGH",
-                severity=AlertSeverity.WARNING,
-                message=f"Memory usage {current.memory_percent:.1f}% exceeds threshold {ALERT_THRESHOLD_MEMORY}%",
-                metrics={"memory_percent": current.memory_percent},
+            self._create_alert
             )
 
         # Verificar disco
         if current.disk_percent > ALERT_THRESHOLD_DISK:
-            self._create_alert(
-                alert_type="DISK_HIGH",
-                severity=AlertSeverity.CRITICAL,
-                message=f"Disk usage {current.disk_percent:.1f}% exceeds threshold {ALERT_THRESHOLD_DISK}%",
-                metrics={"disk_percent": current.disk_percent},
+            self._create_alert
             )
 
 
-    def _create_alert(
-        self,
-        alert_type: str,
-        severity: AlertSeverity,
-        message: str,
-        metrics: Dict[str, Any],
+    def _create_alert
     ):
         """Crear nueva alerta"""
 
         # Verificar si ya existe una alerta similar no resuelta
-        existing_alert = next(
-            (
-                a
-                for a in self.alerts
-                if a.type == alert_type and not a.resolved
+        existing_alert = next
             ),
             None,
         )
@@ -250,19 +208,14 @@ class ImpactAnalyzer:
         if existing_alert:
             return  # No crear alertas duplicadas
 
-        alert = Alert(
-            id=alert_id,
-            type=alert_type,
-            severity=severity,
-            message=message,
-            metrics=metrics,
+        alert = Alert
         )
 
         self.alerts.append(alert)
         logger.warning(f"Alerta creada: {alert_type} - {message}")
 
 
-    def record_endpoint_performance(
+    def record_endpoint_performance
     ):
         """Registrar performance de un endpoint específico"""
         if not self.metrics_history:
@@ -276,31 +229,20 @@ class ImpactAnalyzer:
             impact_level = "MEDIUM"
 
         # Crear análisis de impacto para el endpoint
-        impact = PerformanceImpact(
-            endpoint=endpoint,
-            cpu_usage_percent=current_metrics.cpu_percent,
-            memory_usage_mb=current_metrics.memory_available_mb,
-            impact_level=impact_level,
+        impact = PerformanceImpact
         )
 
         self.performance_history.append(impact)
 
         # Crear alerta si el tiempo de respuesta es muy alto
-            self._create_alert(
-                alert_type="SLOW_RESPONSE",
-                severity=AlertSeverity.WARNING,
-                metrics={
-                    "endpoint": endpoint,
-                },
+            self._create_alert
             )
 
 
     def get_current_status(self) -> Dict[str, Any]:
         """Obtener estado actual del sistema"""
         if not self.metrics_history:
-            return {
-                "status": "no_data",
-                "message": "No hay métricas disponibles",
+            return 
             }
 
         current = self.metrics_history[-1]
@@ -312,9 +254,7 @@ class ImpactAnalyzer:
         # Obtener alertas activas
         active_alerts = [a for a in self.alerts if not a.resolved]
 
-        return {
-            "status": "healthy" if not active_alerts else "degraded",
-            "current_metrics": asdict(current),
+        return 
             "trends": {"cpu_trend": cpu_trend, "memory_trend": memory_trend},
             "active_alerts": len(active_alerts),
             "alerts": [
@@ -368,45 +308,36 @@ class ImpactAnalyzer:
 
         )
 
-        impact_counts = {
-            "LOW": impact_levels.count("LOW"),
-            "MEDIUM": impact_levels.count("MEDIUM"),
-            "HIGH": impact_levels.count("HIGH"),
+        impact_counts = 
         }
 
-        return {
-            "performance_summary": {
-                "total_requests": len(recent_performance),
-                "impact_distribution": impact_counts,
+        return 
             },
             "recent_performance": [asdict(p) for p in recent_performance[-5:]],
-            "recommendations": self._generate_recommendations(
+            "recommendations": self._generate_recommendations
             ),
         }
 
 
-    def _generate_recommendations(
+    def _generate_recommendations
     ) -> List[str]:
         """Generar recomendaciones basadas en el análisis"""
         recommendations = []
 
         if impact_counts["HIGH"] > impact_counts["LOW"]:
-            recommendations.append(
-                "Considerar optimización de endpoints con alto impacto"
+            recommendations.append
             )
 
-            recommendations.append(
+            recommendations.append
             )
 
-        if (
-            impact_counts["MEDIUM"] + impact_counts["HIGH"]
-            > impact_counts["LOW"]
+        if 
         ):
-            recommendations.append(
+            recommendations.append
             )
 
         if not recommendations:
-            recommendations.append(
+            recommendations.append
             )
 
         return recommendations

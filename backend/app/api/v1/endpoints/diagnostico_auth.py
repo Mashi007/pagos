@@ -1,4 +1,4 @@
-﻿"""Endpoint de Diagnóstico Avanzado de Autenticación
+"""Endpoint de Diagnóstico Avanzado de Autenticación
 Sistema de auditoría para encontrar causa raíz de problemas 401
 """
 
@@ -24,16 +24,10 @@ router = APIRouter()
         self.system_metrics = {}
 
 
-    def analyze_authentication_failure(
-        self,
-        user_id: str,
-        error_details: Dict[str, Any],
-        request_context: Dict[str, Any]
+    def analyze_authentication_failure
     ) -> Dict[str, Any]:
         """Analizar fallo de autenticación específico"""
-        analysis = {
-            "user_id": user_id,
-            "error_type": error_details.get("error_type", "unknown"),
+        analysis = 
             "analysis_results": {},
             "recommendations": [],
             "severity": "medium"
@@ -72,11 +66,7 @@ router = APIRouter()
 
     def _analyze_error_pattern(self, error_details: Dict[str, Any]) -> Dict[str, Any]:
         """Analizar patrón del error"""
-        pattern = {
-            "error_type": error_details.get("error_type", "unknown"),
-            "frequency": 1,
-            "common_causes": [],
-            "suggested_fixes": []
+        pattern = 
         }
 
         error_type = error_details.get("error_type", "").lower()
@@ -115,19 +105,10 @@ router = APIRouter()
         return pattern
 
 
-    def _analyze_user_behavior(
-        self,
-        user_id: str,
-        request_context: Dict[str, Any]
+    def _analyze_user_behavior
     ) -> Dict[str, Any]:
         """Analizar comportamiento del usuario"""
-        behavior = {
-            "user_id": user_id,
-            "login_attempts": 0,
-            "recent_failures": 0,
-            "ip_addresses": [],
-            "user_agents": [],
-            "risk_score": 0.0
+        behavior = 
         }
 
         # Aquí se implementaría la lógica para analizar el comportamiento
@@ -148,12 +129,7 @@ router = APIRouter()
 
     def _analyze_system_context(self, request_context: Dict[str, Any]) -> Dict[str, Any]:
         """Analizar contexto del sistema"""
-        context = {
-            "client_ip": request_context.get("client_ip"),
-            "user_agent": request_context.get("user_agent"),
-            "system_load": "normal",
-            "network_status": "stable",
-            "service_status": "operational"
+        context = 
         }
 
         # Aquí se implementaría la lógica para analizar el estado del sistema
@@ -161,18 +137,10 @@ router = APIRouter()
         return context
 
 
-    def _analyze_security_patterns(
-        self,
-        error_details: Dict[str, Any],
-        request_context: Dict[str, Any]
+    def _analyze_security_patterns
     ) -> Dict[str, Any]:
         """Analizar patrones de seguridad"""
-        security = {
-            "suspicious_activity": False,
-            "brute_force_attempt": False,
-            "unusual_location": False,
-            "security_score": 0.0,
-            "threat_level": "low"
+        security = 
         }
 
         error_type = error_details.get("error_type", "").lower()
@@ -229,9 +197,7 @@ router = APIRouter()
 # ENDPOINTS DE DIAGNÓSTICO
 # ============================================
 
-async def analyze_authentication_failure(
-    error_data: Dict[str, Any],
-    request: Request,
+async def analyze_authentication_failure
     current_user: User = Depends(get_current_user),
 ):
     """Analizar fallo de autenticación específico"""
@@ -240,61 +206,50 @@ async def analyze_authentication_failure(
         error_details = error_data.get("error_details", {})
 
         # Obtener contexto de la petición
-        request_context = {
-            "user_agent": request.headers.get("User-Agent"),
+        request_context = 
         }
 
         # Realizar análisis
             user_id, error_details, request_context
         )
 
-        return {
-            "success": True,
-            "analysis": analysis
+        return 
         }
 
     except Exception as e:
         logger.error(f"Error analizando fallo de autenticación: {e}")
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error interno: {str(e)}"
         )
 
     current_user: User = Depends(get_current_user),
 ):
     try:
-        summary = {
-            "system_status": "operational"
+        summary = 
         }
 
-        return {
-            "success": True,
-            "summary": summary
+        return 
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error interno: {str(e)}"
         )
 
 @router.get("/user-behavior/{user_id}")
-async def get_user_behavior_analysis(
-    user_id: str,
+async def get_user_behavior_analysis
     current_user: User = Depends(get_current_user),
 ):
     """Obtener análisis de comportamiento de usuario específico"""
     try:
 
-        return {
-            "success": True,
-            "user_id": user_id,
-            "behavior": behavior
+        return 
         }
 
     except Exception as e:
         logger.error(f"Error obteniendo comportamiento de usuario: {e}")
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error interno: {str(e)}"
         )
+
+"""

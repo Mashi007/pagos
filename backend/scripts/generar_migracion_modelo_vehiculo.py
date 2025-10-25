@@ -10,7 +10,7 @@ import logging
 MODELO_VEHICULO_LENGTH = 100
 
 # Configurar logging
-logging.basicConfig(
+logging.basicConfig
 )
 logger = logging.getLogger(__name__)
 
@@ -77,3 +77,5 @@ def downgrade():
 
 if __name__ == "__main__":
     generar_migracion()
+
+"""

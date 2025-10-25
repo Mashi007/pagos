@@ -1,3 +1,4 @@
+from datetime import date
 # backend/app/schemas/conciliacion.py
 """Schemas para el módulo de conciliación bancaria"""
 
@@ -38,16 +39,13 @@ class MovimientoBancario(BaseModel):
     fecha: date
     referencia: str
     monto: Decimal
-    cedula_pagador: Optional[str] = Field(
-        None, description="Cédula del pagador"
+    cedula_pagador: Optional[str] = Field
     )
     descripcion: Optional[str] = ""
-    cuenta_origen: Optional[str] = Field(
-        None, description="Número de cuenta origen"
+    cuenta_origen: Optional[str] = Field
     )
 
-    model_config = ConfigDict(
-        json_encoders={
+    model_config = ConfigDict
             Decimal: lambda v: float(v),
             date: lambda v: v.isoformat(),
         }
@@ -84,7 +82,7 @@ class ConciliacionCreate(BaseModel):
     @classmethod
     def validar_fechas(cls, v, info):
         if "fecha_inicio" in info.data and v < info.data["fecha_inicio"]:
-            raise ValueError(
+            raise ValueError
             )
         return v
 
@@ -96,14 +94,10 @@ class ConciliacionMatch(BaseModel):
     monto_pago: Decimal
     fecha_pago: date
     tipo_match: TipoMatch
-    confianza: float = Field(
-        ge=0,
-        le=MAX_CONFIDENCE,
-        description="Porcentaje de confianza del match",
+    confianza: float = Field
     )
 
-    model_config = ConfigDict(
-        json_encoders={
+    model_config = ConfigDict
             Decimal: lambda v: float(v),
             date: lambda v: v.isoformat(),
         }
@@ -121,10 +115,9 @@ class ResultadoConciliacion(BaseModel):
     @field_validator("porcentaje_conciliacion")
     @classmethod
     def calcular_porcentaje(cls, v, info):
-        if (
+        if 
         ):
-            return round(
-                (
+            return round
                 )
                 * 100,
                 2,
@@ -142,9 +135,7 @@ class ConciliacionResponse(BaseModel):
     fecha_fin: date
     estado: EstadoConciliacion
 
-    model_config = ConfigDict(
-        from_attributes=True,
-        json_encoders={
+    model_config = ConfigDict
             date: lambda v: v.isoformat(),
         },
     )
@@ -210,9 +201,7 @@ class FiltroConciliacion(BaseModel):
 
 
     class Config:
-        json_encoders = {
-            Decimal: lambda v: float(v),
-            date: lambda v: v.isoformat() if v else None,
+        json_encoders = 
         }
 
 
@@ -231,9 +220,7 @@ class PagoPendienteConciliacion(BaseModel):
     concepto: str
     dias_pendiente: int = 0
 
-    model_config = ConfigDict(
-        from_attributes=True,
-        json_encoders={
+    model_config = ConfigDict
             Decimal: lambda v: float(v),
             date: lambda v: v.isoformat(),
         },
@@ -252,11 +239,7 @@ class ExtractoBancarioUpload(BaseModel):
     separador: str = ","
     codificacion: str = "utf-8"
     tiene_encabezado: bool = True
-    columnas: Dict[str, str] = {
-        "fecha": "fecha",
-        "referencia": "referencia",
-        "monto": "monto",
-        "descripcion": "descripcion",
+    columnas: Dict[str, str] = 
     }
 
 
@@ -320,8 +303,7 @@ class ConciliacionMasiva(BaseModel):
     )
         True, description="Aplicar coincidencias exactas automáticamente"
     )
-    aplicar_parciales: bool = Field(
-        False, description="Aplicar coincidencias parciales"
+    aplicar_parciales: bool = Field
     )
     observaciones: Optional[str] = None
 
@@ -355,5 +337,5 @@ class HistorialConciliacion(BaseModel):
     estado: EstadoConciliacion
     observaciones: Optional[str] = None
 
-    model_config = ConfigDict(
+    model_config = ConfigDict
     )

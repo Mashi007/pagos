@@ -82,27 +82,16 @@ class RealTimeMonitor:
                         error_rate = error_count / total_endpoint_requests
 
                         if error_rate > 0.5:  # Más del 50% de errores
-                            logger.warning(
-                                f"⚠️ Alta tasa de error detectada en {endpoint}: "
+                            logger.warning
                                 f"{error_rate:.2%} ({error_count}/{total_endpoint_requests})"
                             )
 
 
-    def log_request(
-        self,
-        endpoint: str,
-        method: str,
-        status_code: int,
-        user_id: str = None,
-        details: Dict[str, Any] = None
+    def log_request
     ):
         """Registrar un request"""
         with self.lock:
-            request_log = {
-                "endpoint": endpoint,
-                "method": method,
-                "status_code": status_code,
-                "user_id": user_id,
+            request_log = 
                 "details": details or {},
             }
             self.request_logs.append(request_log)
@@ -113,12 +102,7 @@ class RealTimeMonitor:
         try:
             payload = decode_token(token)
 
-            analysis = {
-                "token_valid": True,
-                "user_id": payload.get("sub"),
-                "token_type": payload.get("type"),
-                "issued_at": payload.get("iat"),
-                "expires_at": payload.get("exp"),
+            analysis = 
             }
 
             # Agregar al análisis de tokens
@@ -129,19 +113,13 @@ class RealTimeMonitor:
 
         except Exception as e:
             logger.error(f"Error analizando token: {e}")
-            return {
-                "token_valid": False,
-                "error": str(e),
+            return 
             }
 
 
         """Obtener estadísticas en tiempo real"""
         with self.lock:
-            return {
-                "total_requests": len(self.request_logs),
-                "total_token_analyses": len(self.token_analytics),
-                "error_patterns": dict(self.error_patterns),
-                "success_patterns": dict(self.success_patterns),
+            return 
             }
 
 # Instancia global del monitor tiempo real
@@ -150,20 +128,14 @@ class RealTimeMonitor:
 # ENDPOINTS DEL MONITOR TIEMPO REAL
 # ============================================
 
-async def log_request(
-    endpoint: str,
-    method: str,
-    status_code: int,
-    user_id: str = None,
-    details: Dict[str, Any] = None,
+async def log_request
     current_user: User = Depends(get_current_user),
 ):
     """Registrar un request"""
     )
     return {"message": "Request registrado"}
 
-async def analyze_token(
-    token: str,
+async def analyze_token
     current_user: User = Depends(get_current_user),
 ):
     """Analizar un token"""

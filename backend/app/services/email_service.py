@@ -1,3 +1,4 @@
+from datetime import date
 # backend/app/services/email_service.py
 """Servicio de envío de emails
 
@@ -27,12 +28,7 @@ class EmailService:
         self.from_email = settings.FROM_EMAIL
 
 
-    def send_email(
-        self,
-        to_emails: List[str],
-        subject: str,
-        body: str,
-        is_html: bool = False,
+    def send_email
     ) -> Dict[str, any]:
         """
         Enviar email
@@ -67,25 +63,16 @@ class EmailService:
             server.sendmail(self.from_email, to_emails, text)
             server.quit()
 
-            return {
-                "success": True,
-                "recipients": to_emails
+            return 
             }
 
         except Exception as e:
             logger.error(f"Error enviando email: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "recipients": to_emails
+            return 
             }
 
 
-    def send_notification_email(
-        self,
-        to_email: str,
-        notification_type: str,
-        data: Dict[str, any]
+    def send_notification_email
     ) -> Dict[str, any]:
         """
         Enviar email de notificación
@@ -123,7 +110,7 @@ class EmailService:
 
         except Exception as e:
             logger.error(f"Error enviando email de notificación: {e}")
-            return {
-                "success": False,
-                "error": str(e)
+            return 
             }
+
+"""

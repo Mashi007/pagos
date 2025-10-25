@@ -29,26 +29,17 @@ class CriticalErrorMonitor:
         self.lock = threading.Lock()
 
 
-    def log_critical_error(
-        self,
-        error_type: str,
-        error_message: str,
-        context: Dict[str, Any]
+    def log_critical_error
     ) -> None:
         """Registrar un error crítico"""
         with self.lock:
-            error_record = {
-                "error_type": error_type,
-                "error_message": error_message,
-                "context": context,
-                "severity": self._calculate_severity(error_type, context)
+            error_record = 
             }
 
             self.critical_errors.append(error_record)
             self.error_patterns[error_type] += 1
 
-            logger.error(
-                f"🚨 ERROR CRÍTICO: {error_type} - {error_message}",
+            logger.error
             )
 
 
@@ -66,11 +57,7 @@ class CriticalErrorMonitor:
 
     def get_error_summary(self) -> Dict[str, Any]:
         with self.lock:
-            return {
-                "total_critical_errors": len(self.critical_errors),
-                "error_patterns": dict(self.error_patterns),
-                "deployment_failures": len(self.deployment_failures),
-                "service_503_errors": len(self.service_503_errors)
+            return 
             }
 
 
@@ -92,84 +79,60 @@ critical_monitor = CriticalErrorMonitor()
 # ============================================
 
 @router.get("/critical-errors/summary")
-async def get_critical_errors_summary(
+async def get_critical_errors_summary
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     try:
         summary = critical_monitor.get_error_summary()
-        return {
-            "success": True,
-            "data": summary,
+        return 
         }
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor"
+        raise HTTPException
         )
 
 @router.get("/critical-errors/deployment-failures")
-async def get_deployment_failures(
+async def get_deployment_failures
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     try:
         failures = critical_monitor.get_deployment_failures()
-        return {
-            "success": True,
-            "data": failures,
-            "count": len(failures),
+        return 
         }
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor"
+        raise HTTPException
         )
 
 @router.get("/critical-errors/503-errors")
-async def get_503_errors(
+async def get_503_errors
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Obtener errores 503"""
     try:
         errors = critical_monitor.get_503_errors()
-        return {
-            "success": True,
-            "data": errors,
-            "count": len(errors),
+        return 
         }
     except Exception as e:
         logger.error(f"Error obteniendo errores 503: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor"
+        raise HTTPException
         )
 
-async def log_critical_error(
-    error_type: str,
-    error_message: str,
-    context: Dict[str, Any] = None,
+async def log_critical_error
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Registrar un error crítico"""
     try:
-        critical_monitor.log_critical_error(
-            error_type=error_type,
-            error_message=error_message,
-            context=context or {}
+        critical_monitor.log_critical_error
         )
 
-        return {
-            "success": True,
-            "message": "Error crítico registrado",
+        return 
         }
     except Exception as e:
         logger.error(f"Error registrando error crítico: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor"
+        raise HTTPException
         )
 
 @router.get("/critical-errors/health")
@@ -186,16 +149,9 @@ async def critical_errors_health():
         else:
             health_status = "CRITICAL"
 
-        return {
-            "success": True,
-            "health_status": health_status,
-            "total_critical_errors": total_errors,
-            "error_patterns": summary["error_patterns"],
+        return 
         }
     except Exception as e:
         logger.error(f"Error verificando salud del sistema: {e}")
-        return {
-            "success": False,
-            "health_status": "ERROR",
-            "error": str(e),
+        return 
         }

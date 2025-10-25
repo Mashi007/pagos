@@ -1,3 +1,4 @@
+from datetime import date
 # backend/app/models/modelo_vehiculo.py
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String
@@ -12,26 +13,16 @@ class ModeloVehiculo(Base):
     activo = Column(Boolean, nullable=False, default=True, index=True)
 
     # Timestamps
-    updated_at = Column(
+    updated_at = Column
     )
 
 
     def __repr__(self):
-        return (
-            f"<ModeloVehiculo(id={self.id}, modelo='{self.modelo}', "
+        return 
             f"activo={self.activo})>"
         )
 
 
     def to_dict(self):
-        return {
-            "id": self.id,
-            "modelo": self.modelo,
-            "activo": self.activo,
-            "created_at": (
-                self.created_at.isoformat() if self.created_at else None
-            ),
-            "updated_at": (
-                self.updated_at.isoformat() if self.updated_at else None
-            ),
+        return 
         }

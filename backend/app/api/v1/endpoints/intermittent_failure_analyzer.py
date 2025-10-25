@@ -26,11 +26,7 @@ class IntermittentFailureAnalyzer:
     def log_request(self, request_data: Dict[str, Any], success: bool):
         """Registrar un request"""
         with self.lock:
-            request_entry = {
-                "endpoint": request_data.get("endpoint"),
-                "user_id": request_data.get("user_id"),
-                "token_length": len(request_data.get("token", "")),
-                "success": success,
+            request_entry = 
             }
 
             if success:
@@ -42,9 +38,7 @@ class IntermittentFailureAnalyzer:
     def analyze_intermittent_patterns(self) -> Dict[str, Any]:
         """Analizar patrones intermitentes"""
         with self.lock:
-            analysis = {
-                "total_successful": len(self.successful_requests),
-                "total_failed": len(self.failed_requests),
+            analysis = 
                 "patterns": {},
                 "recommendations": [],
         }
@@ -91,12 +85,7 @@ class IntermittentFailureAnalyzer:
             total = stats["successful"] + stats["failed"]
             if total > 0:
                 success_rate = stats["successful"] / total * 100
-                endpoint_analysis[endpoint] = {
-                    "success_rate": round(success_rate, 2),
-                    "total_requests": total,
-                    "successful": stats["successful"],
-                    "failed": stats["failed"],
-                    "intermittent": 20 < success_rate < 80,  # Considerar intermitente si está entre 20-80%
+                endpoint_analysis[endpoint] = 
                 }
 
         return endpoint_analysis
@@ -121,12 +110,7 @@ class IntermittentFailureAnalyzer:
             total = stats["successful"] + stats["failed"]
             if total > 0:
                 success_rate = stats["successful"] / total * 100
-                user_analysis[user_id] = {
-                    "success_rate": round(success_rate, 2),
-                    "total_requests": total,
-                    "successful": stats["successful"],
-                    "failed": stats["failed"],
-                    "problematic": success_rate < 50,  # Usuario problemático si éxito < 50%
+                user_analysis[user_id] = 
                 }
 
         return user_analysis
@@ -149,10 +133,7 @@ class IntermittentFailureAnalyzer:
             total = stats["successful"] + stats["failed"]
             if total > 0:
                 success_rate = stats["successful"] / total * 100
-                hourly_analysis[hour] = {
-                    "success_rate": round(success_rate, 2),
-                    "total_requests": total,
-                    "peak_hour": total > 10,  # Hora pico si más de 10 requests
+                hourly_analysis[hour] = 
                 }
 
         return hourly_analysis
@@ -166,19 +147,11 @@ class IntermittentFailureAnalyzer:
         analysis = {}
 
         if token_lengths_successful:
-            analysis["successful_tokens"] = {
-                "avg_length": round(statistics.mean(token_lengths_successful), 2),
-                "min_length": min(token_lengths_successful),
-                "max_length": max(token_lengths_successful),
-                "count": len(token_lengths_successful),
+            analysis["successful_tokens"] = 
             }
 
         if token_lengths_failed:
-            analysis["failed_tokens"] = {
-                "avg_length": round(statistics.mean(token_lengths_failed), 2),
-                "min_length": min(token_lengths_failed),
-                "max_length": max(token_lengths_failed),
-                "count": len(token_lengths_failed),
+            analysis["failed_tokens"] = 
             }
 
         # Comparar longitudes
@@ -186,9 +159,7 @@ class IntermittentFailureAnalyzer:
             avg_successful = statistics.mean(token_lengths_successful)
             avg_failed = statistics.mean(token_lengths_failed)
 
-            analysis["comparison"] = {
-                "length_difference": round(abs(avg_successful - avg_failed), 2),
-                "successful_longer": avg_successful > avg_failed,
+            analysis["comparison"] = 
             }
 
         return analysis
@@ -222,22 +193,19 @@ analyzer = IntermittentFailureAnalyzer()
 
 
 @router.get("/intermittent-failure-analysis")
-async def get_intermittent_failure_analysis(
+async def get_intermittent_failure_analysis
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     try:
         analysis = analyzer.analyze_intermittent_patterns()
-        return {
-            "status": "success",
-            "data": analysis,
+        return 
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en análisis: {str(e)}")
 
 
-async def log_request(
-    request_data: Dict[str, Any],
+async def log_request
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -246,8 +214,7 @@ async def log_request(
         success = request_data.get("success", True)
         analyzer.log_request(request_data, success)
 
-        return {
-            "status": "success",
+        return 
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al registrar request: {str(e)}")

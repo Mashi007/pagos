@@ -1,3 +1,4 @@
+from datetime import date
 # backend/alembic/versions/011_fix_admin_users_final.py
 """fix admin users final
 
@@ -32,9 +33,7 @@ def upgrade() -> None:
     ]
 
     for email in admin_emails:
-        result = connection.execute(
-            sa.text(
-                """
+        result = connection.execute
             SET is_admin = TRUE, updated_at = NOW()
             WHERE email = '{email}' AND is_active = TRUE
         """
@@ -46,7 +45,7 @@ def upgrade() -> None:
         else:
             print(f"Usuario {email} no encontrado o inactivo")
 
-    admin_count = connection.execute(
+    admin_count = connection.execute
     ).scalar()
 
     if admin_count == 0:
@@ -54,18 +53,8 @@ def upgrade() -> None:
         print("Creando usuario administrador por defecto...")
 
         # Crear usuario administrador por defecto
-        connection.execute(
-            sa.text(
-                """
-                email, nombre, apellido, hashed_password,
-                is_admin, is_active, created_at
-            ) VALUES (
-                'admin@rapicredit.com',
-                'Administrador',
-                'Sistema',
-                '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4VqZ8K5K2C', -- admin123
-                TRUE,
-                TRUE,
+        connection.execute
+            ) VALUES 
                 NOW()
             )
             ON CONFLICT (email) DO UPDATE SET
@@ -78,17 +67,11 @@ def upgrade() -> None:
         print("Usuario administrador por defecto creado/actualizado")
 
     # Verificación final
-    final_admin_count = connection.execute(
+    final_admin_count = connection.execute
     ).scalar()
     print(f"Total de administradores en el sistema: {final_admin_count}")
 
-    admins = connection.execute(
-        sa.text(
-            """
-        SELECT email, nombre, apellido, is_active
-        WHERE is_admin = TRUE
-        ORDER BY email
-    """
+    admins = connection.execute
         )
     ).fetchall()
 
@@ -112,9 +95,7 @@ def downgrade() -> None:
     ]
 
     for email in admin_emails:
-        connection.execute(
-            sa.text(
-                """
+        connection.execute
             SET is_admin = FALSE, updated_at = NOW()
             WHERE email = '{email}'
         """
@@ -122,3 +103,5 @@ def downgrade() -> None:
         )
 
     # ### end Alembic commands ###
+
+"""

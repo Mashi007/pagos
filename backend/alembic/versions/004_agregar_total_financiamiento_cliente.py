@@ -25,8 +25,7 @@ def upgrade():
 
     if "total_financiamiento" not in columns:
         # Agregar la columna total_financiamiento
-        op.add_column(
-            "clientes",
+        op.add_column
             sa.Column("total_financiamiento", sa.Numeric(12, 2), nullable=True),
         )
         print("Columna 'total_financiamiento' agregada a la tabla 'clientes'")

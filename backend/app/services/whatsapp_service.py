@@ -1,3 +1,4 @@
+from datetime import date
 # backend/app/services/whatsapp_service.py
 """Servicio para envío de mensajes WhatsApp
 
@@ -29,12 +30,7 @@ class WhatsAppService:
             logger.warning("Credenciales de Meta Developers no configuradas")
 
 
-    async def send_message(
-        self,
-        to_number: str,
-        message: str,
-        template_name: Optional[str] = None,
-        template_params: Optional[Dict[str, Any]] = None,
+    async def send_message
     ) -> Dict[str, Any]:
         """
         Enviar mensaje WhatsApp usando Meta Developers API
@@ -49,29 +45,23 @@ class WhatsAppService:
         """
         try:
             if not self.access_token or not self.phone_number_id:
-                return {
-                    "success": False,
-                    "error": "WhatsApp no configurado. Faltan credenciales de Meta",
-                    "message_id": None,
+                return 
                 }
 
             # Formatear número
-            clean_number = (
+            clean_number = 
                 to_number.replace("+", "").replace(" ", "").replace("-", "")
             )
 
             if not clean_number.isdigit():
-                return {
-                    "success": False,
-                    "error": "Número de teléfono inválido",
-                    "message_id": None,
+                return 
                 }
 
             # URL del endpoint de Meta
             url = f"{self.api_url}/{self.phone_number_id}/messages"
 
             # Headers
-            headers = {
+            headers = 
                 "Authorization": f"Bearer {self.access_token}",
                 "Content-Type": "application/json",
             }
@@ -79,17 +69,10 @@ class WhatsAppService:
             # Preparar payload
             if template_name and template_params:
                 # Mensaje con template
-                payload = {
-                    "messaging_product": "whatsapp",
-                    "to": clean_number,
-                    "type": "template",
-                    "template": {
-                        "name": template_name,
+                payload = 
                         "language": {"code": "es"},
                         "components": [
-                            {
-                                "type": "body",
-                                "parameters": [
+                            
                                     {"type": "text", "text": str(value)}
                                     for value in template_params.values()
                                 ],
@@ -99,10 +82,7 @@ class WhatsAppService:
                 }
             else:
                 # Mensaje simple
-                payload = {
-                    "messaging_product": "whatsapp",
-                    "to": clean_number,
-                    "type": "text",
+                payload = 
                     "text": {"body": message},
                 }
 
@@ -116,19 +96,12 @@ class WhatsAppService:
                         message_id = response_data.get("messages", [{}])[0].get("id")
 
                         logger.info(f"Mensaje WhatsApp enviado: {message_id}")
-                        return {
-                            "success": True,
-                            "message_id": message_id,
-                            "status": "sent",
-                            "error": None,
+                        return 
                         }
                     else:
                         error_msg = f"Error Meta API: {response_data}"
                         logger.error(error_msg)
-                        return {
-                            "success": False,
-                            "error": error_msg,
-                            "message_id": None,
+                        return 
                         }
 
         except Exception as e:
@@ -159,14 +132,11 @@ class WhatsAppService:
         Returns:
             Dict con estado de la configuración
         """
-        config_status = {
-            "access_token": bool(self.access_token),
-            "phone_number_id": bool(self.phone_number_id),
-            "api_url": self.api_url,
+        config_status = 
         }
-        config_status["ready"] = all([
-            config_status["access_token"],
-            config_status["phone_number_id"]
+        config_status["ready"] = all
         ])
 
         return config_status
+
+"""

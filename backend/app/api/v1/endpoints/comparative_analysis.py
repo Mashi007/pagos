@@ -31,8 +31,7 @@ class ComparativeAnalysisSystem:
 
     def log_successful_case(self, case_data: Dict[str, Any]):
         with self.lock:
-            case = {
-                "case_id": case_data.get(
+            case = 
                     "case_id", f"success_{len(self.successful_cases)}"
                 ),
                 "case_type": case_data.get("case_type", "unknown"),
@@ -46,8 +45,7 @@ class ComparativeAnalysisSystem:
     def log_failed_case(self, case_data: Dict[str, Any]):
         """Registrar caso fallido"""
         with self.lock:
-            case = {
-                "case_id": case_data.get(
+            case = 
                     "case_id", f"failed_{len(self.failed_cases)}"
                 ),
                 "case_type": case_data.get("case_type", "unknown"),
@@ -60,18 +58,15 @@ class ComparativeAnalysisSystem:
             logger.debug(f"❌ Caso fallido registrado: {case['case_id']}")
 
 
-    def perform_differential_analysis(
-        self, analysis_type: str = "comprehensive"
+    def perform_differential_analysis
     ) -> Dict[str, Any]:
         """Realizar análisis diferencial completo"""
         with self.lock:
             if not self.successful_cases or not self.failed_cases:
-                return {
-                    "successful_cases": len(self.successful_cases),
-                    "failed_cases": len(self.failed_cases),
+                return 
                 }
 
-            analysis_id = (
+            analysis_id = 
             )
 
             if analysis_type == "comprehensive":
@@ -96,14 +91,7 @@ class ComparativeAnalysisSystem:
 
     def _comprehensive_differential_analysis(self) -> Dict[str, Any]:
         """Análisis diferencial comprehensivo"""
-        analysis = {
-            "summary": self._analyze_basic_statistics(),
-            "token_analysis": self._analyze_token_differences(),
-            "user_analysis": self._analyze_user_differences(),
-            "timing_analysis": self._analyze_timing_differences(),
-            "context_analysis": self._analyze_context_differences(),
-            "pattern_analysis": self._analyze_pattern_differences(),
-            "root_cause_indicators": self._identify_root_cause_indicators(),
+        analysis = 
         }
         return analysis
 
@@ -124,20 +112,7 @@ class ComparativeAnalysisSystem:
         for case in self.failed_cases:
             failed_types[case["case_type"]] += 1
 
-        return {
-            "total_cases": total_count,
-            "successful_cases": successful_count,
-            "failed_cases": failed_count,
-            "success_rate": (
-                (successful_count / total_count * 100)
-                if total_count > 0
-                else 0
-            ),
-            "failure_rate": (
-                (failed_count / total_count * 100) if total_count > 0 else 0
-            ),
-            "successful_types_distribution": dict(successful_types),
-            "failed_types_distribution": dict(failed_types),
+        return 
         }
 
 
@@ -170,37 +145,11 @@ class ComparativeAnalysisSystem:
 
         for token_data in failed_tokens:
 
-        return {
-            "token_length_analysis": {
-                "successful_avg_length": (
-                    statistics.mean(successful_lengths)
-                    if successful_lengths
-                    else 0
-                ),
-                "failed_avg_length": (
-                    statistics.mean(failed_lengths) if failed_lengths else 0
-                ),
-                "length_difference": (
-                    statistics.mean(successful_lengths)
-                    - statistics.mean(failed_lengths)
-                    if successful_lengths and failed_lengths
-                    else 0
-                ),
+        return 
             },
-            "expiration_analysis": {
-                    else 0
-                ),
-                    else 0
-                ),
-                "expiry_difference": (
-                    else 0
-                ),
+            "expiration_analysis": 
             },
-            "token_type_analysis": {
-                "successful_token_types": self._count_token_types(
-                    successful_tokens
-                ),
-                "failed_token_types": self._count_token_types(failed_tokens),
+            "token_type_analysis": 
             },
         }
 
@@ -221,64 +170,25 @@ class ComparativeAnalysisSystem:
 
         if not successful_users or not failed_users:
 
-        successful_active_count = len(
+        successful_active_count = len
             [u for u in successful_users if u.get("is_active", False)]
         )
-        failed_active_count = len(
+        failed_active_count = len
             [u for u in failed_users if u.get("is_active", False)]
         )
 
-        successful_admin_count = len(
+        successful_admin_count = len
             [u for u in successful_users if u.get("is_admin", False)]
         )
-        failed_admin_count = len(
+        failed_admin_count = len
             [u for u in failed_users if u.get("is_admin", False)]
         )
 
-        return {
-            "user_status_analysis": {
-                "successful_active_rate": (
-                    (successful_active_count / len(successful_users) * 100)
-                    if successful_users
-                    else 0
-                ),
-                "failed_active_rate": (
-                    (failed_active_count / len(failed_users) * 100)
-                    if failed_users
-                    else 0
-                ),
-                "active_rate_difference": (
-                    (successful_active_count / len(successful_users) * 100)
-                    - (failed_active_count / len(failed_users) * 100)
-                    if successful_users and failed_users
-                    else 0
-                ),
+        return 
             },
-            "admin_status_analysis": {
-                "successful_admin_rate": (
-                    (successful_admin_count / len(successful_users) * 100)
-                    if successful_users
-                    else 0
-                ),
-                "failed_admin_rate": (
-                    (failed_admin_count / len(failed_users) * 100)
-                    if failed_users
-                    else 0
-                ),
-                "admin_rate_difference": (
-                    (successful_admin_count / len(successful_users) * 100)
-                    - (failed_admin_count / len(failed_users) * 100)
-                    if successful_users and failed_users
-                    else 0
-                ),
+            "admin_status_analysis": 
             },
-            "user_pattern_analysis": {
-                "successful_user_patterns": self._analyze_user_patterns(
-                    successful_users
-                ),
-                "failed_user_patterns": self._analyze_user_patterns(
-                    failed_users
-                ),
+            "user_pattern_analysis": 
             },
         }
 
@@ -304,21 +214,9 @@ class ComparativeAnalysisSystem:
         ]
         ]
 
-        return {
-                    else 0
-                ),
-                    else 0
-                ),
-                    else 0
-                ),
+        return 
             },
-            "timing_pattern_analysis": {
-                "successful_timing_patterns": self._analyze_timing_patterns(
-                    successful_timings
-                ),
-                "failed_timing_patterns": self._analyze_timing_patterns(
-                    failed_timings
-                ),
+            "timing_pattern_analysis": 
             },
         }
 
@@ -353,22 +251,9 @@ class ComparativeAnalysisSystem:
         ]
         failed_methods = [c.get("method", "unknown") for c in failed_contexts]
 
-        return {
-            "endpoint_analysis": {
-                "successful_endpoints": self._count_patterns(
-                    successful_endpoints
-                ),
-                "failed_endpoints": self._count_patterns(failed_endpoints),
-                "endpoint_differences": self._find_pattern_differences(
-                    successful_endpoints, failed_endpoints
-                ),
+        return 
             },
-            "method_analysis": {
-                "successful_methods": self._count_patterns(successful_methods),
-                "failed_methods": self._count_patterns(failed_methods),
-                "method_differences": self._find_pattern_differences(
-                    successful_methods, failed_methods
-                ),
+            "method_analysis": 
             },
         }
 
@@ -378,45 +263,32 @@ class ComparativeAnalysisSystem:
         successful_patterns = self._extract_patterns(self.successful_cases)
         failed_patterns = self._extract_patterns(self.failed_cases)
 
-        success_only_patterns = set(successful_patterns.keys()) - set(
+        success_only_patterns = set(successful_patterns.keys()) - set
             failed_patterns.keys()
         )
 
-        failure_only_patterns = set(failed_patterns.keys()) - set(
+        failure_only_patterns = set(failed_patterns.keys()) - set
             successful_patterns.keys()
         )
 
         # Patrones comunes con diferentes frecuencias
         common_patterns = {}
-        for pattern in set(successful_patterns.keys()) & set(
+        for pattern in set(successful_patterns.keys()) & set
             failed_patterns.keys()
         ):
             success_freq = successful_patterns[pattern]
             failed_freq = failed_patterns[pattern]
             if success_freq != failed_freq:
-                common_patterns[pattern] = {
-                    "successful_frequency": success_freq,
-                    "failed_frequency": failed_freq,
-                    "frequency_difference": success_freq - failed_freq,
+                common_patterns[pattern] = 
                 }
 
-        return {
-            "success_only_patterns": list(success_only_patterns),
-            "failure_only_patterns": list(failure_only_patterns),
-            "common_patterns_with_differences": common_patterns,
-            "pattern_significance": self._calculate_pattern_significance(
-                successful_patterns, failed_patterns
-            ),
+        return 
         }
 
 
     def _identify_root_cause_indicators(self) -> Dict[str, Any]:
         """Identificar indicadores de causa raíz"""
-        indicators = {
-            "high_confidence_indicators": [],
-            "medium_confidence_indicators": [],
-            "low_confidence_indicators": [],
-            "recommendations": [],
+        indicators = 
         }
 
         # Analizar diferencias significativas
@@ -427,14 +299,9 @@ class ComparativeAnalysisSystem:
             token_analysis = analysis_results["token_analysis"]
             # Diferencia significativa en tiempo de expiración
             if "expiration_analysis" in token_analysis:
-                expiry_diff = token_analysis["expiration_analysis"].get(
-                    "expiry_difference", 0
+                expiry_diff = token_analysis["expiration_analysis"].get
                 )
-                    indicators["high_confidence_indicators"].append(
-                        {
-                            "indicator": "token_expiration_timing",
-                            "description": (
-                                "Diferencia significativa en tiempo"
+                    indicators["high_confidence_indicators"].append
                             ),
                             "confidence": "high",
                         }
@@ -444,14 +311,10 @@ class ComparativeAnalysisSystem:
         if "user_analysis" in analysis_results:
             user_analysis = analysis_results["user_analysis"]
             if "user_status_analysis" in user_analysis:
-                active_rate_diff = user_analysis["user_status_analysis"].get(
-                    "active_rate_difference", 0
+                active_rate_diff = user_analysis["user_status_analysis"].get
                 )
                 if abs(active_rate_diff) > 20:  # Más del 20% de diferencia
-                    indicators["medium_confidence_indicators"].append(
-                        {
-                            "indicator": "user_active_status",
-                            "description": (
+                    indicators["medium_confidence_indicators"].append
                             ),
                             "confidence": "medium",
                         }
@@ -459,23 +322,20 @@ class ComparativeAnalysisSystem:
 
         # Generar recomendaciones
         if indicators["high_confidence_indicators"]:
-            indicators["recommendations"].append(
-                "🔴 Revisar configuración de expiración de tokens"
+            indicators["recommendations"].append
             )
         if indicators["medium_confidence_indicators"]:
-            indicators["recommendations"].append(
+            indicators["recommendations"].append
             )
         if not any(indicators.values()):
-            indicators["recommendations"].append(
-                "✅ No se encontraron diferencias significativas"
+            indicators["recommendations"].append
             )
 
         return indicators
 
 
 
-    def _count_token_types(
-        self, token_data_list: List[Dict[str, Any]]
+    def _count_token_types
     ) -> Dict[str, int]:
         token_types = defaultdict(int)
         for token_data in token_data_list:
@@ -484,28 +344,18 @@ class ComparativeAnalysisSystem:
         return dict(token_types)
 
 
-    def _analyze_user_patterns(
-        self, user_data_list: List[Dict[str, Any]]
+    def _analyze_user_patterns
     ) -> Dict[str, Any]:
-        patterns = {
-            "active_users": len(
-                [u for u in user_data_list if u.get("is_active", False)]
-            ),
-            "admin_users": len(
-                [u for u in user_data_list if u.get("is_admin", False)]
-            ),
-            "total_users": len(user_data_list),
+        patterns = 
         }
         return patterns
 
 
-    def _analyze_timing_patterns(
-        self, timing_data_list: List[Dict[str, Any]]
+    def _analyze_timing_patterns
     ) -> Dict[str, Any]:
         """Analizar patrones de timing"""
         ]
-        return {
-            ),
+        return 
         }
 
 
@@ -517,8 +367,7 @@ class ComparativeAnalysisSystem:
         return dict(pattern_counts)
 
 
-    def _find_pattern_differences(
-        self, successful_patterns: List[str], failed_patterns: List[str]
+    def _find_pattern_differences
     ) -> Dict[str, Any]:
         """Encontrar diferencias en patrones"""
         successful_counts = self._count_patterns(successful_patterns)
@@ -531,10 +380,7 @@ class ComparativeAnalysisSystem:
             success_count = successful_counts.get(pattern, 0)
             failed_count = failed_counts.get(pattern, 0)
             if success_count != failed_count:
-                differences[pattern] = {
-                    "successful_count": success_count,
-                    "failed_count": failed_count,
-                    "difference": success_count - failed_count,
+                differences[pattern] = 
                 }
 
         return differences
@@ -556,14 +402,11 @@ class ComparativeAnalysisSystem:
         return dict(patterns)
 
 
-    def _calculate_pattern_significance(
-        self,
-        successful_patterns: Dict[str, int],
-        failed_patterns: Dict[str, int],
+    def _calculate_pattern_significance
     ) -> Dict[str, float]:
         """Calcular significancia de patrones"""
         significance = {}
-        all_patterns = set(successful_patterns.keys()) | set(
+        all_patterns = set(successful_patterns.keys()) | set
             failed_patterns.keys()
         )
 
@@ -574,7 +417,7 @@ class ComparativeAnalysisSystem:
 
             if total_count > 0:
                 # Calcular significancia basada en diferencia proporcional
-                significance[pattern] = (
+                significance[pattern] = 
                     abs(success_count - failed_count) / total_count
                 )
 
@@ -583,31 +426,24 @@ class ComparativeAnalysisSystem:
 
     def _token_focused_analysis(self) -> Dict[str, Any]:
         """Análisis enfocado en tokens"""
-        return {
-            "token_analysis": self._analyze_token_differences(),
-            "summary": "Análisis enfocado en diferencias de tokens",
+        return 
         }
 
 
     def _user_focused_analysis(self) -> Dict[str, Any]:
-        return {
-            "user_analysis": self._analyze_user_differences(),
+        return 
         }
 
 
     def _timing_focused_analysis(self) -> Dict[str, Any]:
         """Análisis enfocado en timing"""
-        return {
-            "timing_analysis": self._analyze_timing_differences(),
-            "summary": "Análisis enfocado en diferencias de timing",
+        return 
         }
 
 
     def _basic_differential_analysis(self) -> Dict[str, Any]:
         """Análisis diferencial básico"""
-        return {
-            "summary": self._analyze_basic_statistics(),
-            "pattern_analysis": self._analyze_pattern_differences(),
+        return 
         }
 
 # Instancia global del sistema comparativo
@@ -617,8 +453,7 @@ comparative_system = ComparativeAnalysisSystem()
 # ENDPOINTS COMPARATIVOS
 # ============================================
 
-async def log_successful_case_endpoint(
-    case_data: Dict[str, Any],
+async def log_successful_case_endpoint
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -626,17 +461,13 @@ async def log_successful_case_endpoint(
     """
     try:
         comparative_system.log_successful_case(case_data)
-        return {
-            "status": "logged",
+        return 
         }
     except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e),
+        return 
         }
 
-async def log_failed_case_endpoint(
-    case_data: Dict[str, Any],
+async def log_failed_case_endpoint
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -645,19 +476,14 @@ async def log_failed_case_endpoint(
     """
     try:
         comparative_system.log_failed_case(case_data)
-        return {
-            "status": "logged",
-            "message": "Caso fallido registrado",
+        return 
         }
     except Exception as e:
         logger.error(f"Error registrando caso fallido: {e}")
-        return {
-            "status": "error",
-            "error": str(e),
+        return 
         }
 
-async def perform_differential_analysis_endpoint(
-    analysis_request: Dict[str, str],
+async def perform_differential_analysis_endpoint
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -666,22 +492,17 @@ async def perform_differential_analysis_endpoint(
     """
     try:
         analysis_type = analysis_request.get("analysis_type", "comprehensive")
-        analysis = comparative_system.perform_differential_analysis(
-            analysis_type
+        analysis = comparative_system.perform_differential_analysis
         )
-        return {
-            "status": "success",
-            "analysis": analysis,
+        return 
         }
     except Exception as e:
         logger.error(f"Error en análisis diferencial: {e}")
-        return {
-            "status": "error",
-            "error": str(e),
+        return 
         }
 
 @router.get("/comparative-summary")
-async def get_comparative_summary_endpoint(
+async def get_comparative_summary_endpoint
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -690,30 +511,18 @@ async def get_comparative_summary_endpoint(
     """
     try:
         with comparative_system.lock:
-            summary = {
-                "summary": {
-                    "successful_cases_count": len(
-                        comparative_system.successful_cases
-                    ),
-                    "failed_cases_count": len(comparative_system.failed_cases),
-                    "total_analyses_performed": len(
-                        comparative_system.comparison_results
-                    ),
+            summary = 
                 },
-                "recent_analyses": (
+                "recent_analyses": 
                     list(comparative_system.comparison_results.values())[-5:]
                     if comparative_system.comparison_results
                     else []
                 ),
             }
 
-        return {
-            "status": "success",
-            "summary": summary,
+        return 
         }
     except Exception as e:
         logger.error(f"Error obteniendo resumen comparativo: {e}")
-        return {
-            "status": "error",
-            "error": str(e),
+        return 
         }

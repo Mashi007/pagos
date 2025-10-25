@@ -1,17 +1,10 @@
+from datetime import date, timedelta as delta
 # backend/app/models/aprobacion.py
 """Modelo de Aprobación
 Sistema de workflow para solicitudes que requieren aprobación
 """
 
-from sqlalchemy import (
-    Boolean,
-    Column,
-    Date,
-    DateTime,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
+from sqlalchemy import 
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -30,27 +23,21 @@ class Aprobacion(Base):
     # Identificación
     id = Column(Integer, primary_key=True, index=True)
 
-    estado = Column(
+    estado = Column
         String(20), nullable=False, default="PENDIENTE", index=True
     )
 
     # Solicitante y revisor
-    solicitante_id = Column(
-        Integer,
-        nullable=False,
-        index=True,
+    solicitante_id = Column
     )
-    revisor_id = Column(
-        Integer,
-        nullable=True,
-        index=True,
+    revisor_id = Column
     )
 
     # Detalles de la solicitud
-    tipo_solicitud = Column(
+    tipo_solicitud = Column
         String(50), nullable=False, index=True
     )  # PRESTAMO, MODIFICACION_MONTO, ANULACION, etc.
-    entidad = Column(
+    entidad = Column
         String(50), nullable=False
     )  # Cliente, Prestamo, Pago, etc.
     entidad_id = Column(Integer, nullable=False, index=True)
@@ -59,46 +46,36 @@ class Aprobacion(Base):
 
 
     # Fechas
-    fecha_solicitud = Column(
+    fecha_solicitud = Column
     )
 
     # NUEVOS CAMPOS PARA SISTEMA COMPLETO DE APROBACIONES
-    archivo_evidencia = Column(
+    archivo_evidencia = Column
         String(255), nullable=True
     )  # Path del archivo adjunto
     tipo_archivo = Column(String(50), nullable=True)  # PDF, IMG, DOC, etc.
     tamaño_archivo = Column(Integer, nullable=True)  # Tamaño en bytes
-    prioridad = Column(
+    prioridad = Column
         String(20), default="NORMAL"
     )  # BAJA, NORMAL, ALTA, URGENTE
     fecha_limite = Column(Date, nullable=True)  # Fecha límite para respuesta
-    notificado_admin = Column(
-        Boolean, default=False
+    notificado_admin = Column
     )  # Si ya se notificó al admin
-    notificado_solicitante = Column(
-        Boolean, default=False
+    notificado_solicitante = Column
     )  # Si ya se notificó resultado
-    bloqueado_temporalmente = Column(
-        Boolean, default=True
+    bloqueado_temporalmente = Column
     )  # Si está bloqueado el registro
 
     visto_por_admin = Column(Boolean, default=False)
-    tiempo_respuesta_horas = Column(
-        Integer, nullable=True
+    tiempo_respuesta_horas = Column
     )  # Tiempo que tomó responder
 
     # Auditoría
 
     # Relaciones
-    solicitante = relationship(
-        "User",
-        foreign_keys=[solicitante_id],
-        back_populates="aprobaciones_solicitadas",
+    solicitante = relationship
     )
-    revisor = relationship(
-        "User",
-        foreign_keys=[revisor_id],
-        back_populates="aprobaciones_revisadas",
+    revisor = relationship
     )
 
 
@@ -190,8 +167,7 @@ class Aprobacion(Base):
     @property
     def requiere_atencion_urgente(self) -> bool:
         """Si requiere atención urgente"""
-        return (
-            self.prioridad == "URGENTE"
-            or self.esta_vencida
-            or self.dias_pendiente > 2
+        return 
         )
+
+"""

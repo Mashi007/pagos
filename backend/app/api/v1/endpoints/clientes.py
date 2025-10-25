@@ -1,3 +1,4 @@
+from datetime import date
 """
 Endpoints de gestión de clientes - VERSIÓN CON AUDITORÍA AUTOMÁTICA
 Sistema completo de gestión de clientes con validaciones y auditoría
@@ -13,11 +14,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
 from app.models.user import User
-from app.schemas.cliente import (
-    ClienteCreate,
-    ClienteCreateWithConfirmation,
-    ClienteResponse,
-    ClienteUpdate,
+from app.schemas.cliente import 
 )
 
 router = APIRouter()
@@ -26,16 +23,13 @@ logger = logging.getLogger(__name__)
 
 @router.get("", response_model=dict)
 @router.get("/", response_model=dict)
-def listar_clientes(
-    # Paginación
+def listar_clientes
     page: int = Query(1, ge=1, description="Número de página"),
     per_page: int = Query(20, ge=1, le=1000, description="Tamaño de página"),
     # Búsqueda de texto
-    search: Optional[str] = Query(
-        None, description="Buscar en nombre, cédula o móvil"
+    search: Optional[str] = Query
     ),
-    estado: Optional[str] = Query(
-        None, description="ACTIVO, INACTIVO, FINALIZADO"
+    estado: Optional[str] = Query
     ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -50,8 +44,7 @@ def listar_clientes(
 
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
-                or_(
+            query = query.filter
                     Cliente.nombres.ilike(search_pattern),
                     Cliente.cedula.ilike(search_pattern),
                     Cliente.telefono.ilike(search_pattern),
@@ -75,36 +68,7 @@ def listar_clientes(
         clientes_dict = []
         for cliente in clientes:
             try:
-                cliente_data = {
-                    "id": cliente.id,
-                    "cedula": cliente.cedula,
-                    "nombres": cliente.nombres,
-                    "telefono": cliente.telefono,
-                    "email": cliente.email,
-                    "direccion": cliente.direccion,
-                    "fecha_nacimiento": (
-                        cliente.fecha_nacimiento.isoformat()
-                        if cliente.fecha_nacimiento
-                        else None
-                    ),
-                    "ocupacion": cliente.ocupacion,
-                    "modelo_vehiculo": cliente.modelo_vehiculo,
-                    "concesionario": cliente.concesionario,
-                    "analista": cliente.analista,
-                    "estado": cliente.estado,
-                    "activo": cliente.activo,
-                    "fecha_registro": (
-                        cliente.fecha_registro.isoformat()
-                        if cliente.fecha_registro
-                        else None
-                    ),
-                    "fecha_actualizacion": (
-                        cliente.fecha_actualizacion.isoformat()
-                        if cliente.fecha_actualizacion
-                        else None
-                    ),
-                    "usuario_registro": cliente.usuario_registro,
-                    "notas": cliente.notas,
+                cliente_data = 
                 }
                 clientes_dict.append(cliente_data)
             except Exception as e:
@@ -114,26 +78,17 @@ def listar_clientes(
         # Calcular páginas
         total_pages = (total + per_page - 1) // per_page
 
-        return {
-            "clientes": clientes_dict,
-            "paginacion": {
-                "total": total,
-                "pagina_actual": page,
-                "por_pagina": per_page,
-                "total_paginas": total_pages,
-                "tiene_siguiente": page < total_pages,
-                "tiene_anterior": page > 1,
+        return 
             },
         }
     except Exception as e:
         logger.error(f"Error en listar_clientes: {e}")
-        raise HTTPException(
-            status_code=500, detail="Error interno del servidor"
+        raise HTTPException
         )
 
 
 @router.get("/{cliente_id}", response_model=ClienteResponse)
-def obtener_cliente(
+def obtener_cliente
     cliente_id: int = Path(..., description="ID del cliente"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -142,26 +97,22 @@ def obtener_cliente(
     👤 Obtener cliente por ID
     """
     try:
-        logger.info(
-            f"Obtener cliente {cliente_id} - Usuario: {current_user.email}"
+        logger.info
         )
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
         if not cliente:
-            raise HTTPException(
-                status_code=404, detail="Cliente no encontrado"
+            raise HTTPException
             )
         return ClienteResponse.model_validate(cliente)
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error en obtener_cliente: {e}")
-        raise HTTPException(
-            status_code=500, detail="Error interno del servidor"
+        raise HTTPException
         )
 
 
-def crear_cliente(
-    cliente_data: ClienteCreate,
+def crear_cliente
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -172,20 +123,7 @@ def crear_cliente(
         logger.info(f"Crear cliente - Usuario: {current_user.email}")
 
         # Crear nuevo cliente
-        nuevo_cliente = Cliente(
-            cedula=cliente_data.cedula,
-            nombres=cliente_data.nombres,
-            telefono=cliente_data.telefono,
-            email=cliente_data.email,
-            direccion=cliente_data.direccion,
-            fecha_nacimiento=cliente_data.fecha_nacimiento,
-            ocupacion=cliente_data.ocupacion,
-            modelo_vehiculo=cliente_data.modelo_vehiculo,
-            concesionario=cliente_data.concesionario,
-            analista=cliente_data.analista,
-            estado=cliente_data.estado,
-            notas=cliente_data.notas or "NA",
-            usuario_registro=current_user.email,
+        nuevo_cliente = Cliente
         )
 
         db.add(nuevo_cliente)
@@ -197,13 +135,12 @@ def crear_cliente(
     except Exception as e:
         logger.error(f"Error en crear_cliente: {e}")
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail="Error interno del servidor"
+        raise HTTPException
         )
 
 
 @router.put("/{cliente_id}", response_model=ClienteResponse)
-def actualizar_cliente(
+def actualizar_cliente
     cliente_id: int = Path(..., description="ID del cliente"),
     cliente_data: ClienteUpdate = ...,
     db: Session = Depends(get_db),
@@ -213,14 +150,12 @@ def actualizar_cliente(
     ✏️ Actualizar cliente
     """
     try:
-        logger.info(
-            f"Actualizar cliente {cliente_id} - Usuario: {current_user.email}"
+        logger.info
         )
 
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
         if not cliente:
-            raise HTTPException(
-                status_code=404, detail="Cliente no encontrado"
+            raise HTTPException
             )
 
         update_data = cliente_data.model_dump(exclude_unset=True)
@@ -240,13 +175,12 @@ def actualizar_cliente(
     except Exception as e:
         logger.error(f"Error en actualizar_cliente: {e}")
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail="Error interno del servidor"
+        raise HTTPException
         )
 
 
 @router.delete("/{cliente_id}")
-def eliminar_cliente(
+def eliminar_cliente
     cliente_id: int = Path(..., description="ID del cliente"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -255,14 +189,12 @@ def eliminar_cliente(
     🗑️ Eliminar cliente (hard delete)
     """
     try:
-        logger.info(
-            f"Eliminar cliente {cliente_id} - Usuario: {current_user.email}"
+        logger.info
         )
 
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
         if not cliente:
-            raise HTTPException(
-                status_code=404, detail="Cliente no encontrado"
+            raise HTTPException
             )
 
         # Hard delete - eliminar físicamente de la BD
@@ -275,6 +207,5 @@ def eliminar_cliente(
     except Exception as e:
         logger.error(f"Error en eliminar_cliente: {e}")
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail="Error interno del servidor"
+        raise HTTPException
         )

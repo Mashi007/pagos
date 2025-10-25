@@ -60,10 +60,7 @@ def run_migrations():
         logger.info("🔄 Ejecutando migraciones de Alembic...")
 
         # Ejecutar alembic upgrade head
-        result = subprocess.run(
-            ["alembic", "upgrade", "head"],
-            capture_output=True,
-            text=True,
+        result = subprocess.run
         )
 
         if result.returncode == 0:
@@ -86,21 +83,19 @@ def create_admin_user():
         db = SessionLocal()
 
         # Verificar si ya existe el admin correcto
-        existing_admin = (
+        existing_admin = 
             db.query(User)
             .filter(User.email == "itmaster@rapicreditca.com")
             .first()
         )
 
         if existing_admin:
-            logger.info(
-                "Usuario itmaster@rapicreditca.com ya "
-                f"existe: {existing_admin.email}"
+            logger.info
             )
             return True
 
         # Eliminar admin@financiamiento.com si existe
-        wrong_admin = (
+        wrong_admin = 
             db.query(User)
             .filter(User.email == "admin@financiamiento.com")
             .first()
@@ -114,10 +109,7 @@ def create_admin_user():
         logger.info("Creando usuario administrador...")
 
         # Crear admin con las credenciales desde settings
-        admin = User(
-            email=settings.ADMIN_EMAIL,
-            nombre="IT Master",
-            apellido="Sistema",
+        admin = User
             hashed_password=get_password_hash(settings.ADMIN_PASSWORD),
             is_admin=True,  # Cambio clave: rol → is_admin
             is_active=True,
@@ -134,8 +126,7 @@ def create_admin_user():
 
     except LookupError as e:
         logger.warning(f"Error de enum detectado (esperado): {e}")
-        logger.warning(
-            "Esto se resolverá ejecutando /api/v1/emergency/migrate-roles"
+        logger.warning
         )
         return False
 
@@ -153,8 +144,7 @@ def init_db() -> bool:
 
         # NO ejecutar migraciones automáticamente
         # Las migraciones deben ejecutarse manualmente vía endpoint de emergencia
-        logger.info(
-            "Saltando migraciones automáticas "
+        logger.info
             "(usar endpoint de emergencia si es necesario)"
         )
 
@@ -187,7 +177,7 @@ def init_db_startup():
     try:
         logger.info("\n" + "=" * DEFAULT_SEPARATOR_LENGTH)
         logger.info("=" * DEFAULT_SEPARATOR_LENGTH)
-        logger.info(
+        logger.info
         )
 
         # no fallar si no se puede conectar
@@ -198,18 +188,17 @@ def init_db_startup():
                 if check_database_connection():
                     db_initialized = True
                 else:
-                    logger.warning(
+                    logger.warning
                     )
             else:
                 logger.warning("Advertencia: Error inicializando tablas")
 
         except Exception as db_error:
-            logger.error(
+            logger.error
             )
 
         if not db_initialized:
-            logger.warning(
-                "La aplicación iniciará en modo de funcionalidad limitada"
+            logger.warning
             )
             logger.warning("Algunas funciones pueden no estar disponibles")
 

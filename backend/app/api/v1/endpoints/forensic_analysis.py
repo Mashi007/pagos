@@ -29,22 +29,12 @@ class ForensicAnalyzer:
         self.lock = threading.Lock()
 
 
-    def log_event(
-        self,
-        event_type: str,
-        user_id: str,
-        details: Dict[str, Any],
-        request_context: Dict[str, Any]
+    def log_event
     ) -> str:
         """Registrar un evento en la línea de tiempo"""
         event_id = str(uuid.uuid4())
 
-        event = {
-            "event_id": event_id,
-            "event_type": event_type,
-            "user_id": user_id,
-            "details": details,
-            "request_context": request_context
+        event = 
         }
 
         with self.lock:
@@ -58,15 +48,9 @@ class ForensicAnalyzer:
         return event_id
 
 
-    def reconstruct_error_sequence(
-        self,
-        user_id: str,
-        error_event_id: str,
+    def reconstruct_error_sequence
     ) -> Dict[str, Any]:
-        reconstruction = {
-            "error_event_id": error_event_id,
-            "user_id": user_id,
-            "events_sequence": [],
+        reconstruction = 
             "analysis": {},
             "recommendations": []
         }
@@ -91,9 +75,7 @@ class ForensicAnalyzer:
 
 
                 reconstruction["events_sequence"] = user_events
-                    {
-                        "event_type": event["event_type"],
-                        "details": event["details"]
+                    
                     }
                     for event in user_events
                 ]
@@ -113,25 +95,15 @@ class ForensicAnalyzer:
         return reconstruction
 
 
-    def _analyze_event_sequence(
-        self,
-        events: List[Dict[str, Any]],
-        error_event: Dict[str, Any]
+    def _analyze_event_sequence
     ) -> Dict[str, Any]:
-        analysis = {
-            "total_events": len(events),
-            "error_patterns": [],
-            "suspicious_activities": [],
-            "user_behavior_changes": [],
-            "security_indicators": []
+        analysis = 
         }
 
         # Analizar patrones de error
         error_events = [e for e in events if "error" in e["event_type"].lower()]
         analysis["error_patterns"] = [
-            {
-                "event_type": e["event_type"],
-                "details": e["details"]
+            
             }
             for e in error_events
         ]
@@ -143,9 +115,7 @@ class ForensicAnalyzer:
                 suspicious_events.append(event)
 
         analysis["suspicious_activities"] = [
-            {
-                "event_type": e["event_type"],
-                "details": e["details"]
+            
             }
             for e in suspicious_events
         ]
@@ -190,12 +160,7 @@ class ForensicAnalyzer:
             user_events = self.user_sessions.get(user_id, [])
 
             if not user_events:
-                return {
-                    "user_id": user_id,
-                    "total_events": 0,
-                    "last_activity": None,
-                    "error_count": 0,
-                    "session_duration": 0
+                return 
                 }
 
             # Calcular métricas
@@ -208,15 +173,7 @@ class ForensicAnalyzer:
             else:
                 session_duration = 0
 
-            return {
-                "user_id": user_id,
-                "total_events": total_events,
-                "last_activity": last_activity.isoformat(),
-                "error_count": error_count,
-                "session_duration": session_duration,
-                "recent_events": [
-                    {
-                        "event_type": event["event_type"],
+            return 
                     }
                 ]
             }
@@ -228,9 +185,7 @@ forensic_analyzer = ForensicAnalyzer()
 # ENDPOINTS FORENSES
 # ============================================
 
-async def log_forensic_event(
-    event_data: Dict[str, Any],
-    request: Request,
+async def log_forensic_event
     current_user: User = Depends(get_current_user),
 ):
     """Registrar un evento forense"""
@@ -240,31 +195,23 @@ async def log_forensic_event(
         details = event_data.get("details", {})
 
         # Obtener contexto de la petición
-        request_context = {
-            "user_agent": request.headers.get("User-Agent"),
-            "endpoint": str(request.url),
-            "method": request.method
+        request_context = 
         }
 
         # Registrar evento
-        event_id = forensic_analyzer.log_event(
-            event_type, user_id, details, request_context
+        event_id = forensic_analyzer.log_event
         )
 
-        return {
-            "success": True,
-            "event_id": event_id,
+        return 
         }
 
     except Exception as e:
         logger.error(f"Error registrando evento forense: {e}")
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error interno: {str(e)}"
         )
 
-async def reconstruct_error_sequence_endpoint(
-    reconstruction_data: Dict[str, Any],
+async def reconstruct_error_sequence_endpoint
     current_user: User = Depends(get_current_user),
 ):
     try:
@@ -272,46 +219,38 @@ async def reconstruct_error_sequence_endpoint(
         error_event_id = reconstruction_data.get("error_event_id")
 
         if not user_id or not error_event_id:
-            raise HTTPException(
-                status_code=400,
+            raise HTTPException
             )
 
         # Reconstruir secuencia
-        reconstruction = forensic_analyzer.reconstruct_error_sequence(
+        reconstruction = forensic_analyzer.reconstruct_error_sequence
         )
 
-        return {
-            "success": True,
-            "reconstruction": reconstruction
+        return 
         }
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error reconstruyendo secuencia: {e}")
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error interno: {str(e)}"
         )
 
 @router.get("/user-session/{user_id}")
-async def get_user_session_summary(
-    user_id: str,
+async def get_user_session_summary
     current_user: User = Depends(get_current_user),
 ):
     """Obtener resumen de sesión del usuario"""
     try:
         summary = forensic_analyzer.get_user_session_summary(user_id)
 
-        return {
-            "success": True,
-            "summary": summary
+        return 
         }
 
     except Exception as e:
         logger.error(f"Error obteniendo resumen de sesión: {e}")
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error interno: {str(e)}"
         )
 
@@ -322,22 +261,18 @@ async def get_user_session_summary(
     try:
         with forensic_analyzer.lock:
 
-            {
-                "event_id": event["event_id"],
-                "event_type": event["event_type"],
-                "user_id": event["user_id"],
-                "details": event["details"]
+            
             }
             for event in recent_events
         ]
 
-        return {
-            "success": True,
+        return 
         }
 
     except Exception as e:
         logger.error(f"Error obteniendo línea de tiempo: {e}")
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error interno: {str(e)}"
         )
+
+"""

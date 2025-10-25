@@ -5,15 +5,7 @@ Sistema de notificaciones por email, SMS o WhatsApp
 """
 
 from enum import Enum as PyEnum
-from sqlalchemy import (
-    JSON,
-    Column,
-    DateTime,
-    Enum,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
+from sqlalchemy import 
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -66,13 +58,9 @@ class Notificacion(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     # Destinatario (puede ser un User o un Cliente por email/teléfono)
-    user_id = Column(
-        Integer,
-        nullable=True,
-        index=True,
+    user_id = Column
     )
-    cliente_id = Column(
-        Integer,
+    cliente_id = Column
         ForeignKey("clientes.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
@@ -87,7 +75,7 @@ class Notificacion(Base):
     tipo = Column(Enum(TipoNotificacion), nullable=False, index=True)
 
     # Categoría
-    categoria = Column(
+    categoria = Column
         Enum(CategoriaNotificacion),
         nullable=False,
         default=CategoriaNotificacion.GENERAL,
@@ -102,7 +90,7 @@ class Notificacion(Base):
     extra_data = Column(JSON, nullable=True)
 
     # Estado de envío
-    estado = Column(
+    estado = Column
         Enum(EstadoNotificacion),
         nullable=False,
         default=EstadoNotificacion.PENDIENTE,
@@ -111,7 +99,7 @@ class Notificacion(Base):
 
 
     # Fechas
-    programada_para = Column(
+    programada_para = Column
     )  # Para notificaciones programadas
 
     # Respuesta del servicio de envío
@@ -119,7 +107,7 @@ class Notificacion(Base):
     error_mensaje = Column(Text, nullable=True)
 
     # Prioridad
-    prioridad = Column(
+    prioridad = Column
         Enum(PrioridadNotificacion),
         nullable=False,
         default=PrioridadNotificacion.NORMAL,
@@ -133,9 +121,7 @@ class Notificacion(Base):
 
 
     def __repr__(self):
-        return (
-            f"<Notificacion {self.tipo.value} -"
-            + f"{self.categoria.value} - {self.estado.value}>"
+        return 
         )
 
     @property
@@ -175,11 +161,7 @@ class Notificacion(Base):
         if self.estado == EstadoNotificacion.ENVIADA:
 
     @classmethod
-    def crear_recordatorio_pago(
-        cls,
-        cliente_id: int,
-        tipo: TipoNotificacion,
-        mensaje: str,
+    def crear_recordatorio_pago
     ):
         """
         Helper para crear notificaciones de recordatorio de pago
@@ -193,12 +175,7 @@ class Notificacion(Base):
         Returns:
             Notificacion: Instancia de notificación
         """
-        return cls(
-            cliente_id=cliente_id,
-            tipo=tipo,
-            categoria=CategoriaNotificacion.RECORDATORIO_PAGO,
-            asunto="Recordatorio de Pago",
-            mensaje=mensaje,
-            programada_para=programada_para,
-            prioridad=PrioridadNotificacion.ALTA,
+        return cls
         )
+
+"""

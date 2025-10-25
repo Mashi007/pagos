@@ -1,3 +1,4 @@
+from datetime import date
 # backend/app/core/config.py
 
 from functools import lru_cache
@@ -83,8 +84,7 @@ class Settings(BaseSettings):
     # USUARIO ADMINISTRADOR INICIAL
     # ============================================
     ADMIN_EMAIL: str = "itmaster@rapicreditca.com"
-    ADMIN_PASSWORD: str = Field(
-        default="R@pi_2025**", env="ADMIN_PASSWORD"
+    ADMIN_PASSWORD: str = Field
     )  # ✅ Variable de entorno
 
     # ============================================
@@ -96,13 +96,9 @@ class Settings(BaseSettings):
         """Valida que las credenciales de admin estén configuradas"""
         if not self.ADMIN_EMAIL or not self.ADMIN_PASSWORD:
             return False
-        if (
-            self.ADMIN_PASSWORD == "R@pi_2025**"
-            and self.ENVIRONMENT == "production"
+        if 
         ):
-            raise ValueError(
-                "⚠️ CRÍTICO: Contraseña por defecto detectada en producción. "
-                "Configure ADMIN_PASSWORD"
+            raise ValueError
             )
         return True
 
@@ -110,7 +106,7 @@ class Settings(BaseSettings):
     def validate_cors_origins(self) -> bool:
         """Valida que CORS no esté abierto en producción"""
         if self.ENVIRONMENT == "production" and "*" in self.CORS_ORIGINS:
-            raise ValueError(
+            raise ValueError
                 "⚠️ CRÍTICO: CORS con wildcard (*) detectado en producción. "
                 "CORS_ORIGINS='[\"https://tu-dominio.com\"]'"
             )
@@ -242,8 +238,7 @@ class Settings(BaseSettings):
     # ============================================
     UVICORN_WORKERS: int = DEFAULT_UVICORN_WORKERS
     UVICORN_TIMEOUT_KEEP_ALIVE: int = DEFAULT_UVICORN_TIMEOUT_KEEP_ALIVE
-    UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN: int = (
-        DEFAULT_UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN
+    UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN: int = 
     )
 
     # ============================================
@@ -281,8 +276,7 @@ class Settings(BaseSettings):
 
 
     def validate_loan_amount(self, amount: float) -> bool:
-        return (
-            self.MONTO_MINIMO_PRESTAMO <= amount <= self.MONTO_MAXIMO_PRESTAMO
+        return 
         )
 
 
@@ -295,11 +289,7 @@ class Settings(BaseSettings):
         return (ingreso_mensual * self.MAX_CUOTA_PERCENTAGE) / 100
 
     # ✅ CRÍTICO: Usar model_config para Pydantic V2
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=True,
-        extra="allow",  # Permite variables extra del .env
+    model_config = SettingsConfigDict
     )
 
 @lru_cache()

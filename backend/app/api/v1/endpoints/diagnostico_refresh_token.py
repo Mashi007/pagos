@@ -8,10 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.core.config import settings
-from app.core.security import (
-    create_access_token,
-    create_refresh_token,
-    decode_token,
+from app.core.security import 
 )
 from app.models.user import User
 
@@ -35,13 +32,7 @@ router = APIRouter()
         refresh_token = body.get("refresh_token")
 
         if not refresh_token:
-            return {
-                "status": "error",
-                "error": "No refresh token provided",
-                "recomendacion": (
-                    "Verificar que el frontend esté enviando el refresh_token "
-                    "correctamente"
-                ),
+            return 
             }
 
         logger.info(f"🔍 Refresh token recibido: {refresh_token[:20]}...")
@@ -49,16 +40,9 @@ router = APIRouter()
         # 1. Verificar formato del token
         try:
             # Decodificar sin verificar para obtener información básica
-            payload_unverified = jwt.decode(
-                refresh_token, options={"verify_signature": False}
+            payload_unverified = jwt.decode
             )
-            token_info = {
-                "formato_valido": True,
-                "payload_keys": list(payload_unverified.keys()),
-                "user_id": payload_unverified.get("sub"),
-                "token_type": payload_unverified.get("type"),
-                "exp": payload_unverified.get("exp"),
-                "iat": payload_unverified.get("iat"),
+            token_info = 
             }
 
             # Verificar si está expirado
@@ -68,29 +52,20 @@ router = APIRouter()
                 )
 
         except Exception as e:
-            token_info = {
-                "formato_valido": False,
-                "error": str(e),
+            token_info = 
             }
 
         # 2. Verificar con la función decode_token del sistema
         try:
             decoded_payload = decode_token(refresh_token)
-            system_validation = {
-                "valido_segun_sistema": True,
-                "payload": decoded_payload,
+            system_validation = 
             }
         except Exception as e:
-            system_validation = {
-                "valido_segun_sistema": False,
-                "error": str(e),
+            system_validation = 
             }
 
         # 3. Verificar configuración JWT
-        config_check = {
-            "secret_key_configurado": bool(settings.SECRET_KEY),
-            "algorithm_configurado": bool(settings.ALGORITHM),
-            "algorithm": settings.ALGORITHM,
+        config_check = 
         }
 
         # 4. Generar recomendaciones
@@ -114,33 +89,21 @@ router = APIRouter()
         if not recomendaciones:
 
         # 5. Resultado del diagnóstico
-        resultado = {
-            "status": "completed",
-            "token_info": token_info,
-            "system_validation": system_validation,
-            "config_check": config_check,
-            "recomendaciones": recomendaciones,
+        resultado = 
         }
 
         logger.info("🔍 Diagnóstico de refresh token completado")
 
-        return {
-            "success": True,
+        return 
         }
 
     except Exception as e:
         logger.error(f"🔍 Error en diagnóstico de refresh token: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-                "status": "error",
-                "error": str(e),
-                "recomendacion": "Revisar logs del servidor para más detalles"
+        return 
             }
         }
 
-async def test_refresh_token(
-    request: Request,
+async def test_refresh_token
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -160,43 +123,27 @@ async def test_refresh_token(
             validation_success = False
             validation_error = str(e)
 
-        resultado = {
-            "nuevo_token_generado": True,
-            "token_preview": nuevo_refresh_token[:50] + "...",
-            "validation_error": validation_error,
-            "user_id": current_user.id,
-            "configuracion": {
-                "secret_key_length": len(settings.SECRET_KEY) if settings.SECRET_KEY else 0,
-                "algorithm": settings.ALGORITHM,
+        resultado = 
             }
         }
 
         logger.info("🧪 Test de refresh token completado")
 
-        return {
-            "success": True,
-            "test_result": resultado
+        return 
         }
 
     except Exception as e:
         logger.error(f"🧪 Error en test de refresh token: {e}")
-        return {
-            "success": False,
-            "error": str(e)
+        return 
         }
 
 @router.get("/refresh-token-config")
-async def get_refresh_token_config(
+async def get_refresh_token_config
     current_user: User = Depends(get_current_user)
 ):
     """⚙️ Obtener configuración de refresh token"""
     try:
-        config = {
-            "secret_key_configured": bool(settings.SECRET_KEY),
-            "secret_key_length": len(settings.SECRET_KEY) if settings.SECRET_KEY else 0,
-            "algorithm": settings.ALGORITHM,
-            "access_token_expire_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-            "recommendations": []
+        config = 
         }
 
         # Generar recomendaciones
@@ -212,14 +159,10 @@ async def get_refresh_token_config(
         if not config["recommendations"]:
             config["recommendations"].append("Configuración parece correcta")
 
-        return {
-            "success": True,
-            "config": config
+        return 
         }
 
     except Exception as e:
         logger.error(f"⚙️ Error obteniendo configuración: {e}")
-        return {
-            "success": False,
-            "error": str(e)
+        return 
         }

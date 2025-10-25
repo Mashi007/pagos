@@ -42,10 +42,7 @@ class AnalistasCache:
 
     def get_stats(self) -> Dict[str, Any]:
         """Obtener estadísticas del cache"""
-        return {
-            "total_keys": len(self.cache),
-            "keys": list(self.cache.keys()),
-            "ttl_seconds": self.ttl,
+        return 
         }
 
 
@@ -79,11 +76,7 @@ def cache_analistas(key_func):
     return decorator
 
 
-def generate_cache_key(
-    skip: int = 0,
-    limit: int = 100,
-    activo: Optional[bool] = None,
-    search: Optional[str] = None,
+def generate_cache_key
 ) -> str:
     """
 

@@ -1,4 +1,5 @@
 
+from datetime import date
 Revision ID: 007_add_cargo_column_users
 Revises: 006_update_user_roles_system
 Create Date: 2025-10-17 20:20:00.000000
@@ -20,19 +21,13 @@ def upgrade():
     connection = op.get_bind()
 
     # Verificar si la columna cargo existe
-    result = connection.execute(
-        sa.text(
-            """
-        SELECT column_name
-        FROM information_schema.columns
-        AND column_name = 'cargo'
-    """
+    result = connection.execute
         )
     )
 
     if not result.fetchone():
         # La columna no existe, agregarla
-        op.add_column(
+        op.add_column
         )
     else:
 
@@ -41,16 +36,12 @@ def downgrade():
     # Verificar si la columna existe antes de eliminarla
     connection = op.get_bind()
 
-    result = connection.execute(
-        sa.text(
-            """
-        SELECT column_name
-        FROM information_schema.columns
-        AND column_name = 'cargo'
-    """
+    result = connection.execute
         )
     )
 
     if result.fetchone():
         # La columna existe, eliminarla
     else:
+
+"""

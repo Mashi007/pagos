@@ -1,4 +1,5 @@
 from app.core.security import decode_token
+from datetime import date
 ﻿"""Sistema de Validación Cruzada de Autenticación
 Valida tokens desde múltiples perspectivas para detectar inconsistencias
 """
@@ -32,8 +33,7 @@ router = APIRouter()
         request_context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Validación cruzada completa de un token"""
-        validation_results = {
-            "token_id": self._generate_token_id(token),
+        validation_results = 
             "validations": {},
             "overall_status": "unknown",
             "confidence_score": 0.0,
@@ -50,33 +50,28 @@ router = APIRouter()
             validation_results["validations"]["token_content"] = content_validation
 
             # 3. Validación de contexto
-            context_validation = self._validate_request_context(
-                token, request_context
+            context_validation = self._validate_request_context
             )
             validation_results["validations"]["request_context"] = context_validation
 
             # 4. Validación de tiempo
 
             # 5. Validación de usuario
-            user_validation = self._validate_user_consistency(
-                token, request_context
+            user_validation = self._validate_user_consistency
             )
             validation_results["validations"]["user_consistency"] = user_validation
 
             # 6. Validación de seguridad
-            security_validation = self._validate_security_patterns(
-                token, request_context
+            security_validation = self._validate_security_patterns
             )
             validation_results["validations"]["security_patterns"] = security_validation
 
             # Calcular resultado general
-            validation_results = self._calculate_overall_result(
-                validation_results
+            validation_results = self._calculate_overall_result
             )
 
             # Cachear resultado
-            self.validation_cache[validation_results["token_id"]] = (
-                validation_results
+            self.validation_cache[validation_results["token_id"]] = 
             )
 
             return validation_results
@@ -161,10 +156,7 @@ router = APIRouter()
         return validation
 
 
-    def _validate_request_context(
-        self,
-        token: str,
-        context: Dict[str, Any]
+    def _validate_request_context
     ) -> Dict[str, Any]:
         """Validar contexto de la petición"""
         validation = {"status": "unknown", "details": {}, "score": 0.0}
@@ -226,10 +218,7 @@ router = APIRouter()
         return validation
 
 
-    def _validate_user_consistency(
-        self,
-        token: str,
-        context: Dict[str, Any]
+    def _validate_user_consistency
     ) -> Dict[str, Any]:
         """Validar consistencia del usuario"""
         validation = {"status": "unknown", "details": {}, "score": 0.0}
@@ -257,10 +246,7 @@ router = APIRouter()
         return validation
 
 
-    def _validate_security_patterns(
-        self,
-        token: str,
-        context: Dict[str, Any]
+    def _validate_security_patterns
     ) -> Dict[str, Any]:
         """Validar patrones de seguridad"""
         validation = {"status": "unknown", "details": {}, "score": 0.0}
@@ -293,9 +279,7 @@ router = APIRouter()
         return validation
 
 
-    def _calculate_overall_result(
-        self,
-        validation_results: Dict[str, Any]
+    def _calculate_overall_result
     ) -> Dict[str, Any]:
         """Calcular resultado general de la validación"""
         validations = validation_results["validations"]
@@ -341,36 +325,30 @@ router = APIRouter()
         # Obtener token del header
         authorization = request.headers.get("Authorization")
         if not authorization or not authorization.startswith("Bearer "):
-            raise HTTPException(
-                status_code=401,
-                detail="Token de autorización requerido"
+            raise HTTPException
             )
 
         token = authorization.split(" ")[1]
 
         # Obtener contexto de la petición
-        context = {
-            "user_agent": request.headers.get("User-Agent"),
+        context = 
         }
 
         # Realizar validación cruzada
 
-        return {
-            "success": True,
-            "validation_result": result
+        return 
         }
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error en validación cruzada: {e}")
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error interno: {str(e)}"
         )
 
 @router.get("/validation-history")
-async def get_validation_history(
+async def get_validation_history
     current_user: User = Depends(get_current_user),
 ):
     """Obtener historial de validaciones"""
@@ -378,37 +356,28 @@ async def get_validation_history(
         with auth_checker.lock if hasattr(auth_checker, 'lock') else None:
             history = list(auth_checker.failed_validations.values())
 
-        return {
-            "success": True,
-            "data": {
-                "total_failed_validations": len(history),
+        return 
             }
         }
     except Exception as e:
         logger.error(f"Error obteniendo historial de validaciones: {e}")
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error interno: {str(e)}"
         )
 
 @router.get("/validation-patterns")
-async def get_validation_patterns(
+async def get_validation_patterns
     current_user: User = Depends(get_current_user),
 ):
     """Obtener patrones de validación"""
     try:
         patterns = dict(auth_checker.validation_patterns)
 
-        return {
-            "success": True,
-            "data": {
-                "patterns": patterns,
-                "total_patterns": len(patterns)
+        return 
             }
         }
     except Exception as e:
         logger.error(f"Error obteniendo patrones de validación: {e}")
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error interno: {str(e)}"
         )

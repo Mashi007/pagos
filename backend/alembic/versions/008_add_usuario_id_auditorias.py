@@ -26,16 +26,11 @@ def upgrade():
     if "usuario_id" not in columns:
         with op.batch_alter_table("auditorias") as batch_op:
             batch_op.add_column(sa.Column("usuario_id", sa.Integer(), nullable=True))
-            batch_op.create_index(
-                "ix_auditorias_usuario_id", ["usuario_id"], unique=False
+            batch_op.create_index
             )
 
             try:
-                batch_op.create_foreign_key(
-                    "fk_auditorias_usuario_id",
-                    ["usuario_id"],
-                    ["id"],
-                    ondelete="SET NULL",
+                batch_op.create_foreign_key
                 )
             except Exception:
                 # Si no se puede crear la FK, continuar sin ella

@@ -1,3 +1,4 @@
+from datetime import date
 # backend/app/models/amortizacion.py
 """Modelo de Cuota/Amortización
 
@@ -5,16 +6,7 @@ Representa cada cuota de un préstamo con su detalle de capital, interés
 """
 
 from decimal import Decimal
-from sqlalchemy import (
-    Boolean,
-    Column,
-    Date,
-    DateTime,
-    ForeignKey,
-    Integer,
-    Numeric,
-    String,
-    Table,
+from sqlalchemy import 
 )
 from sqlalchemy.sql import func
 from app.db.session import Base
@@ -29,10 +21,7 @@ class Cuota(Base):
 
     # Identificación
     id = Column(Integer, primary_key=True, index=True)
-    prestamo_id = Column(
-        Integer,
-        nullable=False,
-        index=True,
+    prestamo_id = Column
     )
     numero_cuota = Column(Integer, nullable=False)  # 1, 2, 3, etc.
 
@@ -44,10 +33,10 @@ class Cuota(Base):
     monto_capital = Column(Numeric(12, 2), nullable=False)
     monto_interes = Column(Numeric(12, 2), nullable=False)
 
-    saldo_capital_inicial = Column(
+    saldo_capital_inicial = Column
         Numeric(12, 2), nullable=False
     )  # Saldo al inicio del período
-    saldo_capital_final = Column(
+    saldo_capital_final = Column
         Numeric(12, 2), nullable=False
     )  # Saldo al fin del período
 
@@ -56,33 +45,28 @@ class Cuota(Base):
     mora_pagada = Column(Numeric(12, 2), default=Decimal("0.00"))
     total_pagado = Column(Numeric(12, 2), default=Decimal("0.00"))
 
-    capital_pendiente = Column(
+    capital_pendiente = Column
         Numeric(12, 2), nullable=False
     )  # Capital que falta pagar de esta cuota
-    interes_pendiente = Column(
+    interes_pendiente = Column
         Numeric(12, 2), nullable=False
     )  # Interés que falta pagar de esta cuota
 
     # Mora
     dias_mora = Column(Integer, default=0)
     monto_mora = Column(Numeric(12, 2), default=Decimal("0.00"))
-    tasa_mora = Column(
+    tasa_mora = Column
         Numeric(5, 2), default=Decimal("0.00")
     )  # Tasa de mora aplicada (%)
 
     # Estado
-    estado = Column(
+    estado = Column
         String(20), nullable=False, default="PENDIENTE", index=True
     )  # PENDIENTE, PAGADA, VENCIDA, PARCIAL
 
     # Información adicional
     observaciones = Column(String(500), nullable=True)
-    es_cuota_especial = Column(
-        Boolean, default=False
-
-    # Auditoría
-
-    # Relaciones
+    es_cuota_especial = Column
     # prestamo = relationship("Prestamo", back_populates="cuotas")
     # # COMENTADO: Solo plantilla vacía
     #     "Pago",
@@ -104,8 +88,7 @@ class Cuota(Base):
     @property
     def monto_pendiente_total(self) -> Decimal:
         """Calcula el monto total pendiente (capital + interés + mora)"""
-        return (
-            self.capital_pendiente + self.interes_pendiente + self.monto_mora
+        return 
         )
 
     @property
@@ -132,8 +115,7 @@ class Cuota(Base):
             return Decimal("0.00")
 
         # Mora sobre el capital pendiente
-        mora = (
-            self.capital_pendiente
+        mora = 
             * (tasa_mora_diaria / Decimal("100"))
             * Decimal(dias_mora)
         )
@@ -148,11 +130,7 @@ class Cuota(Base):
         Returns:
             dict: Detalle de cómo se aplicó el pago
         """
-        detalle = {
-            "mora_aplicada": Decimal("0.00"),
-            "interes_aplicado": Decimal("0.00"),
-            "capital_aplicado": Decimal("0.00"),
-            "sobrante": Decimal("0.00"),
+        detalle = 
         }
         saldo = monto_pago
 
@@ -185,8 +163,7 @@ class Cuota(Base):
             detalle["sobrante"] = saldo
 
         # Actualizar total pagado
-        self.total_pagado = (
-            self.capital_pagado + self.interes_pagado + self.mora_pagada
+        self.total_pagado = 
         )
 
         # Actualizar estado
@@ -216,17 +193,9 @@ Amortizacion = Cuota
 # ============================================
 # TABLA DE ASOCIACIÓN PAGO-CUOTAS
 # ============================================
-pago_cuotas = Table(
-    "pago_cuotas",
-    Base.metadata,
-    Column(
-        "pago_id",
-        Integer,
-        primary_key=True,
+pago_cuotas = Table
     ),
-    Column(
-        "cuota_id",
-        Integer,
+    Column
         ForeignKey("cuotas.id", ondelete="CASCADE"),
         primary_key=True,
     ),
@@ -235,3 +204,5 @@ pago_cuotas = Table(
     Column("aplicado_a_interes", Numeric(12, 2), default=Decimal("0.00")),
     Column("aplicado_a_mora", Numeric(12, 2), default=Decimal("0.00")),
 )
+
+"""

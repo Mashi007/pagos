@@ -2,6 +2,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from datetime import date
 # Constantes de validación
 MIN_CEDULA_LENGTH = 8
 MAX_CEDULA_LENGTH = 20
@@ -15,36 +16,18 @@ MAX_NOTA_LENGTH = 1000
 
 class PagoBase(BaseModel):
 
-    cedula_cliente: str = Field(
-        ...,
-        min_length=MIN_CEDULA_LENGTH,
-        max_length=MAX_CEDULA_LENGTH,
-        description="Cédula del cliente",
+    cedula_cliente: str = Field
     )
     monto_pagado: float = Field(..., gt=0, description="Monto pagado")
-    numero_documento: str = Field(
-        ...,
-        min_length=MIN_DOCUMENTO_LENGTH,
-        max_length=MAX_DOCUMENTO_LENGTH,
-        description="Número de documento",
+    numero_documento: str = Field
     )
-    documento_nombre: Optional[str] = Field(
-        None,
-        max_length=MAX_DOCUMENTO_NOMBRE_LENGTH,
-        description="Nombre del documento",
+    documento_nombre: Optional[str] = Field
     )
-    documento_tipo: Optional[str] = Field(
-        None,
-        max_length=MAX_DOCUMENTO_TIPO_LENGTH,
-        description="Tipo de documento",
+    documento_tipo: Optional[str] = Field
     )
-    documento_tamaño: Optional[int] = Field(
-        None, ge=0, description="Tamaño del documento en bytes"
+    documento_tamaño: Optional[int] = Field
     )
-    documento_ruta: Optional[str] = Field(
-        None,
-        max_length=MAX_DOCUMENTO_RUTA_LENGTH,
-        description="Ruta del documento",
+    documento_ruta: Optional[str] = Field
     )
     notas: Optional[str] = Field(None, description="Notas adicionales")
 
@@ -52,7 +35,7 @@ class PagoBase(BaseModel):
     @classmethod
     def validate_cedula(cls, v):
         if not v or len(v.strip()) < MIN_CEDULA_LENGTH:
-            raise ValueError(
+            raise ValueError
             )
         return v.strip().upper()
 

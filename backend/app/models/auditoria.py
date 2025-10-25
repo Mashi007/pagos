@@ -4,14 +4,7 @@ Registra todas las acciones importantes del sistema para trazabilidad
 """
 
 from enum import Enum
-from sqlalchemy import (
-    JSON,
-    Column,
-    DateTime,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
+from sqlalchemy import 
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -45,27 +38,24 @@ class Auditoria(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     # Usuario que realizó la acción
-    usuario_id = Column(
-        Integer,
-        nullable=True,
-        index=True,
+    usuario_id = Column
     )
 
     # Email del usuario (para ordenamiento rápido)
     usuario_email = Column(String(255), nullable=True, index=True)
 
     # Acción realizada
-    accion = Column(
+    accion = Column
         String(50), nullable=False, index=True
     )  # CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.
 
     # Módulo del sistema
-    modulo = Column(
+    modulo = Column
         String(50), nullable=False, index=True
     )  # USUARIOS, CLIENTES, PRESTAMOS, PAGOS, etc.
 
     # Entidad afectada
-    tabla = Column(
+    tabla = Column
         String(50), nullable=False, index=True
     )  # Cliente, Prestamo, Pago, User, etc.
 
@@ -80,14 +70,14 @@ class Auditoria(Base):
     user_agent = Column(String(255), nullable=True)
 
     # Resultado de la acción
-    resultado = Column(
+    resultado = Column
         String(20), nullable=False, default="EXITOSO"
     )  # EXITOSO, FALLIDO, PARCIAL
 
     mensaje_error = Column(Text, nullable=True)
 
     # Timestamp
-    fecha = Column(
+    fecha = Column
         server_default=func.now(),
         nullable=False,
         index=True,
@@ -101,19 +91,7 @@ class Auditoria(Base):
         return f"<Auditoria {self.accion} - {self.tabla} - {self.fecha}>"
 
     @classmethod
-    def registrar(
-        cls,
-        usuario_id: int,
-        usuario_email: str,
-        accion: str,
-        modulo: str,
-        tabla: str,
-        registro_id: int = None,
-        descripcion: str = None,
-        ip_address: str = None,
-        user_agent: str = None,
-        resultado: str = "EXITOSO",
-        mensaje_error: str = None,
+    def registrar
     ):
         """
 
@@ -133,16 +111,5 @@ class Auditoria(Base):
         Returns:
             Auditoria: Instancia del registro de auditoría
         """
-        return cls(
-            usuario_id=usuario_id,
-            usuario_email=usuario_email,
-            accion=accion,
-            modulo=modulo,
-            tabla=tabla,
-            registro_id=registro_id,
-            descripcion=descripcion,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            resultado=resultado,
-            mensaje_error=mensaje_error,
+        return cls
         )

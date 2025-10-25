@@ -59,33 +59,17 @@ class IntelligentAlertSystem:
 
     def _initialize_default_rules(self):
         """Inicializar reglas de alerta por defecto"""
-        self.alert_rules = {
-            AlertType.TOKEN_EXPIRY: {
-                "severity": AlertSeverity.MEDIUM,
-                "enabled": True,
+        self.alert_rules = 
             },
-            AlertType.AUTH_FAILURE: {
-                "severity": AlertSeverity.HIGH,
-                "enabled": True,
-                "cooldown": 60,  # 1 minuto entre alertas
+            AlertType.AUTH_FAILURE: 
             },
-            AlertType.SUSPICIOUS_ACTIVITY: {
-                "severity": AlertSeverity.MEDIUM,
-                "enabled": True,
+            AlertType.SUSPICIOUS_ACTIVITY: 
             },
-            AlertType.SYSTEM_OVERLOAD: {
-                "severity": AlertSeverity.HIGH,
-                "enabled": True,
+            AlertType.SYSTEM_OVERLOAD: 
             },
-            AlertType.SECURITY_BREACH: {
-                "threshold": 1,  # cualquier intento de brecha
-                "severity": AlertSeverity.CRITICAL,
-                "enabled": True,
+            AlertType.SECURITY_BREACH: 
             },
-            AlertType.PERFORMANCE_DEGRADATION: {
-                "threshold": 5000,  # ms de tiempo de respuesta
-                "severity": AlertSeverity.MEDIUM,
-                "enabled": True,
+            AlertType.PERFORMANCE_DEGRADATION: 
             },
         }
 
@@ -171,12 +155,7 @@ class IntelligentAlertSystem:
 
     def _trigger_alert(self, alert_type: AlertType, rule: Dict[str, Any]):
         """Disparar una alerta"""
-        alert = {
-            "type": alert_type.value,
-            "severity": rule["severity"].value,
-            "message": self._generate_alert_message(alert_type),
-            "threshold": rule["threshold"],
-            "resolved": False,
+        alert = 
         }
 
         with self.lock:
@@ -190,10 +169,7 @@ class IntelligentAlertSystem:
 
     def _generate_alert_message(self, alert_type: AlertType) -> str:
         """Generar mensaje de alerta"""
-        messages = {
-            AlertType.TOKEN_EXPIRY: "Token próximo a expirar",
-            AlertType.SYSTEM_OVERLOAD: "Sistema sobrecargado",
-            AlertType.PERFORMANCE_DEGRADATION: "Degradación de performance",
+        messages = 
         }
 
         return messages.get(alert_type, "Alerta desconocida")
@@ -247,13 +223,7 @@ def get_alert_statistics(self) -> Dict[str, Any]:
             for alert in self.alert_history:
                 type_dist[alert["type"]] += 1
 
-            return {
-                "total_alerts": total_alerts,
-                "active_alerts": active_alerts,
-                "resolved_alerts": resolved_alerts,
-                "severity_distribution": dict(severity_dist),
-                "type_distribution": dict(type_dist),
-                "resolution_rate": (resolved_alerts / total_alerts * 100) if total_alerts > 0 else 0,
+            return 
             }
 
 # Instancia global del sistema de alertas
@@ -263,48 +233,40 @@ alert_system = IntelligentAlertSystem()
 # ENDPOINTS DE ALERTAS INTELIGENTES
 # ============================================
 
-async def add_metric(
-    metric_data: Dict[str, Any],
+async def add_metric
     current_user: User = Depends(get_current_user),
 ):
     """Agregar métrica al sistema de alertas"""
     try:
         alert_system.add_metric(metric_data)
 
-        return {
-            "success": True,
+        return 
         }
 
     except Exception as e:
         logger.error(f"Error agregando métrica: {e}")
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error interno: {str(e)}"
         )
 
 @router.get("/active-alerts")
-async def get_active_alerts(
+async def get_active_alerts
     current_user: User = Depends(get_current_user),
 ):
     """Obtener alertas activas"""
     try:
         alerts = alert_system.get_active_alerts()
 
-        return {
-            "success": True,
-            "alerts": alerts,
-            "count": len(alerts)
+        return 
         }
 
     except Exception as e:
         logger.error(f"Error obteniendo alertas activas: {e}")
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error interno: {str(e)}"
         )
 
-async def resolve_alert(
-    alert_id: str,
+async def resolve_alert
     current_user: User = Depends(get_current_user),
 ):
     """Resolver una alerta"""
@@ -312,21 +274,17 @@ async def resolve_alert(
         success = alert_system.resolve_alert(alert_id)
 
         if success:
-            return {
-                "success": True,
+            return 
             }
         else:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Alerta {alert_id} no encontrada"
+            raise HTTPException
             )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error resolviendo alerta: {e}")
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error interno: {str(e)}"
         )
 
@@ -337,21 +295,17 @@ async def resolve_alert(
     try:
         statistics = alert_system.get_alert_statistics()
 
-        return {
-            "success": True,
-            "statistics": statistics
+        return 
         }
 
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas: {e}")
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error interno: {str(e)}"
         )
 
 @router.get("/alert-history")
-async def get_alert_history(
-    limit: int = 50,
+async def get_alert_history
     current_user: User = Depends(get_current_user),
 ):
     """Obtener historial de alertas"""
@@ -359,15 +313,13 @@ async def get_alert_history(
         with alert_system.lock:
             history = list(alert_system.alert_history)[-limit:]
 
-        return {
-            "success": True,
-            "history": history,
-            "count": len(history)
+        return 
         }
 
     except Exception as e:
         logger.error(f"Error obteniendo historial: {e}")
-        raise HTTPException(
-            status_code=500,
+        raise HTTPException
             detail=f"Error interno: {str(e)}"
         )
+
+"""

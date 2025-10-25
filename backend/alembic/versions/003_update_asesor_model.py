@@ -1,3 +1,4 @@
+from datetime import date
 """Update asesor model - make apellido and email nullable
 
 Revision ID: 003_update_asesor_model
@@ -20,7 +21,7 @@ depends_on = None
 def upgrade():
     """Update asesor model to make apellido and email nullable"""
     # Make apellido nullable
-    op.alter_column(
+    op.alter_column
         "asesores", "apellido", existing_type=sa.VARCHAR(255), nullable=True
     )
 
@@ -31,7 +32,7 @@ def upgrade():
 def downgrade():
     """Revert asesor model changes"""
     # Make apellido not nullable
-    op.alter_column(
+    op.alter_column
         "asesores", "apellido", existing_type=sa.VARCHAR(255), nullable=False
     )
 

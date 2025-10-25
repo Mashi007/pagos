@@ -54,21 +54,14 @@ router = APIRouter()
         for url in test_urls:
             try:
 
-                test_result = {
-                    "url": url,
-                    "status_code": response.status_code,
-                    "success": response.status_code == 200
+                test_result = 
                 }
 
                 with self.lock:
                     self.connectivity_tests.append(test_result)
 
             except Exception as e:
-                test_result = {
-                    "url": url,
-                    "status_code": None,
-                    "success": False,
-                    "error": str(e)
+                test_result = 
                 }
 
                 with self.lock:
@@ -81,9 +74,7 @@ router = APIRouter()
             # Simular medición de latencia
 
 
-            measurement = {
-                "latency_ms": round(latency, 2),
-                "source": "internal"
+            measurement = 
             }
 
             with self.lock:
@@ -103,16 +94,9 @@ router = APIRouter()
             recent_latency = list(self.latency_measurements)[-10:]  # Últimas 10 mediciones
             avg_latency = sum(m["latency_ms"] for m in recent_latency) / len(recent_latency) if recent_latency else 0
 
-            return {
-                "connectivity": {
-                    "success_rate": round(success_rate, 2),
-                    "total_tests": len(self.connectivity_tests),
-                    "recent_tests": recent_tests
+            return 
                 },
-                "latency": {
-                    "average_ms": round(avg_latency, 2),
-                    "total_measurements": len(self.latency_measurements),
-                    "recent_measurements": recent_latency
+                "latency": 
                 },
                 "status": "healthy" if success_rate > 80 and avg_latency < 1000 else "degraded"
             }
@@ -122,18 +106,11 @@ router = APIRouter()
         """Probar conectividad a un endpoint específico"""
         try:
 
-            return {
-                "endpoint": endpoint,
-                "status_code": response.status_code,
-                "success": response.status_code == 200,
+            return 
             }
 
         except Exception as e:
-            return {
-                "endpoint": endpoint,
-                "status_code": None,
-                "success": False,
-                "error": str(e),
+            return 
             }
 
 
@@ -141,30 +118,25 @@ router = APIRouter()
 
 
 @router.get("/network-status")
-async def get_network_status(
+async def get_network_status
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Obtener estado de la red"""
     try:
-        return {
-            "status": "success",
-            "data": status,
+        return 
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener estado de red: {str(e)}")
 
 
-async def test_connectivity(
-    endpoint: str,
+async def test_connectivity
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Probar conectividad a un endpoint específico"""
     try:
-        return {
-            "status": "success",
-            "data": result
+        return 
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al probar conectividad: {str(e)}")

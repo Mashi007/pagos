@@ -1,18 +1,11 @@
-﻿"""Modelo de Préstamo
+from datetime import date
+"""Modelo de Préstamo
 Define la estructura básica de un préstamo.
 Sincronizado con el endpoint de aprobaciones.
 """
 
 from enum import Enum
-from sqlalchemy import (
-    TIMESTAMP,
-    Column,
-    Date,
-    ForeignKey,
-    Integer,
-    Numeric,
-    String,
-    Text,
+from sqlalchemy import 
 )
 from sqlalchemy.sql import func
 
@@ -31,8 +24,7 @@ ESTADO_LENGTH = 20
 
 class EstadoPrestamo(str, Enum):
     PENDIENTE = "PENDIENTE"  # Solicitud inicial
-    EN_APROBACION = (
-        "EN_APROBACION"  # <== AÑADIDO: Usado por el endpoint de aprobaciones
+    EN_APROBACION = 
     )
     APROBADO = "APROBADO"  # <== USADO por el endpoint
     RECHAZADO = "RECHAZADO"  # <== AÑADIDO: Usado por el endpoint al rechazar
@@ -60,20 +52,20 @@ class Prestamo(Base):
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False)
     codigo_prestamo = Column(String(CODIGO_LENGTH), unique=True, index=True)
 
-    monto_total = Column(
+    monto_total = Column
         Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False
     )
-    monto_financiado = Column(
+    monto_financiado = Column
         Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False
     )
-    monto_inicial = Column(
+    monto_inicial = Column
         Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), default=0.00
     )
     tasa_interes = Column(Numeric(TASA_PRECISION, TASA_SCALE), default=0.00)
 
     # Cuotas
     numero_cuotas = Column(Integer, nullable=False)
-    monto_cuota = Column(
+    monto_cuota = Column
         Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False
     )
     cuotas_pagadas = Column(Integer, default=0)
@@ -82,32 +74,31 @@ class Prestamo(Base):
     cuotas_pendientes = Column(Integer)
 
     # Fechas
-    fecha_aprobacion = Column(
-        Date, nullable=True
+    fecha_aprobacion = Column
     fecha_desembolso = Column(Date)
     fecha_primer_vencimiento = Column(Date, nullable=False)
     fecha_ultimo_vencimiento = Column(Date)
 
     # Estado financiero
-    saldo_pendiente = Column(
+    saldo_pendiente = Column
         Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False
     )
-    saldo_capital = Column(
+    saldo_capital = Column
         Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False
     )
-    saldo_interes = Column(
+    saldo_interes = Column
         Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), default=0.00
     )
-    total_pagado = Column(
+    total_pagado = Column
         Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), default=0.00
     )
 
     # Estado
-    estado = Column(
+    estado = Column
         String(ESTADO_LENGTH), default=EstadoPrestamo.PENDIENTE.value
     )
     categoria = Column(String(ESTADO_LENGTH), default="NORMAL")
-    modalidad = Column(
+    modalidad = Column
         String(ESTADO_LENGTH), default=ModalidadPago.TRADICIONAL.value
     )
 
@@ -117,12 +108,14 @@ class Prestamo(Base):
 
     # Auditoría
     creado_en = Column(TIMESTAMP, server_default=func.now())
-    actualizado_en = Column(
+    actualizado_en = Column
         TIMESTAMP, server_default=func.now(), onupdate=func.now()
     )
 
     # Relaciones
     # CORREGIDO: Relación correcta con el modelo Cliente
-    # cuotas = relationship("Cuota", back_populates="prestamo",
+    # cuotas = relationship
     # cascade="all, delete-orphan")  # COMENTADO: Solo plantilla vacía
     # Solo plantilla vacía
+
+"""

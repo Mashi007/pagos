@@ -72,9 +72,7 @@ class RealTimeSpecificMonitor:
 
         # Actualizar patrones de éxito
         for pattern, count in patterns.items():
-            self.success_patterns[pattern].append({
-                "count": count,
-                "events": events[:count]
+            self.success_patterns[pattern].append
             })
 
 
@@ -90,9 +88,7 @@ class RealTimeSpecificMonitor:
 
         # Actualizar patrones de fallo
         for pattern, count in patterns.items():
-            self.failure_patterns[pattern].append({
-                "count": count,
-                "events": events[:count]
+            self.failure_patterns[pattern].append
             })
 
 
@@ -105,8 +101,7 @@ class RealTimeSpecificMonitor:
                     success_count = len(self.success_patterns[pattern_key])
 
                     if failure_count > 0 and success_count > 0:
-                        logger.warning(
-                            f"⚠️ Patrón intermitente detectado: {pattern_key} "
+                        logger.warning
                         )
 
 
@@ -120,21 +115,14 @@ class RealTimeSpecificMonitor:
     ):
         """Registrar un evento en tiempo real"""
         with self.lock:
-            event = {
-                "endpoint": endpoint,
-                "method": method,
-                "status": status,
-                "user_type": user_type,
-                "error_type": error_type,
+            event = 
                 "details": details or {},
             }
 
 
         """Obtener análisis en tiempo real"""
         with self.lock:
-            return {
-                "failure_patterns_count": len(self.failure_patterns),
-                "success_patterns_count": len(self.success_patterns),
+            return 
             }
 
 # Instancia global del monitor tiempo real
@@ -162,5 +150,5 @@ class RealTimeSpecificMonitor:
 
     current_user: User = Depends(get_current_user),
 ):
-        return {
+        return 
         }

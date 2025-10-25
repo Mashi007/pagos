@@ -1,3 +1,4 @@
+from datetime import date
 """Endpoints de Aprobaciones
 Sistema de workflow para solicitudes que requieren aprobación
 """
@@ -13,8 +14,7 @@ from app.core.constants import EstadoAprobacion
 from app.models.aprobacion import Aprobacion
 from app.models.user import User
 
-router = APIRouter()
-
+router = APIRouter(
 # ============================================
 # SCHEMAS PYDANTIC
 # ============================================
@@ -52,128 +52,96 @@ class AprobacionResponse(BaseModel):
 # ============================================
 
     "/", response_model=AprobacionResponse, status_code=status.HTTP_201_CREATED
-)
 
-
-def crear_aprobacion(
-    aprobacion_data: AprobacionCreate,
+def crear_aprobacion
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Crear nueva solicitud de aprobación"""
-    aprobacion = Aprobacion(
-        solicitante_id=current_user.id,
-        estado=EstadoAprobacion.PENDIENTE.value,
-        tipo_solicitud=aprobacion_data.tipo_solicitud,
-        nivel=aprobacion_data.nivel,
-        entidad=aprobacion_data.entidad,
-        entidad_id=aprobacion_data.entidad_id,
-        justificacion=aprobacion_data.justificacion,
-    )
-    db.add(aprobacion)
-    db.commit()
-    db.refresh(aprobacion)
+    aprobacion = Aprobacion
+    
+    db.add(aprobacion
+    db.commit(
+    db.refresh(aprobacion
     return aprobacion
 
-@router.get("/", response_model=List[AprobacionResponse])
-def listar_aprobaciones(
-    estado: Optional[str] = None,
-    tipo_solicitud: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 100,
+@router.get("/", response_model=List[AprobacionResponse]
+def listar_aprobaciones
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Aprobacion)
+    query = db.query(Aprobacion
     if estado:
-        query = query.filter(Aprobacion.estado == estado)
+        query = query.filter(Aprobacion.estado == estado
     if tipo_solicitud:
-        query = query.filter(Aprobacion.tipo_solicitud == tipo_solicitud)
-    aprobaciones = query.offset(skip).limit(limit).all()
+        query = query.filter(Aprobacion.tipo_solicitud == tipo_solicitud
+    aprobaciones = query.offset(skip).limit(limit).all(
     return aprobaciones
 
-@router.get("/{aprobacion_id}", response_model=AprobacionResponse)
-def obtener_aprobacion(
-    aprobacion_id: int,
+@router.get("/{aprobacion_id}", response_model=AprobacionResponse
+def obtener_aprobacion
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Obtener aprobación por ID"""
-    aprobacion = (
-        db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
-    )
+    aprobacion = 
+        db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first(
+    
     if not aprobacion:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Aprobación no encontrada",
-        )
+        raise HTTPException
+        
     return aprobacion
 
-@router.put("/{aprobacion_id}", response_model=AprobacionResponse)
-def actualizar_aprobacion(
-    aprobacion_id: int,
-    aprobacion_update: AprobacionUpdate,
+@router.put("/{aprobacion_id}", response_model=AprobacionResponse
+def actualizar_aprobacion
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Aprobar o rechazar una solicitud"""
-    aprobacion = (
-        db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
-    )
+    aprobacion = 
+        db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first(
+    
     if not aprobacion:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Aprobación no encontrada",
-        )
+        raise HTTPException
+        
     if not aprobacion.esta_pendiente:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Esta aprobación ya fue procesada",
-        )
+        raise HTTPException
+        
     # Actualizar según el estado
     if aprobacion_update.estado == EstadoAprobacion.APROBADA.value:
-        aprobacion.aprobar(
-        )
+        aprobacion.aprobar
+        
     elif aprobacion_update.estado == EstadoAprobacion.RECHAZADA.value:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-        aprobacion.rechazar(
-        )
+            raise HTTPException
+            
+        aprobacion.rechazar
+        
     elif aprobacion_update.estado == EstadoAprobacion.CANCELADA.value:
-        aprobacion.cancelar()
+        aprobacion.cancelar(
     else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Estado no válido"
-        )
-    db.commit()
-    db.refresh(aprobacion)
+        raise HTTPException
+        
+    db.commit(
+    db.refresh(aprobacion
     return aprobacion
 
-@router.delete("/{aprobacion_id}", status_code=status.HTTP_204_NO_CONTENT)
-def eliminar_aprobacion(
-    aprobacion_id: int,
+@router.delete("/{aprobacion_id}", status_code=status.HTTP_204_NO_CONTENT
+def eliminar_aprobacion
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Eliminar una solicitud de aprobación"""
-    aprobacion = (
-        db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
-    )
+    aprobacion = 
+        db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first(
+    
     if not aprobacion:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Aprobación no encontrada",
-        )
+        raise HTTPException
+        
     # Solo el solicitante puede eliminar su propia solicitud pendiente
-    if (
-        aprobacion.solicitante_id != current_user.id
-        or not aprobacion.esta_pendiente
+    if 
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tienes permiso para eliminar esta aprobación",
-        )
-    db.delete(aprobacion)
-    db.commit()
+        raise HTTPException
+        
+    db.delete(aprobacion
+    db.commit(
     return None

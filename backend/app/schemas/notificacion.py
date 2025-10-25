@@ -1,10 +1,11 @@
+from datetime import date
 # import Any, Dict, Optionalfrom pydantic import BaseModel, ConfigDict, EmailStr, Field#
 # ============================================================================# Schemas Base#
 # ============================================================================class NotificacionBase(BaseModel): """Schema
 # destinatario_email: Optional[EmailStr] = None destinatario_telefono: Optional[str] = Field(None, max_length=20)
-# destinatario_nombre: Optional[str] = Field(None, max_length=255) # Tipo y categoría tipo: str = Field(...,
-# description="EMAIL, SMS, WHATSAPP, PUSH") categoria: str = Field( ..., description="RECORDATORIO_PAGO, PRESTAMO_APROBADO,
-# metadata) extra_data: Optional[Dict[str, Any]] = None # Configuración prioridad: str = Field( default="NORMAL",
+# destinatario_nombre: Optional[str] = Field(None, max_length=255) # Tipo y categoría tipo: str = Field
+# description="EMAIL, SMS, WHATSAPP, PUSH") categoria: str = Field
+# metadata) extra_data: Optional[Dict[str, Any]] = None # Configuración prioridad: str = Field
 # ge=1, le=10)class NotificacionCreate(NotificacionBase): """Schema para crear una notificación"""class
 # NotificacionUpdate(BaseModel): """Schema para actualizar una notificación""" estado: Optional[str] = None mensaje:
 # Optional[str] = None asunto: Optional[str] = None extra_data: Optional[Dict[str, Any]] = None programada_para:
@@ -25,3 +26,5 @@
 # ============================================================================class NotificacionStats(BaseModel):
 # """Estadísticas de notificaciones""" total: int pendientes: int enviadas: int fallidas: int leidas: int por_tipo: Dict[str,
 # int] = {} por_categoria: Dict[str, int] = {} por_prioridad: Dict[str, int] = {}
+
+"""

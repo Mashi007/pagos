@@ -1,15 +1,8 @@
+from datetime import date
 # backend/app/utils/__init__.py
 """Utilidades del sistema"""
 
-from app.utils.date_helpers import (
-    add_months,
-    add_weeks,
-    calculate_payment_dates,
-    days_between,
-    days_overdue,
-    format_date_es,
-    get_notification_dates,
-    is_overdue,
+from app.utils.date_helpers import 
 )
 
     format_dni,
@@ -46,3 +39,5 @@ __all__ = [
     "sanitize_html",
     "normalize_text",
 ]
+
+"""

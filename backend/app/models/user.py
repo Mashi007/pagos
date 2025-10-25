@@ -19,34 +19,27 @@ class User(Base):
 
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(
+    email = Column
         String(EMAIL_LENGTH), unique=True, index=True, nullable=False
     )
     nombre = Column(String(NAME_LENGTH), nullable=False)
     apellido = Column(String(NAME_LENGTH), nullable=False)
     hashed_password = Column(String(PASSWORD_LENGTH), nullable=False)
-    is_admin = Column(
-        Boolean, default=False, nullable=False
+    is_admin = Column
     )  # Cambio clave: rol → is_admin
-    cargo = Column(
+    cargo = Column
         String(NAME_LENGTH), nullable=True
     )  # Campo separado para cargo en la empresa
     is_active = Column(Boolean, default=True, nullable=False)
 
     # Timestamps
-    created_at = Column(
+    created_at = Column
     )
 
     # Relaciones
-    aprobaciones_solicitadas = relationship(
-        "Aprobacion",
-        foreign_keys="Aprobacion.solicitante_id",
-        back_populates="solicitante",
+    aprobaciones_solicitadas = relationship
     )
-    aprobaciones_revisadas = relationship(
-        "Aprobacion",
-        foreign_keys="Aprobacion.revisor_id",
-        back_populates="revisor",
+    aprobaciones_revisadas = relationship
     )
 
     auditorias = relationship("Auditoria", back_populates="usuario")
@@ -54,8 +47,7 @@ class User(Base):
 
 
     def __repr__(self):
-        return (
-            f"<User(id={self.id}, email='{self.email}', "
+        return 
             f"is_admin={self.is_admin})>"
         )
 
@@ -68,3 +60,5 @@ class User(Base):
     def rol(self) -> str:
         """Propiedad para compatibilidad hacia atrás"""
         return "ADMIN" if self.is_admin else "USER"
+
+"""
