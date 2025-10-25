@@ -610,8 +610,8 @@ def _detectar_anomalia_tasa_error(recent_traces: list) -> list:
             {
                 "type": "high_error_rate",
                 "severity": "critical",
-                "description": f"Error rate is {
-                    error_rate:.1f}% (>{total_traces} traces analyzed)",
+                "description": f"Error rate is {error_rate:.1f}% "
+                f"(>{total_traces} traces analyzed)",
                 "recommendation": "Investigate authentication configuration and token generation",
             })
     elif error_rate > 20:
@@ -619,8 +619,8 @@ def _detectar_anomalia_tasa_error(recent_traces: list) -> list:
             {
                 "type": "elevated_error_rate",
                 "severity": "warning",
-                "description": f"Error rate is {
-                    error_rate:.1f}% (>{total_traces} traces analyzed)",
+                "description": f"Error rate is {error_rate:.1f}% "
+                f"(>{total_traces} traces analyzed)",
                 "recommendation": "Monitor authentication patterns closely",
             })
 
@@ -639,9 +639,8 @@ def _detectar_anomalia_duracion_excesiva(recent_traces: list) -> list:
             {
                 "type": "slow_authentication",
                 "severity": "warning",
-                "description": f"{
-                    len(slow_traces)} traces took >3s (avg: {
-                    avg_slow_duration:.0f}ms)",
+                "description": f"{len(slow_traces)} traces took >3s "
+                f"(avg: {avg_slow_duration:.0f}ms)",
                 "recommendation": "Check database performance and network latency",
             })
     return anomalies
@@ -679,8 +678,8 @@ def _detectar_anomalia_timing_exitoso() -> list:
                 {
                     "type": "slow_successful_auth",
                     "severity": "info",
-                    "description": f"Successful authentications average {
-                        avg_success_duration:.0f}ms",
+                    "description": f"Successful authentications average "
+                    f"{avg_success_duration:.0f}ms",
                     "recommendation": "Consider optimizing authentication flow",
                 })
     return anomalies
@@ -812,8 +811,8 @@ def _generate_correlation_recommendations(
     for error_type, pattern in temporal_patterns.items():
         if pattern["count"] > 3 and pattern["avg_interval_seconds"] < 60:
             recommendations.append(
-                f"⚠️ Error '{error_type}' ocurre frecuentemente (cada {
-                    pattern['avg_interval_seconds']:.0f}s)"
+                f"⚠️ Error '{error_type}' ocurre frecuentemente "
+                f"(cada {pattern['avg_interval_seconds']:.0f}s)"
             )
 
     # Recomendaciones generales
