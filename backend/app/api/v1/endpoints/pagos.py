@@ -54,7 +54,8 @@ async def crear_pago(
     """Crear un nuevo pago"""
     try:
         logger.info(
-            f"Usuario {current_user.email} creando pago para cédula {pago_data.cedula_cliente}"
+            f"Usuario {current_user.email} creando pago para "
+            f"cédula {pago_data.cedula_cliente}"
         )
 
         # Crear el pago

@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",  # ✅ Desarrollo local
         "https://rapicredit.onrender.com",  # ✅ Frontend en Render
-        "https://pagos-f2qf.onrender.com",  # ✅ Backend en Render (para referencias)
+        "https://pagos-f2qf.onrender.com",  # ✅ Backend en Render
         "null",  # ✅ Para requests sin origin (scripts, herramientas)
         "*",  # ✅ Temporalmente permisivo para debugging
     ]
@@ -95,7 +95,7 @@ class Settings(BaseSettings):
     # VALIDACIÓN DE CONFIGURACIÓN
     # ============================================
     def validate_admin_credentials(self) -> bool:
-        """Valida que las credenciales de admin estén configuradas correctamente"""
+        """Valida que las credenciales de admin estén configuradas"""
         if not self.ADMIN_EMAIL or not self.ADMIN_PASSWORD:
             return False
         if (
@@ -103,7 +103,8 @@ class Settings(BaseSettings):
             and self.ENVIRONMENT == "production"
         ):
             raise ValueError(
-                "⚠️ CRÍTICO: Contraseña por defecto detectada en producción. Configure ADMIN_PASSWORD"
+                "⚠️ CRÍTICO: Contraseña por defecto detectada en producción. "
+                "Configure ADMIN_PASSWORD"
             )
         return True
 

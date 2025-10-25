@@ -84,7 +84,8 @@ def registrar_auditoria_cliente(
         db.add(auditoria)
         db.commit()
         logger.info(
-            f"Auditoría registrada: {accion} cliente {cliente_id} por {usuario_email}"
+            f"Auditoría registrada: {accion} cliente {cliente_id} "
+            f"por {usuario_email}"
         )
     except Exception as e:
         logger.error(f"Error registrando auditoría: {e}")

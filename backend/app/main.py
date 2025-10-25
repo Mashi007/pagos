@@ -69,7 +69,8 @@ logger.info(
     "🚀 Iniciando aplicación FastAPI - Sistema de Préstamos y Cobranza"
 )
 logger.info(
-    f"📊 Configuración: Environment={settings.ENVIRONMENT}, Log Level={settings.LOG_LEVEL}"
+    f"📊 Configuración: Environment={settings.ENVIRONMENT}, "
+    f"Log Level={settings.LOG_LEVEL}"
 )
 logger.info(f"🌐 CORS Origins: {settings.CORS_ORIGINS}")
 logger.info(f"🔗 Database URL configurada: {bool(settings.DATABASE_URL)}")
@@ -302,7 +303,8 @@ app.include_router(
     prefix=f"{settings.API_V1_PREFIX}/impact",
     tags=["Análisis de Impacto"],
 )
-# app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", tags=["Mock Data"])  # Removido - se usarán datos reales
+# app.include_router(mock_data.router, prefix=f"{settings.API_V1_PREFIX}/mock", 
+#                   tags=["Mock Data"])  # Removido - se usarán datos reales
 
 
 @app.get("/", include_in_schema=False)

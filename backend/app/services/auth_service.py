@@ -48,7 +48,8 @@ class AuthService:
         email_normalized = email.lower().strip()
 
         logger.info(
-            f"AuthService.authenticate_user - Intentando autenticar usuario: {email_normalized}"
+            f"AuthService.authenticate_user - Intentando autenticar "
+            f"usuario: {email_normalized}"
         )
 
         user = (

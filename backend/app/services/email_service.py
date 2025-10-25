@@ -162,7 +162,8 @@ class EmailService:
                     <style>
                         body { font-family: Arial, sans-serif; }
                         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                        .header { background: #007bff; color: white; padding: 20px; text-align: center; }
+                        .header { background: #007bff; color: white; padding: 20px; 
+                                  text-align: center; }
                         .content { padding: 20px; background: #f8f9fa; }
                         .footer { text-align: center; padding: 10px; color: #666; font-size: 12px; }
                         .button { background: #28a745; color: white; padding: 10px 20px;

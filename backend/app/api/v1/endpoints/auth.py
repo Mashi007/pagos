@@ -60,7 +60,7 @@ def add_cors_headers(request: Request, response: Response) -> None:
         logger.info(f"CORS Debug - Origin permitido: {origin}")
     else:
         logger.warning(f"CORS Debug - Origin NO permitido: {origin}")
-        # En caso de origin no permitido, usar el primer origin válido como fallback
+        # En caso de origin no permitido, usar el primer origin válido
         if settings.CORS_ORIGINS:
             response.headers["Access-Control-Allow-Origin"] = (
                 settings.CORS_ORIGINS[0]

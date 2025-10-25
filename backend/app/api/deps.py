@@ -52,7 +52,8 @@ def get_current_user(
 
         payload = decode_token(token)
         logger.info(
-            f"✅ Token decodificado exitosamente - Payload keys: {list(payload.keys())}"
+            f"✅ Token decodificado exitosamente - "
+            f"Payload keys: {list(payload.keys())}"
         )
 
         # Verificar que sea un access token
@@ -118,7 +119,8 @@ def require_role(require_admin: bool = True):
     Dependency para requerir rol de administrador
 
     Args:
-        require_admin: Si True, requiere admin. Si False, cualquier usuario activo.
+        require_admin: Si True, requiere admin. 
+                      Si False, cualquier usuario activo.
 
     Returns:
         Función de dependencia
@@ -149,7 +151,8 @@ def require_permission(*required_permissions: Permission):
         Función de dependencia
 
     Usage:
-        @app.post("/clientes", dependencies=[Depends(require_permission(Permission.CLIENTE_CREATE))])
+        @app.post("/clientes", 
+                 dependencies=[Depends(require_permission(Permission.CLIENTE_CREATE))])
     """
 
     def permission_checker(
