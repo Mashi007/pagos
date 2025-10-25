@@ -22,33 +22,6 @@ from app.models.user import User
 
 
 # Funciones auxiliares para validación y pruebas
-def _probar_configuracion_whatsapp(db: Session) -> Dict[str, Any]:
-    """Probar configuración de WhatsApp"""
-    return {"status": "ok", "message": "WhatsApp configurado correctamente"}
-
-
-def _probar_configuracion_ai(db: Session) -> Dict[str, Any]:
-    """Probar configuración de IA"""
-    return {"status": "ok", "message": "IA configurada correctamente"}
-
-
-def _probar_configuracion_database(db: Session) -> Dict[str, Any]:
-    """Probar configuración de base de datos"""
-    return {"status": "ok", "message": "Base de datos configurada correctamente"}
-
-
-def _generar_recomendaciones_configuracion(
-    estado_servicios: Dict[str, Any],
-) -> List[str]:
-    """Generar recomendaciones de configuración"""
-    return ["Recomendación 1", "Recomendación 2"]
-
-
-def _generar_alertas_configuracion(db: Session, estado_categorias: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Generar alertas de configuración"""
-    return [{"tipo": "info", "mensaje": "Sistema funcionando correctamente"}]
-
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
