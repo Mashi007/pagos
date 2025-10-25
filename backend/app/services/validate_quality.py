@@ -9,11 +9,11 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# Agregar el directorio del proyecto al path
-sys.path.append(str(Path(__file__).parent.parent.parent))
-
 from app.services.logging_config import configure_service_logging
 from app.services.quality_standards import apply_quality_standards
+
+# Agregar el directorio del proyecto al path
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
 
 def main():

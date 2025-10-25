@@ -303,11 +303,6 @@ class WhatsAppService:
             # URL para obtener estado del mensaje
             f"{self.api_url}/{self.phone_number_id}/messages/{message_id}"
 
-            headers = {
-                "Authorization": f"Bearer {self.access_token}",
-                "Content-Type": "application/json",
-            }
-
             # Nota: Meta API no proporciona endpoint directo para consultar estado
             # El estado se maneja via webhooks
             return {

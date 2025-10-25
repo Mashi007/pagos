@@ -260,6 +260,6 @@ class AuthService:
             permission_strings = [perm.value for perm in permissions]
 
             return permission_strings
-        except Exception as e:
+        except Exception:
             # Si hay error, retornar permisos vacíos
             return []

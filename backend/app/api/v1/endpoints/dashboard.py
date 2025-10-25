@@ -868,9 +868,9 @@ def obtener_matriz_acceso_roles(current_user: User = Depends(get_current_user)):
                 "endpoint": "/api/v1/dashboard/comercial",
                 "filtro_aplicado": "TODOS LOS CLIENTES (roles sin analista individual)",
             },
-            "USER": {
+            "USER_ANALISTA": {
                 "emoji": "👤",
-                "titulo": "USER",
+                "titulo": "USER_ANALISTA",
                 "acceso": "⚠️ SOLO SUS CLIENTES",
                 "vista_dashboard": [
                     "• KPIs de sus clientes únicamente",

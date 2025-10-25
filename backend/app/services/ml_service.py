@@ -1113,7 +1113,6 @@ class OptimizadorTasas:
     @staticmethod
     def _optimizar_tasa_interes(score: float, prestamo_data: Dict) -> float:
         """Optimizar tasa de interés basada en score"""
-        tasa_base = 18.0  # 18% anual base
 
         if score >= 900:
             return 12.0  # Tasa preferencial
@@ -1679,7 +1678,6 @@ class AlertasInteligentes:
         """Detectar deterioro en la calidad de la cartera"""
         # Comparar mora actual vs mes anterior
         hoy = date.today()
-        mes_anterior = hoy - timedelta(days=30)
 
         mora_actual = (
             db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).count()

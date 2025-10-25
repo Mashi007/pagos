@@ -428,6 +428,7 @@ class ServiceMetrics:
 
         return recommendations
 
+
 # Función de utilidad para aplicar normas automáticamente
 
 

@@ -55,6 +55,7 @@ class NotificacionUpdate(BaseModel):
     programada_para: Optional[datetime] = None
     prioridad: Optional[str] = None
 
+
 # ============================================================================
 # Schemas de Respuesta
 # ============================================================================
@@ -91,6 +92,7 @@ class NotificacionResponse(NotificacionInDB):
     fallo: bool = False
     puede_reintentar: bool = False
 
+
 # ============================================================================
 # Schemas para acciones específicas
 # ============================================================================
@@ -119,6 +121,7 @@ class NotificacionRecordatorioPago(BaseModel):
         None, description="Datos adicionales como monto, fecha_vencimiento, etc."
     )
 
+
 # ============================================================================
 # Schemas de Listado y Filtrado
 # ============================================================================
@@ -145,6 +148,7 @@ class NotificacionList(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
 
 # ============================================================================
 # Schemas de Estadísticas

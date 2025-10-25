@@ -219,9 +219,6 @@ class CrossValidationAuthChecker:
             is_user_endpoint = any(
                 user_ep in endpoint for user_ep in context_rules["user_endpoints"]
             )
-            is_public_endpoint = any(
-                pub_ep in endpoint for pub_ep in context_rules["public_endpoints"]
-            )
 
             if is_admin_endpoint:
                 # Verificar si el token tiene claims de admin

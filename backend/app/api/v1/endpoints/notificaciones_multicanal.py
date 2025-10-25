@@ -749,7 +749,6 @@ def dashboard_notificaciones_multicanal(
         total = len(notificaciones)
         exitosas = len([n for n in notificaciones if n.estado == "ENTREGADO"])
         fallidas = len([n for n in notificaciones if n.estado == "ERROR"])
-        pendientes = len([n for n in notificaciones if n.estado == "PENDIENTE"])
 
         # Métricas por canal
         por_canal = {
@@ -770,10 +769,6 @@ def dashboard_notificaciones_multicanal(
             clientes_notificaciones[cliente_id] = (
                 clientes_notificaciones.get(cliente_id, 0) + 1
             )
-
-        top_clientes = sorted(
-            clientes_notificaciones.items(), key=lambda x: x[1], reverse=True
-        )[:10]
 
         return {
             "titulo": "📊 DASHBOARD DE NOTIFICACIONES MULTICANAL",

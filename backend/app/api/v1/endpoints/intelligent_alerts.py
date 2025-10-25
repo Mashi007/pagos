@@ -270,7 +270,6 @@ async def evaluate_alerts(db: Session = Depends(get_db)):
     try:
         # Recolectar métricas actuales
         current_time = datetime.now()
-        cutoff_time = current_time - timedelta(minutes=5)
 
         # Simular recolección de métricas (en producción vendría de logs/monitoring)
         metrics = {

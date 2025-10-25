@@ -51,7 +51,7 @@ class PredictiveAnalyzer:
 
         recent_data = data_points[-window_size:]
         older_data = (
-            data_points[-window_size * 2:-window_size]
+            data_points[-window_size * 2 : -window_size]
             if len(data_points) >= window_size * 2
             else recent_data
         )
@@ -212,9 +212,6 @@ async def collect_authentication_metrics(db: Session = Depends(get_db)):
     📊 Recolectar métricas actuales de autenticación
     """
     try:
-        # Calcular métricas del último período (última hora)
-        cutoff_time = datetime.now() - timedelta(hours=1)
-
         # Simular recolección de métricas (en producción vendría de logs/monitoring)
         # Por ahora, calcularemos métricas básicas
 
