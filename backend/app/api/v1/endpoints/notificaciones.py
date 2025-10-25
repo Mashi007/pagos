@@ -7,8 +7,11 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.models.cliente import Cliente
 from app.models.notificacion import Notificacion
+from app.models.prestamo import Prestamo
 from app.models.user import User
+from app.services.email_service import EmailService
 from app.services.whatsapp_service import WhatsAppService
 
 logger = logging.getLogger(__name__)
