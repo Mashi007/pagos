@@ -207,7 +207,8 @@ def recalcular_mora(
             total_mora_nueva=resultado["total_mora_nueva"],
             diferencia=resultado["diferencia"],
             cuotas_con_mora=cuotas_detalle,
-            mensaje=f"Se recalculó la mora de {resultado['cuotas_actualizadas']} cuotas",
+            mensaje=f"Se recalculó la" + f"mora de {resultado['cuotas_ \
+            actualizadas']} cuotas",
         )
     except Exception as e:
         raise HTTPException(

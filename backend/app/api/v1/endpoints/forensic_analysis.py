@@ -239,9 +239,12 @@ class ForensicTraceSystem:
         data = event.get("data", {})
 
         summaries = {
-            "token_received": f"Token recibido: {data.get('token_length', 'unknown')} chars",
-            "token_validation": f"Validación token: {data.get('status', 'unknown')}",
-            "user_lookup": f"Búsqueda usuario: {data.get('user_id', 'unknown')}",
+            "token_received": f"Token recibido:" + f"{data.get('token_length' \
+            , 'unknown')} chars",
+            "token_validation": f"Validación token: {data.get('status' \
+            , 'unknown')}",
+            "user_lookup": f"Búsqueda usuario: {data.get('user_id', 'u \
+            nknown')}",
             "permission_check": f"Verificación permisos: {data.get('permission', 'unknown')}",
             "auth_failure": f"Fallo autenticación: {data.get('reason', 'unknown')}",
             "token_expired": f"Token expirado: {data.get('exp_time', 'unknown')}",

@@ -43,7 +43,8 @@ async def diagnosticar_refresh_token(
                 "status": "error",
                 "error": "No refresh token provided",
                 "recomendacion": (
-                    "Verificar que el frontend esté enviando el refresh_token correctamente"
+                    "Verificar que el frontend esté enviando el refresh_token \
+                    correctamente"
                 ),
             }
 

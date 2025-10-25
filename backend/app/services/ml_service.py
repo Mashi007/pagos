@@ -1,7 +1,8 @@
 # backend/app/services/ml_service.py
 """
 Servicio de Inteligencia Artificial y Machine Learning
-Sistema avanzado de predicción, scoring y recomendaciones para financiamiento automotriz
+Sistema avanzado de predicción, scoring y recomendaciones para financiamiento \
+automotriz
 """
 
 import logging
@@ -1747,7 +1748,8 @@ class AlertasInteligentes:
                     {
                         "tipo": "OPORTUNIDADES",
                         "prioridad": "BAJA",
-                        "titulo": f"{len(oportunidades)} oportunidades de negocio",
+                        "titulo": f"{len(oportunidades)} oportunidades \
+                        de negocio",
                         "descripcion": "Clientes elegibles para productos adicionales",
                         "oportunidades": oportunidades,
                         "accion_recomendada": "Contacto comercial",

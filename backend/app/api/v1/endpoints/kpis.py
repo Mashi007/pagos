@@ -262,7 +262,8 @@ def kpis_financieros(
                     "monto_total": float(monto),
                     "ticket_promedio": float(ticket),
                 }
-                for modalidad, clientes, monto, ticket in rentabilidad_modalidad
+                for modalidad, clientes, monto, ticket in rentabilidad \
+                _modalidad
             ],
         },
     }

@@ -141,7 +141,8 @@ def calcular_scoring_crediticio(
             accion=TipoAccion.CONSULTA,
             entidad="scoring",
             entidad_id=None,
-            detalles=f"Scoring calculado: {resultado['score_final']} para cédula {solicitud.cedula}",
+            detalles=f"Scoring calculado: {resultado['score_final']}" + \
+            f"para cédula {solicitud.cedula}",
         )
         db.add(auditoria)
         db.commit()
@@ -675,7 +676,8 @@ def dashboard_inteligencia_artificial(
             },
             "estado_modelos": estado_modelos,
             "alertas_ia": [
-                f"🚨 {metricas_ia['clientes_alto_riesgo']} clientes identificados en alto riesgo",
+                f"🚨 {metricas_ia['clientes_alto_riesgo']} clientes" +  \
+                f"identificados en alto riesgo",
                 f"⚠️ {metricas_ia['alertas_criticas']} alertas críticas requieren atención",
                 f"💡 {metricas_ia['recomendaciones_activas']} recomendaciones activas",
             ],

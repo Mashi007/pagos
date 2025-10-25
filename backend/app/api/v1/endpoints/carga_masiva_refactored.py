@@ -57,9 +57,7 @@ def _validar_columnas_requeridas(df: pd.DataFrame) -> None:
         )
 
 
-def _extraer_datos_fila(
-    row: pd.Series, fila_numero: int
-) -> Dict[str, str]:
+def _extraer_datos_fila(row: pd.Series, fila_numero: int) -> Dict[str, str]:
     """Extraer y limpiar datos de una fila"""
     cedula = str(row.get("cedula", "")).strip()
     nombre = str(row.get("nombre", "")).strip()
@@ -73,9 +71,7 @@ def _extraer_datos_fila(
     concesionario = str(row.get("concesionario", "")).strip()
     total_financiamiento = str(row.get("total_financiamiento", "")).strip()
     cuota_inicial = str(row.get("cuota_inicial", "")).strip()
-    numero_amortizaciones = str(
-        row.get("numero_amortizaciones", "")
-    ).strip()
+    numero_amortizaciones = str(row.get("numero_amortizaciones", "")).strip()
     modalidad_pago = str(row.get("modalidad_pago", "")).strip()
     fecha_entrega = str(row.get("fecha_entrega", "")).strip()
     asesor = str(row.get("asesor", "")).strip()
@@ -238,6 +234,4 @@ async def _analizar_archivo_clientes_refactored(
         raise
     except Exception as e:
         logger.error(f"Error analizando archivo de clientes: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")

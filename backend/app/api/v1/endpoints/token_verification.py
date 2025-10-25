@@ -27,7 +27,8 @@ def _extraer_token_del_header(request: Request) -> tuple[str, dict]:
             "timestamp": datetime.now().isoformat(),
             "status": "error",
             "error": "No Authorization header found",
-            "recommendation": "Verificar que el frontend esté enviando el header Authorization",
+            "recommendation": "Verificar que el frontend esté enviando \
+            el header Authorization",
         }
 
     if not auth_header.startswith("Bearer "):

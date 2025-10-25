@@ -24,7 +24,8 @@ router = APIRouter()
 
 
 class CriticalErrorMonitor:
-    """Monitor específico para errores críticos que causan fallos de despliegue"""
+    """Monitor específico para errores críticos que causan fallos de d \
+    espliegue"""
 
     def __init__(self):
         self.critical_errors = deque(maxlen=1000)
@@ -208,7 +209,8 @@ class CriticalErrorMonitor:
                     {
                         "type": "import_fix",
                         "priority": "critical",
-                        "description": "Corregir imports faltantes que causan fallos de despliegue",
+                        "description": "Corregir imports faltantes que \
+                        causan fallos de despliegue",
                         "action": "Verificar y corregir imports en otros archivos",
                         "impact": "Resuelve fallos de despliegue",
                     }

@@ -60,7 +60,8 @@ class AuthService:
 
         if not user:
             logger.warning(
-                f"AuthService.authenticate_user - Usuario no encontrado: {email_normalized}"
+                f"AuthService.authenticate_user - Usuario" + f"no encontrado: \
+                {email_normalized}"
             )
             return None
 

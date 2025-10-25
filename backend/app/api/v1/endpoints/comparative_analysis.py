@@ -25,7 +25,8 @@ router = APIRouter()
 
 
 class ComparativeAnalysisSystem:
-    """Sistema comparativo para análisis diferencial de casos exitosos vs fallidos"""
+    """Sistema comparativo para análisis diferencial de casos exitosos \
+    vs fallidos"""
 
     def __init__(self):
         self.successful_cases = deque(maxlen=5000)  # Casos exitosos

@@ -61,12 +61,9 @@ class Analista(Base):
             "comision_porcentaje": 0,
             "activo": self.activo,
             "notas": "",
-            "updated_at": (
-                self.updated_at.isoformat() if self.updated_at else None
-            ),
+            "updated_at": (self.updated_at.isoformat() if self.updated_at \
+            else None),
             "fecha_eliminacion": (
-                self.fecha_eliminacion.isoformat()
-                if self.fecha_eliminacion
-                else None
+                self.fecha_eliminacion.isoformat() if self.fecha_eliminacion else None
             ),
         }

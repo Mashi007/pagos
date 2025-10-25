@@ -1,6 +1,7 @@
 """
 Sistema de Análisis Predictivo de Autenticación
-Machine Learning y análisis estadístico para predecir problemas de autenticación
+Machine Learning y análisis estadístico para predecir problemas de aut \
+enticación
 """
 
 import logging

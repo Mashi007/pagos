@@ -149,12 +149,12 @@ class ValidadorTelefono:
                 "error": {
                     "valido": False,
                     "error": (
-                        f"Operadora '{operadora}' no válida para {pais}. Válidas: {', '.join(config['operadoras'])}"
+                        f"Operadora '{operadora}' no válida" + f"para  \
+                        {pais}. Válidas: {', '.join(config['operadoras'])}"
                     ),
                     "valor_original": telefono_original,
                     "valor_formateado": None,
-                    "sugerencia": f"Debe comenzar con: {', '.join(
-                            config['operadoras'])}",
+                    "sugerencia": f"Debe comenzar con: {', '.join(config['operadoras'])}",
                 },
             }
 
@@ -1647,7 +1647,8 @@ class ServicioCorreccionDatos:
                     "Capacitar usuarios en formatos correctos",
                 ],
                 "herramientas_disponibles": {
-                    "correccion_individual": "POST /api/v1/validadores/corregir-cliente/{id}",
+                    "correccion_individual": "POST /api/v1/validadores \
+                    /corregir-cliente/{id}",
                     "correccion_masiva": "POST /api/v1/validadores/corregir-masivo",
                     "validacion_tiempo_real": "POST /api/v1/validadores/validar-campo",
                 },

@@ -38,7 +38,8 @@ def obtener_estado_monitoreo(current_user: User = Depends(get_current_user)):
     if not current_user.is_admin:
         raise HTTPException(
             status_code=403,
-            detail="Solo administradores pueden ver configuración de monitoreo",
+            detail="Solo administradores pueden ver configuración de m \
+            onitoreo",
         )
 
     from app.core.monitoring import get_monitoring_status
@@ -298,7 +299,8 @@ def obtener_configuracion_validadores():
                 "total_financiamiento": "Entre $1 y $50,000,000",
                 "amortizaciones": "Entre 1 y 84 meses",
                 "cedula_venezuela": "Prefijos V/E/J + 7-10 dígitos del 0-9",
-                "telefono_venezuela": "+58 + 10 dígitos (primer dígito no puede ser 0)",
+                "telefono_venezuela": "+58 + 10 dígitos (primer dígito \
+                no puede ser 0)",
                 "fecha_formato": "DD/MM/YYYY (día 2 dígitos, mes 2 dígitos, año 4 dígitos)",
                 "email_normalizacion": "Conversión automática a minúsculas (incluyendo @)",
             },
@@ -1449,7 +1451,8 @@ def dashboard_configuracion_sistema(
             "acciones_rapidas": {
                 "configurar_ia": "POST /api/v1/configuracion/ia/actualizar",
                 "configurar_email": "POST /api/v1/configuracion/email/actualizar",
-                "configurar_whatsapp": "POST /api/v1/configuracion/whatsapp/actualizar",
+                "configurar_whatsapp": "POST /api/v1/configuracion/wha \
+                tsapp/actualizar",
                 "probar_servicios": (
                     "POST /api/v1/configuracion/sistema/probar-integracion/{categoria}"
                 ),

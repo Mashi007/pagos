@@ -90,7 +90,8 @@ class TemporalAnalysisSystem:
                     abs(time_diff - expected_diff) > 5
                 ):  # Más de 5 segundos de desviación
                     logger.warning(
-                        f"⚠️ Desviación de tiempo detectada: {time_diff - expected_diff:.2f} segundos"
+                        f"⚠️ Desviación de tiempo" + f"detectada: {time_diff \
+                        - expected_diff:.2f} segundos"
                     )
 
     def _analyze_timing_patterns(self):

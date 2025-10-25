@@ -211,7 +211,8 @@ def verificar_endpoints_criticos():
         "endpoints_criticos": endpoints_criticos,
         "total_endpoints": len(endpoints_criticos),
         "message": "Lista de endpoints críticos para verificar",
-        "nota": "Usar herramientas como Postman o curl para verificar cada endpoint",
+        "nota": "Usar herramientas como Postman o curl para verificar cada \
+        endpoint",
     }
 
 

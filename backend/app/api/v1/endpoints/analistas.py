@@ -267,7 +267,8 @@ def analistas_backup2(
     """
     try:
         # Consulta más simple para evitar problemas
-        query = "SELECT id, nombre, activo FROM analistas ORDER BY id OFFSET %s LIMIT %s"
+        query = "SELECT id, nombre, activo FROM analistas ORDER BY id OFFSET \
+        %s LIMIT %s"
         count_query = "SELECT COUNT(*) FROM analistas"
 
         # Obtener total

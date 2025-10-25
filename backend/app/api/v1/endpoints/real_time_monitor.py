@@ -423,7 +423,8 @@ def _generate_performance_recommendations(status: Dict[str, Any]) -> List[str]:
     success_rate = metrics.get("success_rate_percent", 100)
     if success_rate < 95:
         recommendations.append(
-            f"⚠️ Tasa de éxito baja ({success_rate}%) - Revisar configuración de tokens"
+            f"⚠️ Tasa de éxito baja" + f"({success_rate}%) - Revisar c \
+            onfiguración de tokens"
         )
 
     expiring_tokens = metrics.get("expiring_tokens", 0)

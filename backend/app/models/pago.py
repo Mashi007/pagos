@@ -33,12 +33,9 @@ class Pago(Base):
 
     # DATOS DEL PAGO
     fecha_pago = Column(DateTime, nullable=False)
-    monto_pagado = Column(
-        Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False
-    )
-    numero_documento = Column(
-        String(DOCUMENTO_LENGTH), nullable=False, index=True
-    )
+    monto_pagado = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), n \
+    ullable=False)
+    numero_documento = Column(String(DOCUMENTO_LENGTH), nullable=False, index=True)
 
     # DOCUMENTO ADJUNTO
     documento_nombre = Column(String(DOCUMENTO_NOMBRE_LENGTH), nullable=True)

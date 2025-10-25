@@ -612,7 +612,9 @@ def _detectar_anomalia_tasa_error(recent_traces: list) -> list:
                 "severity": "critical",
                 "description": f"Error rate is {error_rate:.1f}% "
                 f"(>{total_traces} traces analyzed)",
-                "recommendation": "Investigate authentication configuration and token generation",
+                "recommendation": "Investigate authentication configuration \
+                and 
+                token generation",
             }
         )
     elif error_rate > 20:

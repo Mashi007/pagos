@@ -17,7 +17,8 @@ async def ejecutar_migracion_emergencia(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Endpoint de emergencia para ejecutar la migración de concesionario y analista
+    Endpoint de emergencia para ejecutar la migración de concesionario \
+    y analista
     """
     try:
         logger.info(

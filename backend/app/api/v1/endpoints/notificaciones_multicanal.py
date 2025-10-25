@@ -115,7 +115,8 @@ async def procesar_notificaciones_automaticas(
         if not config_servicios["puede_enviar_notificaciones"]:
             raise HTTPException(
                 status_code=400,
-                detail="Servicios de notificación no configurados. Configure email y/o WhatsApp.",
+                detail="Servicios de notificación no configurados. Configure \
+                email y/o WhatsApp.",
             )
 
         # Ejecutar procesamiento en background
@@ -632,7 +633,8 @@ def listar_templates_whatsapp(current_user: User = Depends(get_current_user)):
             "informacion_importante": {
                 "aprobacion_meta": "Las plantillas deben ser aprobadas por Meta antes de usar",
                 "tiempo_aprobacion": "1-2 días hábiles",
-                "proceso": "El sistema enviará automáticamente para aprobación",
+                "proceso": "El sistema enviará automáticamente para ap \
+                robación",
                 "limitaciones": "WhatsApp tiene reglas estrictas sobre contenido",
             },
             "variables_disponibles": [
@@ -899,7 +901,8 @@ def dashboard_notificaciones_multicanal(
                 "scheduler": "✅ EJECUTÁNDOSE",
             },
             "acciones_rapidas": {
-                "procesar_ahora": "POST /api/v1/notificaciones-multicanal/procesar-automaticas",
+                "procesar_ahora": "POST /api/v1/notificaciones-multica \
+                nal/procesar-automaticas",
                 "ver_historial": "GET /api/v1/notificaciones-multicanal/historial",
                 "procesar_reintentos": "POST /api/v1/notificaciones-multicanal/procesar-reintentos",
                 "configurar_templates": "GET /api/v1/notificaciones-multicanal/whatsapp/templates",
@@ -1146,7 +1149,8 @@ def verificar_sistema_notificaciones_multicanal(
         },
         "endpoints_principales": {
             "dashboard": "/api/v1/notificaciones-multicanal/dashboard",
-            "procesar_automaticas": "/api/v1/notificaciones-multicanal/procesar-automaticas",
+            "procesar_automaticas": "/api/v1/notificaciones-multicanal \
+            /procesar-automaticas",
             "historial": "/api/v1/notificaciones-multicanal/historial",
             "preferencias_cliente": "/api/v1/notificaciones-multicanal/cliente/{id}/preferencias",
             "templates_whatsapp": "/api/v1/notificaciones-multicanal/whatsapp/templates",

@@ -141,7 +141,8 @@ async def cargar_archivo_excel(
             usuario_id=current_user.id,
             accion=TipoAccion.CREAR,
             tabla="CargaMasiva",
-            descripcion=f"Análisis de carga masiva: {archivo.filename} ({tipo_carga})",
+            descripcion=f"Análisis de carga" + f"masiva: {archivo.filename} \
+            ({tipo_carga})",
             datos_nuevos={
                 "archivo": archivo.filename,
                 "tipo": tipo_carga,

@@ -165,7 +165,8 @@ class DatabaseSchemaAnalyzer:
                 "table": "analistas",
                 "fix_type": "add_column",
                 "sql": (
-                    "ALTER TABLE analistas ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;"
+                    "ALTER TABLE analistas ADD COLUMN created_at TIMESTAMP \
+                    DEFAULT CURRENT_TIMESTAMP;"
                 ),
                 "description": "Agregar columna created_at faltante que causa error 503",
                 "priority": "critical",

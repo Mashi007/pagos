@@ -666,7 +666,9 @@ def dashboard_comercial(
                         "fecha": cliente.fecha_registro.strftime("%d/%m/%Y"),
                         "cliente": cliente.nombre_completo,
                         "vehiculo": cliente.vehiculo_completo,
-                        "monto": f"${float(cliente.total_financiamiento or 0):,.0f}",
+                        "monto": f"${float(cliente.total_financiamiento \
+                        or 
+                        0):,.0f}",
                         "analista": (
                             cliente.analista.full_name
                             if cliente.analista

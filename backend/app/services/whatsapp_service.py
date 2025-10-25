@@ -31,7 +31,8 @@ class WhatsAppService:
         if not self.access_token or not self.phone_number_id:
             logger.warning("Credenciales de Meta Developers no configuradas")
             logger.info(
-                "Variables requeridas: WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID"
+                "Variables requeridas: WHATSAPP_ACCESS_TOKEN, WHATSAPP \
+                _PHONE_NUMBER_ID"
             )
 
     async def send_message(

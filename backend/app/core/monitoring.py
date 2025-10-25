@@ -138,7 +138,8 @@ def configure_structured_logging() -> None:
     # Configurar formato JSON
     log_handler = logging.StreamHandler()
     formatter = jsonlogger.JsonFormatter(
-        "%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d",
+        "%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s % \
+        (lineno)d",
         rename_fields={
             "asctime": "timestamp",
             "levelname": "level",
@@ -232,8 +233,10 @@ def track_business_metrics(
         labels: Labels adicionales
 
     Examples:
-        track_business_metrics("clientes_creados", 1, {"analista": "Juan", "concesionario": "AutoCenter"})
-        track_business_metrics("pagos_procesados", monto, {"estado": "EXITOSO", "metodo": "TRANSFERENCIA"})
+        track_business_metrics("clientes_creados", 1, {"analista": "Juan" \
+        , "concesionario": "AutoCenter"})
+        track_business_metrics("pagos_procesados", monto, {"estado": "EXITOSO" \
+        , "metodo": "TRANSFERENCIA"})
         track_business_metrics("mora_acumulada", dias_mora, {"cliente_id": 123})
         track_business_metrics("conciliacion_exitosa", 1, {"banco": "Popular", "registros": 50})
     """
@@ -330,9 +333,7 @@ def track_bulk_migration(
     track_business_metrics(
         "bulk_migration_successful", successful, {"type": migration_type}
     )
-    track_business_metrics(
-        "bulk_migration_failed", failed, {"type": migration_type}
-    )
+    track_business_metrics("bulk_migration_failed", failed, {"type": migration_type})
     track_business_metrics(
         "bulk_migration_warnings", warnings, {"type": migration_type}
     )
@@ -354,9 +355,7 @@ class track_operation:
         self.context = kwargs
 
     def __enter__(self):
-        logging.info(
-            f"Iniciando operación: {self.operation_name}", extra=self.context
-        )
+        logging.info(f"Iniciando operación: {self.operation_name}", extra=self.context)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):

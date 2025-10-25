@@ -94,7 +94,8 @@ def listar_auditoria(
     current_user: User = Depends(get_current_user),
 ):
     """
-    📋 Listar registros de auditoría con filtros y paginación (VERSIÓN REFACTORIZADA)
+    📋 Listar registros de auditoría con filtros y paginación (VERSIÓN  \
+    REFACTORIZADA)
 
     Todos los usuarios pueden ver auditoría
     """

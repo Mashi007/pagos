@@ -115,7 +115,8 @@ def test_cedula_post(cedula: str = "E12345678"):
             "cedula_test": cedula,
             "resultado": resultado,
             "deberia_ser_valido": True,
-            "explicacion": "E12345678: E (válido) + 8 dígitos (válido) = VÁLIDO",
+            "explicacion": "E12345678: E (válido) + 8 dígitos (válido) \
+            = VÁLIDO",
         }
     except Exception as e:
         return {"error": str(e), "cedula_test": cedula}
@@ -823,10 +824,13 @@ def obtener_ejemplos_correccion(
             "pais_configurado": pais,
             "ejemplos": ejemplos,
             "herramientas_disponibles": {
-                "validacion_tiempo_real": "POST /api/v1/validadores/validar-campo",
-                "formateo_automatico": "POST /api/v1/validadores/formatear-tiempo-real",
+                "validacion_tiempo_real": "POST /api/v1/validadores/va \
+                lidar-campo",
+                "formateo_automatico": "POST /api/v1/validadores/forma \
+                tear-tiempo-real",
                 "correccion_individual": "POST /api/v1/validadores/corregir-cliente/{id}",
-                "deteccion_masiva": "GET /api/v1/validadores/detectar-errores-masivo",
+                "deteccion_masiva": "GET /api/v1/validadores/detectar- \
+                errores-masivo",
             },
             "integracion_frontend": {
                 "validacion_onchange": "Usar endpoint validar-campo en onChange",

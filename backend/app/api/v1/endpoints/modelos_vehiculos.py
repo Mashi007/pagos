@@ -177,7 +177,8 @@ def crear_modelo_vehiculo(
         db.refresh(nuevo_modelo)
 
         logger.info(
-            f"Modelo de vehículo creado: {nuevo_modelo.modelo} (ID: {nuevo_modelo.id})"
+            f"Modelo de vehículo" + f"creado: {nuevo_modelo.modelo} (ID: \
+            {nuevo_modelo.id})"
         )
 
         return ModeloVehiculoResponse.model_validate(nuevo_modelo)

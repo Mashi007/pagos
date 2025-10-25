@@ -171,7 +171,8 @@ class NotificacionMulticanal:
                 await self._generar_reporte_diario(resultados)
 
             logger.info(
-                f"✅ Procesamiento completado: {resultados['exitosas']} exitosas, {resultados['fallidas']} fallidas"
+                f"✅ Procesamiento completado:" + f"{resultados['exitosas']} \
+                exitosas, {resultados['fallidas']} fallidas"
             )
 
             return resultados
@@ -522,7 +523,8 @@ class NotificacionMulticanal:
                 "asunto": f"🚗 Recordatorio: Tu cuota #{variables['cuota']} vence en 3 días",
                 "cuerpo_html": (
                     f"""
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="font-family: Arial, sans-serif; max-width: \
+                600px; margin: 0 auto;">
                     <div style="background: #007bff; color: white; padding: 20px; text-align: center;">
                         <h1>🚗 Recordatorio de Pago</h1>
                         <p style="margin: 0;">Tu cuota vence en 3 días</p>
@@ -536,8 +538,10 @@ class NotificacionMulticanal:
                                <strong>{variables['vehiculo']}</strong> vence el
                                <strong>{variables['fecha']}</strong>.</p>
 
-                            <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                                <h3 style="margin-top: 0;">💰 Detalles del Pago:</h3>
+                            <div style="background: #e3f2fd; padding: 15px; \
+                            border-radius: 5px; margin: 20px 0;">
+                                <h3 style="margin-top: 0;">💰 Detalles del \
+                                Pago:</h3>
                                 <p><strong>Monto:</strong> {variables['monto']}</p>
                                 <p><strong>Fecha de vencimiento:</strong> {variables['fecha']}</p>
                                 <p><strong>Cuota #:</strong> {variables['cuota']}</p>
@@ -565,7 +569,8 @@ class NotificacionMulticanal:
                 ),
             },
             TipoNotificacionCliente.MORA_1_DIA: {
-                "asunto": f"⚠️ Tu cuota #{variables['cuota']} está vencida - 1 día de atraso",
+                "asunto": f"⚠️ Tu cuota #{variables['cuota']} está" +  \
+                f"vencida - 1 día de atraso",
                 "cuerpo_html": (
                     f"""
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -575,16 +580,21 @@ class NotificacionMulticanal:
                     </div>
 
                     <div style="padding: 20px; background: #f8f9fa;">
-                        <div style="background: white; padding: 20px; border-radius: 8px;">
+                        <div style="background: white; padding: 20px;  \
+                        border-radius: 8px;">
                             <h2>Estimado/a {variables['nombre']},</h2>
 
-                            <div style="background: #fff3cd; border: 1px solid #ffeaa7;
-                                        padding: 15px; border-radius: 5px; margin: 20px 0;">
-                                <p><strong>⚠️ Tu cuota #{variables['cuota']} está vencida desde ayer.</strong></p>
+                            <div style="background: #fff3cd; border: 1px \
+                            solid #ffeaa7;
+                                        padding: 15px; border-radius: 5px; \
+                                        margin: 20px 0;">
+                                <p><strong>⚠️ Tu cuota #{variables['cuota']} \
+                                está vencida desde ayer.</strong></p>
                             </div>
 
                             <div style="background: #f8d7da; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                                <h3 style="margin-top: 0;">💰 Información del Pago:</h3>
+                                <h3 style="margin-top: 0;">💰 Información \
+                                del Pago:</h3>
                                 <p><strong>Vehículo:</strong> {variables['vehiculo']}</p>
                                 <p><strong>Monto:</strong> {variables['monto']}</p>
                                 <p><strong>Fecha de vencimiento:</strong> {variables['fecha']}</p>
@@ -611,17 +621,21 @@ class NotificacionMulticanal:
                 "asunto": f"✅ Pago recibido - Cuota #{variables['cuota']}",
                 "cuerpo_html": (
                     f"""
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <div style="background: #28a745; color: white; padding: 20px; text-align: center;">
+                <div style="font-family: Arial, sans-serif; max-width: \
+                600px; margin: 0 auto;">
+                    <div style="background: #28a745; color: white; padding: \
+                    20px; text-align: center;">
                         <h1>✅ Pago Confirmado</h1>
                         <p style="margin: 0;">¡Gracias por tu pago!</p>
                     </div>
 
                     <div style="padding: 20px; background: #f8f9fa;">
-                        <div style="background: white; padding: 20px; border-radius: 8px;">
+                        <div style="background: white; padding: 20px;  \
+                        border-radius: 8px;">
                             <h2>¡Gracias {variables['nombre']}!</h2>
 
-                            <div style="background: #d4edda; border: 1px solid #c3e6cb;
+                            <div style="background: #d4edda; border: 1px \
+                            solid #c3e6cb;
                                         padding: 15px; border-radius: 5px; margin: 20px 0;">
                                 <p><strong>✅ Hemos recibido tu pago de la cuota #{variables['cuota']}.</strong></p>
                             </div>
@@ -984,13 +998,9 @@ class NotificationScheduler:
 
             # Log de resultados
             logger.info(
-                f"✅ Ciclo completado:"
-                f"{resultados.get(
-                        'exitosas',
-                        0)}"
-                f"exitosas, {resultados.get(
-                        'fallidas',
-                        0)} fallidas"
+                f"✅ Ciclo completado: "
+                f"{resultados.get('exitosas', 0)} exitosas, "
+                f"{resultados.get('fallidas', 0)} fallidas"
             )
 
             return {

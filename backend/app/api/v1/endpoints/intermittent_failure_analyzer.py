@@ -71,7 +71,8 @@ class IntermittentFailureAnalyzer:
             self.failed_requests.append(request)
 
             logger.warning(
-                f"❌ Request fallido registrado: {request['endpoint']} - {request['error_type']}"
+                f"❌ Request fallido" + f"registrado: {request['endpoint']} \
+                - {request['error_type']}"
             )
 
     def analyze_intermittent_patterns(self) -> Dict[str, Any]:

@@ -51,7 +51,8 @@ async def generar_template_conciliacion(
             [""],
             ["3. PROCESO DE CONCILIACIÓN:"],
             [
-                "   - El sistema compara el número de documento con la base de datos"
+                "   - El sistema compara el número de documento con la \
+                base de datos"
             ],
             ["   - Si hay coincidencia EXACTA: se marca como CONCILIADO"],
             ["   - Si NO hay coincidencia: se marca como PENDIENTE"],

@@ -170,7 +170,8 @@ class ImpactAnalyzer:
 
             self.metrics_history.append(metrics)
             logger.debug(
-                f"Métricas recolectadas: CPU {metrics.cpu_percent:.1f}%, Memory {metrics.memory_percent:.1f}%"
+                f"Métricas recolectadas: CPU" + f"{metrics.cpu_percent:.1f}% \
+                , Memory {metrics.memory_percent:.1f}%"
             )
 
         except Exception as e:
@@ -187,9 +188,7 @@ class ImpactAnalyzer:
         # Calcular deltas
         cpu_delta = current.cpu_percent - previous.cpu_percent
         current.memory_percent - previous.memory_percent
-        memory_mb_delta = (
-            previous.memory_available_mb - current.memory_available_mb
-        )
+        memory_mb_delta = previous.memory_available_mb - current.memory_available_mb
 
         # Determinar nivel de impacto
         impact_level = "LOW"
@@ -259,11 +258,7 @@ class ImpactAnalyzer:
 
         # Verificar si ya existe una alerta similar no resuelta
         existing_alert = next(
-            (
-                a
-                for a in self.alerts
-                if a.type == alert_type and not a.resolved
-            ),
+            (a for a in self.alerts if a.type == alert_type and not a.resolved),
             None,
         )
 
@@ -282,9 +277,7 @@ class ImpactAnalyzer:
         self.alerts.append(alert)
         logger.warning(f"Alerta creada: {alert_type} - {message}")
 
-    def record_endpoint_performance(
-        self, endpoint: str, response_time_ms: float
-    ):
+    def record_endpoint_performance(self, endpoint: str, response_time_ms: float):
         """Registrar performance de un endpoint específico"""
         if not self.metrics_history:
             return
@@ -392,9 +385,7 @@ class ImpactAnalyzer:
 
         # Calcular estadísticas
         response_times = [
-            p.response_time_ms
-            for p in recent_performance
-            if p.response_time_ms > 0
+            p.response_time_ms for p in recent_performance if p.response_time_ms > 0
         ]
         impact_levels = [p.impact_level for p in recent_performance]
 
@@ -439,18 +430,12 @@ class ImpactAnalyzer:
                 "Implementar caching para reducir tiempos de respuesta"
             )
 
-        if (
-            impact_counts["MEDIUM"] + impact_counts["HIGH"]
-            > impact_counts["LOW"]
-        ):
-            recommendations.append(
-                "Revisar configuración de recursos del sistema"
-            )
+        if impact_counts["MEDIUM"] + impact_counts["HIGH"] > impact_counts \
+        ["LOW"]:
+            recommendations.append("Revisar configuración de recursos del sistema")
 
         if not recommendations:
-            recommendations.append(
-                "Sistema funcionando dentro de parámetros normales"
-            )
+            recommendations.append("Sistema funcionando dentro de parámetros normales")
 
         return recommendations
 

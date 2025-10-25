@@ -199,7 +199,8 @@ class TablaAmortizacionResponse(BaseModel):
     cuotas: List[CuotaDetalle]
     resumen: dict = Field(
         default_factory=dict,
-        description="Resumen con totales: total_capital, total_interes, total_pagar, etc.",
+        description="Resumen con totales: total_capital, total_interes \
+        , total_pagar, etc.",
     )
     parametros: dict = Field(
         default_factory=dict,

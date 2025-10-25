@@ -37,7 +37,8 @@ class SolicitudAprobacionCompleta(BaseModel):
 
     tipo_solicitud: str = Field(
         ...,
-        description="MODIFICAR_PAGO, ANULAR_PAGO, EDITAR_CLIENTE, MODIFICAR_AMORTIZACION",
+        description="MODIFICAR_PAGO, ANULAR_PAGO, EDITAR_CLIENTE, MODI \
+        FICAR_AMORTIZACION",
     )
     entidad_tipo: str = Field(..., description="cliente, pago, prestamo")
     entidad_id: int = Field(..., description="ID de la entidad a modificar")
@@ -1439,7 +1440,8 @@ def obtener_matriz_permisos_actualizada(
                 "editar_clientes_propios": "POST /solicitudes/analista/editar-cliente-propio"
             },
             "admin": {
-                "aprobar_solicitudes": "POST /solicitudes/aprobar/{solicitud_id}",
+                "aprobar_solicitudes": "POST /solicitudes/aprobar/{sol \
+                icitud_id}",
                 "rechazar_solicitudes": "POST /solicitudes/rechazar/{solicitud_id}",
                 "ver_pendientes": "GET /solicitudes/pendientes",
             },
@@ -1569,17 +1571,20 @@ async def _enviar_email_nueva_solicitud(
             </div>
 
             <div style="padding: 20px; background: #f8f9fa;">
-                <div style="background: white; padding: 20px; border-radius: 8px;
+                <div style="background: white; padding: 20px; border-radius: \
+                8px;
                             box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                     <h2 style="color: #333; margin-top: 0;">📋 Detalles de la Solicitud</h2>
 
                     <table style="width: 100%; border-collapse: collapse;">
                         <tr style="border-bottom: 1px solid #eee;">
                             <td style="padding: 8px 0; font-weight: bold;">Solicitante:</td>
-                            <td style="padding: 8px 0;">{solicitud.solicitante.full_name}</td>
+                            <td style="padding: 8px 0;">{solicitud.sol \
+                            icitante.full_name}</td>
                         </tr>
                         <tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 8px 0; font-weight: bold;">Tipo:</td>
+                            <td style="padding: 8px 0; font-weight: bo \
+                            ld;">Tipo:</td>
                             <td style="padding: 8px 0;">{solicitud.tipo_solicitud}</td>
                         </tr>
                         <tr style="border-bottom: 1px solid #eee;">
@@ -1599,16 +1604,19 @@ async def _enviar_email_nueva_solicitud(
                             </td>
                         </tr>
                         <tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 8px 0; font-weight: bold;">Fecha límite:</td>
+                            <td style="padding: 8px 0; font-weight: bo \
+                            ld;">Fecha límite:</td>
                             <td style="padding: 8px 0;">{solicitud.fecha_limite}</td>
                         </tr>
                         <tr>
-                            <td style="padding: 8px 0; font-weight: bold;">Archivo adjunto:</td>
+                            <td style="padding: 8px 0; font-weight: bo \
+                            ld;">Archivo adjunto:</td>
                             <td style="padding: 8px 0;">{'✅ Sí' if solicitud.archivo_evidencia else '❌ No'}</td>
                         </tr>
                     </table>
 
-                    <h3 style="color: #333; margin-top: 20px;">📝 Justificación:</h3>
+                    <h3 style="color: #333; margin-top: 20px;">📝 Justi \
+                    ficación:</h3>
                     <div style="background: #f8f9fa; padding: 15px; border-radius: 4px; border-left: 4px solid #007bff;">
                         {solicitud.justificacion}
                     </div>
@@ -1618,7 +1626,8 @@ async def _enviar_email_nueva_solicitud(
                            style="background: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 5px;">
                             📋 Ver Solicitudes Pendientes
                         </a>
-                        <a href="https://pagos-f2qf.onrender.com/solicitudes/aprobar/{solicitud.id}"
+                        <a href="https://pagos-f2qf.onrender.com/solic \
+                        itudes/aprobar/{solicitud.id}"
                            style="background: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 5px;">
                             ✅ Aprobar Solicitud
                         </a>
@@ -1767,7 +1776,8 @@ async def _enviar_email_resultado_solicitud(solicitud: Aprobacion):
                     '''}
 
                     <div style="text-align: center; margin-top: 30px;">
-                        <a href="https://pagos-f2qf.onrender.com/solicitudes/mis-solicitudes"
+                        <a href="https://pagos-f2qf.onrender.com/solic \
+                        itudes/mis-solicitudes"
                            style="background: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
                             📋 Ver Mis Solicitudes
                         </a>

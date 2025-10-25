@@ -30,9 +30,7 @@ class RealTimeSpecificMonitor:
     def __init__(self):
         self.active_monitoring = False
         self.monitoring_sessions = {}  # Sesiones de monitoreo activas
-        self.real_time_events = deque(
-            maxlen=1000
-        )  # Eventos en tiempo real
+        self.real_time_events = deque(maxlen=1000)  # Eventos en tiempo real
         self.failure_moments = deque(
             maxlen=100
         )  # Momentos específicos de fallo
@@ -87,9 +85,7 @@ class RealTimeSpecificMonitor:
             logger.info(f"⏹️ Monitoreo específico detenido: {session_id}")
             return session
 
-    def capture_auth_event(
-        self, event_type: str, event_data: Dict[str, Any]
-    ):
+    def capture_auth_event(self, event_type: str, event_data: Dict[str, Any]):
         """Capturar evento de autenticación en tiempo real"""
         if not self.active_monitoring:
             return
@@ -187,9 +183,7 @@ class RealTimeSpecificMonitor:
         if len(self.failure_moments) < 2:
             return {"error": "Datos insuficientes para análisis de timing"}
 
-        timestamps = [
-            moment["timestamp"] for moment in self.failure_moments
-        ]
+        timestamps = [moment["timestamp"] for moment in self.failure_moments]
         timestamps.sort()
 
         intervals = []
@@ -340,9 +334,7 @@ class RealTimeSpecificMonitor:
 
             return {
                 "session": session,
-                "events_captured": session_events[
-                    -20:
-                ],  # Últimos 20 eventos
+                "events_captured": session_events[-20:],  # Últimos 20 eventos
                 "total_events_in_session": len(session_events),
             }
 
@@ -430,9 +422,7 @@ async def capture_auth_event_endpoint(
         event_details = event_data.get("event_details", {})
 
         if not event_type:
-            raise HTTPException(
-                status_code=400, detail="event_type requerido"
-            )
+            raise HTTPException(status_code=400, detail="event_type requerido")
 
         real_time_monitor.capture_auth_event(event_type, event_details)
 
@@ -515,9 +505,7 @@ async def get_monitoring_session_details_endpoint(
     📋 Detalles de sesión de monitoreo específica
     """
     try:
-        details = real_time_monitor.get_monitoring_session_details(
-            session_id
-        )
+        details = real_time_monitor.get_monitoring_session_details(session_id)
 
         return {
             "timestamp": datetime.now().isoformat(),

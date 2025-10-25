@@ -275,7 +275,8 @@ def _procesar_fila_movimiento(
             )
             if not cliente:
                 advertencias.append(
-                    f"Fila {index + 1}: Cédula {cedula} no registrada en sistema"
+                    f"Fila {index + 1}: Cédula" + f"{cedula} no registrada \
+                    en sistema"
                 )
 
         # Crear movimiento
@@ -1237,14 +1238,17 @@ async def flujo_completo_conciliacion(
             "tabla_resultados": tabla_resultados,
             "resumen": resumen_final,
             "leyenda": {
-                "✅ EXACTO": "Coincidencia perfecta - Se aplicará automáticamente",
+                "✅ EXACTO": "Coincidencia perfecta - Se aplicará autom \
+                áticamente",
                 "⚠️ REVISAR": "Coincidencia parcial - Requiere revisión manual",
                 "❌ MANUAL": "Sin coincidencia - Requiere búsqueda manual",
             },
             "acciones_disponibles": {
-                "aplicar_exactos": f"POST /conciliacion/aplicar-exactos/{proceso_id}",
+                "aplicar_exactos": f"POST /conciliacion/aplicar-exactos/ \
+                {proceso_id}",
                 "revisar_parciales": f"POST /conciliacion/revisar-parciales/{proceso_id}",
-                "aplicar_todos": f"POST /conciliacion/aplicar-todos/{proceso_id}",
+                "aplicar_todos": f"POST /conciliacion/aplicar-todos/{p \
+                roceso_id}",
             },
             "mensaje": (
                 f"✅ Archivo procesado - {exactos} coincidencias exactas, {revision} requieren revisión"

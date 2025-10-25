@@ -161,11 +161,13 @@ class EmailService:
                 <head>
                     <style>
                         body { font-family: Arial, sans-serif; }
-                        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                        .container { max-width: 600px; margin: 0 auto; \
+                        padding: 20px; }
                         .header { background: #007bff; color: white; padding: 20px;
                                   text-align: center; }
                         .content { padding: 20px; background: #f8f9fa; }
-                        .footer { text-align: center; padding: 10px; color: #666; font-size: 12px; }
+                        .footer { text-align: center; padding: 10px; color: \
+                        #666; font-size: 12px; }
                         .button { background: #28a745; color: white; padding: 10px 20px;
                                   text-decoration: none; border-radius: 5px; display: inline-block; }
                     </style>
@@ -183,7 +185,8 @@ class EmailService:
                                 <li>Fecha de vencimiento: {{ fecha_vencimiento }}</li>
                                 <li>Días restantes: {{ dias_restantes }}</li>
                             </ul>
-                            <p>Por favor, realice su pago a tiempo para evitar recargos.</p>
+                            <p>Por favor, realice su pago a tiempo para \
+                            evitar recargos.</p>
                             <p style="text-align: center;">
                                 <a href="{{ link_pago }}" class="button">Pagar Ahora</a>
                             </p>
@@ -237,7 +240,8 @@ class EmailService:
                 <head>
                     <style>
                         body { font-family: Arial, sans-serif; }
-                        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                        .container { max-width: 600px; margin: 0 auto; \
+                        padding: 20px; }
                         .header { background: #dc3545; color: white; padding: 20px; text-align: center; }
                         .content { padding: 20px; background: #f8f9fa; }
                         .warning { background: #fff3cd; border: 1px solid #ffc107;

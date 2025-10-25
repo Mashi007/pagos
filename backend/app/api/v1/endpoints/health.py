@@ -120,7 +120,8 @@ def check_database_cached() -> Dict[str, Any]:
             )
 
             logger.info(
-                f"DB Check realizado: {db_status}, Response time: {response_time:.2f}ms"
+                f"DB Check realizado:" + f"{db_status}, Response time: \
+                {response_time:.2f}ms"
             )
         except Exception as e:
             response_time = (time.time() - start_time) * 1000

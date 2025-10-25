@@ -139,8 +139,10 @@ def verificar_rol_administracion(db: Session = Depends(get_db)):
             ],
             "acciones_disponibles": {
                 "crear_admin": "python backend/scripts/create_admin.py",
-                "modo_interactivo": "python backend/scripts/create_admin.py --interactive",
-                "listar_admins": "python backend/scripts/create_admin.py --list",
+                "modo_interactivo": "python backend/scripts/create_admin.py \
+                --interactive",
+                "listar_admins": "python backend/scripts/create_admin.py \
+                --list",
                 "verificar_sistema": "python backend/scripts/create_admin.py --verify",
             },
             "urls_sistema": {
