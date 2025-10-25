@@ -1387,8 +1387,7 @@ Para evitar cargos adicionales, realiza tu pago hoy.
 Necesitas ayuda? Responde este mensaje.
                 """),
                 "sms": (
-                    f"FINANCIERA:" f"{nombre}" f", tu cuota está vencida ({contexto['dias_mora']} días). Monto: ${
-                        contexto['ultima_cuota']['monto']:,.0f}. Paga hoy para evitar cargos. Info: 809-XXX-XXXX"),
+                    f"FINANCIERA: {nombre}, tu cuota está vencida ({contexto['dias_mora']} días). Monto: ${contexto['ultima_cuota']['monto']:,.0f}. Paga hoy para evitar cargos. Info: 809-XXX-XXXX"),
             },
             "MORA_AVANZADA": {
                 "llamada_script": (

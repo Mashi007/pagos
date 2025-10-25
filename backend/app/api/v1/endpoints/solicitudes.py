@@ -1710,8 +1710,7 @@ async def _enviar_email_resultado_solicitud(solicitud: Aprobacion):
         emoji = estado_emoji.get(solicitud.estado, "📋")
         color = "#28a745" if solicitud.estado == "APROBADA" else "#dc3545"
 
-        asunto = f"{emoji}" f"Solicitud {solicitud.estado.lower()} - {
-            solicitud.tipo_solicitud}"
+        asunto = f"{emoji} Solicitud {solicitud.estado.lower()} - {solicitud.tipo_solicitud}"
 
         cuerpo_html = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

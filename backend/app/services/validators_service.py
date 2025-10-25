@@ -149,8 +149,7 @@ class ValidadorTelefono:
                 "error": {
                     "valido": False,
                     "error": (
-                        f"Operadora '{operadora}' no válida para {pais}. " f"Válidas: {', '.join(
-                                config['operadoras'])}"),
+                        f"Operadora '{operadora}' no válida para {pais}. Válidas: {', '.join(config['operadoras'])}"),
                     "valor_original": telefono_original,
                     "valor_formateado": None,
                     "sugerencia": f"Debe comenzar con: {', '.join(

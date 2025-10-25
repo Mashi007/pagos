@@ -58,12 +58,7 @@ class ConfiguracionSistema(Base):
     actualizado_por = Column(String(100), nullable=True)
 
     def __repr__(self):
-        return (
-            f"<ConfiguracionSistema("
-            f"{self.categoria}"
-            f".{self.clave}={
-            self.valor})>"
-        )
+        return f"<ConfiguracionSistema({self.categoria}.{self.clave}={self.valor})>"
 
     def _procesar_valor_boolean(self) -> bool:
         """Procesar valor de tipo BOOLEAN"""

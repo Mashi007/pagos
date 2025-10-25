@@ -617,8 +617,7 @@ Agradecemos su puntualidad y confianza.
         cliente_id=cliente.id,
         tipo="EMAIL",
         categoria="PAGO_RECIBIDO",
-        asunto=f"✅ Confirmación: Pago de {float(
-                pago.monto_pagado):.2f} recibido",
+        asunto=f"✅ Confirmación: Pago de {float(pago.monto_pagado):.2f} recibido",
         mensaje=mensaje,
         estado="PENDIENTE",
         programada_para=datetime.now(),

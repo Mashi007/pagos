@@ -23,12 +23,7 @@ class ModeloVehiculo(Base):
     )
 
     def __repr__(self):
-        return (
-            f"<ModeloVehiculo(id="
-            f"{self.id}"
-            f", modelo='{self.modelo}', activo={
-            self.activo})>"
-        )
+        return f"<ModeloVehiculo(id={self.id}, modelo='{self.modelo}', activo={self.activo})>"
 
     def to_dict(self):
         return {

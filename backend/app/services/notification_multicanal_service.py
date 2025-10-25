@@ -915,8 +915,7 @@ Financiamiento Automotriz"""
             """
 
             for tipo, datos in resultados["por_tipo"].items():
-                reporte_html += f"<li><strong>" f"{tipo}" f":</strong> {datos['exitosas']}/{
-                    datos['total']} exitosas</li>"
+                reporte_html += f"<li><strong>{tipo}:</strong> {datos['exitosas']}/{datos['total']} exitosas</li>"
 
             reporte_html += "</ul>"
 

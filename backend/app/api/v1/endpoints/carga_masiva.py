@@ -747,8 +747,7 @@ async def _analizar_archivo_clientes(
                             error=f'Modalidad "{modalidad_pago}" no es válida',
                             tipo_error="CRITICO",
                             puede_corregirse=True,
-                            sugerencia=f'Use: {
-                                ", ".join(modalidades_validas)}',
+                            sugerencia=f'Use: {", ".join(modalidades_validas)}',
                         )
                     )
                     errores_criticos += 1
