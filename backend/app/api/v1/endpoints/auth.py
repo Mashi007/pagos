@@ -7,16 +7,13 @@ Solución temporal para resolver error 503
 import logging
 
 from fastapi import 
-)
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.config import settings
 from app.core.security import 
-)
 from app.models.user import User
 from app.schemas.auth import 
-)
 from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
 from app.utils.validators import validate_password_strength
@@ -45,14 +42,10 @@ def add_cors_headers(request: Request, response: Response) -> None:
         # En caso de origin no permitido, usar el primer origin válido
         if settings.CORS_ORIGINS:
             response.headers["Access-Control-Allow-Origin"] = 
-            )
             logger.info
-            )
 
     response.headers["Access-Control-Allow-Methods"] = 
-    )
     response.headers["Access-Control-Allow-Headers"] = 
-    )
     response.headers["Access-Control-Allow-Credentials"] = "true"
 
 
@@ -75,16 +68,13 @@ async def login
 
         # Autenticar usuario
         user = AuthService.authenticate_user
-        )
 
         if not user:
             logger.warning(f"Login fallido para: {login_data.email}")
             raise HTTPException
-            )
 
         # Generar tokens
         access_token = create_access_token
-        )
 
         # Generar refresh token nuevo
         refresh_token = create_refresh_token(subject=user.id)
@@ -94,14 +84,12 @@ async def login
         user_dict = UserMeResponse.model_validate(user).model_dump()
 
         return LoginResponse
-        )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error en login: {e}")
         raise HTTPException
-        )
 
 
 @router.get("/me", response_model=UserMeResponse)
@@ -120,7 +108,6 @@ async def get_current_user_info
     except Exception as e:
         logger.error(f"Error obteniendo usuario actual: {e}")
         raise HTTPException
-        )
 
 
 async def logout
@@ -138,7 +125,6 @@ async def logout
     except Exception as e:
         logger.error(f"Error en logout: {e}")
         raise HTTPException
-        )
 
 
 async def refresh_token
@@ -154,7 +140,6 @@ async def refresh_token
         # Validar token de refresh usando el método correcto
         try:
             token_data = AuthService.refresh_access_token
-            )
             return token_data
         except HTTPException as e:
             raise e
@@ -164,7 +149,6 @@ async def refresh_token
     except Exception as e:
         logger.error(f"Error refrescando token: {e}")
         raise HTTPException
-        )
 
 
 async def change_password
@@ -182,14 +166,11 @@ async def change_password
         if not verify_password
         ):
             raise HTTPException
-            )
 
         # Validar fortaleza de nueva contraseña
         is_valid, message = validate_password_strength
-        )
         if not is_valid:
             raise HTTPException
-            )
 
         # Actualizar contraseña
         new_hashed_password = get_password_hash(password_data.new_password)
@@ -204,7 +185,6 @@ async def change_password
     except Exception as e:
         logger.error(f"Error cambiando contraseña: {e}")
         raise HTTPException
-        )
 
 
 @router.options("/{path:path}")

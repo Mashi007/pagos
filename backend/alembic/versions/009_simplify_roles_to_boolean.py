@@ -23,7 +23,6 @@ def upgrade() -> None:
     # Paso 1: Agregar columna is_admin
     op.add_column
         sa.Column("is_admin", sa.Boolean(), nullable=False, server_default="false"),
-    )
 
 
     # Paso 3: Eliminar columna rol (opcional, comentado por seguridad)

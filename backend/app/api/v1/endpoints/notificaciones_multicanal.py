@@ -160,3 +160,5 @@ from datetime import date
 # "/api/v1/notificaciones-multicanal/whatsapp/templates", "probar_envio":\n "/api/v1/notificaciones-multicanal/probar-envio",
 # }, "configuracion_requerida":\n 
 # /api/v1/configuracion/whatsapp", "scheduler":\n "Configurar cron job para ejecutar cada hora", }, }
+
+"""

@@ -46,7 +46,6 @@ class TemporalAnalysisSystem:
     def _collect_timing_data(self):
 
         timing_event = 
-        }
 
         with self.lock:
             self.timing_events.append(timing_event)
@@ -67,7 +66,6 @@ class TemporalAnalysisSystem:
                 min_duration = min(durations)
 
                 self.timing_correlations["duration_stats"] = 
-                }
 
 
     def log_timing_event(self, event_data: Dict[str, Any]):
@@ -75,7 +73,6 @@ class TemporalAnalysisSystem:
         with self.lock:
             event = 
                 "metadata": event_data.get("metadata", {})
-            }
 
             self.timing_events.append(event)
 
@@ -84,7 +81,6 @@ class TemporalAnalysisSystem:
         """Registrar ciclo de vida de token"""
         with self.lock:
             lifecycle_event = 
-            }
 
             self.token_lifecycle_data.append(lifecycle_event)
 
@@ -98,8 +94,6 @@ class TemporalAnalysisSystem:
                 },
                 "correlations": self.timing_correlations,
                 "clock_sync": 
-                }
-            }
 
             return analysis
 
@@ -114,7 +108,6 @@ class TemporalAnalysisSystem:
             if not durations:
 
             return 
-            }
 
 
 # Instancia global del sistema temporal
@@ -130,7 +123,6 @@ async def get_temporal_analysis
     try:
         analysis = temporal_system.get_temporal_analysis()
         return 
-        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en análisis temporal: {str(e)}")
 
@@ -144,7 +136,6 @@ async def get_timing_statistics
     try:
         stats = temporal_system.get_timing_statistics()
         return 
-        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener estadísticas: {str(e)}")
 
@@ -157,7 +148,6 @@ async def log_timing_event
     try:
         temporal_system.log_timing_event(event_data)
         return 
-        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al registrar evento: {str(e)}")
 
@@ -170,6 +160,5 @@ async def log_token_lifecycle
     try:
         temporal_system.log_token_lifecycle(token_data)
         return 
-        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al registrar ciclo de vida: {str(e)}")

@@ -55,7 +55,6 @@ class ConfiguracionSistema(Base):
     creado_en = Column(DateTime, server_default=func.now())
     actualizado_en = Column
         DateTime, server_default=func.now(), onupdate=func.now()
-    )
     actualizado_por = Column(String(100), nullable=True)
 
 
@@ -69,7 +68,6 @@ class ConfiguracionSistema(Base):
             self.valor.lower() in ["true", "1", "yes", "on"]
             if self.valor
             else False
-        )
 
 
     def _procesar_valor_integer(self) -> int:
@@ -143,9 +141,7 @@ class ConfiguracionSistema(Base):
         return 
             db.query(ConfiguracionSistema)
             .filter
-            )
             .first()
-        )
 
     @staticmethod
     def obtener_categoria(db, categoria: str) -> Dict[str, Any]:
@@ -154,11 +150,9 @@ class ConfiguracionSistema(Base):
             db.query(ConfiguracionSistema)
             .filter(ConfiguracionSistema.categoria == categoria)
             .all()
-        )
         resultado = {}
         for config in configs:
             resultado[config.clave] = 
-            }
         return resultado
 
 
@@ -330,7 +324,6 @@ class ConfiguracionPorDefecto:
             "TIMEZONE": 
             },
         },
-    }
 
     @staticmethod
     def crear_configuraciones_default(db):
@@ -343,9 +336,7 @@ class ConfiguracionPorDefecto:
                     existing = 
                         db.query(ConfiguracionSistema)
                         .filter
-                        )
                         .first()
-                    )
                     if not existing:
                         # Crear nueva configuración
                         nueva_config = ConfiguracionSistema
@@ -367,7 +358,6 @@ class ConfiguracionPorDefecto:
                             ),
                             valor_minimo=config_data.get("valor_minimo"),
                             valor_maximo=config_data.get("valor_maximo"),
-                        )
                         db.add(nueva_config)
             db.commit()
             logger = logging.getLogger(__name__)
@@ -408,16 +398,13 @@ class ConfigHelper:
     def is_whatsapp_enabled(db) -> bool:
         """Verificar si WhatsApp está habilitado"""
         return ConfigHelper.get_config
-        )
 
     @staticmethod
     def get_financial_config(db) -> Dict:
         """Obtener configuración financiera completa"""
         return 
-        }
 
     @staticmethod
     def get_notification_config(db) -> Dict:
         """Obtener configuración de notificaciones"""
         return 
-        }

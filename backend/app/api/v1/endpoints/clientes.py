@@ -15,7 +15,6 @@ from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
 from app.models.user import User
 from app.schemas.cliente import 
-)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -48,8 +47,6 @@ def listar_clientes
                     Cliente.nombres.ilike(search_pattern),
                     Cliente.cedula.ilike(search_pattern),
                     Cliente.telefono.ilike(search_pattern),
-                )
-            )
 
         if estado:
             query = query.filter(Cliente.estado == estado)
@@ -69,7 +66,6 @@ def listar_clientes
         for cliente in clientes:
             try:
                 cliente_data = 
-                }
                 clientes_dict.append(cliente_data)
             except Exception as e:
                 logger.error(f"Error serializando cliente {cliente.id}: {e}")
@@ -80,11 +76,9 @@ def listar_clientes
 
         return 
             },
-        }
     except Exception as e:
         logger.error(f"Error en listar_clientes: {e}")
         raise HTTPException
-        )
 
 
 @router.get("/{cliente_id}", response_model=ClienteResponse)
@@ -98,18 +92,15 @@ def obtener_cliente
     """
     try:
         logger.info
-        )
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
         if not cliente:
             raise HTTPException
-            )
         return ClienteResponse.model_validate(cliente)
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error en obtener_cliente: {e}")
         raise HTTPException
-        )
 
 
 def crear_cliente
@@ -124,7 +115,6 @@ def crear_cliente
 
         # Crear nuevo cliente
         nuevo_cliente = Cliente
-        )
 
         db.add(nuevo_cliente)
         db.commit()
@@ -136,7 +126,6 @@ def crear_cliente
         logger.error(f"Error en crear_cliente: {e}")
         db.rollback()
         raise HTTPException
-        )
 
 
 @router.put("/{cliente_id}", response_model=ClienteResponse)
@@ -151,12 +140,10 @@ def actualizar_cliente
     """
     try:
         logger.info
-        )
 
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
         if not cliente:
             raise HTTPException
-            )
 
         update_data = cliente_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -176,7 +163,6 @@ def actualizar_cliente
         logger.error(f"Error en actualizar_cliente: {e}")
         db.rollback()
         raise HTTPException
-        )
 
 
 @router.delete("/{cliente_id}")
@@ -190,12 +176,10 @@ def eliminar_cliente
     """
     try:
         logger.info
-        )
 
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
         if not cliente:
             raise HTTPException
-            )
 
         # Hard delete - eliminar físicamente de la BD
         db.delete(cliente)
@@ -208,4 +192,3 @@ def eliminar_cliente
         logger.error(f"Error en eliminar_cliente: {e}")
         db.rollback()
         raise HTTPException
-        )

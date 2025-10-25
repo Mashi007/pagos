@@ -16,3 +16,4 @@ from datetime import date
 # usuario is_admin: bool # Cambio clave: rol → is_admin exp: int iat: int
 
 """
+"""

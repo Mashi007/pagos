@@ -24,7 +24,6 @@ def upgrade():
     # Create a non-unique index for performance
     op.execute
         "CREATE INDEX IF NOT EXISTS idx_clientes_cedula_performance ON clientes (cedula)"
-    )
 
 
 def downgrade():

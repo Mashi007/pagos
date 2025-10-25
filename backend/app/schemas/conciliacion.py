@@ -40,16 +40,12 @@ class MovimientoBancario(BaseModel):
     referencia: str
     monto: Decimal
     cedula_pagador: Optional[str] = Field
-    )
     descripcion: Optional[str] = ""
     cuenta_origen: Optional[str] = Field
-    )
 
     model_config = ConfigDict
             Decimal: lambda v: float(v),
             date: lambda v: v.isoformat(),
-        }
-    )
 
     @field_validator("monto")
     @classmethod
@@ -83,7 +79,6 @@ class ConciliacionCreate(BaseModel):
     def validar_fechas(cls, v, info):
         if "fecha_inicio" in info.data and v < info.data["fecha_inicio"]:
             raise ValueError
-            )
         return v
 
 
@@ -95,13 +90,10 @@ class ConciliacionMatch(BaseModel):
     fecha_pago: date
     tipo_match: TipoMatch
     confianza: float = Field
-    )
 
     model_config = ConfigDict
             Decimal: lambda v: float(v),
             date: lambda v: v.isoformat(),
-        }
-    )
 
 
 class ResultadoConciliacion(BaseModel):
@@ -118,10 +110,8 @@ class ResultadoConciliacion(BaseModel):
         if 
         ):
             return round
-                )
                 * 100,
                 2,
-            )
         return 0.0
 
 
@@ -138,7 +128,6 @@ class ConciliacionResponse(BaseModel):
     model_config = ConfigDict
             date: lambda v: v.isoformat(),
         },
-    )
 
 
 # ============================================
@@ -202,7 +191,6 @@ class FiltroConciliacion(BaseModel):
 
     class Config:
         json_encoders = 
-        }
 
 
 # ============================================
@@ -224,7 +212,6 @@ class PagoPendienteConciliacion(BaseModel):
             Decimal: lambda v: float(v),
             date: lambda v: v.isoformat(),
         },
-    )
 
 
 # ============================================
@@ -240,7 +227,6 @@ class ExtractoBancarioUpload(BaseModel):
     codificacion: str = "utf-8"
     tiene_encabezado: bool = True
     columnas: Dict[str, str] = 
-    }
 
 
 class ValidacionExtracto(BaseModel):
@@ -300,11 +286,8 @@ class ValidacionArchivoBancario(BaseModel):
 
 class ConciliacionMasiva(BaseModel):
     """Schema para conciliación masiva"""
-    )
         True, description="Aplicar coincidencias exactas automáticamente"
-    )
     aplicar_parciales: bool = Field
-    )
     observaciones: Optional[str] = None
 
 
@@ -338,4 +321,3 @@ class HistorialConciliacion(BaseModel):
     observaciones: Optional[str] = None
 
     model_config = ConfigDict
-    )

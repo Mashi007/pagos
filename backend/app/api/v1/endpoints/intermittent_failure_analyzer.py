@@ -27,7 +27,6 @@ class IntermittentFailureAnalyzer:
         """Registrar un request"""
         with self.lock:
             request_entry = 
-            }
 
             if success:
                 self.successful_requests.append(request_entry)
@@ -41,7 +40,6 @@ class IntermittentFailureAnalyzer:
             analysis = 
                 "patterns": {},
                 "recommendations": [],
-        }
 
         if len(self.successful_requests) == 0 and len(self.failed_requests) == 0:
                 return analysis
@@ -86,7 +84,6 @@ class IntermittentFailureAnalyzer:
             if total > 0:
                 success_rate = stats["successful"] / total * 100
                 endpoint_analysis[endpoint] = 
-                }
 
         return endpoint_analysis
 
@@ -111,7 +108,6 @@ class IntermittentFailureAnalyzer:
             if total > 0:
                 success_rate = stats["successful"] / total * 100
                 user_analysis[user_id] = 
-                }
 
         return user_analysis
 
@@ -134,7 +130,6 @@ class IntermittentFailureAnalyzer:
             if total > 0:
                 success_rate = stats["successful"] / total * 100
                 hourly_analysis[hour] = 
-                }
 
         return hourly_analysis
 
@@ -148,11 +143,9 @@ class IntermittentFailureAnalyzer:
 
         if token_lengths_successful:
             analysis["successful_tokens"] = 
-            }
 
         if token_lengths_failed:
             analysis["failed_tokens"] = 
-            }
 
         # Comparar longitudes
         if token_lengths_successful and token_lengths_failed:
@@ -160,7 +153,6 @@ class IntermittentFailureAnalyzer:
             avg_failed = statistics.mean(token_lengths_failed)
 
             analysis["comparison"] = 
-            }
 
         return analysis
 
@@ -200,7 +192,6 @@ async def get_intermittent_failure_analysis
     try:
         analysis = analyzer.analyze_intermittent_patterns()
         return 
-        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en análisis: {str(e)}")
 
@@ -215,6 +206,5 @@ async def log_request
         analyzer.log_request(request_data, success)
 
         return 
-        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al registrar request: {str(e)}")

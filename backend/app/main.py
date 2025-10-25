@@ -10,7 +10,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 # Routers
 from app.api.v1.endpoints import 
-)
 from app.core.config import settings
 from app.db.init_db import init_db_shutdown, init_db_startup
 
@@ -23,7 +22,6 @@ logging.basicConfig
         logging.StreamHandler(sys.stdout),  # Asegurar que vaya a stdout
     ],
     force=True,  # Forzar reconfiguración
-)
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +32,7 @@ app_logger.addHandler(logging.StreamHandler(sys.stdout))
 
 # Log de inicio
 logger.info
-)
 logger.info
-)
 logger.info(f"CORS Origins: {settings.CORS_ORIGINS}")
 logger.info(f"Database URL configurada: {bool(settings.DATABASE_URL)}")
 
@@ -72,14 +68,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         # CSP más permisivo para desarrollo
         response.headers["Content-Security-Policy"] = 
-        )
 
         # Referrer Policy más permisivo
         response.headers["Referrer-Policy"] = "no-referrer-when-downgrade"
 
         # Permissions Policy más permisivo
         response.headers["Permissions-Policy"] = 
-        )
 
         return response
 
@@ -93,7 +87,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI
-)
 
 # Configurar rate limiter en app state - TEMPORALMENTE DESACTIVADO
 # app.state.limiter = limiter
@@ -108,72 +101,43 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS - MIDDLEWARE SIMPLE PARA OPTIONS
 logger.info
-)
 
 # MIDDLEWARE CORS CENTRALIZADO - USANDO CONFIGURACIÓN DE SETTINGS
 app.add_middleware
-)
 
 # Registrar routers
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 app.include_router
-)
 
 # app.include_router
 @app.get("/", include_in_schema=False)
 async def root():
     return 
-    }
 
+"""
 """

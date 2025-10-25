@@ -22,13 +22,10 @@ def upgrade():
 
     # Verificar si la columna cargo existe
     result = connection.execute
-        )
-    )
 
     if not result.fetchone():
         # La columna no existe, agregarla
         op.add_column
-        )
     else:
 
 
@@ -37,8 +34,6 @@ def downgrade():
     connection = op.get_bind()
 
     result = connection.execute
-        )
-    )
 
     if result.fetchone():
         # La columna existe, eliminarla

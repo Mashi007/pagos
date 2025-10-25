@@ -27,7 +27,6 @@ class AuditLogger:
     ):
         """Registrar request en auditoría"""
         log_entry = 
-        }
 
         # Agregar al log
         audit_logs.append(log_entry)
@@ -40,20 +39,17 @@ class AuditLogger:
         # Log específico para errores 401
         if response.status_code == 401:
             logger.warning
-            )
 
     @staticmethod
     def get_recent_logs(minutes: int = 60) -> List[Dict[str, Any]]:
         """Obtener logs recientes"""
         return [
             log for log in audit_logs
-        ]
 
     @staticmethod
     def get_error_summary() -> Dict[str, Any]:
         """Obtener resumen de errores"""
         return 
-        }
 
 # ============================================
 # ENDPOINTS DEL DASHBOARD
@@ -81,16 +77,13 @@ async def get_dashboard_overview
             "audit_summary": audit_summary,
             "system_status": "operational",
             "database_status": "connected",
-        }
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error obteniendo vista general: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/dashboard/recent-activity")
 async def get_recent_activity
@@ -107,13 +100,11 @@ async def get_recent_activity
             })
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error obteniendo actividad reciente: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/dashboard/error-analysis")
 async def get_error_analysis
@@ -125,29 +116,23 @@ async def get_error_analysis
 
         # Analizar patrones de error
         error_analysis = 
-        }
 
         # Generar recomendaciones basadas en patrones
         if error_patterns.get("Invalid token", 0) > 10:
             error_analysis["recommendations"].append
-            )
 
         if error_patterns.get("Token expired", 0) > 5:
             error_analysis["recommendations"].append
-            )
 
         if not error_analysis["recommendations"]:
             error_analysis["recommendations"].append
-            )
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error analizando errores: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 async def log_dashboard_event
     db: Session = Depends(get_db),
@@ -163,16 +148,13 @@ async def log_dashboard_event
         AuditLogger.log_request
             user_id=event_data.get("user_id"),
             error=event_data.get("error")
-        )
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error registrando evento: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/dashboard/system-health")
 async def get_system_health
@@ -196,7 +178,6 @@ async def get_system_health
             "metrics": 
             },
             "alerts": []
-        }
 
         # Agregar alertas si es necesario
         if error_rate > 20:
@@ -208,12 +189,11 @@ async def get_system_health
             })
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error obteniendo estado de salud: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
+"""
 """

@@ -141,7 +141,6 @@ def get_month_range
         reference_date = date.today()
 
     first_day = get_first_day_of_month
-    )
     last_day = get_last_day_of_month(reference_date.year, reference_date.month)
 
     return first_day, last_day
@@ -239,7 +238,6 @@ def calculate_interest_days
             (end_date.year - start_date.year) * 360
             + (end_date.month - start_date.month) * 30
             + (d2 - d1)
-        )
         return days
     elif day_count_convention == "ACT/360":
         # Días reales / 360
@@ -261,7 +259,6 @@ def format_date_es(date_obj: date) -> str:
         str: Fecha formateada (ej: "15 de enero de 2024")
     """
     months_es = 
-    }
 
     return f"{date_obj.day} de {months_es[date_obj.month]} de {date_obj.year}"
 

@@ -27,7 +27,6 @@ class TokenPredictiveAnalyzer:
         self.token_history = deque(maxlen=10000)  # Historial de tokens
         self.accuracy_metrics = defaultdict(list)  # Métricas de precisión
         self.prediction_thresholds = 
-        }
 
 
     def analyze_token_lifecycle(self, token: str) -> Dict[str, Any]:
@@ -39,23 +38,19 @@ class TokenPredictiveAnalyzer:
 
             # Análisis predictivo
             predictions = 
-            }
 
             # Generar recomendaciones
             if predictions["will_expire_soon"]:
                 predictions["recommendations"].append
-                )
 
             if predictions["security_risk_score"] > self.prediction_thresholds["security_risk"]:
                 predictions["recommendations"].append
-                )
 
             return predictions
 
         except Exception as e:
             logger.error(f"Error analizando token: {e}")
             return 
-            }
 
 
     def _analyze_usage_pattern(self, token: str) -> Dict[str, Any]:
@@ -66,7 +61,6 @@ class TokenPredictiveAnalyzer:
         token_events = [
             event for event in self.token_history
             if event.get("token_hash") == token_hash
-        ]
 
         if not token_events:
             return {"pattern": "new_token", "confidence": 0.5}
@@ -74,7 +68,6 @@ class TokenPredictiveAnalyzer:
         # Analizar frecuencia de uso
         recent_events = [
             event for event in token_events
-        ]
 
         usage_frequency = len(recent_events)
 
@@ -119,14 +112,12 @@ class TokenPredictiveAnalyzer:
         """Registrar evento relacionado con token"""
         event = 
             "details": details or {},
-        }
         self.token_history.append(event)
 
 
     def get_prediction_accuracy(self) -> Dict[str, Any]:
         """Obtener métricas de precisión de predicciones"""
         return 
-        }
 
 # Instancia global del analizador predictivo
 predictive_analyzer = TokenPredictiveAnalyzer()
@@ -156,4 +147,5 @@ async def get_prediction_accuracy
     """Obtener métricas de precisión de predicciones"""
     return predictive_analyzer.get_prediction_accuracy()
 
+"""
 """

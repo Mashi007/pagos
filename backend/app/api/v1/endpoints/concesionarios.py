@@ -13,7 +13,6 @@ from app.api.deps import get_current_user, get_db
 from app.models.concesionario import Concesionario
 from app.models.user import User
 from app.schemas.concesionario import 
-)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -26,12 +25,9 @@ router = APIRouter()
 
 
         return 
-        }
     except Exception as e:
         logger.error
-        )
         return 
-        }
 
 
 @router.get("/test-simple")
@@ -41,10 +37,8 @@ router = APIRouter()
 
 
         return 
-        }
     except Exception as e:
         return 
-        }
 
 
 @router.get("/test-auth")
@@ -55,10 +49,8 @@ router = APIRouter()
     """
     try:
         return 
-        }
     except Exception as e:
         return 
-        }
 
 
 @router.get("/list-no-auth")
@@ -88,10 +80,8 @@ router = APIRouter()
         pages = (total + limit - 1) // limit
 
         return 
-        }
     except Exception as e:
         raise HTTPException
-        )
 
 
 @router.get("/", response_model=ConcesionarioListResponse)
@@ -125,10 +115,8 @@ router = APIRouter()
             page=(skip // limit) + 1,
             size=limit,
             pages=pages,
-        )
     except Exception as e:
         raise HTTPException
-        )
 
 
     db: Session = Depends(get_db),
@@ -139,10 +127,8 @@ router = APIRouter()
     """
     try:
             db.query(Concesionario).filter(Concesionario.activo).all()
-        )
     except Exception as e:
         raise HTTPException
-        )
 
 
 @router.get("/{concesionario_id}", response_model=ConcesionarioResponse)
@@ -157,10 +143,8 @@ def obtener_concesionario
         db.query(Concesionario)
         .filter(Concesionario.id == concesionario_id)
         .first()
-    )
     if not concesionario:
         raise HTTPException
-        )
     return ConcesionarioResponse.model_validate(concesionario)
 
 
@@ -174,7 +158,6 @@ def crear_concesionario
     try:
         # Crear nuevo concesionario
         concesionario = Concesionario
-        )
 
         db.add(concesionario)
         db.commit()
@@ -191,7 +174,6 @@ def crear_concesionario
         db.rollback()
         raise HTTPException
             status_code=500, detail=f"Error al crear concesionario: {str(e)}"
-        )
 
 
 @router.put("/{concesionario_id}", response_model=ConcesionarioResponse)
@@ -207,10 +189,8 @@ def actualizar_concesionario
             db.query(Concesionario)
             .filter(Concesionario.id == concesionario_id)
             .first()
-        )
         if not concesionario:
             raise HTTPException
-            )
 
         # Verificar nombre único si se está cambiando
         if 
@@ -218,12 +198,9 @@ def actualizar_concesionario
             existing = 
                 db.query(Concesionario)
                 .filter
-                )
                 .first()
-            )
             if existing:
                 raise HTTPException
-                )
 
         update_data = concesionario_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -239,7 +216,6 @@ def actualizar_concesionario
         db.rollback()
         raise HTTPException
             detail=f"Error al actualizar concesionario: {str(e)}",
-        )
 
 
 @router.delete("/{concesionario_id}")
@@ -255,16 +231,13 @@ def eliminar_concesionario
             db.query(Concesionario)
             .filter(Concesionario.id == concesionario_id)
             .first()
-        )
         if not concesionario:
             raise HTTPException
-            )
 
         db.delete(concesionario)
         db.commit()
 
         return 
-        }
 
     except HTTPException:
         raise
@@ -272,4 +245,3 @@ def eliminar_concesionario
         db.rollback()
         raise HTTPException
             detail=f"Error al eliminar concesionario: {str(e)}",
-        )

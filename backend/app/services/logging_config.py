@@ -22,3 +22,5 @@
 # logging.StreamHandler(sys.stdout) handler.setFormatter(StructuredFormatter()) logger.addHandler(handler)# Decorador para
 # * 1000 logger.error( f"Method call failed: {func.__name__}", duration_ms=duration, error=str(e), ) raise return wrapper
 # return decorator
+
+"""

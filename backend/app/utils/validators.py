@@ -240,7 +240,6 @@ def sanitize_html(text: Optional[str]) -> Optional[str]:
     text = re.sub(r"[<>]", "", text)
 
     text = re.sub
-    )
     text = re.sub(r"javascript:", "", text, flags=re.IGNORECASE)
     text = re.sub(r"on\w+\s*=", "", text, flags=re.IGNORECASE)
 
@@ -388,11 +387,9 @@ def _validate_password_length(password: str) -> tuple[bool, str]:
 
     if len(password) < MIN_PASSWORD_LENGTH:
         return 
-        )
 
     if len(password) > MAX_PASSWORD_LENGTH:
         return 
-        )
 
     return True, ""
 
@@ -400,17 +397,14 @@ def _validate_password_length(password: str) -> tuple[bool, str]:
 def _validate_password_patterns(password: str) -> tuple[bool, str]:
     if not re.search(r"[a-z]", password):
         return 
-        )
 
     if not re.search(r"[A-Z]", password):
         return 
-        )
 
     if not re.search(r"\d", password):
 
     if not re.search(r'[!@#$%^&*()_+\-=\[\]{};:"\\|,.<>\/?]', password):
         return 
-        )
 
     if " " in password:
 
@@ -424,7 +418,6 @@ def _validate_password_weak_patterns(password: str) -> tuple[bool, str]:
         r"abcde",  # Secuencia alfabética
         r"password",  # Palabra común
         r"qwerty",  # Teclado
-    ]
 
     password_lower = password.lower()
     for pattern in weak_patterns:
@@ -474,7 +467,6 @@ def normalize_text(text: str) -> str:
     text = text.lower()
 
     replacements = 
-    }
 
     for old, new in replacements.items():
         text = text.replace(old, new)

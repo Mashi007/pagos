@@ -71,7 +71,6 @@ class IntelligentAlertSystem:
             },
             AlertType.PERFORMANCE_DEGRADATION: 
             },
-        }
 
 
     def _start_background_monitoring(self):
@@ -142,7 +141,6 @@ class IntelligentAlertSystem:
 
 
         """Obtener tiempo de respuesta promedio"""
-        ]
 
             return 0.0
 
@@ -156,7 +154,6 @@ class IntelligentAlertSystem:
     def _trigger_alert(self, alert_type: AlertType, rule: Dict[str, Any]):
         """Disparar una alerta"""
         alert = 
-        }
 
         with self.lock:
             self.active_alerts[alert["id"]] = alert
@@ -170,7 +167,6 @@ class IntelligentAlertSystem:
     def _generate_alert_message(self, alert_type: AlertType) -> str:
         """Generar mensaje de alerta"""
         messages = 
-        }
 
         return messages.get(alert_type, "Alerta desconocida")
 
@@ -224,7 +220,6 @@ def get_alert_statistics(self) -> Dict[str, Any]:
                 type_dist[alert["type"]] += 1
 
             return 
-            }
 
 # Instancia global del sistema de alertas
 alert_system = IntelligentAlertSystem()
@@ -241,13 +236,11 @@ async def add_metric
         alert_system.add_metric(metric_data)
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error agregando métrica: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/active-alerts")
 async def get_active_alerts
@@ -258,13 +251,11 @@ async def get_active_alerts
         alerts = alert_system.get_active_alerts()
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error obteniendo alertas activas: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 async def resolve_alert
     current_user: User = Depends(get_current_user),
@@ -275,10 +266,8 @@ async def resolve_alert
 
         if success:
             return 
-            }
         else:
             raise HTTPException
-            )
 
     except HTTPException:
         raise
@@ -286,7 +275,6 @@ async def resolve_alert
         logger.error(f"Error resolviendo alerta: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/alert-statistics")
     current_user: User = Depends(get_current_user),
@@ -296,13 +284,11 @@ async def resolve_alert
         statistics = alert_system.get_alert_statistics()
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/alert-history")
 async def get_alert_history
@@ -314,12 +300,11 @@ async def get_alert_history
             history = list(alert_system.alert_history)[-limit:]
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error obteniendo historial: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
+"""
 """

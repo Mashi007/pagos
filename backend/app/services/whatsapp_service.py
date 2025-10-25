@@ -46,16 +46,13 @@ class WhatsAppService:
         try:
             if not self.access_token or not self.phone_number_id:
                 return 
-                }
 
             # Formatear número
             clean_number = 
                 to_number.replace("+", "").replace(" ", "").replace("-", "")
-            )
 
             if not clean_number.isdigit():
                 return 
-                }
 
             # URL del endpoint de Meta
             url = f"{self.api_url}/{self.phone_number_id}/messages"
@@ -64,7 +61,6 @@ class WhatsAppService:
             headers = 
                 "Authorization": f"Bearer {self.access_token}",
                 "Content-Type": "application/json",
-            }
 
             # Preparar payload
             if template_name and template_params:
@@ -76,15 +72,12 @@ class WhatsAppService:
                                     {"type": "text", "text": str(value)}
                                     for value in template_params.values()
                                 ],
-                            }
                         ],
                     },
-                }
             else:
                 # Mensaje simple
                 payload = 
                     "text": {"body": message},
-                }
 
             # Enviar mensaje
             async with aiohttp.ClientSession() as session:
@@ -97,12 +90,10 @@ class WhatsAppService:
 
                         logger.info(f"Mensaje WhatsApp enviado: {message_id}")
                         return 
-                        }
                     else:
                         error_msg = f"Error Meta API: {response_data}"
                         logger.error(error_msg)
                         return 
-                        }
 
         except Exception as e:
             error_msg = f"Error enviando WhatsApp: {str(e)}"
@@ -133,10 +124,10 @@ class WhatsAppService:
             Dict con estado de la configuración
         """
         config_status = 
-        }
         config_status["ready"] = all
         ])
 
         return config_status
 
+"""
 """

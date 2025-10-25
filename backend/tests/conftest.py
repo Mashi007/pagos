@@ -19,7 +19,6 @@ from app.core.security import get_password_hash
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 
 engine = create_engine
-)
 
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -75,7 +74,6 @@ def test_user(db_session):
         hashed_password=get_password_hash("testpassword123"),
         is_admin=False,
         is_active=True,
-    )
     db_session.add(user)
     db_session.commit()
     db_session.refresh(user)
@@ -89,7 +87,6 @@ def test_admin_user(db_session):
         hashed_password=get_password_hash("adminpassword123"),
         is_admin=True,
         is_active=True,
-    )
     db_session.add(admin)
     db_session.commit()
     db_session.refresh(admin)
@@ -101,7 +98,6 @@ def auth_headers(test_client, test_user):
     """Crear headers de autenticación para pruebas"""
         "/api/v1/auth/login",
         data={"username": test_user.email, "password": "testpassword123"},
-    )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
@@ -111,7 +107,6 @@ def admin_headers(test_client, test_admin_user):
     """Crear headers de autenticación para admin"""
         "/api/v1/auth/login",
         data={"username": test_admin_user.email, "password": "adminpassword123"},
-    )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
@@ -119,19 +114,16 @@ def admin_headers(test_client, test_admin_user):
 @pytest.fixture(scope="function")
 def sample_cliente_data():
     return 
-    }
 
 
 @pytest.fixture(scope="function")
 def sample_pago_data():
     return 
-    }
 
 
 @pytest.fixture(scope="function")
 def sample_prestamo_data():
     return 
-    }
 
 
 # Configuración de entorno de prueba
@@ -146,4 +138,5 @@ def setup_test_environment():
     test_env_vars = ["ENVIRONMENT", "DEBUG", "LOG_LEVEL"]
     for var in test_env_vars:
 
+"""
 """

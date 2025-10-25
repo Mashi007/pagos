@@ -50,7 +50,6 @@ class RealTimeSpecificMonitor:
                 return
 
             recent_events = [
-            ]
 
             successful_events = [e for e in recent_events if e["status"] == "success"]
             failed_events = [e for e in recent_events if e["status"] == "failure"]
@@ -102,7 +101,6 @@ class RealTimeSpecificMonitor:
 
                     if failure_count > 0 and success_count > 0:
                         logger.warning
-                        )
 
 
         self,
@@ -117,13 +115,11 @@ class RealTimeSpecificMonitor:
         with self.lock:
             event = 
                 "details": details or {},
-            }
 
 
         """Obtener análisis en tiempo real"""
         with self.lock:
             return 
-            }
 
 # Instancia global del monitor tiempo real
 
@@ -141,7 +137,6 @@ class RealTimeSpecificMonitor:
 ):
     """Registrar un evento en tiempo real"""
         endpoint, method, status, user_type, error_type, details
-    )
     return {"message": "Evento tiempo real registrado"}
 
     current_user: User = Depends(get_current_user),
@@ -151,4 +146,3 @@ class RealTimeSpecificMonitor:
     current_user: User = Depends(get_current_user),
 ):
         return 
-        }

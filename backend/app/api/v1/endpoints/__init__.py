@@ -2,7 +2,6 @@
 """Endpoints de la API v1"""
 
 from . import 
-)
 
 __all__ = [
     "health",
@@ -41,6 +40,6 @@ __all__ = [
     "schema_analyzer",
     "critical_error_monitor",
     "strategic_measurements",
-]
 
+"""
 """

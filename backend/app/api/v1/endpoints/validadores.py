@@ -133,3 +133,4 @@ from datetime import date
 # Reglas de negocio específicas del dominio", ], }@router.get("/configuracion-validadores")async \ndef
 # obtener_configuracion_validadores():\n """ 🔧 Obtener configuración actualizada de validadores para el frontend """ return 
 # {"V":\n "Venezolano", "E":\n "Extranjero", "J":\n "Jurídico"}, }, "telefono_venezuela":\n 
+"""

@@ -38,7 +38,6 @@ router = APIRouter()
             "overall_status": "unknown",
             "confidence_score": 0.0,
             "recommendations": [],
-        }
 
         try:
             # 1. Validación básica de JWT
@@ -51,28 +50,23 @@ router = APIRouter()
 
             # 3. Validación de contexto
             context_validation = self._validate_request_context
-            )
             validation_results["validations"]["request_context"] = context_validation
 
             # 4. Validación de tiempo
 
             # 5. Validación de usuario
             user_validation = self._validate_user_consistency
-            )
             validation_results["validations"]["user_consistency"] = user_validation
 
             # 6. Validación de seguridad
             security_validation = self._validate_security_patterns
-            )
             validation_results["validations"]["security_patterns"] = security_validation
 
             # Calcular resultado general
             validation_results = self._calculate_overall_result
-            )
 
             # Cachear resultado
             self.validation_cache[validation_results["token_id"]] = 
-            )
 
             return validation_results
 
@@ -326,18 +320,15 @@ router = APIRouter()
         authorization = request.headers.get("Authorization")
         if not authorization or not authorization.startswith("Bearer "):
             raise HTTPException
-            )
 
         token = authorization.split(" ")[1]
 
         # Obtener contexto de la petición
         context = 
-        }
 
         # Realizar validación cruzada
 
         return 
-        }
 
     except HTTPException:
         raise
@@ -345,7 +336,6 @@ router = APIRouter()
         logger.error(f"Error en validación cruzada: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/validation-history")
 async def get_validation_history
@@ -357,13 +347,10 @@ async def get_validation_history
             history = list(auth_checker.failed_validations.values())
 
         return 
-            }
-        }
     except Exception as e:
         logger.error(f"Error obteniendo historial de validaciones: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/validation-patterns")
 async def get_validation_patterns
@@ -374,10 +361,7 @@ async def get_validation_patterns
         patterns = dict(auth_checker.validation_patterns)
 
         return 
-            }
-        }
     except Exception as e:
         logger.error(f"Error obteniendo patrones de validación: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )

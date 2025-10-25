@@ -26,7 +26,6 @@ def upgrade():
     if "concesionario" not in columns:
         op.add_column
             "clientes", sa.Column("concesionario", sa.String(100), nullable=True)
-        )
         op.create_index("idx_clientes_concesionario", "clientes", ["concesionario"])
         print("Columna 'concesionario' agregada a la tabla 'clientes'")
     else:

@@ -67,7 +67,6 @@ class IntelligentAlertSystem:
             "last_activity": None
         })
         self.system_metrics = 
-        }
 
 
     def add_alert
@@ -75,7 +74,6 @@ class IntelligentAlertSystem:
         """Agregar una nueva alerta"""
 
         alert = Alert
-        )
 
         self.alerts.append(alert)
 
@@ -124,14 +122,11 @@ class IntelligentAlertSystem:
         if not success:
             recent_failures = [
                 attempt for attempt in user_metrics["failed_attempts"]
-            ]
 
             if len(recent_failures) >= 5:
                 alert_id = self.add_alert
                         "failed_attempts": len(recent_failures),
                         "client_ip": request_context.get("client_ip")
-                    }
-                )
                 alerts.append(alert_id)
 
         # Verificar ubicación inusual
@@ -140,16 +135,12 @@ class IntelligentAlertSystem:
             if client_ip not in user_metrics["ip_addresses"]:
                 alert_id = self.add_alert
                         "known_ips": list(user_metrics["ip_addresses"])
-                    }
-                )
                 alerts.append(alert_id)
 
         if len(user_metrics["user_agents"]) > 3:
             alert_id = self.add_alert
                     "user_agents": list(user_metrics["user_agents"]),
                     "count": len(user_metrics["user_agents"])
-                }
-            )
             alerts.append(alert_id)
 
         return alerts
@@ -204,7 +195,6 @@ class IntelligentAlertSystem:
             type_distribution[alert.alert_type.value] += 1
 
         return 
-        }
 
 # Instancia global del sistema de alertas
 alert_system = IntelligentAlertSystem()
@@ -223,21 +213,17 @@ async def analyze_authentication_event
 
         # Obtener contexto de la petición
         request_context = 
-        }
 
         # Analizar evento
         generated_alerts = alert_system.analyze_authentication_event
-        )
 
         return 
             "message": f"Evento analizado, {len(generated_alerts)} alertas generadas"
-        }
 
     except Exception as e:
         logger.error(f"Error analizando evento de autenticación: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/active-alerts")
 async def get_active_alerts
@@ -252,7 +238,6 @@ async def get_active_alerts
                 severity_enum = AlertSeverity(severity)
             except ValueError:
                 raise HTTPException
-                )
 
         type_enum = None
         if alert_type:
@@ -260,7 +245,6 @@ async def get_active_alerts
                 type_enum = AlertType(alert_type)
             except ValueError:
                 raise HTTPException
-                )
 
         # Obtener alertas filtradas
         alerts = alert_system.get_active_alerts(severity_enum, type_enum, user_id)
@@ -268,12 +252,9 @@ async def get_active_alerts
         # Convertir a formato serializable
         alerts_data = [
             
-            }
             for alert in alerts
-        ]
 
         return 
-        }
 
     except HTTPException:
         raise
@@ -281,7 +262,6 @@ async def get_active_alerts
         logger.error(f"Error obteniendo alertas activas: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 async def resolve_alert
     current_user: User = Depends(get_current_user),
@@ -292,10 +272,8 @@ async def resolve_alert
 
         if success:
             return 
-            }
         else:
             raise HTTPException
-            )
 
     except HTTPException:
         raise
@@ -303,7 +281,6 @@ async def resolve_alert
         logger.error(f"Error resolviendo alerta: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/alert-statistics")
     current_user: User = Depends(get_current_user),
@@ -313,13 +290,11 @@ async def resolve_alert
         statistics = alert_system.get_alert_statistics()
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/user-metrics/{user_id}")
 async def get_user_metrics
@@ -331,15 +306,13 @@ async def get_user_metrics
 
         # Convertir sets a listas para serialización
         metrics_data = 
-        }
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error obteniendo métricas de usuario: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
+"""
 """

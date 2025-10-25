@@ -56,3 +56,4 @@ from datetime import date
 # diferencia: Decimal cuotas_con_mora: List[dict] mensaje: str
 
 """
+"""

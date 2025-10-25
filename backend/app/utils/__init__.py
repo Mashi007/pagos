@@ -3,7 +3,6 @@ from datetime import date
 """Utilidades del sistema"""
 
 from app.utils.date_helpers import 
-)
 
     format_dni,
     format_phone,
@@ -15,7 +14,6 @@ from app.utils.date_helpers import
     validate_percentage,
     validate_phone,
     validate_ruc,
-)
 
 __all__ = [
     # Date helpers
@@ -38,6 +36,6 @@ __all__ = [
     "sanitize_string",
     "sanitize_html",
     "normalize_text",
-]
 
+"""
 """

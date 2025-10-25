@@ -14,7 +14,6 @@ class KPIBase(BaseModel):
     categoria: Optional[str] = Field(None, description="Categoría del KPI")
     unidad_medida: Optional[str] = Field
         None, description="Unidad de medida (%, $, unidades, etc)"
-    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -22,9 +21,7 @@ class KPIBase(BaseModel):
 class KPICreate(KPIBase):
     """Schema para crear un KPI"""
     valor_objetivo: Optional[Decimal] = Field
-    )
     periodicidad: Optional[str] = Field
-    )
     activo: bool = Field(True, description="Indica si el KPI está activo")
 
 
@@ -62,9 +59,7 @@ class KPIValorBase(BaseModel):
 class KPIValorCreate(KPIValorBase):
     """Schema para registrar un valor de KPI"""
     notas: Optional[str] = Field
-    )
     metadata: Optional[Dict[str, Any]] = Field
-    )
 
 
 class KPIValorUpdate(BaseModel):
@@ -87,7 +82,6 @@ class KPIValorResponse(KPIValorBase):
 
 class KPIConValores(KPIResponse):
     valores: List[KPIValorResponse] = Field
-    )
 
 
 class KPIEstadisticas(BaseModel):
@@ -100,9 +94,7 @@ class KPIEstadisticas(BaseModel):
     valor_minimo: Optional[Decimal] = None
     valor_maximo: Optional[Decimal] = None
     tendencia: Optional[str] = Field
-    )
     cumplimiento_objetivo: Optional[float] = Field
-    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -128,6 +120,6 @@ __all__ = [
     "KPIConValores",
     "KPIEstadisticas",
     "DashboardKPIs",
-]
 
+"""
 """

@@ -22,7 +22,6 @@ class VerificarAutenticacionFrontendAnalistas:
     def __init__(self):
         self.frontend_url = "https://rapicredit.onrender.com"
         self.credentials = 
-        }
 
 
     def hacer_login(self) -> Dict[str, Any]:
@@ -43,7 +42,6 @@ class VerificarAutenticacionFrontendAnalistas:
                     f"   📊 Rol: {'Administrador' if user_info.get('is_admin') else 'Usuario'}"
                 
                 return 
-                }
             else:
                 logger.error(f"   ❌ Login falló: {response.status_code}"
                 logger.error(f"   📊 Respuesta: {response.text[:200]}"
@@ -61,7 +59,6 @@ class VerificarAutenticacionFrontendAnalistas:
         headers = 
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
-        }
 
         try:
             logger.info("   🔍 Probando: /api/v1/analistas/"
@@ -80,12 +77,10 @@ class VerificarAutenticacionFrontendAnalistas:
                         f"   📊 Primer analista: {primer_analista.get('nombre', 'N/A')}"
                     
                 return 
-                }
             else:
                 logger.error("   ❌ FALLO: Endpoint principal"
                 logger.error(f"   📊 Respuesta: {response.text[:200]}"
                 return 
-                }
 
         except Exception as e:
             logger.error(f"   ❌ ERROR: Endpoint principal - {e}"
@@ -103,17 +98,14 @@ class VerificarAutenticacionFrontendAnalistas:
                 logger.info("   ✅ ESPERADO: Endpoint requiere autenticación (403)"
                 logger.info(f"   📊 Respuesta: {response.text[:200]}"
                 return 
-                }
             elif response.status_code == 200:
                 logger.error("   ❌ INESPERADO: Endpoint funciona sin autenticación"
                 logger.error(f"   📊 Respuesta: {response.text[:200]}"
                 return 
-                }
             else:
                 logger.error("   ❌ FALLO: Status inesperado"
                 logger.error(f"   📊 Respuesta: {response.text[:200]}"
                 return 
-                }
 
         except Exception as e:
             logger.error(f"   ❌ ERROR: Endpoint sin auth - {e}"
@@ -191,4 +183,5 @@ def main():
     return verificador.ejecutar_verificacion_autenticacion_frontend(
 if __name__ == "__main__":
     main(
+"""
 """

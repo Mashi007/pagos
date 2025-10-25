@@ -14,7 +14,6 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.security import 
-)
 from app.models.user import User
 from app.schemas.auth import LoginRequest, Token
 
@@ -44,26 +43,21 @@ class AuthService:
         email_normalized = email.lower().strip()
 
         logger.info
-        )
 
         user = 
             db.query(User)
             .filter(func.lower(User.email) == email_normalized, User.is_active)
             .first()
-        )
 
         if not user:
             logger.warning
-            )
             return None
 
         if not verify_password(password, user.hashed_password):
             logger.warning
-            )
             return None
 
         logger.info
-        )
         return user
 
     @staticmethod
@@ -81,37 +75,28 @@ class AuthService:
         """
         # Autenticar usuario
         logger.info
-        )
 
         user = AuthService.authenticate_user
-        )
 
         if not user:
             logger.warning
-            )
             raise HTTPException
-            )
 
         # Verificar que el usuario esté activo
         if not user.is_active:
             logger.warning
-            )
             raise HTTPException
-            )
 
         # Actualizar last_login
         db.commit()
 
         logger.info
-        )
 
         # Crear tokens
         access_token = create_access_token
-        )
         refresh_token = create_refresh_token(subject=user.id)
 
         token = Token
-        )
 
         return token, user
 
@@ -135,34 +120,27 @@ class AuthService:
             # Verificar que sea un refresh token
             if payload.get("type") != "refresh":
                 raise HTTPException
-                )
 
             user_id = payload.get("sub")
             if not user_id:
                 raise HTTPException
-                )
 
             # Buscar usuario
             user = db.query(User).filter(User.id == int(user_id)).first()
             if not user:
                 raise HTTPException
-                )
 
             if not user.is_active:
                 raise HTTPException
-                )
 
             new_access_token = create_access_token
-            )
             new_refresh_token = create_refresh_token(subject=user.id)
 
             return Token
-            )
 
         except Exception as e:
             raise HTTPException
                 detail=f"Error procesando token: {str(e)}",
-            )
 
     @staticmethod
     def change_password
@@ -184,13 +162,11 @@ class AuthService:
         # Verificar contraseña actual
         if not verify_password(current_password, user.hashed_password):
             raise HTTPException
-            )
 
         # Validar fortaleza de nueva contraseña
         is_valid, message = validate_password_strength(new_password)
         if not is_valid:
             raise HTTPException
-            )
 
         # Actualizar contraseña
         user.hashed_password = get_password_hash(new_password)
@@ -211,7 +187,6 @@ class AuthService:
         try:
             # Usar is_admin directamente - evitar conflicto de nombres
             from app.core.permissions_simple import 
-            )
 
             permissions = get_permissions(user.is_admin)
             permission_strings = [perm.value for perm in permissions]
@@ -220,4 +195,5 @@ class AuthService:
         except Exception:
             return []
 
+"""
 """

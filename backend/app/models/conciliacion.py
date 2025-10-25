@@ -11,3 +11,4 @@
 # marcar_rechazado(self, usuario_id: int, motivo: str): """Marca como rechazado""" self.estado_match = "RECHAZADO"
 
 """
+"""

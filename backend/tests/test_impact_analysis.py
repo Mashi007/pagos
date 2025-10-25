@@ -28,38 +28,31 @@ class PerformanceImpactAnalyzer:
     def start_measurement(self):
         """Iniciar medición de métricas del sistema"""
         self.start_metrics = 
-        }
 
 
     def end_measurement(self):
         """Finalizar medición de métricas del sistema"""
 
         self.end_metrics = 
-        }
 
 
     def get_impact_analysis(self) -> dict:
         """Obtener análisis de impacto en performance"""
         cpu_delta = self.end_metrics["cpu_percent"] - self.start_metrics["cpu_percent"]
         memory_delta = 
-        )
         memory_mb_delta = 
-        )
 
         return 
             },
             "memory_impact": 
             },
             "performance_score": self._calculate_performance_score(),
-        }
 
 
     def _calculate_performance_score(self) -> float:
         """Calcular score de performance (0-100)"""
         cpu_impact = abs
-        )
         memory_impact = abs
-        )
 
         # Score basado en impacto mínimo
         score = 100 - (cpu_impact * 2) - (memory_impact * 1.5)
@@ -213,7 +206,6 @@ class TestConcurrentLoadImpact:
             futures = [executor.submit(make_request) for _ in range(5)]
             responses = [
                 future.result() for future in concurrent.futures.as_completed(futures)
-            ]
 
         performance_analyzer.end_measurement()
         impact_analysis = performance_analyzer.get_impact_analysis()
@@ -259,7 +251,6 @@ class TestPerformanceBenchmarks:
         # Verificar benchmarks
 
         print
-        )
 
 
 if __name__ == "__main__":

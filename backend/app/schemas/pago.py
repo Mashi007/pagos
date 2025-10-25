@@ -17,18 +17,12 @@ MAX_NOTA_LENGTH = 1000
 class PagoBase(BaseModel):
 
     cedula_cliente: str = Field
-    )
     monto_pagado: float = Field(..., gt=0, description="Monto pagado")
     numero_documento: str = Field
-    )
     documento_nombre: Optional[str] = Field
-    )
     documento_tipo: Optional[str] = Field
-    )
     documento_tamaño: Optional[int] = Field
-    )
     documento_ruta: Optional[str] = Field
-    )
     notas: Optional[str] = Field(None, description="Notas adicionales")
 
     @field_validator("cedula_cliente")
@@ -36,7 +30,6 @@ class PagoBase(BaseModel):
     def validate_cedula(cls, v):
         if not v or len(v.strip()) < MIN_CEDULA_LENGTH:
             raise ValueError
-            )
         return v.strip().upper()
 
     @field_validator("numero_documento")

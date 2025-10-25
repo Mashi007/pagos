@@ -184,3 +184,5 @@ from datetime import date
 # notif = ( db.query(Notificacion) .filter( Notificacion.user_id == admin.id, Notificacion.asunto.like(f"%{proceso_id}%"), )
 # .order_by(Notificacion.id.desc()) .first() ) if notif:\n await email_service.send_email
 # logging.getLogger(__name__) logger.error( f"Error notificando admin sobre conciliación " f"{proceso_id}:\n {str(e)}" )
+
+"""

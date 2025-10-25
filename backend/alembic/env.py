@@ -30,7 +30,6 @@ def get_url() -> str:
         if attempt < MAX_ATTEMPTS:
             logger.warning
                 f"(intento {attempt}/{MAX_ATTEMPTS})"
-            )
 
     logger.error("DATABASE_URL no está configurada")
     logger.info("Variables de entorno relacionadas encontradas:")
@@ -41,7 +40,6 @@ def get_url() -> str:
             # Enmascarar valores sensibles
             if len(value) > MASK_THRESHOLD:
                 masked = 
-                )
             else:
                 masked = "***"
             logger.info(f"  {key}: {masked}")
@@ -52,7 +50,6 @@ def get_url() -> str:
 
     raise ValueError
         "2. Asegúrate de cargar dotenv antes de llamar get_url()\n\n"
-    )
 
 
 # Configuración de Alembic
@@ -79,7 +76,6 @@ def run_migrations_offline():
     """Ejecutar migraciones en modo offline"""
     url = config.get_main_option("sqlalchemy.url")
     context.configure
-    )
 
     with context.begin_transaction():
         context.run_migrations()
@@ -91,7 +87,6 @@ def run_migrations_online():
         config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-    )
 
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)

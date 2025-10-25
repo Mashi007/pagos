@@ -55,7 +55,6 @@ def create_access_token
     if expires_delta:
     else:
             minutes=ACCESS_TOKEN_EXPIRE_MINUTES
-        )
 
     to_encode = {"exp": expire, "sub": str(subject), "type": "access"}
 
@@ -64,7 +63,6 @@ def create_access_token
         to_encode.update(additional_claims)
 
     encoded_jwt = jwt.encode
-    )
     return encoded_jwt
 
 
@@ -74,7 +72,6 @@ def create_refresh_token(subject: str | int) -> str:
     """
     to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
     encoded_jwt = jwt.encode
-    )
     return encoded_jwt
 
 
@@ -87,7 +84,6 @@ def decode_token(token: str) -> dict:
     """
     try:
         payload = jwt.decode
-        )
         return payload
     except PyJWTError as e:
         # Re-lanza PyJWTError para que el manejador de excepciones de FastAPI
@@ -131,7 +127,6 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
     special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
     if not any(c in special_chars for c in password):
         return 
-        )
 
     return True, "Contraseña válida"
 
@@ -144,7 +139,6 @@ def generate_password_reset_token(email: str) -> str:
     )  # Expira en 1 hora
     to_encode = {"exp": expire, "sub": email, "type": "password_reset"}
     encoded_jwt = jwt.encode
-    )
     return encoded_jwt
 
 

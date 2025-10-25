@@ -21,7 +21,6 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column
         String(EMAIL_LENGTH), unique=True, index=True, nullable=False
-    )
     nombre = Column(String(NAME_LENGTH), nullable=False)
     apellido = Column(String(NAME_LENGTH), nullable=False)
     hashed_password = Column(String(PASSWORD_LENGTH), nullable=False)
@@ -34,13 +33,10 @@ class User(Base):
 
     # Timestamps
     created_at = Column
-    )
 
     # Relaciones
     aprobaciones_solicitadas = relationship
-    )
     aprobaciones_revisadas = relationship
-    )
 
     auditorias = relationship("Auditoria", back_populates="usuario")
     notificaciones = relationship("Notificacion", back_populates="user")
@@ -49,7 +45,6 @@ class User(Base):
     def __repr__(self):
         return 
             f"is_admin={self.is_admin})>"
-        )
 
     @property
     def full_name(self) -> str:
@@ -61,4 +56,5 @@ class User(Base):
         """Propiedad para compatibilidad hacia atrás"""
         return "ADMIN" if self.is_admin else "USER"
 
+"""
 """

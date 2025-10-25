@@ -14,32 +14,26 @@ MIN_PASSWORD_LENGTH = 8
 DecimalAmount = Annotated[
     Decimal,
     Field(ge=0, description="Monto en formato decimal con 2 decimales"),
-]
 
 DecimalPercentage = Annotated[
     Decimal,
     Field(ge=0, le=MAX_PERCENTAGE, description="Porcentaje con 2 decimales"),
-]
 
 
 class PrestamoBase(BaseModel):
     """Schema base para Préstamo"""
     cliente_id: int
     monto_total: Decimal = Field
-    )
     monto_financiado: Decimal = Field
-    )
     monto_inicial: Decimal = Field
         default=Decimal("0.00"),
         ge=0,
         description="Monto inicial/cuota inicial",
-    )
     tasa_interes: Decimal = Field
         default=Decimal("0.00"),
         ge=0,
         le=MAX_PERCENTAGE,
         description="Tasa de interés anual (%)",
-    )
     numero_cuotas: int = Field(..., gt=0, description="Número de cuotas")
     monto_cuota: Decimal = Field(..., gt=0, description="Monto de cada cuota")
     fecha_aprobacion: date
@@ -47,12 +41,10 @@ class PrestamoBase(BaseModel):
     fecha_primer_vencimiento: date
     fecha_ultimo_vencimiento: Optional[date] = None
     modalidad: str = Field
-    )
     destino_credito: Optional[str] = None
     observaciones: Optional[str] = None
 
     @field_validator
-    )
     @classmethod
     def validate_decimal_places(cls, v):
         if v is None:
@@ -70,10 +62,8 @@ class PrestamoCreate(PrestamoBase):
 class PrestamoUpdate(BaseModel):
     """Schema para actualizar un préstamo"""
     monto_total: Optional[Decimal] = Field
-    )
     tasa_interes: Optional[Decimal] = Field
         None, ge=0, le=MAX_PERCENTAGE, description="Tasa de interés anual (%)"
-    )
     estado: Optional[str] = None
     categoria: Optional[str] = None
     observaciones: Optional[str] = None
@@ -104,7 +94,6 @@ class PrestamoResponse(PrestamoBase):
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator
-    )
     @classmethod
     def validate_decimal_places(cls, v):
         if v is None:

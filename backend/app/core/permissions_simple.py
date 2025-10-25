@@ -126,7 +126,6 @@ ADMIN_PERMISSIONS: List[Permission] = [
     Permission.VALIDADOR_READ,
     Permission.VALIDADOR_UPDATE,
     Permission.VALIDADOR_DELETE,
-]
 
 
 USER_PERMISSIONS: List[Permission] = [
@@ -141,7 +140,6 @@ USER_PERMISSIONS: List[Permission] = [
     # operaciones básicas
     Permission.CLIENTE_CREATE,  # ✅ Crear clientes
     Permission.CLIENTE_UPDATE,  # ✅ Actualizar clientes
-]
 
 
 def has_permission(user_is_admin: bool, permission: Permission) -> bool:

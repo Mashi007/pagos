@@ -19,3 +19,5 @@
 # Optional[str], ip_address: str, reason: str): """Registra un intento de acceso no autorizado""" log_security_event
 # endpoint, "reason": reason}, success=False, )def log_data_modification
 # "resource": resource, "resource_id": resource_id, "action": action, }, )
+
+"""

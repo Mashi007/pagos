@@ -34,13 +34,11 @@ class CriticalErrorMonitor:
         """Registrar un error crítico"""
         with self.lock:
             error_record = 
-            }
 
             self.critical_errors.append(error_record)
             self.error_patterns[error_type] += 1
 
             logger.error
-            )
 
 
     def _calculate_severity(self, error_type: str, context: Dict[str, Any]) -> str:
@@ -58,7 +56,6 @@ class CriticalErrorMonitor:
     def get_error_summary(self) -> Dict[str, Any]:
         with self.lock:
             return 
-            }
 
 
     def get_deployment_failures(self) -> List[Dict[str, Any]]:
@@ -86,10 +83,8 @@ async def get_critical_errors_summary
     try:
         summary = critical_monitor.get_error_summary()
         return 
-        }
     except Exception as e:
         raise HTTPException
-        )
 
 @router.get("/critical-errors/deployment-failures")
 async def get_deployment_failures
@@ -99,10 +94,8 @@ async def get_deployment_failures
     try:
         failures = critical_monitor.get_deployment_failures()
         return 
-        }
     except Exception as e:
         raise HTTPException
-        )
 
 @router.get("/critical-errors/503-errors")
 async def get_503_errors
@@ -113,11 +106,9 @@ async def get_503_errors
     try:
         errors = critical_monitor.get_503_errors()
         return 
-        }
     except Exception as e:
         logger.error(f"Error obteniendo errores 503: {e}")
         raise HTTPException
-        )
 
 async def log_critical_error
     current_user: User = Depends(get_current_user),
@@ -126,14 +117,11 @@ async def log_critical_error
     """Registrar un error crítico"""
     try:
         critical_monitor.log_critical_error
-        )
 
         return 
-        }
     except Exception as e:
         logger.error(f"Error registrando error crítico: {e}")
         raise HTTPException
-        )
 
 @router.get("/critical-errors/health")
 async def critical_errors_health():
@@ -150,8 +138,8 @@ async def critical_errors_health():
             health_status = "CRITICAL"
 
         return 
-        }
     except Exception as e:
         logger.error(f"Error verificando salud del sistema: {e}")
         return 
-        }
+
+"""

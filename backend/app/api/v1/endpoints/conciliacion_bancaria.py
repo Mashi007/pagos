@@ -24,7 +24,6 @@ async def generar_template_conciliacion
     """Generar template Excel para conciliación bancaria"""
     try:
         logger.info
-        )
 
         # Crear workbook
         from openpyxl import Workbook
@@ -72,11 +71,9 @@ async def generar_template_conciliacion
             ["   - Requiere formulario con justificación"],
             ["   - Se registra en auditoría"],
             [""],
-            [
                 "FECHA DE GENERACIÓN: "
             ],
             ["GENERADO POR: " + current_user.email],
-        ]
 
         # Agregar instrucciones a la hoja
         for i, instruccion in enumerate(instrucciones, 1):
@@ -94,7 +91,6 @@ async def generar_template_conciliacion
         # Aplicar validaciones
         # Validación para fecha (formato YYYY-MM-DD)
         dv_fecha = DataValidation
-        )
         dv_fecha.add("A2:A100")
         ws_template.add_data_validation(dv_fecha)
 
@@ -105,13 +101,11 @@ async def generar_template_conciliacion
 
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error generando template de conciliación: {e}")
         raise HTTPException
             detail=f"Error interno del servidor: {str(e)}",
-        )
 
 
 async def procesar_conciliacion
@@ -122,13 +116,11 @@ async def procesar_conciliacion
     """Procesar archivo Excel de conciliación bancaria"""
     try:
         logger.info
-        )
 
         # Validar tipo de archivo
         if not file.filename.endswith((".xlsx", ".xls")):
             raise HTTPException
                 detail="Archivo debe ser Excel (.xlsx o .xls)",
-            )
 
         # Leer archivo Excel
         file_content = await file.read()
@@ -140,11 +132,9 @@ async def procesar_conciliacion
         required_columns = ["fecha", "numero_documento"]
         if not all(col in df.columns for col in required_columns):
             raise HTTPException
-            )
 
         if len(df) > 100:
             raise HTTPException
-            )
 
         # Procesar cada registro
         pendientes = 0
@@ -157,10 +147,7 @@ async def procesar_conciliacion
             pago = 
                 db.query(Pago)
                 .filter
-                    )
-                )
                 .first()
-            )
 
             if pago:
                 # Marcar como conciliado
@@ -171,17 +158,13 @@ async def procesar_conciliacion
                 estado = "PENDIENTE"
 
                 
-                }
-            )
 
         db.commit()
 
         logger.info
-        )
 
         return 
             },
-        }
 
     except HTTPException:
         raise
@@ -190,13 +173,11 @@ async def procesar_conciliacion
         logger.error(f"Error procesando conciliación: {e}")
         raise HTTPException
             detail=f"Error interno del servidor: {str(e)}",
-        )
 
 
     "/desconciliar-pago",
     response_model=ConciliacionResponse,
     status_code=status.HTTP_201_CREATED,
-)
 
 
 async def desconciliar_pago
@@ -206,20 +187,15 @@ async def desconciliar_pago
     """Desconciliar un pago ya conciliado"""
     try:
         logger.info
-        )
 
         # Buscar el pago a desconciliar
         pago = 
             db.query(Pago)
             .filter
-                )
-            )
             .first()
-        )
 
         if not pago:
             raise HTTPException
-            )
 
         # Desconciliar el pago
         pago.conciliado = False
@@ -227,12 +203,10 @@ async def desconciliar_pago
 
         # Crear registro de auditoría (simulado - se integrará con módulo de auditoría)
         conciliacion_record = 
-        }
 
         db.commit()
 
         logger.info
-        )
 
         return conciliacion_record
 
@@ -243,7 +217,6 @@ async def desconciliar_pago
         logger.error(f"Error desconciliando pago: {e}")
         raise HTTPException
             detail=f"Error interno del servidor: {str(e)}",
-        )
 
 
 @router.get("/estado-conciliacion")
@@ -255,18 +228,14 @@ async def obtener_estado_conciliacion
     try:
         # Estadísticas generales
             db.query(Pago).filter(and_(Pago.activo, Pago.conciliado)).count()
-        )
 
         # Porcentaje de conciliación
         porcentaje_conciliacion = 
-        )
 
         return 
             },
-        }
 
     except Exception as e:
         logger.error(f"Error obteniendo estado de conciliación: {e}")
         raise HTTPException
             detail=f"Error interno del servidor: {str(e)}",
-        )

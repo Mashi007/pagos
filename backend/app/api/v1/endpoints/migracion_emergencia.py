@@ -32,12 +32,8 @@ async def ejecutar_migracion_emergencia
             logger.info("Agregando columna 'concesionario'")
             db.execute
                     "ALTER TABLE clientes ADD COLUMN concesionario VARCHAR(100)"
-                )
-            )
             db.execute
                     "CREATE INDEX idx_clientes_concesionario ON clientes (concesionario)"
-                )
-            )
             logger.info("✅ Columna 'concesionario' agregada")
         else:
             logger.info("ℹ️ Columna 'concesionario' ya existe")
@@ -47,11 +43,8 @@ async def ejecutar_migracion_emergencia
             logger.info("Agregando columna 'analista'")
             db.execute
                 text("ALTER TABLE clientes ADD COLUMN analista VARCHAR(100)")
-            )
             db.execute
                     "CREATE INDEX idx_clientes_analista ON clientes (analista)"
-                )
-            )
             logger.info("✅ Columna 'analista' agregada")
         else:
             logger.info("ℹ️ Columna 'analista' ya existe")
@@ -62,15 +55,12 @@ async def ejecutar_migracion_emergencia
         inspector = inspect(db.bind)
         final_columns = [
             col["name"] for col in inspector.get_columns("clientes")
-        ]
         logger.info(f"Columnas finales en clientes: {final_columns}")
 
         return 
-        }
 
     except Exception as e:
         db.rollback()
         logger.error(f"Error en migración de emergencia: {e}")
         raise HTTPException
             detail=f"Error ejecutando migración: {str(e)}"
-        )

@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import 
-)
 from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import Session
 
@@ -15,7 +14,6 @@ from app.api.deps import get_current_user, get_db
 from app.models.pago import Pago
 from app.models.user import User
 from app.schemas.pago import 
-)
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".pdf"}
@@ -27,7 +25,6 @@ router = APIRouter()
 
 
     "/crear", response_model=PagoResponse, status_code=status.HTTP_201_CREATED
-)
 
 
 async def crear_pago
@@ -37,11 +34,9 @@ async def crear_pago
     """Crear un nuevo pago"""
     try:
         logger.info
-        )
 
         # Crear el pago
         nuevo_pago = Pago
-        )
 
         db.add(nuevo_pago)
         db.commit()
@@ -54,7 +49,6 @@ async def crear_pago
         logger.error(f"Error creando pago: {e}")
         raise HTTPException
             detail=f"Error interno del servidor: {str(e)}",
-        )
 
 
 async def subir_documento
@@ -68,13 +62,11 @@ async def subir_documento
         file_extension = Path(file.filename).suffix.lower()
         if file_extension not in ALLOWED_EXTENSIONS:
             raise HTTPException
-            )
 
         # Validar tamaño
         file_content = await file.read()
         if len(file_content) > MAX_FILE_SIZE_BYTES:
             raise HTTPException
-            )
 
         # Generar nombre único
         unique_filename = f"{uuid.uuid4()}{file_extension}"
@@ -86,7 +78,6 @@ async def subir_documento
 
         logger.info(f"Documento subido: {unique_filename}")
         return 
-        }
 
     except HTTPException:
         raise
@@ -94,7 +85,6 @@ async def subir_documento
         logger.error(f"Error subiendo documento: {e}")
         raise HTTPException
             detail=f"Error interno del servidor: {str(e)}",
-        )
 
 
 @router.get("/listar", response_model=PagoListResponse)
@@ -124,17 +114,14 @@ async def subir_documento
             .offset(offset)
             .limit(por_pagina)
             .all()
-        )
 
         total_paginas = (total + por_pagina - 1) // por_pagina
 
         return PagoListResponse
-        )
 
     except Exception as e:
         raise HTTPException
             detail=f"Error interno del servidor: {str(e)}",
-        )
 
 
     db: Session = Depends(get_db),
@@ -144,23 +131,19 @@ async def subir_documento
         total_dolares = 
             db.query(func.sum(Pago.monto_pagado)).filter(Pago.activo).scalar()
             or 0
-        )
 
         # KPIs de conciliación
         cantidad_conciliada = 
             db.query(Pago).filter(and_(Pago.activo, Pago.conciliado)).count()
-        )
 
             total_dolares=float(total_dolares),
             cantidad_conciliada=cantidad_conciliada,
             cantidad_no_conciliada=cantidad_no_conciliada,
-        )
 
     except Exception as e:
         logger.error(f"Error obteniendo KPIs: {e}")
         raise HTTPException
             detail=f"Error interno del servidor: {str(e)}",
-        )
 
 
 @router.get("/resumen-cliente/{cedula}", response_model=ResumenCliente)
@@ -172,14 +155,11 @@ async def obtener_resumen_cliente
             db.query(Pago)
             .filter(and_(Pago.activo, Pago.cedula_cliente == cedula.upper()))
             .all()
-        )
 
             raise HTTPException
-            )
 
         # Calcular resumen
         total_conciliado = sum
-        )
         total_pendiente = total_pagado - total_conciliado
 
         # Último pago
@@ -199,7 +179,6 @@ async def obtener_resumen_cliente
             total_pendiente=total_pendiente,
             ultimo_pago=ultimo_pago,
             estado_conciliacion=estado_conciliacion,
-        )
 
     except HTTPException:
         raise
@@ -207,7 +186,6 @@ async def obtener_resumen_cliente
         logger.error(f"Error obteniendo resumen del cliente {cedula}: {e}")
         raise HTTPException
             detail=f"Error interno del servidor: {str(e)}",
-        )
 
 
 @router.get("/descargar-documento/{filename}")
@@ -220,17 +198,13 @@ async def descargar_documento
 
         if not file_path.exists():
             raise HTTPException
-            )
 
         # Determinar tipo de contenido
         file_extension = file_path.suffix.lower()
         content_type_map = 
-        }
         content_type = content_type_map.get
-        )
 
         return 
-        }
 
     except HTTPException:
         raise
@@ -238,6 +212,6 @@ async def descargar_documento
         logger.error(f"Error descargando documento {filename}: {e}")
         raise HTTPException
             detail=f"Error interno del servidor: {str(e)}",
-        )
 
+"""
 """

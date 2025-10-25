@@ -26,7 +26,6 @@ class DatabaseSchemaAnalyzer:
         self.schema_inconsistencies = deque(maxlen=1000)
         self.model_vs_schema_analysis = {}
         self.expected_columns = 
-        }
         self.lock = threading.Lock()
 
 
@@ -36,7 +35,6 @@ class DatabaseSchemaAnalyzer:
             analysis = 
                 "schema_analysis": {},
                 "recommendations": [],
-            }
 
             for table in self.critical_tables:
                 table_analysis = self._analyze_table_schema(db, table)
@@ -44,7 +42,6 @@ class DatabaseSchemaAnalyzer:
 
                 if table_analysis["critical_issues"]:
                     analysis["critical_issues"].extend
-                    )
 
             return analysis
 
@@ -66,47 +63,36 @@ class DatabaseSchemaAnalyzer:
             expected = self.expected_columns.get(table_name, [])
             missing_columns = [
                 col for col in expected if col not in real_columns
-            ]
             extra_columns = [
                 col for col in real_columns if col not in expected
-            ]
 
             critical_issues = []
             if missing_columns:
                 critical_issues.append
-                )
 
             if extra_columns:
                 critical_issues.append
-                )
 
             return 
-            }
 
         except Exception as e:
             logger.error
-            )
             return 
                     {"type": "analysis_error", "error": str(e)}
                 ],
-            }
 
 
     def generate_schema_fixes(self, db: Session) -> Dict[str, Any]:
         fixes = 
-        }
 
         # Fix específico para tabla analistas
         fixes["sql_fixes"].append
                 ),
                 "description": "Agregar columna created_at faltante que causa error 503",
                 "priority": "critical",
-            }
-        )
 
         # Fix para queries que usan created_at
         fixes["model_fixes"].append
-        )
 
         return fixes
 
@@ -117,7 +103,6 @@ class DatabaseSchemaAnalyzer:
             "table_validations": {},
             "critical_errors": [],
             "warnings": [],
-        }
 
         try:
             all_valid = True
@@ -127,13 +112,11 @@ class DatabaseSchemaAnalyzer:
                 table_valid = table_analysis.get("schema_consistency", False)
 
                 validation["table_validations"][table] = 
-                }
 
                 if not table_valid:
                     all_valid = False
                     validation["critical_errors"].extend
                         table_analysis.get("critical_issues", [])
-                    )
 
             validation["overall_status"] = "valid" if all_valid else "invalid"
 
@@ -162,13 +145,11 @@ async def analyze_database_schema
         analysis = schema_analyzer.analyze_schema_inconsistencies(db)
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error analizando esquema de BD: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/schema-fixes")
 async def get_schema_fixes
@@ -180,13 +161,11 @@ async def get_schema_fixes
         fixes = schema_analyzer.generate_schema_fixes(db)
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error generando fixes de esquema: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/schema-validation")
 async def validate_schema_consistency
@@ -198,13 +177,11 @@ async def validate_schema_consistency
         validation = schema_analyzer.validate_schema_consistency(db)
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error validando esquema: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/table-analysis/{table_name}")
 async def analyze_specific_table
@@ -215,12 +192,10 @@ async def analyze_specific_table
     try:
         if table_name not in schema_analyzer.critical_tables:
             raise HTTPException
-            )
 
         analysis = schema_analyzer._analyze_table_schema(db, table_name)
 
         return 
-        }
 
     except HTTPException:
         raise
@@ -228,4 +203,5 @@ async def analyze_specific_table
         logger.error(f"Error analizando tabla {table_name}: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
+
+"""

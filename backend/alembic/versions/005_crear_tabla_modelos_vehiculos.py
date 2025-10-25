@@ -40,11 +40,9 @@ def upgrade():
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("nombre_completo"),
-    )
 
     # Crear índices
     op.create_index
-    )
 
         # Toyota
         
@@ -109,14 +107,12 @@ def upgrade():
         },
         
         },
-    ]
 
         op.execute
                 VALUES (:marca, :modelo, :nombre_completo, :categoria, :precio_base, true, now(), now())
                 ON CONFLICT (nombre_completo) DO NOTHING
             """
             ).bindparam(**modelo)
-        )
 
 
 def downgrade():

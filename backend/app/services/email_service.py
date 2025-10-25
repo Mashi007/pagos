@@ -64,12 +64,10 @@ class EmailService:
             server.quit()
 
             return 
-            }
 
         except Exception as e:
             logger.error(f"Error enviando email: {e}")
             return 
-            }
 
 
     def send_notification_email
@@ -111,6 +109,6 @@ class EmailService:
         except Exception as e:
             logger.error(f"Error enviando email de notificación: {e}")
             return 
-            }
 
+"""
 """

@@ -34,13 +34,10 @@ def test_analistas_no_auth(db: Session = Depends(get_db)):
                     if analista.updated_at
                     else None
                 ),
-            }
         return 
-        }
     except Exception as e:
         logger.error(f"Error en test endpoint analistas no auth: {str(e)}"
         return 
-        }
 
 
 @router.get("/cache-stats"
@@ -51,11 +48,9 @@ def cache_stats():
     try:
         stats = analistas_cache.get_stats(
         return 
-        }
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas del cache: {str(e)}"
         return 
-        }
 
 
 @router.post("/cache-clear"
@@ -66,11 +61,9 @@ def clear_cache():
     try:
         analistas_cache.clear(
         return 
-        }
     except Exception as e:
         logger.error(f"Error limpiando cache: {str(e)}"
         return 
-        }
 
 
 @router.get("/health"
@@ -83,11 +76,9 @@ def health_check_analistas(db: Session = Depends(get_db)):
         total = result.fetchone()[0]
 
         return 
-        }
     except Exception as e:
         logger.error(f"Error en health check de analistas: {str(e)}"
         return 
-        }
 
 
 @router.get("/backup1"
@@ -150,9 +141,7 @@ def analistas_backup1
             items.append
                     row[3].isoformat() if row[3] else None
                 ),
-            }
         result_data = 
-        }
 
         # Guardar en cache
         analistas_cache.set(cache_key, result_data
@@ -161,7 +150,6 @@ def analistas_backup1
     except Exception as e:
         logger.error(f"Error en endpoint backup1: {str(e)}"
         return 
-        }
 
 
 @router.get("/backup2"
@@ -201,14 +189,11 @@ def analistas_backup2
                 " ".join(partes_nombre[1:]) if len(partes_nombre) > 1 else ""
             
             items.append
-            }
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error en endpoint backup2: {str(e)}"
         return 
-        }
 
 
 @router.get("/emergency"
@@ -265,14 +250,11 @@ def analistas_emergency
             items.append
                     row[3].isoformat() if row[3] else None
                 ),
-            }
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error en endpoint de emergencia: {str(e)}"
         return 
-        }
 
 
 @router.get("/"
@@ -318,9 +300,7 @@ def listar_analistas
                     if analista.fecha_eliminacion
                     else None
                 ),
-            }
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error listando analistas: {str(e)}"
@@ -357,7 +337,6 @@ def listar_analistas_no_auth
         pages = (total + limit - 1) // limit
 
         return 
-        }
 
     except Exception as e:
         raise HTTPException
@@ -484,7 +463,6 @@ def eliminar_asesor
         db.delete(asesor
         db.commit(
         return 
-        }
 
     except HTTPException:
         raise
@@ -493,4 +471,5 @@ def eliminar_asesor
         raise HTTPException
             status_code=500, detail=f"Error al eliminar analista: {str(e)}"
         
+"""
 """

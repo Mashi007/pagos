@@ -11,7 +11,6 @@ MODELO_VEHICULO_LENGTH = 100
 
 # Configurar logging
 logging.basicConfig
-)
 logger = logging.getLogger(__name__)
 
 # Agregar el directorio del proyecto al path
@@ -78,4 +77,5 @@ def downgrade():
 if __name__ == "__main__":
     generar_migracion()
 
+"""
 """

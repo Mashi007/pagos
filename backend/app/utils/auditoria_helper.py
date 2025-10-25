@@ -35,20 +35,16 @@ def registrar_auditoria
     # Validar que el usuario no sea None
     if usuario is None:
         logger.warning
-        )
         raise ValueError
-        )
 
     try:
         auditoria = Auditoria.registrar
-        )
 
         db.add(auditoria)
         db.commit()
         db.refresh(auditoria)
 
         logger.info
-        )
         return auditoria
     except Exception as e:
         logger.error(f"Error registrando auditoría: {e}")
@@ -62,41 +58,36 @@ def registrar_auditoria
     user_agent: Optional[str] = None,
 ) -> Auditoria:
     return registrar_auditoria
-    )
 
 
 def registrar_logout
 ) -> Auditoria:
     """Registrar logout"""
     return registrar_auditoria
-    )
 
 
 def registrar_creacion
 ) -> Auditoria:
     """Registrar creación de registro"""
     return registrar_auditoria
-    )
 
 
 def registrar_actualizacion
 ) -> Auditoria:
     """Registrar actualización de registro"""
     return registrar_auditoria
-    )
 
 
 def registrar_eliminacion
 ) -> Auditoria:
     """Registrar eliminación de registro"""
     return registrar_auditoria
-    )
 
 
 def registrar_error
 ) -> Auditoria:
     """Registrar error en acción"""
     return registrar_auditoria
-    )
 
+"""
 """

@@ -181,3 +181,5 @@
 # "CargaMasiva", ) .order_by(Auditoria.fecha.desc()) .limit(10) .all() ) return 
 # "usuario":\n f"{current_user.nombre} {current_user.apellido}".strip(), "historial_cargas":\n [ 
 # raise HTTPException( status_code=500, detail=f"Error obteniendo dashboard:\n {str(e)}", )
+
+"""

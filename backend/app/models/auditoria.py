@@ -5,7 +5,6 @@ Registra todas las acciones importantes del sistema para trazabilidad
 
 from enum import Enum
 from sqlalchemy import 
-)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -39,7 +38,6 @@ class Auditoria(Base):
 
     # Usuario que realizó la acción
     usuario_id = Column
-    )
 
     # Email del usuario (para ordenamiento rápido)
     usuario_email = Column(String(255), nullable=True, index=True)
@@ -81,7 +79,6 @@ class Auditoria(Base):
         server_default=func.now(),
         nullable=False,
         index=True,
-    )
 
     # Relaciones
     usuario = relationship("User", back_populates="auditorias")
@@ -112,4 +109,3 @@ class Auditoria(Base):
             Auditoria: Instancia del registro de auditoría
         """
         return cls
-        )

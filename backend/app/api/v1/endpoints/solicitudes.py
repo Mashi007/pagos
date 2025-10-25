@@ -239,3 +239,5 @@ from datetime import date
 # solicitud.revisor else 'N/A'}</td> </tr> <tr> <td style="padding:\n 8px 0;\n font-weight:\n bold;\n">Fecha de
 # revisión:\n</td> <td style="padding:\n 8px 0;\n">{solicitud.fecha_revision}</td> </tr> </table> 
 # html_content=cuerpo_html, ) except Exception as e:\n logger.error(f"Error enviando email de resultado:\n {e}")
+
+"""

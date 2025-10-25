@@ -57,7 +57,6 @@ class RealTimeMonitor:
         with self.lock:
             recent_requests = [
                 req for req in self.request_logs
-            ]
 
             # Analizar patrones de éxito y error
             for request in recent_requests:
@@ -84,7 +83,6 @@ class RealTimeMonitor:
                         if error_rate > 0.5:  # Más del 50% de errores
                             logger.warning
                                 f"{error_rate:.2%} ({error_count}/{total_endpoint_requests})"
-                            )
 
 
     def log_request
@@ -93,7 +91,6 @@ class RealTimeMonitor:
         with self.lock:
             request_log = 
                 "details": details or {},
-            }
             self.request_logs.append(request_log)
 
 
@@ -103,7 +100,6 @@ class RealTimeMonitor:
             payload = decode_token(token)
 
             analysis = 
-            }
 
             # Agregar al análisis de tokens
             with self.lock:
@@ -114,13 +110,11 @@ class RealTimeMonitor:
         except Exception as e:
             logger.error(f"Error analizando token: {e}")
             return 
-            }
 
 
         """Obtener estadísticas en tiempo real"""
         with self.lock:
             return 
-            }
 
 # Instancia global del monitor tiempo real
 
@@ -132,7 +126,6 @@ async def log_request
     current_user: User = Depends(get_current_user),
 ):
     """Registrar un request"""
-    )
     return {"message": "Request registrado"}
 
 async def analyze_token

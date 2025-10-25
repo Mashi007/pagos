@@ -15,7 +15,6 @@ from app.api.deps import get_current_user, get_db
 from app.models.auditoria import Auditoria
 from app.models.user import User
 from app.schemas.auditoria import 
-)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -30,7 +29,6 @@ logger = logging.getLogger(__name__)
     if usuario_email:
         query = query.filter
             Auditoria.usuario_email.ilike(f"%{usuario_email}%")
-        )
     if modulo:
         query = query.filter(Auditoria.modulo == modulo)
     if accion:
@@ -66,7 +64,6 @@ def _calcular_paginacion_auditoria(total, limit, skip):
     return total_pages, current_page
 
 @router.get
-)
 
 
 def listar_auditoria
@@ -88,7 +85,6 @@ def listar_auditoria
         query = db.query(Auditoria)
 
             query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
-        )
 
         # Contar total
         total = query.count()
@@ -101,17 +97,13 @@ def listar_auditoria
 
         # Calcular páginas
         total_pages, current_page = _calcular_paginacion_auditoria
-        )
 
         return AuditoriaListResponse
-        )
     except Exception as e:
         logger.error(f"Error listando auditoría: {e}")
         raise HTTPException
-        )
 
 @router.get
-)
 
 
 def obtener_estadisticas_auditoria
@@ -130,7 +122,6 @@ def obtener_estadisticas_auditoria
             db.query(Auditoria.modulo, func.count(Auditoria.id))
             .group_by(Auditoria.modulo)
             .all()
-        )
             acciones_por_modulo[modulo] = count
 
         # Acciones por usuario (top 10)
@@ -140,7 +131,6 @@ def obtener_estadisticas_auditoria
             .order_by(func.count(Auditoria.id).desc())
             .limit(10)
             .all()
-        )
             if email:  # Solo si tiene email
                 acciones_por_usuario[email] = count
 
@@ -150,31 +140,25 @@ def obtener_estadisticas_auditoria
             db.query(Auditoria)
             .filter(func.date(Auditoria.fecha) == hoy)
             .count()
-        )
         acciones_esta_semana = 
             db.query(Auditoria)
             .filter(func.date(Auditoria.fecha) >= esta_semana)
             .count()
-        )
         acciones_este_mes = 
             db.query(Auditoria)
             .filter(func.date(Auditoria.fecha) >= este_mes)
             .count()
-        )
 
         return AuditoriaStatsResponse
-        )
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas: {e}")
         raise HTTPException
-        )
 
 
 def _crear_dataframe_auditoria(auditorias):
     data = []
     for auditoria in auditorias:
         data.append
-        )
     return pd.DataFrame(data)
 
 
@@ -200,11 +184,9 @@ def exportar_auditoria_excel
     try:
         if not current_user.is_admin:
             raise HTTPException
-            )
 
         query = db.query(Auditoria)
             query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
-        )
 
         auditorias = query.order_by(desc(Auditoria.fecha)).all()
         df = _crear_dataframe_auditoria(auditorias)
@@ -214,7 +196,6 @@ def exportar_auditoria_excel
 
         # Registrar la exportación
         logger.info
-        )
 
         return Response
             content=output.getvalue(),
@@ -222,16 +203,13 @@ def exportar_auditoria_excel
             spreadsheetml.sheet",
             headers=
             },
-        )
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error exportando auditoría: {e}")
         raise HTTPException
-        )
 
 @router.get
-)
 
 
 def obtener_auditoria
@@ -244,16 +222,14 @@ def obtener_auditoria
     try:
         auditoria = 
             db.query(Auditoria).filter(Auditoria.id == auditoria_id).first()
-        )
         if not auditoria:
             raise HTTPException
-            )
         return auditoria
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error obteniendo auditoría {auditoria_id}: {e}")
         raise HTTPException
-        )
 
+"""
 """

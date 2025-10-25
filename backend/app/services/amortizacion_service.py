@@ -64,3 +64,5 @@ from datetime import date
 # Actualizar cuota.monto_mora = nueva_mora cuota.dias_mora = (fecha_calculo - cuota.fecha_vencimiento).days cuota.tasa_mora =
 # tasa_mora_diaria total_mora_nueva += nueva_mora cuotas_actualizadas += 1 db.commit() return 
 # total_mora_nueva - total_mora_anterior, }
+
+"""

@@ -35,7 +35,6 @@ def upgrade():
 
     # Create a non-unique index for performance
     op.create_index
-    )
 
 
 def downgrade():

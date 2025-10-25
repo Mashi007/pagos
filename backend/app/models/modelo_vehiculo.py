@@ -14,15 +14,12 @@ class ModeloVehiculo(Base):
 
     # Timestamps
     updated_at = Column
-    )
 
 
     def __repr__(self):
         return 
             f"activo={self.activo})>"
-        )
 
 
     def to_dict(self):
         return 
-        }

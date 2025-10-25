@@ -25,12 +25,10 @@ async def get_health_impact_analysis_public():
         status_data = analyzer.get_current_status()
 
         return 
-        }
     except Exception as e:
         logger.error(f"Error obteniendo análisis de health: {e}")
         raise HTTPException
             detail=f"Error obteniendo análisis de health: {str(e)}",
-        )
 
 @router.get("/impact/health", response_model=Dict[str, Any])
 async def get_health_impact_analysis
@@ -46,12 +44,10 @@ async def get_health_impact_analysis
         status_data = analyzer.get_current_status()
 
         return 
-        }
     except Exception as e:
         logger.error(f"Error obteniendo análisis de health: {e}")
         raise HTTPException
             detail=f"Error obteniendo análisis de health: {str(e)}",
-        )
 
 @router.get("/impact/performance", response_model=Dict[str, Any])
 async def get_performance_impact_analysis
@@ -67,12 +63,10 @@ async def get_performance_impact_analysis
         report = analyzer.get_performance_report()
 
         return 
-        }
     except Exception as e:
         logger.error(f"Error obteniendo análisis de performance: {e}")
         raise HTTPException
             detail=f"Error obteniendo análisis de performance: {str(e)}",
-        )
 
 @router.get("/impact/errors", response_model=Dict[str, Any])
 async def get_error_impact_analysis
@@ -88,12 +82,10 @@ async def get_error_impact_analysis
         error_report = error_analyzer.get_error_impact_report()
 
         return 
-        }
     except Exception as e:
         logger.error(f"Error obteniendo análisis de errores: {e}")
         raise HTTPException
             detail=f"Error obteniendo análisis de errores: {str(e)}",
-        )
 
 @router.get("/impact/resource-usage", response_model=Dict[str, Any])
 async def get_resource_usage_impact
@@ -108,10 +100,8 @@ async def get_resource_usage_impact
         resource_report = analyzer.get_resource_usage_report()
 
         return 
-        }
     except Exception as e:
         raise HTTPException
-        )
 
 @router.get("/impact/endpoints", response_model=Dict[str, Any])
 async def get_endpoints_impact_analysis
@@ -127,12 +117,10 @@ async def get_endpoints_impact_analysis
         endpoints_report = analyzer.get_endpoints_impact_report()
 
         return 
-        }
     except Exception as e:
         logger.error(f"Error obteniendo análisis de endpoints: {e}")
         raise HTTPException
             detail=f"Error obteniendo análisis de endpoints: {str(e)}",
-        )
 
 @router.get("/impact/summary", response_model=Dict[str, Any])
 async def get_impact_summary
@@ -153,22 +141,17 @@ async def get_impact_summary
 
         # Crear resumen consolidado
         summary = 
-        }
 
             summary["recommendations"].append
-            )
 
         if error_data.get("error_rate", 0) > 5:
             summary["critical_issues"].append
-            )
 
         if not summary["recommendations"]:
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error obteniendo resumen de impacto: {e}")
         raise HTTPException
             detail=f"Error obteniendo resumen de impacto: {str(e)}",
-        )

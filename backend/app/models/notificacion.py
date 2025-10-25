@@ -6,7 +6,6 @@ Sistema de notificaciones por email, SMS o WhatsApp
 
 from enum import Enum as PyEnum
 from sqlalchemy import 
-)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.session import Base
@@ -59,12 +58,10 @@ class Notificacion(Base):
 
     # Destinatario (puede ser un User o un Cliente por email/teléfono)
     user_id = Column
-    )
     cliente_id = Column
         ForeignKey("clientes.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
-    )
 
     # Destinatario manual (si no es user ni cliente registrado)
     destinatario_email = Column(String(255), nullable=True)
@@ -80,7 +77,6 @@ class Notificacion(Base):
         nullable=False,
         default=CategoriaNotificacion.GENERAL,
         index=True,
-    )
 
     # Contenido
     asunto = Column(String(255), nullable=True)
@@ -95,7 +91,6 @@ class Notificacion(Base):
         nullable=False,
         default=EstadoNotificacion.PENDIENTE,
         index=True,
-    )
 
 
     # Fechas
@@ -111,7 +106,6 @@ class Notificacion(Base):
         Enum(PrioridadNotificacion),
         nullable=False,
         default=PrioridadNotificacion.NORMAL,
-    )
 
     # Auditoría
 
@@ -122,7 +116,6 @@ class Notificacion(Base):
 
     def __repr__(self):
         return 
-        )
 
     @property
     def esta_pendiente(self) -> bool:
@@ -176,6 +169,6 @@ class Notificacion(Base):
             Notificacion: Instancia de notificación
         """
         return cls
-        )
 
+"""
 """

@@ -11,7 +11,6 @@ class TestAuthEndpoints:
 
             "/api/v1/auth/login",
             data={"username": test_user.email, "password": "testpassword123"},
-        )
 
         assert response.status_code == 200
         data = response.json()
@@ -23,7 +22,6 @@ class TestAuthEndpoints:
         """Probar login con credenciales inválidas"""
             "/api/v1/auth/login",
             data={"username": "invalid@example.com", "password": "wrongpassword"},
-        )
 
         assert response.status_code == 401
 
@@ -32,7 +30,6 @@ class TestAuthEndpoints:
         """Probar login con password incorrecta"""
             "/api/v1/auth/login",
             data={"username": test_user.email, "password": "wrongpassword"},
-        )
 
         assert response.status_code == 401
 
@@ -62,7 +59,6 @@ class TestClientesEndpoints:
         self, test_client: TestClient, auth_headers, sample_cliente_data
     ):
             "/api/v1/clientes/", json=sample_cliente_data, headers=auth_headers
-        )
 
         assert response.status_code == 201
         data = response.json()
@@ -75,12 +71,10 @@ class TestClientesEndpoints:
         """Probar creación de cliente con cédula duplicada"""
         # Crear primer cliente
             "/api/v1/clientes/", json=sample_cliente_data, headers=auth_headers
-        )
         assert response1.status_code == 201
 
         # Intentar crear segundo cliente con misma cédula
             "/api/v1/clientes/", json=sample_cliente_data, headers=auth_headers
-        )
 
         assert response2.status_code == 503
         assert "duplicate" in response2.json()["detail"].lower()
@@ -103,12 +97,10 @@ class TestClientesEndpoints:
         """Probar obtener cliente por ID"""
         # Crear cliente primero
             "/api/v1/clientes/", json=sample_cliente_data, headers=auth_headers
-        )
         cliente_id = create_response.json()["id"]
 
         # Obtener cliente por ID
         response = test_client.get
-        )
 
         assert response.status_code == 200
         data = response.json()
@@ -129,13 +121,11 @@ class TestClientesEndpoints:
         """Probar actualización de cliente"""
         # Crear cliente primero
             "/api/v1/clientes/", json=sample_cliente_data, headers=auth_headers
-        )
         cliente_id = create_response.json()["id"]
 
         # Actualizar cliente
 
         response = test_client.put
-        )
 
         assert response.status_code == 200
         data = response.json()
@@ -146,12 +136,10 @@ class TestClientesEndpoints:
         """Probar eliminación de cliente"""
         # Crear cliente primero
             "/api/v1/clientes/", json=sample_cliente_data, headers=auth_headers
-        )
         cliente_id = create_response.json()["id"]
 
         # Eliminar cliente
         response = test_client.delete
-        )
 
         assert response.status_code == 200
         assert "eliminado" in response.json()["message"].lower()
@@ -250,7 +238,6 @@ class TestCargaMasivaEndpoints:
         data = {"tipo_carga": "clientes"}
 
             "/api/v1/carga-masiva/upload", files=files, data=data, headers=auth_headers
-        )
 
         assert response.status_code == 400
         assert "formato" in response.json()["detail"].lower()
@@ -261,7 +248,6 @@ class TestCargaMasivaEndpoints:
         data = {"tipo_carga": "clientes"}
 
             "/api/v1/carga-masiva/upload", data=data, headers=auth_headers
-        )
 
         assert response.status_code == 422  # Validation error
 
@@ -269,11 +255,9 @@ class TestCargaMasivaEndpoints:
     def test_upload_tipo_carga_invalido(self, test_client: TestClient, auth_headers):
         """Probar upload con tipo de carga inválido"""
         files = 
-        }
         data = {"tipo_carga": "invalid_type"}
 
             "/api/v1/carga-masiva/upload", files=files, data=data, headers=auth_headers
-        )
 
         assert response.status_code == 400
         assert "tipo" in response.json()["detail"].lower()
@@ -295,9 +279,7 @@ class TestCargaMasivaEndpoints:
             "telefono": "+58412123456",
             "email": "test@concesionario.com",
             "activo": True,
-        }
 
-        )
 
         assert response.status_code == 201
         data = response.json()
@@ -323,11 +305,10 @@ class TestAnalistasEndpoints:
             "email": "analista@test.com",
             "telefono": "+58412123456",
             "activo": True,
-        }
 
-        )
 
         assert response.status_code == 201
         data = response.json()
 
+"""
 """

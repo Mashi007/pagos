@@ -274,3 +274,5 @@ from datetime import date
 # "cliente_existente": { "id": existe.id, "nombre": existe.nombre_completo, "cedula": existe.cedula, }, } return 
 # True, "email": email_limpio, "mensaje": "Email único", } except Exception as e: logger.error(f"Error validando email: {e}")
 # return { "valido": False, "error": f"Error al validar email: {str(e)}", }
+
+"""

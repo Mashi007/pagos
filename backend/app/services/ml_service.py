@@ -34,7 +34,6 @@ class MLService:
         try:
             if not data:
                 return 
-                }
 
             X = []
             y = []
@@ -45,7 +44,6 @@ class MLService:
                     record.get('income', 0),
                     record.get('debt_ratio', 0),
                     record.get('credit_score', 0),
-                ]
                 X.append(features)
                 y.append(record.get('risk_level', 0))
 
@@ -53,7 +51,6 @@ class MLService:
             y = np.array(y)
 
             X_train, X_test, y_train, y_test = train_test_split
-            )
 
             # Escalar características
             scaler = StandardScaler()
@@ -75,12 +72,10 @@ class MLService:
             logger.info(f"Modelo de riesgo entrenado con precisión: {accuracy:.2f}")
 
             return 
-            }
 
         except Exception as e:
             logger.error(f"Error entrenando modelo: {e}")
             return 
-            }
 
 
     def predict_risk(self, client_data: Dict) -> Dict[str, any]:
@@ -95,7 +90,6 @@ class MLService:
         try:
             if not self.is_trained:
                 return 
-                }
 
             # Preparar características
             features = np.array
@@ -119,21 +113,17 @@ class MLService:
             risk_level = risk_levels[prediction] if prediction < len(risk_levels) else 'Desconocido'
 
             return 
-            }
 
         except Exception as e:
             logger.error(f"Error prediciendo riesgo: {e}")
             return 
-            }
 
 
     def _get_risk_recommendation(self, risk_level: str) -> str:
         """Obtener recomendación basada en nivel de riesgo"""
         recommendations = 
-        }
         return recommendations.get(risk_level, 'Revisar caso manualmente.')
 
 
     def get_model_status(self) -> Dict[str, any]:
         return 
-        }

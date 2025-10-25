@@ -39,29 +39,23 @@ def upgrade():
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
-    )
 
     # Crear índices para optimizar consultas
     op.create_index(op.f("ix_auditorias_id"), "auditorias", ["id"], unique=False)
     op.create_index
         op.f("ix_auditorias_usuario_id"), "auditorias", ["usuario_id"], unique=False
-    )
     op.create_index
         op.f("ix_auditorias_usuario_email"),
         "auditorias",
         ["usuario_email"],
         unique=False,
-    )
     op.create_index
         op.f("ix_auditorias_accion"), "auditorias", ["accion"], unique=False
-    )
     op.create_index
         op.f("ix_auditorias_modulo"), "auditorias", ["modulo"], unique=False
-    )
     op.create_index(op.f("ix_auditorias_tabla"), "auditorias", ["tabla"], unique=False)
     op.create_index
         op.f("ix_auditorias_registro_id"), "auditorias", ["registro_id"], unique=False
-    )
     op.create_index(op.f("ix_auditorias_fecha"), "auditorias", ["fecha"], unique=False)
 
 

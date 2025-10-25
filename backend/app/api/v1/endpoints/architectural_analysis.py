@@ -63,7 +63,6 @@ class ArchitecturalAnalysisSystem:
             },
             "frontend_integration": 
             },
-        }
 
 
     def _start_architectural_monitoring(self):
@@ -87,22 +86,17 @@ class ArchitecturalAnalysisSystem:
             for component_id, component_info in self.system_components.items():
                 try:
                     health_status = self._check_component_health
-                    )
                     self.component_health[component_id] = health_status
 
                     # Registrar métricas
                     self.component_metrics[component_id].append
-                    )
 
                     # Limitar historial de métricas
                     if len(self.component_metrics[component_id]) > 100:
                         self.component_metrics[component_id] = 
-                        )
                 except Exception as e:
                     logger.error
-                    )
                     self.component_health[component_id] = 
-                    }
 
 
     def _check_component_health
@@ -119,7 +113,6 @@ class ArchitecturalAnalysisSystem:
                 overall_score += check_result.get("score", 0)
             except Exception as e:
                 health_results[check] = 
-                }
 
         # Calcular score promedio
         if health_checks:
@@ -136,7 +129,6 @@ class ArchitecturalAnalysisSystem:
             status = "poor"
 
         return 
-        }
 
 
     def _perform_health_check
@@ -156,18 +148,15 @@ class ArchitecturalAnalysisSystem:
             return self._check_frontend_integration(check_name)
         else:
             return 
-            }
 
 
     def _test_token_creation(self) -> Dict[str, Any]:
         """Test de creación de token JWT"""
         try:
             test_token = create_access_token
-            )
 
             return 
                 },
-            }
         except Exception as e:
             return {"status": "error", "score": 0, "error": str(e)}
 
@@ -176,12 +165,10 @@ class ArchitecturalAnalysisSystem:
         """Test de validación de token JWT"""
         try:
             test_token = create_access_token
-            )
             payload = decode_token(test_token)
 
             return 
                 },
-            }
         except Exception as e:
             return {"status": "error", "score": 0, "error": str(e)}
 
@@ -194,11 +181,9 @@ class ArchitecturalAnalysisSystem:
             try:
                 decode_token(malformed_token)
                 return 
-                }
             except Exception:
                 return 
                     "metrics": {"malformed_token_detected": True},
-                }
         except Exception as e:
             return {"status": "error", "score": 0, "error": str(e)}
 
@@ -213,7 +198,6 @@ class ArchitecturalAnalysisSystem:
             return self._test_token_decoding()
         else:
             return 
-            }
 
 
     def _check_database_layer(self, check_name: str) -> Dict[str, Any]:
@@ -222,7 +206,6 @@ class ArchitecturalAnalysisSystem:
             try:
                 # Este check se realizará con una sesión de DB real
                 return 
-                }
             except Exception as e:
                 return {"status": "error", "score": 0, "error": str(e)}
         elif check_name == "query_performance":
@@ -231,7 +214,6 @@ class ArchitecturalAnalysisSystem:
 
                 return 
                     },
-                }
             except Exception as e:
                 return {"status": "error", "score": 0, "error": str(e)}
         elif check_name == "transaction_integrity":
@@ -239,12 +221,10 @@ class ArchitecturalAnalysisSystem:
                 # Simular verificación de integridad
                 return 
                     },
-                }
             except Exception as e:
                 return {"status": "error", "score": 0, "error": str(e)}
 
         return 
-        }
 
 
     def _check_auth_middleware(self, check_name: str) -> Dict[str, Any]:
@@ -254,7 +234,6 @@ class ArchitecturalAnalysisSystem:
                 # Simular extracción de token
                 return 
                     },
-                }
             except Exception as e:
                 return {"status": "error", "score": 0, "error": str(e)}
         elif check_name == "user_validation":
@@ -262,19 +241,16 @@ class ArchitecturalAnalysisSystem:
                 # Simular validación de usuario
                 return 
                     },
-                }
             except Exception as e:
                 return {"status": "error", "score": 0, "error": str(e)}
         elif check_name == "permission_check":
             try:
                 return 
                     },
-                }
             except Exception as e:
                 return {"status": "error", "score": 0, "error": str(e)}
 
         return 
-        }
 
 
     def _check_user_model(self, check_name: str) -> Dict[str, Any]:
@@ -284,7 +260,6 @@ class ArchitecturalAnalysisSystem:
                 # Simular búsqueda de usuario
                 return 
                     },
-                }
             except Exception as e:
                 return {"status": "error", "score": 0, "error": str(e)}
         elif check_name == "user_validation":
@@ -292,19 +267,16 @@ class ArchitecturalAnalysisSystem:
                 # Simular validación de usuario
                 return 
                     },
-                }
             except Exception as e:
                 return {"status": "error", "score": 0, "error": str(e)}
         elif check_name == "permission_verification":
             try:
                 return 
                     },
-                }
             except Exception as e:
                 return {"status": "error", "score": 0, "error": str(e)}
 
         return 
-        }
 
 
     def _check_api_endpoints(self, check_name: str) -> Dict[str, Any]:
@@ -314,7 +286,6 @@ class ArchitecturalAnalysisSystem:
                 # Simular verificación de disponibilidad
                 return 
                     },
-                }
             except Exception as e:
                 return {"status": "error", "score": 0, "error": str(e)}
             try:
@@ -322,7 +293,6 @@ class ArchitecturalAnalysisSystem:
 
                 return 
                     },
-                }
             except Exception as e:
                 return {"status": "error", "score": 0, "error": str(e)}
         elif check_name == "error_handling":
@@ -330,12 +300,10 @@ class ArchitecturalAnalysisSystem:
                 # Simular verificación de manejo de errores
                 return 
                     },
-                }
             except Exception as e:
                 return {"status": "error", "score": 0, "error": str(e)}
 
         return 
-        }
 
 
     def _check_frontend_integration(self, check_name: str) -> Dict[str, Any]:
@@ -345,7 +313,6 @@ class ArchitecturalAnalysisSystem:
                 # Simular verificación de CORS
                 return 
                     },
-                }
             except Exception as e:
                 return {"status": "error", "score": 0, "error": str(e)}
         elif check_name == "response_format":
@@ -353,7 +320,6 @@ class ArchitecturalAnalysisSystem:
                 # Simular verificación de formato de respuesta
                 return 
                     },
-                }
             except Exception as e:
                 return {"status": "error", "score": 0, "error": str(e)}
         elif check_name == "error_propagation":
@@ -361,18 +327,15 @@ class ArchitecturalAnalysisSystem:
                 # Simular verificación de propagación de errores
                 return 
                     },
-                }
             except Exception as e:
                 return {"status": "error", "score": 0, "error": str(e)}
 
         return 
-        }
 
 
     def _extract_component_metrics(self, component_id: str) -> Dict[str, Any]:
         """Extraer métricas específicas del componente"""
         metrics = 
-        }
 
         # Métricas específicas por componente
         if component_id == "database_layer":
@@ -390,7 +353,6 @@ class ArchitecturalAnalysisSystem:
             "critical_paths": [],
             "bottlenecks": [],
             "recommendations": [],
-        }
 
         # Mapear dependencias
         for component_id, component_info in self.system_components.items():
@@ -402,25 +364,19 @@ class ArchitecturalAnalysisSystem:
             "jwt_handler",
             "database_layer",
             "authentication_middleware",
-        ]
         dependency_analysis["critical_paths"] = critical_components
 
         for component_id in self.component_health:
             health_score = self.component_health[component_id].get
-            )
             if health_score < 0.7:
                 dependency_analysis["bottlenecks"].append
                         ),
-                    }
-                )
 
         # Generar recomendaciones
         if dependency_analysis["bottlenecks"]:
             dependency_analysis["recommendations"].append
-            )
         if not dependency_analysis["bottlenecks"]:
             dependency_analysis["recommendations"].append
-            )
 
         return dependency_analysis
 
@@ -434,18 +390,12 @@ class ArchitecturalAnalysisSystem:
             healthy_components = len
                     for c in self.component_health.values()
                     if c.get("status") in ["excellent", "good"]
-                ]
-            )
             degraded_components = len
                     for c in self.component_health.values()
                     if c.get("status") == "degraded"
-                ]
-            )
             poor_components = len
                     for c in self.component_health.values()
                     if c.get("status") == "poor"
-                ]
-            )
 
             # Análisis de dependencias
             dependency_analysis = self.analyze_component_dependencies()
@@ -456,7 +406,6 @@ class ArchitecturalAnalysisSystem:
                 "dependency_analysis": dependency_analysis,
                 "system_metrics": 
                 },
-            }
 
 # Instancia global del sistema arquitectural
 architectural_system = ArchitecturalAnalysisSystem()
@@ -477,17 +426,14 @@ async def get_component_health
         with architectural_system.lock:
             if component_id not in architectural_system.component_health:
                 raise HTTPException
-                )
             health_data = architectural_system.component_health[component_id]
 
         return 
-        }
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error obteniendo salud del componente: {e}")
         return 
-        }
 
 @router.get("/all-components-health")
 async def get_all_components_health
@@ -501,11 +447,9 @@ async def get_all_components_health
             all_health = architectural_system.component_health.copy()
 
         return 
-        }
     except Exception as e:
         logger.error(f"Error obteniendo salud de componentes: {e}")
         return 
-        }
 
 @router.get("/component-dependencies")
 async def get_component_dependencies
@@ -518,11 +462,9 @@ async def get_component_dependencies
     try:
         analysis = architectural_system.analyze_component_dependencies()
         return 
-        }
     except Exception as e:
         logger.error(f"Error analizando dependencias: {e}")
         return 
-        }
 
 @router.get("/architectural-summary")
 async def get_architectural_summary_endpoint
@@ -535,11 +477,9 @@ async def get_architectural_summary_endpoint
     try:
         summary = architectural_system.get_architectural_summary()
         return 
-        }
     except Exception as e:
         logger.error(f"Error obteniendo resumen arquitectural: {e}")
         return 
-        }
 
 async def force_component_health_check
     db: Session = Depends(get_db),
@@ -552,19 +492,14 @@ async def force_component_health_check
         with architectural_system.lock:
             if component_id not in architectural_system.system_components:
                 raise HTTPException
-                )
             component_info = architectural_system.system_components[
                 component_id
-            ]
             health_status = architectural_system._check_component_health
-            )
             architectural_system.component_health[component_id] = health_status
 
         return 
-        }
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error forzando verificación de componente: {e}")
         return 
-        }

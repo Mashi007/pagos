@@ -5,7 +5,6 @@ Sistema de workflow para solicitudes que requieren aprobación
 """
 
 from sqlalchemy import 
-)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -25,13 +24,10 @@ class Aprobacion(Base):
 
     estado = Column
         String(20), nullable=False, default="PENDIENTE", index=True
-    )
 
     # Solicitante y revisor
     solicitante_id = Column
-    )
     revisor_id = Column
-    )
 
     # Detalles de la solicitud
     tipo_solicitud = Column
@@ -47,7 +43,6 @@ class Aprobacion(Base):
 
     # Fechas
     fecha_solicitud = Column
-    )
 
     # NUEVOS CAMPOS PARA SISTEMA COMPLETO DE APROBACIONES
     archivo_evidencia = Column
@@ -74,9 +69,7 @@ class Aprobacion(Base):
 
     # Relaciones
     solicitante = relationship
-    )
     revisor = relationship
-    )
 
 
     def __repr__(self):
@@ -168,6 +161,6 @@ class Aprobacion(Base):
     def requiere_atencion_urgente(self) -> bool:
         """Si requiere atención urgente"""
         return 
-        )
 
+"""
 """

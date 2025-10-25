@@ -58,7 +58,6 @@ class Settings(BaseSettings):
         "https://rapicredit.onrender.com",  # ✅ Frontend en Render
         "null",  # ✅ Para requests sin origin (scripts, herramientas)
         "*",  # ✅ Temporalmente permisivo para debugging
-    ]
 
     # ============================================
     # BASE DE DATOS
@@ -99,7 +98,6 @@ class Settings(BaseSettings):
         if 
         ):
             raise ValueError
-            )
         return True
 
 
@@ -109,7 +107,6 @@ class Settings(BaseSettings):
             raise ValueError
                 "⚠️ CRÍTICO: CORS con wildcard (*) detectado en producción. "
                 "CORS_ORIGINS='[\"https://tu-dominio.com\"]'"
-            )
         return True
 
     # ============================================
@@ -176,7 +173,6 @@ class Settings(BaseSettings):
         ".png",
         ".xlsx",
         ".xls",
-    ]
     UPLOAD_DIR: str = "/tmp/uploads"
 
     # ============================================
@@ -239,7 +235,6 @@ class Settings(BaseSettings):
     UVICORN_WORKERS: int = DEFAULT_UVICORN_WORKERS
     UVICORN_TIMEOUT_KEEP_ALIVE: int = DEFAULT_UVICORN_TIMEOUT_KEEP_ALIVE
     UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN: int = 
-    )
 
     # ============================================
     # MÉTODOS DE UTILIDAD
@@ -277,7 +272,6 @@ class Settings(BaseSettings):
 
     def validate_loan_amount(self, amount: float) -> bool:
         return 
-        )
 
 
     def validate_loan_term(self, months: int) -> bool:
@@ -290,7 +284,6 @@ class Settings(BaseSettings):
 
     # ✅ CRÍTICO: Usar model_config para Pydantic V2
     model_config = SettingsConfigDict
-    )
 
 @lru_cache()
 def get_settings() -> Settings:

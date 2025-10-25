@@ -7,7 +7,6 @@ Testing de la lógica de validación del sistema
 from decimal import Decimal
 
 from app.services.validators_service import 
-)
 
 
 class TestValidadorTelefono:
@@ -372,7 +371,6 @@ class TestValidadorCoherenciaFinanciera:
             "monto_financiado": 45000,
             "numero_amortizaciones": 24,
             "monto_cuota": 2000,
-        }
 
         assert resultado["valido"] is True
 
@@ -383,7 +381,6 @@ class TestValidadorCoherenciaFinanciera:
             "monto_financiado": 60000,  # Mayor que monto_total - cuota_inicial
             "numero_amortizaciones": 24,
             "monto_cuota": 2000,
-        }
 
         assert resultado["valido"] is False
         assert "coherencia" in resultado["error"].lower()
@@ -397,7 +394,6 @@ class TestValidadorCoherenciaFinanciera:
             "monto_financiado": 45000,
             "numero_amortizaciones": 24,
             "monto_cuota": 1000,  # Muy bajo para el monto financiado
-        }
 
         assert resultado["valido"] is False
         assert "cuota" in resultado["error"].lower()
@@ -409,7 +405,6 @@ class TestValidadorCoherenciaFinanciera:
         """Probar detección de duplicado"""
             {"cedula": "V12345678", "email": "test@example.com"},
             {"cedula": "V87654321", "email": "other@example.com"},
-        ]
 
 
         assert resultado["valido"] is False
@@ -420,4 +415,5 @@ class TestValidadorCoherenciaFinanciera:
 
         assert resultado["valido"] is True
 
+"""
 """

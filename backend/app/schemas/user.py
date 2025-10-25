@@ -38,7 +38,6 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     password: Optional[str] = Field
         description="Nueva contraseña (opcional, solo se valida si se provee)",
-    )
 
     @field_validator("password")
     @classmethod
@@ -47,7 +46,6 @@ class UserUpdate(BaseModel):
         if v is not None and v.strip() != "":
             if len(v) < 8:
                 raise ValueError
-                )
         return v
 
 # ============================================

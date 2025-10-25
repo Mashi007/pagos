@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.core.config import settings
 from app.core.security import 
-)
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -33,7 +32,6 @@ router = APIRouter()
 
         if not refresh_token:
             return 
-            }
 
         logger.info(f"🔍 Refresh token recibido: {refresh_token[:20]}...")
 
@@ -41,32 +39,25 @@ router = APIRouter()
         try:
             # Decodificar sin verificar para obtener información básica
             payload_unverified = jwt.decode
-            )
             token_info = 
-            }
 
             # Verificar si está expirado
             if payload_unverified.get("exp"):
                     if not token_info["expired"]
                     else "EXPIRED"
-                )
 
         except Exception as e:
             token_info = 
-            }
 
         # 2. Verificar con la función decode_token del sistema
         try:
             decoded_payload = decode_token(refresh_token)
             system_validation = 
-            }
         except Exception as e:
             system_validation = 
-            }
 
         # 3. Verificar configuración JWT
         config_check = 
-        }
 
         # 4. Generar recomendaciones
         recomendaciones = []
@@ -90,18 +81,14 @@ router = APIRouter()
 
         # 5. Resultado del diagnóstico
         resultado = 
-        }
 
         logger.info("🔍 Diagnóstico de refresh token completado")
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"🔍 Error en diagnóstico de refresh token: {e}")
         return 
-            }
-        }
 
 async def test_refresh_token
     db: Session = Depends(get_db),
@@ -124,18 +111,14 @@ async def test_refresh_token
             validation_error = str(e)
 
         resultado = 
-            }
-        }
 
         logger.info("🧪 Test de refresh token completado")
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"🧪 Error en test de refresh token: {e}")
         return 
-        }
 
 @router.get("/refresh-token-config")
 async def get_refresh_token_config
@@ -144,7 +127,6 @@ async def get_refresh_token_config
     """⚙️ Obtener configuración de refresh token"""
     try:
         config = 
-        }
 
         # Generar recomendaciones
         if not settings.SECRET_KEY:
@@ -160,9 +142,7 @@ async def get_refresh_token_config
             config["recommendations"].append("Configuración parece correcta")
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"⚙️ Error obteniendo configuración: {e}")
         return 
-        }

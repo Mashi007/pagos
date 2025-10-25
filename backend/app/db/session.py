@@ -26,7 +26,6 @@ logger = logging.getLogger(__name__)
 
 # Crear engine de SQLAlchemy con configuración optimizada para producción
 engine = create_engine
-)
 
 # SessionLocal para crear sesiones de BD
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -55,7 +54,6 @@ def get_db():
         auth_errors = [
             "401",
             "Not authenticated",
-        ]
         if any(auth_error in error_str for auth_error in auth_errors):
             # Re-lanzar errores de autenticación sin modificar
             raise e
@@ -70,7 +68,6 @@ def get_db():
 
         # Solo para errores que NO son HTTPException
         raise HTTPException
-        )
     finally:
         if db:
             try:
@@ -80,4 +77,5 @@ def get_db():
 
     """Cierra todas las conexiones de la pool al shutdown"""
 
+"""
 """

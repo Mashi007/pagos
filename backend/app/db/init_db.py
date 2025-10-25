@@ -55,13 +55,11 @@ def run_migrations():
     """Ejecuta las migraciones de Alembic"""
     try:
         # Cambiar al directorio del backend
-        )
 
         logger.info("🔄 Ejecutando migraciones de Alembic...")
 
         # Ejecutar alembic upgrade head
         result = subprocess.run
-        )
 
         if result.returncode == 0:
             return True
@@ -87,11 +85,9 @@ def create_admin_user():
             db.query(User)
             .filter(User.email == "itmaster@rapicreditca.com")
             .first()
-        )
 
         if existing_admin:
             logger.info
-            )
             return True
 
         # Eliminar admin@financiamiento.com si existe
@@ -99,7 +95,6 @@ def create_admin_user():
             db.query(User)
             .filter(User.email == "admin@financiamiento.com")
             .first()
-        )
 
         if wrong_admin:
             logger.info(f"Eliminando usuario incorrecto: {wrong_admin.email}")
@@ -113,7 +108,6 @@ def create_admin_user():
             hashed_password=get_password_hash(settings.ADMIN_PASSWORD),
             is_admin=True,  # Cambio clave: rol → is_admin
             is_active=True,
-        )
 
         db.add(admin)
         db.commit()
@@ -127,7 +121,6 @@ def create_admin_user():
     except LookupError as e:
         logger.warning(f"Error de enum detectado (esperado): {e}")
         logger.warning
-        )
         return False
 
     except Exception as e:
@@ -146,7 +139,6 @@ def init_db() -> bool:
         # Las migraciones deben ejecutarse manualmente vía endpoint de emergencia
         logger.info
             "(usar endpoint de emergencia si es necesario)"
-        )
 
         tables_exist = all(table_exists(table) for table in MAIN_TABLES)
 
@@ -178,7 +170,6 @@ def init_db_startup():
         logger.info("\n" + "=" * DEFAULT_SEPARATOR_LENGTH)
         logger.info("=" * DEFAULT_SEPARATOR_LENGTH)
         logger.info
-        )
 
         # no fallar si no se puede conectar
         db_initialized = False
@@ -189,17 +180,14 @@ def init_db_startup():
                     db_initialized = True
                 else:
                     logger.warning
-                    )
             else:
                 logger.warning("Advertencia: Error inicializando tablas")
 
         except Exception as db_error:
             logger.error
-            )
 
         if not db_initialized:
             logger.warning
-            )
             logger.warning("Algunas funciones pueden no estar disponibles")
 
         logger.info(f"Entorno: {settings.ENVIRONMENT}")

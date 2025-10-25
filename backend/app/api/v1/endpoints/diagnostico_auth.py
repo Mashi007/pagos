@@ -31,7 +31,6 @@ router = APIRouter()
             "analysis_results": {},
             "recommendations": [],
             "severity": "medium"
-        }
 
         try:
             # 1. Análisis de patrones de error
@@ -67,7 +66,6 @@ router = APIRouter()
     def _analyze_error_pattern(self, error_details: Dict[str, Any]) -> Dict[str, Any]:
         """Analizar patrón del error"""
         pattern = 
-        }
 
         error_type = error_details.get("error_type", "").lower()
 
@@ -76,31 +74,25 @@ router = APIRouter()
                 "Token expirado",
                 "Token malformado",
                 "Token revocado"
-            ]
             pattern["suggested_fixes"] = [
                 "Verificar expiración del token",
                 "Regenerar token",
                 "Verificar formato del token"
-            ]
         elif "invalid_credentials" in error_type:
             pattern["common_causes"] = [
                 "Credenciales incorrectas",
                 "Usuario bloqueado",
                 "Contraseña expirada"
-            ]
             pattern["suggested_fixes"] = [
                 "Verificar credenciales",
                 "Resetear contraseña",
                 "Verificar estado del usuario"
-            ]
         elif "permission_denied" in error_type:
             pattern["common_causes"] = [
                 "Rol incorrecto",
                 "Recurso protegido"
-            ]
             pattern["suggested_fixes"] = [
                 "Asignar rol correcto",
-            ]
 
         return pattern
 
@@ -109,7 +101,6 @@ router = APIRouter()
     ) -> Dict[str, Any]:
         """Analizar comportamiento del usuario"""
         behavior = 
-        }
 
         # Aquí se implementaría la lógica para analizar el comportamiento
 
@@ -130,7 +121,6 @@ router = APIRouter()
     def _analyze_system_context(self, request_context: Dict[str, Any]) -> Dict[str, Any]:
         """Analizar contexto del sistema"""
         context = 
-        }
 
         # Aquí se implementaría la lógica para analizar el estado del sistema
 
@@ -141,7 +131,6 @@ router = APIRouter()
     ) -> Dict[str, Any]:
         """Analizar patrones de seguridad"""
         security = 
-        }
 
         error_type = error_details.get("error_type", "").lower()
 
@@ -207,34 +196,27 @@ async def analyze_authentication_failure
 
         # Obtener contexto de la petición
         request_context = 
-        }
 
         # Realizar análisis
             user_id, error_details, request_context
-        )
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error analizando fallo de autenticación: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
     current_user: User = Depends(get_current_user),
 ):
     try:
         summary = 
-        }
 
         return 
-        }
 
     except Exception as e:
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/user-behavior/{user_id}")
 async def get_user_behavior_analysis
@@ -244,12 +226,11 @@ async def get_user_behavior_analysis
     try:
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error obteniendo comportamiento de usuario: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
+"""
 """

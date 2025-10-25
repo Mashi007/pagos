@@ -35,7 +35,6 @@ def get_current_user
         HTTPException: Si el token es inválido o el usuario no existe
     """
     credentials_exception = HTTPException
-    )
 
     # Logging detallado para diagnóstico
     logger = logging.getLogger(__name__)
@@ -47,7 +46,6 @@ def get_current_user
         payload = decode_token(token)
         logger.info
             f"Payload keys: {list(payload.keys())}"
-        )
 
         # Verificar que sea un access token
         if payload.get("type") != "access":
@@ -70,12 +68,10 @@ def get_current_user
     if user is None:
         logger.error(f"Usuario no encontrado en BD - ID: {user_id}")
         raise HTTPException
-        )
 
     if not user.is_active:
         logger.warning(f"Usuario inactivo - Email: {user.email}")
         raise HTTPException
-        )
 
     return user
 
@@ -97,7 +93,6 @@ def get_current_active_user
     """
     if not current_user.is_active:
         raise HTTPException
-        )
     return current_user
 
 
@@ -120,7 +115,6 @@ def require_role(require_admin: bool = True):
     def role_checker(current_user: User = Depends(get_current_user)) -> User:
         if require_admin and not current_user.is_admin:
             raise HTTPException
-            )
         return current_user
 
     return role_checker
@@ -148,7 +142,6 @@ def require_permission(*required_permissions: Permission):
         for perm in required_permissions:
             if perm not in user_permissions:
                 raise HTTPException
-                )
 
         return current_user
 
@@ -164,7 +157,6 @@ def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
     """
     if not current_user.is_admin:  # Cambio clave: rol → is_admin
         raise HTTPException
-        )
     return current_user
 
 

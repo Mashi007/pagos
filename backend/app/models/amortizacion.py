@@ -7,7 +7,6 @@ Representa cada cuota de un préstamo con su detalle de capital, interés
 
 from decimal import Decimal
 from sqlalchemy import 
-)
 from sqlalchemy.sql import func
 from app.db.session import Base
 
@@ -22,7 +21,6 @@ class Cuota(Base):
     # Identificación
     id = Column(Integer, primary_key=True, index=True)
     prestamo_id = Column
-    )
     numero_cuota = Column(Integer, nullable=False)  # 1, 2, 3, etc.
 
     # Fechas
@@ -89,7 +87,6 @@ class Cuota(Base):
     def monto_pendiente_total(self) -> Decimal:
         """Calcula el monto total pendiente (capital + interés + mora)"""
         return 
-        )
 
     @property
     def porcentaje_pagado(self) -> Decimal:
@@ -118,7 +115,6 @@ class Cuota(Base):
         mora = 
             * (tasa_mora_diaria / Decimal("100"))
             * Decimal(dias_mora)
-        )
         return mora.quantize(Decimal("0.01"))
 
 
@@ -131,7 +127,6 @@ class Cuota(Base):
             dict: Detalle de cómo se aplicó el pago
         """
         detalle = 
-        }
         saldo = monto_pago
 
         # 1. Aplicar a mora
@@ -164,7 +159,6 @@ class Cuota(Base):
 
         # Actualizar total pagado
         self.total_pagado = 
-        )
 
         # Actualizar estado
         self.actualizar_estado()
@@ -203,6 +197,6 @@ pago_cuotas = Table
     Column("aplicado_a_capital", Numeric(12, 2), default=Decimal("0.00")),
     Column("aplicado_a_interes", Numeric(12, 2), default=Decimal("0.00")),
     Column("aplicado_a_mora", Numeric(12, 2), default=Decimal("0.00")),
-)
 
+"""
 """

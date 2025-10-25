@@ -39,7 +39,6 @@ class AuthFlowTracer:
         """Agregar paso al trace"""
         step = 
             "details": details or {},
-        }
         self.steps.append(step)
 
         # Log específico para debugging
@@ -51,7 +50,6 @@ class AuthFlowTracer:
     def finalize(self, overall_status: str, error: str = None):
         """Finalizar el trace"""
         trace_data = 
-        }
 
         # Agregar al almacenamiento
         auth_flow_traces.append(trace_data)
@@ -64,7 +62,6 @@ class AuthFlowTracer:
 
         logger.info
             f"{overall_status} ({total_duration:.2f}ms)"
-        )
 
 
     def _detect_anomalies(self, trace_data: Dict):
@@ -72,15 +69,12 @@ class AuthFlowTracer:
             anomaly_patterns["slow_auth_flow"] += 1
 
         failed_steps = len
-        )
         if failed_steps > 2:
             anomaly_patterns["multiple_failures"] += 1
 
         # Anomalía 3: Token inválido repetido
         token_errors = len
                 if "token" in s["step"].lower() and s["status"] == "failed"
-            ]
-        )
         if token_errors > 0:
             anomaly_patterns["token_validation_failure"] += 1
 
@@ -107,14 +101,11 @@ class CorrelationAnalyzer:
             try:
                 # Decodificar sin verificar para análisis
                 payload = jwt.decode
-                )
                 token_analysis = 
-                }
             except Exception:
                 token_analysis = {"error": "Invalid token format"}
 
         return 
-        }
 
 
 def _analizar_request_info(request: Request) -> dict:
@@ -123,7 +114,6 @@ def _analizar_request_info(request: Request) -> dict:
     user_agent = request.headers.get("user-agent", "unknown")
 
     return 
-    }
 
 
 def _validar_headers_auth(auth_header: str) -> tuple[bool, str]:
@@ -148,7 +138,6 @@ def _decodificar_token(token: str) -> tuple[bool, str, dict]:
     """Decodificar token JWT sin verificar"""
     try:
         unverified_payload = jwt.decode
-        )
         return True, "", unverified_payload
     except Exception as e:
         return False, f"Token decoding failed: {str(e)}", {}
@@ -212,16 +201,13 @@ async def trace_authentication_flow
         is_valid, error_msg = _validar_headers_auth(auth_header)
         if not is_valid:
             tracer.add_step
-            )
             tracer.finalize("failed", error_msg)
             return 
-            }
 
         tracer.add_step
                     len(auth_header.split(" ")[1]) if " " in auth_header else 0
                 ),
             },
-        )
 
         # Paso 3: Extracción y análisis del token
         tracer.add_step("token_extraction", "started")
@@ -230,11 +216,9 @@ async def trace_authentication_flow
             tracer.add_step("token_extraction", "failed", {"error": error_msg})
             tracer.finalize("failed", error_msg)
             return 
-            }
 
         tracer.add_step
             {"token_parts": 3, "token_length": len(token)},
-        )
 
         # Paso 4: Decodificación del token
         tracer.add_step("token_decoding", "started")
@@ -243,7 +227,6 @@ async def trace_authentication_flow
             tracer.add_step("token_decoding", "failed", {"error": error_msg})
             tracer.finalize("failed", error_msg)
             return 
-            }
 
         tracer.add_step
                 "payload_keys": list(unverified_payload.keys()),
@@ -252,7 +235,6 @@ async def trace_authentication_flow
                 "exp": unverified_payload.get("exp"),
                 "iat": unverified_payload.get("iat"),
             },
-        )
 
         # Paso 5: Verificación de expiración
         tracer.add_step("expiration_check", "started")
@@ -261,24 +243,19 @@ async def trace_authentication_flow
             tracer.add_step("expiration_check", "failed", {"error": error_msg})
             tracer.finalize("failed", error_msg)
             return 
-            }
 
             tracer.add_step
-            )
 
         # Paso 6: Verificación con SECRET_KEY
         tracer.add_step("signature_verification", "started")
         is_valid, error_msg, verified_payload = _verificar_firma_token(token)
         if not is_valid:
             tracer.add_step
-            )
             tracer.finalize("failed", error_msg)
             return 
-            }
 
         tracer.add_step
             {"verified": True, "user_id": verified_payload.get("sub")},
-        )
 
         # Paso 7: Verificación de usuario en BD
         tracer.add_step("user_verification", "started")
@@ -286,13 +263,10 @@ async def trace_authentication_flow
         is_valid, error_msg, user = _verificar_usuario_en_bd(user_id, db)
         if not is_valid:
             tracer.add_step
-            )
             tracer.finalize("failed", error_msg)
             return 
-            }
 
         tracer.add_step
-        )
 
         # Éxito completo
         tracer.finalize("success")
@@ -301,25 +275,21 @@ async def trace_authentication_flow
             "steps": tracer.steps,
             "total_duration_ms": 
             ),
-        }
     except Exception as e:
         tracer.finalize("error", str(e))
         logger.error(f"Error en trace de autenticación: {e}")
         return 
-        }
 
 
 def _obtener_traces_recientes(minutes: int) -> list:
     return [
         trace
         for trace in auth_flow_traces
-    ]
 
 
 def _analizar_correlacion_basica(recent_traces: list, minutes: int) -> dict:
     """Análisis básico de correlación"""
     return 
-    }
 
 
 def _agrupar_errores_por_tipo(recent_traces: list) -> dict:
@@ -337,13 +307,10 @@ def _analizar_patrones_temporales(error_groups: dict) -> dict:
     for error_type, traces in error_groups.items():
         if len(traces) > 1:
             # Calcular intervalo promedio entre errores
-            ]
             intervals = [
-            ]
             avg_interval = sum(intervals) / len(intervals) if intervals else 0
 
             temporal_patterns[error_type] = 
-            }
     return temporal_patterns
 
 
@@ -362,7 +329,6 @@ def _analizar_timing_por_estado() -> dict:
         durations = timing_stats.get(status, [])
         if durations:
             timing_analysis[status] = 
-            }
     return timing_analysis
 
 @router.get("/analyze-correlation")
@@ -376,7 +342,6 @@ async def analyze_request_correlation(request: Request, minutes: int = 60):
 
         # 2. Análisis de correlación básico
         correlation_analysis = _analizar_correlacion_basica
-        )
 
         # 3. Agrupar por tipo de error
         error_groups = _agrupar_errores_por_tipo(recent_traces)
@@ -392,11 +357,9 @@ async def analyze_request_correlation(request: Request, minutes: int = 60):
             },
             "recommendations": _generate_correlation_recommendations
             ),
-        }
     except Exception as e:
         logger.error(f"Error en análisis de correlación: {e}")
         return 
-        }
 
 
 def _detectar_anomalia_tasa_error(recent_traces: list) -> list:
@@ -404,23 +367,17 @@ def _detectar_anomalia_tasa_error(recent_traces: list) -> list:
     anomalies = []
     total_traces = len(recent_traces)
     failed_traces = len
-    )
     error_rate = 
         (failed_traces / total_traces * 100) if total_traces > 0 else 0
-    )
 
     if error_rate > 50:
         anomalies.append
                 f"(>{total_traces} traces analyzed)",
                 "recommendation": "Investigate authentication configuration "
                 "and token generation",
-            }
-        )
     elif error_rate > 20:
         anomalies.append
                 f"(>{total_traces} traces analyzed)",
-            }
-        )
 
     return anomalies
 
@@ -437,8 +394,6 @@ def _detectar_anomalia_duracion_excesiva(recent_traces: list) -> list:
                 f"(avg: {avg_slow_duration:.0f}ms)",
                 "recommendation": "Check database performance and network \
                 latency",
-            }
-        )
     return anomalies
 
 
@@ -451,7 +406,6 @@ def _detectar_anomalia_duracion_excesiva(recent_traces: list) -> list:
     for error, count in error_patterns_count.items():
         if count > 5:  # Más de 5 ocurrencias del mismo error
             anomalies.append
-            )
     return anomalies
 
 
@@ -461,7 +415,6 @@ def _detectar_anomalia_duracion_excesiva(recent_traces: list) -> list:
         avg_success_duration = sum(success_durations) / len(success_durations)
         if avg_success_duration > 1000:  # Más de 1 segundo para éxito
             anomalies.append
-            )
     return anomalies
 
 @router.get("/detect-anomalies")
@@ -473,14 +426,12 @@ async def detect_authentication_anomalies():
         recent_traces = [
             trace
             for trace in auth_flow_traces
-        ]
 
         anomalies = []
 
         anomalies.extend(_detectar_anomalia_tasa_error(recent_traces))
         anomalies.extend(_detectar_anomalia_duracion_excesiva(recent_traces))
         anomalies.extend
-        )
 
         total_traces = len(recent_traces)
 
@@ -488,11 +439,9 @@ async def detect_authentication_anomalies():
             },
             "analysis_period": "last_hour",
             "total_traces_analyzed": total_traces,
-        }
     except Exception as e:
         logger.error(f"Error detectando anomalías: {e}")
         return 
-        }
 
     """
     """
@@ -500,7 +449,6 @@ async def detect_authentication_anomalies():
         recent_traces = [
             trace
             for trace in auth_flow_traces
-        ]
 
         # Ordenar por tiempo
 
@@ -515,14 +463,11 @@ async def detect_authentication_anomalies():
                 "steps_count": len(trace["steps"]),
                 "failed_steps": len
                 ),
-            }
 
         return 
             },
-        }
     except Exception as e:
         return 
-        }
 
 
 def _generate_correlation_recommendations
@@ -533,23 +478,21 @@ def _generate_correlation_recommendations
     # Recomendaciones basadas en errores más comunes
     if step_failures:
         recommendations.append
-        )
 
     # Recomendaciones basadas en patrones temporales
     for error_type, pattern in temporal_patterns.items():
         if pattern["count"] > 3 and pattern["avg_interval_seconds"] < 60:
             recommendations.append
                 f"(cada {pattern['avg_interval_seconds']:.0f}s)"
-            )
 
     # Recomendaciones generales
     if not recommendations:
         recommendations.append
-        )
 
     return recommendations
 
 # Nota: Middleware removido - APIRouter no soporta middleware directamente
 # El middleware debe ser agregado a la aplicación principal en main.py
 
+"""
 """

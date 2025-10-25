@@ -43,7 +43,6 @@ class AnalistasCache:
     def get_stats(self) -> Dict[str, Any]:
         """Obtener estadísticas del cache"""
         return 
-        }
 
 
 # Instancia global del cache

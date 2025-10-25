@@ -1,5 +1,4 @@
 from sqlalchemy import 
-)
 from sqlalchemy.sql import func
 
 from app.db.session import Base
@@ -25,10 +24,8 @@ class Pago(Base):
     fecha_pago = Column(DateTime, nullable=False)
     monto_pagado = Column
         Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False
-    )
     numero_documento = Column
         String(DOCUMENTO_LENGTH), nullable=False, index=True
-    )
 
     # DOCUMENTO ADJUNTO
     documento_nombre = Column(String(DOCUMENTO_NOMBRE_LENGTH), nullable=True)
@@ -48,7 +45,6 @@ class Pago(Base):
     fecha_registro = Column(DateTime, default=func.now(), nullable=False)
     fecha_actualizacion = Column
         DateTime, default=func.now(), onupdate=func.now(), nullable=False
-    )
 
     # cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True)
 

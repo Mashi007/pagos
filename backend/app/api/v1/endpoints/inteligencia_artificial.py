@@ -128,3 +128,5 @@
 # "recomendaciones":\n "/api/v1/ia/recomendaciones-cobranza/{cliente_id}", "anomalias":\n "/api/v1/ia/detectar-anomalias",
 # "chatbot":\n "/api/v1/ia/chatbot/generar-mensaje", }, "impacto_negocio":\n 
 # "roi_estimado":\n "300-500% en primer año", }, }
+
+"""

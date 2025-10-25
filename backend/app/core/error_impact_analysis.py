@@ -111,7 +111,6 @@ class ErrorImpactAnalyzer:
         self.error_history: deque = deque(maxlen=MAX_ERROR_HISTORY)
         self.endpoint_errors: Dict[str, deque] = defaultdict
             lambda: deque(maxlen=100)
-        )
         self.circuit_breakers: Dict[str, CircuitBreaker] = {}
         self.error_counts: Dict[str, int] = defaultdict(int)
         self.total_requests = 0
@@ -139,7 +138,6 @@ class ErrorImpactAnalyzer:
                 stack_trace=traceback.format_exc(),
                 user_id=user_id,
                 request_id=request_id,
-            )
 
             # Registrar error
             self.error_history.append(error_metrics)
@@ -151,7 +149,6 @@ class ErrorImpactAnalyzer:
             self._update_circuit_breaker(endpoint, error)
 
             logger.error
-            )
 
 
         with self.lock:
@@ -198,14 +195,12 @@ class ErrorImpactAnalyzer:
         with self.lock:
             if not self.error_history:
                 return ErrorImpactAnalysis
-                )
 
             # Calcular tasa de error
             error_rate = len(self.error_history) / max(self.total_requests, 1)
 
             # Calcular tiempo promedio de respuesta
                 else 0
-            )
 
             # Determinar nivel de impacto del sistema
             system_impact_level = "LOW"
@@ -227,14 +222,11 @@ class ErrorImpactAnalyzer:
             open_circuits = sum
                 for cb in self.circuit_breakers.values()
                 if cb.state == "OPEN"
-            )
 
             # Generar recomendaciones
             recommendations = self._generate_recommendations
-            )
 
             return ErrorImpactAnalysis
-            )
 
 
     def _generate_recommendations
@@ -244,19 +236,15 @@ class ErrorImpactAnalyzer:
 
         if error_rate > ERROR_RATE_THRESHOLD:
             recommendations.append
-            )
             recommendations.append
-            )
 
 
         if consecutive_errors > MAX_CONSECUTIVE_ERRORS:
             recommendations.append
-            )
             recommendations.append("Implementar graceful degradation")
 
         if not recommendations:
             recommendations.append
-            )
 
         return recommendations
 
@@ -271,17 +259,14 @@ class ErrorImpactAnalyzer:
 
                 error_types = [e.error_type for e in errors]
                 error_counts = 
-                }
 
                 ) / len(errors)
 
                 summary[endpoint] = 
                         self.circuit_breakers.get(endpoint, {}).get
-                        )
                     ),
                     "last_error": 
                     ),
-                }
 
             return summary
 
@@ -334,8 +319,8 @@ def record_error
 ):
     """Registrar un error"""
     error_analyzer.record_error
-    )
 
 
 
+"""
 """

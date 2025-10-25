@@ -9,7 +9,6 @@ from pydantic import BaseModel, ConfigDict, Field
 class ModeloVehiculoBase(BaseModel):
     """Schema base para ModeloVehiculo"""
     modelo: str = Field
-    )
     activo: bool = Field(default=True, description="Estado del modelo")
 
 

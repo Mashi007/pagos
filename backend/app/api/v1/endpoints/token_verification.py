@@ -23,11 +23,9 @@ def _extraer_token_del_header(request: Request) -> tuple[str, dict]:
     auth_header = request.headers.get("authorization")
     if not auth_header:
         return None, 
-        }
 
     if not auth_header.startswith("Bearer "):
         return None, 
-        }
 
     return auth_header.split(" ")[1], None
 
@@ -35,12 +33,10 @@ def _extraer_token_del_header(request: Request) -> tuple[str, dict]:
 def _analizar_estructura_token(token: str) -> tuple[dict, dict]:
     """Analizar estructura básica del token"""
     token_analysis = 
-    }
 
     # Verificar estructura JWT
     if token.count(".") != 2:
         return token_analysis, 
-        }
 
     return token_analysis, None
 
@@ -52,21 +48,18 @@ def _decodificar_token_sin_verificar(token: str) -> tuple[dict, dict]:
         payload_decoded = jwt.decode(token, options={"verify_signature": False})
 
         token_analysis = 
-        }
 
         return token_analysis, None
 
     except Exception as e:
         return {}, 
             "error": f"Error decodificando token: {str(e)}",
-        }
 
 
 def _verificar_expiracion_token(payload_decoded: dict) -> dict:
     """Verificar expiración del token"""
 
         return 
-        }
     else:
         return {"error": "No expiration found in token"}
 
@@ -76,13 +69,10 @@ def _verificar_token_con_secret(token: str) -> dict:
     try:
         verified_payload = decode_token(token)
         return 
-        }
     except PyJWTError as e:
         return 
-        }
     except Exception as e:
         return 
-        }
 
 
 def _verificar_usuario_en_bd(verification_result: dict, db: Session) -> dict:
@@ -92,17 +82,14 @@ def _verificar_usuario_en_bd(verification_result: dict, db: Session) -> dict:
     user_id = verification_result["payload"].get("sub")
     if not user_id:
         return 
-        }
 
     try:
         user = db.query(User).filter(User.id == int(user_id)).first()
         if user:
             return 
-            }
         else:
             return 
                 "error": f"User with ID {user_id} not found in database",
-            }
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
@@ -114,14 +101,12 @@ def _generar_recomendaciones
 
     if not verification_result.get("verified"):
         recommendations.append
-        )
 
     if token_analysis.get("expiration", {}).get("is_expired"):
         recommendations.append("⏰ Token expirado - Hacer login nuevamente")
 
     if not user_verification.get("user_found"):
         recommendations.append
-        )
 
     if not user_verification.get("user_active"):
         recommendations.append("⚠️ Usuario inactivo - Contactar administrador")
@@ -159,7 +144,6 @@ async def verificar_token_detallado
 
         # 4. Verificar expiración
         token_analysis["expiration"] = _verificar_expiracion_token
-        )
 
         # 5. Verificar con SECRET_KEY real
         verification_result = _verificar_token_con_secret(token)
@@ -169,15 +153,12 @@ async def verificar_token_detallado
 
         # 7. Generar recomendaciones
         recommendations = _generar_recomendaciones
-        )
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error en verificación de token: {e}")
         return 
-        }
 
 
 @router.get("/token-info")
@@ -189,7 +170,6 @@ async def obtener_info_token(request: Request, db: Session = Depends(get_db)):
         auth_header = request.headers.get("authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
             return 
-            }
 
         token = auth_header.split(" ")[1]
 
@@ -204,20 +184,16 @@ async def obtener_info_token(request: Request, db: Session = Depends(get_db)):
                 user = db.query(User).filter(User.id == int(user_id)).first()
                 if user:
                     user_info = 
-                    }
 
             return 
                 },
-            }
 
         except Exception as e:
             return 
                 "error": f"Error decoding token: {str(e)}",
-            }
 
     except Exception as e:
         return 
-        }
 
 
 async def generar_token_prueba(db: Session = Depends(get_db)):
@@ -229,19 +205,15 @@ async def generar_token_prueba(db: Session = Depends(get_db)):
         admin_user = db.query(User).filter(User.is_admin).first()
         if not admin_user:
             return 
-            }
 
         # Generar token
         test_token = create_access_token
             subject=str(admin_user.id), additional_claims={"type": "access"}
-        )
 
         return 
             },
             "usage": "Use this token in Authorization header: Bearer <token>",
-        }
 
     except Exception as e:
         logger.error(f"Error generando token de prueba: {e}")
         return 
-        }

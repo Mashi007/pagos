@@ -49,20 +49,17 @@ router = APIRouter()
             "https://www.google.com",
             "https://www.cloudflare.com",
             "https://httpbin.org/get",
-        ]
 
         for url in test_urls:
             try:
 
                 test_result = 
-                }
 
                 with self.lock:
                     self.connectivity_tests.append(test_result)
 
             except Exception as e:
                 test_result = 
-                }
 
                 with self.lock:
                     self.connectivity_tests.append(test_result)
@@ -75,7 +72,6 @@ router = APIRouter()
 
 
             measurement = 
-            }
 
             with self.lock:
                 self.latency_measurements.append(measurement)
@@ -99,7 +95,6 @@ router = APIRouter()
                 "latency": 
                 },
                 "status": "healthy" if success_rate > 80 and avg_latency < 1000 else "degraded"
-            }
 
 
     def test_endpoint_connectivity(self, endpoint: str) -> Dict[str, Any]:
@@ -107,11 +102,9 @@ router = APIRouter()
         try:
 
             return 
-            }
 
         except Exception as e:
             return 
-            }
 
 
 # Instancia global del diagnóstico de red
@@ -125,7 +118,6 @@ async def get_network_status
     """Obtener estado de la red"""
     try:
         return 
-        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener estado de red: {str(e)}")
 
@@ -137,6 +129,5 @@ async def test_connectivity
     """Probar conectividad a un endpoint específico"""
     try:
         return 
-        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al probar conectividad: {str(e)}")

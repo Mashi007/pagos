@@ -6,7 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from datetime import date
 class ConcesionarioBase(BaseModel):
     nombre: str = Field
-    )
     activo: bool = Field(True, description="Estado activo del concesionario")
 
 

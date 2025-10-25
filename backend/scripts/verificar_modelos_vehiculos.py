@@ -21,8 +21,6 @@ logger = logging.getLogger(__name__)
             result = conn.execute
                 );
             """
-                )
-            )
             tabla_existe = result.scalar()
 
             if not tabla_existe:
@@ -31,17 +29,13 @@ logger = logging.getLogger(__name__)
 
 
             result = conn.execute
-            )
 
             result = conn.execute
-            )
 
                 estado = "✅ Activo" if registro.activo else "❌ Inactivo"
                 logger.info
-                )
 
                 logger.warning
-                )
 
     except Exception as e:
 

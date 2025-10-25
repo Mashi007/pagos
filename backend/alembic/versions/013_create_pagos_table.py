@@ -46,7 +46,6 @@ def upgrade() -> None:
             server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
         sa.PrimaryKeyConstraint("id"),
-    )
 
     # Crear índices
 

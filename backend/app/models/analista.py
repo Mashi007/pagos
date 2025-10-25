@@ -24,7 +24,6 @@ class Analista(Base):
     def __repr__(self):
         return 
             f"activo={self.activo})>"
-        )
 
     @property
     def nombre_completo(self):
@@ -52,6 +51,6 @@ class Analista(Base):
 
     def to_dict(self):
         return 
-        }
 
+"""
 """

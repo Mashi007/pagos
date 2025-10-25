@@ -30,14 +30,12 @@ class EndpointSpecificAnalyzer:
             self.business_metrics[endpoint][metric_name] = []
 
         self.business_metrics[endpoint][metric_name].append
-        )
 
 
     def get_endpoint_analysis(self, endpoint: str) -> Dict[str, Any]:
         """Obtener análisis específico del endpoint"""
         if endpoint not in self.business_metrics:
             return 
-            }
 
         metrics = self.business_metrics[endpoint]
         analysis = {}
@@ -45,7 +43,6 @@ class EndpointSpecificAnalyzer:
         for metric_name, values in metrics.items():
             if values:
                 analysis[metric_name] = 
-                }
 
         return analysis
 
@@ -85,10 +82,8 @@ def endpoint_impact_analysis
                             value = _extract_metric_value(result, metric_path)
                             if value is not None:
                                 endpoint_analyzer.record_business_metric
-                                )
                         except Exception as e:
                             logger.warning
-                            )
 
                 return result
             except Exception as e:
@@ -134,9 +129,7 @@ def auth_endpoint_analysis(func: Callable):
             # Métricas específicas de autenticación
             if result and hasattr(result, "access_token"):
                 endpoint_analyzer.record_business_metric
-                )
                 endpoint_analyzer.record_business_metric
-                )
 
             return result
         except Exception as e:
@@ -156,17 +149,13 @@ def carga_masiva_endpoint_analysis(func: Callable):
             # Métricas específicas de carga masiva
             if result and isinstance(result, dict):
                     endpoint_analyzer.record_business_metric
-                    )
                     endpoint_analyzer.record_business_metric
-                    )
                     endpoint_analyzer.record_business_metric
-                    )
 
             return result
         except Exception as e:
             # Métricas de error de carga masiva
             endpoint_analyzer.record_business_metric
-            )
             raise e
     return wrapper
 
@@ -182,16 +171,13 @@ def clientes_endpoint_analysis(func: Callable):
             if result:
                 if hasattr(result, "__len__"):
                     endpoint_analyzer.record_business_metric
-                    )
                 elif isinstance(result, dict) and "total" in result:
                     endpoint_analyzer.record_business_metric
-                    )
 
             return result
         except Exception as e:
             # Métricas de error de clientes
             endpoint_analyzer.record_business_metric
-            )
             raise e
     return wrapper
 
@@ -204,15 +190,12 @@ def clientes_endpoint_analysis(func: Callable):
             if result:
                 if isinstance(result, dict) and "monto_total" in result:
                     endpoint_analyzer.record_business_metric
-                    )
                 elif hasattr(result, "monto_pagado"):
                     endpoint_analyzer.record_business_metric
-                    )
 
             return result
         except Exception as e:
             endpoint_analyzer.record_business_metric
-            )
             raise e
     return wrapper
 
@@ -231,7 +214,6 @@ if __name__ == "__main__":
     @carga_masiva_endpoint_analysis
     def carga_masiva_example():
         return 
-        }
 
     login_result = login_example()
     carga_result = carga_masiva_example()
@@ -244,4 +226,5 @@ if __name__ == "__main__":
     print("Análisis de auth:", auth_analysis)
     print("Análisis de carga masiva:", carga_analysis)
 
+"""
 """

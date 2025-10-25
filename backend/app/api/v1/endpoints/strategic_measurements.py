@@ -33,13 +33,11 @@ class StrategicMeasurements:
         self.measurements = deque(maxlen=1000)  # Mediciones almacenadas
         self.lock = threading.Lock()
         self.measurement_intervals = 
-        }
 
 
     def collect_system_metrics(self) -> Dict[str, Any]:
         """Recopilar métricas del sistema"""
         metrics = 
-        }
 
         with self.lock:
             self.measurements.append(metrics)
@@ -58,7 +56,6 @@ class StrategicMeasurements:
             cpu_freq = psutil.cpu_freq()
 
             return 
-            }
         except Exception as e:
             return {"error": str(e)}
 
@@ -73,7 +70,6 @@ class StrategicMeasurements:
             swap = psutil.swap_memory()
 
             return 
-            }
         except Exception as e:
             return {"error": str(e)}
 
@@ -87,7 +83,6 @@ class StrategicMeasurements:
             disk_usage = psutil.disk_usage('/')
 
             return 
-            }
         except Exception as e:
             return {"error": str(e)}
 
@@ -101,7 +96,6 @@ class StrategicMeasurements:
             net_io = psutil.net_io_counters()
 
             return 
-            }
         except Exception as e:
             return {"error": str(e)}
 
@@ -110,7 +104,6 @@ class StrategicMeasurements:
         """Obtener estadísticas de conexiones de BD"""
         # Simulación - en un sistema real se consultaría la BD
         return 
-        }
 
 
     def get_measurement_history(self, limit: int = 100) -> Dict[str, Any]:
@@ -119,7 +112,6 @@ class StrategicMeasurements:
             recent_measurements = list(self.measurements)[-limit:]
 
             return 
-            }
 
 # Instancia global del sistema de mediciones
 strategic_measurements = StrategicMeasurements()

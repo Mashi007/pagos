@@ -30,15 +30,12 @@ def upgrade() -> None:
         "admin@rapicredit.com",
         "admin@sistema.com",
         "daniel@rapicredit.com",
-    ]
 
     for email in admin_emails:
         result = connection.execute
             SET is_admin = TRUE, updated_at = NOW()
             WHERE email = '{email}' AND is_active = TRUE
         """
-            )
-        )
 
         if result.rowcount > 0:
             print(f"Usuario {email} marcado como administrador")
@@ -56,14 +53,11 @@ def upgrade() -> None:
         connection.execute
             ) VALUES 
                 NOW()
-            )
             ON CONFLICT (email) DO UPDATE SET
                 is_admin = TRUE,
                 is_active = TRUE,
                 updated_at = NOW()
         """
-            )
-        )
         print("Usuario administrador por defecto creado/actualizado")
 
     # Verificación final
@@ -72,7 +66,6 @@ def upgrade() -> None:
     print(f"Total de administradores en el sistema: {final_admin_count}")
 
     admins = connection.execute
-        )
     ).fetchall()
 
     print("Lista de administradores:")
@@ -92,15 +85,12 @@ def downgrade() -> None:
         "admin@rapicredit.com",
         "admin@sistema.com",
         "daniel@rapicredit.com",
-    ]
 
     for email in admin_emails:
         connection.execute
             SET is_admin = FALSE, updated_at = NOW()
             WHERE email = '{email}'
         """
-            )
-        )
 
     # ### end Alembic commands ###
 

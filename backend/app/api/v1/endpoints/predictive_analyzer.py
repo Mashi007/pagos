@@ -100,14 +100,11 @@ class PredictiveAnalyzer:
 
             # Calcular score de confianza y predicción
             predicted_failure_probability = self._calculate_failure_probability
-            )
 
             # Identificar factores de riesgo
             risk_factors = self._identify_risk_factors
-            )
 
             prediction = PredictionResult
-            )
 
             self.predictions.append(prediction)
             return prediction
@@ -116,14 +113,12 @@ class PredictiveAnalyzer:
             logger.error(f"Error prediciendo fallo de autenticación: {e}")
             # Retornar predicción por defecto en caso de error
             return PredictionResult
-            )
 
 
         else:  # long
 
         recent_failures = [
             attempt for attempt in user_data["login_attempts"]
-        ]
 
         return len(recent_failures)
 
@@ -200,10 +195,8 @@ class PredictiveAnalyzer:
     ) -> float:
         """Calcular probabilidad de fallo"""
         weights = 
-        }
 
         probability = 
-        )
 
         return min(max(probability, 0.0), 1.0)  # Clamp entre 0 y 1
 
@@ -242,10 +235,8 @@ class PredictiveAnalyzer:
         risk_score = self._calculate_failure_probability
             len(set(user_data["ip_addresses"])) / max(len(user_data["ip_addresses"]), 1),
             len(set(user_data["user_agents"])) / max(len(user_data["user_agents"]), 1)
-        )
 
         return UserBehaviorPattern
-        )
 
 
     def _calculate_login_frequency(self, user_data: Dict) -> float:
@@ -282,20 +273,16 @@ async def record_authentication_event
 
         # Obtener contexto de la petición
         request_context = 
-        }
 
         # Registrar evento
         predictive_analyzer.record_authentication_event
-        )
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error registrando evento de autenticación: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 async def predict_authentication_failure
     current_user: User = Depends(get_current_user),
@@ -306,18 +293,14 @@ async def predict_authentication_failure
 
         # Validar horizonte temporal
             raise HTTPException
-            )
 
         # Realizar predicción
         prediction = predictive_analyzer.predict_authentication_failure
-        )
 
         # Convertir a formato serializable
         prediction_data = 
-        }
 
         return 
-        }
 
     except HTTPException:
         raise
@@ -325,7 +308,6 @@ async def predict_authentication_failure
         logger.error(f"Error prediciendo fallo de autenticación: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/user-behavior/{user_id}")
 async def get_user_behavior_pattern
@@ -337,16 +319,13 @@ async def get_user_behavior_pattern
 
         # Convertir a formato serializable
         behavior_data = 
-        }
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error obteniendo patrón de comportamiento: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/prediction-history")
 async def get_prediction_history
@@ -365,18 +344,14 @@ async def get_prediction_history
         # Convertir a formato serializable
         predictions_data = [
             
-            }
             for p in predictions
-        ]
 
         return 
-        }
 
     except Exception as e:
         logger.error(f"Error obteniendo historial de predicciones: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
 
 @router.get("/model-accuracy")
 async def get_model_accuracy
@@ -390,20 +365,14 @@ async def get_model_accuracy
         if not recent_predictions:
             return 
                     "confidence_distribution": {}
-                }
-            }
 
         # Calcular distribución de confianza
         confidence_scores = [p.confidence_score for p in recent_predictions]
         avg_confidence = statistics.mean(confidence_scores) if confidence_scores else 0.0
 
         return 
-                }
-            }
-        }
 
     except Exception as e:
         logger.error(f"Error obteniendo precisión del modelo: {e}")
         raise HTTPException
             detail=f"Error interno: {str(e)}"
-        )
