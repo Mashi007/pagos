@@ -60,7 +60,10 @@ class User(Base):
     notificaciones = relationship("Notificacion", back_populates="user")
 
     def __repr__(self):
-        return f"<User(id={self.id}, email='{self.email}', is_admin={self.is_admin})>"
+        return (
+            f"<User(id={self.id}, email='{self.email}', "
+            f"is_admin={self.is_admin})>"
+        )
 
     @property
     def full_name(self) -> str:

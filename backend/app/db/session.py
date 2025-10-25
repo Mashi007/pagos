@@ -82,7 +82,7 @@ def get_db():
         # CORRECCIÓN CRÍTICA: NO sobrescribir HTTPException que ya tienen me...
 
         if isinstance(e, HTTPException):
-            # Re-lanzar HTTPException sin modificar (preservar mensaje específico)
+            # Re-lanzar HTTPException sin modificar (preservar mensaje)
             raise e
 
         # Solo manejar errores reales de DB - usar logger estructurado

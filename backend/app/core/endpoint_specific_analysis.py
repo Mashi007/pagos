@@ -103,10 +103,15 @@ def endpoint_impact_analysis(
 
                 # Registrar métricas específicas si se proporcionan
                 if business_metrics and result:
-                    for metric_name, metric_path in business_metrics.items():
+                    for (
+                        metric_name,
+                        metric_path,
+                    ) in business_metrics.items():
                         try:
                             # Extraer valor de la métrica usando el path
-                            value = _extract_metric_value(result, metric_path)
+                            value = _extract_metric_value(
+                                result, metric_path
+                            )
                             if value is not None:
                                 endpoint_analyzer.record_business_metric(
                                     endpoint_name, metric_name, value
@@ -129,7 +134,7 @@ def endpoint_impact_analysis(
 
 
 def _extract_metric_value(data: Any, path: str) -> Any:
-    """Extraer valor de métrica usando path (ej: 'data.total', 'count', etc.)"""
+    """Extraer valor de métrica usando path (ej: 'data.total', etc.)"""
     try:
         if "." in path:
             # Path con puntos (ej: 'data.total')
@@ -186,7 +191,9 @@ def auth_endpoint_analysis(func: Callable):
             response_time = (time.time() - start_time) * 1000
 
             # Métricas de error de autenticación
-            endpoint_analyzer.record_business_metric("auth", "auth_failed", 1)
+            endpoint_analyzer.record_business_metric(
+                "auth", "auth_failed", 1
+            )
 
             record_error(e, "auth", response_time)
             raise e

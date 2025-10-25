@@ -41,7 +41,7 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     password: Optional[str] = Field(
         None,
-        description="Nueva contraseña (opcional, solo se valida si se proporciona)",
+        description="Nueva contraseña (opcional, solo se valida si se provee)",
     )
 
     @field_validator("password")

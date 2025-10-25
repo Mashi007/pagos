@@ -105,6 +105,6 @@ class PasswordResetConfirm(BaseModel):
 
 
 class LogoutRequest(BaseModel):
-    """Schema para logout (opcional, por si se implementa blacklist de tokens)"""
+    """Schema para logout (opcional, por si se implementa blacklist)"""
 
     refresh_token: Optional[str] = None

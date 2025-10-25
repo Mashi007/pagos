@@ -56,7 +56,9 @@ def crear_prestamo(
         db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
     )
     if not cliente:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+        raise HTTPException(
+            status_code=404, detail="Cliente no encontrado"
+        )
 
     # Calcular próxima fecha de pago
     proxima_fecha = calcular_proxima_fecha_pago(
@@ -102,9 +104,13 @@ def listar_prestamos(
 @router.get("/{prestamo_id}", response_model=PrestamoResponse)
 def obtener_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     """Obtener un préstamo por ID"""
-    prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+    prestamo = (
+        db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+    )
     if not prestamo:
-        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+        raise HTTPException(
+            status_code=404, detail="Préstamo no encontrado"
+        )
     return prestamo
 
 
@@ -115,12 +121,18 @@ def actualizar_prestamo(
     db: Session = Depends(get_db),
 ):
     """Actualizar datos de un préstamo"""
-    prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+    prestamo = (
+        db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+    )
     if not prestamo:
-        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+        raise HTTPException(
+            status_code=404, detail="Préstamo no encontrado"
+        )
 
     # ✅ CORRECCIÓN: usar model_dump() en lugar de dict()
-    for field, value in prestamo_data.model_dump(exclude_unset=True).items():
+    for field, value in prestamo_data.model_dump(
+        exclude_unset=True
+    ).items():
         setattr(prestamo, field, value)
 
     db.commit()
@@ -135,15 +147,21 @@ def actualizar_prestamo(
 #     try:
 #         # Contar préstamos por estado
 #         total_prestamos = db.query(Prestamo).count()
-#         prestamos_activos = db.query(Prestamo).filter(Prestamo.estado == "ACTIVO").count()
-#         prestamos_pendientes = db.query(Prestamo).filter(Prestamo.estado == "PENDIENTE").count()
-#         prestamos_completados = db.query(Prestamo).filter(Prestamo.estado == "COMPLETADO").count()
-#         prestamos_en_mora = db.query(Prestamo).filter(Prestamo.estado == "EN_MORA").count()
+#         prestamos_activos = db.query(Prestamo).filter(
+#             Prestamo.estado == "ACTIVO").count()
+#         prestamos_pendientes = db.query(Prestamo).filter(
+#             Prestamo.estado == "PENDIENTE").count()
+#         prestamos_completados = db.query(Prestamo).filter(
+#             Prestamo.estado == "COMPLETADO").count()
+#         prestamos_en_mora = db.query(Prestamo).filter(
+#             Prestamo.estado == "EN_MORA").count()
 #
 #         # Calcular montos
 #         from sqlalchemy import func
-#         monto_total_prestado = db.query(func.sum(Prestamo.monto_total)).scalar() or 0
-#         monto_total_pendiente = db.query(func.sum(Prestamo.saldo_pendiente)).scalar() or 0
+#         monto_total_prestado = db.query(
+#             func.sum(Prestamo.monto_total)).scalar() or 0
+#         monto_total_pendiente = db.query(
+#             func.sum(Prestamo.saldo_pendiente)).scalar() or 0
 #
 #         return {
 #             "total_prestamos": total_prestamos,
@@ -155,7 +173,8 @@ def actualizar_prestamo(
 #             "monto_total_pendiente": float(monto_total_pendiente)
 #         }
 #     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Error al obtener estadísticas: {str(e)}")
+#         raise HTTPException(
+#             status_code=500, detail=f"Error: {str(e)}")
 
 
 # ENDPOINT TEMPORAL CON DATOS MOCK PARA EVITAR ERROR 503
@@ -175,5 +194,6 @@ def obtener_estadisticas_prestamos(db: Session = Depends(get_db)):
         }
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error al obtener estadísticas: {str(e)}"
+            status_code=500,
+            detail=f"Error al obtener estadísticas: {str(e)}",
         )

@@ -6,7 +6,7 @@ Schemas organizados por módulo:
  Cliente: Gestión de clientes
  Préstamo: Gestión de préstamos
  Pago: Gestión de pagos
- User: Gestión de usuarios y autenticación (SIMPLIFICADO - solo is_admin boolean)
+# User: Gestión de usuarios y autenticación (SIMPLIFICADO - solo is_admin)
  Conciliación: Conciliación bancaria
  KPIs: Métricas e indicadores
 """
