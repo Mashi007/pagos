@@ -61,7 +61,9 @@ class Conciliacion(Base):
     # Información adicional
     observaciones = Column(Text, nullable=True)
     tipo_match = Column(String(20), nullable=True)  # AUTOMATICO, MANUAL
-    confianza_match = Column(Numeric(5, 2), nullable=True)  # Porcentaje de confianza
+    confianza_match = Column(
+        Numeric(5, 2), nullable=True
+    )  # Porcentaje de confianza
 
     # Auditoría
     created_at = Column(DateTime(timezone=True), server_default=func.now())

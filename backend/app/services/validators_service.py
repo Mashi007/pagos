@@ -149,7 +149,8 @@ class ValidadorTelefono:
                 "error": {
                     "valido": False,
                     "error": (
-                        f"Operadora '{operadora}' no válida para {pais}. Válidas: {', '.join(config['operadoras'])}"),
+                        f"Operadora '{operadora}' no válida para {pais}. Válidas: {', '.join(config['operadoras'])}"
+                    ),
                     "valor_original": telefono_original,
                     "valor_formateado": None,
                     "sugerencia": f"Debe comenzar con: {', '.join(
@@ -565,7 +566,8 @@ class ValidadorCedula:
             return {
                 "valido": False,
                 "error": (
-                    f"Prefijo '{cedula_limpia[0] if cedula_limpia else 'ninguno'}' no válido. DEBE empezar por V, E o J"),
+                    f"Prefijo '{cedula_limpia[0] if cedula_limpia else 'ninguno'}' no válido. DEBE empezar por V, E o J"
+                ),
                 "valor_original": cedula_limpia,
                 "valor_formateado": None,
                 "formato_esperado": config["descripcion"],
@@ -599,7 +601,8 @@ class ValidadorCedula:
                 return {
                     "valido": False,
                     "error": (
-                        f"Longitud inválida: {len(numero)} dígitos. DEBE tener entre 7 y 10 dígitos"),
+                        f"Longitud inválida: {len(numero)} dígitos. DEBE tener entre 7 y 10 dígitos"
+                    ),
                     "valor_original": cedula_limpia,
                     "valor_formateado": None,
                     "formato_esperado": config["descripcion"],
@@ -2022,10 +2025,12 @@ class ValidadorCoherenciaFinanciera:
 
             # 2. Validar cuota inicial mínima (10%)
             cuota_minima = (
-                total_financiamiento *
-                Decimal(
-                    ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE) /
-                Decimal("100"))
+                total_financiamiento
+                * Decimal(
+                    ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE
+                )
+                / Decimal("100")
+            )
             if cuota_inicial < cuota_minima:
                 errores.append(
                     f"La cuota inicial debe ser al menos el "
@@ -2035,16 +2040,19 @@ class ValidadorCoherenciaFinanciera:
 
             # 3. Advertencia si cuota inicial es muy alta
             cuota_maxima_recomendada = (
-                total_financiamiento *
-                Decimal(
-                    ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MAXIMA_PORCENTAJE) /
-                Decimal("100"))
+                total_financiamiento
+                * Decimal(
+                    ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MAXIMA_PORCENTAJE
+                )
+                / Decimal("100")
+            )
             if cuota_inicial > cuota_maxima_recomendada:
                 advertencias.append(
                     f"La cuota inicial es muy alta ({(
                             cuota_inicial /
                             total_financiamiento *
-                            100):.1f}% del total)")
+                            100):.1f}% del total)"
+                )
 
             # 4. Monto financiado debe ser positivo
             monto_financiado = total_financiamiento - cuota_inicial
@@ -2167,7 +2175,9 @@ class ValidadorDuplicados:
                 return {
                     "valido": False,
                     "error": (
-                        f"El número de chasis ya está registrado para el cliente " f"{existe.nombre_completo} (ID: {existe.id})"),
+                        f"El número de chasis ya está registrado para el cliente "
+                        f"{existe.nombre_completo} (ID: {existe.id})"
+                    ),
                     "chasis": chasis_limpio,
                     "cliente_existente": {
                         "id": existe.id,
@@ -2222,7 +2232,8 @@ class ValidadorDuplicados:
                 return {
                     "valido": False,
                     "error": (
-                        f"El email ya está registrado para el cliente {existe.nombre_completo}"),
+                        f"El email ya está registrado para el cliente {existe.nombre_completo}"
+                    ),
                     "email": email_limpio,
                     "cliente_existente": {
                         "id": existe.id,

@@ -21,7 +21,9 @@ class User(Base):
     __tablename__ = "usuarios"
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(EMAIL_LENGTH), unique=True, index=True, nullable=False)
+    email = Column(
+        String(EMAIL_LENGTH), unique=True, index=True, nullable=False
+    )
     nombre = Column(String(NAME_LENGTH), nullable=False)
     apellido = Column(String(NAME_LENGTH), nullable=False)
     hashed_password = Column(String(PASSWORD_LENGTH), nullable=False)

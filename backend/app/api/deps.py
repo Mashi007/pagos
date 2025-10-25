@@ -214,7 +214,9 @@ class PaginationParams:
         self.limit = limit if limit is not None else page_size
 
 
-def get_pagination_params(page: int = 1, page_size: int = 10) -> PaginationParams:
+def get_pagination_params(
+    page: int = 1, page_size: int = 10
+) -> PaginationParams:
     """
     Dependency para obtener parámetros de paginación
 

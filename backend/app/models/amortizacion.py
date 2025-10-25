@@ -103,9 +103,7 @@ class Cuota(Base):
     # )  # COMENTADO: Temporalmente hasta implementar módulo préstamos
 
     def __repr__(self):
-        return (
-            f"<Cuota {self.numero_cuota} - Préstamo {self.prestamo_id} - {self.estado}>"
-        )
+        return f"<Cuota {self.numero_cuota} - Préstamo {self.prestamo_id} - {self.estado}>"
 
     @property
     def esta_vencida(self) -> bool:
@@ -118,7 +116,9 @@ class Cuota(Base):
     @property
     def monto_pendiente_total(self) -> Decimal:
         """Calcula el monto total pendiente (capital + interés + mora)"""
-        return self.capital_pendiente + self.interes_pendiente + self.monto_mora
+        return (
+            self.capital_pendiente + self.interes_pendiente + self.monto_mora
+        )
 
     @property
     def porcentaje_pagado(self) -> Decimal:
@@ -202,7 +202,9 @@ class Cuota(Base):
             detalle["sobrante"] = saldo
 
         # Actualizar total pagado
-        self.total_pagado = self.capital_pagado + self.interes_pagado + self.mora_pagada
+        self.total_pagado = (
+            self.capital_pagado + self.interes_pagado + self.mora_pagada
+        )
 
         # Actualizar estado
         self.actualizar_estado()

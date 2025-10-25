@@ -43,7 +43,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/crear", response_model=PagoResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/crear", response_model=PagoResponse, status_code=status.HTTP_201_CREATED
+)
 async def crear_pago(
     pago_data: PagoCreate,
     db: Session = Depends(get_db),
@@ -142,7 +144,9 @@ async def subir_documento(
 @router.get("/listar", response_model=PagoListResponse)
 async def listar_pagos(
     pagina: int = Query(1, ge=1, description="Número de página"),
-    por_pagina: int = Query(20, ge=1, le=1000, description="Elementos por página"),
+    por_pagina: int = Query(
+        20, ge=1, le=1000, description="Elementos por página"
+    ),
     cedula: Optional[str] = Query(None, description="Filtrar por cédula"),
     conciliado: Optional[bool] = Query(
         None, description="Filtrar por estado de conciliación"
@@ -200,7 +204,8 @@ async def obtener_kpis_pagos(
         # KPIs básicos
         total_pagos = db.query(Pago).filter(Pago.activo).count()
         total_dolares = (
-            db.query(func.sum(Pago.monto_pagado)).filter(Pago.activo).scalar() or 0
+            db.query(func.sum(Pago.monto_pagado)).filter(Pago.activo).scalar()
+            or 0
         )
         numero_pagos = total_pagos  # Mismo valor para consistencia
 
@@ -310,7 +315,9 @@ async def descargar_documento(
             ".pdf": "application/pdf",
         }
 
-        content_type = content_type_map.get(file_extension, "application/octet-stream")
+        content_type = content_type_map.get(
+            file_extension, "application/octet-stream"
+        )
 
         return {
             "success": True,

@@ -62,10 +62,16 @@ def add_cors_headers(request: Request, response: Response) -> None:
         logger.warning(f"CORS Debug - Origin NO permitido: {origin}")
         # En caso de origin no permitido, usar el primer origin válido
         if settings.CORS_ORIGINS:
-            response.headers["Access-Control-Allow-Origin"] = settings.CORS_ORIGINS[0]
-            logger.info(f"CORS Debug - Usando fallback: {settings.CORS_ORIGINS[0]}")
+            response.headers["Access-Control-Allow-Origin"] = (
+                settings.CORS_ORIGINS[0]
+            )
+            logger.info(
+                f"CORS Debug - Usando fallback: {settings.CORS_ORIGINS[0]}"
+            )
 
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Methods"] = (
+        "GET, POST, PUT, DELETE, OPTIONS"
+    )
     response.headers["Access-Control-Allow-Headers"] = (
         "Content-Type, Authorization, X-Requested-With"
     )
@@ -95,7 +101,9 @@ async def login(
         add_cors_headers(request, response)
 
         # Autenticar usuario
-        user = AuthService.authenticate_user(db, login_data.email, login_data.password)
+        user = AuthService.authenticate_user(
+            db, login_data.email, login_data.password
+        )
         if not user:
             logger.warning(f"Login fallido para: {login_data.email}")
             raise HTTPException(
@@ -240,9 +248,13 @@ async def change_password(
             )
 
         # Validar fortaleza de nueva contraseña
-        is_valid, message = validate_password_strength(password_data.new_password)
+        is_valid, message = validate_password_strength(
+            password_data.new_password
+        )
         if not is_valid:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=message
+            )
 
         # Actualizar contraseña
         new_hashed_password = get_password_hash(password_data.new_password)
