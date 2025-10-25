@@ -558,7 +558,9 @@ def _validar_y_corregir_numero_operacion(
 def _limpiar_observaciones_error(pago: Pago, current_user: User) -> None:
     """Limpiar observaciones de error"""
     if pago.observaciones and "REQUIERE_VALIDACIÓN" in pago.observaciones:
-        usuario_nombre = f"{current_user.nombre} {current_user.apellido}".strip()
+        usuario_nombre = (
+            f"{current_user.nombre} {current_user.apellido}".strip()
+        )
         pago.observaciones = f"CORREGIDO - {datetime.now().strftime('%d/%m/%Y')} por {usuario_nombre}"
 
 
@@ -941,7 +943,8 @@ async def _procesar_correcciones_masivas(
                 fallidas += 1
 
         logger.info(
-            f"📊 Corrección masiva completada: {exitosas} exitosas, {fallidas} fallidas")
+            f"📊 Corrección masiva completada: {exitosas} exitosas, {fallidas} fallidas"
+        )
 
         db.close()
 

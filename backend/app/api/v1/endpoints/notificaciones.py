@@ -117,7 +117,8 @@ async def enviar_notificacion(
         )
 
     logger.info(
-        f"Notificación {nueva_notif.id} programada para envío por {notificacion.canal}")
+        f"Notificación {nueva_notif.id} programada para envío por {notificacion.canal}"
+    )
     return nueva_notif
 
 
@@ -442,9 +443,8 @@ Gracias por su puntualidad.
                 mensaje=mensaje,
                 estado="PENDIENTE",
                 programada_para=datetime.now().replace(
-                    hour=9,
-                    minute=0,
-                    second=0),
+                    hour=9, minute=0, second=0
+                ),
                 prioridad="ALTA",
             )
 
@@ -717,9 +717,13 @@ PRÓXIMOS VENCIMIENTOS:
 """
 
         for cuota in cuotas_pendientes:
-            mensaje += f"• Cuota #" f"{cuota.numero_cuota}" f": {float(
+            mensaje += (
+                f"• Cuota #"
+                f"{cuota.numero_cuota}"
+                f": {float(
                     cuota.monto_cuota):.2f} - {
                 cuota.fecha_vencimiento.strftime('%d/%m/%Y')}\n"
+            )
 
         mensaje += "\nMantengase al día con sus pagos.\n\nSaludos cordiales."
 

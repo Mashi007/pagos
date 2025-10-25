@@ -1177,13 +1177,16 @@ def obtener_alertas_tiempo_real(
     )
 
     if pagos_pendientes > 0:
-        alertas.append({"tipo": "CONCILIACION_PENDIENTE",
-                        "mensaje": f"{pagos_pendientes} pago(s) pendiente(s) de conciliar",
-                        "prioridad": "MEDIA",
-                        "icono": "💳",
-                        "color": "warning",
-                        "accion": "/conciliacion/pendientes",
-                        })
+        alertas.append(
+            {
+                "tipo": "CONCILIACION_PENDIENTE",
+                "mensaje": f"{pagos_pendientes} pago(s) pendiente(s) de conciliar",
+                "prioridad": "MEDIA",
+                "icono": "💳",
+                "color": "warning",
+                "accion": "/conciliacion/pendientes",
+            }
+        )
 
     # Clientes críticos (>30 días mora)
     clientes_criticos = (
@@ -1201,7 +1204,8 @@ def obtener_alertas_tiempo_real(
                 "icono": "🚨",
                 "color": "danger",
                 "accion": "/clientes?dias_mora_min=30",
-            })
+            }
+        )
 
     # Vencimientos de hoy
     vencimientos_hoy = (
@@ -1462,7 +1466,9 @@ async def exportar_vista_dashboard(
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 headers={
                     "Content-Disposition": (
-                        f"attachment; filename=dashboard_{tipo_vista}_{date.today().strftime('%Y%m%d')}.xlsx")},
+                        f"attachment; filename=dashboard_{tipo_vista}_{date.today().strftime('%Y%m%d')}.xlsx"
+                    )
+                },
             )
 
         else:

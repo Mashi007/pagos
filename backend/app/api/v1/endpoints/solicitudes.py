@@ -714,9 +714,9 @@ def solicitar_modificacion_amortizacion(
         "prestamo_afectado": {
             "id": prestamo.id,
             "cliente": (
-                prestamo.cliente.nombre_completo if prestamo.cliente else "N/A"),
-            "monto_actual": float(
-                prestamo.monto_total),
+                prestamo.cliente.nombre_completo if prestamo.cliente else "N/A"
+            ),
+            "monto_actual": float(prestamo.monto_total),
         },
     }
 
