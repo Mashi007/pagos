@@ -84,14 +84,14 @@ async def login(
 
         logger.info(f"Login exitoso para: {login_data.email}")
 
-        # Convertir usuario a diccionario
-        user_dict = UserMeResponse.model_validate(user).model_dump()
+        # Calcular tiempo de expiración en segundos (30 minutos por defecto)
+        expires_in = 30 * 60  # 1800 segundos
 
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
             token_type="bearer",
-            user=user_dict,
+            expires_in=expires_in,
         )
 
     except HTTPException:
@@ -149,14 +149,14 @@ async def refresh_token(
             subject=user.id, expires_delta=timedelta(minutes=1440)
         )
 
-        # Convertir usuario a diccionario
-        user_dict = UserMeResponse.model_validate(user).model_dump()
+        # Calcular tiempo de expiración en segundos (30 minutos por defecto)
+        expires_in = 30 * 60  # 1800 segundos
 
         return TokenResponse(
             access_token=new_access_token,
             refresh_token=new_refresh_token,
             token_type="bearer",
-            user=user_dict,
+            expires_in=expires_in,
         )
 
     except HTTPException:
