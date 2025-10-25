@@ -98,7 +98,10 @@ class Settings(BaseSettings):
         """Valida que las credenciales de admin estén configuradas correctamente"""
         if not self.ADMIN_EMAIL or not self.ADMIN_PASSWORD:
             return False
-        if self.ADMIN_PASSWORD == "R@pi_2025**" and self.ENVIRONMENT == "production":
+        if (
+            self.ADMIN_PASSWORD == "R@pi_2025**"
+            and self.ENVIRONMENT == "production"
+        ):
             raise ValueError(
                 "⚠️ CRÍTICO: Contraseña por defecto detectada en producción. Configure ADMIN_PASSWORD"
             )
@@ -244,7 +247,9 @@ class Settings(BaseSettings):
     # ============================================
     UVICORN_WORKERS: int = DEFAULT_UVICORN_WORKERS
     UVICORN_TIMEOUT_KEEP_ALIVE: int = DEFAULT_UVICORN_TIMEOUT_KEEP_ALIVE
-    UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN: int = DEFAULT_UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN
+    UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN: int = (
+        DEFAULT_UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN
+    )
 
     # ============================================
     # MÉTODOS DE UTILIDAD
@@ -280,7 +285,9 @@ class Settings(BaseSettings):
 
     def validate_loan_amount(self, amount: float) -> bool:
         """Valida que el monto esté dentro de los límites"""
-        return self.MONTO_MINIMO_PRESTAMO <= amount <= self.MONTO_MAXIMO_PRESTAMO
+        return (
+            self.MONTO_MINIMO_PRESTAMO <= amount <= self.MONTO_MAXIMO_PRESTAMO
+        )
 
     def validate_loan_term(self, months: int) -> bool:
         """Valida que el plazo esté dentro de los límites"""

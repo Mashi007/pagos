@@ -220,7 +220,9 @@ def setup_monitoring(app: FastAPI) -> dict:
 # ============================================
 
 
-def track_business_metrics(metric_name: str, value: float, labels: Optional[dict] = None) -> None:
+def track_business_metrics(
+    metric_name: str, value: float, labels: Optional[dict] = None
+) -> None:
     """
     Registra métricas de negocio personalizadas para financiamiento automotriz
 
@@ -313,15 +315,27 @@ def track_approval_workflow(
 
 
 def track_bulk_migration(
-    total_records: int, successful: int, failed: int, warnings: int, migration_type: str
+    total_records: int,
+    successful: int,
+    failed: int,
+    warnings: int,
+    migration_type: str,
 ) -> None:
     """
     Trackear migraciones masivas
     """
-    track_business_metrics("bulk_migration_total", total_records, {"type": migration_type})
-    track_business_metrics("bulk_migration_successful", successful, {"type": migration_type})
-    track_business_metrics("bulk_migration_failed", failed, {"type": migration_type})
-    track_business_metrics("bulk_migration_warnings", warnings, {"type": migration_type})
+    track_business_metrics(
+        "bulk_migration_total", total_records, {"type": migration_type}
+    )
+    track_business_metrics(
+        "bulk_migration_successful", successful, {"type": migration_type}
+    )
+    track_business_metrics(
+        "bulk_migration_failed", failed, {"type": migration_type}
+    )
+    track_business_metrics(
+        "bulk_migration_warnings", warnings, {"type": migration_type}
+    )
 
 
 # Context managers para tracking
@@ -340,7 +354,9 @@ class track_operation:
         self.context = kwargs
 
     def __enter__(self):
-        logging.info(f"Iniciando operación: {self.operation_name}", extra=self.context)
+        logging.info(
+            f"Iniciando operación: {self.operation_name}", extra=self.context
+        )
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -351,7 +367,10 @@ class track_operation:
                 exc_info=True,
             )
         else:
-            logging.info(f"Operación completada: {self.operation_name}", extra=self.context)
+            logging.info(
+                f"Operación completada: {self.operation_name}",
+                extra=self.context,
+            )
 
 
 # ============================================
@@ -371,7 +390,9 @@ def get_monitoring_status() -> dict:
                 "habilitado": bool(getattr(settings, "SENTRY_DSN", None)),
                 "dsn_configurado": bool(getattr(settings, "SENTRY_DSN", None)),
                 "environment": getattr(settings, "ENVIRONMENT", "production"),
-                "traces_sample_rate": getattr(settings, "SENTRY_TRACES_SAMPLE_RATE", 0.1),
+                "traces_sample_rate": getattr(
+                    settings, "SENTRY_TRACES_SAMPLE_RATE", 0.1
+                ),
                 "descripcion": "Tracking de errores y performance",
             },
             "prometheus": {

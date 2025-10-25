@@ -92,7 +92,9 @@ class EmailService:
 
             # Actualizar notificación
             if notificacion_id:
-                self._actualizar_notificacion(notificacion_id, EstadoNotificacion.ENVIADA.value)
+                self._actualizar_notificacion(
+                    notificacion_id, EstadoNotificacion.ENVIADA.value
+                )
 
             return True
 
@@ -102,7 +104,9 @@ class EmailService:
             # Actualizar notificación como fallida
             if notificacion_id:
                 self._actualizar_notificacion(
-                    notificacion_id, EstadoNotificacion.FALLIDA.value, error=str(e)
+                    notificacion_id,
+                    EstadoNotificacion.FALLIDA.value,
+                    error=str(e),
                 )
 
             return False
@@ -277,7 +281,11 @@ class EmailService:
         """
         try:
             db = SessionLocal()
-            notificacion = db.query(Notificacion).filter(Notificacion.id == notificacion_id).first()
+            notificacion = (
+                db.query(Notificacion)
+                .filter(Notificacion.id == notificacion_id)
+                .first()
+            )
 
             if notificacion:
                 notificacion.estado = estado
@@ -289,6 +297,8 @@ class EmailService:
                 db.commit()
 
         except Exception as e:
-            logger.error(f"Error actualizando notificación {notificacion_id}: {str(e)}")
+            logger.error(
+                f"Error actualizando notificación {notificacion_id}: {str(e)}"
+            )
         finally:
             db.close()

@@ -25,7 +25,9 @@ class EndpointSpecificAnalyzer:
         self.endpoint_metrics = {}
         self.business_metrics = {}
 
-    def record_business_metric(self, endpoint: str, metric_name: str, value: Any):
+    def record_business_metric(
+        self, endpoint: str, metric_name: str, value: Any
+    ):
         """Registrar métrica de negocio específica"""
         if endpoint not in self.business_metrics:
             self.business_metrics[endpoint] = {}
@@ -40,7 +42,9 @@ class EndpointSpecificAnalyzer:
     def get_endpoint_analysis(self, endpoint: str) -> Dict[str, Any]:
         """Obtener análisis específico del endpoint"""
         if endpoint not in self.business_metrics:
-            return {"message": "No hay métricas específicas para este endpoint"}
+            return {
+                "message": "No hay métricas específicas para este endpoint"
+            }
 
         metrics = self.business_metrics[endpoint]
         analysis = {}
@@ -50,13 +54,15 @@ class EndpointSpecificAnalyzer:
                 recent_values = values[-10:]  # Últimos 10 valores
                 analysis[metric_name] = {
                     "current": recent_values[-1]["value"],
-                    "average": sum(v["value"] for v in recent_values) / len(recent_values),
+                    "average": sum(v["value"] for v in recent_values)
+                    / len(recent_values),
                     "max": max(v["value"] for v in recent_values),
                     "min": min(v["value"] for v in recent_values),
                     "trend": (
                         "increasing"
                         if len(recent_values) > 1
-                        and recent_values[-1]["value"] > recent_values[0]["value"]
+                        and recent_values[-1]["value"]
+                        > recent_values[0]["value"]
                         else "stable"
                     ),
                 }
@@ -68,7 +74,9 @@ class EndpointSpecificAnalyzer:
 endpoint_analyzer = EndpointSpecificAnalyzer()
 
 
-def endpoint_impact_analysis(endpoint_name: str, business_metrics: Optional[Dict[str, str]] = None):
+def endpoint_impact_analysis(
+    endpoint_name: str, business_metrics: Optional[Dict[str, str]] = None
+):
     """
     Decorator para análisis de impacto específico por endpoint
 
@@ -104,7 +112,9 @@ def endpoint_impact_analysis(endpoint_name: str, business_metrics: Optional[Dict
                                     endpoint_name, metric_name, value
                                 )
                         except Exception as e:
-                            logger.warning(f"Error extrayendo métrica {metric_name}: {e}")
+                            logger.warning(
+                                f"Error extrayendo métrica {metric_name}: {e}"
+                            )
 
                 return result
 
@@ -160,8 +170,12 @@ def auth_endpoint_analysis(func: Callable):
 
             # Métricas específicas de autenticación
             if result and hasattr(result, "access_token"):
-                endpoint_analyzer.record_business_metric("auth", "tokens_generated", 1)
-                endpoint_analyzer.record_business_metric("auth", "auth_success", 1)
+                endpoint_analyzer.record_business_metric(
+                    "auth", "tokens_generated", 1
+                )
+                endpoint_analyzer.record_business_metric(
+                    "auth", "auth_success", 1
+                )
 
             record_endpoint_performance("auth", response_time)
             record_success("auth", response_time)
@@ -221,7 +235,9 @@ def carga_masiva_endpoint_analysis(func: Callable):
             response_time = (time.time() - start_time) * 1000
 
             # Métricas de error de carga masiva
-            endpoint_analyzer.record_business_metric("carga_masiva", "carga_failed", 1)
+            endpoint_analyzer.record_business_metric(
+                "carga_masiva", "carga_failed", 1
+            )
 
             record_error(e, "carga_masiva", response_time)
             raise e
@@ -260,7 +276,9 @@ def clientes_endpoint_analysis(func: Callable):
             response_time = (time.time() - start_time) * 1000
 
             # Métricas de error de clientes
-            endpoint_analyzer.record_business_metric("clientes", "clientes_failed", 1)
+            endpoint_analyzer.record_business_metric(
+                "clientes", "clientes_failed", 1
+            )
 
             record_error(e, "clientes", response_time)
             raise e
@@ -299,7 +317,9 @@ def pagos_endpoint_analysis(func: Callable):
             response_time = (time.time() - start_time) * 1000
 
             # Métricas de error de pagos
-            endpoint_analyzer.record_business_metric("pagos", "pagos_failed", 1)
+            endpoint_analyzer.record_business_metric(
+                "pagos", "pagos_failed", 1
+            )
 
             record_error(e, "pagos", response_time)
             raise e

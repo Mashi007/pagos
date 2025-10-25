@@ -35,7 +35,9 @@ class EstadoPrestamo(str, Enum):
     """Estados posibles de un préstamo."""
 
     PENDIENTE = "PENDIENTE"  # Solicitud inicial
-    EN_APROBACION = "EN_APROBACION"  # <== AÑADIDO: Usado por el endpoint de aprobaciones
+    EN_APROBACION = (
+        "EN_APROBACION"  # <== AÑADIDO: Usado por el endpoint de aprobaciones
+    )
     APROBADO = "APROBADO"  # <== USADO por el endpoint
     RECHAZADO = "RECHAZADO"  # <== AÑADIDO: Usado por el endpoint al rechazar
     CANCELADO = "CANCELADO"
@@ -64,14 +66,22 @@ class Prestamo(Base):
     codigo_prestamo = Column(String(CODIGO_LENGTH), unique=True, index=True)
 
     # Montos
-    monto_total = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
-    monto_financiado = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
-    monto_inicial = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), default=0.00)
+    monto_total = Column(
+        Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False
+    )
+    monto_financiado = Column(
+        Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False
+    )
+    monto_inicial = Column(
+        Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), default=0.00
+    )
     tasa_interes = Column(Numeric(TASA_PRECISION, TASA_SCALE), default=0.00)
 
     # Cuotas
     numero_cuotas = Column(Integer, nullable=False)
-    monto_cuota = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
+    monto_cuota = Column(
+        Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False
+    )
     cuotas_pagadas = Column(Integer, default=0)
     # Se recomienda que cuotas_pendientes sea calculado, pero se mantiene como columna por diseño.
     cuotas_pendientes = Column(Integer)
@@ -85,15 +95,27 @@ class Prestamo(Base):
     fecha_ultimo_vencimiento = Column(Date)
 
     # Estado financiero
-    saldo_pendiente = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
-    saldo_capital = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
-    saldo_interes = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), default=0.00)
-    total_pagado = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), default=0.00)
+    saldo_pendiente = Column(
+        Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False
+    )
+    saldo_capital = Column(
+        Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False
+    )
+    saldo_interes = Column(
+        Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), default=0.00
+    )
+    total_pagado = Column(
+        Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), default=0.00
+    )
 
     # Estado
-    estado = Column(String(ESTADO_LENGTH), default=EstadoPrestamo.PENDIENTE.value)
+    estado = Column(
+        String(ESTADO_LENGTH), default=EstadoPrestamo.PENDIENTE.value
+    )
     categoria = Column(String(ESTADO_LENGTH), default="NORMAL")
-    modalidad = Column(String(ESTADO_LENGTH), default=ModalidadPago.TRADICIONAL.value)
+    modalidad = Column(
+        String(ESTADO_LENGTH), default=ModalidadPago.TRADICIONAL.value
+    )
 
     # Información adicional
     destino_credito = Column(Text)
@@ -101,7 +123,9 @@ class Prestamo(Base):
 
     # Auditoría
     creado_en = Column(TIMESTAMP, server_default=func.now())
-    actualizado_en = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+    actualizado_en = Column(
+        TIMESTAMP, server_default=func.now(), onupdate=func.now()
+    )
 
     # Relaciones
     # CORREGIDO: Relación correcta con el modelo Cliente

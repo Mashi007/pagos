@@ -78,7 +78,10 @@ class NetworkDiagnosticSystem:
         # Test de DNS
         try:
             socket.gethostbyname("google.com")
-            test_result["tests"]["dns"] = {"status": "success", "latency_ms": 0}
+            test_result["tests"]["dns"] = {
+                "status": "success",
+                "latency_ms": 0,
+            }
         except Exception as e:
             test_result["tests"]["dns"] = {"status": "failed", "error": str(e)}
 
@@ -89,22 +92,36 @@ class NetworkDiagnosticSystem:
             start_time = time.time()
             urllib.request.urlopen("http://httpbin.org/get", timeout=10)
             latency = (time.time() - start_time) * 1000
-            test_result["tests"]["http"] = {"status": "success", "latency_ms": latency}
+            test_result["tests"]["http"] = {
+                "status": "success",
+                "latency_ms": latency,
+            }
         except Exception as e:
-            test_result["tests"]["http"] = {"status": "failed", "error": str(e)}
+            test_result["tests"]["http"] = {
+                "status": "failed",
+                "error": str(e),
+            }
 
         # Test de conectividad HTTPS
         try:
             start_time = time.time()
             urllib.request.urlopen("https://httpbin.org/get", timeout=10)
             latency = (time.time() - start_time) * 1000
-            test_result["tests"]["https"] = {"status": "success", "latency_ms": latency}
+            test_result["tests"]["https"] = {
+                "status": "success",
+                "latency_ms": latency,
+            }
         except Exception as e:
-            test_result["tests"]["https"] = {"status": "failed", "error": str(e)}
+            test_result["tests"]["https"] = {
+                "status": "failed",
+                "error": str(e),
+            }
 
         # Determinar estado general
         failed_tests = [
-            test for test in test_result["tests"].values() if test["status"] == "failed"
+            test
+            for test in test_result["tests"].values()
+            if test["status"] == "failed"
         ]
         if len(failed_tests) == 0:
             test_result["overall_status"] = "excellent"
@@ -169,7 +186,9 @@ class NetworkDiagnosticSystem:
         """Analizar salud general de la red"""
         with self.lock:
             current_time = datetime.now()
-            cutoff_time = current_time - timedelta(minutes=10)  # Últimos 10 minutos
+            cutoff_time = current_time - timedelta(
+                minutes=10
+            )  # Últimos 10 minutos
 
             # Filtrar tests recientes
             recent_tests = [
@@ -206,7 +225,9 @@ class NetworkDiagnosticSystem:
                 ),
             }
 
-    def _analyze_connectivity(self, recent_tests: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _analyze_connectivity(
+        self, recent_tests: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """Analizar conectividad"""
         if not recent_tests:
             return {"status": "no_data", "message": "No hay datos recientes"}
@@ -225,7 +246,9 @@ class NetworkDiagnosticSystem:
         connectivity_stats = {}
         for test_type, counts in test_types.items():
             total = counts["success"] + counts["failed"]
-            success_rate = (counts["success"] / total * 100) if total > 0 else 0
+            success_rate = (
+                (counts["success"] / total * 100) if total > 0 else 0
+            )
             connectivity_stats[test_type] = {
                 "success_rate": success_rate,
                 "success_count": counts["success"],
@@ -256,7 +279,9 @@ class NetworkDiagnosticSystem:
             "total_tests": len(recent_tests),
         }
 
-    def _analyze_latency(self, recent_latency: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _analyze_latency(
+        self, recent_latency: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """Analizar latencia"""
         if not recent_latency:
             return {
@@ -283,8 +308,14 @@ class NetworkDiagnosticSystem:
                 }
 
         # Calcular latencia promedio general
-        all_latencies = [lat for latencies in service_latencies.values() for lat in latencies]
-        overall_avg_latency = statistics.mean(all_latencies) if all_latencies else 0
+        all_latencies = [
+            lat
+            for latencies in service_latencies.values()
+            for lat in latencies
+        ]
+        overall_avg_latency = (
+            statistics.mean(all_latencies) if all_latencies else 0
+        )
 
         # Determinar estado de latencia
         if overall_avg_latency < 100:
@@ -310,8 +341,14 @@ class NetworkDiagnosticSystem:
                 return {"status": "insufficient_data"}
 
             # Analizar tendencia de latencia
-            recent_latencies = list(self.latency_history)[-20:]  # Últimos 20 tests
-            successful_tests = [test for test in recent_latencies if test["status"] == "success"]
+            recent_latencies = list(self.latency_history)[
+                -20:
+            ]  # Últimos 20 tests
+            successful_tests = [
+                test
+                for test in recent_latencies
+                if test["status"] == "success"
+            ]
 
             if len(successful_tests) < 5:
                 return {"status": "insufficient_successful_tests"}
@@ -324,7 +361,11 @@ class NetworkDiagnosticSystem:
                 first_half_avg = statistics.mean(latencies[:mid_point])
                 second_half_avg = statistics.mean(latencies[mid_point:])
 
-                trend_direction = "improving" if second_half_avg < first_half_avg else "degrading"
+                trend_direction = (
+                    "improving"
+                    if second_half_avg < first_half_avg
+                    else "degrading"
+                )
                 trend_magnitude = abs(second_half_avg - first_half_avg)
 
                 return {
@@ -377,25 +418,37 @@ class NetworkDiagnosticSystem:
         # Recomendaciones basadas en conectividad
         connectivity_status = connectivity.get("status", "unknown")
         if connectivity_status == "poor":
-            recommendations.append("🔴 Conectividad crítica - Verificar configuración de red")
+            recommendations.append(
+                "🔴 Conectividad crítica - Verificar configuración de red"
+            )
         elif connectivity_status == "degraded":
-            recommendations.append("🟡 Conectividad degradada - Revisar DNS y firewall")
+            recommendations.append(
+                "🟡 Conectividad degradada - Revisar DNS y firewall"
+            )
 
         # Recomendaciones basadas en latencia
         latency_status = latency.get("status", "unknown")
         if latency_status == "poor":
-            recommendations.append("🔴 Latencia muy alta - Considerar CDN o servidor más cercano")
+            recommendations.append(
+                "🔴 Latencia muy alta - Considerar CDN o servidor más cercano"
+            )
         elif latency_status == "degraded":
-            recommendations.append("🟡 Latencia alta - Optimizar queries y conexiones")
+            recommendations.append(
+                "🟡 Latencia alta - Optimizar queries y conexiones"
+            )
 
         # Recomendaciones específicas por servicio
         test_results = connectivity.get("test_results", {})
         for test_type, result in test_results.items():
             if result["success_rate"] < 80:
                 if test_type == "dns":
-                    recommendations.append("🔧 Problemas de DNS - Verificar configuración DNS")
+                    recommendations.append(
+                        "🔧 Problemas de DNS - Verificar configuración DNS"
+                    )
                 elif test_type == "https":
-                    recommendations.append("🔒 Problemas HTTPS - Verificar certificados SSL")
+                    recommendations.append(
+                        "🔒 Problemas HTTPS - Verificar certificados SSL"
+                    )
 
         if not recommendations:
             recommendations.append("✅ Red funcionando correctamente")
@@ -413,7 +466,8 @@ network_diagnostic = NetworkDiagnosticSystem()
 
 @router.get("/network-health")
 async def get_network_health(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     🌐 Análisis completo de salud de red
@@ -438,7 +492,8 @@ async def get_network_health(
 
 @router.post("/test-connectivity")
 async def test_connectivity_now(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     🔍 Test inmediato de conectividad
@@ -468,7 +523,8 @@ async def test_connectivity_now(
 
 @router.post("/test-latency")
 async def test_latency_now(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     ⚡ Test inmediato de latencia
@@ -499,7 +555,8 @@ async def test_latency_now(
 
 @router.get("/network-statistics")
 async def get_network_statistics(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     📊 Estadísticas históricas de red
@@ -531,7 +588,8 @@ async def get_network_statistics(
                 all_latencies = [
                     test["latency_ms"]
                     for test in network_diagnostic.latency_history
-                    if test["status"] == "success" and test["latency_ms"] is not None
+                    if test["status"] == "success"
+                    and test["latency_ms"] is not None
                 ]
 
                 if all_latencies:
@@ -562,7 +620,8 @@ async def get_network_statistics(
 
 @router.get("/network-trends")
 async def get_network_trends(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     📈 Análisis de tendencias de red

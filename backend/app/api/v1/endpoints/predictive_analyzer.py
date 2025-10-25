@@ -34,7 +34,9 @@ class AuthMetrics:
 
 
 # Almacenamiento para métricas históricas
-historical_metrics = deque(maxlen=1000)  # Mantener últimos 1000 puntos de métricas
+historical_metrics = deque(
+    maxlen=1000
+)  # Mantener últimos 1000 puntos de métricas
 prediction_models = {}  # Modelos de predicción
 
 
@@ -42,10 +44,16 @@ class PredictiveAnalyzer:
     """Analizador predictivo para problemas de autenticación"""
 
     @staticmethod
-    def calculate_trend(data_points: List[float], window_size: int = 5) -> Dict[str, float]:
+    def calculate_trend(
+        data_points: List[float], window_size: int = 5
+    ) -> Dict[str, float]:
         """Calcular tendencia de datos"""
         if len(data_points) < window_size:
-            return {"trend": "insufficient_data", "slope": 0.0, "confidence": 0.0}
+            return {
+                "trend": "insufficient_data",
+                "slope": 0.0,
+                "confidence": 0.0,
+            }
 
         recent_data = data_points[-window_size:]
         older_data = (
@@ -58,10 +66,16 @@ class PredictiveAnalyzer:
         older_avg = statistics.mean(older_data)
 
         slope = recent_avg - older_avg
-        trend = "increasing" if slope > 0.05 else "decreasing" if slope < -0.05 else "stable"
+        trend = (
+            "increasing"
+            if slope > 0.05
+            else "decreasing" if slope < -0.05 else "stable"
+        )
 
         # Calcular confianza basada en variabilidad
-        variance = statistics.variance(recent_data) if len(recent_data) > 1 else 0
+        variance = (
+            statistics.variance(recent_data) if len(recent_data) > 1 else 0
+        )
         confidence = max(0, 1 - (variance / (recent_avg + 0.001)))
 
         return {
@@ -73,7 +87,9 @@ class PredictiveAnalyzer:
         }
 
     @staticmethod
-    def detect_anomaly_patterns(metrics: List[AuthMetrics]) -> List[Dict[str, Any]]:
+    def detect_anomaly_patterns(
+        metrics: List[AuthMetrics],
+    ) -> List[Dict[str, Any]]:
         """Detectar patrones anómalos en métricas históricas"""
         anomalies = []
 
@@ -87,7 +103,10 @@ class PredictiveAnalyzer:
 
         # Anomalía 1: Caída súbita en tasa de éxito
         success_trend = PredictiveAnalyzer.calculate_trend(success_rates)
-        if success_trend["trend"] == "decreasing" and success_trend["confidence"] > 0.7:
+        if (
+            success_trend["trend"] == "decreasing"
+            and success_trend["confidence"] > 0.7
+        ):
             anomalies.append(
                 {
                     "type": "success_rate_decline",
@@ -100,7 +119,10 @@ class PredictiveAnalyzer:
 
         # Anomalía 2: Aumento en tiempo de respuesta
         response_trend = PredictiveAnalyzer.calculate_trend(response_times)
-        if response_trend["trend"] == "increasing" and response_trend["confidence"] > 0.6:
+        if (
+            response_trend["trend"] == "increasing"
+            and response_trend["confidence"] > 0.6
+        ):
             anomalies.append(
                 {
                     "type": "response_time_increase",
@@ -118,10 +140,14 @@ class PredictiveAnalyzer:
             recent_errors = error_counts[-5:]
             avg_recent_errors = statistics.mean(recent_errors)
             historical_avg = (
-                statistics.mean(error_counts[:-5]) if len(error_counts) > 5 else avg_recent_errors
+                statistics.mean(error_counts[:-5])
+                if len(error_counts) > 5
+                else avg_recent_errors
             )
 
-            if avg_recent_errors > historical_avg * 2:  # Doble del promedio histórico
+            if (
+                avg_recent_errors > historical_avg * 2
+            ):  # Doble del promedio histórico
                 anomalies.append(
                     {
                         "type": "error_spike",
@@ -153,14 +179,21 @@ class PredictiveAnalyzer:
         [m.error_count for m in metrics]
 
         # Predicción 1: Tasa de éxito
-        success_trend = PredictiveAnalyzer.calculate_trend(success_rates, window_size=10)
+        success_trend = PredictiveAnalyzer.calculate_trend(
+            success_rates, window_size=10
+        )
         if success_trend["trend"] == "decreasing":
             # Calcular cuándo podría llegar a un umbral crítico
             current_rate = success_rates[-1]
             critical_threshold = 0.7  # 70% success rate
 
-            if current_rate > critical_threshold and success_trend["slope"] < 0:
-                days_to_critical = (current_rate - critical_threshold) / abs(success_trend["slope"])
+            if (
+                current_rate > critical_threshold
+                and success_trend["slope"] < 0
+            ):
+                days_to_critical = (current_rate - critical_threshold) / abs(
+                    success_trend["slope"]
+                )
                 predictions["success_rate_critical"] = {
                     "probability": min(0.9, success_trend["confidence"]),
                     "days_to_critical": max(1, int(days_to_critical)),
@@ -169,13 +202,20 @@ class PredictiveAnalyzer:
                 }
 
         # Predicción 2: Tiempo de respuesta
-        response_trend = PredictiveAnalyzer.calculate_trend(response_times, window_size=10)
+        response_trend = PredictiveAnalyzer.calculate_trend(
+            response_times, window_size=10
+        )
         if response_trend["trend"] == "increasing":
             current_time = response_times[-1]
             warning_threshold = 2000  # 2 segundos
 
-            if current_time < warning_threshold and response_trend["slope"] > 0:
-                days_to_warning = (warning_threshold - current_time) / response_trend["slope"]
+            if (
+                current_time < warning_threshold
+                and response_trend["slope"] > 0
+            ):
+                days_to_warning = (
+                    warning_threshold - current_time
+                ) / response_trend["slope"]
                 predictions["response_time_warning"] = {
                     "probability": min(0.8, response_trend["confidence"]),
                     "days_to_warning": max(1, int(days_to_warning)),
@@ -187,7 +227,9 @@ class PredictiveAnalyzer:
             "status": "success",
             "predictions": predictions,
             "analysis_period": f"{len(metrics)} data points",
-            "last_update": metrics[-1].timestamp.isoformat() if metrics else None,
+            "last_update": (
+                metrics[-1].timestamp.isoformat() if metrics else None
+            ),
         }
 
 
@@ -244,7 +286,9 @@ async def collect_authentication_metrics(db: Session = Depends(get_db)):
 router.get("/predictive-analysis")
 
 
-def _validar_datos_suficientes(historical_metrics: list) -> Optional[Dict[str, Any]]:
+def _validar_datos_suficientes(
+    historical_metrics: list,
+) -> Optional[Dict[str, Any]]:
     """Validar que hay suficientes datos para análisis"""
     if len(historical_metrics) < 5:
         return {
@@ -280,7 +324,9 @@ def _calcular_tendencias(metrics_list: list) -> Dict[str, Any]:
     }
 
 
-def _generar_recomendaciones_predictivas(predictions: Dict[str, Any]) -> List[str]:
+def _generar_recomendaciones_predictivas(
+    predictions: Dict[str, Any],
+) -> List[str]:
     """Generar recomendaciones basadas en predicciones"""
     recommendations = []
 
@@ -307,7 +353,9 @@ def _generar_recomendaciones_tendencias(trends: Dict[str, Any]) -> List[str]:
     recommendations = []
 
     if trends["success_rate"]["trend"] == "decreasing":
-        recommendations.append("📉 Tendencia: Tasa de éxito disminuyendo - Monitorear de cerca")
+        recommendations.append(
+            "📉 Tendencia: Tasa de éxito disminuyendo - Monitorear de cerca"
+        )
 
     if trends["response_time"]["trend"] == "increasing":
         recommendations.append(
@@ -315,10 +363,14 @@ def _generar_recomendaciones_tendencias(trends: Dict[str, Any]) -> List[str]:
         )
 
     if trends["error_count"]["trend"] == "increasing":
-        recommendations.append("❌ Tendencia: Errores aumentando - Investigar causas")
+        recommendations.append(
+            "❌ Tendencia: Errores aumentando - Investigar causas"
+        )
 
     if not recommendations:
-        recommendations.append("✅ Sistema estable - Continuar monitoreo rutinario")
+        recommendations.append(
+            "✅ Sistema estable - Continuar monitoreo rutinario"
+        )
 
     return recommendations
 
@@ -344,7 +396,9 @@ async def get_predictive_analysis():
 
         # 5. Generar recomendaciones
         recommendations = []
-        recommendations.extend(_generar_recomendaciones_predictivas(analysis["predictions"]))
+        recommendations.extend(
+            _generar_recomendaciones_predictivas(analysis["predictions"])
+        )
         recommendations.extend(_generar_recomendaciones_tendencias(trends))
 
         return {
@@ -360,7 +414,13 @@ async def get_predictive_analysis():
             "recommendations": recommendations,
             "summary": {
                 "total_anomalies": len(analysis["anomalies"]),
-                "critical_anomalies": len([a for a in analysis["anomalies"] if a["severity"] == "high"]),
+                "critical_anomalies": len(
+                    [
+                        a
+                        for a in analysis["anomalies"]
+                        if a["severity"] == "high"
+                    ]
+                ),
                 "predictions_count": (
                     len(analysis["predictions"].get("predictions", {}))
                     if analysis["predictions"].get("status") == "success"
@@ -381,7 +441,9 @@ async def get_predictive_analysis():
 router.get("/health-score")
 
 
-def _validar_datos_health_score(historical_metrics: list) -> Optional[Dict[str, Any]]:
+def _validar_datos_health_score(
+    historical_metrics: list,
+) -> Optional[Dict[str, Any]]:
     """Validar que hay suficientes datos para health score"""
     if len(historical_metrics) < 3:
         return {
@@ -394,7 +456,9 @@ def _validar_datos_health_score(historical_metrics: list) -> Optional[Dict[str, 
 
 def _calcular_componente_success_rate(recent_metrics: list) -> Dict[str, Any]:
     """Calcular componente de tasa de éxito (40% del score)"""
-    avg_success_rate = statistics.mean([m.success_rate for m in recent_metrics])
+    avg_success_rate = statistics.mean(
+        [m.success_rate for m in recent_metrics]
+    )
     success_score = min(100, avg_success_rate * 100)
     return {
         "value": avg_success_rate,
@@ -405,7 +469,9 @@ def _calcular_componente_success_rate(recent_metrics: list) -> Dict[str, Any]:
 
 def _calcular_componente_response_time(recent_metrics: list) -> Dict[str, Any]:
     """Calcular componente de tiempo de respuesta (30% del score)"""
-    avg_response_time = statistics.mean([m.avg_response_time for m in recent_metrics])
+    avg_response_time = statistics.mean(
+        [m.avg_response_time for m in recent_metrics]
+    )
     # Score basado en tiempo de respuesta (mejor = más rápido)
     response_score = max(0, 100 - (avg_response_time / 50))  # Penalizar >5s
     return {
@@ -415,10 +481,14 @@ def _calcular_componente_response_time(recent_metrics: list) -> Dict[str, Any]:
     }
 
 
-def _calcular_componente_error_stability(recent_metrics: list) -> Dict[str, Any]:
+def _calcular_componente_error_stability(
+    recent_metrics: list,
+) -> Dict[str, Any]:
     """Calcular componente de estabilidad de errores (20% del score)"""
     error_counts = [m.error_count for m in recent_metrics]
-    error_variance = statistics.variance(error_counts) if len(error_counts) > 1 else 0
+    error_variance = (
+        statistics.variance(error_counts) if len(error_counts) > 1 else 0
+    )
     avg_errors = statistics.mean(error_counts)
     stability_score = max(0, 100 - (error_variance / 10) - (avg_errors / 2))
     return {
@@ -429,10 +499,16 @@ def _calcular_componente_error_stability(recent_metrics: list) -> Dict[str, Any]
     }
 
 
-def _calcular_componente_user_availability(recent_metrics: list) -> Dict[str, Any]:
+def _calcular_componente_user_availability(
+    recent_metrics: list,
+) -> Dict[str, Any]:
     """Calcular componente de disponibilidad de usuarios (10% del score)"""
-    avg_unique_users = statistics.mean([m.unique_users for m in recent_metrics])
-    user_score = min(100, (avg_unique_users / 10) * 100)  # Normalizar a 10 usuarios
+    avg_unique_users = statistics.mean(
+        [m.unique_users for m in recent_metrics]
+    )
+    user_score = min(
+        100, (avg_unique_users / 10) * 100
+    )  # Normalizar a 10 usuarios
     return {
         "value": avg_unique_users,
         "score": user_score,
@@ -443,10 +519,14 @@ def _calcular_componente_user_availability(recent_metrics: list) -> Dict[str, An
 def _calcular_score_total(components: Dict[str, Any]) -> float:
     """Calcular score total ponderado"""
     return (
-        components["success_rate"]["score"] * components["success_rate"]["weight"]
-        + components["response_time"]["score"] * components["response_time"]["weight"]
-        + components["error_stability"]["score"] * components["error_stability"]["weight"]
-        + components["user_availability"]["score"] * components["user_availability"]["weight"]
+        components["success_rate"]["score"]
+        * components["success_rate"]["weight"]
+        + components["response_time"]["score"]
+        * components["response_time"]["weight"]
+        + components["error_stability"]["score"]
+        * components["error_stability"]["weight"]
+        + components["user_availability"]["score"]
+        * components["user_availability"]["weight"]
     )
 
 
@@ -462,7 +542,9 @@ def _determinar_estado_salud(total_score: float) -> tuple[str, str]:
         return "poor", "red"
 
 
-def _generar_recomendaciones_health_score(components: Dict[str, Any]) -> List[str]:
+def _generar_recomendaciones_health_score(
+    components: Dict[str, Any],
+) -> List[str]:
     """Generar recomendaciones basadas en componentes"""
     recommendations = []
     if components["success_rate"]["score"] < 80:
@@ -492,9 +574,15 @@ async def calculate_authentication_health_score():
         # 3. Calcular componentes del health score
         components = {
             "success_rate": _calcular_componente_success_rate(recent_metrics),
-            "response_time": _calcular_componente_response_time(recent_metrics),
-            "error_stability": _calcular_componente_error_stability(recent_metrics),
-            "user_availability": _calcular_componente_user_availability(recent_metrics),
+            "response_time": _calcular_componente_response_time(
+                recent_metrics
+            ),
+            "error_stability": _calcular_componente_error_stability(
+                recent_metrics
+            ),
+            "user_availability": _calcular_componente_user_availability(
+                recent_metrics
+            ),
         }
 
         # 4. Calcular score total ponderado
@@ -517,7 +605,11 @@ async def calculate_authentication_health_score():
             },
             "recommendations": recommendations,
             "analysis_period": f"{len(recent_metrics)} recent data points",
-            "last_updated": recent_metrics[-1].timestamp.isoformat() if recent_metrics else None,
+            "last_updated": (
+                recent_metrics[-1].timestamp.isoformat()
+                if recent_metrics
+                else None
+            ),
         }
 
     except Exception as e:
@@ -538,7 +630,9 @@ async def get_metrics_history(hours: int = 24, limit: int = 100):
         cutoff_time = datetime.now() - timedelta(hours=hours)
 
         # Filtrar métricas por tiempo
-        filtered_metrics = [m for m in historical_metrics if m.timestamp > cutoff_time]
+        filtered_metrics = [
+            m for m in historical_metrics if m.timestamp > cutoff_time
+        ]
 
         # Limitar resultados
         if limit:

@@ -50,7 +50,9 @@ class UserUpdate(BaseModel):
         """Validar contraseña solo si se proporciona un valor no vacío"""
         if v is not None and v.strip() != "":
             if len(v) < 8:
-                raise ValueError("La contraseña debe tener al menos 8 caracteres")
+                raise ValueError(
+                    "La contraseña debe tener al menos 8 caracteres"
+                )
         return v
 
 

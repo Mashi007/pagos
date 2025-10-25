@@ -15,7 +15,9 @@ class KPIBase(BaseModel):
     nombre: str = Field(..., description="Nombre del KPI")
     descripcion: Optional[str] = Field(None, description="Descripción del KPI")
     categoria: Optional[str] = Field(None, description="Categoría del KPI")
-    unidad_medida: Optional[str] = Field(None, description="Unidad de medida (%, $, unidades, etc)")
+    unidad_medida: Optional[str] = Field(
+        None, description="Unidad de medida (%, $, unidades, etc)"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -23,8 +25,12 @@ class KPIBase(BaseModel):
 class KPICreate(KPIBase):
     """Schema para crear un KPI"""
 
-    valor_objetivo: Optional[Decimal] = Field(None, description="Valor objetivo del KPI")
-    periodicidad: Optional[str] = Field("mensual", description="Periodicidad de medición")
+    valor_objetivo: Optional[Decimal] = Field(
+        None, description="Valor objetivo del KPI"
+    )
+    periodicidad: Optional[str] = Field(
+        "mensual", description="Periodicidad de medición"
+    )
     activo: bool = Field(True, description="Indica si el KPI está activo")
 
 
@@ -68,8 +74,12 @@ class KPIValorBase(BaseModel):
 class KPIValorCreate(KPIValorBase):
     """Schema para registrar un valor de KPI"""
 
-    notas: Optional[str] = Field(None, description="Notas adicionales sobre la medición")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Metadata adicional")
+    notas: Optional[str] = Field(
+        None, description="Notas adicionales sobre la medición"
+    )
+    metadata: Optional[Dict[str, Any]] = Field(
+        None, description="Metadata adicional"
+    )
 
 
 class KPIValorUpdate(BaseModel):
@@ -113,7 +123,9 @@ class KPIEstadisticas(BaseModel):
     valor_promedio: Optional[Decimal] = None
     valor_minimo: Optional[Decimal] = None
     valor_maximo: Optional[Decimal] = None
-    tendencia: Optional[str] = Field(None, description="ascendente, descendente, estable")
+    tendencia: Optional[str] = Field(
+        None, description="ascendente, descendente, estable"
+    )
     cumplimiento_objetivo: Optional[float] = Field(
         None, description="Porcentaje de cumplimiento del objetivo"
     )

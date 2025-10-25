@@ -31,7 +31,11 @@ async def get_health_impact_analysis_public():
         analyzer = get_impact_analyzer()
         status_data = analyzer.get_current_status()
 
-        return {"status": "success", "data": status_data, "timestamp": time.time()}
+        return {
+            "status": "success",
+            "data": status_data,
+            "timestamp": time.time(),
+        }
     except Exception as e:
         logger.error(f"Error obteniendo análisis de health: {e}")
         raise HTTPException(
@@ -41,7 +45,9 @@ async def get_health_impact_analysis_public():
 
 
 @router.get("/impact/health", response_model=Dict[str, Any])
-async def get_health_impact_analysis(current_user: User = Depends(get_current_user)):
+async def get_health_impact_analysis(
+    current_user: User = Depends(get_current_user),
+):
     """
     Obtener análisis de impacto de health checks
 
@@ -53,7 +59,11 @@ async def get_health_impact_analysis(current_user: User = Depends(get_current_us
         analyzer = get_impact_analyzer()
         status_data = analyzer.get_current_status()
 
-        return {"status": "success", "data": status_data, "timestamp": time.time()}
+        return {
+            "status": "success",
+            "data": status_data,
+            "timestamp": time.time(),
+        }
     except Exception as e:
         logger.error(f"Error obteniendo análisis de health: {e}")
         raise HTTPException(
@@ -87,7 +97,9 @@ async def get_performance_impact_analysis(
 
 
 @router.get("/impact/errors", response_model=Dict[str, Any])
-async def get_error_impact_analysis(current_user: User = Depends(get_current_user)):
+async def get_error_impact_analysis(
+    current_user: User = Depends(get_current_user),
+):
     """
     Obtener análisis de impacto de errores
 
@@ -142,7 +154,9 @@ async def get_comprehensive_impact_analysis(
         error_summary = error_analyzer.get_endpoint_error_summary()
 
         # Calcular score general del sistema
-        system_score = _calculate_system_score(health_status, performance_report, error_analysis)
+        system_score = _calculate_system_score(
+            health_status, performance_report, error_analysis
+        )
 
         # Generar recomendaciones generales
         general_recommendations = _generate_general_recommendations(
@@ -173,7 +187,9 @@ async def get_comprehensive_impact_analysis(
 
 
 @router.post("/impact/monitoring/start")
-async def start_impact_monitoring(current_user: User = Depends(get_current_user)):
+async def start_impact_monitoring(
+    current_user: User = Depends(get_current_user),
+):
     """
     Iniciar monitoreo de impacto del sistema
 
@@ -203,7 +219,9 @@ async def start_impact_monitoring(current_user: User = Depends(get_current_user)
 
 
 @router.post("/impact/monitoring/stop")
-async def stop_impact_monitoring(current_user: User = Depends(get_current_user)):
+async def stop_impact_monitoring(
+    current_user: User = Depends(get_current_user),
+):
     """
     Detener monitoreo de impacto del sistema
 
@@ -243,7 +261,12 @@ def _calculate_system_score(
         score -= health_status["active_alerts"] * 10
 
     # Penalizar por performance
-    if performance_report.get("performance_summary", {}).get("avg_response_time_ms", 0) > 500:
+    if (
+        performance_report.get("performance_summary", {}).get(
+            "avg_response_time_ms", 0
+        )
+        > 500
+    ):
         score -= 20
 
     # Penalizar por tasa de error
@@ -274,7 +297,9 @@ def _calculate_system_score(
         "factors": {
             "health_alerts": health_status.get("active_alerts", 0),
             "avg_response_time": (
-                performance_report.get("performance_summary", {}).get("avg_response_time_ms", 0)
+                performance_report.get("performance_summary", {}).get(
+                    "avg_response_time_ms", 0
+                )
             ),
             "error_rate": error_analysis.error_rate,
             "consecutive_errors": error_analysis.consecutive_errors,
@@ -297,16 +322,22 @@ def _generate_general_recommendations(
         "avg_response_time_ms", 0
     )
     if avg_response_time > 1000:
-        recommendations.append("Optimizar endpoints con tiempo de respuesta > 1s")
+        recommendations.append(
+            "Optimizar endpoints con tiempo de respuesta > 1s"
+        )
 
     # Recomendaciones basadas en errores
     if error_analysis.error_rate > 0.05:
         recommendations.append("Implementar manejo de errores más robusto")
 
     if error_analysis.consecutive_errors > 3:
-        recommendations.append("Activar circuit breakers para endpoints problemáticos")
+        recommendations.append(
+            "Activar circuit breakers para endpoints problemáticos"
+        )
 
     if not recommendations:
-        recommendations.append("Sistema funcionando dentro de parámetros normales")
+        recommendations.append(
+            "Sistema funcionando dentro de parámetros normales"
+        )
 
     return recommendations

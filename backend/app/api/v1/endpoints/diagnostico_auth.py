@@ -46,7 +46,9 @@ async def debug_autenticacion(request: Request, db: Session = Depends(get_db)):
 
         # 2. Verificar configuración JWT
         jwt_config = {
-            "secret_key_length": len(settings.SECRET_KEY) if settings.SECRET_KEY else 0,
+            "secret_key_length": (
+                len(settings.SECRET_KEY) if settings.SECRET_KEY else 0
+            ),
             "algorithm": settings.ALGORITHM,
             "access_token_expire_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
             "refresh_token_expire_days": settings.REFRESH_TOKEN_EXPIRE_DAYS,
@@ -74,11 +76,14 @@ async def debug_autenticacion(request: Request, db: Session = Depends(get_db)):
                 [
                     r
                     for r in failed_requests_cache
-                    if r.get("timestamp", datetime.min) > datetime.now() - timedelta(hours=1)
+                    if r.get("timestamp", datetime.min)
+                    > datetime.now() - timedelta(hours=1)
                 ]
             ),
             "total_failed_requests": len(failed_requests_cache),
-            "last_failed_request": failed_requests_cache[-1] if failed_requests_cache else None,
+            "last_failed_request": (
+                failed_requests_cache[-1] if failed_requests_cache else None
+            ),
         }
 
         # 5. Test de creación de token
@@ -88,7 +93,8 @@ async def debug_autenticacion(request: Request, db: Session = Depends(get_db)):
             admin_user = db.query(User).filter(User.is_admin).first()
             if admin_user:
                 test_token = create_access_token(
-                    subject=str(admin_user.id), additional_claims={"type": "access"}
+                    subject=str(admin_user.id),
+                    additional_claims={"type": "access"},
                 )
                 token_test = {
                     "status": "success",
@@ -98,7 +104,10 @@ async def debug_autenticacion(request: Request, db: Session = Depends(get_db)):
                     "test_user_email": admin_user.email,
                 }
             else:
-                token_test = {"status": "error", "error": "No admin user found"}
+                token_test = {
+                    "status": "error",
+                    "error": "No admin user found",
+                }
         except Exception as e:
             token_test = {"status": "error", "error": str(e)}
 
@@ -141,7 +150,8 @@ def _test_login(db: Session) -> Dict[str, Any]:
         if admin_user:
             # Simular login
             test_token = create_access_token(
-                subject=str(admin_user.id), additional_claims={"type": "access"}
+                subject=str(admin_user.id),
+                additional_claims={"type": "access"},
             )
             return {
                 "status": "success",
@@ -178,7 +188,9 @@ def _test_validacion_token(login_test: Dict[str, Any]) -> Dict[str, Any]:
         return {"status": "error", "error": str(e)}
 
 
-def _test_endpoint_protegido(validation_test: Dict[str, Any], db: Session) -> Dict[str, Any]:
+def _test_endpoint_protegido(
+    validation_test: Dict[str, Any], db: Session
+) -> Dict[str, Any]:
     """Test de endpoint protegido"""
     try:
         if validation_test.get("status") == "success":
@@ -259,7 +271,8 @@ async def obtener_logs_autenticacion():
         recent_logs = [
             log
             for log in failed_requests_cache
-            if log.get("timestamp", datetime.min) > datetime.now() - timedelta(hours=1)
+            if log.get("timestamp", datetime.min)
+            > datetime.now() - timedelta(hours=1)
         ]
 
         # Agrupar por tipo de error
@@ -273,7 +286,9 @@ async def obtener_logs_autenticacion():
             "logs": {
                 "total_recent_logs": len(recent_logs),
                 "error_summary": error_summary,
-                "recent_requests": recent_logs[-10:] if recent_logs else [],  # Últimos 10
+                "recent_requests": (
+                    recent_logs[-10:] if recent_logs else []
+                ),  # Últimos 10
             },
         }
 
@@ -287,7 +302,9 @@ async def obtener_logs_autenticacion():
 
 
 @router.post("/auth-fix")
-async def aplicar_fix_autenticacion(request: Request, db: Session = Depends(get_db)):
+async def aplicar_fix_autenticacion(
+    request: Request, db: Session = Depends(get_db)
+):
     """
     🔧 Aplicar fixes automáticos de autenticación
     """
@@ -354,16 +371,24 @@ def _generate_recommendations(
         )
 
     if jwt_config.get("secret_key_length", 0) < 32:
-        recommendations.append("🔐 SECRET_KEY muy corta - Debe tener al menos 32 caracteres")
+        recommendations.append(
+            "🔐 SECRET_KEY muy corta - Debe tener al menos 32 caracteres"
+        )
 
     if users_analysis.get("admin_users", 0) == 0:
-        recommendations.append("👤 No hay usuarios administradores - Crear usuario admin")
+        recommendations.append(
+            "👤 No hay usuarios administradores - Crear usuario admin"
+        )
 
     if users_analysis.get("active_users", 0) == 0:
-        recommendations.append("⚠️ No hay usuarios activos - Verificar estado de usuarios")
+        recommendations.append(
+            "⚠️ No hay usuarios activos - Verificar estado de usuarios"
+        )
 
     if not recommendations:
-        recommendations.append("✅ Configuración parece correcta - Revisar logs de aplicación")
+        recommendations.append(
+            "✅ Configuración parece correcta - Revisar logs de aplicación"
+        )
 
     return recommendations
 

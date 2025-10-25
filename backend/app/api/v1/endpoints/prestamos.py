@@ -13,7 +13,11 @@ from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.user import User
-from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate
+from app.schemas.prestamo import (
+    PrestamoCreate,
+    PrestamoResponse,
+    PrestamoUpdate,
+)
 
 # Constantes de cálculo de fechas
 DAYS_PER_WEEK = 7
@@ -30,9 +34,13 @@ def calcular_proxima_fecha_pago(
     if modalidad == "SEMANAL":
         return fecha_inicio + timedelta(weeks=cuotas_pagadas + 1)
     elif modalidad == "QUINCENAL":
-        return fecha_inicio + timedelta(days=DAYS_PER_QUINCENA * (cuotas_pagadas + 1))
+        return fecha_inicio + timedelta(
+            days=DAYS_PER_QUINCENA * (cuotas_pagadas + 1)
+        )
     else:  # MENSUAL
-        return fecha_inicio + timedelta(days=DAYS_PER_MONTH * (cuotas_pagadas + 1))
+        return fecha_inicio + timedelta(
+            days=DAYS_PER_MONTH * (cuotas_pagadas + 1)
+        )
 
 
 @router.post("/", response_model=PrestamoResponse, status_code=201)
@@ -44,12 +52,16 @@ def crear_prestamo(
     """Crear un nuevo préstamo"""
 
     # Verificar que el cliente existe
-    cliente = db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
+    cliente = (
+        db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
+    )
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
     # Calcular próxima fecha de pago
-    proxima_fecha = calcular_proxima_fecha_pago(prestamo.fecha_inicio, prestamo.modalidad.value, 0)
+    proxima_fecha = calcular_proxima_fecha_pago(
+        prestamo.fecha_inicio, prestamo.modalidad.value, 0
+    )
 
     # ✅ CORRECCIÓN: usar model_dump() en lugar de dict()
     db_prestamo = Prestamo(
@@ -98,7 +110,9 @@ def obtener_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
 
 @router.put("/{prestamo_id}", response_model=PrestamoResponse)
 def actualizar_prestamo(
-    prestamo_id: int, prestamo_data: PrestamoUpdate, db: Session = Depends(get_db)
+    prestamo_id: int,
+    prestamo_data: PrestamoUpdate,
+    db: Session = Depends(get_db),
 ):
     """Actualizar datos de un préstamo"""
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
@@ -160,4 +174,6 @@ def obtener_estadisticas_prestamos(db: Session = Depends(get_db)):
             "monto_total_pendiente": 0.0,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al obtener estadísticas: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error al obtener estadísticas: {str(e)}"
+        )

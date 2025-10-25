@@ -31,8 +31,12 @@ class RealTimeSpecificMonitor:
         self.active_monitoring = False
         self.monitoring_sessions = {}  # Sesiones de monitoreo activas
         self.real_time_events = deque(maxlen=1000)  # Eventos en tiempo real
-        self.failure_moments = deque(maxlen=100)  # Momentos específicos de fallo
-        self.success_moments = deque(maxlen=100)  # Momentos específicos de éxito
+        self.failure_moments = deque(
+            maxlen=100
+        )  # Momentos específicos de fallo
+        self.success_moments = deque(
+            maxlen=100
+        )  # Momentos específicos de éxito
         self.lock = threading.Lock()
 
     def start_specific_monitoring(
@@ -71,7 +75,9 @@ class RealTimeSpecificMonitor:
 
             # Si no hay más sesiones activas, detener monitoreo global
             active_sessions = [
-                s for s in self.monitoring_sessions.values() if s["status"] == "active"
+                s
+                for s in self.monitoring_sessions.values()
+                if s["status"] == "active"
             ]
             if not active_sessions:
                 self.active_monitoring = False
@@ -119,11 +125,17 @@ class RealTimeSpecificMonitor:
 
     def _get_session_context(self) -> Dict[str, Any]:
         """Obtener contexto de sesiones activas"""
-        active_sessions = [s for s in self.monitoring_sessions.values() if s["status"] == "active"]
+        active_sessions = [
+            s
+            for s in self.monitoring_sessions.values()
+            if s["status"] == "active"
+        ]
         return {
             "active_sessions_count": len(active_sessions),
             "session_ids": [s["session_id"] for s in active_sessions],
-            "total_events_captured": sum(s["events_captured"] for s in active_sessions),
+            "total_events_captured": sum(
+                s["events_captured"] for s in active_sessions
+            ),
         }
 
     def analyze_failure_moments(self) -> Dict[str, Any]:
@@ -179,7 +191,9 @@ class RealTimeSpecificMonitor:
 
         return {
             "failure_intervals_seconds": intervals,
-            "avg_interval_seconds": sum(intervals) / len(intervals) if intervals else 0,
+            "avg_interval_seconds": (
+                sum(intervals) / len(intervals) if intervals else 0
+            ),
             "min_interval_seconds": min(intervals) if intervals else 0,
             "max_interval_seconds": max(intervals) if intervals else 0,
             "first_failure": timestamps[0].isoformat(),
@@ -198,7 +212,8 @@ class RealTimeSpecificMonitor:
 
         return {
             "avg_active_sessions": (
-                sum(c.get("active_sessions_count", 0) for c in contexts) / len(contexts)
+                sum(c.get("active_sessions_count", 0) for c in contexts)
+                / len(contexts)
             ),
             "total_events_during_failures": sum(
                 c.get("total_events_captured", 0) for c in contexts
@@ -234,7 +249,8 @@ class RealTimeSpecificMonitor:
                         "to": next_outcome,
                         "time_diff_seconds": (
                             (
-                                all_moments[i + 1]["timestamp"] - all_moments[i]["timestamp"]
+                                all_moments[i + 1]["timestamp"]
+                                - all_moments[i]["timestamp"]
                             ).total_seconds()
                         ),
                     }
@@ -243,13 +259,22 @@ class RealTimeSpecificMonitor:
         return {
             "total_transitions": len(transitions),
             "failure_to_success_transitions": len(
-                [t for t in transitions if t["from"] == "failure" and t["to"] == "success"]
+                [
+                    t
+                    for t in transitions
+                    if t["from"] == "failure" and t["to"] == "success"
+                ]
             ),
             "success_to_failure_transitions": len(
-                [t for t in transitions if t["from"] == "success" and t["to"] == "failure"]
+                [
+                    t
+                    for t in transitions
+                    if t["from"] == "success" and t["to"] == "failure"
+                ]
             ),
             "avg_transition_time_seconds": (
-                sum(t["time_diff_seconds"] for t in transitions) / len(transitions)
+                sum(t["time_diff_seconds"] for t in transitions)
+                / len(transitions)
                 if transitions
                 else 0
             ),
@@ -259,7 +284,9 @@ class RealTimeSpecificMonitor:
         """Obtener estado del monitoreo en tiempo real"""
         with self.lock:
             active_sessions = [
-                s for s in self.monitoring_sessions.values() if s["status"] == "active"
+                s
+                for s in self.monitoring_sessions.values()
+                if s["status"] == "active"
             ]
 
             return {
@@ -281,7 +308,9 @@ class RealTimeSpecificMonitor:
                 ],
             }
 
-    def get_monitoring_session_details(self, session_id: str) -> Dict[str, Any]:
+    def get_monitoring_session_details(
+        self, session_id: str
+    ) -> Dict[str, Any]:
         """Obtener detalles de sesión de monitoreo específica"""
         with self.lock:
             if session_id not in self.monitoring_sessions:
@@ -293,7 +322,9 @@ class RealTimeSpecificMonitor:
             session_events = []
             for event in self.real_time_events:
                 if session["start_time"] <= event["timestamp"]:
-                    if session["status"] == "stopped" and hasattr(session, "end_time"):
+                    if session["status"] == "stopped" and hasattr(
+                        session, "end_time"
+                    ):
                         if event["timestamp"] <= session["end_time"]:
                             session_events.append(event)
                     else:
@@ -324,10 +355,14 @@ async def start_specific_monitoring_endpoint(
     🔍 Iniciar monitoreo específico de fallos 401
     """
     try:
-        session_id = monitoring_request.get("session_id", f"monitor_{int(time.time())}")
+        session_id = monitoring_request.get(
+            "session_id", f"monitor_{int(time.time())}"
+        )
         target_endpoints = monitoring_request.get("target_endpoints", [])
 
-        session = real_time_monitor.start_specific_monitoring(session_id, target_endpoints)
+        session = real_time_monitor.start_specific_monitoring(
+            session_id, target_endpoints
+        )
 
         return {
             "timestamp": datetime.now().isoformat(),
@@ -408,7 +443,8 @@ async def capture_auth_event_endpoint(
 
 @router.get("/failure-moments-analysis")
 async def get_failure_moments_analysis(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     🔍 Análisis de momentos específicos de fallo
@@ -433,7 +469,8 @@ async def get_failure_moments_analysis(
 
 @router.get("/real-time-status")
 async def get_real_time_status_endpoint(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     📊 Estado del monitoreo en tiempo real

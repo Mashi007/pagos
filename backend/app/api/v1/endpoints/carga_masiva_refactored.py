@@ -46,7 +46,9 @@ def _obtener_mapeo_columnas() -> Dict[str, str]:
 def _validar_columnas_requeridas(df: pd.DataFrame) -> None:
     """Validar que existan las columnas requeridas"""
     columnas_requeridas = ["cedula", "nombre"]
-    columnas_faltantes = [col for col in columnas_requeridas if col not in df.columns]
+    columnas_faltantes = [
+        col for col in columnas_requeridas if col not in df.columns
+    ]
 
     if columnas_faltantes:
         raise HTTPException(
@@ -59,7 +61,9 @@ def _extraer_datos_fila(row: pd.Series, fila_numero: int) -> Dict[str, str]:
     """Extraer y limpiar datos de una fila"""
     cedula = str(row.get("cedula", "")).strip()
     nombre = str(row.get("nombre", "")).strip()
-    apellido = str(row.get("apellido", "")).strip() if "apellido" in row else ""
+    apellido = (
+        str(row.get("apellido", "")).strip() if "apellido" in row else ""
+    )
     movil = str(row.get("movil", "")).strip()
     email = str(row.get("email", "")).strip()
     direccion = str(row.get("direccion", "")).strip()
@@ -98,7 +102,9 @@ def _extraer_datos_fila(row: pd.Series, fila_numero: int) -> Dict[str, str]:
     }
 
 
-def _validar_campos_criticos(datos: Dict[str, str]) -> Tuple[List[ErrorCargaMasiva], int]:
+def _validar_campos_criticos(
+    datos: Dict[str, str],
+) -> Tuple[List[ErrorCargaMasiva], int]:
     """Validar campos críticos y generar errores"""
     errores = []
     errores_criticos = 0
@@ -136,7 +142,10 @@ def _validar_campos_criticos(datos: Dict[str, str]) -> Tuple[List[ErrorCargaMasi
         errores_criticos += 1
 
     # Total Financiamiento (CRÍTICO si se quiere financiamiento)
-    if not datos["total_financiamiento"] or datos["total_financiamiento"].upper() == "ERROR":
+    if (
+        not datos["total_financiamiento"]
+        or datos["total_financiamiento"].upper() == "ERROR"
+    ):
         errores.append(
             ErrorCargaMasiva(
                 fila=datos["fila_numero"],
@@ -180,7 +189,9 @@ async def _analizar_archivo_clientes_refactored(
         todos_los_errores = []
 
         for index, row in df.iterrows():
-            fila_numero = index + 2  # +2 porque Excel empieza en 1 y tiene header
+            fila_numero = (
+                index + 2
+            )  # +2 porque Excel empieza en 1 y tiene header
 
             # Extraer datos de la fila
             datos = _extraer_datos_fila(row, fila_numero)
@@ -210,7 +221,11 @@ async def _analizar_archivo_clientes_refactored(
             errores_criticos=errores_criticos,
             errores_advertencia=errores_advertencia,
             datos_vacios=datos_vacios,
-            tasa_exito=round(len(registros_procesados) / total_registros * 100, 1) if total_registros > 0 else 0,
+            tasa_exito=(
+                round(len(registros_procesados) / total_registros * 100, 1)
+                if total_registros > 0
+                else 0
+            ),
             errores_detallados=todos_los_errores,
             registros_validos=registros_procesados,
         )

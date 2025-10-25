@@ -46,7 +46,9 @@ class TokenPredictiveAnalyzer:
                 "issued_at": datetime.fromtimestamp(payload.get("iat", 0)),
                 "expires_at": datetime.fromtimestamp(payload.get("exp", 0)),
                 "type": payload.get("type"),
-                "time_to_expiry": self._calculate_time_to_expiry(payload.get("exp", 0)),
+                "time_to_expiry": self._calculate_time_to_expiry(
+                    payload.get("exp", 0)
+                ),
                 "usage_pattern": self._analyze_usage_pattern(token_id),
                 "risk_factors": self._identify_risk_factors(token_id, payload),
             }
@@ -72,7 +74,9 @@ class TokenPredictiveAnalyzer:
             "minutes": int(time_diff.total_seconds() / 60),
             "hours": int(time_diff.total_seconds() / 3600),
             "is_expired": time_diff.total_seconds() < 0,
-            "is_expiring_soon": 0 < time_diff.total_seconds() < 300,  # 5 minutos
+            "is_expiring_soon": 0
+            < time_diff.total_seconds()
+            < 300,  # 5 minutos
         }
 
     def _analyze_usage_pattern(self, token_id: str) -> Dict[str, Any]:
@@ -94,7 +98,9 @@ class TokenPredictiveAnalyzer:
         # Estadísticas de uso
         usage_stats = {
             "total_uses": len(history),
-            "avg_interval_minutes": statistics.mean(intervals) / 60 if intervals else 0,
+            "avg_interval_minutes": (
+                statistics.mean(intervals) / 60 if intervals else 0
+            ),
             "min_interval_minutes": min(intervals) / 60 if intervals else 0,
             "max_interval_minutes": max(intervals) / 60 if intervals else 0,
             "usage_frequency": self._calculate_usage_frequency(intervals),
@@ -129,10 +135,14 @@ class TokenPredictiveAnalyzer:
             hour_counts[hour] += 1
 
         # Retornar las 3 horas con más uso
-        sorted_hours = sorted(hour_counts.items(), key=lambda x: x[1], reverse=True)
+        sorted_hours = sorted(
+            hour_counts.items(), key=lambda x: x[1], reverse=True
+        )
         return [hour for hour, count in sorted_hours[:3]]
 
-    def _identify_risk_factors(self, token_id: str, payload: Dict) -> List[str]:
+    def _identify_risk_factors(
+        self, token_id: str, payload: Dict
+    ) -> List[str]:
         """Identificar factores de riesgo"""
         risk_factors = []
 
@@ -153,7 +163,9 @@ class TokenPredictiveAnalyzer:
                 risk_factors.append("high_usage")
 
             # Verificar errores recientes
-            recent_errors = [h for h in history[-10:] if not h.get("success", True)]
+            recent_errors = [
+                h for h in history[-10:] if not h.get("success", True)
+            ]
             if len(recent_errors) > 3:
                 risk_factors.append("recent_errors")
 
@@ -163,7 +175,9 @@ class TokenPredictiveAnalyzer:
 
         return risk_factors
 
-    def _generate_predictions(self, token_info: Dict[str, Any]) -> Dict[str, Any]:
+    def _generate_predictions(
+        self, token_info: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Generar predicciones basadas en análisis"""
         predictions = {
             "will_expire_soon": False,
@@ -208,7 +222,9 @@ class TokenPredictiveAnalyzer:
                 predictions["predicted_failure_time"] = exp_time.isoformat()
 
         # Normalizar score de confianza
-        predictions["confidence_score"] = min(predictions["confidence_score"], 1.0)
+        predictions["confidence_score"] = min(
+            predictions["confidence_score"], 1.0
+        )
 
         return predictions
 
@@ -226,12 +242,14 @@ class TokenPredictiveAnalyzer:
             predictions["system_health"] = "insufficient_data"
             return predictions
 
-        recent_metrics = list(self.system_metrics)[-50:]  # Últimos 50 registros
+        recent_metrics = list(self.system_metrics)[
+            -50:
+        ]  # Últimos 50 registros
 
         # Calcular tasa de error promedio
-        error_rate = sum(1 for m in recent_metrics if not m.get("success", True)) / len(
-            recent_metrics
-        )
+        error_rate = sum(
+            1 for m in recent_metrics if not m.get("success", True)
+        ) / len(recent_metrics)
 
         if error_rate > 0.1:  # Más del 10% de errores
             predictions["predicted_failures"].append(
@@ -242,10 +260,14 @@ class TokenPredictiveAnalyzer:
                 }
             )
             predictions["system_health"] = "degraded"
-            predictions["recommendations"].append("Revisar configuración de autenticación")
+            predictions["recommendations"].append(
+                "Revisar configuración de autenticación"
+            )
 
         # Predecir sobrecarga
-        avg_response_time = statistics.mean([m.get("response_time", 0) for m in recent_metrics])
+        avg_response_time = statistics.mean(
+            [m.get("response_time", 0) for m in recent_metrics]
+        )
         if avg_response_time > 2.0:
             predictions["predicted_failures"].append(
                 {
@@ -255,7 +277,9 @@ class TokenPredictiveAnalyzer:
                 }
             )
             predictions["system_health"] = "degraded"
-            predictions["recommendations"].append("Optimizar queries de base de datos")
+            predictions["recommendations"].append(
+                "Optimizar queries de base de datos"
+            )
 
         return predictions
 
@@ -303,7 +327,8 @@ async def analyze_token_predictive(
 
 @router.get("/predict-system-failures")
 async def predict_system_failures_endpoint(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     🔮 Predicción de fallas del sistema
@@ -339,7 +364,9 @@ async def analyze_user_patterns(
         # Verificar que el usuario existe
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
-            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+            raise HTTPException(
+                status_code=404, detail="Usuario no encontrado"
+            )
 
         # Buscar patrones del usuario
         user_patterns = predictive_analyzer.user_patterns.get(str(user_id), {})
@@ -352,7 +379,9 @@ async def analyze_user_patterns(
             "predictions": {
                 "likely_usage_times": _predict_usage_times(user_patterns),
                 "risk_factors": _identify_user_risk_factors(user_patterns),
-                "recommendations": _generate_user_recommendations(user_patterns),
+                "recommendations": _generate_user_recommendations(
+                    user_patterns
+                ),
             },
         }
 
@@ -391,7 +420,9 @@ async def token_health_check():
         total_tokens = len(predictive_analyzer.token_history)
         if total_tokens == 0:
             health_status["overall_health"] = "no_data"
-            health_status["warnings"].append("No hay datos de tokens para analizar")
+            health_status["warnings"].append(
+                "No hay datos de tokens para analizar"
+            )
             return health_status
 
         # Estadísticas generales
@@ -413,14 +444,18 @@ async def token_health_check():
 
         # Generar recomendaciones
         if expiring_soon > total_tokens * 0.1:  # Más del 10% expirando pronto
-            health_status["warnings"].append(f"{expiring_soon} tokens expirando pronto")
+            health_status["warnings"].append(
+                f"{expiring_soon} tokens expirando pronto"
+            )
             health_status["recommendations"].append(
                 "Implementar renovación automática más agresiva"
             )
 
         if expired > 0:
             health_status["warnings"].append(f"{expired} tokens expirados")
-            health_status["recommendations"].append("Limpiar tokens expirados del sistema")
+            health_status["recommendations"].append(
+                "Limpiar tokens expirados del sistema"
+            )
 
         return health_status
 

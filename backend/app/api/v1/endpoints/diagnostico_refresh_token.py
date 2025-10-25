@@ -12,7 +12,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.config import settings
-from app.core.security import create_access_token, create_refresh_token, decode_token
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+)
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -20,7 +24,9 @@ router = APIRouter()
 
 
 @router.post("/diagnosticar-refresh-token")
-async def diagnosticar_refresh_token(request: Request, db: Session = Depends(get_db)):
+async def diagnosticar_refresh_token(
+    request: Request, db: Session = Depends(get_db)
+):
     """
     🔍 Diagnóstico específico para problemas de refresh token
     """
@@ -46,7 +52,9 @@ async def diagnosticar_refresh_token(request: Request, db: Session = Depends(get
         # 1. Verificar formato del token
         try:
             # Decodificar sin verificar para obtener información básica
-            payload_unverified = jwt.decode(refresh_token, options={"verify_signature": False})
+            payload_unverified = jwt.decode(
+                refresh_token, options={"verify_signature": False}
+            )
 
             token_info = {
                 "formato_valido": True,
@@ -66,7 +74,9 @@ async def diagnosticar_refresh_token(request: Request, db: Session = Depends(get
                 token_info["expired"] = now > exp_datetime
                 token_info["expires_at"] = exp_datetime.isoformat()
                 token_info["time_until_expiry"] = (
-                    str(exp_datetime - now) if not token_info["expired"] else "EXPIRED"
+                    str(exp_datetime - now)
+                    if not token_info["expired"]
+                    else "EXPIRED"
                 )
 
         except Exception as e:
@@ -154,7 +164,10 @@ async def diagnosticar_refresh_token(request: Request, db: Session = Depends(get
         try:
             new_access_token = create_access_token(
                 subject=user.id,
-                additional_claims={"is_admin": user.is_admin, "email": user.email},
+                additional_claims={
+                    "is_admin": user.is_admin,
+                    "email": user.email,
+                },
             )
 
             new_refresh_token = create_refresh_token(subject=user.id)
@@ -202,13 +215,16 @@ async def diagnosticar_refresh_token(request: Request, db: Session = Depends(get
 
 @router.get("/estado-refresh-tokens")
 async def estado_refresh_tokens(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     📊 Estado general de los refresh tokens en el sistema
     """
     try:
-        logger.info(f"📊 Verificando estado de refresh tokens - Usuario: {current_user.email}")
+        logger.info(
+            f"📊 Verificando estado de refresh tokens - Usuario: {current_user.email}"
+        )
 
         # Información del usuario actual
         user_info = {
@@ -237,7 +253,9 @@ async def estado_refresh_tokens(
                 "refresh_token": test_refresh_token,
             },
             "configuracion": {
-                "jwt_secret_key": "CONFIGURED" if settings.SECRET_KEY else "NOT_CONFIGURED",
+                "jwt_secret_key": (
+                    "CONFIGURED" if settings.SECRET_KEY else "NOT_CONFIGURED"
+                ),
                 "jwt_algorithm": "HS256",
                 "access_token_expire_minutes": 30,
                 "refresh_token_expire_days": 7,

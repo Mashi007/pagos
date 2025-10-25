@@ -117,7 +117,9 @@ class ErrorImpactAnalyzer:
 
     def __init__(self):
         self.error_history: deque = deque(maxlen=MAX_ERROR_HISTORY)
-        self.endpoint_errors: Dict[str, deque] = defaultdict(lambda: deque(maxlen=100))
+        self.endpoint_errors: Dict[str, deque] = defaultdict(
+            lambda: deque(maxlen=100)
+        )
         self.circuit_breakers: Dict[str, CircuitBreaker] = {}
         self.error_counts: Dict[str, int] = defaultdict(int)
         self.total_requests = 0
@@ -177,7 +179,9 @@ class ErrorImpactAnalyzer:
             if endpoint in self.circuit_breakers:
                 self.circuit_breakers[endpoint]._on_success()
 
-    def _determine_severity(self, error: Exception, response_time_ms: float) -> ErrorSeverity:
+    def _determine_severity(
+        self, error: Exception, response_time_ms: float
+    ) -> ErrorSeverity:
         """Determinar severidad del error"""
         error_type = type(error).__name__
 
@@ -227,7 +231,11 @@ class ErrorImpactAnalyzer:
 
             # Calcular tiempo promedio de respuesta
             response_times = [e.response_time_ms for e in self.error_history]
-            avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+            avg_response_time = (
+                sum(response_times) / len(response_times)
+                if response_times
+                else 0
+            )
 
             # Determinar nivel de impacto del sistema
             system_impact_level = "LOW"
@@ -241,16 +249,20 @@ class ErrorImpactAnalyzer:
             if self.error_history:
                 last_error_time = self.error_history[-1].timestamp
                 for error in reversed(self.error_history):
-                    if (last_error_time - error.timestamp).total_seconds() < 60:  # Último minuto
+                    if (
+                        last_error_time - error.timestamp
+                    ).total_seconds() < 60:  # Último minuto
                         consecutive_errors += 1
                     else:
                         break
 
             # Estado de circuit breakers
-            open_circuits = sum(1 for cb in self.circuit_breakers.values() if cb.state == "OPEN")
-            circuit_breaker_status = (
-                f"{open_circuits} circuitos abiertos de {len(self.circuit_breakers)}"
+            open_circuits = sum(
+                1
+                for cb in self.circuit_breakers.values()
+                if cb.state == "OPEN"
             )
+            circuit_breaker_status = f"{open_circuits} circuitos abiertos de {len(self.circuit_breakers)}"
 
             # Generar recomendaciones
             recommendations = self._generate_recommendations(
@@ -267,25 +279,36 @@ class ErrorImpactAnalyzer:
             )
 
     def _generate_recommendations(
-        self, error_rate: float, avg_response_time: float, consecutive_errors: int
+        self,
+        error_rate: float,
+        avg_response_time: float,
+        consecutive_errors: int,
     ) -> list:
         """Generar recomendaciones basadas en el análisis"""
         recommendations = []
 
         if error_rate > ERROR_RATE_THRESHOLD:
-            recommendations.append("Implementar retry logic con exponential backoff")
-            recommendations.append("Revisar configuración de recursos del sistema")
+            recommendations.append(
+                "Implementar retry logic con exponential backoff"
+            )
+            recommendations.append(
+                "Revisar configuración de recursos del sistema"
+            )
 
         if avg_response_time > 2000:
             recommendations.append("Optimizar queries de base de datos")
             recommendations.append("Implementar caching para endpoints lentos")
 
         if consecutive_errors > MAX_CONSECUTIVE_ERRORS:
-            recommendations.append("Activar circuit breakers para endpoints problemáticos")
+            recommendations.append(
+                "Activar circuit breakers para endpoints problemáticos"
+            )
             recommendations.append("Implementar graceful degradation")
 
         if not recommendations:
-            recommendations.append("Sistema funcionando dentro de parámetros normales")
+            recommendations.append(
+                "Sistema funcionando dentro de parámetros normales"
+            )
 
         return recommendations
 
@@ -300,19 +323,26 @@ class ErrorImpactAnalyzer:
 
                 error_types = [e.error_type for e in errors]
                 error_counts = {
-                    error_type: error_types.count(error_type) for error_type in set(error_types)
+                    error_type: error_types.count(error_type)
+                    for error_type in set(error_types)
                 }
 
-                avg_response_time = sum(e.response_time_ms for e in errors) / len(errors)
+                avg_response_time = sum(
+                    e.response_time_ms for e in errors
+                ) / len(errors)
 
                 summary[endpoint] = {
                     "total_errors": len(errors),
                     "error_types": error_counts,
                     "avg_response_time_ms": avg_response_time,
                     "circuit_breaker_state": (
-                        self.circuit_breakers.get(endpoint, {}).get("state", "N/A")
+                        self.circuit_breakers.get(endpoint, {}).get(
+                            "state", "N/A"
+                        )
                     ),
-                    "last_error": errors[-1].timestamp.isoformat() if errors else None,
+                    "last_error": (
+                        errors[-1].timestamp.isoformat() if errors else None
+                    ),
                 }
 
             return summary
@@ -377,7 +407,9 @@ def record_error(
     request_id: Optional[str] = None,
 ):
     """Registrar un error"""
-    error_analyzer.record_error(error, endpoint, response_time_ms, user_id, request_id)
+    error_analyzer.record_error(
+        error, endpoint, response_time_ms, user_id, request_id
+    )
 
 
 def record_success(endpoint: str, response_time_ms: float):

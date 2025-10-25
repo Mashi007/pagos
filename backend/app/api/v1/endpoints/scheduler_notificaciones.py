@@ -26,15 +26,21 @@ router = APIRouter()
 class ConfiguracionScheduler(BaseModel):
     """Configuración del scheduler de notificaciones"""
 
-    habilitado: bool = Field(True, description="Habilitar scheduler automático")
-    frecuencia_minutos: int = Field(60, ge=5, le=1440, description="Frecuencia en minutos")
+    habilitado: bool = Field(
+        True, description="Habilitar scheduler automático"
+    )
+    frecuencia_minutos: int = Field(
+        60, ge=5, le=1440, description="Frecuencia en minutos"
+    )
     hora_inicio: str = Field("06:00", description="Hora de inicio (HH:MM)")
     hora_fin: str = Field("22:00", description="Hora de fin (HH:MM)")
     dias_activos: list[str] = Field(
         ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO"],
         description="Días activos para envío",
     )
-    reporte_diario_hora: str = Field("18:00", description="Hora del reporte diario")
+    reporte_diario_hora: str = Field(
+        "18:00", description="Hora del reporte diario"
+    )
 
 
 # ============================================
@@ -44,14 +50,16 @@ class ConfiguracionScheduler(BaseModel):
 
 @router.get("/configuracion")
 def obtener_configuracion_scheduler(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     ⚙️ Obtener configuración actual del scheduler de notificaciones
     """
     if not current_user.is_admin:
         raise HTTPException(
-            status_code=403, detail="Sin permisos para ver configuración del scheduler"
+            status_code=403,
+            detail="Sin permisos para ver configuración del scheduler",
         )
 
     try:
@@ -110,7 +118,9 @@ def obtener_configuracion_scheduler(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo configuración: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error obteniendo configuración: {str(e)}"
+        )
 
 
 @router.post("/configurar")
@@ -142,7 +152,9 @@ def configurar_scheduler(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error configurando scheduler: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error configurando scheduler: {str(e)}"
+        )
 
 
 @router.get("/logs")
@@ -196,7 +208,9 @@ def obtener_logs_scheduler(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo logs: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error obteniendo logs: {str(e)}"
+        )
 
 
 @router.post("/ejecutar-ahora")
@@ -209,15 +223,22 @@ async def ejecutar_scheduler_manual(
     ▶️ Ejecutar scheduler manualmente (fuera del horario programado)
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Sin permisos para ejecutar scheduler manual")
+        raise HTTPException(
+            status_code=403,
+            detail="Sin permisos para ejecutar scheduler manual",
+        )
 
     try:
         # Verificar si ya está ejecutándose
         if notification_scheduler.is_running:
-            raise HTTPException(status_code=400, detail="Scheduler ya está ejecutándose")
+            raise HTTPException(
+                status_code=400, detail="Scheduler ya está ejecutándose"
+            )
 
         # Ejecutar en background
-        background_tasks.add_task(_ejecutar_scheduler_manual, db, current_user.id)
+        background_tasks.add_task(
+            _ejecutar_scheduler_manual, db, current_user.id
+        )
 
         return {
             "mensaje": "✅ Scheduler ejecutándose manualmente en background",
@@ -230,12 +251,15 @@ async def ejecutar_scheduler_manual(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error ejecutando scheduler: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error ejecutando scheduler: {str(e)}"
+        )
 
 
 @router.get("/estado")
 def obtener_estado_scheduler(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     📊 Obtener estado actual del scheduler
@@ -271,7 +295,9 @@ def obtener_estado_scheduler(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo estado: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error obteniendo estado: {str(e)}"
+        )
 
 
 # ============================================
@@ -287,7 +313,9 @@ async def _ejecutar_scheduler_manual(db: Session, user_id: int):
         db_local = SessionLocal()
 
         # Ejecutar ciclo de notificaciones
-        resultado = await notification_scheduler.ejecutar_ciclo_notificaciones(db_local)
+        resultado = await notification_scheduler.ejecutar_ciclo_notificaciones(
+            db_local
+        )
 
         logger.info(f"📧 Scheduler manual ejecutado por usuario {user_id}")
         logger.info(f"📊 Resultados: {resultado}")
@@ -326,7 +354,9 @@ def _generar_expresion_cron(config: ConfiguracionScheduler) -> str:
             "SABADO": "6",
             "DOMINGO": "0",
         }
-        dias_numeros = [dias_map[dia] for dia in config.dias_activos if dia in dias_map]
+        dias_numeros = [
+            dias_map[dia] for dia in config.dias_activos if dia in dias_map
+        ]
         dias = ",".join(dias_numeros) if dias_numeros else "*"
 
         return f"{minuto} {hora} * * {dias}"
@@ -342,7 +372,8 @@ def _generar_expresion_cron(config: ConfiguracionScheduler) -> str:
 
 @router.get("/verificacion-completa")
 def verificar_sistema_notificaciones_completo(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     🔍 Verificación completa del sistema de notificaciones multicanal

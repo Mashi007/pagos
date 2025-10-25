@@ -76,7 +76,9 @@ def _leer_archivo_excel(contenido: bytes) -> pd.DataFrame:
     }
 
     # Renombrar columnas
-    df.columns = [columnas_esperadas.get(i, f"col_{i}") for i in range(len(df.columns))]
+    df.columns = [
+        columnas_esperadas.get(i, f"col_{i}") for i in range(len(df.columns))
+    ]
     return df
 
 
@@ -132,7 +134,9 @@ def _validar_monto(fila: pd.Series, index: int) -> tuple[Decimal, list]:
         return None, advertencias
 
 
-def _validar_referencia(fila: pd.Series, index: int, referencias_vistas: set) -> tuple[str, list, list]:
+def _validar_referencia(
+    fila: pd.Series, index: int, referencias_vistas: set
+) -> tuple[str, list, list]:
     """Validar referencia de una fila"""
     advertencias = []
     duplicados = []
@@ -144,18 +148,22 @@ def _validar_referencia(fila: pd.Series, index: int, referencias_vistas: set) ->
 
     # Detectar duplicados
     if referencia in referencias_vistas:
-        duplicados.append({
-            "fila": index + 1,
-            "referencia": referencia,
-            "monto": float(fila["monto"]),
-        })
+        duplicados.append(
+            {
+                "fila": index + 1,
+                "referencia": referencia,
+                "monto": float(fila["monto"]),
+            }
+        )
         return None, advertencias, duplicados
 
     referencias_vistas.add(referencia)
     return referencia, advertencias, duplicados
 
 
-def _buscar_matching_automatico(cedula: str, monto: Decimal, db: Session) -> dict:
+def _buscar_matching_automatico(
+    cedula: str, monto: Decimal, db: Session
+) -> dict:
     """Buscar matching automático para vista previa"""
     if not cedula or cedula == "nan":
         return {}
@@ -227,7 +235,11 @@ def _buscar_matching_automatico(cedula: str, monto: Decimal, db: Session) -> dic
     return {}
 
 
-def _procesar_fila_movimiento(fila: pd.Series, index: int, referencias_vistas: set, db: Session) -> tuple[Optional[MovimientoBancarioExtendido], List[str], List[str], List[str]]:
+def _procesar_fila_movimiento(
+    fila: pd.Series, index: int, referencias_vistas: set, db: Session
+) -> tuple[
+    Optional[MovimientoBancarioExtendido], List[str], List[str], List[str]
+]:
     """Procesar una fila individual del archivo bancario"""
     advertencias = []
     errores = []
@@ -247,7 +259,9 @@ def _procesar_fila_movimiento(fila: pd.Series, index: int, referencias_vistas: s
             return None, advertencias, errores, duplicados
 
         # Validar referencia
-        referencia, ref_advertencias, ref_duplicados = _validar_referencia(fila, index, referencias_vistas)
+        referencia, ref_advertencias, ref_duplicados = _validar_referencia(
+            fila, index, referencias_vistas
+        )
         advertencias.extend(ref_advertencias)
         duplicados.extend(ref_duplicados)
         if referencia is None:
@@ -256,9 +270,13 @@ def _procesar_fila_movimiento(fila: pd.Series, index: int, referencias_vistas: s
         # Validar cédula
         cedula = str(fila["cedula_pagador"]).strip()
         if cedula and cedula != "nan":
-            cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
+            cliente = (
+                db.query(Cliente).filter(Cliente.cedula == cedula).first()
+            )
             if not cliente:
-                advertencias.append(f"Fila {index + 1}: Cédula {cedula} no registrada en sistema")
+                advertencias.append(
+                    f"Fila {index + 1}: Cédula {cedula} no registrada en sistema"
+                )
 
         # Crear movimiento
         movimiento = MovimientoBancarioExtendido(
@@ -267,7 +285,11 @@ def _procesar_fila_movimiento(fila: pd.Series, index: int, referencias_vistas: s
             monto=monto,
             cedula_pagador=cedula if cedula != "nan" else None,
             descripcion=str(fila.get("descripcion", "")),
-            cuenta_origen=str(fila.get("cuenta_origen", "")) if "cuenta_origen" in fila else None,
+            cuenta_origen=(
+                str(fila.get("cuenta_origen", ""))
+                if "cuenta_origen" in fila
+                else None
+            ),
             id=index + 1,
         )
 
@@ -276,8 +298,12 @@ def _procesar_fila_movimiento(fila: pd.Series, index: int, referencias_vistas: s
         if matching_data:
             movimiento.tipo_match = matching_data.get("tipo_match")
             movimiento.confianza_match = matching_data.get("confianza_match")
-            movimiento.requiere_revision = matching_data.get("requiere_revision", False)
-            movimiento.cliente_encontrado = matching_data.get("cliente_encontrado")
+            movimiento.requiere_revision = matching_data.get(
+                "requiere_revision", False
+            )
+            movimiento.cliente_encontrado = matching_data.get(
+                "cliente_encontrado"
+            )
             movimiento.pago_sugerido = matching_data.get("pago_sugerido")
 
         return movimiento, advertencias, errores, duplicados
@@ -287,7 +313,13 @@ def _procesar_fila_movimiento(fila: pd.Series, index: int, referencias_vistas: s
         return None, advertencias, errores, duplicados
 
 
-def _procesar_archivo_completo(df: pd.DataFrame, db: Session) -> tuple[List[MovimientoBancarioExtendido], List[str], List[str], List[str], List[str]]:
+def _procesar_archivo_completo(df: pd.DataFrame, db: Session) -> tuple[
+    List[MovimientoBancarioExtendido],
+    List[str],
+    List[str],
+    List[str],
+    List[str],
+]:
     """Procesar archivo completo y extraer movimientos válidos"""
     advertencias = []
     movimientos_validos = []
@@ -297,7 +329,9 @@ def _procesar_archivo_completo(df: pd.DataFrame, db: Session) -> tuple[List[Movi
     referencias_vistas = set()
 
     for index, fila in df.iterrows():
-        movimiento, fila_advertencias, fila_errores, fila_duplicados = _procesar_fila_movimiento(fila, index, referencias_vistas, db)
+        movimiento, fila_advertencias, fila_errores, fila_duplicados = (
+            _procesar_fila_movimiento(fila, index, referencias_vistas, db)
+        )
 
         advertencias.extend(fila_advertencias)
         errores.extend(fila_errores)
@@ -308,11 +342,24 @@ def _procesar_archivo_completo(df: pd.DataFrame, db: Session) -> tuple[List[Movi
 
             # Verificar cédulas no registradas
             if movimiento.cedula_pagador:
-                cliente = db.query(Cliente).filter(Cliente.cedula == movimiento.cedula_pagador).first()
-                if not cliente and movimiento.cedula_pagador not in cedulas_no_registradas:
+                cliente = (
+                    db.query(Cliente)
+                    .filter(Cliente.cedula == movimiento.cedula_pagador)
+                    .first()
+                )
+                if (
+                    not cliente
+                    and movimiento.cedula_pagador not in cedulas_no_registradas
+                ):
                     cedulas_no_registradas.append(movimiento.cedula_pagador)
 
-    return movimientos_validos, advertencias, errores, duplicados, cedulas_no_registradas
+    return (
+        movimientos_validos,
+        advertencias,
+        errores,
+        duplicados,
+        cedulas_no_registradas,
+    )
 
 
 @router.post("/validar-archivo", response_model=ValidacionArchivoBancario)
@@ -357,7 +404,13 @@ async def validar_archivo_bancario(
             )
 
         # 4. Procesar archivo completo
-        movimientos_validos, advertencias, errores_procesamiento, duplicados, cedulas_no_registradas = _procesar_archivo_completo(df, db)
+        (
+            movimientos_validos,
+            advertencias,
+            errores_procesamiento,
+            duplicados,
+            cedulas_no_registradas,
+        ) = _procesar_archivo_completo(df, db)
 
         return ValidacionArchivoBancario(
             archivo_valido=len(errores_procesamiento) == 0,
@@ -368,11 +421,15 @@ async def validar_archivo_bancario(
             advertencias=advertencias,
             duplicados_encontrados=duplicados,
             cedulas_no_registradas=cedulas_no_registradas,
-            vista_previa=movimientos_validos[:10],  # Primeros 10 para vista previa
+            vista_previa=movimientos_validos[
+                :10
+            ],  # Primeros 10 para vista previa
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error procesando archivo: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error procesando archivo: {str(e)}"
+        )
 
 
 def _buscar_cliente_por_cedula(cedula: str, db: Session) -> Optional[Cliente]:
@@ -380,7 +437,9 @@ def _buscar_cliente_por_cedula(cedula: str, db: Session) -> Optional[Cliente]:
     return db.query(Cliente).filter(Cliente.cedula == cedula).first()
 
 
-def _buscar_cuota_exacta(cliente_id: int, monto: Decimal, db: Session) -> Optional[Cuota]:
+def _buscar_cuota_exacta(
+    cliente_id: int, monto: Decimal, db: Session
+) -> Optional[Cuota]:
     """Buscar cuota con monto exacto"""
     return (
         db.query(Cuota)
@@ -394,7 +453,9 @@ def _buscar_cuota_exacta(cliente_id: int, monto: Decimal, db: Session) -> Option
     )
 
 
-def _buscar_cuota_aproximada(cliente_id: int, monto: Decimal, tolerancia: Decimal, db: Session) -> Optional[Cuota]:
+def _buscar_cuota_aproximada(
+    cliente_id: int, monto: Decimal, tolerancia: Decimal, db: Session
+) -> Optional[Cuota]:
     """Buscar cuota con monto aproximado"""
     return (
         db.query(Cuota)
@@ -409,7 +470,9 @@ def _buscar_cuota_aproximada(cliente_id: int, monto: Decimal, tolerancia: Decima
     )
 
 
-def _crear_match_exacto(mov: MovimientoBancarioExtendido, cliente: Cliente, cuota: Cuota) -> Dict[str, Any]:
+def _crear_match_exacto(
+    mov: MovimientoBancarioExtendido, cliente: Cliente, cuota: Cuota
+) -> Dict[str, Any]:
     """Crear resultado de match exacto"""
     return {
         "movimiento": mov,
@@ -430,7 +493,9 @@ def _crear_match_exacto(mov: MovimientoBancarioExtendido, cliente: Cliente, cuot
     }
 
 
-def _crear_match_aproximado(mov: MovimientoBancarioExtendido, cliente: Cliente, cuota: Cuota) -> Dict[str, Any]:
+def _crear_match_aproximado(
+    mov: MovimientoBancarioExtendido, cliente: Cliente, cuota: Cuota
+) -> Dict[str, Any]:
     """Crear resultado de match aproximado"""
     diferencia = abs(cuota.monto_cuota - mov.monto)
     porcentaje_diferencia = (diferencia / mov.monto) * 100
@@ -455,12 +520,16 @@ def _crear_match_aproximado(mov: MovimientoBancarioExtendido, cliente: Cliente, 
     }
 
 
-def _buscar_pago_por_referencia(referencia: str, db: Session) -> Optional[Pago]:
+def _buscar_pago_por_referencia(
+    referencia: str, db: Session
+) -> Optional[Pago]:
     """Buscar pago por número de referencia"""
     return db.query(Pago).filter(Pago.numero_operacion == referencia).first()
 
 
-def _crear_match_referencia(mov: MovimientoBancarioExtendido, pago: Pago) -> Dict[str, Any]:
+def _crear_match_referencia(
+    mov: MovimientoBancarioExtendido, pago: Pago
+) -> Dict[str, Any]:
     """Crear resultado de match por referencia"""
     return {
         "movimiento": mov,
@@ -509,7 +578,9 @@ def matching_automatico(
             if cliente:
                 cuota_exacta = _buscar_cuota_exacta(cliente.id, mov.monto, db)
                 if cuota_exacta:
-                    exactos.append(_crear_match_exacto(mov, cliente, cuota_exacta))
+                    exactos.append(
+                        _crear_match_exacto(mov, cliente, cuota_exacta)
+                    )
                     match_encontrado = True
 
         # 2° PRIORIDAD: Cédula + Monto aproximado (±2%)
@@ -517,9 +588,13 @@ def matching_automatico(
             cliente = _buscar_cliente_por_cedula(mov.cedula_pagador, db)
             if cliente:
                 tolerancia = mov.monto * Decimal("0.02")
-                cuota_aproximada = _buscar_cuota_aproximada(cliente.id, mov.monto, tolerancia, db)
+                cuota_aproximada = _buscar_cuota_aproximada(
+                    cliente.id, mov.monto, tolerancia, db
+                )
                 if cuota_aproximada:
-                    parciales.append(_crear_match_aproximado(mov, cliente, cuota_aproximada))
+                    parciales.append(
+                        _crear_match_aproximado(mov, cliente, cuota_aproximada)
+                    )
                     match_encontrado = True
 
         # 3° PRIORIDAD: Referencia conocida
@@ -540,7 +615,9 @@ def matching_automatico(
         sin_conciliar_banco=len(sin_match),
         sin_conciliar_sistema=len(parciales),
         porcentaje_conciliacion=(
-            round((len(exactos) / len(movimientos) * 100), 2) if movimientos else 0
+            round((len(exactos) / len(movimientos) * 100), 2)
+            if movimientos
+            else 0
         ),
         detalle_conciliados=exactos,
         detalle_sin_conciliar_banco=sin_match,
@@ -549,7 +626,9 @@ def matching_automatico(
 
 
 @router.post("/confirmar-conciliacion/{pago_id}")
-def confirmar_conciliacion(pago_id: int, referencia_bancaria: str, db: Session = Depends(get_db)):
+def confirmar_conciliacion(
+    pago_id: int, referencia_bancaria: str, db: Session = Depends(get_db)
+):
     """
     Confirma manualmente la conciliación de un pago.
     """
@@ -577,7 +656,9 @@ def obtener_pendientes_conciliacion(
     """
     Obtiene pagos pendientes de conciliar.
     """
-    query = db.query(Pago).filter(Pago.estado_conciliacion == EstadoConciliacion.PENDIENTE)
+    query = db.query(Pago).filter(
+        Pago.estado_conciliacion == EstadoConciliacion.PENDIENTE
+    )
 
     if fecha_inicio:
         query = query.filter(Pago.fecha_pago >= fecha_inicio)
@@ -610,7 +691,9 @@ def reporte_conciliacion(mes: int, anio: int, db: Session = Depends(get_db)):
     fecha_fin = date(anio, mes, ultimo_dia)
 
     total_pagos = (
-        db.query(Pago).filter(Pago.fecha_pago >= fecha_inicio, Pago.fecha_pago <= fecha_fin).count()
+        db.query(Pago)
+        .filter(Pago.fecha_pago >= fecha_inicio, Pago.fecha_pago <= fecha_fin)
+        .count()
     )
 
     conciliados = (
@@ -654,9 +737,15 @@ def procesar_revision_manual(
     try:
         if revision.accion == "APLICAR":
             # Buscar cliente
-            cliente = db.query(Cliente).filter(Cliente.cedula == revision.cliente_cedula).first()
+            cliente = (
+                db.query(Cliente)
+                .filter(Cliente.cedula == revision.cliente_cedula)
+                .first()
+            )
             if not cliente:
-                raise HTTPException(status_code=404, detail="Cliente no encontrado")
+                raise HTTPException(
+                    status_code=404, detail="Cliente no encontrado"
+                )
 
             # Buscar cuota si se especifica
             cuota = None
@@ -664,12 +753,17 @@ def procesar_revision_manual(
                 cuota = (
                     db.query(Cuota)
                     .join(Prestamo)
-                    .filter(Cuota.id == revision.cuota_id, Prestamo.cliente_id == cliente.id)
+                    .filter(
+                        Cuota.id == revision.cuota_id,
+                        Prestamo.cliente_id == cliente.id,
+                    )
                     .first()
                 )
 
                 if not cuota:
-                    raise HTTPException(status_code=404, detail="Cuota no encontrada")
+                    raise HTTPException(
+                        status_code=404, detail="Cuota no encontrada"
+                    )
 
             # Crear pago
             monto_final = revision.monto_ajustado or revision.monto
@@ -678,13 +772,19 @@ def procesar_revision_manual(
             # Por simplicidad, crear pago directamente
 
             db_pago = Pago(
-                prestamo_id=cuota.prestamo_id if cuota else cliente.prestamos[0].id,
+                prestamo_id=(
+                    cuota.prestamo_id if cuota else cliente.prestamos[0].id
+                ),
                 numero_cuota=cuota.numero_cuota if cuota else 1,
-                monto_cuota_programado=cuota.monto_cuota if cuota else monto_final,
+                monto_cuota_programado=(
+                    cuota.monto_cuota if cuota else monto_final
+                ),
                 monto_pagado=monto_final,
                 monto_total=monto_final,
                 fecha_pago=date.today(),
-                fecha_vencimiento=cuota.fecha_vencimiento if cuota else date.today(),
+                fecha_vencimiento=(
+                    cuota.fecha_vencimiento if cuota else date.today()
+                ),
                 metodo_pago="TRANSFERENCIA",
                 numero_operacion=f"CONC-{revision.movimiento_id}",
                 observaciones=f"Conciliación manual: {revision.observaciones}",
@@ -719,7 +819,9 @@ def procesar_revision_manual(
 
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error en revisión manual: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error en revisión manual: {str(e)}"
+        )
 
 
 # ============================================
@@ -777,13 +879,19 @@ def aplicar_conciliacion_masiva(
             resumen_financiero={
                 "total_monto_aplicado": float(total_monto),
                 "clientes_afectados": len(clientes_afectados),
-                "promedio_pago": float(total_monto / len(pagos_creados)) if pagos_creados else 0,
+                "promedio_pago": (
+                    float(total_monto / len(pagos_creados))
+                    if pagos_creados
+                    else 0
+                ),
             },
             reporte_generado=True,
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en aplicación masiva: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error en aplicación masiva: {str(e)}"
+        )
 
 
 # ============================================
@@ -834,13 +942,21 @@ def obtener_historial_conciliaciones(
     resultado = historial_simulado
 
     if fecha_desde:
-        resultado = [h for h in resultado if h["fecha_proceso"].date() >= fecha_desde]
+        resultado = [
+            h for h in resultado if h["fecha_proceso"].date() >= fecha_desde
+        ]
 
     if fecha_hasta:
-        resultado = [h for h in resultado if h["fecha_proceso"].date() <= fecha_hasta]
+        resultado = [
+            h for h in resultado if h["fecha_proceso"].date() <= fecha_hasta
+        ]
 
     if usuario:
-        resultado = [h for h in resultado if usuario.lower() in h["usuario_proceso"].lower()]
+        resultado = [
+            h
+            for h in resultado
+            if usuario.lower() in h["usuario_proceso"].lower()
+        ]
 
     return resultado
 
@@ -895,9 +1011,15 @@ def obtener_tabla_resultados(
         "tabla_resultados": tabla_resultados,
         "resumen": {
             "total": len(tabla_resultados),
-            "exactos": len([r for r in tabla_resultados if "✅" in r["estado"]]),
-            "revision": len([r for r in tabla_resultados if "⚠️" in r["estado"]]),
-            "manuales": len([r for r in tabla_resultados if "❌" in r["estado"]]),
+            "exactos": len(
+                [r for r in tabla_resultados if "✅" in r["estado"]]
+            ),
+            "revision": len(
+                [r for r in tabla_resultados if "⚠️" in r["estado"]]
+            ),
+            "manuales": len(
+                [r for r in tabla_resultados if "❌" in r["estado"]]
+            ),
         },
         "leyenda": {
             "✅ EXACTO": "Coincidencia perfecta - Se puede aplicar automáticamente",
@@ -912,7 +1034,9 @@ def obtener_tabla_resultados(
 # ============================================
 
 
-async def _generar_reporte_conciliacion(user_id: int, pagos_creados: List[int], total_monto: float):
+async def _generar_reporte_conciliacion(
+    user_id: int, pagos_creados: List[int], total_monto: float
+):
     """
     Generar reporte de conciliación en background
     """
@@ -972,7 +1096,10 @@ async def flujo_completo_conciliacion(
 
         # Verificar permisos
         if not current_user.is_admin:
-            raise HTTPException(status_code=403, detail="Sin permisos para conciliación bancaria")
+            raise HTTPException(
+                status_code=403,
+                detail="Sin permisos para conciliación bancaria",
+            )
 
         # Validar archivo (reutilizar endpoint existente)
         validacion = await validar_archivo_bancario(
@@ -995,7 +1122,9 @@ async def flujo_completo_conciliacion(
 
         # Ejecutar matching automático
         resultado_matching = matching_automatico(
-            movimientos=movimientos_extendidos, db=db, current_user=current_user
+            movimientos=movimientos_extendidos,
+            db=db,
+            current_user=current_user,
         )
 
         # ============================================
@@ -1048,7 +1177,8 @@ async def flujo_completo_conciliacion(
                     "ref_banco": match["movimiento"].referencia,
                     "monto": f"${float(match['movimiento'].monto):,.2f}",
                     "cliente": "????",
-                    "cedula": match["movimiento"].cedula_pagador or "Desconocida",
+                    "cedula": match["movimiento"].cedula_pagador
+                    or "Desconocida",
                     "estado": "❌ Manual",
                     "color": "danger",
                     "confianza": 0.0,
@@ -1087,7 +1217,9 @@ async def flujo_completo_conciliacion(
             "total_monto_aplicable": total_monto_aplicable,
             "clientes_afectados": clientes_afectados,
             "tasa_exito_automatico": (
-                round((exactos / len(tabla_resultados) * 100), 2) if tabla_resultados else 0
+                round((exactos / len(tabla_resultados) * 100), 2)
+                if tabla_resultados
+                else 0
             ),
         }
 
@@ -1118,7 +1250,9 @@ async def flujo_completo_conciliacion(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en flujo de conciliación: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error en flujo de conciliación: {str(e)}"
+        )
 
 
 @router.post("/aplicar-exactos/{proceso_id}")
@@ -1220,13 +1354,17 @@ async def aplicar_coincidencias_exactas(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error aplicando conciliación: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error aplicando conciliación: {str(e)}"
+        )
 
 
 @router.get("/flujo-completo/paso/{paso}")
 def obtener_paso_flujo_conciliacion(
     paso: int,
-    proceso_id: Optional[str] = Query(None, description="ID del proceso de conciliación"),
+    proceso_id: Optional[str] = Query(
+        None, description="ID del proceso de conciliación"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1382,7 +1520,10 @@ def obtener_paso_flujo_conciliacion(
 
 
 async def _generar_reporte_conciliacion_completo(
-    proceso_id: str, user_id: int, pagos_creados: List[dict], total_monto: float
+    proceso_id: str,
+    user_id: int,
+    pagos_creados: List[dict],
+    total_monto: float,
 ):
     """
     📄 PASO 13: Generar reporte PDF de conciliación
@@ -1415,7 +1556,10 @@ async def _generar_reporte_conciliacion_completo(
 
 
 async def _notificar_admin_conciliacion(
-    proceso_id: str, usuario_proceso: str, pagos_aplicados: int, total_monto: float
+    proceso_id: str,
+    usuario_proceso: str,
+    pagos_aplicados: int,
+    total_monto: float,
 ):
     """
     🔔 PASO 15: Notificar a Admin sobre conciliación completada
@@ -1424,7 +1568,11 @@ async def _notificar_admin_conciliacion(
         db = SessionLocal()
 
         # Obtener administradores
-        admins = db.query(User).filter(User.is_admin, User.is_active, User.email.isnot(None)).all()
+        admins = (
+            db.query(User)
+            .filter(User.is_admin, User.is_active, User.email.isnot(None))
+            .all()
+        )
 
         for admin in admins:
             mensaje = f"""
@@ -1499,4 +1647,6 @@ Saludos.
 
     except Exception as e:
         logger = logging.getLogger(__name__)
-        logger.error(f"Error notificando admin sobre conciliación {proceso_id}: {str(e)}")
+        logger.error(
+            f"Error notificando admin sobre conciliación {proceso_id}: {str(e)}"
+        )

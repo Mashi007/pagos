@@ -49,7 +49,9 @@ class PreferenciasNotificacion:
     """Gestión de preferencias de notificación por cliente"""
 
     @staticmethod
-    def obtener_preferencias_cliente(cliente_id: int, db: Session) -> CanalNotificacion:
+    def obtener_preferencias_cliente(
+        cliente_id: int, db: Session
+    ) -> CanalNotificacion:
         """
         Obtener preferencias de notificación del cliente
         Por defecto: AMBOS canales si están configurados
@@ -82,9 +84,13 @@ class PreferenciasNotificacion:
         try:
             # TODO: Implementar tabla de preferencias
             # Por ahora, guardar en observaciones del cliente
-            cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+            cliente = (
+                db.query(Cliente).filter(Cliente.id == cliente_id).first()
+            )
             if cliente:
-                cliente.observaciones = f"PREFERENCIA_NOTIFICACION: {canal_preferido.value}"
+                cliente.observaciones = (
+                    f"PREFERENCIA_NOTIFICACION: {canal_preferido.value}"
+                )
                 db.commit()
                 return True
             return False
@@ -126,7 +132,9 @@ class NotificacionMulticanal:
         Se ejecuta cada hora via scheduler/cron
         """
         try:
-            logger.info("🔔 Iniciando procesamiento automático de notificaciones")
+            logger.info(
+                "🔔 Iniciando procesamiento automático de notificaciones"
+            )
 
             resultados = {
                 "fecha_procesamiento": datetime.now().isoformat(),
@@ -140,15 +148,21 @@ class NotificacionMulticanal:
             # Procesar cada tipo de notificación
             for tipo_notif in TipoNotificacionCliente:
                 try:
-                    resultado_tipo = await self._procesar_tipo_notificacion(tipo_notif)
+                    resultado_tipo = await self._procesar_tipo_notificacion(
+                        tipo_notif
+                    )
 
-                    resultados["notificaciones_procesadas"] += resultado_tipo["total"]
+                    resultados["notificaciones_procesadas"] += resultado_tipo[
+                        "total"
+                    ]
                     resultados["exitosas"] += resultado_tipo["exitosas"]
                     resultados["fallidas"] += resultado_tipo["fallidas"]
                     resultados["por_tipo"][tipo_notif.value] = resultado_tipo
 
                 except Exception as e:
-                    error_msg = f"Error procesando {tipo_notif.value}: {str(e)}"
+                    error_msg = (
+                        f"Error procesando {tipo_notif.value}: {str(e)}"
+                    )
                     logger.error(error_msg)
                     resultados["errores"].append(error_msg)
 
@@ -166,7 +180,9 @@ class NotificacionMulticanal:
             logger.error(f"Error en procesamiento automático: {e}")
             return {"error": str(e)}
 
-    async def _procesar_tipo_notificacion(self, tipo: TipoNotificacionCliente) -> Dict:
+    async def _procesar_tipo_notificacion(
+        self, tipo: TipoNotificacionCliente
+    ) -> Dict:
         """Procesar un tipo específico de notificación"""
         try:
             # Obtener clientes que requieren esta notificación
@@ -183,20 +199,26 @@ class NotificacionMulticanal:
             for cliente_data in clientes_objetivo:
                 try:
                     # Verificar límites anti-spam
-                    if not self._puede_enviar_notificacion(cliente_data["cliente_id"]):
+                    if not self._puede_enviar_notificacion(
+                        cliente_data["cliente_id"]
+                    ):
                         continue
 
                     # Obtener preferencias del cliente
-                    preferencias = PreferenciasNotificacion.obtener_preferencias_cliente(
-                        cliente_data["cliente_id"], self.db
+                    preferencias = (
+                        PreferenciasNotificacion.obtener_preferencias_cliente(
+                            cliente_data["cliente_id"], self.db
+                        )
                     )
 
                     if preferencias == CanalNotificacion.NINGUNO:
                         continue
 
                     # Enviar por canales según preferencias
-                    resultado_envio = await self._enviar_notificacion_multicanal(
-                        cliente_data, tipo, preferencias
+                    resultado_envio = (
+                        await self._enviar_notificacion_multicanal(
+                            cliente_data, tipo, preferencias
+                        )
                     )
 
                     if resultado_envio["exitoso"]:
@@ -224,7 +246,9 @@ class NotificacionMulticanal:
                 "error": str(e),
             }
 
-    def _obtener_clientes_para_notificacion(self, tipo: TipoNotificacionCliente) -> List[Dict]:
+    def _obtener_clientes_para_notificacion(
+        self, tipo: TipoNotificacionCliente
+    ) -> List[Dict]:
         """Obtener clientes que requieren notificación específica"""
         try:
             hoy = date.today()
@@ -338,7 +362,9 @@ class NotificacionMulticanal:
                             if cuota.fecha_vencimiento < hoy
                             else 0
                         ),
-                        "saldo_pendiente": float(cuota.capital_pendiente + cuota.interes_pendiente),
+                        "saldo_pendiente": float(
+                            cuota.capital_pendiente + cuota.interes_pendiente
+                        ),
                         "vehiculo": cliente.vehiculo_completo or "Vehículo",
                     }
                 )
@@ -372,11 +398,17 @@ class NotificacionMulticanal:
 
             # Determinar canales a usar
             canales_envio = []
-            if preferencias in [CanalNotificacion.EMAIL, CanalNotificacion.AMBOS]:
+            if preferencias in [
+                CanalNotificacion.EMAIL,
+                CanalNotificacion.AMBOS,
+            ]:
                 if cliente_data["email"]:
                     canales_envio.append("EMAIL")
 
-            if preferencias in [CanalNotificacion.WHATSAPP, CanalNotificacion.AMBOS]:
+            if preferencias in [
+                CanalNotificacion.WHATSAPP,
+                CanalNotificacion.AMBOS,
+            ]:
                 if cliente_data["telefono"]:
                     canales_envio.append("WHATSAPP")
 
@@ -386,14 +418,18 @@ class NotificacionMulticanal:
 
                 try:
                     if canal == "EMAIL":
-                        exito_email = await self._enviar_email_cliente(cliente_data, tipo)
+                        exito_email = await self._enviar_email_cliente(
+                            cliente_data, tipo
+                        )
                         if exito_email:
                             resultado["canales_exitosos"].append("EMAIL")
                         else:
                             resultado["canales_fallidos"].append("EMAIL")
 
                     elif canal == "WHATSAPP":
-                        exito_whatsapp = await self._enviar_whatsapp_cliente(cliente_data, tipo)
+                        exito_whatsapp = await self._enviar_whatsapp_cliente(
+                            cliente_data, tipo
+                        )
                         if exito_whatsapp:
                             resultado["canales_exitosos"].append("WHATSAPP")
                         else:
@@ -446,11 +482,14 @@ class NotificacionMulticanal:
         """Enviar notificación por WhatsApp"""
         try:
             # Obtener template de WhatsApp
-            template_whatsapp = self._obtener_template_whatsapp(tipo, cliente_data)
+            template_whatsapp = self._obtener_template_whatsapp(
+                tipo, cliente_data
+            )
 
             # Enviar WhatsApp
             resultado = await self.whatsapp_service.send_message(
-                to_phone=cliente_data["telefono"], message=template_whatsapp["mensaje"]
+                to_phone=cliente_data["telefono"],
+                message=template_whatsapp["mensaje"],
             )
 
             return resultado.get("exitoso", False)
@@ -743,14 +782,17 @@ Financiamiento Automotriz"""
             notificaciones_hoy = (
                 self.db.query(Notificacion)
                 .filter(
-                    Notificacion.usuario_id == cliente_id,  # Asumiendo que cliente_id = usuario_id
+                    Notificacion.usuario_id
+                    == cliente_id,  # Asumiendo que cliente_id = usuario_id
                     func.date(Notificacion.creado_en) == hoy,
                 )
                 .count()
             )
 
             if notificaciones_hoy >= self.LIMITE_NOTIFICACIONES_DIA:
-                logger.warning(f"Cliente {cliente_id} alcanzó límite diario de notificaciones")
+                logger.warning(
+                    f"Cliente {cliente_id} alcanzó límite diario de notificaciones"
+                )
                 return False
 
             # Verificar intervalo mínimo
@@ -762,9 +804,15 @@ Financiamiento Automotriz"""
             )
 
             if ultima_notificacion:
-                tiempo_transcurrido = datetime.now() - ultima_notificacion.creado_en
-                if tiempo_transcurrido.total_seconds() < (self.INTERVALO_MINIMO_HORAS * 3600):
-                    logger.warning(f"Cliente {cliente_id} no cumple intervalo mínimo")
+                tiempo_transcurrido = (
+                    datetime.now() - ultima_notificacion.creado_en
+                )
+                if tiempo_transcurrido.total_seconds() < (
+                    self.INTERVALO_MINIMO_HORAS * 3600
+                ):
+                    logger.warning(
+                        f"Cliente {cliente_id} no cumple intervalo mínimo"
+                    )
                     return False
 
             return True
@@ -774,16 +822,25 @@ Financiamiento Automotriz"""
             return True  # En caso de error, permitir envío
 
     async def _registrar_en_historial(
-        self, cliente_data: Dict, tipo: TipoNotificacionCliente, resultado: Dict
+        self,
+        cliente_data: Dict,
+        tipo: TipoNotificacionCliente,
+        resultado: Dict,
     ):
         """Registrar notificación en historial completo"""
         try:
             # Registrar para cada canal intentado
             for canal in resultado["canales_intentados"]:
-                estado = "ENTREGADO" if canal in resultado["canales_exitosos"] else "ERROR"
+                estado = (
+                    "ENTREGADO"
+                    if canal in resultado["canales_exitosos"]
+                    else "ERROR"
+                )
 
                 notificacion = Notificacion(
-                    usuario_id=cliente_data["cliente_id"],  # Asumiendo cliente_id = usuario_id
+                    usuario_id=cliente_data[
+                        "cliente_id"
+                    ],  # Asumiendo cliente_id = usuario_id
                     tipo=tipo.value,
                     categoria="CLIENTE",
                     prioridad="NORMAL",
@@ -791,16 +848,22 @@ Financiamiento Automotriz"""
                     mensaje=f"Notificación enviada por {canal} al cliente {cliente_data['nombre']}",
                     canal=canal,
                     estado=estado,
-                    destinatario_email=(cliente_data["email"] if canal == "EMAIL" else None),
+                    destinatario_email=(
+                        cliente_data["email"] if canal == "EMAIL" else None
+                    ),
                     destinatario_telefono=(
-                        cliente_data["telefono"] if canal == "WHATSAPP" else None
+                        cliente_data["telefono"]
+                        if canal == "WHATSAPP"
+                        else None
                     ),
                     destinatario_nombre=cliente_data["nombre"],
                     extra_data=str(
                         {
                             "cuota_numero": cliente_data["cuota_numero"],
                             "monto_cuota": cliente_data["monto_cuota"],
-                            "fecha_vencimiento": cliente_data["fecha_vencimiento"].isoformat(),
+                            "fecha_vencimiento": cliente_data[
+                                "fecha_vencimiento"
+                            ].isoformat(),
                             "tipo_notificacion": tipo.value,
                         }
                     ),
@@ -892,7 +955,9 @@ class NotificationScheduler:
     def __init__(self):
         self.is_running = False
 
-    async def ejecutar_ciclo_notificaciones(self, db: Session) -> Dict[str, Any]:
+    async def ejecutar_ciclo_notificaciones(
+        self, db: Session
+    ) -> Dict[str, Any]:
         """
         🔄 Ejecutar ciclo completo de notificaciones
         Método principal que se llama desde cron/scheduler
@@ -909,7 +974,9 @@ class NotificationScheduler:
             servicio_notif = NotificacionMulticanal(db)
 
             # Procesar todas las notificaciones
-            resultados = await servicio_notif.procesar_notificaciones_automaticas()
+            resultados = (
+                await servicio_notif.procesar_notificaciones_automaticas()
+            )
 
             # Log de resultados
             logger.info(
@@ -932,7 +999,9 @@ class NotificationScheduler:
         finally:
             self.is_running = False
 
-    def verificar_configuracion_servicios(self, db: Session) -> Dict[str, bool]:
+    def verificar_configuracion_servicios(
+        self, db: Session
+    ) -> Dict[str, bool]:
         """Verificar que los servicios estén configurados"""
         try:
             from app.models.configuracion_sistema import ConfigHelper
@@ -975,7 +1044,8 @@ class GestorReintentos:
                     Notificacion.estado == "ERROR",
                     Notificacion.intentos < Notificacion.max_intentos,
                     Notificacion.creado_en
-                    >= datetime.now() - timedelta(hours=24),  # Solo últimas 24h
+                    >= datetime.now()
+                    - timedelta(hours=24),  # Solo últimas 24h
                 )
                 .all()
             )
@@ -994,9 +1064,13 @@ class GestorReintentos:
 
                     # Intentar reenvío
                     if notificacion.canal == "EMAIL":
-                        exito = await GestorReintentos._reintentar_email(notificacion)
+                        exito = await GestorReintentos._reintentar_email(
+                            notificacion
+                        )
                     elif notificacion.canal == "WHATSAPP":
-                        exito = await GestorReintentos._reintentar_whatsapp(notificacion)
+                        exito = await GestorReintentos._reintentar_whatsapp(
+                            notificacion
+                        )
                     else:
                         exito = False
 
@@ -1009,12 +1083,16 @@ class GestorReintentos:
 
                         # Si agotó reintentos, notificar a admin
                         if notificacion.intentos >= notificacion.max_intentos:
-                            await GestorReintentos._notificar_admin_fallo_critico(notificacion, db)
+                            await GestorReintentos._notificar_admin_fallo_critico(
+                                notificacion, db
+                            )
 
                     db.commit()
 
                 except Exception as e:
-                    logger.error(f"Error en reintento de notificación {notificacion.id}: {e}")
+                    logger.error(
+                        f"Error en reintento de notificación {notificacion.id}: {e}"
+                    )
                     resultados["fallidos"] += 1
 
             return resultados
@@ -1061,7 +1139,9 @@ class GestorReintentos:
             return False
 
     @staticmethod
-    async def _notificar_admin_fallo_critico(notificacion: Notificacion, db: Session):
+    async def _notificar_admin_fallo_critico(
+        notificacion: Notificacion, db: Session
+    ):
         """Notificar a admin sobre fallo crítico en notificaciones"""
         try:
             # Obtener administradores
@@ -1100,7 +1180,9 @@ Acción requerida: Revisar configuración del servicio.
                 db.add(notif_admin)
 
             db.commit()
-            logger.warning("🚨 Administradores notificados sobre fallo crítico")
+            logger.warning(
+                "🚨 Administradores notificados sobre fallo crítico"
+            )
 
         except Exception as e:
             logger.error(f"Error notificando fallo crítico: {e}")
@@ -1122,7 +1204,11 @@ class WhatsAppTemplateManager:
             "categoria": "MARKETING",
             "idioma": "es",
             "componentes": [
-                {"tipo": "HEADER", "formato": "TEXT", "texto": "Recordatorio de Pago"},
+                {
+                    "tipo": "HEADER",
+                    "formato": "TEXT",
+                    "texto": "Recordatorio de Pago",
+                },
                 {
                     "tipo": "BODY",
                     "texto": (
@@ -1138,7 +1224,11 @@ class WhatsAppTemplateManager:
             "categoria": "UTILITY",
             "idioma": "es",
             "componentes": [
-                {"tipo": "HEADER", "formato": "TEXT", "texto": "⚠️ Cuota Vencida"},
+                {
+                    "tipo": "HEADER",
+                    "formato": "TEXT",
+                    "texto": "⚠️ Cuota Vencida",
+                },
                 {
                     "tipo": "BODY",
                     "texto": (
@@ -1159,7 +1249,11 @@ class WhatsAppTemplateManager:
             "categoria": "UTILITY",
             "idioma": "es",
             "componentes": [
-                {"tipo": "HEADER", "formato": "TEXT", "texto": "✅ Pago Confirmado"},
+                {
+                    "tipo": "HEADER",
+                    "formato": "TEXT",
+                    "texto": "✅ Pago Confirmado",
+                },
                 {
                     "tipo": "BODY",
                     "texto": (
@@ -1177,7 +1271,9 @@ class WhatsAppTemplateManager:
         """
         Obtener template formateado para envío a Meta para aprobación
         """
-        template = WhatsAppTemplateManager.TEMPLATES_WHATSAPP.get(template_name)
+        template = WhatsAppTemplateManager.TEMPLATES_WHATSAPP.get(
+            template_name
+        )
         if not template:
             return {}
 

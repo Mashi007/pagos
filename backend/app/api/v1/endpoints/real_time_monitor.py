@@ -86,7 +86,9 @@ class RealTimeAuthMonitor:
 
             # Mantener solo últimos 50 análisis por token
             if len(self.token_analysis[token_id]) > 50:
-                self.token_analysis[token_id] = self.token_analysis[token_id][-50:]
+                self.token_analysis[token_id] = self.token_analysis[token_id][
+                    -50:
+                ]
 
         except Exception as e:
             logger.error(f"Error analizando token: {e}")
@@ -97,7 +99,9 @@ class RealTimeAuthMonitor:
             # Analizar últimos 5 minutos
             cutoff_time = datetime.now() - timedelta(minutes=5)
             recent_requests = [
-                req for req in self.request_history if req["timestamp"] > cutoff_time
+                req
+                for req in self.request_history
+                if req["timestamp"] > cutoff_time
             ]
 
             # Contar errores por tipo
@@ -115,7 +119,9 @@ class RealTimeAuthMonitor:
             if len(self.error_patterns) > 100:
                 # Mantener solo los más frecuentes
                 sorted_patterns = sorted(
-                    self.error_patterns.items(), key=lambda x: x[1], reverse=True
+                    self.error_patterns.items(),
+                    key=lambda x: x[1],
+                    reverse=True,
                 )
                 self.error_patterns = dict(sorted_patterns[:50])
 
@@ -139,12 +145,20 @@ class RealTimeAuthMonitor:
             # Análisis de últimos 5 minutos
             cutoff_time = current_time - timedelta(minutes=5)
             recent_requests = [
-                req for req in self.request_history if req["timestamp"] > cutoff_time
+                req
+                for req in self.request_history
+                if req["timestamp"] > cutoff_time
             ]
 
             # Estadísticas básicas
             total_requests = len(recent_requests)
-            failed_requests = len([req for req in recent_requests if not req.get("success", True)])
+            failed_requests = len(
+                [
+                    req
+                    for req in recent_requests
+                    if not req.get("success", True)
+                ]
+            )
             success_rate = (
                 ((total_requests - failed_requests) / total_requests * 100)
                 if total_requests > 0
@@ -159,7 +173,9 @@ class RealTimeAuthMonitor:
                 if analyses:
                     latest_analysis = analyses[-1]
                     exp_time = datetime.fromtimestamp(latest_analysis["exp"])
-                    if exp_time < current_time + timedelta(minutes=5):  # Expira en 5 minutos
+                    if exp_time < current_time + timedelta(
+                        minutes=5
+                    ):  # Expira en 5 minutos
                         expiring_tokens += 1
 
             return {
@@ -186,7 +202,10 @@ class RealTimeAuthMonitor:
         if not self.performance_metrics:
             return 0.0
 
-        total_time = sum(metric.get("response_time", 0) for metric in self.performance_metrics)
+        total_time = sum(
+            metric.get("response_time", 0)
+            for metric in self.performance_metrics
+        )
         return round(total_time / len(self.performance_metrics), 2)
 
     def _calculate_peak_error_rate(self) -> float:
@@ -195,7 +214,9 @@ class RealTimeAuthMonitor:
             return 0.0
 
         error_count = sum(
-            1 for metric in self.performance_metrics if not metric.get("success", True)
+            1
+            for metric in self.performance_metrics
+            if not metric.get("success", True)
         )
         return round((error_count / len(self.performance_metrics)) * 100, 2)
 
@@ -259,8 +280,14 @@ async def analyze_user_tokens(
 
         # Análisis estadístico
         total_requests = len(user_token_analyses)
-        successful_requests = len([a for a in user_token_analyses if a.get("success", True)])
-        success_rate = (successful_requests / total_requests * 100) if total_requests > 0 else 0
+        successful_requests = len(
+            [a for a in user_token_analyses if a.get("success", True)]
+        )
+        success_rate = (
+            (successful_requests / total_requests * 100)
+            if total_requests > 0
+            else 0
+        )
 
         # Endpoints más usados
         endpoint_usage = defaultdict(int)
@@ -281,9 +308,15 @@ async def analyze_user_tokens(
                 "successful_requests": successful_requests,
                 "success_rate_percent": round(success_rate, 2),
                 "most_used_endpoints": dict(
-                    sorted(endpoint_usage.items(), key=lambda x: x[1], reverse=True)[:10]
+                    sorted(
+                        endpoint_usage.items(),
+                        key=lambda x: x[1],
+                        reverse=True,
+                    )[:10]
                 ),
-                "recent_requests": user_token_analyses[:20],  # Últimos 20 requests
+                "recent_requests": user_token_analyses[
+                    :20
+                ],  # Últimos 20 requests
             },
         }
 
@@ -334,14 +367,18 @@ async def get_error_patterns():
             patterns = dict(auth_monitor.error_patterns)
 
         # Ordenar por frecuencia
-        sorted_patterns = sorted(patterns.items(), key=lambda x: x[1], reverse=True)
+        sorted_patterns = sorted(
+            patterns.items(), key=lambda x: x[1], reverse=True
+        )
 
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
             "patterns": sorted_patterns,
             "total_patterns": len(patterns),
-            "most_common_error": sorted_patterns[0] if sorted_patterns else None,
+            "most_common_error": (
+                sorted_patterns[0] if sorted_patterns else None
+            ),
         }
 
     except Exception as e:
@@ -395,7 +432,9 @@ def _generate_performance_recommendations(status: Dict[str, Any]) -> List[str]:
             f"🔄 {expiring_tokens} tokens expirando pronto - Verificar auto-refresh"
         )
 
-    avg_response_time = status.get("performance", {}).get("avg_response_time", 0)
+    avg_response_time = status.get("performance", {}).get(
+        "avg_response_time", 0
+    )
     if avg_response_time > 2.0:
         recommendations.append(
             f"🐌 Tiempo de respuesta alto ({avg_response_time}s) - Optimizar queries"

@@ -53,7 +53,8 @@ def habilitar_monitoreo_basico(current_user: User = Depends(get_current_user)):
     """
     if not current_user.is_admin:
         raise HTTPException(
-            status_code=403, detail="Solo administradores pueden configurar monitoreo"
+            status_code=403,
+            detail="Solo administradores pueden configurar monitoreo",
         )
 
     try:
@@ -88,7 +89,9 @@ def habilitar_monitoreo_basico(current_user: User = Depends(get_current_user)):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error habilitando monitoreo: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error habilitando monitoreo: {str(e)}"
+        )
 
 
 # ============================================
@@ -98,7 +101,9 @@ def habilitar_monitoreo_basico(current_user: User = Depends(get_current_user)):
 
 @router.get("/sistema/completa")
 def obtener_configuracion_completa(
-    categoria: Optional[str] = Query(None, description="Filtrar por categoría"),
+    categoria: Optional[str] = Query(
+        None, description="Filtrar por categoría"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -116,7 +121,9 @@ def obtener_configuracion_completa(
         # Obtener tiempo actual para logging
         time.time()
 
-        query = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.visible_frontend)
+        query = db.query(ConfiguracionSistema).filter(
+            ConfiguracionSistema.visible_frontend
+        )
 
         if categoria:
             query = query.filter(ConfiguracionSistema.categoria == categoria)
@@ -136,7 +143,9 @@ def obtener_configuracion_completa(
                 "requerido": config.requerido,
                 "solo_lectura": config.solo_lectura,
                 "opciones_validas": (
-                    json.loads(config.opciones_validas) if config.opciones_validas else None
+                    json.loads(config.opciones_validas)
+                    if config.opciones_validas
+                    else None
                 ),
                 "valor_minimo": config.valor_minimo,
                 "valor_maximo": config.valor_maximo,
@@ -155,7 +164,9 @@ def obtener_configuracion_completa(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo configuración: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error obteniendo configuración: {str(e)}"
+        )
 
 
 @router.get("/validadores")
@@ -332,13 +343,17 @@ def probar_validadores(datos_prueba: Dict[str, Any]):
         if "telefono" in datos_prueba:
             telefono = datos_prueba["telefono"]
             pais = datos_prueba.get("pais_telefono", "VENEZUELA")
-            resultados["telefono"] = ValidadorTelefono.validar_y_formatear_telefono(telefono, pais)
+            resultados["telefono"] = (
+                ValidadorTelefono.validar_y_formatear_telefono(telefono, pais)
+            )
 
         # Probar cédula
         if "cedula" in datos_prueba:
             cedula = datos_prueba["cedula"]
             pais = datos_prueba.get("pais_cedula", "VENEZUELA")
-            resultados["cedula"] = ValidadorCedula.validar_y_formatear_cedula(cedula, pais)
+            resultados["cedula"] = ValidadorCedula.validar_y_formatear_cedula(
+                cedula, pais
+            )
 
         # Probar fecha
         if "fecha" in datos_prueba:
@@ -357,13 +372,21 @@ def probar_validadores(datos_prueba: Dict[str, Any]):
             "resultados": resultados,
             "resumen": {
                 "total_validados": len(resultados),
-                "validos": sum(1 for r in resultados.values() if r.get("valido", False)),
-                "invalidos": sum(1 for r in resultados.values() if not r.get("valido", False)),
+                "validos": sum(
+                    1 for r in resultados.values() if r.get("valido", False)
+                ),
+                "invalidos": sum(
+                    1
+                    for r in resultados.values()
+                    if not r.get("valido", False)
+                ),
             },
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error probando validadores: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error probando validadores: {str(e)}"
+        )
 
 
 @router.get("/sistema/categoria/{categoria}")
@@ -392,7 +415,10 @@ def obtener_configuracion_categoria(
         )
 
         if not configs:
-            raise HTTPException(status_code=404, detail=f"Categoría '{categoria}' no encontrada")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Categoría '{categoria}' no encontrada",
+            )
 
         configuracion = {}
         for config in configs:
@@ -403,7 +429,9 @@ def obtener_configuracion_categoria(
                 "requerido": config.requerido,
                 "solo_lectura": config.solo_lectura,
                 "opciones_validas": (
-                    json.loads(config.opciones_validas) if config.opciones_validas else None
+                    json.loads(config.opciones_validas)
+                    if config.opciones_validas
+                    else None
                 ),
                 "valor_minimo": config.valor_minimo,
                 "valor_maximo": config.valor_maximo,
@@ -426,7 +454,9 @@ def obtener_configuracion_categoria(
         )
 
 
-def _buscar_configuracion_existente(categoria: str, clave: str, db: Session) -> Optional[ConfiguracionSistema]:
+def _buscar_configuracion_existente(
+    categoria: str, clave: str, db: Session
+) -> Optional[ConfiguracionSistema]:
     """Buscar configuración existente en la base de datos"""
     return (
         db.query(ConfiguracionSistema)
@@ -438,7 +468,9 @@ def _buscar_configuracion_existente(categoria: str, clave: str, db: Session) -> 
     )
 
 
-def _validar_configuracion_para_actualizacion(config: ConfiguracionSistema, categoria: str, clave: str) -> Optional[str]:
+def _validar_configuracion_para_actualizacion(
+    config: ConfiguracionSistema, categoria: str, clave: str
+) -> Optional[str]:
     """Validar si la configuración puede ser actualizada"""
     if not config:
         return f"Configuración {categoria}.{clave} no encontrada"
@@ -449,8 +481,9 @@ def _validar_configuracion_para_actualizacion(config: ConfiguracionSistema, cate
     return None
 
 
-def _procesar_actualizacion_configuracion(config: ConfiguracionSistema, nuevo_valor: Any,
-                                          categoria: str, clave: str) -> Optional[Dict[str, Any]]:
+def _procesar_actualizacion_configuracion(
+    config: ConfiguracionSistema, nuevo_valor: Any, categoria: str, clave: str
+) -> Optional[Dict[str, Any]]:
     """Procesar la actualización de una configuración"""
     try:
         # Validar nuevo valor
@@ -460,7 +493,9 @@ def _procesar_actualizacion_configuracion(config: ConfiguracionSistema, nuevo_va
 
         # Actualizar valor
         valor_anterior = config.valor_procesado
-        config.actualizar_valor(nuevo_valor, "SISTEMA")  # Usuario será pasado desde el contexto
+        config.actualizar_valor(
+            nuevo_valor, "SISTEMA"
+        )  # Usuario será pasado desde el contexto
 
         return {
             "categoria": categoria,
@@ -472,9 +507,14 @@ def _procesar_actualizacion_configuracion(config: ConfiguracionSistema, nuevo_va
         return None  # Error será manejado por el llamador
 
 
-def _procesar_categoria_configuraciones(categoria: str, configs: Dict[str, Any],
-                                        db: Session, actualizaciones_exitosas: list,
-                                        errores: list, current_user: User):
+def _procesar_categoria_configuraciones(
+    categoria: str,
+    configs: Dict[str, Any],
+    db: Session,
+    actualizaciones_exitosas: list,
+    errores: list,
+    current_user: User,
+):
     """Procesar todas las configuraciones de una categoría"""
     for clave, nuevo_valor in configs.items():
         try:
@@ -482,13 +522,17 @@ def _procesar_categoria_configuraciones(categoria: str, configs: Dict[str, Any],
             config = _buscar_configuracion_existente(categoria, clave, db)
 
             # Validar configuración
-            error_validacion = _validar_configuracion_para_actualizacion(config, categoria, clave)
+            error_validacion = _validar_configuracion_para_actualizacion(
+                config, categoria, clave
+            )
             if error_validacion:
                 errores.append(error_validacion)
                 continue
 
             # Procesar actualización
-            resultado = _procesar_actualizacion_configuracion(config, nuevo_valor, categoria, clave)
+            resultado = _procesar_actualizacion_configuracion(
+                config, nuevo_valor, categoria, clave
+            )
             if resultado:
                 # Actualizar con el usuario real
                 config.actualizar_valor(nuevo_valor, current_user.full_name)
@@ -502,7 +546,9 @@ def _procesar_categoria_configuraciones(categoria: str, configs: Dict[str, Any],
             errores.append(f"Error actualizando {categoria}.{clave}: {str(e)}")
 
 
-def _registrar_auditoria_configuracion(actualizaciones_exitosas: list, current_user: User, db: Session):
+def _registrar_auditoria_configuracion(
+    actualizaciones_exitosas: list, current_user: User, db: Session
+):
     """Registrar operación en auditoría"""
     from app.core.constants import TipoAccion
     from app.models.auditoria import Auditoria
@@ -552,13 +598,20 @@ def actualizar_configuracion_sistema(
         # Procesar cada categoría
         for categoria, configs in configuraciones.items():
             _procesar_categoria_configuraciones(
-                categoria, configs, db, actualizaciones_exitosas, errores, current_user
+                categoria,
+                configs,
+                db,
+                actualizaciones_exitosas,
+                errores,
+                current_user,
             )
 
         # Confirmar cambios si no hay errores críticos
         if len(errores) < len(actualizaciones_exitosas):
             db.commit()
-            _registrar_auditoria_configuracion(actualizaciones_exitosas, current_user, db)
+            _registrar_auditoria_configuracion(
+                actualizaciones_exitosas, current_user, db
+            )
             db.commit()
         else:
             db.rollback()
@@ -579,7 +632,10 @@ def actualizar_configuracion_sistema(
 
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error actualizando configuraciones: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error actualizando configuraciones: {str(e)}",
+        )
 
 
 @router.post("/sistema/probar-integracion/{categoria}")
@@ -593,7 +649,8 @@ def probar_integracion(
     """
     if not current_user.is_admin:
         raise HTTPException(
-            status_code=403, detail="Solo administradores pueden probar integraciones"
+            status_code=403,
+            detail="Solo administradores pueden probar integraciones",
         )
 
     try:
@@ -616,12 +673,15 @@ def probar_integracion(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error probando integración: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error probando integración: {str(e)}"
+        )
 
 
 @router.get("/sistema/estado-servicios")
 def obtener_estado_servicios(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     📊 Obtener estado de todos los servicios configurados
@@ -639,20 +699,36 @@ def obtener_estado_servicios(
         estado_servicios = {
             "ai": {
                 "habilitado": ConfigHelper.is_ai_enabled(db),
-                "configurado": bool(ConfigHelper.get_config(db, "AI", "OPENAI_API_KEY")),
-                "estado": "✅ ACTIVO" if ConfigHelper.is_ai_enabled(db) else "❌ INACTIVO",
+                "configurado": bool(
+                    ConfigHelper.get_config(db, "AI", "OPENAI_API_KEY")
+                ),
+                "estado": (
+                    "✅ ACTIVO"
+                    if ConfigHelper.is_ai_enabled(db)
+                    else "❌ INACTIVO"
+                ),
             },
             "email": {
                 "habilitado": True,  # Siempre habilitado
                 "configurado": ConfigHelper.is_email_configured(db),
                 "estado": (
-                    "✅ CONFIGURADO" if ConfigHelper.is_email_configured(db) else "⚠️ PENDIENTE"
+                    "✅ CONFIGURADO"
+                    if ConfigHelper.is_email_configured(db)
+                    else "⚠️ PENDIENTE"
                 ),
             },
             "whatsapp": {
                 "habilitado": ConfigHelper.is_whatsapp_enabled(db),
-                "configurado": bool(ConfigHelper.get_config(db, "WHATSAPP", "META_ACCESS_TOKEN")),
-                "estado": "✅ ACTIVO" if ConfigHelper.is_whatsapp_enabled(db) else "❌ INACTIVO",
+                "configurado": bool(
+                    ConfigHelper.get_config(
+                        db, "WHATSAPP", "META_ACCESS_TOKEN"
+                    )
+                ),
+                "estado": (
+                    "✅ ACTIVO"
+                    if ConfigHelper.is_whatsapp_enabled(db)
+                    else "❌ INACTIVO"
+                ),
                 "provider": "META_CLOUD_API",
             },
             "database": {
@@ -661,8 +737,12 @@ def obtener_estado_servicios(
                 "estado": "✅ CONECTADA",
             },
             "monitoreo": {
-                "habilitado": bool(ConfigHelper.get_config(db, "MONITOREO", "SENTRY_DSN")),
-                "configurado": bool(ConfigHelper.get_config(db, "MONITOREO", "SENTRY_DSN")),
+                "habilitado": bool(
+                    ConfigHelper.get_config(db, "MONITOREO", "SENTRY_DSN")
+                ),
+                "configurado": bool(
+                    ConfigHelper.get_config(db, "MONITOREO", "SENTRY_DSN")
+                ),
                 "estado": (
                     "✅ ACTIVO"
                     if ConfigHelper.get_config(db, "MONITOREO", "SENTRY_DSN")
@@ -672,7 +752,9 @@ def obtener_estado_servicios(
         }
 
         # Calcular estado general
-        servicios_activos = sum(1 for s in estado_servicios.values() if "✅" in s["estado"])
+        servicios_activos = sum(
+            1 for s in estado_servicios.values() if "✅" in s["estado"]
+        )
         total_servicios = len(estado_servicios)
 
         return {
@@ -681,7 +763,9 @@ def obtener_estado_servicios(
             "estado_general": {
                 "servicios_activos": servicios_activos,
                 "total_servicios": total_servicios,
-                "porcentaje_activo": round(servicios_activos / total_servicios * 100, 1),
+                "porcentaje_activo": round(
+                    servicios_activos / total_servicios * 100, 1
+                ),
                 "estado": (
                     "✅ ÓPTIMO"
                     if servicios_activos == total_servicios
@@ -689,18 +773,22 @@ def obtener_estado_servicios(
                 ),
             },
             "servicios": estado_servicios,
-            "recomendaciones": _generar_recomendaciones_configuracion(estado_servicios),
+            "recomendaciones": _generar_recomendaciones_configuracion(
+                estado_servicios
+            ),
         }
 
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error obteniendo estado de servicios: {str(e)}"
+            status_code=500,
+            detail=f"Error obteniendo estado de servicios: {str(e)}",
         )
 
 
 @router.post("/sistema/inicializar-defaults")
 def inicializar_configuraciones_default(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     🔧 Inicializar configuraciones por defecto del sistema
@@ -743,7 +831,8 @@ def inicializar_configuraciones_default(
 
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error inicializando configuraciones: {str(e)}"
+            status_code=500,
+            detail=f"Error inicializando configuraciones: {str(e)}",
         )
 
 
@@ -754,7 +843,8 @@ def inicializar_configuraciones_default(
 
 @router.get("/ia")
 def obtener_configuracion_ia(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     🤖 Obtener configuración de Inteligencia Artificial
@@ -788,31 +878,47 @@ def obtener_configuracion_ia(
 
             configuracion[config.clave] = {
                 "valor": valor_mostrar,
-                "valor_real": config.valor_procesado if config.tipo_dato != "PASSWORD" else None,
+                "valor_real": (
+                    config.valor_procesado
+                    if config.tipo_dato != "PASSWORD"
+                    else None
+                ),
                 "descripcion": config.descripcion,
                 "tipo_dato": config.tipo_dato,
                 "requerido": config.requerido,
                 "configurado": bool(config.valor),
                 "opciones_validas": (
-                    json.loads(config.opciones_validas) if config.opciones_validas else None
+                    json.loads(config.opciones_validas)
+                    if config.opciones_validas
+                    else None
                 ),
             }
 
         # Estado de funcionalidades IA
         estado_ia = {
             "scoring_crediticio": {
-                "habilitado": configuracion.get("AI_SCORING_ENABLED", {}).get("valor", False),
-                "configurado": bool(configuracion.get("OPENAI_API_KEY", {}).get("valor_real")),
+                "habilitado": configuracion.get("AI_SCORING_ENABLED", {}).get(
+                    "valor", False
+                ),
+                "configurado": bool(
+                    configuracion.get("OPENAI_API_KEY", {}).get("valor_real")
+                ),
                 "descripcion": "Sistema de scoring crediticio automático",
             },
             "prediccion_mora": {
-                "habilitado": configuracion.get("AI_PREDICTION_ENABLED", {}).get("valor", False),
+                "habilitado": configuracion.get(
+                    "AI_PREDICTION_ENABLED", {}
+                ).get("valor", False),
                 "configurado": True,  # No requiere configuración externa
                 "descripcion": "Predicción de mora con Machine Learning",
             },
             "chatbot": {
-                "habilitado": configuracion.get("AI_CHATBOT_ENABLED", {}).get("valor", False),
-                "configurado": bool(configuracion.get("OPENAI_API_KEY", {}).get("valor_real")),
+                "habilitado": configuracion.get("AI_CHATBOT_ENABLED", {}).get(
+                    "valor", False
+                ),
+                "configurado": bool(
+                    configuracion.get("OPENAI_API_KEY", {}).get("valor_real")
+                ),
                 "descripcion": "Chatbot inteligente para cobranza",
             },
         }
@@ -835,53 +941,76 @@ def obtener_configuracion_ia(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo configuración IA: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error obteniendo configuración IA: {str(e)}",
+        )
 
 
-def _actualizar_config_api_key(openai_api_key: str, current_user: User, db: Session) -> Optional[str]:
+def _actualizar_config_api_key(
+    openai_api_key: str, current_user: User, db: Session
+) -> Optional[str]:
     """Actualizar API Key de OpenAI"""
     if openai_api_key is not None:
-        config = ConfiguracionSistema.obtener_por_clave(db, "AI", "OPENAI_API_KEY")
+        config = ConfiguracionSistema.obtener_por_clave(
+            db, "AI", "OPENAI_API_KEY"
+        )
         if config:
             config.actualizar_valor(openai_api_key, current_user.full_name)
             return "OPENAI_API_KEY"
     return None
 
 
-def _actualizar_config_modelo(openai_model: str, current_user: User, db: Session) -> Optional[str]:
+def _actualizar_config_modelo(
+    openai_model: str, current_user: User, db: Session
+) -> Optional[str]:
     """Actualizar modelo de OpenAI"""
     if openai_model is not None:
-        config = ConfiguracionSistema.obtener_por_clave(db, "AI", "OPENAI_MODEL")
+        config = ConfiguracionSistema.obtener_por_clave(
+            db, "AI", "OPENAI_MODEL"
+        )
         if config:
             config.actualizar_valor(openai_model, current_user.full_name)
             return "OPENAI_MODEL"
     return None
 
 
-def _actualizar_config_scoring(scoring_enabled: bool, current_user: User, db: Session) -> Optional[str]:
+def _actualizar_config_scoring(
+    scoring_enabled: bool, current_user: User, db: Session
+) -> Optional[str]:
     """Actualizar configuración de scoring"""
     if scoring_enabled is not None:
-        config = ConfiguracionSistema.obtener_por_clave(db, "AI", "AI_SCORING_ENABLED")
+        config = ConfiguracionSistema.obtener_por_clave(
+            db, "AI", "AI_SCORING_ENABLED"
+        )
         if config:
             config.actualizar_valor(scoring_enabled, current_user.full_name)
             return "AI_SCORING_ENABLED"
     return None
 
 
-def _actualizar_config_prediction(prediction_enabled: bool, current_user: User, db: Session) -> Optional[str]:
+def _actualizar_config_prediction(
+    prediction_enabled: bool, current_user: User, db: Session
+) -> Optional[str]:
     """Actualizar configuración de predicción"""
     if prediction_enabled is not None:
-        config = ConfiguracionSistema.obtener_por_clave(db, "AI", "AI_PREDICTION_ENABLED")
+        config = ConfiguracionSistema.obtener_por_clave(
+            db, "AI", "AI_PREDICTION_ENABLED"
+        )
         if config:
             config.actualizar_valor(prediction_enabled, current_user.full_name)
             return "AI_PREDICTION_ENABLED"
     return None
 
 
-def _actualizar_config_chatbot(chatbot_enabled: bool, current_user: User, db: Session) -> Optional[str]:
+def _actualizar_config_chatbot(
+    chatbot_enabled: bool, current_user: User, db: Session
+) -> Optional[str]:
     """Actualizar configuración de chatbot"""
     if chatbot_enabled is not None:
-        config = ConfiguracionSistema.obtener_por_clave(db, "AI", "AI_CHATBOT_ENABLED")
+        config = ConfiguracionSistema.obtener_por_clave(
+            db, "AI", "AI_CHATBOT_ENABLED"
+        )
         if config:
             config.actualizar_valor(chatbot_enabled, current_user.full_name)
             return "AI_CHATBOT_ENABLED"
@@ -902,29 +1031,41 @@ def actualizar_configuracion_ia(
     🤖 Actualizar configuración de IA (VERSIÓN REFACTORIZADA)
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Solo administradores pueden configurar IA")
+        raise HTTPException(
+            status_code=403, detail="Solo administradores pueden configurar IA"
+        )
 
     try:
         actualizaciones = []
 
         # Actualizar configuraciones individuales
-        config_api_key = _actualizar_config_api_key(openai_api_key, current_user, db)
+        config_api_key = _actualizar_config_api_key(
+            openai_api_key, current_user, db
+        )
         if config_api_key:
             actualizaciones.append(config_api_key)
 
-        config_modelo = _actualizar_config_modelo(openai_model, current_user, db)
+        config_modelo = _actualizar_config_modelo(
+            openai_model, current_user, db
+        )
         if config_modelo:
             actualizaciones.append(config_modelo)
 
-        config_scoring = _actualizar_config_scoring(scoring_enabled, current_user, db)
+        config_scoring = _actualizar_config_scoring(
+            scoring_enabled, current_user, db
+        )
         if config_scoring:
             actualizaciones.append(config_scoring)
 
-        config_prediction = _actualizar_config_prediction(prediction_enabled, current_user, db)
+        config_prediction = _actualizar_config_prediction(
+            prediction_enabled, current_user, db
+        )
         if config_prediction:
             actualizaciones.append(config_prediction)
 
-        config_chatbot = _actualizar_config_chatbot(chatbot_enabled, current_user, db)
+        config_chatbot = _actualizar_config_chatbot(
+            chatbot_enabled, current_user, db
+        )
         if config_chatbot:
             actualizaciones.append(config_chatbot)
 
@@ -941,7 +1082,8 @@ def actualizar_configuracion_ia(
     except Exception as e:
         db.rollback()
         raise HTTPException(
-            status_code=500, detail=f"Error actualizando configuración IA: {str(e)}"
+            status_code=500,
+            detail=f"Error actualizando configuración IA: {str(e)}",
         )
 
 
@@ -952,7 +1094,8 @@ def actualizar_configuracion_ia(
 
 @router.get("/email")
 def obtener_configuracion_email(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     📧 Obtener configuración de email
@@ -965,14 +1108,20 @@ def obtener_configuracion_email(
                 detail="Solo administradores pueden ver configuración de email",
             )
         configs_email = (
-            db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "EMAIL").all()
+            db.query(ConfiguracionSistema)
+            .filter(ConfiguracionSistema.categoria == "EMAIL")
+            .all()
         )
 
         configuracion = {}
         for config in configs_email:
             valor_mostrar = config.valor_procesado
             if config.tipo_dato == "PASSWORD" and config.valor:
-                valor_mostrar = "****" + config.valor[-4:] if len(config.valor) > 4 else "****"
+                valor_mostrar = (
+                    "****" + config.valor[-4:]
+                    if len(config.valor) > 4
+                    else "****"
+                )
 
             configuracion[config.clave] = {
                 "valor": valor_mostrar,
@@ -1017,7 +1166,8 @@ def obtener_configuracion_email(
 
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error obteniendo configuración email: {str(e)}"
+            status_code=500,
+            detail=f"Error obteniendo configuración email: {str(e)}",
         )
 
 
@@ -1036,7 +1186,10 @@ def actualizar_configuracion_email(
     📧 Actualizar configuración de email
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Solo administradores pueden configurar email")
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden configurar email",
+        )
 
     try:
         actualizaciones = []
@@ -1053,7 +1206,9 @@ def actualizar_configuracion_email(
 
         for clave, valor in parametros.items():
             if valor is not None:
-                config = ConfiguracionSistema.obtener_por_clave(db, "EMAIL", clave)
+                config = ConfiguracionSistema.obtener_por_clave(
+                    db, "EMAIL", clave
+                )
                 if config:
                     config.actualizar_valor(valor, current_user.full_name)
                     actualizaciones.append(clave)
@@ -1070,7 +1225,8 @@ def actualizar_configuracion_email(
     except Exception as e:
         db.rollback()
         raise HTTPException(
-            status_code=500, detail=f"Error actualizando configuración email: {str(e)}"
+            status_code=500,
+            detail=f"Error actualizando configuración email: {str(e)}",
         )
 
 
@@ -1081,7 +1237,8 @@ def actualizar_configuracion_email(
 
 @router.get("/whatsapp")
 def obtener_configuracion_whatsapp(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     📱 Obtener configuración de WhatsApp
@@ -1103,7 +1260,11 @@ def obtener_configuracion_whatsapp(
         for config in configs_whatsapp:
             valor_mostrar = config.valor_procesado
             if config.tipo_dato == "PASSWORD" and config.valor:
-                valor_mostrar = "****" + config.valor[-4:] if len(config.valor) > 4 else "****"
+                valor_mostrar = (
+                    "****" + config.valor[-4:]
+                    if len(config.valor) > 4
+                    else "****"
+                )
 
             configuracion[config.clave] = {
                 "valor": valor_mostrar,
@@ -1139,7 +1300,8 @@ def obtener_configuracion_whatsapp(
 
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error obteniendo configuración WhatsApp: {str(e)}"
+            status_code=500,
+            detail=f"Error obteniendo configuración WhatsApp: {str(e)}",
         )
 
 
@@ -1150,7 +1312,8 @@ def obtener_configuracion_whatsapp(
 
 @router.get("/dashboard")
 def dashboard_configuracion_sistema(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     📊 Dashboard principal de configuración del sistema
@@ -1162,18 +1325,26 @@ def dashboard_configuracion_sistema(
         )
 
     try:
-        from app.models.configuracion_sistema import ConfigHelper, ConfiguracionSistema
+        from app.models.configuracion_sistema import (
+            ConfigHelper,
+            ConfiguracionSistema,
+        )
 
         # Estadísticas de configuración
         total_configs = db.query(ConfiguracionSistema).count()
         configs_configuradas = (
             db.query(ConfiguracionSistema)
-            .filter(ConfiguracionSistema.valor.isnot(None), ConfiguracionSistema.valor != "")
+            .filter(
+                ConfiguracionSistema.valor.isnot(None),
+                ConfiguracionSistema.valor != "",
+            )
             .count()
         )
 
         configs_requeridas = (
-            db.query(ConfiguracionSistema).filter(ConfiguracionSistema.requerido).count()
+            db.query(ConfiguracionSistema)
+            .filter(ConfiguracionSistema.requerido)
+            .count()
         )
 
         configs_requeridas_configuradas = (
@@ -1207,7 +1378,11 @@ def dashboard_configuracion_sistema(
                 .count()
             )
 
-            porcentaje = round(configuradas_cat / total_cat * 100, 1) if total_cat > 0 else 0
+            porcentaje = (
+                round(configuradas_cat / total_cat * 100, 1)
+                if total_cat > 0
+                else 0
+            )
 
             estado_categorias[categoria] = {
                 "total": total_cat,
@@ -1227,11 +1402,14 @@ def dashboard_configuracion_sistema(
                 "total_configuraciones": total_configs,
                 "configuradas": configs_configuradas,
                 "porcentaje_configurado": (
-                    round(configs_configuradas / total_configs * 100, 1) if total_configs > 0 else 0
+                    round(configs_configuradas / total_configs * 100, 1)
+                    if total_configs > 0
+                    else 0
                 ),
                 "configuraciones_requeridas": configs_requeridas,
                 "requeridas_configuradas": configs_requeridas_configuradas,
-                "sistema_listo": configs_requeridas_configuradas == configs_requeridas,
+                "sistema_listo": configs_requeridas_configuradas
+                == configs_requeridas,
             },
             "estado_por_categoria": estado_categorias,
             "servicios_criticos": {
@@ -1245,17 +1423,25 @@ def dashboard_configuracion_sistema(
                 },
                 "email": {
                     "estado": (
-                        "✅ CONFIGURADO" if ConfigHelper.is_email_configured(db) else "⚠️ PENDIENTE"
+                        "✅ CONFIGURADO"
+                        if ConfigHelper.is_email_configured(db)
+                        else "⚠️ PENDIENTE"
                     ),
                     "descripcion": "Servicio de email",
                 },
                 "ia": {
-                    "estado": "✅ ACTIVA" if ConfigHelper.is_ai_enabled(db) else "❌ INACTIVA",
+                    "estado": (
+                        "✅ ACTIVA"
+                        if ConfigHelper.is_ai_enabled(db)
+                        else "❌ INACTIVA"
+                    ),
                     "descripcion": "Inteligencia Artificial",
                 },
                 "whatsapp": {
                     "estado": (
-                        "✅ ACTIVO" if ConfigHelper.is_whatsapp_enabled(db) else "❌ INACTIVO"
+                        "✅ ACTIVO"
+                        if ConfigHelper.is_whatsapp_enabled(db)
+                        else "❌ INACTIVO"
                     ),
                     "descripcion": "WhatsApp Business",
                 },
@@ -1269,12 +1455,15 @@ def dashboard_configuracion_sistema(
                 ),
                 "inicializar_defaults": "POST /api/v1/configuracion/sistema/inicializar-defaults",
             },
-            "alertas_configuracion": _generar_alertas_configuracion(db, estado_categorias),
+            "alertas_configuracion": _generar_alertas_configuracion(
+                db, estado_categorias
+            ),
         }
 
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error en dashboard de configuración: {str(e)}"
+            status_code=500,
+            detail=f"Error en dashboard de configuración: {str(e)}",
         )
 
 
@@ -1283,7 +1472,9 @@ class ConfiguracionTasas(BaseModel):
     tasa_interes_base: Decimal = Field(
         ..., ge=0, le=100, description="Tasa de interés base anual (%)"
     )
-    tasa_mora: Decimal = Field(..., ge=0, le=10, description="Tasa de mora mensual (%)")
+    tasa_mora: Decimal = Field(
+        ..., ge=0, le=10, description="Tasa de mora mensual (%)"
+    )
     tasa_descuento_pronto_pago: Optional[Decimal] = Field(None, ge=0, le=10)
 
 
@@ -1355,7 +1546,9 @@ _config_cache: Dict[str, Any] = {
 
 
 @router.get("/general")
-def obtener_configuracion_general(current_user: User = Depends(get_current_user)):
+def obtener_configuracion_general(
+    current_user: User = Depends(get_current_user),
+):
     """
     📋 Obtener configuración general del sistema
     """
@@ -1363,7 +1556,9 @@ def obtener_configuracion_general(current_user: User = Depends(get_current_user)
 
 
 @router.get("/tasas")
-def obtener_configuracion_tasas(current_user: User = Depends(get_current_user)):
+def obtener_configuracion_tasas(
+    current_user: User = Depends(get_current_user),
+):
     """
     Obtener configuración de tasas de interés.
     """
@@ -1379,17 +1574,24 @@ def actualizar_configuracion_tasas(
     Solo accesible para ADMIN.
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Solo administradores pueden modificar tasas")
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden modificar tasas",
+        )
 
     _config_cache["tasas"] = {
         "tasa_interes_base": float(config.tasa_interes_base),
         "tasa_mora": float(config.tasa_mora),
         "tasa_descuento_pronto_pago": (
-            float(config.tasa_descuento_pronto_pago) if config.tasa_descuento_pronto_pago else 0.0
+            float(config.tasa_descuento_pronto_pago)
+            if config.tasa_descuento_pronto_pago
+            else 0.0
         ),
     }
 
-    logger.info(f"Tasas actualizadas por {current_user.email}: {_config_cache['tasas']}")
+    logger.info(
+        f"Tasas actualizadas por {current_user.email}: {_config_cache['tasas']}"
+    )
 
     return {
         "mensaje": "Configuración de tasas actualizada exitosamente",
@@ -1398,7 +1600,9 @@ def actualizar_configuracion_tasas(
 
 
 @router.get("/limites")
-def obtener_configuracion_limites(current_user: User = Depends(get_current_user)):
+def obtener_configuracion_limites(
+    current_user: User = Depends(get_current_user),
+):
     """
     Obtener configuración de límites de préstamos.
     """
@@ -1407,24 +1611,30 @@ def obtener_configuracion_limites(current_user: User = Depends(get_current_user)
 
 @router.put("/limites")
 def actualizar_configuracion_limites(
-    config: ConfiguracionLimites, current_user: User = Depends(get_current_user)
+    config: ConfiguracionLimites,
+    current_user: User = Depends(get_current_user),
 ):
     """
     Actualizar configuración de límites.
     Solo accesible para ADMIN.
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Solo administradores pueden modificar límites")
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden modificar límites",
+        )
 
     # Validar que máximo > mínimo
     if config.monto_maximo_prestamo <= config.monto_minimo_prestamo:
         raise HTTPException(
-            status_code=400, detail="El monto máximo debe ser mayor al monto mínimo"
+            status_code=400,
+            detail="El monto máximo debe ser mayor al monto mínimo",
         )
 
     if config.plazo_maximo_meses <= config.plazo_minimo_meses:
         raise HTTPException(
-            status_code=400, detail="El plazo máximo debe ser mayor al plazo mínimo"
+            status_code=400,
+            detail="El plazo máximo debe ser mayor al plazo mínimo",
         )
 
     _config_cache["limites"] = {
@@ -1435,7 +1645,9 @@ def actualizar_configuracion_limites(
         "limite_prestamos_activos": config.limite_prestamos_activos,
     }
 
-    logger.info(f"Límites actualizados por {current_user.email}: {_config_cache['limites']}")
+    logger.info(
+        f"Límites actualizados por {current_user.email}: {_config_cache['limites']}"
+    )
 
     return {
         "mensaje": "Configuración de límites actualizada exitosamente",
@@ -1455,14 +1667,18 @@ def obtener_configuracion_notificaciones(
 
 @router.put("/notificaciones")
 def actualizar_configuracion_notificaciones(
-    config: ConfiguracionNotificaciones, current_user: User = Depends(get_current_user)
+    config: ConfiguracionNotificaciones,
+    current_user: User = Depends(get_current_user),
 ):
     """
     Actualizar configuración de notificaciones.
     Solo accesible para ADMIN y GERENTE.
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Sin permisos para modificar notificaciones")
+        raise HTTPException(
+            status_code=403,
+            detail="Sin permisos para modificar notificaciones",
+        )
 
     _config_cache["notificaciones"] = {
         "dias_previos_recordatorio": config.dias_previos_recordatorio,
@@ -1482,7 +1698,8 @@ def actualizar_configuracion_notificaciones(
 
 @router.put("/general")
 def actualizar_configuracion_general(
-    config: ConfiguracionGeneral, current_user: User = Depends(get_current_user)
+    config: ConfiguracionGeneral,
+    current_user: User = Depends(get_current_user),
 ):
     """
     Actualizar configuración general.
@@ -1513,7 +1730,9 @@ def actualizar_configuracion_general(
 
 
 @router.get("/completa")
-def obtener_configuracion_cache(current_user: User = Depends(get_current_user)):
+def obtener_configuracion_cache(
+    current_user: User = Depends(get_current_user),
+):
     """
     Obtener toda la configuración del sistema desde caché.
     """
@@ -1573,7 +1792,9 @@ def restablecer_configuracion_defecto(
 
     if seccion == "todo":
         _config_cache.update(defaults)
-        logger.warning(f"TODA la configuración restablecida por {current_user.email}")
+        logger.warning(
+            f"TODA la configuración restablecida por {current_user.email}"
+        )
         return {
             "mensaje": "Toda la configuración ha sido restablecida a valores por defecto",
             "configuracion": _config_cache,
@@ -1581,7 +1802,9 @@ def restablecer_configuracion_defecto(
 
     elif seccion in defaults:
         _config_cache[seccion] = defaults[seccion]
-        logger.warning(f"Configuración de {seccion} restablecida por {current_user.email}")
+        logger.warning(
+            f"Configuración de {seccion} restablecida por {current_user.email}"
+        )
         return {
             "mensaje": f"Configuración de {seccion} restablecida a valores por defecto",
             "configuracion": _config_cache[seccion],
@@ -1605,17 +1828,27 @@ def calcular_cuota_ejemplo(
     Calcular cuota mensual con la configuración actual de tasas.
     """
     # Obtener tasa
-    tasa = tasa_personalizada if tasa_personalizada else _config_cache["tasas"]["tasa_interes_base"]
+    tasa = (
+        tasa_personalizada
+        if tasa_personalizada
+        else _config_cache["tasas"]["tasa_interes_base"]
+    )
 
     # Validar límites
     limites = _config_cache["limites"]
-    if monto < limites["monto_minimo_prestamo"] or monto > limites["monto_maximo_prestamo"]:
+    if (
+        monto < limites["monto_minimo_prestamo"]
+        or monto > limites["monto_maximo_prestamo"]
+    ):
         raise HTTPException(
             status_code=400,
             detail=f"Monto fuera de límites permitidos: ${limites['monto_minimo_prestamo']:,.2f} - ${limites['monto_maximo_prestamo']:,.2f}",
         )
 
-    if plazo_meses < limites["plazo_minimo_meses"] or plazo_meses > limites["plazo_maximo_meses"]:
+    if (
+        plazo_meses < limites["plazo_minimo_meses"]
+        or plazo_meses > limites["plazo_maximo_meses"]
+    ):
         raise HTTPException(
             status_code=400,
             detail=f"Plazo fuera de límites permitidos: {limites['plazo_minimo_meses']} - {limites['plazo_maximo_meses']} meses",
@@ -1658,13 +1891,16 @@ def validar_limites_cliente(
         # Solo admin puede validar límites
         if not current_user.is_admin:
             raise HTTPException(
-                status_code=403, detail="Solo administradores pueden validar límites"
+                status_code=403,
+                detail="Solo administradores pueden validar límites",
             )
 
         # Contar préstamos activos del cliente
         prestamos_activos = (
             db.query(Prestamo)
-            .filter(Prestamo.cliente_id == cliente_id, Prestamo.estado == "ACTIVO")
+            .filter(
+                Prestamo.cliente_id == cliente_id, Prestamo.estado == "ACTIVO"
+            )
             .count()
         )
 
@@ -1701,7 +1937,9 @@ def validar_limites_cliente(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error validando límites: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error validando límites: {str(e)}"
+        )
 
 
 # ============================================

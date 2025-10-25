@@ -78,7 +78,9 @@ async def enviar_notificacion(
     Enviar notificación individual.
     """
     # Obtener cliente
-    cliente = db.query(Cliente).filter(Cliente.id == notificacion.cliente_id).first()
+    cliente = (
+        db.query(Cliente).filter(Cliente.id == notificacion.cliente_id).first()
+    )
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
@@ -114,7 +116,9 @@ async def enviar_notificacion(
             notificacion_id=nueva_notif.id,
         )
 
-    logger.info(f"Notificación {nueva_notif.id} programada para envío por {notificacion.canal}")
+    logger.info(
+        f"Notificación {nueva_notif.id} programada para envío por {notificacion.canal}"
+    )
     return nueva_notif
 
 
@@ -143,7 +147,9 @@ async def envio_masivo_notificaciones(
 
     for cliente in clientes:
         # Personalizar mensaje según template
-        mensaje = _generar_mensaje_template(template=request.template, cliente=cliente, db=db)
+        mensaje = _generar_mensaje_template(
+            template=request.template, cliente=cliente, db=db
+        )
 
         notif = Notificacion(
             cliente_id=cliente.id,
@@ -162,7 +168,9 @@ async def envio_masivo_notificaciones(
 
     # Programar envíos en background
     for notif in notificaciones_creadas:
-        cliente = db.query(Cliente).filter(Cliente.id == notif.cliente_id).first()
+        cliente = (
+            db.query(Cliente).filter(Cliente.id == notif.cliente_id).first()
+        )
 
         if request.canal == "EMAIL" and cliente.email:
             background_tasks.add_task(
@@ -300,7 +308,9 @@ Gracias.
 
     # Enviar en background
     for notif in recordatorios:
-        cliente = db.query(Cliente).filter(Cliente.id == notif.cliente_id).first()
+        cliente = (
+            db.query(Cliente).filter(Cliente.id == notif.cliente_id).first()
+        )
         if cliente.email:
             background_tasks.add_task(
                 email_service.send_email,
@@ -317,7 +327,9 @@ Gracias.
 
 
 # Función helper para generar mensajes desde templates
-def _generar_mensaje_template(template: str, cliente: Cliente, db: Session) -> str:
+def _generar_mensaje_template(
+    template: str, cliente: Cliente, db: Session
+) -> str:
     """
     Generar mensaje personalizado según template.
     """
@@ -430,7 +442,9 @@ Gracias por su puntualidad.
                 asunto=f"Recordatorio: Cuota #{cuota.numero_cuota} vence en 3 días",
                 mensaje=mensaje,
                 estado="PENDIENTE",
-                programada_para=datetime.now().replace(hour=9, minute=0, second=0),
+                programada_para=datetime.now().replace(
+                    hour=9, minute=0, second=0
+                ),
                 prioridad="ALTA",
             )
 
@@ -455,7 +469,9 @@ Gracias por su puntualidad.
         cliente = cuota.prestamo.cliente
 
         # Calcular mora
-        mora_calculada = cuota.calcular_mora(Decimal(str(settings.TASA_MORA_DIARIA)))
+        mora_calculada = cuota.calcular_mora(
+            Decimal(str(settings.TASA_MORA_DIARIA))
+        )
 
         mensaje = f"""
 Estimado/a {cliente.nombre_completo},
@@ -493,14 +509,18 @@ Contacto inmediato: (021) 123-456
 
     # Programar envíos
     for notif in notificaciones_programadas:
-        cliente = db.query(Cliente).filter(Cliente.id == notif.cliente_id).first()
+        cliente = (
+            db.query(Cliente).filter(Cliente.id == notif.cliente_id).first()
+        )
         if cliente.email:
             background_tasks.add_task(
                 email_service.send_template_email,
                 to_email=cliente.email,
                 subject=notif.asunto,
                 template_name=(
-                    "recordatorio_pago" if "recordatorio" in notif.asunto.lower() else "mora"
+                    "recordatorio_pago"
+                    if "recordatorio" in notif.asunto.lower()
+                    else "mora"
                 ),
                 context={
                     "cliente_nombre": cliente.nombre_completo,
@@ -514,17 +534,27 @@ Contacto inmediato: (021) 123-456
     return {
         "notificaciones_programadas": len(notificaciones_programadas),
         "recordatorios_pre_vencimiento": len(
-            [n for n in notificaciones_programadas if n.categoria == "CUOTA_PROXIMA"]
+            [
+                n
+                for n in notificaciones_programadas
+                if n.categoria == "CUOTA_PROXIMA"
+            ]
         ),
         "avisos_vencidas": len(
-            [n for n in notificaciones_programadas if n.categoria == "CUOTA_VENCIDA"]
+            [
+                n
+                for n in notificaciones_programadas
+                if n.categoria == "CUOTA_VENCIDA"
+            ]
         ),
     }
 
 
 @router.post("/confirmar-pago-recibido/{pago_id}")
 async def enviar_confirmacion_pago(
-    pago_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+    pago_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
 ):
     """
     3. Confirmación de pago recibido (automática al registrar pago)
@@ -623,7 +653,11 @@ async def enviar_estados_cuenta_mensual(
     4. Estado de cuenta mensual (primer día de cada mes)
     """
     # Obtener todos los clientes activos con email
-    clientes = db.query(Cliente).filter(Cliente.activo, Cliente.email.isnot(None)).all()
+    clientes = (
+        db.query(Cliente)
+        .filter(Cliente.activo, Cliente.email.isnot(None))
+        .all()
+    )
 
     estados_enviados = []
 
@@ -706,7 +740,9 @@ PRÓXIMOS VENCIMIENTOS:
 
     # Programar envíos
     for notif in estados_enviados:
-        cliente = db.query(Cliente).filter(Cliente.id == notif.cliente_id).first()
+        cliente = (
+            db.query(Cliente).filter(Cliente.id == notif.cliente_id).first()
+        )
         background_tasks.add_task(
             email_service.send_email,
             to_email=cliente.email,
@@ -745,11 +781,18 @@ async def enviar_resumen_diario_usuarios(
         db.query(Cuota)
         .join(Prestamo)
         .join(Cliente)
-        .filter(Cuota.fecha_vencimiento == hoy, Cuota.estado.in_(["PENDIENTE", "PARCIAL"]))
+        .filter(
+            Cuota.fecha_vencimiento == hoy,
+            Cuota.estado.in_(["PENDIENTE", "PARCIAL"]),
+        )
         .count()
     )
 
-    pagos_ayer = db.query(Pago).filter(Pago.fecha_pago == ayer, Pago.estado != "ANULADO").all()
+    pagos_ayer = (
+        db.query(Pago)
+        .filter(Pago.fecha_pago == ayer, Pago.estado != "ANULADO")
+        .all()
+    )
 
     total_cobrado_ayer = sum(float(p.monto_pagado) for p in pagos_ayer)
 
@@ -758,17 +801,27 @@ async def enviar_resumen_diario_usuarios(
         db.query(Cliente)
         .join(Prestamo)
         .join(Cuota)
-        .filter(Cuota.fecha_vencimiento == ayer, Cuota.estado == "VENCIDA", Cliente.activo)
+        .filter(
+            Cuota.fecha_vencimiento == ayer,
+            Cuota.estado == "VENCIDA",
+            Cliente.activo,
+        )
         .distinct()
         .all()
     )
 
     # Clientes críticos (>30 días mora)
-    clientes_criticos = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 30).count()
+    clientes_criticos = (
+        db.query(Cliente)
+        .filter(Cliente.activo, Cliente.dias_mora > 30)
+        .count()
+    )
 
     # Obtener usuarios para notificar
     usuarios_notificar = (
-        db.query(User).filter(User.is_admin, User.is_active, User.email.isnot(None)).all()
+        db.query(User)
+        .filter(User.is_admin, User.is_active, User.email.isnot(None))
+        .all()
     )
 
     for usuario in usuarios_notificar:
@@ -838,7 +891,9 @@ async def enviar_reporte_semanal_usuarios(
     """
     # Calcular semana anterior (lunes a domingo)
     hoy = date.today()
-    inicio_semana = hoy - timedelta(days=hoy.weekday() + 7)  # Lunes semana anterior
+    inicio_semana = hoy - timedelta(
+        days=hoy.weekday() + 7
+    )  # Lunes semana anterior
     fin_semana = inicio_semana + timedelta(days=6)  # Domingo semana anterior
 
     # Datos de la semana
@@ -863,7 +918,9 @@ async def enviar_reporte_semanal_usuarios(
 
     # Top analista de la semana
     top_analista = (
-        db.query(User.full_name, func.count(Cliente.id).label("nuevos_clientes"))
+        db.query(
+            User.full_name, func.count(Cliente.id).label("nuevos_clientes")
+        )
         .outerjoin(
             Cliente,
             and_(
@@ -882,7 +939,9 @@ async def enviar_reporte_semanal_usuarios(
 
     # Enviar a usuarios gerenciales
     usuarios_gerenciales = (
-        db.query(User).filter(User.is_admin, User.is_active, User.email.isnot(None)).all()
+        db.query(User)
+        .filter(User.is_admin, User.is_active, User.email.isnot(None))
+        .all()
     )
 
     for usuario in usuarios_gerenciales:
@@ -935,7 +994,9 @@ Saludos.
     return {
         "usuarios_notificados": len(usuarios_gerenciales),
         "nuevos_clientes_semana": len(nuevos_clientes),
-        "total_cobrado_semana": sum(float(p.monto_pagado) for p in pagos_semana),
+        "total_cobrado_semana": sum(
+            float(p.monto_pagado) for p in pagos_semana
+        ),
     }
 
 
@@ -946,7 +1007,8 @@ Saludos.
 
 @router.get("/configuracion")
 def obtener_configuracion_notificaciones(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     ⚙️ Obtener configuración de notificaciones
@@ -1007,7 +1069,12 @@ def historial_completo_notificaciones(
     - Estado: Enviado/Entregado/Rebotado/Error
     - Filtros por cliente, tipo, fecha
     """
-    query = db.query(Notificacion).select_from(Notificacion).outerjoin(Cliente).outerjoin(User)
+    query = (
+        db.query(Notificacion)
+        .select_from(Notificacion)
+        .outerjoin(Cliente)
+        .outerjoin(User)
+    )
 
     # Aplicar filtros
     if fecha_desde:
@@ -1029,7 +1096,10 @@ def historial_completo_notificaciones(
     total = query.count()
     skip = (page - 1) * page_size
     notificaciones = (
-        query.order_by(Notificacion.creado_en.desc()).offset(skip).limit(page_size).all()
+        query.order_by(Notificacion.creado_en.desc())
+        .offset(skip)
+        .limit(page_size)
+        .all()
     )
 
     return {
@@ -1059,13 +1129,19 @@ def historial_completo_notificaciones(
         ],
         "estadisticas": {
             "total_enviadas": (
-                db.query(Notificacion).filter(Notificacion.estado == "ENVIADA").count()
+                db.query(Notificacion)
+                .filter(Notificacion.estado == "ENVIADA")
+                .count()
             ),
             "total_fallidas": (
-                db.query(Notificacion).filter(Notificacion.estado == "FALLIDA").count()
+                db.query(Notificacion)
+                .filter(Notificacion.estado == "FALLIDA")
+                .count()
             ),
             "total_pendientes": (
-                db.query(Notificacion).filter(Notificacion.estado == "PENDIENTE").count()
+                db.query(Notificacion)
+                .filter(Notificacion.estado == "PENDIENTE")
+                .count()
             ),
         },
     }
@@ -1081,9 +1157,15 @@ async def reenviar_notificacion(
     """
     Reenvío manual de notificación fallida
     """
-    notif = db.query(Notificacion).filter(Notificacion.id == notificacion_id).first()
+    notif = (
+        db.query(Notificacion)
+        .filter(Notificacion.id == notificacion_id)
+        .first()
+    )
     if not notif:
-        raise HTTPException(status_code=404, detail="Notificación no encontrada")
+        raise HTTPException(
+            status_code=404, detail="Notificación no encontrada"
+        )
 
     if not notif.puede_reintentar:
         raise HTTPException(
@@ -1097,7 +1179,9 @@ async def reenviar_notificacion(
 
     # Obtener destinatario
     if notif.cliente_id:
-        cliente = db.query(Cliente).filter(Cliente.id == notif.cliente_id).first()
+        cliente = (
+            db.query(Cliente).filter(Cliente.id == notif.cliente_id).first()
+        )
         email_destino = cliente.email
     elif notif.user_id:
         usuario = db.query(User).filter(User.id == notif.user_id).first()

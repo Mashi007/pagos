@@ -82,7 +82,9 @@ class AmortizacionService:
             # Sin interés, solo dividir el monto
             cuota_fija = monto / Decimal(n_cuotas)
 
-        cuota_fija = cuota_fija.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        cuota_fija = cuota_fija.quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
 
         # Generar fechas de vencimiento
         fechas = calculate_payment_dates(
@@ -97,7 +99,9 @@ class AmortizacionService:
 
         for i in range(n_cuotas):
             # Calcular interés del período
-            interes = (saldo * tasa_periodo).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            interes = (saldo * tasa_periodo).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
 
             # Calcular capital (cuota - interés)
             capital = cuota_fija - interes
@@ -145,10 +149,14 @@ class AmortizacionService:
             "sistema": "FRANCES",
         }
 
-        return TablaAmortizacionResponse(cuotas=cuotas, resumen=resumen, parametros=parametros)
+        return TablaAmortizacionResponse(
+            cuotas=cuotas, resumen=resumen, parametros=parametros
+        )
 
     @staticmethod
-    def _generar_aleman(request: TablaAmortizacionRequest) -> TablaAmortizacionResponse:
+    def _generar_aleman(
+        request: TablaAmortizacionRequest,
+    ) -> TablaAmortizacionResponse:
         """
         Sistema Alemán: Capital fijo, cuota decreciente
         Capital por cuota = Monto / N
@@ -165,7 +173,9 @@ class AmortizacionService:
             tasa_periodo = tasa_anual / Decimal("12")
 
         # Capital fijo por cuota
-        capital_fijo = (monto / Decimal(n_cuotas)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        capital_fijo = (monto / Decimal(n_cuotas)).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
 
         # Generar fechas
         fechas = calculate_payment_dates(
@@ -180,7 +190,9 @@ class AmortizacionService:
 
         for i in range(n_cuotas):
             # Interés sobre saldo
-            interes = (saldo * tasa_periodo).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            interes = (saldo * tasa_periodo).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
 
             # Capital fijo (ajuste en última cuota)
             if i == n_cuotas - 1:
@@ -227,7 +239,9 @@ class AmortizacionService:
             "sistema": "ALEMAN",
         }
 
-        return TablaAmortizacionResponse(cuotas=cuotas, resumen=resumen, parametros=parametros)
+        return TablaAmortizacionResponse(
+            cuotas=cuotas, resumen=resumen, parametros=parametros
+        )
 
     @staticmethod
     def _generar_americano(
@@ -244,7 +258,9 @@ class AmortizacionService:
         tasa_periodo = tasa_anual / Decimal("12")
 
         # Interés fijo por período
-        interes_fijo = (monto * tasa_periodo).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        interes_fijo = (monto * tasa_periodo).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
 
         # Generar fechas
         fechas = calculate_payment_dates(
@@ -298,7 +314,9 @@ class AmortizacionService:
             "sistema": "AMERICANO",
         }
 
-        return TablaAmortizacionResponse(cuotas=cuotas, resumen=resumen, parametros=parametros)
+        return TablaAmortizacionResponse(
+            cuotas=cuotas, resumen=resumen, parametros=parametros
+        )
 
     @staticmethod
     def crear_cuotas_prestamo(

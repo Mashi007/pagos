@@ -140,7 +140,9 @@ class IntelligentAlertSystem:
             # Verificar cooldown
             if rule_name in alert_cooldowns:
                 last_alert_time = alert_cooldowns[rule_name]
-                if current_time - last_alert_time < timedelta(minutes=rule.cooldown_minutes):
+                if current_time - last_alert_time < timedelta(
+                    minutes=rule.cooldown_minutes
+                ):
                     continue
 
             # Evaluar condición
@@ -153,7 +155,9 @@ class IntelligentAlertSystem:
 
         return new_alerts
 
-    def _evaluate_condition(self, rule: AlertRule, metrics: Dict[str, Any]) -> bool:
+    def _evaluate_condition(
+        self, rule: AlertRule, metrics: Dict[str, Any]
+    ) -> bool:
         """Evaluar condición específica de la regla"""
         try:
             if rule.name == "high_error_rate":
@@ -219,11 +223,15 @@ class IntelligentAlertSystem:
         alert_history.append(alert)
 
         # Log de alerta
-        logger.warning(f"🚨 ALERT [{rule.severity.value.upper()}] {rule.name}: {message}")
+        logger.warning(
+            f"🚨 ALERT [{rule.severity.value.upper()}] {rule.name}: {message}"
+        )
 
         return alert
 
-    def _generate_alert_message(self, rule: AlertRule, metrics: Dict[str, Any]) -> str:
+    def _generate_alert_message(
+        self, rule: AlertRule, metrics: Dict[str, Any]
+    ) -> str:
         """Generar mensaje específico para la alerta"""
         current_value = self._get_current_value(rule.name, metrics)
 
@@ -248,16 +256,25 @@ class IntelligentAlertSystem:
             ),
         }
 
-        return messages.get(rule.name, f"Alerta {rule.name}: {current_value} > {rule.threshold}")
+        return messages.get(
+            rule.name,
+            f"Alerta {rule.name}: {current_value} > {rule.threshold}",
+        )
 
-    def _get_current_value(self, rule_name: str, metrics: Dict[str, Any]) -> float:
+    def _get_current_value(
+        self, rule_name: str, metrics: Dict[str, Any]
+    ) -> float:
         """Obtener valor actual para la regla"""
         value_map = {
             "high_error_rate": metrics.get("error_rate", 0),
             "slow_response_time": metrics.get("avg_response_time", 0),
             "token_expiry_spike": metrics.get("token_expiry_rate", 0),
-            "authentication_failure_spike": metrics.get("auth_failures_per_minute", 0),
-            "database_connection_issues": metrics.get("db_connection_failures", 0),
+            "authentication_failure_spike": metrics.get(
+                "auth_failures_per_minute", 0
+            ),
+            "database_connection_issues": metrics.get(
+                "db_connection_failures", 0
+            ),
             "unusual_user_patterns": metrics.get("unusual_user_activity", 0),
         }
 
@@ -328,7 +345,11 @@ async def get_active_alerts():
     """
     try:
         # Filtrar alertas activas
-        current_alerts = [alert for alert in active_alerts if alert.status == AlertStatus.ACTIVE]
+        current_alerts = [
+            alert
+            for alert in active_alerts
+            if alert.status == AlertStatus.ACTIVE
+        ]
 
         # Agrupar por severidad
         alerts_by_severity = defaultdict(list)
@@ -535,9 +556,15 @@ async def get_alert_summary():
     """
     try:
         # Estadísticas de alertas activas
-        active_count = len([a for a in active_alerts if a.status == AlertStatus.ACTIVE])
-        acknowledged_count = len([a for a in active_alerts if a.status == AlertStatus.ACKNOWLEDGED])
-        resolved_count = len([a for a in alert_history if a.status == AlertStatus.RESOLVED])
+        active_count = len(
+            [a for a in active_alerts if a.status == AlertStatus.ACTIVE]
+        )
+        acknowledged_count = len(
+            [a for a in active_alerts if a.status == AlertStatus.ACKNOWLEDGED]
+        )
+        resolved_count = len(
+            [a for a in alert_history if a.status == AlertStatus.RESOLVED]
+        )
 
         # Estadísticas por severidad
         severity_stats = defaultdict(int)
@@ -550,7 +577,9 @@ async def get_alert_summary():
         for alert in alert_history:
             rule_frequency[alert.rule_name] += 1
 
-        most_frequent = sorted(rule_frequency.items(), key=lambda x: x[1], reverse=True)[:5]
+        most_frequent = sorted(
+            rule_frequency.items(), key=lambda x: x[1], reverse=True
+        )[:5]
 
         return {
             "timestamp": datetime.now().isoformat(),
@@ -562,7 +591,9 @@ async def get_alert_summary():
                 "by_severity": dict(severity_stats),
                 "most_frequent_rules": most_frequent,
                 "total_rules": len(alert_rules),
-                "enabled_rules": len([r for r in alert_rules.values() if r.enabled]),
+                "enabled_rules": len(
+                    [r for r in alert_rules.values() if r.enabled]
+                ),
             },
         }
 

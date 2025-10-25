@@ -60,7 +60,9 @@ def registrar_auditoria_cliente(
     try:
         # ✅ OPTIMIZACIÓN: Solo serializar si es necesario y simplificar datos
         datos_anteriores_serializados = (
-            serializar_datos_auditoria(datos_anteriores) if datos_anteriores else None
+            serializar_datos_auditoria(datos_anteriores)
+            if datos_anteriores
+            else None
         )
         datos_nuevos_serializados = (
             serializar_datos_auditoria(datos_nuevos) if datos_nuevos else None
@@ -81,7 +83,9 @@ def registrar_auditoria_cliente(
         )
         db.add(auditoria)
         db.commit()
-        logger.info(f"Auditoría registrada: {accion} cliente {cliente_id} por {usuario_email}")
+        logger.info(
+            f"Auditoría registrada: {accion} cliente {cliente_id} por {usuario_email}"
+        )
     except Exception as e:
         logger.error(f"Error registrando auditoría: {e}")
         # ✅ OPTIMIZACIÓN: No hacer rollback de auditoría para evitar
@@ -100,9 +104,13 @@ def listar_clientes(
     page: int = Query(1, ge=1, description="Número de página"),
     per_page: int = Query(20, ge=1, le=1000, description="Tamaño de página"),
     # Búsqueda de texto
-    search: Optional[str] = Query(None, description="Buscar en nombre, cédula o móvil"),
+    search: Optional[str] = Query(
+        None, description="Buscar en nombre, cédula o móvil"
+    ),
     # Filtros específicos
-    estado: Optional[str] = Query(None, description="ACTIVO, INACTIVO, FINALIZADO"),
+    estado: Optional[str] = Query(
+        None, description="ACTIVO, INACTIVO, FINALIZADO"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -160,7 +168,9 @@ def listar_clientes(
                     "email": cliente.email,
                     "direccion": cliente.direccion,
                     "fecha_nacimiento": (
-                        cliente.fecha_nacimiento.isoformat() if cliente.fecha_nacimiento else None
+                        cliente.fecha_nacimiento.isoformat()
+                        if cliente.fecha_nacimiento
+                        else None
                     ),
                     "ocupacion": cliente.ocupacion,
                     "modelo_vehiculo": cliente.modelo_vehiculo,
@@ -169,7 +179,9 @@ def listar_clientes(
                     "estado": cliente.estado,
                     "activo": cliente.activo,
                     "fecha_registro": (
-                        cliente.fecha_registro.isoformat() if cliente.fecha_registro else None
+                        cliente.fecha_registro.isoformat()
+                        if cliente.fecha_registro
+                        else None
                     ),
                     "fecha_actualizacion": (
                         cliente.fecha_actualizacion.isoformat()
@@ -201,7 +213,9 @@ def listar_clientes(
 
     except Exception as e:
         logger.error(f"Error en listar_clientes: {e}")
-        raise HTTPException(status_code=500, detail="Error interno del servidor")
+        raise HTTPException(
+            status_code=500, detail="Error interno del servidor"
+        )
 
 
 @router.get("/{cliente_id}", response_model=ClienteResponse)
@@ -219,12 +233,16 @@ def obtener_cliente(
     - Auditoría automática
     """
     try:
-        logger.info(f"Obtener cliente {cliente_id} - Usuario: {current_user.email}")
+        logger.info(
+            f"Obtener cliente {cliente_id} - Usuario: {current_user.email}"
+        )
 
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
 
         if not cliente:
-            raise HTTPException(status_code=404, detail="Cliente no encontrado")
+            raise HTTPException(
+                status_code=404, detail="Cliente no encontrado"
+            )
 
         return ClienteResponse.model_validate(cliente)
 
@@ -232,7 +250,9 @@ def obtener_cliente(
         raise
     except Exception as e:
         logger.error(f"Error en obtener_cliente: {e}")
-        raise HTTPException(status_code=500, detail="Error interno del servidor")
+        raise HTTPException(
+            status_code=500, detail="Error interno del servidor"
+        )
 
 
 # ============================================
@@ -261,7 +281,11 @@ def crear_cliente(
         logger.info(f"Datos recibidos: {cliente_data}")
 
         # CORREGIDO: Detectar cédulas duplicadas y manejar confirmación
-        cliente_existente = db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
+        cliente_existente = (
+            db.query(Cliente)
+            .filter(Cliente.cedula == cliente_data.cedula)
+            .first()
+        )
         if cliente_existente:
             # ✅ NUEVO: Si el usuario confirma el duplicado, actualizar el cliente existente
             if cliente_data.confirm_duplicate:
@@ -276,9 +300,13 @@ def crear_cliente(
                 cliente_existente.telefono = cliente_data.telefono
                 cliente_existente.email = cliente_data.email
                 cliente_existente.direccion = cliente_data.direccion
-                cliente_existente.fecha_nacimiento = cliente_data.fecha_nacimiento
+                cliente_existente.fecha_nacimiento = (
+                    cliente_data.fecha_nacimiento
+                )
                 cliente_existente.ocupacion = cliente_data.ocupacion
-                cliente_existente.modelo_vehiculo = cliente_data.modelo_vehiculo
+                cliente_existente.modelo_vehiculo = (
+                    cliente_data.modelo_vehiculo
+                )
                 cliente_existente.concesionario = cliente_data.concesionario
                 cliente_existente.analista = cliente_data.analista
                 cliente_existente.estado = cliente_data.estado
@@ -307,7 +335,8 @@ def crear_cliente(
                 )
 
                 logger.info(
-                    f"Cliente actualizado exitosamente por confirmación: " f"{cliente_existente.id}"
+                    f"Cliente actualizado exitosamente por confirmación: "
+                    f"{cliente_existente.id}"
                 )
                 return ClienteResponse.model_validate(cliente_existente)
             else:
@@ -369,7 +398,9 @@ def crear_cliente(
             accion=TipoAccion.CREAR.value,
             cliente_id=nuevo_cliente.id,
             datos_nuevos=cliente_data.model_dump(),
-            descripcion=(f"Cliente creado: {cliente_data.nombres} {cliente_data.apellidos}"),
+            descripcion=(
+                f"Cliente creado: {cliente_data.nombres} {cliente_data.apellidos}"
+            ),
         )
 
         logger.info(f"Cliente creado exitosamente: {nuevo_cliente.id}")
@@ -384,10 +415,14 @@ def crear_cliente(
         # ✅ OPTIMIZACIÓN: Logging simplificado
         logger.error(f"❌ Error inesperado en crear_cliente: {str(e)}")
         db.rollback()
-        raise HTTPException(status_code=500, detail="Error interno del servidor")
+        raise HTTPException(
+            status_code=500, detail="Error interno del servidor"
+        )
 
 
-@router.post("/confirmar-duplicado", response_model=ClienteResponse, status_code=201)
+@router.post(
+    "/confirmar-duplicado", response_model=ClienteResponse, status_code=201
+)
 def crear_cliente_con_confirmacion(
     request_data: ClienteCreateWithConfirmation,
     db: Session = Depends(get_db),
@@ -402,7 +437,9 @@ def crear_cliente_con_confirmacion(
     - Incluye comentarios del operador
     """
     try:
-        logger.info(f"Crear cliente con confirmación - Usuario: {current_user.email}")
+        logger.info(
+            f"Crear cliente con confirmación - Usuario: {current_user.email}"
+        )
         logger.info(f"Datos recibidos: {request_data}")
         logger.info(
             f"Confirmación: {request_data.confirmacion}, "
@@ -458,7 +495,9 @@ def crear_cliente_con_confirmacion(
             ),
         )
 
-        logger.info(f"Cliente creado con confirmación exitosamente: {nuevo_cliente.id}")
+        logger.info(
+            f"Cliente creado con confirmación exitosamente: {nuevo_cliente.id}"
+        )
         return ClienteResponse.model_validate(nuevo_cliente)
 
     except HTTPException:
@@ -494,12 +533,16 @@ def actualizar_cliente(
     - Fecha actualización automática
     """
     try:
-        logger.info(f"Actualizar cliente {cliente_id} - Usuario: {current_user.email}")
+        logger.info(
+            f"Actualizar cliente {cliente_id} - Usuario: {current_user.email}"
+        )
 
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
 
         if not cliente:
-            raise HTTPException(status_code=404, detail="Cliente no encontrado")
+            raise HTTPException(
+                status_code=404, detail="Cliente no encontrado"
+            )
 
         # Guardar datos anteriores para auditoría
         datos_anteriores = {
@@ -510,7 +553,9 @@ def actualizar_cliente(
             "email": cliente.email,
             "direccion": cliente.direccion,
             "fecha_nacimiento": (
-                cliente.fecha_nacimiento.isoformat() if cliente.fecha_nacimiento else None
+                cliente.fecha_nacimiento.isoformat()
+                if cliente.fecha_nacimiento
+                else None
             ),
             "ocupacion": cliente.ocupacion,
             "modelo_vehiculo": cliente.modelo_vehiculo,
@@ -551,7 +596,9 @@ def actualizar_cliente(
     except Exception as e:
         logger.error(f"Error en actualizar_cliente: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail="Error interno del servidor")
+        raise HTTPException(
+            status_code=500, detail="Error interno del servidor"
+        )
 
 
 # ============================================
@@ -574,12 +621,16 @@ def eliminar_cliente(
     - Validación de existencia
     """
     try:
-        logger.info(f"Eliminar cliente {cliente_id} - Usuario: {current_user.email}")
+        logger.info(
+            f"Eliminar cliente {cliente_id} - Usuario: {current_user.email}"
+        )
 
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
 
         if not cliente:
-            raise HTTPException(status_code=404, detail="Cliente no encontrado")
+            raise HTTPException(
+                status_code=404, detail="Cliente no encontrado"
+            )
 
         # Guardar datos para auditoría
         datos_anteriores = {
@@ -603,7 +654,8 @@ def eliminar_cliente(
             datos_anteriores=datos_anteriores,
             datos_nuevos={"eliminado": True},
             descripcion=(
-                f"Cliente eliminado físicamente: " f"{cliente.nombres} {cliente.apellidos}"
+                f"Cliente eliminado físicamente: "
+                f"{cliente.nombres} {cliente.apellidos}"
             ),
         )
 
@@ -615,7 +667,9 @@ def eliminar_cliente(
     except Exception as e:
         logger.error(f"Error en eliminar_cliente: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail="Error interno del servidor")
+        raise HTTPException(
+            status_code=500, detail="Error interno del servidor"
+        )
 
 
 # TEMPORALMENTE COMENTADO PARA EVITAR ERROR 503
@@ -669,10 +723,15 @@ def buscar_cliente_por_cedula(
         logger.info(f"Buscando cliente por cédula (MOCK): {cedula}")
 
         # Datos mock temporales hasta que se resuelva el problema de BD
-        raise HTTPException(status_code=404, detail="Cliente no encontrado - Datos mock temporales")
+        raise HTTPException(
+            status_code=404,
+            detail="Cliente no encontrado - Datos mock temporales",
+        )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error en buscar_cliente_por_cedula: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )

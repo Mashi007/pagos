@@ -72,8 +72,12 @@ def _verificar_configuracion_datos(db: Session) -> Dict[str, Any]:
     """Verificar datos de configuración"""
     try:
         analistas_activos = db.query(Analista).filter(Analista.activo).count()
-        concesionarios_activos = db.query(Concesionario).filter(Concesionario.activo).count()
-        modelos_activos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo).count()
+        concesionarios_activos = (
+            db.query(Concesionario).filter(Concesionario.activo).count()
+        )
+        modelos_activos = (
+            db.query(ModeloVehiculo).filter(ModeloVehiculo.activo).count()
+        )
 
         return {
             "status": "ok",
@@ -93,7 +97,9 @@ def _verificar_administradores(db: Session) -> Dict[str, Any]:
     """Verificar usuario administrador"""
     try:
         admin_count = db.query(User).filter(User.is_admin).count()
-        admin_activo = db.query(User).filter(User.is_admin, User.is_active).count()
+        admin_activo = (
+            db.query(User).filter(User.is_admin, User.is_active).count()
+        )
 
         return {
             "status": "ok",
@@ -120,12 +126,16 @@ def _verificar_configuracion_app() -> Dict[str, Any]:
     }
 
 
-def _determinar_estado_general(componentes: Dict[str, Any]) -> tuple[str, List[str], str]:
+def _determinar_estado_general(
+    componentes: Dict[str, Any],
+) -> tuple[str, List[str], str]:
     """Determinar estado general del sistema"""
     errores = []
     for componente, info in componentes.items():
         if info.get("status") == "error":
-            errores.append(f"{componente}: {info.get('message', 'Error desconocido')}")
+            errores.append(
+                f"{componente}: {info.get('message', 'Error desconocido')}"
+            )
 
     if errores:
         return "error", errores, f"Sistema con {len(errores)} errores críticos"
@@ -149,12 +159,20 @@ def diagnostico_completo_sistema(db: Session = Depends(get_db)):
         # Verificar componentes individuales
         diagnostico["componentes"]["base_datos"] = _verificar_conexion_bd(db)
         diagnostico["componentes"]["tablas"] = _verificar_tablas_criticas(db)
-        diagnostico["componentes"]["configuracion"] = _verificar_configuracion_datos(db)
-        diagnostico["componentes"]["administradores"] = _verificar_administradores(db)
-        diagnostico["componentes"]["configuracion_app"] = _verificar_configuracion_app()
+        diagnostico["componentes"]["configuracion"] = (
+            _verificar_configuracion_datos(db)
+        )
+        diagnostico["componentes"]["administradores"] = (
+            _verificar_administradores(db)
+        )
+        diagnostico["componentes"][
+            "configuracion_app"
+        ] = _verificar_configuracion_app()
 
         # Determinar estado general
-        status, errores, message = _determinar_estado_general(diagnostico["componentes"])
+        status, errores, message = _determinar_estado_general(
+            diagnostico["componentes"]
+        )
         diagnostico["status"] = status
         diagnostico["message"] = message
         if errores:
@@ -208,7 +226,9 @@ def verificar_configuracion_sistema():
             "environment": settings.ENVIRONMENT,
             "log_level": settings.LOG_LEVEL,
             "cors_origins_count": len(settings.CORS_ORIGINS),
-            "secret_key_length": len(settings.SECRET_KEY) if settings.SECRET_KEY else 0,
+            "secret_key_length": (
+                len(settings.SECRET_KEY) if settings.SECRET_KEY else 0
+            ),
             "database_url_configured": bool(settings.DATABASE_URL),
             "app_name": settings.APP_NAME,
             "app_version": settings.APP_VERSION,
@@ -244,8 +264,12 @@ def monitoreo_tiempo_real(db: Session = Depends(get_db)):
 
         # Verificar datos de configuración activos
         analistas_activos = db.query(Analista).filter(Analista.activo).count()
-        concesionarios_activos = db.query(Concesionario).filter(Concesionario.activo).count()
-        modelos_activos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo).count()
+        concesionarios_activos = (
+            db.query(Concesionario).filter(Concesionario.activo).count()
+        )
+        modelos_activos = (
+            db.query(ModeloVehiculo).filter(ModeloVehiculo.activo).count()
+        )
 
         return {
             "timestamp": datetime.now().isoformat(),
@@ -260,7 +284,11 @@ def monitoreo_tiempo_real(db: Session = Depends(get_db)):
                     "activos": usuarios_activos,
                     "administradores": usuarios_admin,
                     "porcentaje_activos": round(
-                        ((usuarios_activos / usuarios_count * 100) if usuarios_count > 0 else 0),
+                        (
+                            (usuarios_activos / usuarios_count * 100)
+                            if usuarios_count > 0
+                            else 0
+                        ),
                         2,
                     ),
                 },

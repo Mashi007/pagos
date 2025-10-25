@@ -59,7 +59,9 @@ class AprobacionResponse(BaseModel):
 # ============================================
 
 
-@router.post("/", response_model=AprobacionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", response_model=AprobacionResponse, status_code=status.HTTP_201_CREATED
+)
 def crear_aprobacion(
     aprobacion_data: AprobacionCreate,
     db: Session = Depends(get_db),
@@ -113,11 +115,14 @@ def obtener_aprobacion(
     current_user: User = Depends(get_current_user),
 ):
     """Obtener aprobación por ID"""
-    aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
+    aprobacion = (
+        db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
+    )
 
     if not aprobacion:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Aprobación no encontrada"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Aprobación no encontrada",
         )
 
     return aprobacion
@@ -131,11 +136,14 @@ def actualizar_aprobacion(
     current_user: User = Depends(get_current_user),
 ):
     """Aprobar o rechazar una solicitud"""
-    aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
+    aprobacion = (
+        db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
+    )
 
     if not aprobacion:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Aprobación no encontrada"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Aprobación no encontrada",
         )
 
     if not aprobacion.esta_pendiente:
@@ -146,18 +154,24 @@ def actualizar_aprobacion(
 
     # Actualizar según el estado
     if aprobacion_update.estado == EstadoAprobacion.APROBADA.value:
-        aprobacion.aprobar(current_user.id, aprobacion_update.comentarios_revisor)
+        aprobacion.aprobar(
+            current_user.id, aprobacion_update.comentarios_revisor
+        )
     elif aprobacion_update.estado == EstadoAprobacion.RECHAZADA.value:
         if not aprobacion_update.comentarios_revisor:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Los comentarios son obligatorios al rechazar",
             )
-        aprobacion.rechazar(current_user.id, aprobacion_update.comentarios_revisor)
+        aprobacion.rechazar(
+            current_user.id, aprobacion_update.comentarios_revisor
+        )
     elif aprobacion_update.estado == EstadoAprobacion.CANCELADA.value:
         aprobacion.cancelar()
     else:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Estado no válido")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Estado no válido"
+        )
 
     db.commit()
     db.refresh(aprobacion)
@@ -172,15 +186,21 @@ def eliminar_aprobacion(
     current_user: User = Depends(get_current_user),
 ):
     """Eliminar una solicitud de aprobación"""
-    aprobacion = db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
+    aprobacion = (
+        db.query(Aprobacion).filter(Aprobacion.id == aprobacion_id).first()
+    )
 
     if not aprobacion:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Aprobación no encontrada"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Aprobación no encontrada",
         )
 
     # Solo el solicitante puede eliminar su propia solicitud pendiente
-    if aprobacion.solicitante_id != current_user.id or not aprobacion.esta_pendiente:
+    if (
+        aprobacion.solicitante_id != current_user.id
+        or not aprobacion.esta_pendiente
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tienes permiso para eliminar esta aprobación",

@@ -25,15 +25,23 @@ class ConfiguracionSistema(Base):
     __tablename__ = "configuracion_sistema"
 
     id = Column(Integer, primary_key=True, index=True)
-    categoria = Column(String(50), nullable=False, index=True)  # AI, EMAIL, WHATSAPP, etc.
-    subcategoria = Column(String(50), nullable=True, index=True)  # OPENAI, GMAIL, TWILIO, etc.
-    clave = Column(String(100), nullable=False, index=True)  # Nombre de la configuración
+    categoria = Column(
+        String(50), nullable=False, index=True
+    )  # AI, EMAIL, WHATSAPP, etc.
+    subcategoria = Column(
+        String(50), nullable=True, index=True
+    )  # OPENAI, GMAIL, TWILIO, etc.
+    clave = Column(
+        String(100), nullable=False, index=True
+    )  # Nombre de la configuración
     valor = Column(Text, nullable=True)  # Valor de la configuración
     valor_json = Column(JSON, nullable=True)  # Para configuraciones complejas
 
     # Metadatos
     descripcion = Column(Text, nullable=True)
-    tipo_dato = Column(String(20), default="STRING")  # STRING, INTEGER, BOOLEAN, JSON, PASSWORD
+    tipo_dato = Column(
+        String(20), default="STRING"
+    )  # STRING, INTEGER, BOOLEAN, JSON, PASSWORD
     requerido = Column(Boolean, default=False)
     visible_frontend = Column(Boolean, default=True)
     solo_lectura = Column(Boolean, default=False)
@@ -41,12 +49,18 @@ class ConfiguracionSistema(Base):
     # Validaciones
     valor_minimo = Column(String(100), nullable=True)
     valor_maximo = Column(String(100), nullable=True)
-    opciones_validas = Column(Text, nullable=True)  # JSON array de opciones válidas
-    patron_validacion = Column(String(200), nullable=True)  # Regex para validación
+    opciones_validas = Column(
+        Text, nullable=True
+    )  # JSON array de opciones válidas
+    patron_validacion = Column(
+        String(200), nullable=True
+    )  # Regex para validación
 
     # Auditoría
     creado_en = Column(DateTime, server_default=func.now())
-    actualizado_en = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    actualizado_en = Column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
     actualizado_por = Column(String(100), nullable=True)
 
     def __repr__(self):
@@ -54,7 +68,11 @@ class ConfiguracionSistema(Base):
 
     def _procesar_valor_boolean(self) -> bool:
         """Procesar valor de tipo BOOLEAN"""
-        return self.valor.lower() in ["true", "1", "yes", "on"] if self.valor else False
+        return (
+            self.valor.lower() in ["true", "1", "yes", "on"]
+            if self.valor
+            else False
+        )
 
     def _procesar_valor_integer(self) -> int:
         """Procesar valor de tipo INTEGER"""
@@ -118,7 +136,9 @@ class ConfiguracionSistema(Base):
             self.actualizado_por = usuario
 
     @staticmethod
-    def obtener_por_clave(db, categoria: str, clave: str) -> Optional["ConfiguracionSistema"]:
+    def obtener_por_clave(
+        db, categoria: str, clave: str
+    ) -> Optional["ConfiguracionSistema"]:
         """Obtener configuración por categoría y clave"""
         return (
             db.query(ConfiguracionSistema)
@@ -133,7 +153,9 @@ class ConfiguracionSistema(Base):
     def obtener_categoria(db, categoria: str) -> Dict[str, Any]:
         """Obtener todas las configuraciones de una categoría"""
         configs = (
-            db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == categoria).all()
+            db.query(ConfiguracionSistema)
+            .filter(ConfiguracionSistema.categoria == categoria)
+            .all()
         )
 
         resultado = {}
@@ -532,7 +554,12 @@ class ConfiguracionPorDefecto:
                 "valor": "STRIPE",
                 "descripcion": "Proveedor de pasarela de pagos",
                 "tipo_dato": "STRING",
-                "opciones_validas": ["STRIPE", "PAYPAL", "MERCADOPAGO", "CARDNET"],
+                "opciones_validas": [
+                    "STRIPE",
+                    "PAYPAL",
+                    "MERCADOPAGO",
+                    "CARDNET",
+                ],
                 "requerido": False,
             },
         },
@@ -557,7 +584,13 @@ class ConfiguracionPorDefecto:
                 "valor": "INFO",
                 "descripcion": "Nivel de logging",
                 "tipo_dato": "STRING",
-                "opciones_validas": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+                "opciones_validas": [
+                    "DEBUG",
+                    "INFO",
+                    "WARNING",
+                    "ERROR",
+                    "CRITICAL",
+                ],
                 "requerido": True,
             },
         },
@@ -635,14 +668,20 @@ class ConfiguracionPorDefecto:
                             descripcion=config_data.get("descripcion", ""),
                             tipo_dato=config_data.get("tipo_dato", "STRING"),
                             requerido=config_data.get("requerido", False),
-                            visible_frontend=config_data.get("visible_frontend", True),
-                            solo_lectura=config_data.get("solo_lectura", False),
+                            visible_frontend=config_data.get(
+                                "visible_frontend", True
+                            ),
+                            solo_lectura=config_data.get(
+                                "solo_lectura", False
+                            ),
                             opciones_validas=(
                                 json.dumps(config_data.get("opciones_validas"))
                                 if config_data.get("opciones_validas")
                                 else None
                             ),
-                            patron_validacion=config_data.get("patron_validacion"),
+                            patron_validacion=config_data.get(
+                                "patron_validacion"
+                            ),
                             valor_minimo=config_data.get("valor_minimo"),
                             valor_maximo=config_data.get("valor_maximo"),
                         )
@@ -692,21 +731,29 @@ class ConfigHelper:
     @staticmethod
     def is_whatsapp_enabled(db) -> bool:
         """Verificar si WhatsApp está habilitado"""
-        return ConfigHelper.get_config(db, "WHATSAPP", "WHATSAPP_ENABLED", False)
+        return ConfigHelper.get_config(
+            db, "WHATSAPP", "WHATSAPP_ENABLED", False
+        )
 
     @staticmethod
     def get_financial_config(db) -> Dict:
         """Obtener configuración financiera completa"""
         return {
-            "tasa_base": ConfigHelper.get_config(db, "FINANCIERO", "TASA_INTERES_BASE", 18.0),
-            "tasa_mora": ConfigHelper.get_config(db, "FINANCIERO", "TASA_MORA_MENSUAL", 2.0),
+            "tasa_base": ConfigHelper.get_config(
+                db, "FINANCIERO", "TASA_INTERES_BASE", 18.0
+            ),
+            "tasa_mora": ConfigHelper.get_config(
+                db, "FINANCIERO", "TASA_MORA_MENSUAL", 2.0
+            ),
             "cuota_inicial_min": ConfigHelper.get_config(
                 db, "FINANCIERO", "CUOTA_INICIAL_MINIMA", 10.0
             ),
             "monto_maximo": ConfigHelper.get_config(
                 db, "FINANCIERO", "MONTO_MAXIMO_FINANCIAMIENTO", 5000000
             ),
-            "plazo_maximo": ConfigHelper.get_config(db, "FINANCIERO", "PLAZO_MAXIMO_MESES", 84),
+            "plazo_maximo": ConfigHelper.get_config(
+                db, "FINANCIERO", "PLAZO_MAXIMO_MESES", 84
+            ),
         }
 
     @staticmethod
@@ -723,6 +770,9 @@ class ConfigHelper:
                 db, "NOTIFICACIONES", "NOTIFICACIONES_MORA_HABILITADAS", True
             ),
             "frecuencia_mora": ConfigHelper.get_config(
-                db, "NOTIFICACIONES", "FRECUENCIA_NOTIFICACIONES_MORA", "DIARIA"
+                db,
+                "NOTIFICACIONES",
+                "FRECUENCIA_NOTIFICACIONES_MORA",
+                "DIARIA",
             ),
         }

@@ -24,7 +24,9 @@ class NotificacionBase(BaseModel):
 
     # Tipo y categoría
     tipo: str = Field(..., description="EMAIL, SMS, WHATSAPP, PUSH")
-    categoria: str = Field(..., description="RECORDATORIO_PAGO, PRESTAMO_APROBADO, etc.")
+    categoria: str = Field(
+        ..., description="RECORDATORIO_PAGO, PRESTAMO_APROBADO, etc."
+    )
 
     # Contenido
     asunto: Optional[str] = Field(None, max_length=255)
@@ -34,7 +36,9 @@ class NotificacionBase(BaseModel):
     extra_data: Optional[Dict[str, Any]] = None
 
     # Configuración
-    prioridad: str = Field(default="NORMAL", description="BAJA, NORMAL, ALTA, URGENTE")
+    prioridad: str = Field(
+        default="NORMAL", description="BAJA, NORMAL, ALTA, URGENTE"
+    )
     programada_para: Optional[datetime] = None
     max_intentos: int = Field(default=3, ge=1, le=10)
 
@@ -116,7 +120,8 @@ class NotificacionRecordatorioPago(BaseModel):
     mensaje: str
     programada_para: Optional[datetime] = None
     extra_data: Optional[Dict[str, Any]] = Field(
-        None, description="Datos adicionales como monto, fecha_vencimiento, etc."
+        None,
+        description="Datos adicionales como monto, fecha_vencimiento, etc.",
     )
 
 

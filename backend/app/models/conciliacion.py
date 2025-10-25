@@ -6,7 +6,15 @@ Registra la conciliación entre pagos del sistema y movimientos bancarios
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import (
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -26,7 +34,10 @@ class Conciliacion(Base):
 
     # Relación con pago
     pago_id = Column(
-        Integer, ForeignKey("pagos.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("pagos.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     # Información bancaria
@@ -50,7 +61,9 @@ class Conciliacion(Base):
     # Información adicional
     observaciones = Column(Text, nullable=True)
     tipo_match = Column(String(20), nullable=True)  # AUTOMATICO, MANUAL
-    confianza_match = Column(Numeric(5, 2), nullable=True)  # Porcentaje de confianza
+    confianza_match = Column(
+        Numeric(5, 2), nullable=True
+    )  # Porcentaje de confianza
 
     # Auditoría
     created_at = Column(DateTime(timezone=True), server_default=func.now())

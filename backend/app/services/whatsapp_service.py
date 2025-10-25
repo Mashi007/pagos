@@ -30,7 +30,9 @@ class WhatsAppService:
         # Verificar configuración
         if not self.access_token or not self.phone_number_id:
             logger.warning("Credenciales de Meta Developers no configuradas")
-            logger.info("Variables requeridas: WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID")
+            logger.info(
+                "Variables requeridas: WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID"
+            )
 
     async def send_message(
         self,
@@ -62,7 +64,9 @@ class WhatsAppService:
                 }
 
             # Formatear número (quitar + y espacios)
-            clean_number = to_number.replace("+", "").replace(" ", "").replace("-", "")
+            clean_number = (
+                to_number.replace("+", "").replace(" ", "").replace("-", "")
+            )
             if not clean_number.isdigit():
                 return {
                     "success": False,
@@ -111,11 +115,15 @@ class WhatsAppService:
 
             # Enviar mensaje
             async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, json=payload) as response:
+                async with session.post(
+                    url, headers=headers, json=payload
+                ) as response:
                     response_data = await response.json()
 
                     if response.status == 200:
-                        message_id = response_data.get("messages", [{}])[0].get("id")
+                        message_id = response_data.get("messages", [{}])[
+                            0
+                        ].get("id")
 
                         # Actualizar notificación
                         if notificacion_id:
@@ -159,7 +167,9 @@ class WhatsAppService:
             # Actualizar notificación como fallida
             if notificacion_id:
                 self._actualizar_notificacion(
-                    notificacion_id, EstadoNotificacion.FALLIDA.value, error=error_msg
+                    notificacion_id,
+                    EstadoNotificacion.FALLIDA.value,
+                    error=error_msg,
                 )
 
             return {"success": False, "error": error_msg, "message_id": None}
@@ -192,7 +202,9 @@ class WhatsAppService:
                 }
 
             # Formatear número
-            clean_number = to_number.replace("+", "").replace(" ", "").replace("-", "")
+            clean_number = (
+                to_number.replace("+", "").replace(" ", "").replace("-", "")
+            )
             if not clean_number.isdigit():
                 return {
                     "success": False,
@@ -221,7 +233,8 @@ class WhatsAppService:
                         {
                             "type": "body",
                             "parameters": [
-                                {"type": "text", "text": str(value)} for value in variables.values()
+                                {"type": "text", "text": str(value)}
+                                for value in variables.values()
                             ],
                         }
                     ],
@@ -230,11 +243,15 @@ class WhatsAppService:
 
             # Enviar mensaje
             async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, json=payload) as response:
+                async with session.post(
+                    url, headers=headers, json=payload
+                ) as response:
                     response_data = await response.json()
 
                     if response.status == 200:
-                        message_id = response_data.get("messages", [{}])[0].get("id")
+                        message_id = response_data.get("messages", [{}])[
+                            0
+                        ].get("id")
 
                         # Actualizar notificación
                         if notificacion_id:
@@ -278,7 +295,9 @@ class WhatsAppService:
             # Actualizar notificación como fallida
             if notificacion_id:
                 self._actualizar_notificacion(
-                    notificacion_id, EstadoNotificacion.FALLIDA.value, error=error_msg
+                    notificacion_id,
+                    EstadoNotificacion.FALLIDA.value,
+                    error=error_msg,
                 )
 
             return {"success": False, "error": error_msg, "message_id": None}
@@ -309,7 +328,9 @@ class WhatsAppService:
             }
 
         except Exception as e:
-            logger.error(f"Error obteniendo estado del mensaje {message_id}: {str(e)}")
+            logger.error(
+                f"Error obteniendo estado del mensaje {message_id}: {str(e)}"
+            )
             return {"error": str(e)}
 
     def _actualizar_notificacion(
@@ -324,7 +345,11 @@ class WhatsAppService:
         """
         try:
             db = SessionLocal()
-            notificacion = db.query(Notificacion).filter(Notificacion.id == notificacion_id).first()
+            notificacion = (
+                db.query(Notificacion)
+                .filter(Notificacion.id == notificacion_id)
+                .first()
+            )
 
             if notificacion:
                 notificacion.estado = estado
@@ -342,7 +367,9 @@ class WhatsAppService:
                 db.commit()
 
         except Exception as e:
-            logger.error(f"Error actualizando notificación {notificacion_id}: {str(e)}")
+            logger.error(
+                f"Error actualizando notificación {notificacion_id}: {str(e)}"
+            )
         finally:
             db.close()
 

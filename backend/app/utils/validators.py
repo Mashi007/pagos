@@ -289,7 +289,9 @@ def sanitize_html(text: Optional[str]) -> Optional[str]:
     text = re.sub(r"[<>]", "", text)
 
     # Remover scripts obvios
-    text = re.sub(r"<script.*?>.*?</script>", "", text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(
+        r"<script.*?>.*?</script>", "", text, flags=re.IGNORECASE | re.DOTALL
+    )
     text = re.sub(r"javascript:", "", text, flags=re.IGNORECASE)
     text = re.sub(r"on\w+\s*=", "", text, flags=re.IGNORECASE)
 
@@ -373,7 +375,10 @@ def validate_cuenta_bancaria(cuenta: str) -> bool:
     if not cuenta_clean.isdigit():
         return False
 
-    if len(cuenta_clean) < MIN_CUENTA_LENGTH or len(cuenta_clean) > MAX_CUENTA_LENGTH:
+    if (
+        len(cuenta_clean) < MIN_CUENTA_LENGTH
+        or len(cuenta_clean) > MAX_CUENTA_LENGTH
+    ):
         return False
 
     return True
@@ -472,11 +477,17 @@ def _validate_password_patterns(password: str) -> tuple[bool, str]:
     """Validar patrones requeridos en contraseña"""
     # Verificar que tenga al menos una letra minúscula
     if not re.search(r"[a-z]", password):
-        return False, "La contraseña debe contener al menos una letra minúscula"
+        return (
+            False,
+            "La contraseña debe contener al menos una letra minúscula",
+        )
 
     # Verificar que tenga al menos una letra mayúscula
     if not re.search(r"[A-Z]", password):
-        return False, "La contraseña debe contener al menos una letra mayúscula"
+        return (
+            False,
+            "La contraseña debe contener al menos una letra mayúscula",
+        )
 
     # Verificar que tenga al menos un dígito
     if not re.search(r"\d", password):
@@ -484,7 +495,10 @@ def _validate_password_patterns(password: str) -> tuple[bool, str]:
 
     # Verificar que tenga al menos un carácter especial
     if not re.search(r'[!@#$%^&*()_+\-=\[\]{};:"\\|,.<>\/?]', password):
-        return False, "La contraseña debe contener al menos un carácter especial"
+        return (
+            False,
+            "La contraseña debe contener al menos un carácter especial",
+        )
 
     # Verificar que no contenga espacios
     if " " in password:

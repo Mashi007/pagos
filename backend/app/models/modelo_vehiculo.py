@@ -18,7 +18,9 @@ class ModeloVehiculo(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     def __repr__(self):
         return f"<ModeloVehiculo(id={self.id}, modelo='{self.modelo}', activo={self.activo})>"
@@ -28,6 +30,10 @@ class ModeloVehiculo(Base):
             "id": self.id,
             "modelo": self.modelo,
             "activo": self.activo,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": (
+                self.created_at.isoformat() if self.created_at else None
+            ),
+            "updated_at": (
+                self.updated_at.isoformat() if self.updated_at else None
+            ),
         }

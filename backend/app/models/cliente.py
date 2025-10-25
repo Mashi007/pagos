@@ -26,13 +26,23 @@ class Cliente(Base):
     cedula = Column(String(CEDULA_LENGTH), nullable=False, index=True)
 
     # Datos personales - OBLIGATORIOS
-    nombres = Column(String(NAME_LENGTH), nullable=False)  # 1-2 palabras máximo
-    apellidos = Column(String(NAME_LENGTH), nullable=False)  # 1-2 palabras máximo
-    telefono = Column(String(PHONE_LENGTH), nullable=False, index=True)  # Validado por validadores
-    email = Column(String(EMAIL_LENGTH), nullable=False, index=True)  # Validado por validadores
+    nombres = Column(
+        String(NAME_LENGTH), nullable=False
+    )  # 1-2 palabras máximo
+    apellidos = Column(
+        String(NAME_LENGTH), nullable=False
+    )  # 1-2 palabras máximo
+    telefono = Column(
+        String(PHONE_LENGTH), nullable=False, index=True
+    )  # Validado por validadores
+    email = Column(
+        String(EMAIL_LENGTH), nullable=False, index=True
+    )  # Validado por validadores
     direccion = Column(Text, nullable=False)  # Libre
     fecha_nacimiento = Column(Date, nullable=False)  # Validado por validadores
-    ocupacion = Column(String(OCCUPATION_LENGTH), nullable=False)  # Texto libre
+    ocupacion = Column(
+        String(OCCUPATION_LENGTH), nullable=False
+    )  # Texto libre
 
     # ============================================
     # DATOS DEL VEHÍCULO Y FINANCIAMIENTO - OBLIGATORIOS
@@ -41,8 +51,12 @@ class Cliente(Base):
     modelo_vehiculo = Column(
         String(VEHICLE_MODEL_LENGTH), nullable=False, index=True
     )  # Configuración
-    concesionario = Column(String(DEALER_LENGTH), nullable=False, index=True)  # Configuración
-    analista = Column(String(ANALYST_LENGTH), nullable=False, index=True)  # Configuración
+    concesionario = Column(
+        String(DEALER_LENGTH), nullable=False, index=True
+    )  # Configuración
+    analista = Column(
+        String(ANALYST_LENGTH), nullable=False, index=True
+    )  # Configuración
 
     # Estado y control - OBLIGATORIOS
     estado = Column(

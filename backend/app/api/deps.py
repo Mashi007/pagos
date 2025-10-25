@@ -51,7 +51,9 @@ def get_current_user(
         logger.info(f"🔍 Validando token JWT - Longitud: {len(token)}")
 
         payload = decode_token(token)
-        logger.info(f"✅ Token decodificado exitosamente - Payload keys: {list(payload.keys())}")
+        logger.info(
+            f"✅ Token decodificado exitosamente - Payload keys: {list(payload.keys())}"
+        )
 
         # Verificar que sea un access token
         if payload.get("type") != "access":
@@ -74,11 +76,16 @@ def get_current_user(
 
     if user is None:
         logger.error(f"❌ Usuario no encontrado en BD - ID: {user_id}")
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado",
+        )
 
     if not user.is_active:
         logger.warning(f"⚠️ Usuario inactivo - Email: {user.email}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo"
+        )
 
     logger.info(f"✅ Usuario autenticado exitosamente - Email: {user.email}")
     return user
@@ -100,7 +107,9 @@ def get_current_active_user(
         HTTPException: Si el usuario está inactivo
     """
     if not current_user.is_active:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo"
+        )
     return current_user
 
 
@@ -143,7 +152,9 @@ def require_permission(*required_permissions: Permission):
         @app.post("/clientes", dependencies=[Depends(require_permission(Permission.CLIENTE_CREATE))])
     """
 
-    def permission_checker(current_user: User = Depends(get_current_user)) -> User:
+    def permission_checker(
+        current_user: User = Depends(get_current_user),
+    ) -> User:
         # Obtener permisos del usuario basado en is_admin
         user_permissions = get_user_permissions(current_user.is_admin)
 
@@ -200,7 +211,9 @@ class PaginationParams:
         self.limit = limit if limit is not None else page_size
 
 
-def get_pagination_params(page: int = 1, page_size: int = 10) -> PaginationParams:
+def get_pagination_params(
+    page: int = 1, page_size: int = 10
+) -> PaginationParams:
     """
     Dependency para obtener parámetros de paginación
 

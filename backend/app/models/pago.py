@@ -1,4 +1,12 @@
-from sqlalchemy import Boolean, Column, DateTime, Integer, Numeric, String, Text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.sql import func
 
 from app.db.session import Base
@@ -25,12 +33,18 @@ class Pago(Base):
 
     # DATOS DEL PAGO
     fecha_pago = Column(DateTime, nullable=False)
-    monto_pagado = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
-    numero_documento = Column(String(DOCUMENTO_LENGTH), nullable=False, index=True)
+    monto_pagado = Column(
+        Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False
+    )
+    numero_documento = Column(
+        String(DOCUMENTO_LENGTH), nullable=False, index=True
+    )
 
     # DOCUMENTO ADJUNTO
     documento_nombre = Column(String(DOCUMENTO_NOMBRE_LENGTH), nullable=True)
-    documento_tipo = Column(String(DOCUMENTO_TIPO_LENGTH), nullable=True)  # PNG, JPG, PDF
+    documento_tipo = Column(
+        String(DOCUMENTO_TIPO_LENGTH), nullable=True
+    )  # PNG, JPG, PDF
     documento_tamaño = Column(Integer, nullable=True)  # bytes
     documento_ruta = Column(String(DOCUMENTO_RUTA_LENGTH), nullable=True)
 
@@ -42,7 +56,9 @@ class Pago(Base):
     activo = Column(Boolean, default=True, nullable=False)
     notas = Column(Text, nullable=True)
     fecha_registro = Column(DateTime, default=func.now(), nullable=False)
-    fecha_actualizacion = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    fecha_actualizacion = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     # RELACIONES (pendientes hasta desarrollar otros módulos)
     # cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True)

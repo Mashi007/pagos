@@ -76,15 +76,21 @@ class ScoringCrediticio:
             scores_componentes = {}
 
             # 1. ANÁLISIS DE INGRESOS VS CUOTA (30%)
-            score_ingresos = ScoringCrediticio._calcular_score_ingresos(cliente_data, prestamo_data)
+            score_ingresos = ScoringCrediticio._calcular_score_ingresos(
+                cliente_data, prestamo_data
+            )
             scores_componentes["ingresos"] = score_ingresos
 
             # 2. HISTORIAL CREDITICIO (25%)
-            score_historial = ScoringCrediticio._calcular_score_historial(cliente_data, db)
+            score_historial = ScoringCrediticio._calcular_score_historial(
+                cliente_data, db
+            )
             scores_componentes["historial"] = score_historial
 
             # 3. ESTABILIDAD LABORAL (20%)
-            score_laboral = ScoringCrediticio._calcular_score_laboral(cliente_data)
+            score_laboral = ScoringCrediticio._calcular_score_laboral(
+                cliente_data
+            )
             scores_componentes["laboral"] = score_laboral
 
             # 4. GARANTÍAS ADICIONALES (15%)
@@ -94,22 +100,30 @@ class ScoringCrediticio:
             scores_componentes["garantias"] = score_garantias
 
             # 5. COMPORTAMIENTO DE PAGO (10%)
-            score_comportamiento = ScoringCrediticio._calcular_score_comportamiento(
-                cliente_data, db
+            score_comportamiento = (
+                ScoringCrediticio._calcular_score_comportamiento(
+                    cliente_data, db
+                )
             )
             scores_componentes["comportamiento"] = score_comportamiento
 
             # SCORE FINAL PONDERADO
             score_final = (
                 score_ingresos * MLConfig.SCORING_WEIGHTS["ingresos_vs_cuota"]
-                + score_historial * MLConfig.SCORING_WEIGHTS["historial_crediticio"]
-                + score_laboral * MLConfig.SCORING_WEIGHTS["estabilidad_laboral"]
-                + score_garantias * MLConfig.SCORING_WEIGHTS["garantias_adicionales"]
-                + score_comportamiento * MLConfig.SCORING_WEIGHTS["comportamiento_pago"]
+                + score_historial
+                * MLConfig.SCORING_WEIGHTS["historial_crediticio"]
+                + score_laboral
+                * MLConfig.SCORING_WEIGHTS["estabilidad_laboral"]
+                + score_garantias
+                * MLConfig.SCORING_WEIGHTS["garantias_adicionales"]
+                + score_comportamiento
+                * MLConfig.SCORING_WEIGHTS["comportamiento_pago"]
             )
 
             # RECOMENDACIÓN AUTOMÁTICA
-            recomendacion = ScoringCrediticio._generar_recomendacion(score_final)
+            recomendacion = ScoringCrediticio._generar_recomendacion(
+                score_final
+            )
 
             # FACTORES DE RIESGO
             factores_riesgo = ScoringCrediticio._identificar_factores_riesgo(
@@ -118,13 +132,17 @@ class ScoringCrediticio:
 
             return {
                 "score_final": round(score_final, 0),
-                "clasificacion": ScoringCrediticio._clasificar_score(score_final),
+                "clasificacion": ScoringCrediticio._clasificar_score(
+                    score_final
+                ),
                 "recomendacion": recomendacion,
                 "scores_componentes": scores_componentes,
                 "factores_riesgo": factores_riesgo,
                 "fecha_calculo": datetime.now().isoformat(),
                 "version_algoritmo": "1.0",
-                "confianza": ScoringCrediticio._calcular_confianza(scores_componentes),
+                "confianza": ScoringCrediticio._calcular_confianza(
+                    scores_componentes
+                ),
             }
 
         except Exception as e:
@@ -137,7 +155,9 @@ class ScoringCrediticio:
             }
 
     @staticmethod
-    def _calcular_score_ingresos(cliente_data: Dict, prestamo_data: Dict) -> float:
+    def _calcular_score_ingresos(
+        cliente_data: Dict, prestamo_data: Dict
+    ) -> float:
         """Calcular score basado en ingresos vs cuota (0-1000)"""
         try:
             ingresos = float(cliente_data.get("ingresos_mensuales", 0))
@@ -170,7 +190,9 @@ class ScoringCrediticio:
             cedula = cliente_data.get("cedula")
 
             # Buscar historial previo en el sistema
-            cliente_existente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
+            cliente_existente = (
+                db.query(Cliente).filter(Cliente.cedula == cedula).first()
+            )
 
             if not cliente_existente:
                 return 600  # Score neutro para cliente nuevo
@@ -188,11 +210,15 @@ class ScoringCrediticio:
 
             # Calcular métricas de comportamiento
             total_pagos = len(pagos_cliente)
-            pagos_puntuales = len([p for p in pagos_cliente if p.dias_mora == 0])
+            pagos_puntuales = len(
+                [p for p in pagos_cliente if p.dias_mora == 0]
+            )
             len([p for p in pagos_cliente if p.dias_mora > 0])
 
             # Score basado en puntualidad
-            tasa_puntualidad = pagos_puntuales / total_pagos if total_pagos > 0 else 0
+            tasa_puntualidad = (
+                pagos_puntuales / total_pagos if total_pagos > 0 else 0
+            )
 
             if tasa_puntualidad >= 0.95:  # 95%+ puntual
                 return 1000
@@ -213,7 +239,9 @@ class ScoringCrediticio:
         """Calcular score basado en estabilidad laboral"""
         try:
             ocupacion = cliente_data.get("ocupacion", "").upper()
-            antiguedad_laboral = cliente_data.get("antiguedad_laboral_meses", 0)
+            antiguedad_laboral = cliente_data.get(
+                "antiguedad_laboral_meses", 0
+            )
             tipo_empleo = cliente_data.get("tipo_empleo", "").upper()
 
             score_base = 500
@@ -253,7 +281,9 @@ class ScoringCrediticio:
             return 500  # Score neutro
 
     @staticmethod
-    def _calcular_score_garantias(cliente_data: Dict, prestamo_data: Dict) -> float:
+    def _calcular_score_garantias(
+        cliente_data: Dict, prestamo_data: Dict
+    ) -> float:
         """Calcular score basado en garantías adicionales"""
         try:
             score_base = 400
@@ -290,7 +320,9 @@ class ScoringCrediticio:
             return 400
 
     @staticmethod
-    def _calcular_score_comportamiento(cliente_data: Dict, db: Session) -> float:
+    def _calcular_score_comportamiento(
+        cliente_data: Dict, db: Session
+    ) -> float:
         """Calcular score basado en comportamiento de pago histórico"""
         try:
             cedula = cliente_data.get("cedula")
@@ -298,7 +330,9 @@ class ScoringCrediticio:
             # Buscar comportamiento en los últimos 12 meses
             fecha_limite = date.today() - timedelta(days=365)
 
-            cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
+            cliente = (
+                db.query(Cliente).filter(Cliente.cedula == cedula).first()
+            )
             if not cliente:
                 return 600  # Neutro para cliente nuevo
 
@@ -306,7 +340,10 @@ class ScoringCrediticio:
             pagos_recientes = (
                 db.query(Pago)
                 .join(Prestamo)
-                .filter(Prestamo.cliente_id == cliente.id, Pago.fecha_pago >= fecha_limite)
+                .filter(
+                    Prestamo.cliente_id == cliente.id,
+                    Pago.fecha_pago >= fecha_limite,
+                )
                 .all()
             )
 
@@ -315,9 +352,15 @@ class ScoringCrediticio:
 
             # Métricas de comportamiento
             total_pagos = len(pagos_recientes)
-            pagos_adelantados = len([p for p in pagos_recientes if p.dias_mora < 0])
-            pagos_puntuales = len([p for p in pagos_recientes if p.dias_mora == 0])
-            pagos_con_mora = len([p for p in pagos_recientes if p.dias_mora > 0])
+            pagos_adelantados = len(
+                [p for p in pagos_recientes if p.dias_mora < 0]
+            )
+            pagos_puntuales = len(
+                [p for p in pagos_recientes if p.dias_mora == 0]
+            )
+            pagos_con_mora = len(
+                [p for p in pagos_recientes if p.dias_mora > 0]
+            )
 
             # Calcular score
             score = 500  # Base
@@ -326,7 +369,9 @@ class ScoringCrediticio:
                 score += 200  # Bonificación por pagos adelantados
 
             tasa_puntualidad = pagos_puntuales / total_pagos
-            score += int(tasa_puntualidad * 300)  # Hasta 300 puntos por puntualidad
+            score += int(
+                tasa_puntualidad * 300
+            )  # Hasta 300 puntos por puntualidad
 
             if pagos_con_mora > 0:
                 tasa_mora = pagos_con_mora / total_pagos
@@ -380,7 +425,9 @@ class ScoringCrediticio:
                 "decision": "RECHAZAR_AUTOMATICAMENTE",
                 "color": "#dc3545",
                 "mensaje": "Cliente de muy alto riesgo - Rechazo recomendado",
-                "condiciones_especiales": ["No aprobar sin garantías extraordinarias"],
+                "condiciones_especiales": [
+                    "No aprobar sin garantías extraordinarias"
+                ],
                 "tasa_recomendada": "NO_APLICABLE",
                 "plazo_maximo": 0,
             }
@@ -402,7 +449,9 @@ class ScoringCrediticio:
             return "MUY_MALO"
 
     @staticmethod
-    def _identificar_factores_riesgo(scores: Dict, cliente_data: Dict) -> List[Dict]:
+    def _identificar_factores_riesgo(
+        scores: Dict, cliente_data: Dict
+    ) -> List[Dict]:
         """Identificar factores de riesgo específicos"""
         factores = []
 
@@ -467,7 +516,9 @@ class PrediccionMora:
         """
         try:
             # Obtener datos del cliente
-            cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+            cliente = (
+                db.query(Cliente).filter(Cliente.id == cliente_id).first()
+            )
             if not cliente:
                 raise ValueError("Cliente no encontrado")
 
@@ -486,7 +537,9 @@ class PrediccionMora:
                 "cliente_id": cliente_id,
                 "cliente_nombre": cliente.nombre_completo,
                 "probabilidad_mora": round(probabilidad * 100, 2),
-                "clasificacion_riesgo": PrediccionMora._clasificar_riesgo_mora(probabilidad),
+                "clasificacion_riesgo": PrediccionMora._clasificar_riesgo_mora(
+                    probabilidad
+                ),
                 "horizonte_dias": horizonte_dias,
                 "features_analizadas": features,
                 "recomendaciones": recomendaciones,
@@ -509,24 +562,32 @@ class PrediccionMora:
             # Features básicas del cliente
             features = {
                 "dias_mora_actual": cliente.dias_mora or 0,
-                "estado_financiero": 1 if cliente.estado_financiero == "AL_DIA" else 0,
-                "antiguedad_cliente_dias": (date.today() - cliente.fecha_registro).days,
+                "estado_financiero": (
+                    1 if cliente.estado_financiero == "AL_DIA" else 0
+                ),
+                "antiguedad_cliente_dias": (
+                    date.today() - cliente.fecha_registro
+                ).days,
                 "tiene_telefono": 1 if cliente.telefono else 0,
                 "tiene_email": 1 if cliente.email else 0,
             }
 
             # Features del vehículo
             if cliente.anio_vehiculo:
-                features["vehiculo_antiguedad"] = date.today().year - cliente.anio_vehiculo
+                features["vehiculo_antiguedad"] = (
+                    date.today().year - cliente.anio_vehiculo
+                )
             else:
                 features["vehiculo_antiguedad"] = 5  # Promedio
 
             # Features financieras
             if cliente.total_financiamiento:
-                features["monto_financiado"] = float(cliente.total_financiamiento)
-                features["porcentaje_cuota_inicial"] = float(cliente.cuota_inicial or 0) / float(
+                features["monto_financiado"] = float(
                     cliente.total_financiamiento
                 )
+                features["porcentaje_cuota_inicial"] = float(
+                    cliente.cuota_inicial or 0
+                ) / float(cliente.total_financiamiento)
 
             # Features de comportamiento de pago
             pagos_cliente = (
@@ -540,13 +601,15 @@ class PrediccionMora:
 
             if pagos_cliente:
                 features["pagos_ultimos_12_meses"] = len(pagos_cliente)
-                features["promedio_dias_mora"] = sum(p.dias_mora for p in pagos_cliente) / len(
-                    pagos_cliente
-                )
+                features["promedio_dias_mora"] = sum(
+                    p.dias_mora for p in pagos_cliente
+                ) / len(pagos_cliente)
                 features["pagos_puntuales_ratio"] = len(
                     [p for p in pagos_cliente if p.dias_mora == 0]
                 ) / len(pagos_cliente)
-                features["ultimo_pago_dias"] = (date.today() - pagos_cliente[0].fecha_pago).days
+                features["ultimo_pago_dias"] = (
+                    date.today() - pagos_cliente[0].fecha_pago
+                ).days
             else:
                 features["pagos_ultimos_12_meses"] = 0
                 features["promedio_dias_mora"] = 0
@@ -557,7 +620,9 @@ class PrediccionMora:
             mes_actual = date.today().month
             features["mes_diciembre"] = 1 if mes_actual == 12 else 0  # Navidad
             features["mes_enero"] = 1 if mes_actual == 1 else 0  # Post-navidad
-            features["mes_verano"] = 1 if mes_actual in [6, 7, 8] else 0  # Vacaciones
+            features["mes_verano"] = (
+                1 if mes_actual in [6, 7, 8] else 0
+            )  # Vacaciones
 
             return features
 
@@ -596,7 +661,9 @@ class PrediccionMora:
                 probabilidad_base -= 0.05  # Buena cuota inicial
 
             # Factores estacionales
-            if features.get("mes_diciembre", 0) or features.get("mes_enero", 0):
+            if features.get("mes_diciembre", 0) or features.get(
+                "mes_enero", 0
+            ):
                 probabilidad_base += 0.10  # Época difícil
 
             return max(min(probabilidad_base, 0.95), 0.01)  # Entre 1% y 95%
@@ -716,20 +783,30 @@ class SistemaRecomendaciones:
     """
 
     @staticmethod
-    def recomendar_estrategia_cobranza(cliente_id: int, db: Session) -> Dict[str, Any]:
+    def recomendar_estrategia_cobranza(
+        cliente_id: int, db: Session
+    ) -> Dict[str, Any]:
         """
         Recomendar mejor estrategia de cobranza para cliente específico
         """
         try:
-            cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+            cliente = (
+                db.query(Cliente).filter(Cliente.id == cliente_id).first()
+            )
             if not cliente:
                 raise ValueError("Cliente no encontrado")
 
             # Analizar perfil del cliente
-            perfil = SistemaRecomendaciones._analizar_perfil_cliente(cliente, db)
+            perfil = SistemaRecomendaciones._analizar_perfil_cliente(
+                cliente, db
+            )
 
             # Generar estrategia personalizada
-            estrategia = SistemaRecomendaciones._generar_estrategia_personalizada(perfil)
+            estrategia = (
+                SistemaRecomendaciones._generar_estrategia_personalizada(
+                    perfil
+                )
+            )
 
             return {
                 "cliente_id": cliente_id,
@@ -758,7 +835,9 @@ class SistemaRecomendaciones:
 
         if pagos:
             dias_mora_promedio = sum(p.dias_mora for p in pagos) / len(pagos)
-            tasa_puntualidad = len([p for p in pagos if p.dias_mora == 0]) / len(pagos)
+            tasa_puntualidad = len(
+                [p for p in pagos if p.dias_mora == 0]
+            ) / len(pagos)
             ultimo_pago = pagos[0].fecha_pago
         else:
             dias_mora_promedio = 0
@@ -804,7 +883,10 @@ class SistemaRecomendaciones:
                 "canal_principal": "EMAIL",
                 "frecuencia": "RECORDATORIO_SUAVE",
                 "tono": "AGRADECIMIENTO",
-                "incentivos": ["Descuento por puntualidad", "Tasa preferencial"],
+                "incentivos": [
+                    "Descuento por puntualidad",
+                    "Tasa preferencial",
+                ],
                 "acciones": [
                     "Enviar recordatorio 3 días antes",
                     "Ofrecer descuentos por pago anticipado",
@@ -864,7 +946,9 @@ class AnalisisPredictivoCartera:
     """
 
     @staticmethod
-    def analizar_tendencias_cartera(horizonte_meses: int, db: Session) -> Dict[str, Any]:
+    def analizar_tendencias_cartera(
+        horizonte_meses: int, db: Session
+    ) -> Dict[str, Any]:
         """
         Análisis predictivo de tendencias de la cartera
         """
@@ -873,13 +957,21 @@ class AnalisisPredictivoCartera:
             fecha_inicio = date.today() - timedelta(days=730)
 
             # Tendencias de mora
-            tendencia_mora = AnalisisPredictivoCartera._analizar_tendencia_mora(db, fecha_inicio)
+            tendencia_mora = (
+                AnalisisPredictivoCartera._analizar_tendencia_mora(
+                    db, fecha_inicio
+                )
+            )
 
             # Proyección de flujo de caja
-            proyeccion_flujo = AnalisisPredictivoCartera._proyectar_flujo_caja(db, horizonte_meses)
+            proyeccion_flujo = AnalisisPredictivoCartera._proyectar_flujo_caja(
+                db, horizonte_meses
+            )
 
             # Análisis de segmentos
-            analisis_segmentos = AnalisisPredictivoCartera._analizar_segmentos_riesgo(db)
+            analisis_segmentos = (
+                AnalisisPredictivoCartera._analizar_segmentos_riesgo(db)
+            )
 
             # Recomendaciones estratégicas
             recomendaciones = AnalisisPredictivoCartera._generar_recomendaciones_estrategicas(
@@ -925,7 +1017,11 @@ class AnalisisPredictivoCartera:
                 .count()
             )
 
-            tasa_mora = (clientes_mora / total_clientes * 100) if total_clientes > 0 else 0
+            tasa_mora = (
+                (clientes_mora / total_clientes * 100)
+                if total_clientes > 0
+                else 0
+            )
 
             datos_mensuales.append(
                 {
@@ -937,7 +1033,9 @@ class AnalisisPredictivoCartera:
             )
 
         # Calcular tendencia
-        tasas = [d["tasa_mora"] for d in datos_mensuales[-12:]]  # Últimos 12 meses
+        tasas = [
+            d["tasa_mora"] for d in datos_mensuales[-12:]
+        ]  # Últimos 12 meses
         tendencia = "ESTABLE"
 
         if len(tasas) >= 3:
@@ -951,7 +1049,9 @@ class AnalisisPredictivoCartera:
             "tendencia": tendencia,
             "tasa_actual": tasas[-1] if tasas else 0,
             "tasa_promedio": sum(tasas) / len(tasas) if tasas else 0,
-            "proyeccion_3_meses": AnalisisPredictivoCartera._proyectar_mora(tasas),
+            "proyeccion_3_meses": AnalisisPredictivoCartera._proyectar_mora(
+                tasas
+            ),
         }
 
     @staticmethod
@@ -966,8 +1066,10 @@ class AnalisisPredictivoCartera:
             cuotas_programadas = (
                 db.query(func.sum(Cuota.monto_cuota))
                 .filter(
-                    func.extract("year", Cuota.fecha_vencimiento) == fecha_proyeccion.year,
-                    func.extract("month", Cuota.fecha_vencimiento) == fecha_proyeccion.month,
+                    func.extract("year", Cuota.fecha_vencimiento)
+                    == fecha_proyeccion.year,
+                    func.extract("month", Cuota.fecha_vencimiento)
+                    == fecha_proyeccion.month,
                     Cuota.estado.in_(["PENDIENTE", "PARCIAL"]),
                 )
                 .scalar()
@@ -990,7 +1092,8 @@ class AnalisisPredictivoCartera:
         return {
             "proyecciones_mensuales": proyecciones,
             "total_proyectado": sum(p["flujo_esperado"] for p in proyecciones),
-            "promedio_mensual": sum(p["flujo_esperado"] for p in proyecciones) / len(proyecciones),
+            "promedio_mensual": sum(p["flujo_esperado"] for p in proyecciones)
+            / len(proyecciones),
         }
 
     @staticmethod
@@ -1038,7 +1141,9 @@ class OptimizadorTasas:
         """
         try:
             # Calcular scoring del cliente
-            scoring = ScoringCrediticio.calcular_score_completo(cliente_data, prestamo_data, db)
+            scoring = ScoringCrediticio.calcular_score_completo(
+                cliente_data, prestamo_data, db
+            )
 
             # Optimizar tasa de interés
             tasa_optimizada = OptimizadorTasas._optimizar_tasa_interes(
@@ -1052,7 +1157,9 @@ class OptimizadorTasas:
 
             # Calcular cuota optimizada
             cuota_optimizada = OptimizadorTasas._calcular_cuota_optimizada(
-                prestamo_data["monto_financiado"], tasa_optimizada, plazo_optimizado
+                prestamo_data["monto_financiado"],
+                tasa_optimizada,
+                plazo_optimizado,
             )
 
             return {
@@ -1061,7 +1168,8 @@ class OptimizadorTasas:
                     "tasa_interes_anual": tasa_optimizada,
                     "plazo_meses": plazo_optimizado,
                     "cuota_mensual": cuota_optimizada,
-                    "cuota_inicial_minima": prestamo_data["monto_total"] * 0.10,
+                    "cuota_inicial_minima": prestamo_data["monto_total"]
+                    * 0.10,
                 },
                 "comparacion": {
                     "tasa_original": prestamo_data.get("tasa_interes", 0),
@@ -1070,7 +1178,9 @@ class OptimizadorTasas:
                         prestamo_data, tasa_optimizada, plazo_optimizado
                     ),
                 },
-                "justificacion": OptimizadorTasas._justificar_condiciones(scoring),
+                "justificacion": OptimizadorTasas._justificar_condiciones(
+                    scoring
+                ),
             }
 
         except Exception as e:
@@ -1109,14 +1219,18 @@ class OptimizadorTasas:
 
         # Ajuste por score
         if score >= 800:
-            return min(plazo_base + 12, 84)  # Hasta 7 años para buenos clientes
+            return min(
+                plazo_base + 12, 84
+            )  # Hasta 7 años para buenos clientes
         elif score >= 600:
             return plazo_base  # Plazo estándar
         else:
             return max(plazo_base - 12, 24)  # Plazo reducido para alto riesgo
 
     @staticmethod
-    def _calcular_cuota_optimizada(monto: float, tasa_anual: float, plazo_meses: int) -> float:
+    def _calcular_cuota_optimizada(
+        monto: float, tasa_anual: float, plazo_meses: int
+    ) -> float:
         """Calcular cuota mensual optimizada"""
         try:
             tasa_mensual = tasa_anual / 100 / 12
@@ -1155,7 +1269,9 @@ class ChatbotCobranza:
         Generar mensaje personalizado para cliente
         """
         try:
-            cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+            cliente = (
+                db.query(Cliente).filter(Cliente.id == cliente_id).first()
+            )
             if not cliente:
                 raise ValueError("Cliente no encontrado")
 
@@ -1163,14 +1279,20 @@ class ChatbotCobranza:
             contexto = ChatbotCobranza._obtener_contexto_cliente(cliente, db)
 
             # Generar mensaje según tipo
-            mensaje = ChatbotCobranza._generar_mensaje_por_tipo(tipo_mensaje, contexto, cliente)
+            mensaje = ChatbotCobranza._generar_mensaje_por_tipo(
+                tipo_mensaje, contexto, cliente
+            )
 
             return {
                 "cliente_id": cliente_id,
                 "tipo_mensaje": tipo_mensaje,
                 "mensaje_generado": mensaje,
-                "canal_recomendado": ChatbotCobranza._recomendar_canal(contexto),
-                "momento_optimo": ChatbotCobranza._calcular_momento_optimo(contexto),
+                "canal_recomendado": ChatbotCobranza._recomendar_canal(
+                    contexto
+                ),
+                "momento_optimo": ChatbotCobranza._calcular_momento_optimo(
+                    contexto
+                ),
                 "fecha_generacion": datetime.now().isoformat(),
             }
 
@@ -1202,8 +1324,12 @@ class ChatbotCobranza:
             "vehiculo": cliente.vehiculo_completo,
             "ultima_cuota": {
                 "numero": ultima_cuota.numero_cuota if ultima_cuota else 0,
-                "monto": float(ultima_cuota.monto_cuota) if ultima_cuota else 0,
-                "fecha_vencimiento": ultima_cuota.fecha_vencimiento if ultima_cuota else None,
+                "monto": (
+                    float(ultima_cuota.monto_cuota) if ultima_cuota else 0
+                ),
+                "fecha_vencimiento": (
+                    ultima_cuota.fecha_vencimiento if ultima_cuota else None
+                ),
             },
             "tiene_whatsapp": bool(cliente.telefono),
             "tiene_email": bool(cliente.email),
@@ -1212,7 +1338,9 @@ class ChatbotCobranza:
         }
 
     @staticmethod
-    def _generar_mensaje_por_tipo(tipo: str, contexto: Dict, cliente: Cliente) -> Dict:
+    def _generar_mensaje_por_tipo(
+        tipo: str, contexto: Dict, cliente: Cliente
+    ) -> Dict:
         """Generar mensaje específico por tipo"""
         nombre = contexto["nombre"].split()[0]  # Primer nombre
         vehiculo = contexto["vehiculo"]
@@ -1349,7 +1477,9 @@ class DetectorPatrones:
             anomalias = []
 
             # 1. CLIENTES CON CAMBIO SÚBITO EN COMPORTAMIENTO
-            clientes_cambio = DetectorPatrones._detectar_cambio_comportamiento(db)
+            clientes_cambio = DetectorPatrones._detectar_cambio_comportamiento(
+                db
+            )
             if clientes_cambio:
                 anomalias.append(
                     {
@@ -1362,7 +1492,9 @@ class DetectorPatrones:
                 )
 
             # 2. CONCENTRACIÓN DE MORA POR USER
-            concentracion_mora = DetectorPatrones._detectar_concentracion_mora_analista(db)
+            concentracion_mora = (
+                DetectorPatrones._detectar_concentracion_mora_analista(db)
+            )
             if concentracion_mora:
                 anomalias.append(
                     {
@@ -1374,7 +1506,9 @@ class DetectorPatrones:
                 )
 
             # 3. PATRONES ESTACIONALES
-            patrones_estacionales = DetectorPatrones._detectar_patrones_estacionales(db)
+            patrones_estacionales = (
+                DetectorPatrones._detectar_patrones_estacionales(db)
+            )
             anomalias.append(
                 {
                     "tipo": "PATRONES_ESTACIONALES",
@@ -1433,8 +1567,12 @@ class DetectorPatrones:
             )
 
             if pagos_anteriores and pagos_recientes:
-                mora_anterior = sum(p.dias_mora for p in pagos_anteriores) / len(pagos_anteriores)
-                mora_reciente = sum(p.dias_mora for p in pagos_recientes) / len(pagos_recientes)
+                mora_anterior = sum(
+                    p.dias_mora for p in pagos_anteriores
+                ) / len(pagos_anteriores)
+                mora_reciente = sum(
+                    p.dias_mora for p in pagos_recientes
+                ) / len(pagos_recientes)
 
                 # Si la mora reciente es significativamente mayor
                 if mora_reciente > mora_anterior * 2:
@@ -1445,7 +1583,10 @@ class DetectorPatrones:
                             "mora_anterior": round(mora_anterior, 1),
                             "mora_reciente": round(mora_reciente, 1),
                             "cambio_porcentual": round(
-                                (mora_reciente - mora_anterior) / mora_anterior * 100, 1
+                                (mora_reciente - mora_anterior)
+                                / mora_anterior
+                                * 100,
+                                1,
                             ),
                         }
                     )
@@ -1461,7 +1602,9 @@ class DetectorPatrones:
                 User.id,
                 User.full_name,
                 func.count(Cliente.id).label("total_clientes"),
-                func.sum(func.case([(Cliente.dias_mora > 0, 1)], else_=0)).label("clientes_mora"),
+                func.sum(
+                    func.case([(Cliente.dias_mora > 0, 1)], else_=0)
+                ).label("clientes_mora"),
                 func.avg(Cliente.dias_mora).label("promedio_mora"),
             )
             .join(Cliente, Analista.id == Cliente.analista_id)
@@ -1473,7 +1616,9 @@ class DetectorPatrones:
         resultado = []
         for analista in mora_por_analista:
             if analista.total_clientes > 0:
-                tasa_mora = (analista.clientes_mora / analista.total_clientes) * 100
+                tasa_mora = (
+                    analista.clientes_mora / analista.total_clientes
+                ) * 100
 
                 # Alertar si tasa de mora > 20%
                 if tasa_mora > 20:
@@ -1484,7 +1629,9 @@ class DetectorPatrones:
                             "total_clientes": analista.total_clientes,
                             "clientes_mora": analista.clientes_mora,
                             "tasa_mora": round(tasa_mora, 2),
-                            "promedio_dias_mora": round(float(analista.promedio_mora or 0), 1),
+                            "promedio_dias_mora": round(
+                                float(analista.promedio_mora or 0), 1
+                            ),
                         }
                     )
 
@@ -1499,7 +1646,10 @@ class DetectorPatrones:
         for mes in range(1, 13):
             clientes_mes = (
                 db.query(Cliente)
-                .filter(func.extract("month", Cliente.fecha_registro) == mes, Cliente.activo)
+                .filter(
+                    func.extract("month", Cliente.fecha_registro) == mes,
+                    Cliente.activo,
+                )
                 .all()
             )
 
@@ -1547,7 +1697,9 @@ class AlertasInteligentes:
             alertas = []
 
             # 1. CLIENTES EN RIESGO DE MORA
-            clientes_riesgo = AlertasInteligentes._identificar_clientes_riesgo(db)
+            clientes_riesgo = AlertasInteligentes._identificar_clientes_riesgo(
+                db
+            )
             if clientes_riesgo:
                 alertas.append(
                     {
@@ -1595,7 +1747,9 @@ class AlertasInteligentes:
                 "total_alertas": len(alertas),
                 "alertas": alertas,
                 "nivel_sistema": (
-                    "CRITICO" if any(a["prioridad"] == "ALTA" for a in alertas) else "NORMAL"
+                    "CRITICO"
+                    if any(a["prioridad"] == "ALTA" for a in alertas)
+                    else "NORMAL"
                 ),
             }
 
@@ -1610,35 +1764,51 @@ class AlertasInteligentes:
         clientes_riesgo = []
 
         clientes_al_dia = (
-            db.query(Cliente).filter(Cliente.activo, Cliente.estado_financiero == "AL_DIA").all()
+            db.query(Cliente)
+            .filter(Cliente.activo, Cliente.estado_financiero == "AL_DIA")
+            .all()
         )
 
         for cliente in clientes_al_dia:
             # Calcular probabilidad de mora
-            probabilidad = PrediccionMora.predecir_probabilidad_mora(cliente.id, 7, db)
+            probabilidad = PrediccionMora.predecir_probabilidad_mora(
+                cliente.id, 7, db
+            )
 
-            if probabilidad.get("probabilidad_mora", 0) > 50:  # >50% probabilidad
+            if (
+                probabilidad.get("probabilidad_mora", 0) > 50
+            ):  # >50% probabilidad
                 clientes_riesgo.append(
                     {
                         "cliente_id": cliente.id,
                         "nombre": cliente.nombre_completo,
                         "cedula": cliente.cedula,
                         "probabilidad_mora": probabilidad["probabilidad_mora"],
-                        "factores_riesgo": probabilidad.get("recomendaciones", []),
+                        "factores_riesgo": probabilidad.get(
+                            "recomendaciones", []
+                        ),
                     }
                 )
 
-        return sorted(clientes_riesgo, key=lambda x: x["probabilidad_mora"], reverse=True)[:20]
+        return sorted(
+            clientes_riesgo, key=lambda x: x["probabilidad_mora"], reverse=True
+        )[:20]
 
     @staticmethod
     def _detectar_deterioro_cartera(db: Session) -> Dict:
         """Detectar deterioro en la calidad de la cartera"""
         # Comparar mora actual vs mes anterior
 
-        mora_actual = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).count()
+        mora_actual = (
+            db.query(Cliente)
+            .filter(Cliente.activo, Cliente.dias_mora > 0)
+            .count()
+        )
 
         total_actual = db.query(Cliente).filter(Cliente.activo).count()
-        tasa_actual = (mora_actual / total_actual * 100) if total_actual > 0 else 0
+        tasa_actual = (
+            (mora_actual / total_actual * 100) if total_actual > 0 else 0
+        )
 
         # Simular tasa del mes anterior (en producción sería histórica)
         tasa_anterior = tasa_actual * 0.9  # Placeholder
@@ -1670,7 +1840,9 @@ class AlertasInteligentes:
         oportunidades = []
         for cliente in clientes_excelentes[:20]:  # Top 20
             # Calcular scoring
-            scoring = ScoringCrediticio.calcular_score_completo({"cedula": cliente.cedula}, {}, db)
+            scoring = ScoringCrediticio.calcular_score_completo(
+                {"cedula": cliente.cedula}, {}, db
+            )
 
             if scoring["score_final"] > 800:
                 oportunidades.append(

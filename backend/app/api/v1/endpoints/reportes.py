@@ -29,14 +29,20 @@ from app.models.cliente import Cliente
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.models.user import User
-from app.schemas.reportes import ReporteCartera, ReporteCobranza, ReporteMorosidad
+from app.schemas.reportes import (
+    ReporteCartera,
+    ReporteCobranza,
+    ReporteMorosidad,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.get("/cartera", response_model=ReporteCartera)
-def reporte_cartera(fecha_corte: Optional[date] = None, db: Session = Depends(get_db)):
+def reporte_cartera(
+    fecha_corte: Optional[date] = None, db: Session = Depends(get_db)
+):
     """
     Genera reporte de cartera al día de corte.
     """
@@ -54,13 +60,23 @@ def reporte_cartera(fecha_corte: Optional[date] = None, db: Session = Depends(ge
     ).scalar() or Decimal("0")
 
     # Préstamos activos
-    total_activos = db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.ACTIVO).count()
+    total_activos = (
+        db.query(Prestamo)
+        .filter(Prestamo.estado == EstadoPrestamo.ACTIVO)
+        .count()
+    )
 
     # Préstamos en mora
-    total_mora = db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.EN_MORA).count()
+    total_mora = (
+        db.query(Prestamo)
+        .filter(Prestamo.estado == EstadoPrestamo.EN_MORA)
+        .count()
+    )
 
     # Tasa de morosidad
-    tasa_morosidad = (total_mora / total_activos * 100) if total_activos > 0 else 0
+    tasa_morosidad = (
+        (total_mora / total_activos * 100) if total_activos > 0 else 0
+    )
 
     # Distribución por rango de montos
     distribucion = (
@@ -68,7 +84,11 @@ def reporte_cartera(fecha_corte: Optional[date] = None, db: Session = Depends(ge
             func.count(Prestamo.id).label("cantidad"),
             func.sum(Prestamo.monto_total).label("monto"),
         )
-        .filter(Prestamo.estado.in_([EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA]))
+        .filter(
+            Prestamo.estado.in_(
+                [EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA]
+            )
+        )
         .group_by(
             func.case(
                 (Prestamo.monto_total <= 1000, "Hasta $1,000"),
@@ -89,13 +109,16 @@ def reporte_cartera(fecha_corte: Optional[date] = None, db: Session = Depends(ge
         total_prestamos_mora=total_mora,
         tasa_morosidad=round(tasa_morosidad, 2),
         distribucion_montos=[
-            {"rango": d[0], "cantidad": d[1], "monto": d[2]} for d in distribucion
+            {"rango": d[0], "cantidad": d[1], "monto": d[2]}
+            for d in distribucion
         ],
     )
 
 
 @router.get("/morosidad", response_model=ReporteMorosidad)
-def reporte_morosidad(dias_mora_minimo: int = 1, db: Session = Depends(get_db)):
+def reporte_morosidad(
+    dias_mora_minimo: int = 1, db: Session = Depends(get_db)
+):
     """
     Genera reporte detallado de morosidad.
     """
@@ -126,11 +149,19 @@ def reporte_morosidad(dias_mora_minimo: int = 1, db: Session = Depends(get_db)):
         monto_mora = sum(p.saldo_pendiente for p in prestamos)
 
         detalle_rangos.append(
-            {"rango": rango["nombre"], "cantidad": cantidad, "monto_total": monto_mora}
+            {
+                "rango": rango["nombre"],
+                "cantidad": cantidad,
+                "monto_total": monto_mora,
+            }
         )
 
     # Total general
-    total_mora = db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.EN_MORA).count()
+    total_mora = (
+        db.query(Prestamo)
+        .filter(Prestamo.estado == EstadoPrestamo.EN_MORA)
+        .count()
+    )
 
     monto_total_mora = db.query(func.sum(Prestamo.saldo_pendiente)).filter(
         Prestamo.estado == EstadoPrestamo.EN_MORA
@@ -145,13 +176,17 @@ def reporte_morosidad(dias_mora_minimo: int = 1, db: Session = Depends(get_db)):
 
 
 @router.get("/cobranza", response_model=ReporteCobranza)
-def reporte_cobranza(fecha_inicio: date, fecha_fin: date, db: Session = Depends(get_db)):
+def reporte_cobranza(
+    fecha_inicio: date, fecha_fin: date, db: Session = Depends(get_db)
+):
     """
     Genera reporte de gestión de cobranza.
     """
     # Pagos recibidos en el período
     pagos = (
-        db.query(Pago).filter(Pago.fecha_pago >= fecha_inicio, Pago.fecha_pago <= fecha_fin).all()
+        db.query(Pago)
+        .filter(Pago.fecha_pago >= fecha_inicio, Pago.fecha_pago <= fecha_fin)
+        .all()
     )
 
     total_recaudado = sum(p.monto for p in pagos)
@@ -174,16 +209,23 @@ def reporte_cobranza(fecha_inicio: date, fecha_fin: date, db: Session = Depends(
         Prestamo.estado.in_([EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA])
     ).scalar() or Decimal("0")
 
-    eficiencia = (total_recaudado / total_esperado * 100) if total_esperado > 0 else 0
+    eficiencia = (
+        (total_recaudado / total_esperado * 100) if total_esperado > 0 else 0
+    )
 
     return ReporteCobranza(
         fecha_inicio=fecha_inicio,
         fecha_fin=fecha_fin,
         total_recaudado=total_recaudado,
         cantidad_pagos=cantidad_pagos,
-        promedio_pago=(total_recaudado / cantidad_pagos if cantidad_pagos > 0 else Decimal("0")),
+        promedio_pago=(
+            total_recaudado / cantidad_pagos
+            if cantidad_pagos > 0
+            else Decimal("0")
+        ),
         detalle_por_concepto=[
-            {"concepto": c[0], "cantidad": c[1], "monto": c[2]} for c in por_concepto
+            {"concepto": c[0], "cantidad": c[1], "monto": c[2]}
+            for c in por_concepto
         ],
         eficiencia_cobranza=round(eficiencia, 2),
     )
@@ -191,7 +233,9 @@ def reporte_cobranza(fecha_inicio: date, fecha_fin: date, db: Session = Depends(
 
 def _crear_estilos_excel():
     """Crear estilos para el archivo Excel"""
-    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+    header_fill = PatternFill(
+        start_color="366092", end_color="366092", fill_type="solid"
+    )
     header_font = Font(color="FFFFFF", bold=True)
     return header_fill, header_font
 
@@ -220,29 +264,44 @@ def _crear_reporte_cartera(ws, header_fill, header_font, db):
 
     prestamos = (
         db.query(Prestamo)
-        .filter(Prestamo.estado.in_([EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA]))
+        .filter(
+            Prestamo.estado.in_(
+                [EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA]
+            )
+        )
         .all()
     )
 
     for p in prestamos:
-        ws.append([
-            p.id,
-            f"{p.cliente.nombres} {p.cliente.apellidos}",
-            float(p.monto_total),
-            float(p.saldo_pendiente),
-            p.estado.value,
-            p.dias_mora or 0,
-        ])
+        ws.append(
+            [
+                p.id,
+                f"{p.cliente.nombres} {p.cliente.apellidos}",
+                float(p.monto_total),
+                float(p.saldo_pendiente),
+                p.estado.value,
+                p.dias_mora or 0,
+            ]
+        )
 
 
-def _crear_reporte_pagos(ws, header_fill, header_font, fecha_inicio, fecha_fin, db):
+def _crear_reporte_pagos(
+    ws, header_fill, header_font, fecha_inicio, fecha_fin, db
+):
     """Crear reporte de pagos"""
     ws.title = "Reporte de Pagos"
     ws.append(["Reporte de Pagos", "", "", ""])
     ws.append(["Período:", f"{fecha_inicio} - {fecha_fin}", "", ""])
     ws.append([])
 
-    headers = ["Fecha", "Préstamo ID", "Cliente", "Monto", "Concepto", "Referencia"]
+    headers = [
+        "Fecha",
+        "Préstamo ID",
+        "Cliente",
+        "Monto",
+        "Concepto",
+        "Referencia",
+    ]
     ws.append(headers)
 
     for cell in ws[4]:
@@ -256,14 +315,16 @@ def _crear_reporte_pagos(ws, header_fill, header_font, fecha_inicio, fecha_fin, 
     )
 
     for p in pagos:
-        ws.append([
-            p.fecha_pago.strftime("%d/%m/%Y"),
-            p.prestamo_id,
-            f"{p.prestamo.cliente.nombres} {p.prestamo.cliente.apellidos}",
-            float(p.monto),
-            p.concepto,
-            p.referencia_bancaria or "",
-        ])
+        ws.append(
+            [
+                p.fecha_pago.strftime("%d/%m/%Y"),
+                p.prestamo_id,
+                f"{p.prestamo.cliente.nombres} {p.prestamo.cliente.apellidos}",
+                float(p.monto),
+                p.concepto,
+                p.referencia_bancaria or "",
+            ]
+        )
 
 
 def _ajustar_ancho_columnas(ws):
@@ -319,7 +380,9 @@ async def exportar_excel(
         if tipo_reporte == "cartera":
             _crear_reporte_cartera(ws, header_fill, header_font, db)
         elif tipo_reporte == "pagos":
-            _crear_reporte_pagos(ws, header_fill, header_font, fecha_inicio, fecha_fin, db)
+            _crear_reporte_pagos(
+                ws, header_fill, header_font, fecha_inicio, fecha_fin, db
+            )
 
         # Ajustar ancho de columnas
         _ajustar_ancho_columnas(ws)
@@ -327,16 +390,22 @@ async def exportar_excel(
         # Guardar en memoria
         output = _guardar_excel_en_memoria(wb)
 
-        filename = f"reporte_{tipo_reporte}_{date.today().strftime('%Y%m%d')}.xlsx"
+        filename = (
+            f"reporte_{tipo_reporte}_{date.today().strftime('%Y%m%d')}.xlsx"
+        )
 
         return StreamingResponse(
             output,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f"attachment; filename={filename}"},
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            },
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generando Excel: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error generando Excel: {str(e)}"
+        )
 
 
 @router.get("/clientes-top")
@@ -374,7 +443,9 @@ def clientes_top(limite: int = 10, db: Session = Depends(get_db)):
 
 
 @router.get("/estado-cuenta/{cliente_id}/pdf")
-async def generar_estado_cuenta_pdf(cliente_id: int, db: Session = Depends(get_db)):
+async def generar_estado_cuenta_pdf(
+    cliente_id: int, db: Session = Depends(get_db)
+):
     """
     1. Estado de cuenta por cliente (PDF)
     - Datos del cliente
@@ -387,7 +458,9 @@ async def generar_estado_cuenta_pdf(cliente_id: int, db: Session = Depends(get_d
         # Obtener datos del cliente
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
         if not cliente:
-            raise HTTPException(status_code=404, detail="Cliente no encontrado")
+            raise HTTPException(
+                status_code=404, detail="Cliente no encontrado"
+            )
 
         # Crear PDF en memoria
         buffer = io.BytesIO()
@@ -417,7 +490,11 @@ async def generar_estado_cuenta_pdf(cliente_id: int, db: Session = Depends(get_d
             y_pos - 30,
             f"Total Financiado: ${float(resumen['total_financiado']):,.2f}",
         )
-        p.drawString(50, y_pos - 50, f"Total Pagado: ${float(resumen['total_pagado']):,.2f}")
+        p.drawString(
+            50,
+            y_pos - 50,
+            f"Total Pagado: ${float(resumen['total_pagado']):,.2f}",
+        )
         p.drawString(
             50,
             y_pos - 70,
@@ -428,7 +505,9 @@ async def generar_estado_cuenta_pdf(cliente_id: int, db: Session = Depends(get_d
             y_pos - 90,
             f"Cuotas: {resumen['cuotas_pagadas']} / {resumen['cuotas_totales']}",
         )
-        p.drawString(50, y_pos - 110, f"% Avance: {resumen['porcentaje_avance']}%")
+        p.drawString(
+            50, y_pos - 110, f"% Avance: {resumen['porcentaje_avance']}%"
+        )
 
         p.showPage()
         p.save()
@@ -444,11 +523,15 @@ async def generar_estado_cuenta_pdf(cliente_id: int, db: Session = Depends(get_d
         )
 
     except ImportError:
-        raise HTTPException(status_code=500, detail="reportlab no está instalado")
+        raise HTTPException(
+            status_code=500, detail="reportlab no está instalado"
+        )
 
 
 @router.get("/tabla-amortizacion/{cliente_id}/pdf")
-async def generar_tabla_amortizacion_pdf(cliente_id: int, db: Session = Depends(get_db)):
+async def generar_tabla_amortizacion_pdf(
+    cliente_id: int, db: Session = Depends(get_db)
+):
     """
     2. Tabla de amortización por cliente (PDF)
     - Plan de pagos completo
@@ -471,13 +554,21 @@ async def generar_tabla_amortizacion_pdf(cliente_id: int, db: Session = Depends(
         # Obtener cliente y sus cuotas
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
         if not cliente:
-            raise HTTPException(status_code=404, detail="Cliente no encontrado")
+            raise HTTPException(
+                status_code=404, detail="Cliente no encontrado"
+            )
 
         # Obtener préstamo y cuotas
 
-        prestamo = db.query(Prestamo).filter(Prestamo.cliente_id == cliente_id).first()
+        prestamo = (
+            db.query(Prestamo)
+            .filter(Prestamo.cliente_id == cliente_id)
+            .first()
+        )
         if not prestamo:
-            raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+            raise HTTPException(
+                status_code=404, detail="Préstamo no encontrado"
+            )
 
         cuotas = (
             db.query(Cuota)
@@ -513,7 +604,17 @@ async def generar_tabla_amortizacion_pdf(cliente_id: int, db: Session = Depends(
         story.append(Spacer(1, 20))
 
         # Tabla de cuotas
-        data = [["#", "Fecha Venc.", "Capital", "Interés", "Cuota", "Saldo", "Estado"]]
+        data = [
+            [
+                "#",
+                "Fecha Venc.",
+                "Capital",
+                "Interés",
+                "Cuota",
+                "Saldo",
+                "Estado",
+            ]
+        ]
 
         for cuota in cuotas:
             estado_emoji = {
@@ -564,12 +665,16 @@ async def generar_tabla_amortizacion_pdf(cliente_id: int, db: Session = Depends(
         )
 
     except ImportError:
-        raise HTTPException(status_code=500, detail="reportlab no está instalado")
+        raise HTTPException(
+            status_code=500, detail="reportlab no está instalado"
+        )
 
 
 @router.get("/cobranza-diaria/pdf")
 async def reporte_cobranza_diaria_pdf(
-    fecha: Optional[date] = Query(None, description="Fecha del reporte (default: hoy)"),
+    fecha: Optional[date] = Query(
+        None, description="Fecha del reporte (default: hoy)"
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -596,7 +701,10 @@ async def reporte_cobranza_diaria_pdf(
         .select_from(Cuota)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .filter(Cuota.fecha_vencimiento == fecha, Cuota.estado.in_(["PENDIENTE", "PARCIAL"]))
+        .filter(
+            Cuota.fecha_vencimiento == fecha,
+            Cuota.estado.in_(["PENDIENTE", "PARCIAL"]),
+        )
         .all()
     )
 
@@ -626,7 +734,9 @@ async def reporte_cobranza_diaria_pdf(
         "resumen": {
             "total_cobrado": sum(float(p.monto_pagado) for p in pagos_hoy),
             "total_vencimientos": len(vencimientos_hoy),
-            "monto_vencimientos": sum(float(c.monto_cuota) for c in vencimientos_hoy),
+            "monto_vencimientos": sum(
+                float(c.monto_cuota) for c in vencimientos_hoy
+            ),
         },
     }
 
@@ -636,14 +746,22 @@ def generar_reporte_personalizado(
     # Filtros
     fecha_inicio: Optional[date] = Query(None),
     fecha_fin: Optional[date] = Query(None),
-    cliente_ids: Optional[str] = Query(None, description="IDs separados por coma"),
+    cliente_ids: Optional[str] = Query(
+        None, description="IDs separados por coma"
+    ),
     asesor_ids: Optional[str] = Query(
         None, description="IDs de asesores de configuración separados por coma"
     ),
-    concesionarios: Optional[str] = Query(None, description="Nombres separados por coma"),
-    modelos: Optional[str] = Query(None, description="Modelos separados por coma"),
+    concesionarios: Optional[str] = Query(
+        None, description="Nombres separados por coma"
+    ),
+    modelos: Optional[str] = Query(
+        None, description="Modelos separados por coma"
+    ),
     estado: Optional[str] = Query(None, description="AL_DIA, MORA, TODOS"),
-    modalidad: Optional[str] = Query(None, description="SEMANAL, QUINCENAL, MENSUAL"),
+    modalidad: Optional[str] = Query(
+        None, description="SEMANAL, QUINCENAL, MENSUAL"
+    ),
     # Columnas a incluir
     incluir_datos_personales: bool = Query(True),
     incluir_datos_vehiculo: bool = Query(True),
@@ -818,10 +936,14 @@ async def reporte_mensual_cartera_pdf(
         # KPIs principales
         total_clientes = db.query(Cliente).filter(Cliente.activo).count()
         clientes_al_dia = (
-            db.query(Cliente).filter(Cliente.activo, Cliente.estado_financiero == "AL_DIA").count()
+            db.query(Cliente)
+            .filter(Cliente.activo, Cliente.estado_financiero == "AL_DIA")
+            .count()
         )
         clientes_mora = (
-            db.query(Cliente).filter(Cliente.activo, Cliente.estado_financiero == "EN_MORA").count()
+            db.query(Cliente)
+            .filter(Cliente.activo, Cliente.estado_financiero == "EN_MORA")
+            .count()
         )
 
         # Pagos del mes
@@ -844,7 +966,8 @@ async def reporte_mensual_cartera_pdf(
 
         # Título
         title = Paragraph(
-            f"<b>REPORTE MENSUAL DE CARTERA</b><br/>{mes:02d}/{anio}", styles["Title"]
+            f"<b>REPORTE MENSUAL DE CARTERA</b><br/>{mes:02d}/{anio}",
+            styles["Title"],
         )
         story.append(title)
         story.append(Spacer(1, 30))
@@ -856,12 +979,20 @@ async def reporte_mensual_cartera_pdf(
             [
                 "Clientes al Día",
                 f"{clientes_al_dia:,}",
-                (f"{(clientes_al_dia/total_clientes*100):.1f}%" if total_clientes > 0 else "0%"),
+                (
+                    f"{(clientes_al_dia/total_clientes*100):.1f}%"
+                    if total_clientes > 0
+                    else "0%"
+                ),
             ],
             [
                 "Clientes en Mora",
                 f"{clientes_mora:,}",
-                (f"{(clientes_mora/total_clientes*100):.1f}%" if total_clientes > 0 else "0%"),
+                (
+                    f"{(clientes_mora/total_clientes*100):.1f}%"
+                    if total_clientes > 0
+                    else "0%"
+                ),
             ],
             ["Total Cobrado", f"${float(pagos_mes):,.2f}", "-"],
         ]
@@ -892,7 +1023,11 @@ async def reporte_mensual_cartera_pdf(
             [
                 "0 días (Al día)",
                 str(clientes_al_dia),
-                (f"{(clientes_al_dia/total_clientes*100):.1f}%" if total_clientes > 0 else "0%"),
+                (
+                    f"{(clientes_al_dia/total_clientes*100):.1f}%"
+                    if total_clientes > 0
+                    else "0%"
+                ),
             ],
             ["1-30 días", "0", "0%"],  # Placeholder - calcular real
             ["31-60 días", "0", "0%"],  # Placeholder - calcular real
@@ -927,7 +1062,9 @@ async def reporte_mensual_cartera_pdf(
         )
 
     except ImportError:
-        raise HTTPException(status_code=500, detail="reportlab no está instalado")
+        raise HTTPException(
+            status_code=500, detail="reportlab no está instalado"
+        )
 
 
 @router.get("/asesor/{asesor_id}/pdf")
@@ -963,7 +1100,9 @@ async def reporte_asesor_pdf(
 
         asesor = db.query(Analista).filter(Analista.id == asesor_id).first()
         if not asesor:
-            raise HTTPException(status_code=404, detail="Analista no encontrado")
+            raise HTTPException(
+                status_code=404, detail="Analista no encontrado"
+            )
 
         # Establecer período por defecto
         if not fecha_inicio:
@@ -973,7 +1112,9 @@ async def reporte_asesor_pdf(
 
         # Obtener clientes del asesor
         clientes_asesor = (
-            db.query(Cliente).filter(Cliente.asesor_id == asesor_id, Cliente.activo).all()
+            db.query(Cliente)
+            .filter(Cliente.asesor_id == asesor_id, Cliente.activo)
+            .all()
         )
 
         # Ventas del período
@@ -988,11 +1129,17 @@ async def reporte_asesor_pdf(
         )
 
         # Monto total de cartera
-        monto_cartera = sum(float(c.total_financiamiento or 0) for c in clientes_asesor)
+        monto_cartera = sum(
+            float(c.total_financiamiento or 0) for c in clientes_asesor
+        )
 
         # Estado de cobranza
-        clientes_al_dia = len([c for c in clientes_asesor if c.estado_financiero == "AL_DIA"])
-        clientes_mora = len([c for c in clientes_asesor if c.estado_financiero == "EN_MORA"])
+        clientes_al_dia = len(
+            [c for c in clientes_asesor if c.estado_financiero == "AL_DIA"]
+        )
+        clientes_mora = len(
+            [c for c in clientes_asesor if c.estado_financiero == "EN_MORA"]
+        )
 
         # Crear PDF
         buffer = io.BytesIO()
@@ -1001,7 +1148,9 @@ async def reporte_asesor_pdf(
         story = []
 
         # Título
-        title = Paragraph(f"<b>REPORTE DE USER</b><br/>{asesor.full_name}", styles["Title"])
+        title = Paragraph(
+            f"<b>REPORTE DE USER</b><br/>{asesor.full_name}", styles["Title"]
+        )
         story.append(title)
         story.append(Spacer(1, 30))
 
@@ -1055,13 +1204,17 @@ async def reporte_asesor_pdf(
             )
         )
 
-        story.append(Paragraph("<b>Resumen de Cartera</b>", styles["Heading2"]))
+        story.append(
+            Paragraph("<b>Resumen de Cartera</b>", styles["Heading2"])
+        )
         story.append(resumen_table)
         story.append(Spacer(1, 30))
 
         # Lista de clientes (primeros 20)
         if clientes_asesor:
-            clientes_data = [["Cliente", "Cédula", "Vehículo", "Estado", "Monto"]]
+            clientes_data = [
+                ["Cliente", "Cédula", "Vehículo", "Estado", "Monto"]
+            ]
 
             for cliente in clientes_asesor[:20]:  # Limitar a 20 para el PDF
                 clientes_data.append(
@@ -1090,7 +1243,11 @@ async def reporte_asesor_pdf(
                 )
             )
 
-            story.append(Paragraph("<b>Clientes Asignados (Top 20)</b>", styles["Heading2"]))
+            story.append(
+                Paragraph(
+                    "<b>Clientes Asignados (Top 20)</b>", styles["Heading2"]
+                )
+            )
             story.append(clientes_table)
 
         doc.build(story)
@@ -1107,7 +1264,9 @@ async def reporte_asesor_pdf(
         )
 
     except ImportError:
-        raise HTTPException(status_code=500, detail="reportlab no está instalado")
+        raise HTTPException(
+            status_code=500, detail="reportlab no está instalado"
+        )
 
 
 # ============================================

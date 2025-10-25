@@ -36,7 +36,11 @@ def _extraer_token_del_header(request: Request) -> tuple[str, dict]:
             "status": "error",
             "error": "Invalid Authorization header format",
             "expected_format": "Bearer <token>",
-            "received": auth_header[:20] + "..." if len(auth_header) > 20 else auth_header,
+            "received": (
+                auth_header[:20] + "..."
+                if len(auth_header) > 20
+                else auth_header
+            ),
         }
 
     return auth_header.split(" ")[1], None
@@ -69,7 +73,9 @@ def _decodificar_token_sin_verificar(token: str) -> tuple[dict, dict]:
     """Decodificar token sin verificar firma para análisis"""
     try:
         header_decoded = jwt.get_unverified_header(token)
-        payload_decoded = jwt.decode(token, options={"verify_signature": False})
+        payload_decoded = jwt.decode(
+            token, options={"verify_signature": False}
+        )
 
         token_analysis = {
             "header": header_decoded,
@@ -101,7 +107,9 @@ def _verificar_expiracion_token(payload_decoded: dict) -> dict:
             "exp_datetime": exp_datetime.isoformat(),
             "is_expired": is_expired,
             "time_until_expiry": (
-                str(exp_datetime - datetime.now()) if not is_expired else "EXPIRED"
+                str(exp_datetime - datetime.now())
+                if not is_expired
+                else "EXPIRED"
             ),
         }
     else:
@@ -165,18 +173,24 @@ def _verificar_usuario_en_bd(verification_result: dict, db: Session) -> dict:
         return {"status": "error", "error": str(e)}
 
 
-def _generar_recomendaciones(verification_result: dict, token_analysis: dict, user_verification: dict) -> list:
+def _generar_recomendaciones(
+    verification_result: dict, token_analysis: dict, user_verification: dict
+) -> list:
     """Generar recomendaciones basadas en el análisis"""
     recommendations = []
 
     if not verification_result.get("verified"):
-        recommendations.append("🔐 Token no válido - Verificar SECRET_KEY o regenerar token")
+        recommendations.append(
+            "🔐 Token no válido - Verificar SECRET_KEY o regenerar token"
+        )
 
     if token_analysis.get("expiration", {}).get("is_expired"):
         recommendations.append("⏰ Token expirado - Hacer login nuevamente")
 
     if not user_verification.get("user_found"):
-        recommendations.append("👤 Usuario no encontrado en BD - Verificar datos de usuario")
+        recommendations.append(
+            "👤 Usuario no encontrado en BD - Verificar datos de usuario"
+        )
 
     if not user_verification.get("user_active"):
         recommendations.append("⚠️ Usuario inactivo - Contactar administrador")
@@ -188,7 +202,9 @@ def _generar_recomendaciones(verification_result: dict, token_analysis: dict, us
 
 
 @router.post("/verify-token")
-async def verificar_token_detallado(request: Request, db: Session = Depends(get_db)):
+async def verificar_token_detallado(
+    request: Request, db: Session = Depends(get_db)
+):
     """
     🔍 Verificación detallada de token JWT (VERSIÓN REFACTORIZADA)
     Analiza token sin requerir autenticación previa
@@ -205,14 +221,18 @@ async def verificar_token_detallado(request: Request, db: Session = Depends(get_
             return error_response
 
         # 3. Decodificar token sin verificar
-        decoded_analysis, error_response = _decodificar_token_sin_verificar(token)
+        decoded_analysis, error_response = _decodificar_token_sin_verificar(
+            token
+        )
         if error_response:
             return error_response
 
         token_analysis.update(decoded_analysis)
 
         # 4. Verificar expiración
-        token_analysis["expiration"] = _verificar_expiracion_token(token_analysis["payload"])
+        token_analysis["expiration"] = _verificar_expiracion_token(
+            token_analysis["payload"]
+        )
 
         # 5. Verificar con SECRET_KEY real
         verification_result = _verificar_token_con_secret(token)
@@ -221,7 +241,9 @@ async def verificar_token_detallado(request: Request, db: Session = Depends(get_
         user_verification = _verificar_usuario_en_bd(verification_result, db)
 
         # 7. Generar recomendaciones
-        recommendations = _generar_recomendaciones(verification_result, token_analysis, user_verification)
+        recommendations = _generar_recomendaciones(
+            verification_result, token_analysis, user_verification
+        )
 
         return {
             "timestamp": datetime.now().isoformat(),
@@ -232,7 +254,8 @@ async def verificar_token_detallado(request: Request, db: Session = Depends(get_
             "recommendations": recommendations,
             "overall_status": (
                 "valid"
-                if verification_result.get("verified") and user_verification.get("user_found")
+                if verification_result.get("verified")
+                and user_verification.get("user_found")
                 else "invalid"
             ),
         }

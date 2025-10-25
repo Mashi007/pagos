@@ -34,7 +34,9 @@ class Aprobacion(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     # Estado - Valores posibles: PENDIENTE, APROBADA, RECHAZADA, CANCELADA
-    estado = Column(String(20), nullable=False, default="PENDIENTE", index=True)
+    estado = Column(
+        String(20), nullable=False, default="PENDIENTE", index=True
+    )
 
     # Solicitante y revisor
     solicitante_id = Column(
@@ -55,7 +57,9 @@ class Aprobacion(Base):
         String(50), nullable=False, index=True
     )  # PRESTAMO, MODIFICACION_MONTO, ANULACION, etc.
 
-    entidad = Column(String(50), nullable=False)  # Cliente, Prestamo, Pago, etc.
+    entidad = Column(
+        String(50), nullable=False
+    )  # Cliente, Prestamo, Pago, etc.
     entidad_id = Column(Integer, nullable=False, index=True)
 
     # Justificación y comentarios
@@ -66,23 +70,37 @@ class Aprobacion(Base):
     datos_solicitados = Column(Text, nullable=True)
 
     # Fechas
-    fecha_solicitud = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    fecha_solicitud = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     fecha_revision = Column(DateTime(timezone=True), nullable=True)
 
     # NUEVOS CAMPOS PARA SISTEMA COMPLETO DE APROBACIONES
-    archivo_evidencia = Column(String(255), nullable=True)  # Path del archivo adjunto
+    archivo_evidencia = Column(
+        String(255), nullable=True
+    )  # Path del archivo adjunto
     tipo_archivo = Column(String(50), nullable=True)  # PDF, IMG, DOC, etc.
     tamaño_archivo = Column(Integer, nullable=True)  # Tamaño en bytes
-    prioridad = Column(String(20), default="NORMAL")  # BAJA, NORMAL, ALTA, URGENTE
+    prioridad = Column(
+        String(20), default="NORMAL"
+    )  # BAJA, NORMAL, ALTA, URGENTE
     fecha_limite = Column(Date, nullable=True)  # Fecha límite para respuesta
-    notificado_admin = Column(Boolean, default=False)  # Si ya se notificó al admin
-    notificado_solicitante = Column(Boolean, default=False)  # Si ya se notificó resultado
-    bloqueado_temporalmente = Column(Boolean, default=True)  # Si está bloqueado el registro
+    notificado_admin = Column(
+        Boolean, default=False
+    )  # Si ya se notificó al admin
+    notificado_solicitante = Column(
+        Boolean, default=False
+    )  # Si ya se notificó resultado
+    bloqueado_temporalmente = Column(
+        Boolean, default=True
+    )  # Si está bloqueado el registro
 
     # Campos de seguimiento
     visto_por_admin = Column(Boolean, default=False)
     fecha_visto = Column(DateTime(timezone=True), nullable=True)
-    tiempo_respuesta_horas = Column(Integer, nullable=True)  # Tiempo que tomó responder
+    tiempo_respuesta_horas = Column(
+        Integer, nullable=True
+    )  # Tiempo que tomó responder
 
     # Auditoría
     creado_en = Column(DateTime(timezone=True), server_default=func.now())
@@ -90,10 +108,14 @@ class Aprobacion(Base):
 
     # Relaciones
     solicitante = relationship(
-        "User", foreign_keys=[solicitante_id], back_populates="aprobaciones_solicitadas"
+        "User",
+        foreign_keys=[solicitante_id],
+        back_populates="aprobaciones_solicitadas",
     )
     revisor = relationship(
-        "User", foreign_keys=[revisor_id], back_populates="aprobaciones_revisadas"
+        "User",
+        foreign_keys=[revisor_id],
+        back_populates="aprobaciones_revisadas",
     )
 
     def __repr__(self):
@@ -184,4 +206,8 @@ class Aprobacion(Base):
     @property
     def requiere_atencion_urgente(self) -> bool:
         """Si requiere atención urgente"""
-        return self.prioridad == "URGENTE" or self.esta_vencida or self.dias_pendiente > 2
+        return (
+            self.prioridad == "URGENTE"
+            or self.esta_vencida
+            or self.dias_pendiente > 2
+        )

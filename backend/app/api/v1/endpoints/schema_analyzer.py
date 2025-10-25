@@ -31,7 +31,13 @@ class DatabaseSchemaAnalyzer:
         self.model_vs_schema_analysis = {}
         self.critical_tables = ["analistas", "clientes", "users", "usuarios"]
         self.expected_columns = {
-            "analistas": ["id", "nombre", "activo", "created_at", "updated_at"],
+            "analistas": [
+                "id",
+                "nombre",
+                "activo",
+                "created_at",
+                "updated_at",
+            ],
             "clientes": [
                 "id",
                 "cedula",
@@ -43,7 +49,13 @@ class DatabaseSchemaAnalyzer:
                 "fecha_registro",
             ],
             "users": ["id", "email", "is_active", "created_at", "updated_at"],
-            "usuarios": ["id", "email", "is_active", "created_at", "updated_at"],
+            "usuarios": [
+                "id",
+                "email",
+                "is_active",
+                "created_at",
+                "updated_at",
+            ],
         }
         self.lock = threading.Lock()
 
@@ -62,11 +74,15 @@ class DatabaseSchemaAnalyzer:
                 analysis["schema_analysis"][table] = table_analysis
 
                 if table_analysis["critical_issues"]:
-                    analysis["critical_issues"].extend(table_analysis["critical_issues"])
+                    analysis["critical_issues"].extend(
+                        table_analysis["critical_issues"]
+                    )
 
             return analysis
 
-    def _analyze_table_schema(self, db: Session, table_name: str) -> Dict[str, Any]:
+    def _analyze_table_schema(
+        self, db: Session, table_name: str
+    ) -> Dict[str, Any]:
         """Analizar esquema específico de una tabla"""
         try:
             # Obtener columnas reales de la BD
@@ -82,8 +98,12 @@ class DatabaseSchemaAnalyzer:
 
             # Comparar con columnas esperadas
             expected = self.expected_columns.get(table_name, [])
-            missing_columns = [col for col in expected if col not in real_columns]
-            extra_columns = [col for col in real_columns if col not in expected]
+            missing_columns = [
+                col for col in expected if col not in real_columns
+            ]
+            extra_columns = [
+                col for col in real_columns if col not in expected
+            ]
 
             critical_issues = []
             if missing_columns:
@@ -119,11 +139,15 @@ class DatabaseSchemaAnalyzer:
             }
 
         except Exception as e:
-            logger.error(f"Error analizando esquema de tabla {table_name}: {e}")
+            logger.error(
+                f"Error analizando esquema de tabla {table_name}: {e}"
+            )
             return {
                 "table_name": table_name,
                 "error": str(e),
-                "critical_issues": [{"type": "analysis_error", "error": str(e)}],
+                "critical_issues": [
+                    {"type": "analysis_error", "error": str(e)}
+                ],
             }
 
     def generate_schema_fixes(self, db: Session) -> Dict[str, Any]:
@@ -175,7 +199,9 @@ class DatabaseSchemaAnalyzer:
                     """
 
                     result = db.execute(query, (table,))
-                    current_state[table] = [row[0] for row in result.fetchall()]
+                    current_state[table] = [
+                        row[0] for row in result.fetchall()
+                    ]
 
                 except Exception as e:
                     current_state[table] = {"error": str(e)}
@@ -197,7 +223,8 @@ schema_analyzer = DatabaseSchemaAnalyzer()
 
 @router.get("/schema-inconsistencies")
 async def get_schema_inconsistencies(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     🔍 Analizar inconsistencias específicas del esquema de BD
@@ -222,7 +249,8 @@ async def get_schema_inconsistencies(
 
 @router.get("/schema-fixes")
 async def get_schema_fixes(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     🔧 Generar fixes específicos para el esquema
@@ -247,7 +275,8 @@ async def get_schema_fixes(
 
 @router.get("/schema-monitoring")
 async def get_schema_monitoring(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     📊 Monitorear estado actual del esquema

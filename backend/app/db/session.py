@@ -70,7 +70,11 @@ def get_db():
 
         # Verificar si es un error de autenticación HTTP
         error_str = str(e)
-        auth_errors = ["401", "Not authenticated", "Email o contraseña incorrectos"]
+        auth_errors = [
+            "401",
+            "Not authenticated",
+            "Email o contraseña incorrectos",
+        ]
         if any(auth_error in error_str for auth_error in auth_errors):
             # Re-lanzar errores de autenticación sin modificar
             raise e

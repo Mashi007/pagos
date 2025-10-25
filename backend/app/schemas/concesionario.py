@@ -5,7 +5,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ConcesionarioBase(BaseModel):
-    nombre: str = Field(..., min_length=2, max_length=255, description="Nombre del concesionario")
+    nombre: str = Field(
+        ...,
+        min_length=2,
+        max_length=255,
+        description="Nombre del concesionario",
+    )
     activo: bool = Field(True, description="Estado activo del concesionario")
 
 

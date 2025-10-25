@@ -31,8 +31,12 @@ class TemporalAnalysisSystem:
 
     def __init__(self):
         self.timing_events = deque(maxlen=10000)  # Eventos de timing
-        self.clock_sync_data = deque(maxlen=1000)  # Datos de sincronización de reloj
-        self.token_lifecycle_data = deque(maxlen=5000)  # Datos de ciclo de vida de tokens
+        self.clock_sync_data = deque(
+            maxlen=1000
+        )  # Datos de sincronización de reloj
+        self.token_lifecycle_data = deque(
+            maxlen=5000
+        )  # Datos de ciclo de vida de tokens
         self.timing_correlations = {}  # Correlaciones temporales
         self.lock = threading.Lock()
 
@@ -67,7 +71,9 @@ class TemporalAnalysisSystem:
                 "system_time": time.time(),
                 "datetime_now": current_time.isoformat(),
                 "timezone_offset": (
-                    current_time.utcoffset().total_seconds() if current_time.utcoffset() else 0
+                    current_time.utcoffset().total_seconds()
+                    if current_time.utcoffset()
+                    else 0
                 ),
             }
             self.clock_sync_data.append(clock_data)
@@ -75,10 +81,14 @@ class TemporalAnalysisSystem:
             # Verificar desviación de tiempo
             if len(self.clock_sync_data) >= 2:
                 prev_data = self.clock_sync_data[-2]
-                time_diff = (current_time - prev_data["timestamp"]).total_seconds()
+                time_diff = (
+                    current_time - prev_data["timestamp"]
+                ).total_seconds()
                 expected_diff = 60.0  # Esperamos 60 segundos
 
-                if abs(time_diff - expected_diff) > 5:  # Más de 5 segundos de desviación
+                if (
+                    abs(time_diff - expected_diff) > 5
+                ):  # Más de 5 segundos de desviación
                     logger.warning(
                         f"⚠️ Desviación de tiempo detectada: {time_diff - expected_diff:.2f} segundos"
                     )
@@ -90,7 +100,9 @@ class TemporalAnalysisSystem:
                 return
 
             # Analizar patrones de timing en eventos recientes
-            recent_events = list(self.timing_events)[-100:]  # Últimos 100 eventos
+            recent_events = list(self.timing_events)[
+                -100:
+            ]  # Últimos 100 eventos
 
             # Agrupar por tipo de evento
             event_timings = defaultdict(list)
@@ -105,10 +117,16 @@ class TemporalAnalysisSystem:
                         "avg_duration_ms": statistics.mean(
                             [t.get("duration_ms", 0) for t in timings]
                         ),
-                        "min_duration_ms": min([t.get("duration_ms", 0) for t in timings]),
-                        "max_duration_ms": max([t.get("duration_ms", 0) for t in timings]),
+                        "min_duration_ms": min(
+                            [t.get("duration_ms", 0) for t in timings]
+                        ),
+                        "max_duration_ms": max(
+                            [t.get("duration_ms", 0) for t in timings]
+                        ),
                         "std_deviation_ms": (
-                            statistics.stdev([t.get("duration_ms", 0) for t in timings])
+                            statistics.stdev(
+                                [t.get("duration_ms", 0) for t in timings]
+                            )
                             if len(timings) > 1
                             else 0
                         ),
@@ -132,12 +150,16 @@ class TemporalAnalysisSystem:
                         "type": "slow_event",
                         "event_type": event_type,
                         "avg_duration_ms": avg_duration,
-                        "severity": "high" if avg_duration > 10000 else "medium",
+                        "severity": (
+                            "high" if avg_duration > 10000 else "medium"
+                        ),
                     }
                 )
 
             # Detectar alta variabilidad en timing
-            if std_deviation > avg_duration * 0.5:  # Desviación > 50% del promedio
+            if (
+                std_deviation > avg_duration * 0.5
+            ):  # Desviación > 50% del promedio
                 anomalies.append(
                     {
                         "type": "high_variability",
@@ -149,9 +171,13 @@ class TemporalAnalysisSystem:
                 )
 
         if anomalies:
-            logger.warning(f"🚨 Anomalías temporales detectadas: {len(anomalies)}")
+            logger.warning(
+                f"🚨 Anomalías temporales detectadas: {len(anomalies)}"
+            )
             for anomaly in anomalies:
-                logger.warning(f"   - {anomaly['type']}: {anomaly['event_type']}")
+                logger.warning(
+                    f"   - {anomaly['type']}: {anomaly['event_type']}"
+                )
 
     def log_timing_event(
         self,
@@ -183,22 +209,40 @@ class TemporalAnalysisSystem:
             current_time = datetime.now()
 
             # Calcular tiempos
-            issued_time = datetime.fromtimestamp(iat_timestamp) if iat_timestamp else None
-            expires_time = datetime.fromtimestamp(exp_timestamp) if exp_timestamp else None
+            issued_time = (
+                datetime.fromtimestamp(iat_timestamp)
+                if iat_timestamp
+                else None
+            )
+            expires_time = (
+                datetime.fromtimestamp(exp_timestamp)
+                if exp_timestamp
+                else None
+            )
 
             # Análisis temporal
             timing_analysis = {
                 "token_timing": {
-                    "issued_at": issued_time.isoformat() if issued_time else None,
-                    "expires_at": expires_time.isoformat() if expires_time else None,
+                    "issued_at": (
+                        issued_time.isoformat() if issued_time else None
+                    ),
+                    "expires_at": (
+                        expires_time.isoformat() if expires_time else None
+                    ),
                     "current_time": current_time.isoformat(),
                     "age_seconds": (
-                        (current_time - issued_time).total_seconds() if issued_time else None
+                        (current_time - issued_time).total_seconds()
+                        if issued_time
+                        else None
                     ),
                     "time_to_expiry_seconds": (
-                        (expires_time - current_time).total_seconds() if expires_time else None
+                        (expires_time - current_time).total_seconds()
+                        if expires_time
+                        else None
                     ),
-                    "is_expired": expires_time < current_time if expires_time else None,
+                    "is_expired": (
+                        expires_time < current_time if expires_time else None
+                    ),
                 },
                 "timing_issues": [],
                 "recommendations": [],
@@ -223,7 +267,10 @@ class TemporalAnalysisSystem:
                     }
                 )
 
-            if expires_time and (expires_time - current_time).total_seconds() < 300:
+            if (
+                expires_time
+                and (expires_time - current_time).total_seconds() < 300
+            ):
                 timing_analysis["timing_issues"].append(
                     {
                         "issue": "token_expiring_soon",
@@ -234,9 +281,13 @@ class TemporalAnalysisSystem:
 
             # Generar recomendaciones
             if timing_analysis["timing_issues"]:
-                timing_analysis["recommendations"].append("🔄 Renovar token inmediatamente")
+                timing_analysis["recommendations"].append(
+                    "🔄 Renovar token inmediatamente"
+                )
             else:
-                timing_analysis["recommendations"].append("✅ Timing del token es correcto")
+                timing_analysis["recommendations"].append(
+                    "✅ Timing del token es correcto"
+                )
 
             return timing_analysis
 
@@ -260,7 +311,9 @@ class TemporalAnalysisSystem:
             if len(self.clock_sync_data) < 2:
                 return {"error": "Datos de sincronización insuficientes"}
 
-            recent_data = list(self.clock_sync_data)[-10:]  # Últimos 10 registros
+            recent_data = list(self.clock_sync_data)[
+                -10:
+            ]  # Últimos 10 registros
 
             # Calcular desviaciones de tiempo
             time_diffs = []
@@ -274,9 +327,15 @@ class TemporalAnalysisSystem:
             sync_analysis = {
                 "clock_sync_status": "unknown",
                 "time_differences": time_diffs,
-                "avg_time_diff": statistics.mean(time_diffs) if time_diffs else 0,
-                "time_diff_std": statistics.stdev(time_diffs) if len(time_diffs) > 1 else 0,
-                "max_deviation": max(time_diffs) - min(time_diffs) if time_diffs else 0,
+                "avg_time_diff": (
+                    statistics.mean(time_diffs) if time_diffs else 0
+                ),
+                "time_diff_std": (
+                    statistics.stdev(time_diffs) if len(time_diffs) > 1 else 0
+                ),
+                "max_deviation": (
+                    max(time_diffs) - min(time_diffs) if time_diffs else 0
+                ),
                 "sync_issues": [],
                 "recommendations": [],
             }
@@ -313,11 +372,17 @@ class TemporalAnalysisSystem:
 
             # Generar recomendaciones
             if sync_analysis["clock_sync_status"] == "poor":
-                sync_analysis["recommendations"].append("🔧 Sincronizar reloj del sistema")
+                sync_analysis["recommendations"].append(
+                    "🔧 Sincronizar reloj del sistema"
+                )
             elif sync_analysis["clock_sync_status"] == "degraded":
-                sync_analysis["recommendations"].append("⚠️ Monitorear sincronización de reloj")
+                sync_analysis["recommendations"].append(
+                    "⚠️ Monitorear sincronización de reloj"
+                )
             else:
-                sync_analysis["recommendations"].append("✅ Sincronización de reloj correcta")
+                sync_analysis["recommendations"].append(
+                    "✅ Sincronización de reloj correcta"
+                )
 
             return sync_analysis
 
@@ -325,16 +390,22 @@ class TemporalAnalysisSystem:
         """Analizar correlaciones temporales"""
         with self.lock:
             if len(self.timing_events) < 20:
-                return {"error": "Datos de eventos insuficientes para análisis de correlaciones"}
+                return {
+                    "error": "Datos de eventos insuficientes para análisis de correlaciones"
+                }
 
-            recent_events = list(self.timing_events)[-200:]  # Últimos 200 eventos
+            recent_events = list(self.timing_events)[
+                -200:
+            ]  # Últimos 200 eventos
 
             # Agrupar eventos por ventanas de tiempo
             time_windows = defaultdict(list)
             for event in recent_events:
                 # Crear ventana de 5 minutos
                 window_key = event["timestamp"].replace(
-                    minute=(event["timestamp"].minute // 5) * 5, second=0, microsecond=0
+                    minute=(event["timestamp"].minute // 5) * 5,
+                    second=0,
+                    microsecond=0,
                 )
                 time_windows[window_key].append(event)
 
@@ -361,7 +432,9 @@ class TemporalAnalysisSystem:
                     if event_type in next_types:
                         correlation_strength = min(
                             current_types[event_type], next_types[event_type]
-                        ) / max(current_types[event_type], next_types[event_type])
+                        ) / max(
+                            current_types[event_type], next_types[event_type]
+                        )
                         if correlation_strength > 0.7:  # Correlación fuerte
                             correlations[f"{event_type}_correlation"] = {
                                 "strength": correlation_strength,
@@ -372,19 +445,35 @@ class TemporalAnalysisSystem:
             return {
                 "temporal_correlations": correlations,
                 "analysis_period": {
-                    "start_time": window_keys[0].isoformat() if window_keys else None,
-                    "end_time": window_keys[-1].isoformat() if window_keys else None,
+                    "start_time": (
+                        window_keys[0].isoformat() if window_keys else None
+                    ),
+                    "end_time": (
+                        window_keys[-1].isoformat() if window_keys else None
+                    ),
                     "total_windows": len(window_keys),
                 },
                 "correlation_summary": {
                     "strong_correlations": len(
-                        [c for c in correlations.values() if c["strength"] > 0.8]
+                        [
+                            c
+                            for c in correlations.values()
+                            if c["strength"] > 0.8
+                        ]
                     ),
                     "medium_correlations": len(
-                        [c for c in correlations.values() if 0.6 < c["strength"] <= 0.8]
+                        [
+                            c
+                            for c in correlations.values()
+                            if 0.6 < c["strength"] <= 0.8
+                        ]
                     ),
                     "weak_correlations": len(
-                        [c for c in correlations.values() if c["strength"] <= 0.6]
+                        [
+                            c
+                            for c in correlations.values()
+                            if c["strength"] <= 0.6
+                        ]
                     ),
                 },
             }
@@ -393,16 +482,23 @@ class TemporalAnalysisSystem:
         """Obtener resumen temporal general"""
         with self.lock:
             current_time = datetime.now()
-            cutoff_time = current_time - timedelta(hours=24)  # Últimas 24 horas
+            cutoff_time = current_time - timedelta(
+                hours=24
+            )  # Últimas 24 horas
 
             # Filtrar eventos recientes
             recent_events = [
-                event for event in self.timing_events if event["timestamp"] > cutoff_time
+                event
+                for event in self.timing_events
+                if event["timestamp"] > cutoff_time
             ]
 
             # Estadísticas temporales
             if recent_events:
-                durations = [event["timing_data"].get("duration_ms", 0) for event in recent_events]
+                durations = [
+                    event["timing_data"].get("duration_ms", 0)
+                    for event in recent_events
+                ]
                 avg_duration = statistics.mean(durations) if durations else 0
                 max_duration = max(durations) if durations else 0
                 min_duration = min(durations) if durations else 0
@@ -419,11 +515,17 @@ class TemporalAnalysisSystem:
                     "avg_event_duration_ms": avg_duration,
                     "max_event_duration_ms": max_duration,
                     "min_event_duration_ms": min_duration,
-                    "clock_sync_status": clock_sync_analysis.get("clock_sync_status", "unknown"),
-                    "sync_issues_count": len(clock_sync_analysis.get("sync_issues", [])),
+                    "clock_sync_status": clock_sync_analysis.get(
+                        "clock_sync_status", "unknown"
+                    ),
+                    "sync_issues_count": len(
+                        clock_sync_analysis.get("sync_issues", [])
+                    ),
                 },
                 "clock_sync_analysis": clock_sync_analysis,
-                "recent_timing_events": recent_events[-10:] if recent_events else [],
+                "recent_timing_events": (
+                    recent_events[-10:] if recent_events else []
+                ),
             }
 
 
@@ -506,7 +608,8 @@ async def analyze_token_timing_endpoint(
 
 @router.get("/clock-synchronization")
 async def get_clock_synchronization_analysis(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     🕐 Análisis de sincronización de reloj
@@ -531,7 +634,8 @@ async def get_clock_synchronization_analysis(
 
 @router.get("/temporal-correlations")
 async def get_temporal_correlations_analysis(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     🔗 Análisis de correlaciones temporales
@@ -556,7 +660,8 @@ async def get_temporal_correlations_analysis(
 
 @router.get("/temporal-summary")
 async def get_temporal_summary_endpoint(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     📊 Resumen temporal general

@@ -51,8 +51,12 @@ class StructuredFormatter(logging.Formatter):
         # Agregar excepción si existe
         if record.exc_info:
             log_data["exception"] = {
-                "type": record.exc_info[0].__name__ if record.exc_info[0] else None,
-                "message": str(record.exc_info[1]) if record.exc_info[1] else None,
+                "type": (
+                    record.exc_info[0].__name__ if record.exc_info[0] else None
+                ),
+                "message": (
+                    str(record.exc_info[1]) if record.exc_info[1] else None
+                ),
                 "traceback": self.formatException(record.exc_info),
             }
 
@@ -89,7 +93,9 @@ class ServiceLogger:
         Log con contexto de trazabilidad
         """
         # Crear record con datos adicionales
-        record = self.logger.makeRecord(self.logger.name, level, "", 0, message, (), None)
+        record = self.logger.makeRecord(
+            self.logger.name, level, "", 0, message, (), None
+        )
 
         if extra_data:
             record.extra_data = extra_data
@@ -185,9 +191,13 @@ def log_service_call(
         log_data["error"] = error
 
     if success:
-        logger.info(f"Service call completed: {service_name}.{method_name}", **log_data)
+        logger.info(
+            f"Service call completed: {service_name}.{method_name}", **log_data
+        )
     else:
-        logger.error(f"Service call failed: {service_name}.{method_name}", **log_data)
+        logger.error(
+            f"Service call failed: {service_name}.{method_name}", **log_data
+        )
 
 
 def log_business_event(
@@ -285,7 +295,9 @@ def configure_service_logging():
         logger.setLevel(logging.INFO)
 
         # Agregar handler estructurado si no existe
-        if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
+        if not any(
+            isinstance(h, logging.StreamHandler) for h in logger.handlers
+        ):
             handler = logging.StreamHandler(sys.stdout)
             handler.setFormatter(StructuredFormatter())
             logger.addHandler(handler)
@@ -306,12 +318,19 @@ def log_method_calls(logger_name: str):
                 logger.info(f"Method call started: {func.__name__}")
                 result = func(*args, **kwargs)
 
-                duration = (datetime.utcnow() - start_time).total_seconds() * 1000
-                logger.info(f"Method call completed: {func.__name__}", duration_ms=duration)
+                duration = (
+                    datetime.utcnow() - start_time
+                ).total_seconds() * 1000
+                logger.info(
+                    f"Method call completed: {func.__name__}",
+                    duration_ms=duration,
+                )
 
                 return result
             except Exception as e:
-                duration = (datetime.utcnow() - start_time).total_seconds() * 1000
+                duration = (
+                    datetime.utcnow() - start_time
+                ).total_seconds() * 1000
                 logger.error(
                     f"Method call failed: {func.__name__}",
                     duration_ms=duration,

@@ -12,11 +12,13 @@ MIN_PASSWORD_LENGTH = 8
 
 # Definir constraints personalizados para Decimal
 DecimalAmount = Annotated[
-    Decimal, Field(ge=0, description="Monto en formato decimal con 2 decimales")
+    Decimal,
+    Field(ge=0, description="Monto en formato decimal con 2 decimales"),
 ]
 
 DecimalPercentage = Annotated[
-    Decimal, Field(ge=0, le=MAX_PERCENTAGE, description="Porcentaje con 2 decimales")
+    Decimal,
+    Field(ge=0, le=MAX_PERCENTAGE, description="Porcentaje con 2 decimales"),
 ]
 
 
@@ -24,10 +26,16 @@ class PrestamoBase(BaseModel):
     """Schema base para Préstamo"""
 
     cliente_id: int
-    monto_total: Decimal = Field(..., gt=0, description="Monto total del préstamo")
-    monto_financiado: Decimal = Field(..., gt=0, description="Monto financiado")
+    monto_total: Decimal = Field(
+        ..., gt=0, description="Monto total del préstamo"
+    )
+    monto_financiado: Decimal = Field(
+        ..., gt=0, description="Monto financiado"
+    )
     monto_inicial: Decimal = Field(
-        default=Decimal("0.00"), ge=0, description="Monto inicial/cuota inicial"
+        default=Decimal("0.00"),
+        ge=0,
+        description="Monto inicial/cuota inicial",
     )
     tasa_interes: Decimal = Field(
         default=Decimal("0.00"),
@@ -41,7 +49,9 @@ class PrestamoBase(BaseModel):
     fecha_desembolso: Optional[date] = None
     fecha_primer_vencimiento: date
     fecha_ultimo_vencimiento: Optional[date] = None
-    modalidad: str = Field(default="MENSUAL", description="SEMANAL, QUINCENAL, MENSUAL")
+    modalidad: str = Field(
+        default="MENSUAL", description="SEMANAL, QUINCENAL, MENSUAL"
+    )
     destino_credito: Optional[str] = None
     observaciones: Optional[str] = None
 
@@ -70,7 +80,9 @@ class PrestamoCreate(PrestamoBase):
 class PrestamoUpdate(BaseModel):
     """Schema para actualizar un préstamo"""
 
-    monto_total: Optional[Decimal] = Field(None, gt=0, description="Monto total del préstamo")
+    monto_total: Optional[Decimal] = Field(
+        None, gt=0, description="Monto total del préstamo"
+    )
     tasa_interes: Optional[Decimal] = Field(
         None, ge=0, le=MAX_PERCENTAGE, description="Tasa de interés anual (%)"
     )

@@ -67,7 +67,9 @@ class CriticalErrorMonitor:
                 "error_type": error_type,
                 "error_data": error_data,
                 "severity": self._determine_severity(error_type, error_data),
-                "pattern_matched": self._match_error_patterns(error_data.get("message", "")),
+                "pattern_matched": self._match_error_patterns(
+                    error_data.get("message", "")
+                ),
             }
 
             self.critical_errors.append(error_entry)
@@ -86,7 +88,9 @@ class CriticalErrorMonitor:
                 f"🚨 Error crítico registrado: {error_type} - {error_data.get('message', '')}"
             )
 
-    def _determine_severity(self, error_type: str, error_data: Dict[str, Any]) -> str:
+    def _determine_severity(
+        self, error_type: str, error_data: Dict[str, Any]
+    ) -> str:
         """Determinar severidad del error"""
         message = error_data.get("message", "").lower()
 
@@ -173,9 +177,12 @@ class CriticalErrorMonitor:
         return {
             "hourly_distribution": dict(hourly_errors),
             "peak_error_hour": (
-                max(hourly_errors.items(), key=lambda x: x[1])[0] if hourly_errors else None
+                max(hourly_errors.items(), key=lambda x: x[1])[0]
+                if hourly_errors
+                else None
             ),
-            "error_frequency": len(self.critical_errors) / 24,  # Errores por hora promedio
+            "error_frequency": len(self.critical_errors)
+            / 24,  # Errores por hora promedio
         }
 
     def _generate_recommendations(self) -> List[Dict[str, Any]]:
@@ -187,7 +194,11 @@ class CriticalErrorMonitor:
         for error in self.critical_errors:
             error_counts[error["error_type"]] += 1
 
-        most_frequent = max(error_counts.items(), key=lambda x: x[1]) if error_counts else None
+        most_frequent = (
+            max(error_counts.items(), key=lambda x: x[1])
+            if error_counts
+            else None
+        )
 
         if most_frequent:
             error_type, count = most_frequent
@@ -238,7 +249,11 @@ class CriticalErrorMonitor:
                     "import_errors": len(self.import_errors),
                     "schema_errors": len(self.schema_errors),
                     "frontend_errors": len(self.frontend_errors),
-                    "last_error": self.critical_errors[-1] if self.critical_errors else None,
+                    "last_error": (
+                        self.critical_errors[-1]
+                        if self.critical_errors
+                        else None
+                    ),
                 },
             }
 
@@ -288,7 +303,8 @@ async def log_critical_error_endpoint(
 
 @router.get("/critical-error-analysis")
 async def get_critical_error_analysis(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     📊 Análisis de tendencias de errores críticos
@@ -313,7 +329,8 @@ async def get_critical_error_analysis(
 
 @router.get("/critical-error-summary")
 async def get_critical_error_summary_endpoint(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     📋 Resumen de errores críticos

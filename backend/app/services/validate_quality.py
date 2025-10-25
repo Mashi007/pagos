@@ -115,7 +115,8 @@ def _mostrar_recomendaciones(report: dict):
 def _guardar_reporte(report: dict) -> Path:
     """Guardar reporte en archivo"""
     report_file = (
-        Path(__file__).parent / f"quality_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        Path(__file__).parent
+        / f"quality_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     )
     with open(report_file, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)

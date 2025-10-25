@@ -42,12 +42,19 @@ class MovimientoBancario(BaseModel):
     fecha: date
     referencia: str
     monto: Decimal
-    cedula_pagador: Optional[str] = Field(None, description="Cédula del pagador")
+    cedula_pagador: Optional[str] = Field(
+        None, description="Cédula del pagador"
+    )
     descripcion: Optional[str] = ""
-    cuenta_origen: Optional[str] = Field(None, description="Número de cuenta origen")
+    cuenta_origen: Optional[str] = Field(
+        None, description="Número de cuenta origen"
+    )
 
     model_config = ConfigDict(
-        json_encoders={Decimal: lambda v: float(v), date: lambda v: v.isoformat()}
+        json_encoders={
+            Decimal: lambda v: float(v),
+            date: lambda v: v.isoformat(),
+        }
     )
 
     @field_validator("monto")
@@ -84,7 +91,9 @@ class ConciliacionCreate(BaseModel):
     @classmethod
     def validar_fechas(cls, v, info):
         if "fecha_inicio" in info.data and v < info.data["fecha_inicio"]:
-            raise ValueError("La fecha fin debe ser posterior a la fecha inicio")
+            raise ValueError(
+                "La fecha fin debe ser posterior a la fecha inicio"
+            )
         return v
 
 
@@ -97,11 +106,16 @@ class ConciliacionMatch(BaseModel):
     fecha_pago: date
     tipo_match: TipoMatch
     confianza: float = Field(
-        ge=0, le=MAX_CONFIDENCE, description="Porcentaje de confianza del match"
+        ge=0,
+        le=MAX_CONFIDENCE,
+        description="Porcentaje de confianza del match",
     )
 
     model_config = ConfigDict(
-        json_encoders={Decimal: lambda v: float(v), date: lambda v: v.isoformat()}
+        json_encoders={
+            Decimal: lambda v: float(v),
+            date: lambda v: v.isoformat(),
+        }
     )
 
 
@@ -124,9 +138,16 @@ class ResultadoConciliacion(BaseModel):
     @field_validator("porcentaje_conciliacion")
     @classmethod
     def calcular_porcentaje(cls, v, info):
-        if "total_movimientos" in info.data and info.data["total_movimientos"] > 0:
+        if (
+            "total_movimientos" in info.data
+            and info.data["total_movimientos"] > 0
+        ):
             return round(
-                (info.data.get("conciliados", 0) / info.data["total_movimientos"]) * 100,
+                (
+                    info.data.get("conciliados", 0)
+                    / info.data["total_movimientos"]
+                )
+                * 100,
                 2,
             )
         return 0.0
@@ -245,7 +266,10 @@ class PagoPendienteConciliacion(BaseModel):
 
     model_config = ConfigDict(
         from_attributes=True,
-        json_encoders={Decimal: lambda v: float(v), date: lambda v: v.isoformat()},
+        json_encoders={
+            Decimal: lambda v: float(v),
+            date: lambda v: v.isoformat(),
+        },
     )
 
 
@@ -336,9 +360,15 @@ class ValidacionArchivoBancario(BaseModel):
 class ConciliacionMasiva(BaseModel):
     """Schema para conciliación masiva"""
 
-    movimientos_a_aplicar: List[int] = Field(..., description="IDs de movimientos a aplicar")
-    aplicar_exactos: bool = Field(True, description="Aplicar coincidencias exactas automáticamente")
-    aplicar_parciales: bool = Field(False, description="Aplicar coincidencias parciales")
+    movimientos_a_aplicar: List[int] = Field(
+        ..., description="IDs de movimientos a aplicar"
+    )
+    aplicar_exactos: bool = Field(
+        True, description="Aplicar coincidencias exactas automáticamente"
+    )
+    aplicar_parciales: bool = Field(
+        False, description="Aplicar coincidencias parciales"
+    )
     observaciones: Optional[str] = None
 
 

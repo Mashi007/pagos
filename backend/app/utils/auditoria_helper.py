@@ -52,8 +52,12 @@ def registrar_auditoria(
     """
     # Validar que el usuario no sea None
     if usuario is None:
-        logger.warning(f"Intento de registrar auditoría sin usuario válido: {accion} - {modulo}")
-        raise ValueError("No se puede registrar auditoría sin un usuario válido")
+        logger.warning(
+            f"Intento de registrar auditoría sin usuario válido: {accion} - {modulo}"
+        )
+        raise ValueError(
+            "No se puede registrar auditoría sin un usuario válido"
+        )
 
     try:
         auditoria = Auditoria.registrar(
@@ -76,7 +80,9 @@ def registrar_auditoria(
         db.commit()
         db.refresh(auditoria)
 
-        logger.info(f"Auditoría registrada: {usuario.email} - {accion} - {modulo}")
+        logger.info(
+            f"Auditoría registrada: {usuario.email} - {accion} - {modulo}"
+        )
         return auditoria
 
     except Exception as e:

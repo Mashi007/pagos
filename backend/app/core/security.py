@@ -56,7 +56,9 @@ def create_access_token(
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.utcnow() + timedelta(
+            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+        )
 
     to_encode = {"exp": expire, "sub": str(subject), "type": "access"}
 
@@ -64,7 +66,9 @@ def create_access_token(
     if additional_claims:
         to_encode.update(additional_claims)
 
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(
+        to_encode, settings.SECRET_KEY, algorithm=ALGORITHM
+    )
     return encoded_jwt
 
 
@@ -76,7 +80,9 @@ def create_refresh_token(subject: str | int) -> str:
 
     to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
 
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(
+        to_encode, settings.SECRET_KEY, algorithm=ALGORITHM
+    )
     return encoded_jwt
 
 
@@ -88,7 +94,9 @@ def decode_token(token: str) -> dict:
         PyJWTError: Si el token es inválido o expiró
     """
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[ALGORITHM]
+        )
         return payload
     except PyJWTError as e:
         # Re-lanza PyJWTError para que el manejador de excepciones de FastAPI lo capture
@@ -135,7 +143,10 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
 
     special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
     if not any(c in special_chars for c in password):
-        return False, "La contraseña debe contener al menos un carácter especial"
+        return (
+            False,
+            "La contraseña debe contener al menos un carácter especial",
+        )
 
     return True, "Contraseña válida"
 
@@ -144,11 +155,15 @@ def generate_password_reset_token(email: str) -> str:
     """
     Genera un token para reset de contraseña
     """
-    expire = datetime.utcnow() + timedelta(hours=PASSWORD_RESET_EXPIRE_HOURS)  # Expira en 1 hora
+    expire = datetime.utcnow() + timedelta(
+        hours=PASSWORD_RESET_EXPIRE_HOURS
+    )  # Expira en 1 hora
 
     to_encode = {"exp": expire, "sub": email, "type": "password_reset"}
 
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(
+        to_encode, settings.SECRET_KEY, algorithm=ALGORITHM
+    )
     return encoded_jwt
 
 

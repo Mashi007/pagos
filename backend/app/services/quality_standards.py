@@ -50,37 +50,54 @@ class QualityStandards:
         """
         Validar estructura y organización del archivo
         """
-        results = {"file_path": file_path, "validations": {}, "issues": [], "score": 0}
+        results = {
+            "file_path": file_path,
+            "validations": {},
+            "issues": [],
+            "score": 0,
+        }
 
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
             # Validaciones de estructura
-            results["validations"]["has_docstring"] = QualityStandards._has_module_docstring(
-                content
+            results["validations"]["has_docstring"] = (
+                QualityStandards._has_module_docstring(content)
             )
-            results["validations"]["proper_imports"] = QualityStandards._validate_imports(content)
-            results["validations"]["class_structure"] = QualityStandards._validate_class_structure(
-                content
+            results["validations"]["proper_imports"] = (
+                QualityStandards._validate_imports(content)
             )
-            results["validations"]["function_length"] = QualityStandards._validate_function_length(
-                content
+            results["validations"]["class_structure"] = (
+                QualityStandards._validate_class_structure(content)
             )
-            results["validations"]["line_length"] = QualityStandards._validate_line_length(content)
-            results["validations"]["indentation"] = QualityStandards._validate_indentation(content)
-            results["validations"]["forbidden_words"] = QualityStandards._check_forbidden_words(
-                content
+            results["validations"]["function_length"] = (
+                QualityStandards._validate_function_length(content)
             )
-            results["validations"]["error_handling"] = QualityStandards._validate_error_handling(
-                content
+            results["validations"]["line_length"] = (
+                QualityStandards._validate_line_length(content)
             )
-            results["validations"]["logging"] = QualityStandards._validate_logging(content)
+            results["validations"]["indentation"] = (
+                QualityStandards._validate_indentation(content)
+            )
+            results["validations"]["forbidden_words"] = (
+                QualityStandards._check_forbidden_words(content)
+            )
+            results["validations"]["error_handling"] = (
+                QualityStandards._validate_error_handling(content)
+            )
+            results["validations"]["logging"] = (
+                QualityStandards._validate_logging(content)
+            )
 
             # Calcular score
             total_validations = len(results["validations"])
-            passed_validations = sum(1 for v in results["validations"].values() if v)
-            results["score"] = round((passed_validations / total_validations) * 100, 2)
+            passed_validations = sum(
+                1 for v in results["validations"].values() if v
+            )
+            results["score"] = round(
+                (passed_validations / total_validations) * 100, 2
+            )
 
         except Exception as e:
             results["issues"].append(f"Error validando archivo: {str(e)}")
@@ -104,7 +121,11 @@ class QualityStandards:
     def _validate_imports(content: str) -> bool:
         """Validar organización de imports"""
         lines = content.split("\n")
-        import_lines = [line for line in lines if line.strip().startswith(("import ", "from "))]
+        import_lines = [
+            line
+            for line in lines
+            if line.strip().startswith(("import ", "from "))
+        ]
 
         if not import_lines:
             return True
@@ -150,7 +171,9 @@ class QualityStandards:
                             if not item.name.startswith("_") and not (
                                 item.body
                                 and isinstance(item.body[0], ast.Expr)
-                                and isinstance(item.body[0].value, ast.Constant)
+                                and isinstance(
+                                    item.body[0].value, ast.Constant
+                                )
                             ):
                                 return False
 
@@ -192,7 +215,10 @@ class QualityStandards:
             if line.strip():  # Línea no vacía
                 # Contar espacios al inicio
                 spaces = len(line) - len(line.lstrip())
-                if spaces > 0 and spaces % QualityStandards.INDENTATION_SIZE != 0:
+                if (
+                    spaces > 0
+                    and spaces % QualityStandards.INDENTATION_SIZE != 0
+                ):
                     return False
 
         return True
@@ -226,8 +252,12 @@ class QualityStandards:
     @staticmethod
     def _validar_funcion_error_handling(node: ast.FunctionDef) -> bool:
         """Validar manejo de errores en una función específica"""
-        has_error_handling = QualityStandards._verificar_manejo_errores_en_funcion(node)
-        has_external_calls = QualityStandards._verificar_llamadas_externas_en_funcion(node)
+        has_error_handling = (
+            QualityStandards._verificar_manejo_errores_en_funcion(node)
+        )
+        has_external_calls = (
+            QualityStandards._verificar_llamadas_externas_en_funcion(node)
+        )
 
         # Si la función hace llamadas externas, debería tener manejo de errores
         if has_external_calls and not has_error_handling:
@@ -243,7 +273,9 @@ class QualityStandards:
 
             for node in ast.walk(tree):
                 if isinstance(node, ast.FunctionDef):
-                    if not QualityStandards._validar_funcion_error_handling(node):
+                    if not QualityStandards._validar_funcion_error_handling(
+                        node
+                    ):
                         return False
 
             return True
@@ -289,7 +321,9 @@ class QualityStandards:
             if service_file.name.startswith("__"):
                 continue
 
-            file_report = QualityStandards.validate_file_structure(str(service_file))
+            file_report = QualityStandards.validate_file_structure(
+                str(service_file)
+            )
             report["services"].append(file_report)
             total_score += file_report["score"]
 
@@ -304,10 +338,14 @@ class QualityStandards:
                 )
 
         if report["services_analyzed"] > 0:
-            report["overall_score"] = round(total_score / report["services_analyzed"], 2)
+            report["overall_score"] = round(
+                total_score / report["services_analyzed"], 2
+            )
 
         # Generar recomendaciones
-        report["recommendations"] = QualityStandards._generate_recommendations(report)
+        report["recommendations"] = QualityStandards._generate_recommendations(
+            report
+        )
 
         return report
 
@@ -317,19 +355,35 @@ class QualityStandards:
         recommendations = []
 
         if report["overall_score"] < 80:
-            recommendations.append("Implementar logging estructurado en todos los servicios")
-            recommendations.append("Agregar docstrings a todas las clases y métodos públicos")
+            recommendations.append(
+                "Implementar logging estructurado en todos los servicios"
+            )
+            recommendations.append(
+                "Agregar docstrings a todas las clases y métodos públicos"
+            )
             recommendations.append("Implementar manejo de errores consistente")
 
         if report["overall_score"] < 70:
-            recommendations.append("Revisar longitud de funciones (máximo 50 líneas)")
-            recommendations.append("Eliminar palabras prohibidas de producción")
-            recommendations.append("Implementar validación de entrada en todos los métodos")
+            recommendations.append(
+                "Revisar longitud de funciones (máximo 50 líneas)"
+            )
+            recommendations.append(
+                "Eliminar palabras prohibidas de producción"
+            )
+            recommendations.append(
+                "Implementar validación de entrada en todos los métodos"
+            )
 
         if report["overall_score"] < 60:
-            recommendations.append("Refactorizar código con alta complejidad ciclomática")
-            recommendations.append("Implementar tests unitarios para todos los servicios")
-            recommendations.append("Revisar arquitectura y separación de responsabilidades")
+            recommendations.append(
+                "Refactorizar código con alta complejidad ciclomática"
+            )
+            recommendations.append(
+                "Implementar tests unitarios para todos los servicios"
+            )
+            recommendations.append(
+                "Revisar arquitectura y separación de responsabilidades"
+            )
 
         return recommendations
 
@@ -370,7 +424,10 @@ class ServiceMetrics:
                     # Calcular complejidad ciclomática básica
                     complexity = 1  # Base complexity
                     for item in ast.walk(node):
-                        if isinstance(item, (ast.If, ast.While, ast.For, ast.ExceptHandler)):
+                        if isinstance(
+                            item,
+                            (ast.If, ast.While, ast.For, ast.ExceptHandler),
+                        ):
                             complexity += 1
                     metrics["cyclomatic_complexity"] += complexity
 
@@ -378,7 +435,9 @@ class ServiceMetrics:
                     metrics["total_classes"] += 1
 
             if function_lengths:
-                metrics["average_function_length"] = sum(function_lengths) / len(function_lengths)
+                metrics["average_function_length"] = sum(
+                    function_lengths
+                ) / len(function_lengths)
 
             return metrics
 
@@ -386,23 +445,33 @@ class ServiceMetrics:
             return {"error": str(e)}
 
     @staticmethod
-    def generate_performance_recommendations(metrics: Dict[str, Any]) -> List[str]:
+    def generate_performance_recommendations(
+        metrics: Dict[str, Any],
+    ) -> List[str]:
         """
         Generar recomendaciones de rendimiento basadas en métricas
         """
         recommendations = []
 
         if metrics.get("average_function_length", 0) > 30:
-            recommendations.append("Considerar dividir funciones largas en funciones más pequeñas")
+            recommendations.append(
+                "Considerar dividir funciones largas en funciones más pequeñas"
+            )
 
         if metrics.get("cyclomatic_complexity", 0) > 20:
-            recommendations.append("Reducir complejidad ciclomática usando patrones de diseño")
+            recommendations.append(
+                "Reducir complejidad ciclomática usando patrones de diseño"
+            )
 
         if metrics.get("max_function_length", 0) > 50:
-            recommendations.append("Refactorizar función más larga para mejorar legibilidad")
+            recommendations.append(
+                "Refactorizar función más larga para mejorar legibilidad"
+            )
 
         if metrics.get("total_functions", 0) > 20:
-            recommendations.append("Considerar dividir el módulo en múltiples archivos")
+            recommendations.append(
+                "Considerar dividir el módulo en múltiples archivos"
+            )
 
         return recommendations
 
@@ -421,9 +490,13 @@ def apply_quality_standards(services_dir: str) -> Dict[str, Any]:
         try:
             with open(service["file_path"], "r", encoding="utf-8") as f:
                 content = f.read()
-            service["metrics"] = ServiceMetrics.calculate_complexity_metrics(content)
+            service["metrics"] = ServiceMetrics.calculate_complexity_metrics(
+                content
+            )
             service["performance_recommendations"] = (
-                ServiceMetrics.generate_performance_recommendations(service["metrics"])
+                ServiceMetrics.generate_performance_recommendations(
+                    service["metrics"]
+                )
             )
         except Exception as e:
             service["metrics"] = {"error": str(e)}

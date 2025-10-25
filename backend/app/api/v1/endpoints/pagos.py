@@ -9,7 +9,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import Session
 
@@ -35,7 +43,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/crear", response_model=PagoResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/crear", response_model=PagoResponse, status_code=status.HTTP_201_CREATED
+)
 async def crear_pago(
     pago_data: PagoCreate,
     db: Session = Depends(get_db),
@@ -133,9 +143,13 @@ async def subir_documento(
 @router.get("/listar", response_model=PagoListResponse)
 async def listar_pagos(
     pagina: int = Query(1, ge=1, description="Número de página"),
-    por_pagina: int = Query(20, ge=1, le=1000, description="Elementos por página"),
+    por_pagina: int = Query(
+        20, ge=1, le=1000, description="Elementos por página"
+    ),
     cedula: Optional[str] = Query(None, description="Filtrar por cédula"),
-    conciliado: Optional[bool] = Query(None, description="Filtrar por estado de conciliación"),
+    conciliado: Optional[bool] = Query(
+        None, description="Filtrar por estado de conciliación"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -154,7 +168,12 @@ async def listar_pagos(
 
         # Paginación
         offset = (pagina - 1) * por_pagina
-        pagos = query.order_by(desc(Pago.fecha_registro)).offset(offset).limit(por_pagina).all()
+        pagos = (
+            query.order_by(desc(Pago.fecha_registro))
+            .offset(offset)
+            .limit(por_pagina)
+            .all()
+        )
 
         total_paginas = (total + por_pagina - 1) // por_pagina
 
@@ -176,17 +195,23 @@ async def listar_pagos(
 
 @router.get("/kpis", response_model=KPIsPagos)
 async def obtener_kpis_pagos(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Obtener KPIs de pagos"""
     try:
         # KPIs básicos
         total_pagos = db.query(Pago).filter(Pago.activo).count()
-        total_dolares = db.query(func.sum(Pago.monto_pagado)).filter(Pago.activo).scalar() or 0
+        total_dolares = (
+            db.query(func.sum(Pago.monto_pagado)).filter(Pago.activo).scalar()
+            or 0
+        )
         numero_pagos = total_pagos  # Mismo valor para consistencia
 
         # KPIs de conciliación
-        cantidad_conciliada = db.query(Pago).filter(and_(Pago.activo, Pago.conciliado)).count()
+        cantidad_conciliada = (
+            db.query(Pago).filter(and_(Pago.activo, Pago.conciliado)).count()
+        )
         cantidad_no_conciliada = total_pagos - cantidad_conciliada
 
         return KPIsPagos(
@@ -216,7 +241,9 @@ async def obtener_resumen_cliente(
     try:
         # Filtrar pagos del cliente
         pagos_cliente = (
-            db.query(Pago).filter(and_(Pago.activo, Pago.cedula_cliente == cedula.upper())).all()
+            db.query(Pago)
+            .filter(and_(Pago.activo, Pago.cedula_cliente == cedula.upper()))
+            .all()
         )
 
         if not pagos_cliente:
@@ -227,7 +254,9 @@ async def obtener_resumen_cliente(
 
         # Calcular resumen
         total_pagado = sum(pago.monto_pagado for pago in pagos_cliente)
-        total_conciliado = sum(pago.monto_pagado for pago in pagos_cliente if pago.conciliado)
+        total_conciliado = sum(
+            pago.monto_pagado for pago in pagos_cliente if pago.conciliado
+        )
         total_pendiente = total_pagado - total_conciliado
         numero_pagos = len(pagos_cliente)
 
@@ -263,14 +292,17 @@ async def obtener_resumen_cliente(
 
 
 @router.get("/descargar-documento/{filename}")
-async def descargar_documento(filename: str, current_user: User = Depends(get_current_user)):
+async def descargar_documento(
+    filename: str, current_user: User = Depends(get_current_user)
+):
     """Descargar documento de pago"""
     try:
         file_path = UPLOAD_DIR / filename
 
         if not file_path.exists():
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Archivo no encontrado"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Archivo no encontrado",
             )
 
         # Determinar tipo de contenido
@@ -282,7 +314,9 @@ async def descargar_documento(filename: str, current_user: User = Depends(get_cu
             ".pdf": "application/pdf",
         }
 
-        content_type = content_type_map.get(file_extension, "application/octet-stream")
+        content_type = content_type_map.get(
+            file_extension, "application/octet-stream"
+        )
 
         return {
             "success": True,

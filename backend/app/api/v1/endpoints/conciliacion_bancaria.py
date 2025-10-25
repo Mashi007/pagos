@@ -17,10 +17,14 @@ router = APIRouter()
 
 
 @router.get("/template-conciliacion")
-async def generar_template_conciliacion(current_user: User = Depends(get_current_user)):
+async def generar_template_conciliacion(
+    current_user: User = Depends(get_current_user),
+):
     """Generar template Excel para conciliación bancaria"""
     try:
-        logger.info(f"Usuario {current_user.email} generando template de conciliación")
+        logger.info(
+            f"Usuario {current_user.email} generando template de conciliación"
+        )
 
         # Crear workbook
         from openpyxl import Workbook
@@ -46,7 +50,9 @@ async def generar_template_conciliacion(current_user: User = Depends(get_current
             ["   - numero_documento: Número de documento del pago"],
             [""],
             ["3. PROCESO DE CONCILIACIÓN:"],
-            ["   - El sistema compara el número de documento con la base de datos"],
+            [
+                "   - El sistema compara el número de documento con la base de datos"
+            ],
             ["   - Si hay coincidencia EXACTA: se marca como CONCILIADO"],
             ["   - Si NO hay coincidencia: se marca como PENDIENTE"],
             [""],
@@ -75,7 +81,10 @@ async def generar_template_conciliacion(current_user: User = Depends(get_current
             ["   - Requiere formulario con justificación"],
             ["   - Se registra en auditoría"],
             [""],
-            ["FECHA DE GENERACIÓN: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+            [
+                "FECHA DE GENERACIÓN: "
+                + datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            ],
             ["GENERADO POR: " + current_user.email],
         ]
 
@@ -98,7 +107,9 @@ async def generar_template_conciliacion(current_user: User = Depends(get_current
 
         # Aplicar validaciones
         # Validación para fecha (formato YYYY-MM-DD)
-        dv_fecha = DataValidation(type="date", formula1="2020-01-01", formula2="2030-12-31")
+        dv_fecha = DataValidation(
+            type="date", formula1="2020-01-01", formula2="2030-12-31"
+        )
         dv_fecha.add("A2:A100")
         ws_template.add_data_validation(dv_fecha)
 
@@ -132,7 +143,9 @@ async def procesar_conciliacion(
 ):
     """Procesar archivo Excel de conciliación bancaria"""
     try:
-        logger.info(f"Usuario {current_user.email} procesando conciliación bancaria")
+        logger.info(
+            f"Usuario {current_user.email} procesando conciliación bancaria"
+        )
 
         # Validar tipo de archivo
         if not file.filename.endswith((".xlsx", ".xls")):
@@ -143,7 +156,9 @@ async def procesar_conciliacion(
 
         # Leer archivo Excel
         file_content = await file.read()
-        df = pd.read_excel(io.BytesIO(file_content), sheet_name=1)  # Segunda hoja
+        df = pd.read_excel(
+            io.BytesIO(file_content), sheet_name=1
+        )  # Segunda hoja
 
         # Validar columnas requeridas
         required_columns = ["fecha", "numero_documento"]
@@ -172,7 +187,11 @@ async def procesar_conciliacion(
             # Buscar pago en BD
             pago = (
                 db.query(Pago)
-                .filter(and_(Pago.activo, Pago.numero_documento == numero_documento))
+                .filter(
+                    and_(
+                        Pago.activo, Pago.numero_documento == numero_documento
+                    )
+                )
                 .first()
             )
 
@@ -188,7 +207,8 @@ async def procesar_conciliacion(
 
             resultados.append(
                 {
-                    "fila": index + 2,  # +2 porque Excel es 1-indexed y primera fila es encabezado
+                    "fila": index
+                    + 2,  # +2 porque Excel es 1-indexed y primera fila es encabezado
                     "fecha": str(fecha),
                     "numero_documento": numero_documento,
                     "estado": estado,
@@ -199,7 +219,9 @@ async def procesar_conciliacion(
         # Guardar cambios
         db.commit()
 
-        logger.info(f"Conciliación procesada: {conciliados} conciliados, {pendientes} pendientes")
+        logger.info(
+            f"Conciliación procesada: {conciliados} conciliados, {pendientes} pendientes"
+        )
 
         return {
             "success": True,
@@ -245,7 +267,8 @@ async def desconciliar_pago(
             .filter(
                 and_(
                     Pago.activo,
-                    Pago.numero_documento == conciliacion_data.numero_documento_anterior,
+                    Pago.numero_documento
+                    == conciliacion_data.numero_documento_anterior,
                     Pago.conciliado,
                 )
             )
@@ -296,17 +319,22 @@ async def desconciliar_pago(
 
 @router.get("/estado-conciliacion")
 async def obtener_estado_conciliacion(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Obtener estado general de conciliación"""
     try:
         # Estadísticas generales
         total_pagos = db.query(Pago).filter(Pago.activo).count()
-        pagos_conciliados = db.query(Pago).filter(and_(Pago.activo, Pago.conciliado)).count()
+        pagos_conciliados = (
+            db.query(Pago).filter(and_(Pago.activo, Pago.conciliado)).count()
+        )
         pagos_pendientes = total_pagos - pagos_conciliados
 
         # Porcentaje de conciliación
-        porcentaje_conciliacion = (pagos_conciliados / total_pagos * 100) if total_pagos > 0 else 0
+        porcentaje_conciliacion = (
+            (pagos_conciliados / total_pagos * 100) if total_pagos > 0 else 0
+        )
 
         return {
             "success": True,

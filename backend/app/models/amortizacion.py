@@ -50,8 +50,12 @@ class Cuota(Base):
     monto_interes = Column(Numeric(12, 2), nullable=False)
 
     # Saldos
-    saldo_capital_inicial = Column(Numeric(12, 2), nullable=False)  # Saldo al inicio del período
-    saldo_capital_final = Column(Numeric(12, 2), nullable=False)  # Saldo al fin del período
+    saldo_capital_inicial = Column(
+        Numeric(12, 2), nullable=False
+    )  # Saldo al inicio del período
+    saldo_capital_final = Column(
+        Numeric(12, 2), nullable=False
+    )  # Saldo al fin del período
 
     # Pagos realizados
     capital_pagado = Column(Numeric(12, 2), default=Decimal("0.00"))
@@ -70,7 +74,9 @@ class Cuota(Base):
     # Mora
     dias_mora = Column(Integer, default=0)
     monto_mora = Column(Numeric(12, 2), default=Decimal("0.00"))
-    tasa_mora = Column(Numeric(5, 2), default=Decimal("0.00"))  # Tasa de mora aplicada (%)
+    tasa_mora = Column(
+        Numeric(5, 2), default=Decimal("0.00")
+    )  # Tasa de mora aplicada (%)
 
     # Estado
     estado = Column(
@@ -79,7 +85,9 @@ class Cuota(Base):
 
     # Información adicional
     observaciones = Column(String(500), nullable=True)
-    es_cuota_especial = Column(Boolean, default=False)  # Para cuotas con montos diferentes
+    es_cuota_especial = Column(
+        Boolean, default=False
+    )  # Para cuotas con montos diferentes
 
     # Auditoría
     creado_en = Column(DateTime(timezone=True), server_default=func.now())
@@ -108,7 +116,9 @@ class Cuota(Base):
     @property
     def monto_pendiente_total(self) -> Decimal:
         """Calcula el monto total pendiente (capital + interés + mora)"""
-        return self.capital_pendiente + self.interes_pendiente + self.monto_mora
+        return (
+            self.capital_pendiente + self.interes_pendiente + self.monto_mora
+        )
 
     @property
     def porcentaje_pagado(self) -> Decimal:
@@ -136,7 +146,11 @@ class Cuota(Base):
             return Decimal("0.00")
 
         # Mora sobre el capital pendiente
-        mora = self.capital_pendiente * (tasa_mora_diaria / Decimal("100")) * Decimal(dias_mora)
+        mora = (
+            self.capital_pendiente
+            * (tasa_mora_diaria / Decimal("100"))
+            * Decimal(dias_mora)
+        )
 
         return mora.quantize(Decimal("0.01"))
 
@@ -188,7 +202,9 @@ class Cuota(Base):
             detalle["sobrante"] = saldo
 
         # Actualizar total pagado
-        self.total_pagado = self.capital_pagado + self.interes_pagado + self.mora_pagada
+        self.total_pagado = (
+            self.capital_pagado + self.interes_pagado + self.mora_pagada
+        )
 
         # Actualizar estado
         self.actualizar_estado()
@@ -222,7 +238,12 @@ Amortizacion = Cuota
 pago_cuotas = Table(
     "pago_cuotas",
     Base.metadata,
-    Column("pago_id", Integer, ForeignKey("pagos.id", ondelete="CASCADE"), primary_key=True),
+    Column(
+        "pago_id",
+        Integer,
+        ForeignKey("pagos.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
     Column(
         "cuota_id",
         Integer,
