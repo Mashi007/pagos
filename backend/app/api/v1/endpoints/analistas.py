@@ -20,9 +20,9 @@ logger = logging.getLogger(__name__
 router = APIRouter(
 @router.get("/test-no-auth"
 def test_analistas_no_auth(db: Session = Depends(get_db)):
-    """
+    """"""
     Test endpoint sin autenticación para verificar analistas
-    """
+    """"""
     try:
         total_analistas = db.query(Analista).count(
         analistas = db.query(Analista).limit(5).all(
@@ -41,9 +41,9 @@ def test_analistas_no_auth(db: Session = Depends(get_db)):
 
 @router.get("/cache-stats"
 def cache_stats():
-    """
+    """"""
     Obtener estadísticas del cache de analistas
-    """
+    """"""
     try:
         stats = analistas_cache.get_stats(
         return 
@@ -54,9 +54,9 @@ def cache_stats():
 
 @router.post("/cache-clear"
 def clear_cache():
-    """
+    """"""
     Limpiar el cache de analistas
-    """
+    """"""
     try:
         analistas_cache.clear(
         return 
@@ -67,9 +67,9 @@ def clear_cache():
 
 @router.get("/health"
 def health_check_analistas(db: Session = Depends(get_db)):
-    """
+    """"""
     Health check específico para el módulo de analistas
-    """
+    """"""
     try:
         result = db.execute(text("SELECT COUNT(*) FROM analistas")
         total = result.fetchone()[0]
@@ -87,9 +87,9 @@ def analistas_backup1
     activo: Optional[bool] = Query
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
-    """
+    """"""
     Endpoint de respaldo 1 - Sin autenticación, con cache
-    """
+    """"""
     try:
         cache_key = 
             f"backup1_{generate_cache_key(skip, limit, activo, search)}"
@@ -154,9 +154,9 @@ def analistas_backup2
     activo: Optional[bool] = Query
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
-    """
+    """"""
     Endpoint de respaldo 2 - Sin autenticación, consulta simple
-    """
+    """"""
     try:
         # Consulta más simple para evitar problemas
         query = "SELECT id, nombre, activo FROM analistas ORDER BY id OFFSET %s LIMIT %s"
@@ -195,10 +195,10 @@ def analistas_emergency
     activo: Optional[bool] = Query
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
-    """
+    """"""
     Endpoint de emergencia para analistas SIN autenticación
     Usar solo cuando el endpoint principal falle
-    """
+    """"""
     try:
         # Usar SQL directo para máxima compatibilidad
         base_query = "SELECT id, nombre, activo, updated_at FROM analistas"
@@ -253,9 +253,9 @@ def listar_analistas
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     Listar analistas CON autenticación (endpoint principal
-    """
+    """"""
     try:
         query = db.query(Analista
         if activo is not None:
@@ -297,9 +297,9 @@ def listar_analistas_no_auth
     activo: Optional[bool] = Query
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
-    """
+    """"""
     Listar analistas SIN autenticación (para testing
-    """
+    """"""
     try:
         query = db.query(Analista
         if activo is not None:
@@ -327,10 +327,10 @@ def listar_asesores_activos
     db: Session = Depends(get_db),
     # TEMPORALMENTE SIN AUTENTICACIÓN PARA DROPDOWNS
     # current_user: User = Depends(get_current_user
-    """
+    """"""
     Listar solo asesores activos (para formularios
     Simplificado: Sin filtros adicionales, solo asesores activos
-    """
+    """"""
     try:
         query = db.query(Analista).filter(Analista.activo
         asesores = query.all(
@@ -343,9 +343,9 @@ def listar_asesores_activos
 def obtener_asesor
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     Obtener un asesor por ID
-    """
+    """"""
     asesor = db.query(Analista).filter(Analista.id == asesor_id).first(
     if not asesor:
         raise HTTPException(status_code=404, detail="Analista no encontrado"
@@ -354,9 +354,9 @@ def obtener_asesor
 def crear_asesor
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     Crear un nuevo asesor
-    """
+    """"""
     try:
         # Generar email automático si no se proporciona
         if not asesor_data.email:
@@ -391,9 +391,9 @@ def crear_asesor
 def actualizar_asesor
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     Actualizar un asesor existente
-    """
+    """"""
     try:
         asesor = db.query(Analista).filter(Analista.id == asesor_id).first(
         if not asesor:
@@ -427,9 +427,9 @@ def actualizar_asesor
 def eliminar_asesor
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     Eliminar un analista (HARD DELETE - borrado completo de BD
-    """
+    """"""
     try:
         asesor = db.query(Analista).filter(Analista.id == asesor_id).first(
         if not asesor:
@@ -447,4 +447,4 @@ def eliminar_asesor
             status_code=500, detail=f"Error al eliminar analista: {str(e)}"
         
 """
-"""
+""""""

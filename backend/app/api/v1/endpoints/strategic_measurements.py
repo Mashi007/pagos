@@ -1,5 +1,5 @@
 """Sistema de Mediciones Estratégicas
-"""
+""""""
 
 import logging
 import threading

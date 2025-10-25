@@ -1,9 +1,9 @@
 from datetime import date
 # backend/app/services/email_service.py
-"""Servicio de envío de emails
+"""Servicio de envío de emails"""
 
 Configuración y envío de emails usando SMTP
-"""
+""""""
 
 import logging
 import smtplib
@@ -30,7 +30,7 @@ class EmailService:
 
     def send_email
     ) -> Dict[str, any]:
-        """
+        """"""
         Enviar email
 
         Args:
@@ -40,7 +40,7 @@ class EmailService:
 
         Returns:
             Dict con resultado del envío
-        """
+        """"""
         try:
             # Crear mensaje
             msg = MIMEMultipart()
@@ -72,7 +72,7 @@ class EmailService:
 
     def send_notification_email
     ) -> Dict[str, any]:
-        """
+        """"""
         Enviar email de notificación
 
         Args:
@@ -81,28 +81,28 @@ class EmailService:
 
         Returns:
             Dict con resultado del envío
-        """
+        """"""
         try:
             # Generar contenido basado en tipo
             if notification_type == "payment_reminder":
                 subject = "Recordatorio de Pago"
-                body = """
+                body = """"""
                 Estimado/a {data.get('client_name', 'Cliente')},
 
                 Fecha de vencimiento: {data.get('due_date', 'N/A')}
 
 
                 Equipo de Financiamiento
-                """
+                """"""
             else:
                 subject = "Notificación del Sistema"
-                body = """
+                body = """"""
                 Estimado/a {data.get('client_name', 'Cliente')},
 
                 {data.get('message', 'Tiene una nueva notificación del sistema.')}
 
                 Equipo de Financiamiento
-                """
+                """"""
 
             return self.send_email([to_email], subject, body)
 
@@ -111,4 +111,4 @@ class EmailService:
             return 
 
 """
-"""
+""""""

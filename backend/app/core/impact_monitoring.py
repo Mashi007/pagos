@@ -1,5 +1,5 @@
 """Sistema de Monitoreo con Análisis de Impacto en Performance
-"""
+""""""
 
 import logging
 import threading
@@ -67,9 +67,9 @@ class Alert:
 
 
 class ImpactAnalyzer:
-    """
+    """"""
     Analizador de impacto en performance del sistema
-    """
+    """"""
 
 
     def __init__(self):

@@ -1,10 +1,10 @@
 from app.core.security import decode_token
 from datetime import date
 # backend/app/services/auth_service.py
-"""Servicio de autenticación
+"""Servicio de autenticación"""
 
 Lógica de negocio para login, logout, refresh tokens
-"""
+""""""
 
 import logging
 from typing import Optional, Tuple
@@ -29,7 +29,7 @@ class AuthService:
     @staticmethod
     def authenticate_user
     ) -> Optional[User]:
-        """
+        """"""
         Autentica un usuario con email y contraseña
 
         Args:
@@ -37,7 +37,7 @@ class AuthService:
             password: Contraseña en texto plano
 
         Returns:
-        """
+        """"""
         # Consulta específica solo con columnas necesarias para autenticación
         # CASE INSENSITIVE: Normalizar email a minúsculas para búsqueda
         email_normalized = email.lower().strip()
@@ -62,7 +62,7 @@ class AuthService:
 
     @staticmethod
     def login(db: Session, login_data: LoginRequest) -> Tuple[Token, User]:
-        """
+        """"""
         Realiza el login de un usuario
 
         Args:
@@ -72,7 +72,7 @@ class AuthService:
 
         Raises:
             HTTPException: Si las credenciales son inválidas o el usuario está inactivo
-        """
+        """"""
         # Autenticar usuario
         logger.info
 
@@ -102,7 +102,7 @@ class AuthService:
 
     @staticmethod
     def refresh_access_token(db: Session, refresh_token: str) -> Token:
-        """
+        """"""
         Genera un nuevo access token usando un refresh token
 
         Args:
@@ -113,7 +113,7 @@ class AuthService:
 
         Raises:
             HTTPException: Si el refresh token es inválido
-        """
+        """"""
         try:
             payload = decode_token(refresh_token)
 
@@ -145,7 +145,7 @@ class AuthService:
     @staticmethod
     def change_password
     ) -> User:
-        """
+        """"""
         Cambia la contraseña de un usuario
 
         Args:
@@ -158,7 +158,7 @@ class AuthService:
 
         Raises:
             HTTPException: Si la contraseña actual es incorrecta o la nueva es débil
-        """
+        """"""
         # Verificar contraseña actual
         if not verify_password(current_password, user.hashed_password):
             raise HTTPException
@@ -177,13 +177,13 @@ class AuthService:
 
     @staticmethod
     def get_user_permissions(user: User) -> list[str]:
-        """
+        """"""
 
         Args:
             user: Usuario
 
         Returns:
-        """
+        """"""
         try:
             # Usar is_admin directamente - evitar conflicto de nombres
             from app.core.permissions_simple import 
@@ -196,4 +196,4 @@ class AuthService:
             return []
 
 """
-"""
+""""""

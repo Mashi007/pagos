@@ -1,7 +1,7 @@
 from collections import deque
-"""Sistema de Análisis de Flujo de Autenticación
+"""Sistema de Análisis de Flujo de Autenticación"""
 Tracing avanzado y análisis de causa raíz para problemas de autenticación
-"""
+""""""
 
 import hashlib
 import json
@@ -181,10 +181,10 @@ def _verificar_usuario_en_bd
 
 async def trace_authentication_flow
     request: Request, db: Session = Depends(get_db)
-    """
+    """"""
     🔬 Trace completo del flujo de autenticación
     Analiza cada paso del proceso de autenticación
-    """
+    """"""
     tracer = AuthFlowTracer()
 
     try:
@@ -329,9 +329,9 @@ def _analizar_timing_por_estado() -> dict:
 
 @router.get("/analyze-correlation")
 async def analyze_request_correlation(request: Request, minutes: int = 60):
-    """
+    """"""
     🔗 Análisis de correlación entre requests (VERSIÓN REFACTORIZADA)
-    """
+    """"""
     try:
         # 1. Obtener traces recientes
         recent_traces = _obtener_traces_recientes(minutes)
@@ -415,7 +415,7 @@ def _detectar_anomalia_duracion_excesiva(recent_traces: list) -> list:
 @router.get("/detect-anomalies")
 async def detect_authentication_anomalies():
     """
-    """
+    """"""
     try:
         # Obtener traces de la última hora
         recent_traces = [
@@ -439,7 +439,7 @@ async def detect_authentication_anomalies():
         return 
 
     """
-    """
+    """"""
     try:
         recent_traces = [
             trace
@@ -489,4 +489,4 @@ def _generate_correlation_recommendations
 # El middleware debe ser agregado a la aplicación principal en main.py
 
 """
-"""
+""""""

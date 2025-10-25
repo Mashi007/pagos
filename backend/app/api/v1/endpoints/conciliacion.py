@@ -1,5 +1,5 @@
 from datetime import date
-# backend/app/api/v1/endpoints/conciliacion.py"""Sistema de Conciliación BancariaProceso completo de conciliación automática
+# backend/app/api/v1/endpoints/conciliacion.py"""Sistema de Conciliación BancariaProceso completo de conciliación automática"""
 # \nimport Decimal\nfrom typing \nimport List, Optional, Dict, Any\nimport pandas as pd\nfrom fastapi \nimport 
 # BackgroundTasks, Depends, File, HTTPException, Query, UploadFile,)\nfrom sqlalchemy.orm \nimport Session\nfrom app.api.deps
 # \nimport get_current_user, get_db\nfrom app.db.session \nimport SessionLocal\nfrom app.models.amortizacion \nimport
@@ -26,7 +26,7 @@ from datetime import date
 # advertencias\ndef _validar_referencia( fila:\n pd.Series, index:\n int, referencias_vistas:\n set) -> tuple[str, list,
 # str(fila["referencia"]).strip() if not referencia or referencia == "nan":\n advertencias.append
 # _buscar_matching_automatico( cedula:\n str, monto:\n Decimal, db:\n Session) -> dict:\n """Buscar matching automático para
-# vista previa""" if not cedula or cedula == "nan":\n return {} cliente = db.query(Cliente).filter
+# vista previa""" if not cedula or cedula == "nan":\n return {} cliente = db.query(Cliente).filter"""
 # cedula).first() if not cliente:\n return {} # Buscar cuotas pendientes del cliente cuotas_pendientes = ( db.query(Cuota)
 # .join(Prestamo) .filter( Prestamo.cliente_id == cliente.id, Cuota.estado.in_(["PENDIENTE", "VENCIDA", "PARCIAL"]),
 # Cuota.monto_cuota == monto, # Monto exacto ) .first() ) if cuotas_pendientes:\n return 
@@ -56,7 +56,7 @@ from datetime import date
 # validar_archivo_bancario( archivo:\n UploadFile = File(...), db:\n Session = Depends(get_db), current_user:\n User =
 # Formato requerido (Excel):\n - Columna A:\n Fecha de transacción - Columna B:\n Monto - Columna C:\n Nº
 # Referencia/Comprobante - Columna D:\n Cédula del pagador - Columna E:\n Descripción/Concepto - Columna F:\n Nº Cuenta
-# origen """ try:\n # 1. Detectar formato formato = _detectar_formato_archivo(archivo.filename) # 2. Leer archivo contenido =
+# origen """ try:\n # 1. Detectar formato formato = _detectar_formato_archivo(archivo.filename) # 2. Leer archivo contenido ="""
 # await archivo.read() if formato == "EXCEL":\n df = _leer_archivo_excel(contenido) else:\n # CSV df =
 # _leer_archivo_csv(contenido) # 3. Validar columnas requeridas errores = _validar_columnas_requeridas(df) if errores:\n
 # return ValidacionArchivoBancario( archivo_valido=False, formato_detectado=formato, total_filas=len(df), filas_validas=0,
@@ -64,7 +64,7 @@ from datetime import date
 # procesando archivo:\n {str(e)}" )\ndef _buscar_cliente_por_cedula(cedula:\n str, db:\n Session) -> Optional[Cliente]:\n
 # """Buscar cliente por cédula""" return db.query(Cliente).filter(Cliente.cedula == cedula).first()\ndef
 # _buscar_cuota_exacta( cliente_id:\n int, monto:\n Decimal, db:\n Session) -> Optional[Cuota]:\n """Buscar cuota con monto
-# exacto""" return ( db.query(Cuota) .join(Prestamo) .filter
+# exacto""" return ( db.query(Cuota) .join(Prestamo) .filter"""
 # Cuota.estado.in_(["PENDIENTE", "VENCIDA", "PARCIAL"]), Cuota.monto_cuota == monto, ) .first() )\ndef
 # _buscar_cuota_aproximada( cliente_id:\n int, monto:\n Decimal, tolerancia:\n Decimal, db:\n Session) -> Optional[Cuota]:\n
 # """Buscar cuota con monto aproximado""" return ( db.query(Cuota) .join(Prestamo) .filter
@@ -81,7 +81,7 @@ from datetime import date
 # REVISAR", }\ndef _buscar_pago_por_referencia( referencia:\n str, db:\n Session) -> Optional[Pago]:\n """Buscar pago por
 # número de referencia""" return db.query(Pago).filter(Pago.numero_operacion == referencia).first()\ndef
 # _crear_match_referencia( mov:\n MovimientoBancarioExtendido, pago:\n Pago) -> Dict[str, Any]:\n """Crear resultado de match
-# por referencia""" return 
+# por referencia""" return """
 # "fecha":\n pago.fecha_pago, }, "tipo_match":\n "REFERENCIA_CONOCIDA", "confianza":\n 90.0, "estado_visual":\n "✅ EXACTO",
 # }\ndef _crear_sin_match(mov:\n MovimientoBancarioExtendido) -> Dict[str, Any]:\n """Crear resultado sin match""" return 
 # "Conciliación confirmada", "pago_id":\n pago_id}@router.get("/pendientes", response_model=List[dict])\ndef
@@ -91,7 +91,7 @@ from datetime import date
 # Depends(get_db)):\n """ Genera reporte mensual de conciliación. """ \nfrom calendar \nimport monthrange fecha_inicio =
 # db.query(Pago) .filter
 # revision:\n RevisionManual, db:\n Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """
-# Procesar revisión manual de movimiento bancario """ try:\n if revision.accion == "APLICAR":\n # Buscar cliente cliente = 
+# Procesar revisión manual de movimiento bancario """ try:\n if revision.accion == "APLICAR":\n # Buscar cliente cliente = """
 # db.query(Cliente) .filter(Cliente.cedula == revision.cliente_cedula) .first() ) if not cliente:\n raise HTTPException
 # status_code=404, detail="Cliente no encontrado" ) # Buscar cuota si se especifica cuota = None if revision.cuota_id:\n
 # cuota = ( db.query(Cuota) .join(Prestamo) .filter( Cuota.id == revision.cuota_id, Prestamo.cliente_id == cliente.id, )
@@ -123,12 +123,12 @@ from datetime import date
 # "color":\n "danger", "confianza":\n 0.0, "accion_sugerida":\n "BUSQUEDA_MANUAL", }, ] return 
 # revisión manual", "❌ MANUAL":\n "Sin coincidencia - Requiere búsqueda manual", }, }#
 # ============================================# FUNCIONES AUXILIARES# ============================================async \ndef
-# conciliación en background """ try:\n # Simulación de generación de reporte logger = logging.getLogger(__name__)
+# conciliación en background """ try:\n # Simulación de generación de reporte logger = logging.getLogger(__name__)"""
 # ${total_monto}" ) # En implementación real:\n # 1. Crear PDF/Excel con detalles # 2. Enviar por email al usuario # 3.
 # generando reporte de conciliación:\n {str(e)}")# ============================================# FLUJO COMPLETO DE
 # flujo_completo_conciliacion( background_tasks:\n BackgroundTasks, archivo:\n UploadFile = File(...), db:\n Session =
 # Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 🏦 FLUJO COMPLETO DE CONCILIACIÓN BANCARIA MASIVA
-# genera reporte PDF 14. ✅ Conciliación completada 15. ✅ Notifica a Admin """ try:\n #
+# genera reporte PDF 14. ✅ Conciliación completada 15. ✅ Notifica a Admin """ try:\n #"""
 # ============================================ # PASOS 1-5:\n VALIDACIÓN Y VISTA PREVIA #
 # validacion = await validar_archivo_bancario( archivo=archivo, db=db, current_user=current_user ) if not
 # validacion.archivo_valido:\n return 
@@ -155,7 +155,7 @@ from datetime import date
 # detail=f"Error aplicando conciliación:\n {str(e)}" )@router.get("/flujo-completo/paso/{paso}")\ndef
 # obtener_paso_flujo_conciliacion
 # conciliación" ), db:\n Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 📋 INFORMACIÓN
-# DETALLADA DE CADA PASO DEL FLUJO """ if paso == 1:\n return 
+# DETALLADA DE CADA PASO DEL FLUJO """ if paso == 1:\n return """
 # Referencia/Comprobante", "D:\n Cédula del pagador", "E:\n Descripción/Concepto", "F:\n Nº Cuenta origen", ], },
 # "siguiente_paso":\n "Ingresar al sistema y acceder a Conciliación Bancaria", } elif paso == 2:\n return 
 # "Cargar archivo Excel", } elif paso == 7:\n return 
@@ -173,16 +173,16 @@ from datetime import date
 # "revision_manual":\n "POST /conciliacion/revision-manual", "aplicar_masivo":\n "POST /conciliacion/aplicar-masivo", }, }#
 # ============================================# FUNCIONES AUXILIARES PARA FLUJO COMPLETO#
 # ============================================async \ndef _generar_reporte_conciliacion_completo
-# """ try:\n logger = logging.getLogger(__name__) # Simulación de generación de reporte PDF reporte_data = 
+# """ try:\n logger = logging.getLogger(__name__) # Simulación de generación de reporte PDF reporte_data = """
 # total_monto, "archivo_generado":\n f"conciliacion_{proceso_id}.pdf", } logger.info
 # e:\n logger = logging.getLogger(__name__) logger.error(f"Error generando reporte completo:\n {str(e)}")async \ndef
 # """ 🔔 PASO 15:\n Notificar a Admin sobre conciliación completada """ try:\n db = SessionLocal() # Obtener administradores
 # admins = ( db.query(User) .filter(User.is_admin, User.is_active, User.email.isnot(None)) .all() ) for admin in admins:\n
-# mensaje = f"""Hola {admin.full_name},CONCILIACIÓN BANCARIA COMPLETADA RESUMEN DEL PROCESO:\n Proceso ID:\n {proceso_id}
+# mensaje = f"""Hola {admin.full_name},CONCILIACIÓN BANCARIA COMPLETADA RESUMEN DEL PROCESO:\n Proceso ID:\n {proceso_id}"""
 # = Notificacion
 # Enviar emails \nfrom app.services.email_service \nimport EmailService email_service = EmailService() for admin in admins:\n
 # notif = ( db.query(Notificacion) .filter( Notificacion.user_id == admin.id, Notificacion.asunto.like(f"%{proceso_id}%"), )
 # .order_by(Notificacion.id.desc()) .first() ) if notif:\n await email_service.send_email
 # logging.getLogger(__name__) logger.error( f"Error notificando admin sobre conciliación " f"{proceso_id}:\n {str(e)}" )
 
-"""
+""""""

@@ -1,7 +1,7 @@
 # backend/app/services/ml_service.py
-"""Servicio de Machine Learning
+"""Servicio de Machine Learning"""
 
-"""
+""""""
 
 import logging
 from typing import Dict, List, Optional
@@ -24,13 +24,13 @@ class MLService:
 
 
     def train_risk_model(self, data: List[Dict]) -> Dict[str, any]:
-        """
+        """"""
         Entrenar modelo de evaluación de riesgo
 
         Args:
 
         Returns:
-        """
+        """"""
         try:
             if not data:
                 return 
@@ -79,14 +79,14 @@ class MLService:
 
 
     def predict_risk(self, client_data: Dict) -> Dict[str, any]:
-        """
+        """"""
         Predecir nivel de riesgo de un cliente
 
         Args:
 
         Returns:
             Dict con predicción de riesgo
-        """
+        """"""
         try:
             if not self.is_trained:
                 return 

@@ -1,5 +1,5 @@
 from datetime import date
-# backend/app/services/notification_multicanal_service.py"""Servicio de Notificaciones MulticanalSistema 100% automático de
+# backend/app/services/notification_multicanal_service.py"""Servicio de Notificaciones MulticanalSistema 100% automático de"""
 # sqlalchemy.orm import Sessionfrom app.models.amortizacion import Cuotafrom app.models.cliente import Clientefrom
 # app.models.notificacion import Notificacionfrom app.models.prestamo import Prestamofrom app.models.user import Userfrom
 # app.services.email_service import EmailServicefrom app.services.whatsapp_service import WhatsAppServicelogger =
@@ -18,14 +18,14 @@ from datetime import date
 # db.query(Cliente).filter(Cliente.id == cliente_id).first() ) if cliente: cliente.observaciones = 
 # f"PREFERENCIA_NOTIFICACION: {canal_preferido.value}" ) db.commit() return True return False except Exception as e:
 # logger.error(f"Error actualizando preferencias: {e}") return Falseclass NotificacionMulticanal: """ 🔔 Servicio principal de
-# notificaciones multicanal """ def __init__(self, db: Session): self.db = db self.email_service = EmailService()
+# notificaciones multicanal """ def __init__(self, db: Session): self.db = db self.email_service = EmailService()"""
 # TipoNotificacionCliente.RECORDATORIO_3_DIAS: "09:00", TipoNotificacionCliente.RECORDATORIO_1_DIA: "09:00",
 # TipoNotificacionCliente.DIA_VENCIMIENTO: "08:00", TipoNotificacionCliente.MORA_1_DIA: "10:00",
 # TipoNotificacionCliente.MORA_3_DIAS: "10:00", TipoNotificacionCliente.MORA_5_DIAS: "10:00",
 # TipoNotificacionCliente.CONFIRMACION_PAGO: "INMEDIATO", } # Límites anti-spam self.LIMITE_NOTIFICACIONES_DIA = 3
 # self.INTERVALO_MINIMO_HORAS = 2 self.REINTENTOS_MAXIMOS = 2 self.INTERVALO_REINTENTO_MINUTOS = 30 async def
 # procesar_notificaciones_automaticas(self) -> Dict[str, Any]: """ 🤖 Procesamiento automático de todas las notificaciones Se
-# ejecuta cada hora via scheduler/cron """ try: logger.info( "🔔 Iniciando procesamiento automático de notificaciones" )
+# ejecuta cada hora via scheduler/cron """ try: logger.info( "🔔 Iniciando procesamiento automático de notificaciones" )"""
 # "fallidas": 0, "por_tipo": {}, "errores": [], } # Procesar cada tipo de notificación for tipo_notif in
 # TipoNotificacionCliente: try: resultado_tipo = await self._procesar_tipo_notificacion( tipo_notif )
 # Exception as e: error_msg = ( f"Error procesando {tipo_notif.value}: {str(e)}" ) logger.error(error_msg)
@@ -59,24 +59,24 @@ from datetime import date
 # template_whatsapp = self._obtener_template_whatsapp( tipo, cliente_data ) # Enviar WhatsApp resultado = await
 # self.whatsapp_service.send_message( to_phone=cliente_data["telefono"], message=template_whatsapp["mensaje"], ) return
 # _obtener_template_email( self, tipo: TipoNotificacionCliente, cliente_data: Dict ) -> Dict[str, str]: """Obtener template
-# de email según tipo de notificación""" # Variables comunes variables = 
+# de email según tipo de notificación""" # Variables comunes variables = """
 # cliente_data["dias_mora"], "saldo_pendiente": f"${cliente_data['saldo_pendiente']:,.0f}", "vehiculo":
 # cliente_data["vehiculo"], "nombre_empresa": "Financiamiento Automotriz", "telefono_empresa": "809-XXX-XXXX", } templates =
 # { TipoNotificacionCliente.RECORDATORIO_3_DIAS: { "asunto": f"🚗 Recordatorio: Tu cuota #{variables['cuota']} vence en 3
 # días", "cuerpo_html": 
-# #666;"> {variables['nombre_empresa']}<br> 📞 {variables['telefono_empresa']} </p> </div> </div> </div> </div> """ ), },
+# #666;"> {variables['nombre_empresa']}<br> 📞 {variables['telefono_empresa']} </p> </div> </div> </div> </div> """ ), },"""
 # TipoNotificacionCliente.MORA_1_DIA: { "asunto": f"⚠️ Tu cuota #{variables['cuota']} está" + f"vencida - 1 día de atraso",
 # "cuerpo_html": 
-# </div> </div> </div> </div> """ ), }, TipoNotificacionCliente.CONFIRMACION_PAGO: 
+# </div> </div> </div> </div> """ ), }, TipoNotificacionCliente.CONFIRMACION_PAGO: """
 # #{variables['cuota']}", "cuerpo_html": 
-# {variables['nombre_empresa']}<br> 📞 {variables['telefono_empresa']} </p> </div> </div> </div> </div> """ ), }, } return
+# {variables['nombre_empresa']}<br> 📞 {variables['telefono_empresa']} </p> </div> </div> </div> </div> """ ), }, } return"""
 # templates.get
 # }, ) def _obtener_template_whatsapp( self, tipo: TipoNotificacionCliente, cliente_data: Dict ) -> Dict[str, str]:
 # cliente_data["nombre"].split()[0] cuota = cliente_data["cuota_numero"] monto = f"${cliente_data['monto_cuota']:,.0f}" fecha
 # cliente_data["vehiculo"] templates = 
 # 💳Dudas? Responde este mensaje.Gracias,Financiamiento Automotriz""" ) }, TipoNotificacionCliente.RECORDATORIO_1_DIA: 
 # pago!Financiamiento Automotriz""" ) }, TipoNotificacionCliente.DIA_VENCIMIENTO: 
-# vence HOY {vehiculo} {monto} Vence: HOYRealiza tu pago antes de las 6:00 PM para evitar mora.Financiamiento Automotriz""" )
+# vence HOY {vehiculo} {monto} Vence: HOYRealiza tu pago antes de las 6:00 PM para evitar mora.Financiamiento Automotriz""" )"""
 # }, TipoNotificacionCliente.MORA_1_DIA: 
 # Automotriz""" ) }, TipoNotificacionCliente.MORA_3_DIAS: 
 # llama: 809-XXX-XXXXFinanciamiento Automotriz""" ) }, TipoNotificacionCliente.MORA_5_DIAS: 
@@ -98,14 +98,14 @@ from datetime import date
 # cliente_data["monto_cuota"], "fecha_vencimiento": cliente_data[ "fecha_vencimiento" ].isoformat(), "tipo_notificacion":
 # tipo.value, } ), ) self.db.add(notificacion) self.db.commit() except Exception as e: logger.error
 # historial: {e}") def _es_hora_reporte_diario(self) -> bool: """Verificar si es hora del reporte diario""" ahora =
-# is_admin User.is_active, User.email.isnot(None), ) .all() ) # Crear reporte reporte_html = """ <h2>📊 Reporte Diario de
+# is_admin User.is_active, User.email.isnot(None), ) .all() ) # Crear reporte reporte_html = """ <h2>📊 Reporte Diario de"""
 # reporte_html += f"<li>{error}</li>" reporte_html += "</ul>" # Enviar reporte a equipo de cobranzas for usuario in
 # al equipo de cobranzas") except Exception as e: logger.error(f"Error generando reporte diario: {e}")#
 # ============================================# SCHEDULER DE NOTIFICACIONES#
 # ============================================class NotificationScheduler: """ ⏰ Scheduler automático de notificaciones Se
 # ejecuta cada hora para procesar notificaciones pendientes """ def __init__(self): self.is_running = False async def
 # ejecutar_ciclo_notificaciones( self, db: Session ) -> Dict[str, Any]: """ 🔄 Ejecutar ciclo completo de notificaciones
-# Método principal que se llama desde cron/scheduler """ if self.is_running: logger.warning
+# Método principal que se llama desde cron/scheduler """ if self.is_running: logger.warning"""
 # automático de notificaciones") # Crear servicio de notificaciones servicio_notif = NotificacionMulticanal(db) # Procesar
 # ConfigHelper return 
 # Exception as e: logger.error(f"Error verificando configuración: {e}") return 
@@ -114,13 +114,13 @@ from datetime import date
 # @staticmethod async def _reintentar_whatsapp(notificacion: Notificacion) -> bool: """Reintentar envío de WhatsApp""" try: #
 # whatsapp_service.send_message( to_phone=notificacion.destinatario_telefono, message=notificacion.mensaje, ) return
 # @staticmethod async def _notificar_admin_fallo_critico( notificacion: Notificacion, db: Session ): """Notificar a admin
-# sobre fallo crítico en notificaciones""" try: # Obtener administradores admins = ( db.query(User) .filter
+# sobre fallo crítico en notificaciones""" try: # Obtener administradores admins = ( db.query(User) .filter"""
 # Cambio clave: rol → is_admin User.is_active, User.email.isnot(None), ) .all() ) # Crear notificación de fallo crítico for
 # admin in admins: notif_admin = Notificacion
 # fallo crítico" ) except Exception as e: logger.error(f"Error notificando fallo crítico: {e}")#
 # ============================================# CONFIGURACIÓN DE TEMPLATES WHATSAPP#
 # ============================================class WhatsAppTemplateManager: """ 📝 Gestor de templates de WhatsApp Business
-# API """ TEMPLATES_WHATSAPP = 
+# API """ TEMPLATES_WHATSAPP = """
 # "idioma": "es", "componentes": [ { "tipo": "HEADER", "formato": "TEXT", "texto": "Recordatorio de Pago", }, 
 # {{5}}\n\nPor favor realiza tu pago a tiempo. " "💳\n\n¿Dudas? Responde este mensaje." ), }, 
 # "Financiamiento Automotriz"}, ], "variables": ["nombre", "cuota", "vehiculo", "fecha", "monto"], }, "mora_1_dia": 
@@ -132,4 +132,4 @@ from datetime import date
 # ["nombre", "monto", "vehiculo", "cuota"], }, } @staticmethod def obtener_template_para_aprobacion(template_name: str) ->
 # Dict: """ Obtener template formateado para envío a Meta para aprobación """ template =
 # WhatsAppTemplateManager.TEMPLATES_WHATSAPP.get( template_name ) if not template: return {} return 
-"""
+""""""

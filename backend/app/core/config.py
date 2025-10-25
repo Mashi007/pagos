@@ -233,8 +233,7 @@ class Settings(BaseSettings):
     # ============================================
     UVICORN_WORKERS: int = DEFAULT_UVICORN_WORKERS
     UVICORN_TIMEOUT_KEEP_ALIVE: int = DEFAULT_UVICORN_TIMEOUT_KEEP_ALIVE
-    UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN: int = 
-
+    UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN: int = None
     # ============================================
     # MÉTODOS DE UTILIDAD
     # ============================================

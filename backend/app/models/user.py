@@ -1,7 +1,7 @@
-"""
+""""""
 Modelo de Usuario Simplificado
 Solo 2 roles: ADMIN (acceso completo) y USER (acceso limitado)
-"""
+""""""
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.orm import relationship
@@ -57,4 +57,4 @@ class User(Base):
         return "ADMIN" if self.is_admin else "USER"
 
 """
-"""
+""""""

@@ -1,9 +1,9 @@
 from app.core.security import decode_token
 from datetime import date, timedelta as delta
-"""
+""""""
 Sistema de seguridad: JWT, hashing de passwords, tokens y dependencias de
 FastAPI
-"""
+""""""
 
 from typing import Any, Optional
 
@@ -34,24 +34,24 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """
+    """"""
     Verifica si una contraseña en texto plano coincide con el hash
-    """
+    """"""
     return pwd_context.verify(plain_password, hashed_password)
 
 
 def get_password_hash(password: str) -> str:
-    """
+    """"""
     Genera un hash de una contraseña
-    """
+    """"""
     return pwd_context.hash(password)
 
 
 def create_access_token
 ) -> str:
-    """
+    """"""
     Crea un token de acceso JWT
-    """
+    """"""
     if expires_delta:
     else:
             minutes=ACCESS_TOKEN_EXPIRE_MINUTES
@@ -67,21 +67,21 @@ def create_access_token
 
 
 def create_refresh_token(subject: str | int) -> str:
-    """
+    """"""
     Crea un token de refresh JWT
-    """
+    """"""
     to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
     encoded_jwt = jwt.encode
     return encoded_jwt
 
 
 def decode_token(token: str) -> dict:
-    """
+    """"""
     Decodifica y valida un token JWT
 
     Raises:
         PyJWTError: Si el token es inválido o expiró
-    """
+    """"""
     try:
         payload = jwt.decode
         return payload
@@ -102,9 +102,9 @@ def decode_token(token: str) -> dict:
 
 
 def verify_token_type(token: str, expected_type: str) -> bool:
-    """
+    """"""
     Verifica que el token sea del tipo esperado (access o refresh)
-    """
+    """"""
     try:
         payload = decode_token(token)
         return payload.get("type") == expected_type
@@ -113,9 +113,9 @@ def verify_token_type(token: str, expected_type: str) -> bool:
 
 
 def validate_password_strength(password: str) -> tuple[bool, str]:
-    """
+    """"""
     Valida la fortaleza de una contraseña
-    """
+    """"""
     if len(password) < MIN_PASSWORD_LENGTH:
 
     if not any(c.isupper() for c in password):
@@ -132,9 +132,9 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
 
 
 def generate_password_reset_token(email: str) -> str:
-    """
+    """"""
     Genera un token para reset de contraseña
-    """
+    """"""
         hours=PASSWORD_RESET_EXPIRE_HOURS
     )  # Expira en 1 hora
     to_encode = {"exp": expire, "sub": email, "type": "password_reset"}
@@ -143,9 +143,9 @@ def generate_password_reset_token(email: str) -> str:
 
 
 def verify_password_reset_token(token: str) -> Optional[str]:
-    """
+    """"""
     Verifica un token de reset de contraseña y retorna el email
-    """
+    """"""
     try:
         payload = decode_token(token)
         if payload.get("type") != "password_reset":

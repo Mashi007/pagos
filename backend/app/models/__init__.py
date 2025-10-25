@@ -14,7 +14,7 @@ from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.models.user import User
 
-__all__ = [
+__all__ = []
     "Base",
     "User",
     "Cliente",

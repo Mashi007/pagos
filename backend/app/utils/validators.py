@@ -1,6 +1,6 @@
 from datetime import date
 # backend/app/utils/validators.py
-"""
+""""""
 
 import re
 from decimal import Decimal
@@ -20,13 +20,13 @@ MAX_CUENTA_LENGTH = 20
 
 
 def validate_dni(dni: str) -> bool:
-    """
+    """"""
     Valida formato de DNI/Cédula
     Args:
         dni: Número de documento
     Returns:
         bool: True si es válido
-    """
+    """"""
     if not dni:
         return False
 
@@ -42,14 +42,14 @@ def validate_dni(dni: str) -> bool:
 
 
 def validate_phone(phone: str) -> bool:
-    """
+    """"""
     Valida formato de teléfono venezolano
     Ejemplo: +584121234567
     Args:
         phone: Número de teléfono
     Returns:
         bool: True si es válido
-    """
+    """"""
     if not phone:
         return False
 
@@ -60,13 +60,13 @@ def validate_phone(phone: str) -> bool:
 
 
 def validate_email(email: str) -> bool:
-    """
+    """"""
     Valida formato de email
     Args:
         email: Dirección de email
     Returns:
         bool: True si es válido
-    """
+    """"""
     if not email:
         return False
 
@@ -75,13 +75,13 @@ def validate_email(email: str) -> bool:
 
 
 def validate_ruc(ruc: str) -> bool:
-    """
+    """"""
     Valida formato de RUC paraguayo
     Args:
         ruc: Número de RUC
     Returns:
         bool: True si es válido
-    """
+    """"""
     if not ruc:
         return False
 
@@ -95,12 +95,12 @@ def validate_ruc(ruc: str) -> bool:
     return True
 
 
-    """
+    """"""
     Args:
         amount: Monto a validar
     Returns:
         bool: True si es válido
-    """
+    """"""
     if amount is None:
         return False
 
@@ -108,13 +108,13 @@ def validate_ruc(ruc: str) -> bool:
 
 
 def validate_percentage(percentage: Decimal) -> bool:
-    """
+    """"""
     Valida que un porcentaje esté entre 0 y 100
     Args:
         percentage: Porcentaje a validar
     Returns:
         bool: True si es válido
-    """
+    """"""
     if percentage is None:
         return False
 
@@ -122,14 +122,14 @@ def validate_percentage(percentage: Decimal) -> bool:
 
 
 def validate_date_range(start_date: date, end_date: date) -> bool:
-    """
+    """"""
     Valida que una fecha de inicio sea menor o igual a la fecha de fin
     Args:
         start_date: Fecha de inicio
         end_date: Fecha de fin
     Returns:
         bool: True si es válido
-    """
+    """"""
     if not start_date or not end_date:
         return False
 
@@ -137,13 +137,13 @@ def validate_date_range(start_date: date, end_date: date) -> bool:
 
 
 def validate_future_date(check_date: date) -> bool:
-    """
+    """"""
     Valida que una fecha sea futura
     Args:
         check_date: Fecha a validar
     Returns:
         bool: True si es válido
-    """
+    """"""
     if not check_date:
         return False
 
@@ -151,13 +151,13 @@ def validate_future_date(check_date: date) -> bool:
 
 
 def validate_past_date(check_date: date) -> bool:
-    """
+    """"""
     Valida que una fecha sea pasada
     Args:
         check_date: Fecha a validar
     Returns:
         bool: True si es válido
-    """
+    """"""
     if not check_date:
         return False
 
@@ -165,13 +165,13 @@ def validate_past_date(check_date: date) -> bool:
 
 
 def validate_date_not_future(check_date: date) -> bool:
-    """
+    """"""
     Valida que una fecha no sea futura (hoy o antes)
     Args:
         check_date: Fecha a validar
     Returns:
         bool: True si es válido
-    """
+    """"""
     if not check_date:
         return False
 
@@ -179,13 +179,13 @@ def validate_date_not_future(check_date: date) -> bool:
 
 
 def validate_cuotas(numero_cuotas: int) -> bool:
-    """
+    """"""
     Valida número de cuotas
     Args:
         numero_cuotas: Número de cuotas
     Returns:
         bool: True si es válido (entre 1 y MAX_CUOTAS)
-    """
+    """"""
     if numero_cuotas is None:
         return False
 
@@ -193,13 +193,13 @@ def validate_cuotas(numero_cuotas: int) -> bool:
 
 
 def validate_tasa_interes(tasa: Decimal) -> bool:
-    """
+    """"""
     Valida tasa de interés
     Args:
         tasa: Tasa de interés anual
     Returns:
         bool: True si es válido (entre 0 y MAX_TASA_INTERES)
-    """
+    """"""
     if tasa is None:
         return False
 
@@ -207,13 +207,13 @@ def validate_tasa_interes(tasa: Decimal) -> bool:
 
 
 def sanitize_string(text: Optional[str]) -> Optional[str]:
-    """
+    """"""
     Sanitiza un string removiendo caracteres especiales
     Args:
         text: Texto a sanitizar
     Returns:
         Optional[str]: Texto sanitizado
-    """
+    """"""
     if not text:
         return None
 
@@ -223,12 +223,12 @@ def sanitize_string(text: Optional[str]) -> Optional[str]:
 
 
 def sanitize_html(text: Optional[str]) -> Optional[str]:
-    """
+    """"""
     Sanitiza HTML para prevenir XSS
     Args:
         text: Texto que puede contener HTML
     Returns:
-    """
+    """"""
     if not text:
         return None
 
@@ -247,13 +247,13 @@ def sanitize_html(text: Optional[str]) -> Optional[str]:
 
 
 def format_dni(dni: str) -> str:
-    """
+    """"""
     Ejemplo: 12345678 -> 1.234.567-8
     Args:
         dni: DNI sin formato
     Returns:
         str: DNI formateado
-    """
+    """"""
     if not dni:
         return dni
 
@@ -273,14 +273,14 @@ def format_dni(dni: str) -> str:
 
 
 def format_phone(phone: str) -> str:
-    """
+    """"""
     Formatea teléfono
     Ejemplo: 0981234567 -> (0981) 234-567
     Args:
         phone: Teléfono sin formato
     Returns:
         str: Teléfono formateado
-    """
+    """"""
     if not phone:
         return phone
 
@@ -299,13 +299,13 @@ def format_phone(phone: str) -> str:
 
 
 def validate_cuenta_bancaria(cuenta: str) -> bool:
-    """
+    """"""
     Valida formato de cuenta bancaria
     Args:
         cuenta: Número de cuenta
     Returns:
         bool: True si es válido
-    """
+    """"""
     if not cuenta:
         return False
 
@@ -323,14 +323,14 @@ def validate_cuenta_bancaria(cuenta: str) -> bool:
 
 
 def validate_codigo_prestamo(codigo: str) -> bool:
-    """
+    """"""
     Valida formato de código de préstamo
     Formato esperado: PREST-YYYYMMDD-XXXX
     Args:
         codigo: Código de préstamo
     Returns:
         bool: True si es válido
-    """
+    """"""
     if not codigo:
         return False
 
@@ -341,7 +341,7 @@ def validate_codigo_prestamo(codigo: str) -> bool:
 def validate_monto_vs_ingreso
     max_percentage: Decimal = Decimal(str(MAX_PERCENTAGE_INGRESO)),
 ) -> bool:
-    """
+    """"""
     Valida que el monto de cuota no supere un porcentaje del ingreso
     Args:
         monto_cuota: Monto de la cuota
@@ -349,7 +349,7 @@ def validate_monto_vs_ingreso
         max_percentage: Porcentaje máximo permitido
     Returns:
         bool: True si es válido
-    """
+    """"""
     if not monto_cuota or not ingreso_mensual:
         return False
 
@@ -363,7 +363,7 @@ def validate_monto_vs_ingreso
 def validate_payment_amount
     tolerance: Decimal = Decimal(str(DEFAULT_TOLERANCE_PAYMENT)),
 ) -> bool:
-    """
+    """"""
     Valida que un monto de pago sea válido con respecto al esperado
     Args:
         payment_amount: Monto pagado
@@ -371,7 +371,7 @@ def validate_payment_amount
         tolerance: Tolerancia permitida
     Returns:
         bool: True si es válido
-    """
+    """"""
     if not payment_amount or not expected_amount:
         return False
 
@@ -427,13 +427,13 @@ def _validate_password_weak_patterns(password: str) -> tuple[bool, str]:
 
 
 def validate_password_strength(password: str) -> tuple[bool, str]:
-    """
+    """"""
     Valida la fortaleza de una contraseña
     Args:
         password: Contraseña a validar
     Returns:
         tuple[bool, str]: (es_valida, mensaje_error)
-    """
+    """"""
     # Validar longitud
     is_valid, message = _validate_password_length(password)
     if not is_valid:
@@ -452,13 +452,13 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
 
 
 def normalize_text(text: str) -> str:
-    """
+    """"""
     Normaliza texto para búsquedas
     Args:
         text: Texto a normalizar
     Returns:
         str: Texto normalizado
-    """
+    """"""
     if not text:
         return ""
 
@@ -476,4 +476,4 @@ def normalize_text(text: str) -> str:
 
     return text
 
-"""
+""""""

@@ -1,8 +1,8 @@
 from datetime import date, timedelta as delta
 # backend/app/models/aprobacion.py
-"""Modelo de Aprobación
+"""Modelo de Aprobación"""
 Sistema de workflow para solicitudes que requieren aprobación
-"""
+""""""
 
 # from sqlalchemy import  # TODO: Agregar imports específicos
 from sqlalchemy.orm import relationship
@@ -13,9 +13,9 @@ from app.db.session import Base
 
 
 class Aprobacion(Base):
-    """
+    """"""
     Modelo de Aprobación para workflow de solicitudes
-    """
+    """"""
     __tablename__ = "aprobaciones"
     __table_args__ = {"extend_existing": True}
 
@@ -163,4 +163,4 @@ class Aprobacion(Base):
         return 
 
 """
-"""
+""""""

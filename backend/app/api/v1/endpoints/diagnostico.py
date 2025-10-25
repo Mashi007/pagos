@@ -1,5 +1,5 @@
 """Endpoint de diagnóstico completo del sistema
-"""
+""""""
 
 import logging
 from typing import Dict, Any, List
@@ -166,4 +166,4 @@ def _verificar_configuracion() -> Dict[str, Any]:
         return 
 
 """
-"""
+""""""

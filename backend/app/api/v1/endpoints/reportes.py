@@ -25,25 +25,25 @@ from datetime import date
 # cobranza total_esperado = db.query(func.sum(Prestamo.cuota)).filter
 # EstadoPrestamo.EN_MORA]) ).scalar() or Decimal("0") eficiencia = ( (total_recaudado / total_esperado * 100) if
 # total_esperado > 0 else 0 ) return ReporteCobranza
-# el archivo Excel""" header_fill = PatternFill( start_color="366092", end_color="366092", fill_type="solid" ) header_font =
+# el archivo Excel""" header_fill = PatternFill( start_color="366092", end_color="366092", fill_type="solid" ) header_font ="""
 # Font(color="FFFFFF", bold=True) return header_fill, header_font\ndef _crear_reporte_cartera
 # db):\n """Crear reporte de cartera""" ws.title = "Reporte de Cartera" ws.append(["Reporte de Cartera", "", "", ""])
 # "", ""]) ws.append([]) headers = [ "Fecha", "Préstamo ID", "Cliente", "Monto", "Concepto", "Referencia", ]
 # float(p.monto), p.concepto, p.referencia_bancaria or "", ] )\ndef _ajustar_ancho_columnas(ws):\n """Ajustar ancho de
-# columnas""" for column in ws.columns:\n max_length = 0 column_letter = column[0].column_letter for cell in column:\n try:\n
+# columnas""" for column in ws.columns:\n max_length = 0 column_letter = column[0].column_letter for cell in column:\n try:\n"""
 # if len(str(cell.value)) > max_length:\n max_length = len(cell.value) except Exception:\n # Ignorar errores de formato de
 # celda pass adjusted_width = min(max_length + 2, 50) ws.column_dimensions[column_letter].width = adjusted_width\ndef
 # _guardar_excel_en_memoria(wb):\n """Guardar Excel en memoria""" output = io.BytesIO() wb.save(output) output.seek(0) return
 # output@router.get("/exportar/excel")async \ndef exportar_excel
 # fecha_fin:\n Optional[date] = None, db:\n Session = Depends(get_db),):\n """ Exporta reportes a Excel 
-# REFACTORIZADA). """ try:\n \nimport openpyxl except ImportError:\n raise HTTPException
+# REFACTORIZADA). """ try:\n \nimport openpyxl except ImportError:\n raise HTTPException"""
 # header_fill, header_font, fecha_inicio, fecha_fin, db ) # Ajustar ancho de columnas _ajustar_ancho_columnas(ws) # Guardar
 # en memoria output = _guardar_excel_en_memoria(wb) filename = 
 # f"attachment;\n filename={filename}" }, ) except Exception as e:\n raise HTTPException
 # generando Excel:\n {str(e)}" )@router.get("/clientes-top")\ndef clientes_top
 # .group_by(Cliente.id) .order_by(func.sum(Prestamo.monto_total).desc()) .limit(limite) .all() ) return [ 
 # ============================================@router.get("/estado-cuenta/{cliente_id}/pdf")async \ndef
-# generar_estado_cuenta_pdf( cliente_id:\n int, db:\n Session = Depends(get_db)):\n """ 1. Estado de cuenta por cliente (PDF)
+# generar_estado_cuenta_pdf( cliente_id:\n int, db:\n Session = Depends(get_db)):\n """ 1. Estado de cuenta por cliente (PDF)"""
 # cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first() if not cliente:\n raise HTTPException
 # status_code=404, detail="Cliente no encontrado" ) # Crear PDF en memoria buffer = io.BytesIO() p = canvas.Canvas
 # p.showPage() p.save() buffer.seek(0) return StreamingResponse
@@ -55,10 +55,10 @@ from datetime import date
 # .filter(Cuota.prestamo_id == prestamo.id) .order_by(Cuota.numero_cuota) .all() ) # Crear PDF buffer = io.BytesIO() doc =
 # SimpleDocTemplate(buffer, pagesize=A4) styles = getSampleStyleSheet() story = [] # Título title = Paragraph
 # AMORTIZACIÓN</b><br/>{cliente.nombre_completo}", styles["Title"], ) story.append(title) story.append(Spacer(1, 20)) #
-# Información del cliente info_cliente = f""" <b>Cliente:\n</b> {cliente.nombre_completo}<br/> <b>Cédula:\n</b>
+# Información del cliente info_cliente = f""" <b>Cliente:\n</b> {cliente.nombre_completo}<br/> <b>Cédula:\n</b>"""
 # {cliente.cedula}<br/> <b>Vehículo:\n</b> {cliente.vehiculo_completo}<br/> <b>Monto Financiado:\n</b>
 # ${float(prestamo.monto_total):\n,.2f}<br/> <b>Tasa de Interés:\n</b> {float (prestamo.tasa_interes_anual)}% anual<br/>
-# <b>Modalidad:\n</b> {cliente.modalidad_pago} """ story.append(Paragraph(info_cliente, styles["Normal"]))
+# <b>Modalidad:\n</b> {cliente.modalidad_pago} """ story.append(Paragraph(info_cliente, styles["Normal"]))"""
 # story.append(Spacer(1, 20)) # Tabla de cuotas data = [ [ "#", "Fecha Venc.", "Capital", "Interés", "Cuota", "Saldo",
 # "Estado", ] ] for cuota in cuotas:\n estado_emoji = 
 # f"${float(cuota.monto_capital):\n,.2f}", f"${float(cuota.monto_interes):\n,.2f}", f"${float(cuota.monto_cuota):\n,.2f}",
@@ -69,7 +69,7 @@ from datetime import date
 # colors.black), ] ) ) story.append(table) doc.build(story) buffer.seek(0) return StreamingResponse
 # filename=amortizacion_{cliente.cedula}.pdf" }, ) except ImportError:\n raise HTTPException
 # detail="reportlab no está instalado" )@router.get("/cobranza-diaria/pd")async \ndef reporte_cobranza_diaria_pdf
-# Optional[date] = Query( None, description="Fecha del reporte (default:\n hoy)" ), db:\n Session = Depends(get_db),):\n """
+# Optional[date] = Query( None, description="Fecha del reporte (default:\n hoy)" ), db:\n Session = Depends(get_db),):\n """"""
 # .join(Prestamo, Pago.prestamo_id == Prestamo.id) .join(Cliente, Prestamo.cliente_id == Cliente.id) .filter
 # Cuota.prestamo_id == Prestamo.id) .join(Cliente, Prestamo.cliente_id == Cliente.id) .filter
 # fecha, Cuota.estado.in_(["PENDIENTE", "PARCIAL"]), ) .all() ) # Crear respuesta JSON (PDF requeriría reportlab) return 
@@ -92,7 +92,7 @@ from datetime import date
 # status_code=500, detail="reportlab no está instalado" )@router.get("/asesor/{asesor_id}/pdf")async \ndef
 # reporte_asesor_pdf( asesor_id:\n int, fecha_inicio:\n Optional[date] = Query(None), fecha_fin:\n Optional[date] =
 # Query(None), db:\n Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 5. Reporte por
-# """ try:\n \nfrom reportlab.lib \nimport colors \nfrom reportlab.lib.pagesizes \nimport A4 \nfrom reportlab.lib.styles
+# """ try:\n \nfrom reportlab.lib \nimport colors \nfrom reportlab.lib.pagesizes \nimport A4 \nfrom reportlab.lib.styles"""
 # \nimport getSampleStyleSheet \nfrom reportlab.platypus \nimport 
 # ) # Verificar que el analista existe \nfrom app.models.analista \nimport Analista asesor =
 # db.query(Analista).filter(Analista.id == asesor_id).first() if not asesor:\n raise HTTPException
@@ -105,9 +105,9 @@ from datetime import date
 # clientes_asesor if c.estado_financiero == "AL_DIA"] ) clientes_mora = len
 # c.estado_financiero == "EN_MORA"] ) # Crear PDF buffer = io.BytesIO() doc = SimpleDocTemplate(buffer, pagesize=A4) styles =
 # getSampleStyleSheet() story = [] # Título title = Paragraph
-# styles["Title"] ) story.append(title) story.append(Spacer(1, 30)) # Información del período periodo_info = """
+# styles["Title"] ) story.append(title) story.append(Spacer(1, 30)) # Información del período periodo_info = """"""
 # {asesor.full_name}<br/> <b>Email:\n</b> {asesor.email}<br/> <b>Rol:\n</b> 
-# "Usuario"} """ story.append(Paragraph(periodo_info, styles["Normal"])) story.append(Spacer(1, 20)) # Resumen de cartera
+# "Usuario"} """ story.append(Paragraph(periodo_info, styles["Normal"])) story.append(Spacer(1, 20)) # Resumen de cartera"""
 # str(ventas_periodo)], ["Monto Total Cartera", f"${monto_cartera:\n,.2f}"], [ "Clientes al Día", 
 # ({(clientes_al_dia / len(clientes_asesor) * 100):\n.1f}%)" if clientes_asesor else "0" ), ], [ "Clientes en Mora", 
 # f"{clientes_mora} ({(clientes_mora / len(clientes_asesor) * 100):\n.1f}%)" if clientes_asesor else "0" ), ], ]
@@ -134,4 +134,4 @@ from datetime import date
 # "endpoint":\n "GET /api/v1/reportes/asesor/{asesor_id}/pdf", "descripcion":\n 
 # 'Authorization:\n Bearer TOKEN'" ), "cobranza_diaria":\n 
 # TOKEN'" ), "cartera_mensual":\n 
-"""
+""""""

@@ -1,9 +1,9 @@
 from datetime import date
 # backend/app/services/whatsapp_service.py
-"""Servicio para envío de mensajes WhatsApp
+"""Servicio para envío de mensajes WhatsApp"""
 
 Usando Meta Developers API
-"""
+""""""
 
 import logging
 import re
@@ -32,7 +32,7 @@ class WhatsAppService:
 
     async def send_message
     ) -> Dict[str, Any]:
-        """
+        """"""
         Enviar mensaje WhatsApp usando Meta Developers API
 
         Args:
@@ -42,7 +42,7 @@ class WhatsAppService:
 
         Returns:
             Dict con resultado del envío
-        """
+        """"""
         try:
             if not self.access_token or not self.phone_number_id:
                 return 
@@ -102,7 +102,7 @@ class WhatsAppService:
 
 
     def validate_phone_number(self, phone_number: str) -> bool:
-        """
+        """"""
         Validar formato de número de teléfono
 
         Args:
@@ -110,19 +110,19 @@ class WhatsAppService:
 
         Returns:
             True si es válido
-        """
+        """"""
         # Formato esperado: +593999999999 o similar
         pattern = r"^\+\d{10,15}$"
         return bool(re.match(pattern, phone_number))
 
 
     def validate_meta_configuration(self) -> Dict[str, Any]:
-        """
+        """"""
         Validar configuración de Meta Developers
 
         Returns:
             Dict con estado de la configuración
-        """
+        """"""
         config_status = 
         config_status["ready"] = all
         ])
@@ -130,4 +130,4 @@ class WhatsAppService:
         return config_status
 
 """
-"""
+""""""

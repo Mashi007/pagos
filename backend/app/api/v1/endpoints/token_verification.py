@@ -1,7 +1,7 @@
 from app.core.security import decode_token
 from datetime import date
 """Endpoint de Verificación de Tokens JWT
-"""
+""""""
 
 import logging
 
@@ -119,10 +119,10 @@ def _generar_recomendaciones
 
 async def verificar_token_detallado
     request: Request, db: Session = Depends(get_db)
-    """
+    """"""
     🔍 Verificación detallada de token JWT (VERSIÓN REFACTORIZADA)
     Analiza token sin requerir autenticación previa
-    """
+    """"""
     try:
         # 1. Extraer token del header
         token, error_response = _extraer_token_del_header(request)
@@ -162,9 +162,9 @@ async def verificar_token_detallado
 
 @router.get("/token-info")
 async def obtener_info_token(request: Request, db: Session = Depends(get_db)):
-    """
+    """"""
     📊 Información básica del token actual
-    """
+    """"""
     try:
         auth_header = request.headers.get("authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
@@ -196,9 +196,9 @@ async def obtener_info_token(request: Request, db: Session = Depends(get_db)):
 
 
 async def generar_token_prueba(db: Session = Depends(get_db)):
-    """
+    """"""
     🧪 Generar token de prueba para testing
-    """
+    """"""
     try:
         # Buscar usuario admin
         admin_user = db.query(User).filter(User.is_admin).first()

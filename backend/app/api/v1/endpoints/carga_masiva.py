@@ -7,19 +7,19 @@
 # app.services.validators_service \nimport 
 # ValidadorTelefono,)logger = logging.getLogger(__name__)router = APIRouter()# ============================================#
 # SCHEMAS PARA CARGA MASIVA# ============================================\nclass ErrorCargaMasiva(BaseModel):\n """Error
-# encontrado en carga masiva""" fila:\n int cedula:\n str campo:\n str valor_original:\n str error:\n str tipo_error:\n str #
+# encontrado en carga masiva""" fila:\n int cedula:\n str campo:\n str valor_original:\n str error:\n str tipo_error:\n str #"""
 # CRITICO, ADVERTENCIA, DATO_VACIO puede_corregirse:\n bool sugerencia:\n Optional[str] = None\nclass
 # RegistroCargaMasiva(BaseModel):\n """Registro procesado en carga masiva""" fila:\n int cedula:\n str nombre_completo:\n str
 # cedula:\n str correcciones:\n Dict[str, str]# ============================================# ENDPOINT:\n SUBIR ARCHIVO
 # db:\n Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 📤 PASO 1:\n Subir archivo Excel
-# ADVERTENCIA, DATO_VACÍO) 4. NO guardar nada aún 5. Retornar dashboard con errores para corrección """ try:\n # Validar tipo
+# ADVERTENCIA, DATO_VACÍO) 4. NO guardar nada aún 5. Retornar dashboard con errores para corrección """ try:\n # Validar tipo"""
 # de archivo if not archivo.filename.endswith((".xlsx", ".xls")):\n raise HTTPException
 # {str(e)}", )# ============================================# FUNCIÓN:\n ANALIZAR ARCHIVO DE CLIENTES#
 # ============================================\ndef _mapear_columnas(df:\n pd.DataFrame) -> pd.DataFrame:\n """Mapear
-# columnas del Excel al sistema""" mapeo_columnas = 
+# columnas del Excel al sistema""" mapeo_columnas = """
 # "fecha_entrega", "ENTREGA":\n "fecha_entrega", "USER":\n "asesor", "USER ASIGNADO":\n "asesor", } return
 # df.rename(columns=mapeo_columnas)\ndef _validar_columnas_requeridas(df:\n pd.DataFrame) -> None:\n """Validar que existan
-# las columnas requeridas""" columnas_requeridas = ["cedula", "nombre"] columnas_faltantes = [ col for col in
+# las columnas requeridas""" columnas_requeridas = ["cedula", "nombre"] columnas_faltantes = [ col for col in"""
 # columnas_requeridas if col not in df.columns ] if columnas_faltantes:\n raise HTTPException
 # "")).strip() nombre = str(row.get("nombre", "")).strip() apellido = ( str(row.get("apellido", "")).strip() if "apellido" in
 # row else "" ) movil = str(row.get("movil", "")).strip() email = str(row.get("email", "")).strip() direccion =
@@ -31,7 +31,7 @@
 # apellido and nombre:\n partes_nombre = nombre.split(" ", 1) if len(partes_nombre) > 1:\n nombre = partes_nombre[0] apellido
 # = partes_nombre[1] return 
 # total_financiamiento, cuota_inicial, numero_amortizaciones, modalidad_pago, fecha_entrega, asesor, )\ndef
-# errores""" errores = [] # Cédula (CRÍTICO) if not cedula or cedula.upper() == "ERROR":\n errores.append
+# errores""" errores = [] # Cédula (CRÍTICO) if not cedula or cedula.upper() == "ERROR":\n errores.append"""
 # ERROR", tipo_error="CRITICO", puede_corregirse=True, sugerencia="Ingrese cédula válida (ej:\n V12345678)", ) ) # Nombre
 # (CRÍTICO) if not nombre or nombre.upper() == "ERROR":\n errores.append
 # puede_corregirse=True, sugerencia="Ingrese nombre completo del cliente", ) ) # Total Financiamiento 
@@ -114,10 +114,10 @@
 # """Validar corrección de cédula""" resultado = ValidadorCedula.validar_y_formatear_cedula(valor, "VENEZUELA") if not
 # resultado.get("valido"):\n return False, f"Cédula:\n {resultado.get('mensaje')}", "" return True, "",
 # resultado.get("valor_formateado")\ndef _validar_correccion_movil(valor:\n str) -> tuple[bool, str, str]:\n """Validar
-# corrección de móvil""" resultado = ValidadorTelefono.validar_y_formatear_telefono( valor, "VENEZUELA" ) if not
+# corrección de móvil""" resultado = ValidadorTelefono.validar_y_formatear_telefono( valor, "VENEZUELA" ) if not"""
 # resultado.get("valido"):\n return False, f"Móvil:\n {resultado.get('mensaje')}", "" return True, "",
 # resultado.get("valor_formateado")\ndef _validar_correccion_email(valor:\n str) -> tuple[bool, str, str]:\n """Validar
-# corrección de email""" resultado = ValidadorEmail.validar_email(valor) if not resultado.get("valido"):\n return False,
+# corrección de email""" resultado = ValidadorEmail.validar_email(valor) if not resultado.get("valido"):\n return False,"""
 # f"Email:\n {resultado.get('mensaje')}", "" return True, "", resultado.get("valor_formateado")\ndef
 # _validar_correccion_fecha(valor:\n str) -> tuple[bool, str, str]:\n """Validar corrección de fecha""" resultado =
 # ValidadorFecha.validar_y_formatear_fecha(valor) if not resultado.get("valido"):\n return False, "Fecha:\n
@@ -138,10 +138,10 @@
 # str) -> tuple[bool, str, str]:\n """Validar corrección de modalidad de pago""" modalidades_validas = ["SEMANAL",
 # "QUINCENAL", "MENSUAL", "BIMENSUAL"] if valor.upper() not in modalidades_validas:\n return 
 # no es válida. Use:\n " f"{', '.join(modalidades_validas)}", "", ) return True, "", valor.upper()\ndef
-# _procesar_correccion_campo( campo:\n str, valor:\n str, db:\n Session) -> tuple[bool, str, dict]:\n """Procesar corrección
+# _procesar_correccion_campo( campo:\n str, valor:\n str, db:\n Session) -> tuple[bool, str, dict]:\n """Procesar corrección"""
 # "modelo_vehiculo":\n valido, error, valor_formateado, modelo_id = ( _validar_correccion_modelo_vehiculo(valor, db) ) if
 # corregir_registro_en_linea( correccion:\n CorreccionRegistro, db:\n Session = Depends(get_db), current_user:\n User =
-# Depends(get_current_user),):\n """ ✏️ PASO 2:\n Corregir un registro con errores en línea (VERSIÓN REFACTORIZADA)
+# Depends(get_current_user),):\n """ ✏️ PASO 2:\n Corregir un registro con errores en línea (VERSIÓN REFACTORIZADA)"""
 # Proceso:\n 1. Recibir correcciones del usuario 2. Validar con validadores del sistema 3. Si pasa validación, marcar como
 # retornar sin guardar if errores_validacion:\n return 
 # Exception as e:\n raise HTTPException( status_code=500, detail=f"Error corrigiendo registro:\n {str(e)}", )#
@@ -170,16 +170,16 @@
 # status_code=500, detail=f"Error generando template:\n {str(e)}", )# ============================================#
 # ENDPOINT:\n OBTENER LISTAS DE CONFIGURACIÓN#
 # ============================================@router.get("/opciones-configuracion")async \ndef
-# obtener_opciones_configuracion( db:\n Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """
+# obtener_opciones_configuracion( db:\n Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """"""
 # db.query(ModeloVehiculo).filter(ModeloVehiculo.activo).all() # Modalidades de pago configurables modalidades_pago = [
 # {"value":\n "SEMANAL", "label":\n "Semanal"}, {"value":\n "QUINCENAL", "label":\n "Quincenal"}, 
 # modalidades_pago, } except Exception as e:\n raise HTTPException
 # {str(e)}", )# ============================================# ENDPOINT:\n DASHBOARD DE CARGA MASIVA#
 # ============================================@router.get("/dashboard")async \ndef dashboard_carga_masiva
-# Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 📊 Dashboard de carga masiva Muestra:\n -
+# Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 📊 Dashboard de carga masiva Muestra:\n -"""
 # usuario auditorias = ( db.query(Auditoria) .filter
 # "CargaMasiva", ) .order_by(Auditoria.fecha.desc()) .limit(10) .all() ) return 
 # "usuario":\n f"{current_user.nombre} {current_user.apellido}".strip(), "historial_cargas":\n [ 
 # raise HTTPException( status_code=500, detail=f"Error obteniendo dashboard:\n {str(e)}", )
 
-"""
+""""""

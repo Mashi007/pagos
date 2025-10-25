@@ -1,6 +1,6 @@
-"""
+""""""
 Sistema de cache inteligente para analistas
-"""
+""""""
 
 import logging
 from typing import Any, Dict, Optional
@@ -77,7 +77,7 @@ def cache_analistas(key_func):
 
 def generate_cache_key
 ) -> str:
-    """
+    """"""
 
     Args:
         activo: Filtro de estado activo
@@ -85,5 +85,5 @@ def generate_cache_key
 
     Returns:
         str: Clave única para el cache
-    """
+    """"""
     return f"analistas_{skip}_{limit}_{activo}_{search or ''}"

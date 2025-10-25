@@ -1,7 +1,7 @@
 from datetime import date, timedelta as delta
 # backend/app/utils/date_helpers.py
 """Utilidades para manejo de fechas
-"""
+""""""
 
 import calendar
 from typing import List, Optional
@@ -9,37 +9,37 @@ from dateutil.relativedelta import relativedelta
 
 
 def add_months(start_date: date, months: int) -> date:
-    """
+    """"""
     Suma meses a una fecha
     Args:
         start_date: Fecha inicial
         months: Número de meses a sumar
     Returns:
         date: Nueva fecha
-    """
+    """"""
     return start_date + relativedelta(months=months)
 
 
 def add_weeks(start_date: date, weeks: int) -> date:
-    """
+    """"""
     Suma semanas a una fecha
     Args:
         start_date: Fecha inicial
         weeks: Número de semanas a sumar
     Returns:
         date: Nueva fecha
-    """
+    """"""
 
 
 def calculate_payment_dates
 ) -> List[date]:
-    """
+    """"""
     Args:
         start_date: Fecha del primer pago
         frequency: Frecuencia (SEMANAL, QUINCENAL, MENSUAL, BIMENSUAL)
     Returns:
         List[date]: Lista de fechas de vencimiento
-    """
+    """"""
     payment_dates = []
     current_date = start_date
 
@@ -64,38 +64,38 @@ def calculate_payment_dates
 
 
 def days_between(date1: date, date2: date) -> int:
-    """
+    """"""
     Args:
         date1: Primera fecha
         date2: Segunda fecha
     Returns:
         int: Número de días (puede ser negativo si date2 < date1)
-    """
+    """"""
     return (date2 - date1).days
 
 
 def is_overdue(due_date: date, reference_date: Optional[date] = None) -> bool:
-    """
+    """"""
     Verifica si una fecha de vencimiento está vencida
     Args:
         due_date: Fecha de vencimiento
         reference_date: Fecha de referencia (por defecto, hoy)
     Returns:
         bool: True si está vencida
-    """
+    """"""
     if reference_date is None:
         reference_date = date.today()
     return reference_date > due_date
 
 
 def days_overdue(due_date: date, reference_date: Optional[date] = None) -> int:
-    """
+    """"""
     Args:
         due_date: Fecha de vencimiento
         reference_date: Fecha de referencia (por defecto, hoy)
     Returns:
         int: Días de mora (0 si no está vencida)
-    """
+    """"""
     if reference_date is None:
         reference_date = date.today()
 
@@ -104,39 +104,39 @@ def days_overdue(due_date: date, reference_date: Optional[date] = None) -> int:
 
 
 def get_last_day_of_month(year: int, month: int) -> date:
-    """
+    """"""
     Obtiene el último día del mes
     Args:
         year: Año
         month: Mes (1-12)
     Returns:
         date: Último día del mes
-    """
+    """"""
     last_day = calendar.monthrange(year, month)[1]
     return date(year, month, last_day)
 
 
 def get_first_day_of_month(year: int, month: int) -> date:
-    """
+    """"""
     Obtiene el primer día del mes
     Args:
         year: Año
         month: Mes (1-12)
     Returns:
         date: Primer día del mes
-    """
+    """"""
     return date(year, month, 1)
 
 
 def get_month_range
 ) -> tuple[date, date]:
-    """
+    """"""
     Obtiene el rango de fechas del mes
     Args:
         reference_date: Fecha de referencia (por defecto, hoy)
     Returns:
         tuple[date, date]: (primer_día, último_día)
-    """
+    """"""
     if reference_date is None:
         reference_date = date.today()
 
@@ -148,13 +148,13 @@ def get_month_range
 
 def get_quarter_range
 ) -> tuple[date, date]:
-    """
+    """"""
     Obtiene el rango de fechas del trimestre
     Args:
         reference_date: Fecha de referencia (por defecto, hoy)
     Returns:
         tuple[date, date]: (primer_día_trimestre, último_día_trimestre)
-    """
+    """"""
     if reference_date is None:
         reference_date = date.today()
 
@@ -169,13 +169,13 @@ def get_quarter_range
 
 
 def get_year_range(year: Optional[int] = None) -> tuple[date, date]:
-    """
+    """"""
     Obtiene el rango de fechas del año
     Args:
         year: Año (por defecto, año actual)
     Returns:
         tuple[date, date]: (primer_día_año, último_día_año)
-    """
+    """"""
     if year is None:
         year = date.today().year
 
@@ -187,13 +187,13 @@ def get_year_range(year: Optional[int] = None) -> tuple[date, date]:
 
 def is_business_day
 ) -> bool:
-    """
+    """"""
     Args:
         check_date: Fecha a verificar
         holidays: Lista de fechas feriadas
     Returns:
         bool: True si es día hábil
-    """
+    """"""
     # Verificar si es fin de semana (sábado=5, domingo=6)
     if check_date.weekday() >= 5:
         return False
@@ -207,21 +207,21 @@ def is_business_day
 
 def next_business_day
 ) -> date:
-    """
+    """"""
     Obtiene el siguiente día hábil
     Args:
         start_date: Fecha inicial
         holidays: Lista de fechas feriadas
     Returns:
         date: Siguiente día hábil
-    """
+    """"""
     while not is_business_day(next_day, holidays):
     return next_day
 
 
 def calculate_interest_days
 ) -> int:
-    """
+    """"""
     Calcula días para cálculo de intereses según convención
     Args:
         start_date: Fecha inicial
@@ -229,7 +229,7 @@ def calculate_interest_days
         day_count_convention: Convención (30/360, ACT/360, ACT/365)
     Returns:
         int: Número de días según convención
-    """
+    """"""
     if day_count_convention == "30/360":
         # Convención 30/360 (cada mes tiene 30 días)
         d1 = min(start_date.day, 30)
@@ -251,13 +251,13 @@ def calculate_interest_days
 
 
 def format_date_es(date_obj: date) -> str:
-    """
+    """"""
     Formatea fecha en español
     Args:
         date_obj: Fecha a formatear
     Returns:
         str: Fecha formateada (ej: "15 de enero de 2024")
-    """
+    """"""
     months_es = 
 
     return f"{date_obj.day} de {months_es[date_obj.month]} de {date_obj.year}"
@@ -265,14 +265,14 @@ def format_date_es(date_obj: date) -> str:
 
 def get_age_in_days
 ) -> int:
-    """
+    """"""
     Calcula la edad en días
     Args:
         birth_date: Fecha de nacimiento
         reference_date: Fecha de referencia (por defecto, hoy)
     Returns:
         int: Edad en días
-    """
+    """"""
     if reference_date is None:
         reference_date = date.today()
 
@@ -281,14 +281,14 @@ def get_age_in_days
 
 def get_notification_dates
 ) -> List[tuple[date, str]]:
-    """
+    """"""
     Calcula fechas para envío de notificaciones
     Args:
         due_date: Fecha de vencimiento
         days_before: Lista de días antes del vencimiento para notificar
     Returns:
         List[tuple[date, str]]: Lista de (fecha_notificación, tipo)
-    """
+    """"""
     notification_dates = []
 
     for days in sorted(days_before, reverse=True):
@@ -307,7 +307,7 @@ def get_notification_dates
 
 def calculate_days_in_period
 ) -> int:
-    """
+    """"""
     Calcula el número esperado de días en un período según frecuencia
     Args:
         start_date: Fecha inicial
@@ -315,7 +315,7 @@ def calculate_days_in_period
         frequency: Frecuencia del período
     Returns:
         int: Número de días en el período
-    """
+    """"""
     if frequency == "SEMANAL":
         return 7
     elif frequency == "QUINCENAL":

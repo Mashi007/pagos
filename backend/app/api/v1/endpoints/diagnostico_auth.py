@@ -1,6 +1,6 @@
-"""Endpoint de Diagnóstico Avanzado de Autenticación
+"""Endpoint de Diagnóstico Avanzado de Autenticación"""
 Sistema de auditoría para encontrar causa raíz de problemas 401
-"""
+""""""
 
 import logging
 from typing import Dict, List, Any
@@ -230,4 +230,4 @@ async def get_user_behavior_analysis
             detail=f"Error interno: {str(e)}"
 
 """
-"""
+""""""

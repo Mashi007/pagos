@@ -1,10 +1,10 @@
 from datetime import date
 # backend/app/models/configuracion_sistema.py
-"""Modelo de Configuración del Sistema
+"""Modelo de Configuración del Sistema"""
 
 Centraliza todas las configuraciones del sistema para fácil gestión desde
 el frontend
-"""
+""""""
 
 import json
 import logging
@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 
 
 class ConfiguracionSistema(Base):
-    """
+    """"""
     Configuración centralizada del sistema
-    """
+    """"""
     __tablename__ = "configuracion_sistema"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -157,10 +157,10 @@ class ConfiguracionSistema(Base):
 
 
 class ConfiguracionPorDefecto:
-    """
+    """"""
     Configuraciones por defecto del sistema
     Se crean automáticamente al inicializar el sistema
-    """
+    """"""
     CONFIGURACIONES_DEFAULT = 
                 "patron_validacion": r"^sk-[a-zA-Z0-9]{48}$",
             },
@@ -369,9 +369,9 @@ class ConfiguracionPorDefecto:
 
 
 class ConfigHelper:
-    """
+    """"""
     Helper para acceso rápido a configuraciones
-    """
+    """"""
     @staticmethod
     def get_config(db, categoria: str, clave: str, default=None):
         """Obtener valor de configuración"""

@@ -45,8 +45,7 @@ class TemporalAnalysisSystem:
 
     def _collect_timing_data(self):
 
-        timing_event = 
-
+        timing_event = None
         with self.lock:
             self.timing_events.append(timing_event)
 
@@ -71,7 +70,7 @@ class TemporalAnalysisSystem:
     def log_timing_event(self, event_data: Dict[str, Any]):
         """Registrar un evento de timing"""
         with self.lock:
-            event = 
+            event = None
                 "metadata": event_data.get("metadata", {})
 
             self.timing_events.append(event)
@@ -80,15 +79,14 @@ class TemporalAnalysisSystem:
     def log_token_lifecycle(self, token_data: Dict[str, Any]):
         """Registrar ciclo de vida de token"""
         with self.lock:
-            lifecycle_event = 
-
+            lifecycle_event = None
             self.token_lifecycle_data.append(lifecycle_event)
 
 
     def get_temporal_analysis(self) -> Dict[str, Any]:
         """Obtener análisis temporal completo"""
         with self.lock:
-            analysis = 
+            analysis = None
                 },
                 "token_lifecycle": 
                 },

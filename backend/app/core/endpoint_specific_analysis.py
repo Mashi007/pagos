@@ -1,5 +1,5 @@
 """Decorator Específico para Análisis de Impacto por Endpoint
-"""
+""""""
 
 import logging
 from functools import wraps
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class EndpointSpecificAnalyzer:
     """
-    """
+    """"""
 
 
     def __init__(self):
@@ -51,13 +51,13 @@ endpoint_analyzer = EndpointSpecificAnalyzer()
 
 
 def endpoint_impact_analysis
-    """
+    """"""
     Decorator para análisis de impacto específico por endpoint
 
     Args:
         endpoint_name: Nombre del endpoint para métricas
         business_metrics: Diccionario de métricas de negocio a capturar
-    """
+    """"""
 
 
     def decorator(func: Callable):
@@ -225,4 +225,4 @@ if __name__ == "__main__":
     print("Análisis de carga masiva:", carga_analysis)
 
 """
-"""
+""""""

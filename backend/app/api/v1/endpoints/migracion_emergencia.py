@@ -1,6 +1,6 @@
-"""Endpoint de migración de emergencia
+"""Endpoint de migración de emergencia"""
 Migración de emergencia para agregar columnas concesionario y analista
-"""
+""""""
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,9 +15,9 @@ router = APIRouter()
 async def ejecutar_migracion_emergencia
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     Endpoint de emergencia para ejecutar la migración de concesionario y analista
-    """
+    """"""
     try:
         logger.info(f"Ejecutando migración de emergencia - Usuario: {current_user.email}")
 

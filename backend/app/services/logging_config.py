@@ -1,6 +1,6 @@
-# backend/app/services/logging_config.py"""Configuración de Logging Estructurado para ServicesImplementa normas de monitoreo
+# backend/app/services/logging_config.py"""Configuración de Logging Estructurado para ServicesImplementa normas de monitoreo"""
 # ContextVar("request_id", default=None)user_id: ContextVar[Optional[int]] = ContextVar("user_id", default=None)session_id:
-# ContextVar[Optional[str]] = ContextVar("session_id", default=None)class StructuredFormatter(logging.Formatter): """
+# ContextVar[Optional[str]] = ContextVar("session_id", default=None)class StructuredFormatter(logging.Formatter): """"""
 # "level": record.levelname, "logger": record.name, "message": record.getMessage(), "module": record.module, "function":
 # record.funcName, "line": record.lineno, "thread": record.thread, "process": record.process, } # Agregar contexto de
 # trazabilidad if request_id.get(): log_data["request_id"] = request_id.get() if user_id.get(): log_data["user_id"] =
@@ -12,7 +12,7 @@
 # value: float, unit: str = "ms", tags: Optional[Dict[str, str]] = None,): """ Log de métricas de rendimiento """ logger =
 # get_service_logger("performance") metric_data = 
 # {}, } logger.info(f"Performance metric: {metric_name}", **metric_data)def log_security_event
-# """ logger = get_service_logger("security") security_data = 
+# """ logger = get_service_logger("security") security_data = """
 # "threat_level": threat_level, "details": details or {}, } if severity in ["HIGH", "CRITICAL"]: logger.critical
 # event: {event_type}", **security_data) else: logger.warning(f"Security event: {event_type}", **security_data)#
 # "app.services.email_service", "app.services.ml_service", "app.services.notification_multicanal_service",
@@ -23,4 +23,4 @@
 # * 1000 logger.error( f"Method call failed: {func.__name__}", duration_ms=duration, error=str(e), ) raise return wrapper
 # return decorator
 
-"""
+""""""

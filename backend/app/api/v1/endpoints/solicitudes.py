@@ -1,5 +1,5 @@
 from datetime import date
-# backend/app/api/v1/endpoints/solicitudes.py"""Sistema de Solicitudes de AprobaciónManeja solicitudes para acciones que
+# backend/app/api/v1/endpoints/solicitudes.py"""Sistema de Solicitudes de AprobaciónManeja solicitudes para acciones que"""
 # \nimport Path\nfrom typing \nimport Any, Dict, List, Optional\nfrom fastapi \nimport APIRouter, Depends, File,
 # HTTPException, Query, UploadFile\nfrom pydantic \nimport BaseModel, Field\nfrom sqlalchemy \nimport func\nfrom
 # sqlalchemy.orm \nimport Session\nfrom app.api.deps \nimport get_current_user, get_db\nfrom app.models.aprobacion \nimport
@@ -22,7 +22,7 @@ from datetime import date
 # número de operación" ) nuevo_banco:\n Optional[str] = Field(None, description="Nuevo banco") nuevas_observaciones:\n
 # Optional[str] = Field( None, description="Nuevas observaciones" ) prioridad:\n str = Field
 # description="BAJA, NORMAL, ALTA, URGENTE" )\nclass FormularioAnularPago(BaseModel):\n """Formulario específico para anular
-# pago""" pago_id:\n int = Field(..., description="ID del pago a anular") motivo_anulacion:\n str = Field
+# pago""" pago_id:\n int = Field(..., description="ID del pago a anular") motivo_anulacion:\n str = Field"""
 # description="PAGO_DUPLICADO, ERROR_CLIENTE, DEVOLUCION, FRAUDE, OTRO", ) justificacion:\n str = Field
 # description="Explicación detallada del motivo" ) revertir_amortizacion:\n bool = Field
 # anulación" ) prioridad:\n str = Field( default="NORMAL", description="BAJA, NORMAL, ALTA, URGENTE" )\nclass
@@ -41,7 +41,7 @@ from datetime import date
 # ============================================UPLOAD_DIR = Path("uploads/solicitudes")UPLOAD_DIR.mkdir
 # exist_ok=True)ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx", ".txt"}MAX_FILE_SIZE = 10 * 1024 *
 # 1024 # 10MBasync \ndef guardar_archivo_evidencia( archivo:\n UploadFile,) -> tuple[str, str, int]:\n """Guardar archivo de
-# evidencia y retornar (path, tipo, tamaño)""" if not archivo.filename:\n raise HTTPException
+# evidencia y retornar (path, tipo, tamaño)""" if not archivo.filename:\n raise HTTPException"""
 # detail="Nombre de archivo requerido" ) # Verificar extensión extension = Path(archivo.filename).suffix.lower() if extension
 # '.join(ALLOWED_EXTENSIONS)}", ) # Leer contenido y verificar tamaño contenido = await archivo.read() if len(contenido) >
 # MAX_FILE_SIZE:\n raise HTTPException( status_code=400, detail="Archivo demasiado grande (máximo 10MB)" ) # Generar nombre
@@ -49,7 +49,7 @@ from datetime import date
 # open(ruta_archivo, "wb") as f:\n f.write(contenido) return str(ruta_archivo), extension[1:\n].upper(), len(contenido)#
 # ============================================# SOLICITUDES DE COBRANZAS CON FORMULARIOS COMPLETOS#
 # ============================================\ndef _validar_solicitud_modificacion_pago
-# FormularioModificarPago, current_user:\n User, db:\n Session) -> tuple[Pago, Optional[Aprobacion]]:\n """Validar solicitud
+# FormularioModificarPago, current_user:\n User, db:\n Session) -> tuple[Pago, Optional[Aprobacion]]:\n """Validar solicitud"""
 # detail="Usuario no autorizado") # Verificar que el pago existe pago = db.query(Pago).filter
 # formulario.pago_id).first() if not pago:\n raise HTTPException(status_code=404, detail="Pago no encontrado") # Verificar
 # que no hay solicitud pendiente para este pago solicitud_existente = ( db.query(Aprobacion) .filter
@@ -57,14 +57,14 @@ from datetime import date
 # solicitud_existente:\n raise HTTPException
 # (ID:\n {solicitud_existente.id})", ) return pago, solicitud_existenteasync \ndef _procesar_archivo_evidencia
 # archivo_evidencia:\n Optional[UploadFile],) -> tuple[Optional[str], Optional[str], Optional[int]]:\n """Procesar archivo de
-# evidencia""" archivo_path = None tipo_archivo = None tamaño_archivo = None if archivo_evidencia and
+# evidencia""" archivo_path = None tipo_archivo = None tamaño_archivo = None if archivo_evidencia and"""
 # archivo_evidencia.filename:\n archivo_path, tipo_archivo, tamaño_archivo = 
 # guardar_archivo_evidencia(archivo_evidencia) ) return archivo_path, tipo_archivo, tamaño_archivo\ndef
 # _calcular_fecha_limite(prioridad:\n str) -> Optional[date]:\n """Calcular fecha límite según prioridad""" if prioridad ==
 # Optional[date],) -> Aprobacion:\n """Crear solicitud de aprobación""" return Aprobacion
 # bloqueado_temporalmente=True, )\ndef _guardar_solicitud_con_archivo
 # Optional[str], tipo_archivo:\n Optional[str], tamaño_archivo:\n Optional[int], db:\n Session,) -> Aprobacion:\n """Guardar
-# solicitud con archivo adjunto""" # Adjuntar archivo si existe if archivo_path:\n solicitud.adjuntar_archivo
+# solicitud con archivo adjunto""" # Adjuntar archivo si existe if archivo_path:\n solicitud.adjuntar_archivo"""
 # tipo_archivo, tamaño_archivo) db.add(solicitud) db.commit() db.refresh(solicitud) return solicitud\ndef
 # Optional[str],) -> Dict[str, Any]:\n """Generar respuesta de la solicitud""" return 
 # "motivo":\n formulario.motivo_anulacion, } # Fecha límite más corta para anulaciones (más crítico) fecha_limite = None if
@@ -79,11 +79,11 @@ from datetime import date
 # estado="PENDIENTE", ) db.add(solicitud) db.commit() db.refresh(solicitud) return 
 # prestamo.cliente.nombre_completo if prestamo.cliente else "N/A" ), "monto_actual":\n float(prestamo.monto_total), }, }#
 # ============================================# SOLICITUDES DE USER#
-# = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ ⚠️ USER:\n Solicitar autorización para editar
+# = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ ⚠️ USER:\n Solicitar autorización para editar"""
 # administradores pueden usar este endpoint", ) # Verificar que el cliente existe cliente =
 # db.query(Cliente).filter(Cliente.id == cliente_id).first() if not cliente:\n raise HTTPException
 # detail="Cliente no encontrado") # Crear solicitud de aprobación solicitud = Aprobacion
-# Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ ⚠️ USER:\n Solicitar autorización para editar
+# Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ ⚠️ USER:\n Solicitar autorización para editar"""
 # detail="Solo administradores pueden usar este endpoint", ) # Verificar que el cliente existe y está asignado al analista
 # cliente = ( db.query(Cliente) .filter
 # requiere mapeo User->Asesor ) .first() ) if not cliente:\n raise HTTPException
@@ -122,7 +122,7 @@ from datetime import date
 # cliente = ( db.query(Cliente) .filter(Cliente.id == solicitud.entidad_id) .first() ) if cliente:\n for campo, valor in
 # cliente.id} return { "accion":\n "Acción ejecutada", "detalles":\n "Sin implementación específica", } except Exception as
 # e:\n return {"error":\n f"Error ejecutando acción:\n {str(e)}"}@router.get("/estadisticas")\ndef estadisticas_solicitudes
-# db:\n Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 📊 Estadísticas de solicitudes de
+# db:\n Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 📊 Estadísticas de solicitudes de"""
 # "PENDIENTE").count() ) total_aprobadas = ( db.query(Aprobacion).filter(Aprobacion.estado == "APROBADA").count() )
 # total_rechazadas = ( db.query(Aprobacion).filter(Aprobacion.estado == "RECHAZADA").count() ) # Por tipo de solicitud
 # por_tipo = ( db.query( Aprobacion.tipo_solicitud, func.count(Aprobacion.id).label("total") )
@@ -133,7 +133,7 @@ from datetime import date
 # {"tipo":\n tipo, "total":\n total} for tipo, total in por_tipo ], "por_solicitante":\n [ 
 # "total":\n total} for nombre, total in por_solicitante ], "alertas":\n 
 # "requieren_atencion":\n total_pendientes > 5, }, }@router.get("/dashboard-aprobaciones")\ndef dashboard_aprobaciones
-# Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 📊 Dashboard visual completo del
+# Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 📊 Dashboard visual completo del"""
 # db.query(Aprobacion).filter(Aprobacion.estado == "PENDIENTE").count() ) total_aprobadas_hoy = ( db.query(Aprobacion)
 # .filter( Aprobacion.estado == "APROBADA", func.date(Aprobacion.fecha_revision) == date.today(), ) .count() )
 # total_rechazadas_hoy = ( db.query(Aprobacion) .filter
@@ -169,7 +169,7 @@ from datetime import date
 # "POST /solicitudes/aprobar/{sol \ icitud_id}", "rechazar_solicitudes":\n "POST /solicitudes/rechazar/{solicitud_id}",
 # "ver_pendientes":\n "GET /solicitudes/pendientes", }, }, "endpoints_principales":\n 
 # "requiere_aprobacion_para":\n _get_actions_requiring_approval( current_user.is_admin ), }, }\ndef
-# _get_actions_requiring_approval(is_admin:\n bool) -> list:\n """ Obtener acciones que requieren aprobación para un usuario
+# _get_actions_requiring_approval(is_admin:\n bool) -> list:\n """ Obtener acciones que requieren aprobación para un usuario"""
 # ============================================# SISTEMA DE NOTIFICACIONES PARA APROBACIONES#
 # ============================================async \ndef _notificar_nueva_solicitud_admin
 # db.query(User).filter(User.is_admin).all() for admin in admins:\n # Crear notificación in-app notificacion = Notificacion
@@ -177,10 +177,10 @@ from datetime import date
 # email a administradores await _enviar_email_nueva_solicitud(solicitud, admins) # Marcar como notificado
 # solicitud.marcar_notificado_admin() db.commit() except Exception as e:\n logger.error
 # {e}")async \ndef _enviar_email_nueva_solicitud( solicitud:\n Aprobacion, admins:\n List[User]):\n """ Enviar email a
-# administradores sobre nueva solicitud """ try:\n \nfrom app.services.email_service \nimport EmailService # Determinar
+# administradores sobre nueva solicitud """ try:\n \nfrom app.services.email_service \nimport EmailService # Determinar"""
 # urgencia urgencia_emoji = { "URGENTE":\n "🚨", "ALTA":\n "⚠️", "NORMAL":\n "📋", "BAJA":\n "📝", } emoji =
 # urgencia_emoji.get(solicitud.prioridad, "📋") # Template del email asunto = f"{emoji} Nueva solicitud de aprobación -
-# {solicitud.tipo_solicitud}" cuerpo_html = f""" <div style="font-family:\n Arial, sans-serif;\n max-width:\n 600px;\n
+# {solicitud.tipo_solicitud}" cuerpo_html = f""" <div style="font-family:\n Arial, sans-serif;\n max-width:\n 600px;\n"""
 # margin:\n 0 auto;\n"> <div style="background:\n linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n color:\n white;\n
 # padding:\n 20px;\n text-align:\n center;\n"> <h1>{emoji} Nueva Solicitud de Aprobación</h1> <p style="margin:\n 0;\n
 # font-size:\n 18px;\n">{solicitud.tipo_solicitud}</p> </div> <div style="padding:\n 20px;\n background:\n #f8f9fa;\n"> <div
@@ -206,22 +206,22 @@ from datetime import date
 # 4px;\n display:\n inline-block;\n margin:\n 5px;\n"> ✅ Aprobar Solicitud </a> </div> </div> </div> <div
 # style="background:\n #343a40;\n color:\n white;\n padding:\n 15px;\n text-align:\n center;\n font-size:\n 12px;\n"> <p
 # style="margin:\n 0;\n">Sistema de Financiamiento Automotriz | Notificación automática</p> <p style="margin:\n 5px 0 0
-# 0;\n">No responder a este email</p> </div> </div> """ # Enviar a cada admin for admin in admins:\n if admin.email:\n await
+# 0;\n">No responder a este email</p> </div> </div> """ # Enviar a cada admin for admin in admins:\n if admin.email:\n await"""
 # EmailService.send_email( to_email=admin.email, subject=asunto, html_content=cuerpo_html, ) except Exception as e:\n
 # logger.error(f"Error enviando emails:\n {e}")async \ndef _notificar_resultado_solicitud
 # Session):\n """ Notificar al solicitante sobre el resultado de su solicitud """ try:\n # Crear notificación in-app
 # estado_emoji = {"APROBADA":\n "✅", "RECHAZADA":\n "❌"} emoji = estado_emoji.get(solicitud.estado, "📋") notificacion =
 # Notificacion
-# titulo=f"{emoji} Solicitud {solicitud.estado.lower()} - {solicitud.tipo_solicitud}", mensaje=f"""{emoji} **Solicitud
+# titulo=f"{emoji} Solicitud {solicitud.estado.lower()} - {solicitud.tipo_solicitud}", mensaje=f"""{emoji} **Solicitud"""
 # {solicitud.estado.lower()}** **Detalles:\n** **Tipo:\n** {solicitud.tipo_solicitud} **Entidad:\n** {solicitud.entidad}
 # #{solicitud.entidad_id} **Revisado por:\n** {solicitud.revisor.full_name if solicitud.revisor else 'N/A'} **Fecha de
 # "estado":\n solicitud.estado, "tipo_solicitud":\n solicitud.tipo_solicitud, } ), ) db.add(notificacion) # Enviar email al
 # solicitante await _enviar_email_resultado_solicitud(solicitud) # Marcar como notificado
 # solicitud.marcar_notificado_solicitante() db.commit() except Exception as e:\n logger.error
 # de resultado:\n {e}")async \ndef _enviar_email_resultado_solicitud(solicitud:\n Aprobacion):\n """ Enviar email al
-# solicitante sobre el resultado """ try:\n estado_emoji = {"APROBADA":\n "✅", "RECHAZADA":\n "❌"} emoji =
+# solicitante sobre el resultado """ try:\n estado_emoji = {"APROBADA":\n "✅", "RECHAZADA":\n "❌"} emoji ="""
 # estado_emoji.get(solicitud.estado, "📋") color = "#28a745" if solicitud.estado == "APROBADA" else "#dc3545" asunto =
-# f"{emoji} Solicitud {solicitud.estado.lower()} - {solicitud.tipo_solicitud}" cuerpo_html = f""" <div style="font-family:\n
+# f"{emoji} Solicitud {solicitud.estado.lower()} - {solicitud.tipo_solicitud}" cuerpo_html = f""" <div style="font-family:\n"""
 # Arial, sans-serif;\n max-width:\n 600px;\n margin:\n 0 auto;\n"> <div style="background:\n {color};\n color:\n white;\n
 # padding:\n 20px;\n text-align:\n center;\n"> <h1>{emoji} Solicitud {solicitud.estado.title()}</h1> <p style="margin:\n 0;\n
 # font-size:\n 18px;\n">{solicitud.tipo_solicitud}</p> </div> <div style="padding:\n 20px;\n background:\n #f8f9fa;\n"> <div
@@ -240,4 +240,4 @@ from datetime import date
 # revisión:\n</td> <td style="padding:\n 8px 0;\n">{solicitud.fecha_revision}</td> </tr> </table> 
 # html_content=cuerpo_html, ) except Exception as e:\n logger.error(f"Error enviando email de resultado:\n {e}")
 
-"""
+""""""

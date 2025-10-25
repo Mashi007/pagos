@@ -26,8 +26,7 @@ class IntermittentFailureAnalyzer:
     def log_request(self, request_data: Dict[str, Any], success: bool):
         """Registrar un request"""
         with self.lock:
-            request_entry = 
-
+            request_entry = None
             if success:
                 self.successful_requests.append(request_entry)
             else:
@@ -37,7 +36,7 @@ class IntermittentFailureAnalyzer:
     def analyze_intermittent_patterns(self) -> Dict[str, Any]:
         """Analizar patrones intermitentes"""
         with self.lock:
-            analysis = 
+            analysis = None
                 "patterns": {},
                 "recommendations": [],
 

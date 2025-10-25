@@ -1,8 +1,8 @@
 from datetime import date
-"""
+""""""
 Endpoints de gestión de clientes - VERSIÓN CON AUDITORÍA AUTOMÁTICA
 Sistema completo de gestión de clientes con validaciones y auditoría
-"""
+""""""
 
 import logging
 from typing import Optional
@@ -31,7 +31,7 @@ def listar_clientes
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     """
-    """
+    """"""
     try:
         logger.info(f"Listar clientes - Usuario: {current_user.email}")
 
@@ -83,9 +83,9 @@ def obtener_cliente
     cliente_id: int = Path(..., description="ID del cliente"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     👤 Obtener cliente por ID
-    """
+    """"""
     try:
         logger.info
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
@@ -102,9 +102,9 @@ def obtener_cliente
 def crear_cliente
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     ➕ Crear nuevo cliente
-    """
+    """"""
     try:
         logger.info(f"Crear cliente - Usuario: {current_user.email}")
 
@@ -129,9 +129,9 @@ def actualizar_cliente
     cliente_data: ClienteUpdate = ...,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     ✏️ Actualizar cliente
-    """
+    """"""
     try:
         logger.info
 
@@ -164,9 +164,9 @@ def eliminar_cliente
     cliente_id: int = Path(..., description="ID del cliente"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     🗑️ Eliminar cliente (hard delete)
-    """
+    """"""
     try:
         logger.info
 

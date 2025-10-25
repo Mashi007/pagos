@@ -16,7 +16,7 @@ router = APIRouter()
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     """
-    """
+    """"""
     try:
         logger.info
 
@@ -32,7 +32,7 @@ router = APIRouter()
         stats_result = db.execute
                 COUNT(*) as total,
                 COUNT(CASE WHEN nombre NOT LIKE 'Concesionario #%' THEN 1 END) as reales
-        """
+        """"""
         stats = stats_result.fetchone()
 
         nombres_reales_result = db.execute
@@ -59,4 +59,4 @@ router = APIRouter()
     except Exception as e:
         raise HTTPException
 
-"""
+""""""

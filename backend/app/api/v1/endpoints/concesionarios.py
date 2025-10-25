@@ -1,6 +1,6 @@
 from datetime import date
 """
-"""
+""""""
 
 import logging
 import traceback
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.concesionario import Concesionario
 from app.models.user import User
-from app.schemas.concesionario import 
+from app.schemas.concesionario import ConcesionarioCreate, ConcesionarioUpdate, ConcesionarioResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -20,7 +20,7 @@ router = APIRouter()
 
 @router.get("/test-no-auth")
     """
-    """
+    """"""
     try:
 
 
@@ -32,7 +32,7 @@ router = APIRouter()
 
 @router.get("/test-simple")
     """
-    """
+    """"""
     try:
 
 
@@ -45,7 +45,7 @@ router = APIRouter()
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     """
-    """
+    """"""
     try:
         return 
     except Exception as e:
@@ -58,7 +58,7 @@ router = APIRouter()
     search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
     """
-    """
+    """"""
     try:
         query = db.query(Concesionario)
 
@@ -87,7 +87,7 @@ router = APIRouter()
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     """
-    """
+    """"""
     try:
         query = db.query(Concesionario)
 
@@ -116,7 +116,7 @@ router = APIRouter()
     # TEMPORALMENTE SIN AUTENTICACIÓN PARA DROPDOWNS
     # current_user: User = Depends(get_current_user)
     """
-    """
+    """"""
     try:
             db.query(Concesionario).filter(Concesionario.activo).all()
     except Exception as e:
@@ -127,9 +127,9 @@ router = APIRouter()
 def obtener_concesionario
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     🔍 Obtener un concesionario por ID
-    """
+    """"""
     concesionario = 
         db.query(Concesionario)
         .filter(Concesionario.id == concesionario_id)
@@ -142,9 +142,9 @@ def obtener_concesionario
 def crear_concesionario
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     ➕ Crear un nuevo concesionario
-    """
+    """"""
     try:
         # Crear nuevo concesionario
         concesionario = Concesionario
@@ -170,9 +170,9 @@ def crear_concesionario
 def actualizar_concesionario
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     ✏️ Actualizar un concesionario existente
-    """
+    """"""
     try:
         concesionario = 
             db.query(Concesionario)
@@ -210,9 +210,9 @@ def actualizar_concesionario
 def eliminar_concesionario
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     🗑️ Eliminar un concesionario (HARD DELETE - borrado completo de BD)
-    """
+    """"""
     try:
         concesionario = 
             db.query(Concesionario)

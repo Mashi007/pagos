@@ -24,13 +24,13 @@ def dashboard_administrador
     fecha_fin: Optional[date] = Query
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     👑 DASHBOARD ADMINISTRADOR - ACCESO COMPLETO AL SISTEMA
     ✅ Acceso: TODO el sistema
     ✅ Vista Dashboard:
     • Gráfico de mora vs al día
     • Estadísticas globales
-    """
+    """"""
     if not current_user.is_admin:
         raise HTTPException
 
@@ -156,12 +156,12 @@ def dashboard_administrador
 def dashboard_cobranzas
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     💰 DASHBOARD COBRANZAS - ACCESO COMPLETO (EXCEPTO GESTIÓN DE USUARIOS)
     ✅ Vista Dashboard:
     • Gráfico de mora vs al día
     • Estadísticas globales
-    """
+    """"""
     if not current_user.is_admin:
         raise HTTPException
 
@@ -250,7 +250,7 @@ def dashboard_cobranzas
 def dashboard_comercial
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     👔 DASHBOARD USER - SOLO SUS CLIENTES
     ⚠️ Acceso: SOLO SUS CLIENTES
     ✅ Vista Dashboard:
@@ -258,7 +258,7 @@ def dashboard_comercial
     • Gráfico de mora vs al día (solo sus clientes)
     • Lista de sus clientes
     • Estadísticas de sus clientes
-    """
+    """"""
     if not current_user.is_admin:
         raise HTTPException
 
@@ -379,7 +379,7 @@ def dashboard_analista
         description="ID del analista de configuración (default: usuario actual)",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     👤 DASHBOARD USER - SOLO SUS CLIENTES
     ⚠️ Acceso: SOLO SUS CLIENTES
     ✅ Vista Dashboard:
@@ -387,7 +387,7 @@ def dashboard_analista
     • Gráfico de mora vs al día (solo sus clientes)
     • Lista de sus clientes
     • Estadísticas de sus clientes
-    """
+    """"""
 
     mis_clientes = db.query(Cliente).filter(Cliente.activo).all()
     total_clientes = len(mis_clientes)
@@ -462,9 +462,9 @@ def dashboard_analista
 @router.get("/matriz-acceso-roles")
 def obtener_matriz_acceso_roles
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     📋 Matriz de acceso actualizada por roles
-    """
+    """"""
     return 
         },
         "matriz_acceso": 
@@ -488,10 +488,10 @@ def dashboard_por_rol
     filtro_estado: Optional[str] = Query
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     🎨 Dashboard adaptativo según rol del usuario actual
     IMPLEMENTA MATRIZ DE ACCESO POR ROL:
-    """
+    """"""
     user_role = "ADMIN" if current_user.is_admin else "USER"
 
 
@@ -509,9 +509,9 @@ def dashboard_por_rol
     filtro_modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     Soporta tooltips y drill-down
-    """
+    """"""
     hoy = date.today()
 
     if tipo_grafico == "evolucion_cartera":
@@ -571,9 +571,9 @@ def dashboard_por_rol
 def obtener_configuracion_dashboard
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     ⚙️ Configuración del dashboard interactivo
-    """
+    """"""
     return 
         },
         "configuracion_visual": 
@@ -594,9 +594,9 @@ def obtener_configuracion_dashboard
 def obtener_alertas_tiempo_real
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     🔔 Alertas en tiempo real para el dashboard
-    """
+    """"""
     alertas = []
 
         db.query(Pago)
@@ -644,9 +644,9 @@ def obtener_detalle_tabla
     page_size: int = Query(10, ge=1, le=50),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     📋 Obtener detalle de tabla al hacer click en gráfico
-    """
+    """"""
         query = 
             db.query(Cuota)
             .select_from(Cuota)
@@ -701,9 +701,9 @@ async def exportar_vista_dashboard
     formato: str = Query("excel", description="excel, pdf, png, csv"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     📤 Exportar cualquier vista del dashboard
-    """
+    """"""
     try:
         if formato == "excel":
             import io
@@ -760,7 +760,7 @@ def obtener_actualizacion_tiempo_real
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     """
-    """
+    """"""
     hoy = date.today()
     actualizaciones = {}
 
@@ -792,4 +792,4 @@ def obtener_actualizacion_tiempo_real
     return 
 
 """
-"""
+""""""

@@ -8,14 +8,14 @@ from datetime import date
 # ValidacionCampo(BaseModel):\n """Schema para validación de campo individual""" campo:\n str = Field
 # description="Nombre del campo a validar") valor:\n str = Field(..., description="Valor a validar") pais:\n str = Field
 # "VENEZUELA", description="País para validaciones específicas" ) contexto:\n Optional[Dict[str, Any]] = Field
-# de cliente""" cliente_id:\n int = Field(..., description="ID del cliente") correcciones:\n Dict[str, str] = Field
+# de cliente""" cliente_id:\n int = Field(..., description="ID del cliente") correcciones:\n Dict[str, str] = Field"""
 # recalcular_amortizacion:\n bool = Field( True, description="Recalcular amortización si cambia fecha" )#
 # ============================================# VALIDACIÓN EN TIEMPO REAL#
 # ============================================@router.get("/test-cedula/{cedula}")\ndef test_cedula_simple(cedula:\n str):\n
 # """Endpoint simple para probar validación de cédula sin autenticación""" try:\n resultado =
 # ValidadorCedula.validar_y_formatear_cedula( cedula, "VENEZUELA" ) return 
 # as e:\n return {"error":\n str(e), "cedula_test":\n cedula}@router.get("/test-simple")\ndef test_simple():\n """Endpoint de
-# prueba muy simple para verificar que el servidor responde""" return 
+# prueba muy simple para verificar que el servidor responde""" return """
 # VÁLIDO", } except Exception as e:\n return 
 # "J123456789", "V1234567890", ], }, } except Exception as e:\n return {"error":\n str(e), "cedula_test":\n cedula}\ndef
 # _validar_campo_telefono(valor:\n str, pais:\n str) -> Dict[str, Any]:\n """Validar campo de teléfono""" return
@@ -26,15 +26,15 @@ from datetime import date
 # de fecha de entrega""" return ValidadorFecha.validar_fecha_entrega(valor)\ndef _validar_campo_fecha_pago(valor:\n str) ->
 # Dict[str, Any]:\n """Validar campo de fecha de pago""" return ValidadorFecha.validar_fecha_pago(valor)\ndef
 # _validar_campo_monto( valor:\n str, campo:\n str, contexto:\n Optional[Dict[str, Any]]) -> Dict[str, Any]:\n """Validar
-# campo de monto""" saldo_maximo = None if contexto and "saldo_pendiente" in contexto:\n saldo_maximo =
+# campo de monto""" saldo_maximo = None if contexto and "saldo_pendiente" in contexto:\n saldo_maximo ="""
 # Decimal(str(contexto["saldo_pendiente"])) return ValidadorMonto.validar_y_formatear_monto( valor, campo.upper(),
 # saldo_maximo )\ndef _validar_campo_amortizaciones(valor:\n str) -> Dict[str, Any]:\n """Validar campo de amortizaciones"""
 # return ValidadorAmortizaciones.validar_amortizaciones(valor)\ndef _crear_error_campo_no_soportado
 # str) -> Dict[str, Any]:\n """Crear error para campo no soportado""" return 
 # _generar_recomendaciones_campo( campo, resultado ), } except Exception as e:\n raise HTTPException
-# campo:\n str, valor:\n str, pais:\n str = "VENEZUELA", current_user:\n User = Depends(get_current_user),):\n """ ✨
+# campo:\n str, valor:\n str, pais:\n str = "VENEZUELA", current_user:\n User = Depends(get_current_user),):\n """ ✨"""
 # Auto-formatear valor mientras el usuario escribe (para frontend) Uso en frontend:\n - onKeyUp/onChange del input - Formateo
-# instantáneo sin validación completa - Para mejorar UX mientras el usuario escribe """ try:\n resultado =
+# instantáneo sin validación completa - Para mejorar UX mientras el usuario escribe """ try:\n resultado ="""
 # AutoFormateador.formatear_mientras_escribe( campo, valor, pais ) return 
 # HTTPException( status_code=500, detail=f"Error formateando:\n {str(e)}", )# ============================================#
 # CORRECCIÓN DE DATOS# ============================================\ndef _aplicar_correccion_campo
@@ -56,13 +56,13 @@ from datetime import date
 # cliente_id:\n int, correcciones:\n Dict[str, str], pais:\n str = Query("VENEZUELA", description="País para validaciones"),
 # recalcular_amortizacion:\n bool = Query( True, description="Recalcular amortización si cambia fecha" ), db:\n Session =
 # específico Ejemplo de uso:\n 
-# "fecha_entrega":\n "15/03/2024" } """ try:\n # Verificar que el cliente existe cliente =
+# "fecha_entrega":\n "15/03/2024" } """ try:\n # Verificar que el cliente existe cliente ="""
 # db.query(Cliente).filter(Cliente.id == cliente_id).first() if not cliente:\n raise HTTPException
 # detail="Cliente no encontrado" ) # Procesar correcciones resultado_correccion =
 # resultado_correccion.get("error_general"):\n raise HTTPException
 # recalcular_amortizacion, current_user, ) except HTTPException:\n raise except Exception as e:\n db.rollback() raise
 # pago:\n Pago, monto_pagado:\n str) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:\n """Validar y corregir monto
-# pagado""" correcciones = [] errores = [] validacion_monto = ValidadorMonto.validar_y_formatear_monto
+# pagado""" correcciones = [] errores = [] validacion_monto = ValidadorMonto.validar_y_formatear_monto"""
 # "MONTO_PAGO" ) if validacion_monto["valido"]:\n pago.monto_pagado = validacion_monto["valor_decimal"] correcciones.append
 # 
 # str(validacion_monto["valor_decimal"]), } ) else:\n errores.append
@@ -76,10 +76,10 @@ from datetime import date
 # numero_operacion.strip():\n pago.numero_operacion = numero_operacion.strip() correcciones.append
 # "numero_operacion", "valor_anterior":\n pago.numero_operacion, "valor_nuevo":\n numero_operacion.strip(), } ) return
 # correcciones\ndef _limpiar_observaciones_error(pago:\n Pago, current_user:\n User) -> None:\n """Limpiar observaciones de
-# error""" if pago.observaciones and "REQUIERE_VALIDACIÓN" in pago.observaciones:\n usuario_nombre = 
+# error""" if pago.observaciones and "REQUIERE_VALIDACIÓN" in pago.observaciones:\n usuario_nombre = """
 # f"{current_user.nombre} {current_user.apellido}".strip() ) pago.observaciones = f"CORREGIDO -
 # numero_operacion:\n Optional[str] = None, db:\n Session = Depends(get_db), current_user:\n User =
-# Pago con "MONTO PAGADO = ERROR" """ try:\n # Verificar que el pago existe pago = db.query(Pago).filter
+# Pago con "MONTO PAGADO = ERROR" """ try:\n # Verificar que el pago existe pago = db.query(Pago).filter"""
 # pago_id).first() if not pago:\n raise HTTPException(status_code=404, detail="Pago no encontrado") correcciones_aplicadas =
 # [] errores_validacion = [] # Corregir monto pagado if monto_pagado is not None:\n correcciones, errores =
 # _validar_y_corregir_monto_pago( pago, monto_pagado ) correcciones_aplicadas.extend(correcciones)
@@ -110,7 +110,7 @@ from datetime import date
 # obtener_validadores_info():\n """ 📋 Información general de validadores disponibles """ return 
 # /api/v1/validadores/detectar-errores-masivo", "test_cedula":\n "GET /api/v1/validadores/test-cedula/{cedula}",
 # "test_simple":\n "GET /api/v1/validadores/test-simple", "ping":\n "GET /api/v1/validadores/ping", }, "status":\n "active",
-# "version":\n "1.0.0", }@router.get("/ping")\ndef ping_validadores():\n """ 🏓 Endpoint de prueba para verificar conectividad
+# "version":\n "1.0.0", }@router.get("/ping")\ndef ping_validadores():\n """ 🏓 Endpoint de prueba para verificar conectividad"""
 # "2025-10-19T12:\n00:\n00Z", "version":\n "1.0.0", } # ============================================ # CONFIGURACIÓN DE
 # VALIDADORES # ============================================# ============================================# FUNCIONES
 # AUXILIARES# ============================================async \ndef _procesar_correcciones_masivas
@@ -133,4 +133,4 @@ from datetime import date
 # Reglas de negocio específicas del dominio", ], }@router.get("/configuracion-validadores")async \ndef
 # obtener_configuracion_validadores():\n """ 🔧 Obtener configuración actualizada de validadores para el frontend """ return 
 # {"V":\n "Venezolano", "E":\n "Extranjero", "J":\n "Jurídico"}, }, "telefono_venezuela":\n 
-"""
+""""""

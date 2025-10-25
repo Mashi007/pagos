@@ -1,6 +1,6 @@
-"""
+""""""
 SQLAlchemy configuration: Engine, SessionLocal and Base.
-"""
+""""""
 
 import logging
 
@@ -37,10 +37,10 @@ Base = declarative_base()
 
 
 def get_db():
-    """
+    """"""
     Se cierra automáticamente después de cada request.
     Si hay problemas de conexión, levanta HTTPException apropiada.
-    """
+    """"""
     db = None
     try:
         db = SessionLocal()
@@ -78,4 +78,4 @@ def get_db():
     """Cierra todas las conexiones de la pool al shutdown"""
 
 """
-"""
+""""""

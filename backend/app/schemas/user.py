@@ -1,7 +1,7 @@
 from datetime import date
 # backend/app/schemas/user.py
-"""Schemas de usuario simplificado.
-
+"""
+Schemas de usuario simplificado.
 Solo 2 roles: ADMIN (acceso completo) y USER (acceso limitado)
 Compatible con Pydantic v2.
 """

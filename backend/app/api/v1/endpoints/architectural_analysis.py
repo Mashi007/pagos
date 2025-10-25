@@ -1,7 +1,7 @@
 from app.core.security import decode_token
 from datetime import date
 """Sistema Arquitectural de Análisis de Componentes
-"""
+""""""
 
 import logging
 import threading
@@ -417,9 +417,9 @@ architectural_system = ArchitecturalAnalysisSystem()
 async def get_component_health
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     🏗️ Obtener salud de componente específico
-    """
+    """"""
     try:
         with architectural_system.lock:
             if component_id not in architectural_system.component_health:
@@ -438,7 +438,7 @@ async def get_all_components_health
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     """
-    """
+    """"""
     try:
         with architectural_system.lock:
             all_health = architectural_system.component_health.copy()
@@ -452,9 +452,9 @@ async def get_all_components_health
 async def get_component_dependencies
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     🔗 Análisis de dependencias entre componentes
-    """
+    """"""
     try:
         analysis = architectural_system.analyze_component_dependencies()
         return 
@@ -466,9 +466,9 @@ async def get_component_dependencies
 async def get_architectural_summary_endpoint
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     📊 Resumen arquitectural general
-    """
+    """"""
     try:
         summary = architectural_system.get_architectural_summary()
         return 
@@ -479,9 +479,9 @@ async def get_architectural_summary_endpoint
 async def force_component_health_check
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     🔄 Forzar verificación de salud de componente
-    """
+    """"""
     try:
         with architectural_system.lock:
             if component_id not in architectural_system.system_components:

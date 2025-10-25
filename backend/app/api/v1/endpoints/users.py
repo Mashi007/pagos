@@ -5,14 +5,14 @@ from datetime import date
 # \nimport ( registrar_creacion, registrar_eliminacion,)\nfrom app.utils.validators \nimport validate_password_strengthlogger
 # = logging.getLogger(__name__)router = APIRouter()# ============================================# VERIFICACIÓN DE
 # ADMINISTRADORES# ============================================@router.get("/verificar-admin")\ndef
-# verificar_rol_administracion(db:\n Session = Depends(get_db)):\n """ 🔍 Verificar estado del rol de administración en el
+# verificar_rol_administracion(db:\n Session = Depends(get_db)):\n """ 🔍 Verificar estado del rol de administración en el"""
 # "activo":\n admin.is_active, "fecha_creacion":\n admin.created_at, "ultimo_login":\n getattr(admin, "last_login", None),
 # administrador" ), 
 # response_model=UserResponse, status_code=status.HTTP_201_CREATED, summary="Crear usuario",)\ndef create_user
-# UserCreate, db:\n Session = Depends(get_db), current_user:\n User = Depends(get_admin_user),):\n """ Crear un nuevo usuario
+# UserCreate, db:\n Session = Depends(get_db), current_user:\n User = Depends(get_admin_user),):\n """ Crear un nuevo usuario"""
 # (solo ADMIN) - **email**:\n Email único del usuario - **nombre**:\n Nombre del usuario - **apellido**:\n Apellido del
 # usuario - **cargo**:\n Cargo del usuario en la empresa (opcional) - **rol**:\n Rol del usuario 
-# USER) - **password**:\n Contraseña (mínimo 8 caracteres) - **is_active**:\n Si el usuario está activo """ # Verificar que
+# USER) - **password**:\n Contraseña (mínimo 8 caracteres) - **is_active**:\n Si el usuario está activo """ # Verificar que"""
 # el email no exista existing_user = ( db.query(User).filter(User.email == user_data.email).first() ) if existing_user:\n
 # raise HTTPException( status_code=status.HTTP_400_BAD_REQUEST, detail="El email ya está registrado", ) # Validar fortaleza
 # de contraseña is_valid, message = validate_password_strength(user_data.password) if not is_valid:\n raise HTTPException
@@ -21,7 +21,7 @@ from datetime import date
 # registro_id=new_user.id, descripcion=f"Usuario creado:\n {new_user.email} como 
 # "is_admin":\n new_user.is_admin, # Cambio clave:\n rol → is_admin "is_active":\n new_user.is_active, }, ) except Exception
 # as e:\n logger.warning( f"Error registrando auditoría de creación de usuario:\n {e}" ) return
-# new_user@router.get("/test-simple")\ndef test_users_simple(db:\n Session = Depends(get_db)):\n """ Test endpoint simple
+# new_user@router.get("/test-simple")\ndef test_users_simple(db:\n Session = Depends(get_db)):\n """ Test endpoint simple"""
 # db.query(User).limit(5).all() users_data = [] for user in users:\n users_data.append
 # is_admin "is_active":\n user.is_active, "created_at":\n ( user.created_at.isoformat() if user.created_at else None ), } )
 # return 
@@ -48,7 +48,7 @@ from datetime import date
 # user_data.email).first() if existing:\n raise HTTPException
 # update_data.pop("password") if password_value and password_value.strip():\n # Solo actualizar contraseña si se proporciona
 # user@router.delete( "/{user_id}", status_code=status.HTTP_200_OK, summary="Eliminar usuario")\ndef delete_user
-# int, db:\n Session = Depends(get_db), current_user:\n User = Depends(get_admin_user),):\n """ Eliminar un usuario 
+# int, db:\n Session = Depends(get_db), current_user:\n User = Depends(get_admin_user),):\n """ Eliminar un usuario """
 # db.query(User).filter(User.id == user_id).first() if not user:\n raise HTTPException
 # status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado", ) # No permitir eliminar el propio usuario if
 # user.id == current_user.id:\n raise HTTPException
@@ -59,7 +59,7 @@ from datetime import date
 # user_id).first() if not user:\n raise HTTPException
 # "/{user_id}/deactivate", response_model=UserResponse, summary="Desactivar usuario",)\ndef deactivate_user
 # db:\n Session = Depends(get_db), current_user:\n User = Depends(get_admin_user),):\n """ Desactivar un usuario (solo ADMIN)
-# """ user = db.query(User).filter(User.id == user_id).first() if not user:\n raise HTTPException
+# """ user = db.query(User).filter(User.id == user_id).first() if not user:\n raise HTTPException"""
 # status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado", ) user.is_active = False user.updated_at =
 
-"""
+""""""

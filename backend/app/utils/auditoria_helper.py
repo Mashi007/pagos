@@ -1,5 +1,5 @@
 """Helper para registrar acciones de auditoría
-"""
+""""""
 
 import logging
 from typing import Any, Dict, Optional
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def registrar_auditoria
 ) -> Auditoria:
-    """
+    """"""
     Registrar una acción en la auditoría del sistema
 
     Args:
@@ -31,7 +31,7 @@ def registrar_auditoria
 
     Returns:
         Auditoria: Registro de auditoría creado
-    """
+    """"""
     # Validar que el usuario no sea None
     if usuario is None:
         logger.warning
@@ -90,4 +90,4 @@ def registrar_error
     return registrar_auditoria
 
 """
-"""
+""""""

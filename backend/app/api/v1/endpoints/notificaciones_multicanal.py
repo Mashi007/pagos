@@ -1,5 +1,5 @@
 from datetime import date
-# backend/app/api/v1/endpoints/notificaciones_multicanal.py"""Endpoints de Notificaciones MulticanalSistema 100% automático
+# backend/app/api/v1/endpoints/notificaciones_multicanal.py"""Endpoints de Notificaciones MulticanalSistema 100% automático"""
 # \nimport Dict, List, Optional\nfrom fastapi \nimport APIRouter, BackgroundTasks, Depends, HTTPException, Query\nfrom
 # pydantic \nimport BaseModel, Field\nfrom sqlalchemy \nimport desc, func\nfrom sqlalchemy.orm \nimport Session\nfrom
 # app.api.deps \nimport get_current_user, get_db\nfrom app.db.session \nimport SessionLocal\nfrom app.models.amortizacion
@@ -9,7 +9,7 @@ from datetime import date
 # notification_scheduler,)logger = logging.getLogger(__name__)router = APIRouter()#
 # ============================================# SCHEMAS PARA NOTIFICACIONES MULTICANAL#
 # ============================================\nclass ConfiguracionNotificacionesCliente(BaseModel):\n """Schema para
-# configuración de notificaciones por cliente""" recordatorio_3_dias:\n bool = Field
+# configuración de notificaciones por cliente""" recordatorio_3_dias:\n bool = Field"""
 # antes" ) recordatorio_1_dia:\n bool = Field( True, description="Recordatorio 1 día antes" ) dia_vencimiento:\n bool =
 # Field( True, description="Notificación día de vencimiento" ) mora_1_dia:\n bool = Field
 # día de mora") mora_3_dias:\n bool = Field(True, description="Notificación 3 días de mora") mora_5_dias:\n bool =
@@ -19,10 +19,10 @@ from datetime import date
 # ============================================# PROCESAMIENTO AUTOMÁTICO#
 # procesar_notificaciones_automaticas
 # description="Forzar procesamiento fuera de horario" ), db:\n Session = Depends(get_db), current_user:\n User =
-# Depends(get_current_user),):\n """ 🤖 Procesar notificaciones automáticas (Endpoint para scheduler/cron) FLUJO AUTOMÁTICO:\n
+# Depends(get_current_user),):\n """ 🤖 Procesar notificaciones automáticas (Endpoint para scheduler/cron) FLUJO AUTOMÁTICO:\n"""
 # 1. Busca clientes con cuotas que requieren notificación hoy 2. Para cada cliente:\n - Verifica preferencias
 # aplica) - Envía por WhatsApp (si aplica) - Registra en historial - Marca como enviado 3. Si hay errores:\n registra,
-# programa reintento, notifica admin 4. Genera reporte diario para Cobranzas """ # Solo admin y cobranzas pueden ejecutar
+# programa reintento, notifica admin 4. Genera reporte diario para Cobranzas """ # Solo admin y cobranzas pueden ejecutar"""
 # _ejecutar_procesamiento_background, db_session=db, user_id=current_user.id, forzar=forzar_procesamiento, ) return 
 # /api/v1/notificaciones-multicanal/estado-procesamiento", } except HTTPException:\n raise except Exception as e:\n raise
 # HTTPException( status_code=500, detail=f"Error iniciando procesamiento:\n {str(e)}"
@@ -44,7 +44,7 @@ from datetime import date
 # Query( None, description="ENTREGADO, ERROR, PENDIENTE" ), fecha_desde:\n Optional[date] = Query
 # desde"), fecha_hasta:\n Optional[date] = Query(None, description="Fecha hasta"), page:\n int = Query(1, ge=1), page_size:\n
 # int = Query(50, ge=1, le=200), db:\n Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 📋
-# PENDIENTE • ❌ ERROR / Rebotado """ try:\n # Construir query base query = db.query(Notificacion).filter
+# PENDIENTE • ❌ ERROR / Rebotado """ try:\n # Construir query base query = db.query(Notificacion).filter"""
 # cliente_id) if canal and canal != "AMBOS":\n query = query.filter(Notificacion.canal == canal) if tipo:\n query =
 # query.filter(Notificacion.tipo == tipo) if estado:\n query = query.filter(Notificacion.estado == estado) if fecha_desde:\n
 # query = query.filter( func.date(Notificacion.creado_en) >= fecha_desde ) if fecha_hasta:\n query = query.filter
@@ -80,7 +80,7 @@ from datetime import date
 # HTTPException:\n raise except Exception as e:\n raise HTTPException
 # cliente_id:\n int, canal_preferido:\n CanalNotificacion, db:\n Session = Depends(get_db), current_user:\n User =
 # Depends(get_current_user),):\n """ ✏️ Actualizar preferencias de notificación del cliente Opciones:\n • AMBOS:\n Email +
-# WhatsApp (recomendado) • EMAIL:\n Solo email • WHATSAPP:\n Solo WhatsApp • NINGUNO:\n Opt-out (sin notificaciones) """
+# WhatsApp (recomendado) • EMAIL:\n Solo email • WHATSAPP:\n Solo WhatsApp • NINGUNO:\n Opt-out (sin notificaciones) """"""
 # try:\n # Verificar que el cliente existe cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first() if not
 # status_code=400, detail="Cliente no tiene email configurado" ) if 
 # cliente.telefono ):\n raise HTTPException( status_code=400, detail="Cliente no tiene teléfono configurado" ) if
@@ -92,7 +92,7 @@ from datetime import date
 # HTTPException:\n raise except Exception as e:\n raise HTTPException
 # preferencias:\n {str(e)}", )# ============================================# GESTIÓN DE TEMPLATES WHATSAPP#
 # ============================================@router.get("/whatsapp/templates")\ndef
-# listar_templates_whatsapp(current_user:\n User = Depends(get_current_user)):\n """ 📝 Listar templates de WhatsApp
+# listar_templates_whatsapp(current_user:\n User = Depends(get_current_user)):\n """ 📝 Listar templates de WhatsApp"""
 # disponibles ⚠️ IMPORTANTE:\n Las plantillas de WhatsApp deben ser aprobadas por Meta antes de poder usarse. El sistema las
 # TEMPLATES DE WHATSAPP BUSINESS API", "total_templates":\n len(templates), "templates":\n templates,
 # "informacion_importante":\n 
@@ -101,7 +101,7 @@ from datetime import date
 # de mora", "{vehiculo} - Descripción del vehículo", "{nombre_empresa} - Nombre de la empresa", "{telefono_empresa} -
 # Teléfono de contacto", ], } except Exception as e:\n raise HTTPException
 # template_name:\n str, current_user:\n User = Depends(get_current_user)):\n """ 📤 Enviar template de WhatsApp a Meta para
-# aprobación """ if not current_user.is_admin:\n raise HTTPException
+# aprobación """ if not current_user.is_admin:\n raise HTTPException"""
 # gestionar templates", ) try:\n # Obtener template formateado para Meta template_meta = 
 # WhatsAppTemplateManager.obtener_template_para_aprobacion( template_name ) ) if not template_meta:\n raise HTTPException
 # status_code=404, detail="Template no encontrado" ) # En producción, aquí se enviaría a la API de Meta # Por ahora, simular
@@ -131,7 +131,7 @@ from datetime import date
 # /api/v1/notificaciones-multicanal/whatsapp/templates", }, } except Exception as e:\n raise HTTPException
 # detail=f"Error en dashboard:\n {str(e)}" )# ============================================# TESTING Y PRUEBAS#
 # cliente_id:\n int, tipo_notificacion:\n TipoNotificacionCliente, canal:\n CanalNotificacion = CanalNotificacion.AMBOS,
-# db:\n Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 🧪 Probar envío de notificación a
+# db:\n Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 🧪 Probar envío de notificación a"""
 # cliente_id).first() if not cliente:\n raise HTTPException( status_code=404, detail="Cliente no encontrado" ) # Obtener
 # cliente_id) .order_by(Cuota.numero_cuota.desc()) .first() ) if not cuota:\n raise HTTPException
 # "cuota_numero":\n cuota.numero_cuota, "monto_cuota":\n float(cuota.monto_cuota), "fecha_vencimiento":\n
@@ -161,4 +161,4 @@ from datetime import date
 # }, "configuracion_requerida":\n 
 # /api/v1/configuracion/whatsapp", "scheduler":\n "Configurar cron job para ejecutar cada hora", }, }
 
-"""
+""""""

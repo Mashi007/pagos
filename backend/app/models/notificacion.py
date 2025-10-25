@@ -1,6 +1,6 @@
 # backend/app/models/notificacion.py
-"""Modelo de Notificación
-
+"""
+Modelo de Notificación
 Sistema de notificaciones por email, SMS o WhatsApp
 """
 
@@ -50,7 +50,7 @@ class PrioridadNotificacion(str, PyEnum):
 
 class Notificacion(Base):
     """
-    """
+    """"""
     __tablename__ = "notificaciones"
 
     # Identificación
@@ -155,7 +155,7 @@ class Notificacion(Base):
 
     @classmethod
     def crear_recordatorio_pago
-        """
+        """"""
         Helper para crear notificaciones de recordatorio de pago
 
         Args:
@@ -166,8 +166,8 @@ class Notificacion(Base):
 
         Returns:
             Notificacion: Instancia de notificación
-        """
+        """"""
         return cls
 
 """
-"""
+""""""

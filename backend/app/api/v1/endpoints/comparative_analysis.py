@@ -1,6 +1,6 @@
 from collections import deque
 """Sistema Comparativo de Análisis Diferencial
-"""
+""""""
 
 import logging
 import statistics
@@ -408,7 +408,7 @@ async def log_successful_case_endpoint
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     """
-    """
+    """"""
     try:
         comparative_system.log_successful_case(case_data)
         return 
@@ -418,9 +418,9 @@ async def log_successful_case_endpoint
 async def log_failed_case_endpoint
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     ❌ Registrar caso fallido para análisis comparativo
-    """
+    """"""
     try:
         comparative_system.log_failed_case(case_data)
         return 
@@ -431,9 +431,9 @@ async def log_failed_case_endpoint
 async def perform_differential_analysis_endpoint
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     📊 Realizar análisis diferencial completo
-    """
+    """"""
     try:
         analysis_type = analysis_request.get("analysis_type", "comprehensive")
         analysis = comparative_system.perform_differential_analysis
@@ -446,9 +446,9 @@ async def perform_differential_analysis_endpoint
 async def get_comparative_summary_endpoint
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     📈 Resumen comparativo general
-    """
+    """"""
     try:
         with comparative_system.lock:
             summary = 

@@ -53,14 +53,12 @@ router = APIRouter()
         for url in test_urls:
             try:
 
-                test_result = 
-
+                test_result = None
                 with self.lock:
                     self.connectivity_tests.append(test_result)
 
             except Exception as e:
-                test_result = 
-
+                test_result = None
                 with self.lock:
                     self.connectivity_tests.append(test_result)
 
@@ -71,8 +69,7 @@ router = APIRouter()
             # Simular medición de latencia
 
 
-            measurement = 
-
+            measurement = None
             with self.lock:
                 self.latency_measurements.append(measurement)
 

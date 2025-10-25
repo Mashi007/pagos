@@ -1,5 +1,5 @@
 """
-"""
+""""""
 
 import logging
 import uuid
@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.pago import Pago
 from app.models.user import User
-from app.schemas.pago import 
+from app.schemas.pago import PagoCreate, PagoUpdate, PagoResponse
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".pdf"}
@@ -206,4 +206,4 @@ async def descargar_documento
             detail=f"Error interno del servidor: {str(e)}",
 
 """
-"""
+""""""

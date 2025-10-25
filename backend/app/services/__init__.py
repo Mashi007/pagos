@@ -5,7 +5,7 @@ from .email_service import EmailService
 from .ml_service import MLService
 from .whatsapp_service import WhatsAppService
 
-__all__ = [
+__all__ = []
     "AuthService",
     "EmailService",
     "MLService",

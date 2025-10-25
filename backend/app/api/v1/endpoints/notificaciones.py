@@ -1,5 +1,5 @@
 from datetime import date
-# backend/app/api/v1/endpoints/notificaciones.py"""Endpoint para gestión de notificaciones del sistema.Soporta Email y
+# backend/app/api/v1/endpoints/notificaciones.py"""Endpoint para gestión de notificaciones del sistema.Soporta Email y"""
 # Decimal\nfrom typing \nimport Optional\nfrom fastapi \nimport APIRouter, BackgroundTasks, Depends, HTTPException,
 # Query\nfrom pydantic \nimport BaseModel\nfrom sqlalchemy \nimport and_, func\nfrom sqlalchemy.orm \nimport Session\nfrom
 # app.api.deps \nimport get_current_user, get_db\nfrom app.core.config \nimport settings\nfrom app.models.amortizacion
@@ -15,7 +15,7 @@ from datetime import date
 # body=notificacion.mensaje, notificacion_id=nueva_notif.id, ) elif notificacion.canal == "WHATSAPP":\n
 # background_tasks.add_task
 # notificacion_id=nueva_notif.id, ) logger.info
-# EnvioMasivoRequest, background_tasks:\n BackgroundTasks, db:\n Session = Depends(get_db),):\n """ Envío masivo de
+# EnvioMasivoRequest, background_tasks:\n BackgroundTasks, db:\n Session = Depends(get_db),):\n """ Envío masivo de"""
 # request.tipo_cliente == "MOROSO":\n query = query.filter(Prestamo.dias_mora > 0) if request.dias_mora_min:\n query =
 # query.filter(Prestamo.dias_mora >= request.dias_mora_min) clientes = query.all() # Crear notificaciones masivas
 # notificaciones_creadas = [] for cliente in clientes:\n # Personalizar mensaje según template mensaje =
@@ -29,27 +29,27 @@ from datetime import date
 # .filter(Notificacion.cliente_id == cliente_id) .order_by(Notificacion.creado_en.desc()) .all() ) return 
 # n.categoria, "asunto":\n n.asunto, "estado":\n n.estado, "enviada_en":\n n.enviada_en, "creado_en":\n n.creado_en, } for n
 # in notificaciones ], }@router.get("/pendientes")\ndef notificaciones_pendientes(db:\n Session = Depends(get_db)):\n """
-# Obtener notificaciones pendientes de envío. """ pendientes = ( db.query(Notificacion) .filter
+# Obtener notificaciones pendientes de envío. """ pendientes = ( db.query(Notificacion) .filter"""
 # Prestamo.fecha_vencimiento <= fecha_limite, Prestamo.fecha_vencimiento >= date.today(), Prestamo.estado == "ACTIVO", )
 # tipo="EMAIL", categoria="RECORDATORIO_PAGO", asunto="Recordatorio:\n Cuota próxima a vencer", mensaje=mensaje,
 # cliente.email:\n background_tasks.add_task
-# _generar_mensaje_template( template:\n str, cliente:\n Cliente, db:\n Session) -> str:\n """ Generar mensaje personalizado
+# _generar_mensaje_template( template:\n str, cliente:\n Cliente, db:\n Session) -> str:\n """ Generar mensaje personalizado"""
 # "Mensaje genérico de notificación."# ============================================# NOTIFICACIONES AUTOMÁTICAS PROGRAMADAS#
 # programar_notificaciones_automaticas( background_tasks:\n BackgroundTasks, db:\n Session = Depends(get_db)):\n """
-# Programar todas las notificaciones automáticas del sistema Debe ejecutarse diariamente via cron job """
+# Programar todas las notificaciones automáticas del sistema Debe ejecutarse diariamente via cron job """"""
 # notificaciones_programadas = [] # 1. RECORDATORIOS PRE-VENCIMIENTO (3 días antes) fecha_recordatorio = date.today() +
 # fecha_recordatorio, Cuota.estado.in_(["PENDIENTE", "PARCIAL"]), Cliente.email.isnot(None), Cliente.activo, ) .all() ) for
 # cuota in cuotas_proximas:\n cliente = cuota.prestamo.cliente # Verificar que no se haya enviado ya ya_enviado = 
 # db.query(Notificacion) .filter
 # func.date(Notificacion.creado_en) == date.today(), ) .first() ) if not ya_enviado:\n mensaje = """Estimado/a
-# 123-456Email:\n cobranzas@financiera.comGracias por su puntualidad. """ notif = Notificacion
+# 123-456Email:\n cobranzas@financiera.comGracias por su puntualidad. """ notif = Notificacion"""
 # prioridad="ALTA", ) db.add(notif) notificaciones_programadas.append(notif) # 2. AVISOS DE CUOTA VENCIDA (día siguiente)
 # cuotas_vencidas_ayer = ( db.query(Cuota) .join(Prestamo) .join(Cliente) .filter( Cuota.fecha_vencimiento == date.today() -
 # cuota in cuotas_vencidas_ayer:\n cliente = cuota.prestamo.cliente # Calcular mora mora_calculada = cuota.calcular_mora
-# Decimal(str(settings.TASA_MORA_DIARIA)) ) mensaje = f"""Estimado/a {cliente.nombre_completo},ALERTA:\n Su cuota
+# Decimal(str(settings.TASA_MORA_DIARIA)) ) mensaje = f"""Estimado/a {cliente.nombre_completo},ALERTA:\n Su cuota"""
 # {(date.today() - cuota.fecha_vencimiento).days} Monto adeudado:\n {float(cuota.monto_pendiente_total):\n,.2f} Recargo por
 # mora:\n {float(mora_calculada):\n,.2f}URGENTE:\n Regularice su pago inmediatamente para evitar:\n Incremento de mora diaria
-# Reporte en centrales de riesgo Acciones legalesContacto inmediato:\n (021) 123-456 """ notif = Notificacion
+# Reporte en centrales de riesgo Acciones legalesContacto inmediato:\n (021) 123-456 """ notif = Notificacion"""
 # = ( db.query(Cliente).filter(Cliente.id == notif.cliente_id).first() ) if cliente.email:\n background_tasks.add_task
 # "recordatorio" in notif.asunto.lower() else "mora" ), context=
 # "Financiera Automotriz", "telefono":\n "(021) 123-456", "email":\n "info@financiera.com", }, notificacion_id=notif.id, )
@@ -64,22 +64,22 @@ from datetime import date
 # Capital:\n {float(pago.monto_capital):\n.2f} Interés:\n {float(pago.monto_interes):\n.2f} Mora:\n
 # {float(pago.monto_mora):\n.2f}ESTADO ACTUAL:\n Saldo pendiente:\n {float(pago.prestamo.saldo_pendiente):\n.2f} Próximo
 # cliente_id=cliente.id, tipo="EMAIL", categoria="PAGO_RECIBIDO", asunto=f"✅ Confirmación:\n Pago de 
-# financiero resumen = cliente.calcular_resumen_financiero(db) mensaje = f"""Estimado/a {cliente.nombre_completo},ESTADO DE
+# financiero resumen = cliente.calcular_resumen_financiero(db) mensaje = f"""Estimado/a {cliente.nombre_completo},ESTADO DE"""
 # {float(resumen['total_financiado']):\n.2f} Total pagado:\n {float(resumen['total_pagado']):\n.2f} Saldo pendiente:\n
 # {float(resumen['saldo_pendiente']):\n.2f} Cuotas pagadas:\n {resumen['cuotas_pagadas']} / {resumen['cuotas_totales']} %
-# Avance:\n {resumen['porcentaje_avance']}%PRÓXIMOS VENCIMIENTOS:\n""" for cuota in cuotas_pendientes:\n mensaje += 
+# Avance:\n {resumen['porcentaje_avance']}%PRÓXIMOS VENCIMIENTOS:\n""" for cuota in cuotas_pendientes:\n mensaje += """
 # db.query(Cliente).filter(Cliente.id == notif.cliente_id).first() ) background_tasks.add_task
 # to_email=cliente.email, subject=notif.asunto, body=notif.mensaje, notificacion_id=notif.id, ) return 
 # (Cliente).filter(Cliente.dias_mora > 0).count() / db.query(Cliente).filter(Cliente.activo).count() * 100:\n.2f}%Revisar
 # db.add(notif) background_tasks.add_task
 # ============================================@router.get("/configuracion")\ndef obtener_configuracion_notificaciones
-# Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ ⚙️ Obtener configuración de
+# Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ ⚙️ Obtener configuración de"""
 # "09:\n00", "resumen_diario":\n "08:\n00", "reporte_semanal":\n "09:\n00", # Lunes "reporte_mensual":\n "10:\n00", # Día 1
 # settings.SMTP_PORT, "habilitado":\n settings.EMAIL_ENABLED, "from_name":\n settings.FROM_NAME, },
 # }@router.get("/historial-completo")\ndef historial_completo_notificaciones( fecha_desde:\n Optional[date] = Query(None),
 # fecha_hasta:\n Optional[date] = Query(None), tipo:\n Optional[str] = Query(None), estado:\n Optional[str] = Query(None),
 # cliente_id:\n Optional[int] = Query(None), page:\n int = Query(1, ge=1), page_size:\n int = Query(20, ge=1, le=1000), db:\n
-# Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 📋 Historial completo de notificaciones
+# Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 📋 Historial completo de notificaciones"""
 # fecha_desde:\n query = query.filter(func.date(Notificacion.creado_en) >= fecha_desde) if fecha_hasta:\n query =
 # query.filter(func.date(Notificacion.creado_en) <= fecha_hasta) if tipo:\n query = query.filter(Notificacion.tipo == tipo)
 # if estado:\n query = query.filter(Notificacion.estado == estado) if cliente_id:\n query =
@@ -88,4 +88,4 @@ from datetime import date
 # n.error_mensaje, "puede_reenviar":\n n.puede_reintentar, } for n in notificaciones ], "estadisticas":\n 
 # "notificacion_id":\n notificacion_id, "destinatario":\n email_destino, }
 
-"""
+""""""

@@ -1,8 +1,8 @@
 from datetime import date
-"""Modelo de Préstamo
+"""Modelo de Préstamo"""
 Define la estructura básica de un préstamo.
 Sincronizado con el endpoint de aprobaciones.
-"""
+""""""
 
 from enum import Enum
 # from sqlalchemy import  # TODO: Agregar imports específicos
@@ -23,7 +23,7 @@ ESTADO_LENGTH = 20
 
 class EstadoPrestamo(str, Enum):
     PENDIENTE = "PENDIENTE"  # Solicitud inicial
-    EN_APROBACION = 
+    EN_APROBACION = "EN_APROBACION"
     APROBADO = "APROBADO"  # <== USADO por el endpoint
     RECHAZADO = "RECHAZADO"  # <== AÑADIDO: Usado por el endpoint al rechazar
     CANCELADO = "CANCELADO"
@@ -106,4 +106,4 @@ class Prestamo(Base):
     # Solo plantilla vacía
 
 """
-"""
+""""""

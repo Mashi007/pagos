@@ -1,15 +1,15 @@
 from datetime import date
-# backend/app/api/v1/endpoints/configuracion.py"""Endpoint para configuración administrativa del sistema.Gestión de
+# backend/app/api/v1/endpoints/configuracion.py"""Endpoint para configuración administrativa del sistema.Gestión de"""
 # Depends, HTTPException, Query\nfrom pydantic \nimport BaseModel, Field\nfrom sqlalchemy.orm \nimport Session\nfrom
 # app.api.deps \nimport get_current_user, get_db\nfrom app.models.configuracion_sistema \nimport ConfiguracionSistema\nfrom
 # app.models.prestamo \nimport Prestamo\nfrom app.models.user \nimport User# Funciones auxiliares para validación y
 # pruebaslogger = logging.getLogger(__name__)router = APIRouter()# ============================================# MONITOREO Y
 # OBSERVABILIDAD# ============================================@router.get("/monitoreo/estado")\ndef
 # obtener_estado_monitoreo(current_user:\n User = Depends(get_current_user)):\n """ 🔍 Verificar estado del sistema de
-# monitoreo y observabilidad """ # Solo admin puede ver configuración de monitoreo if not current_user.is_admin:\n raise
+# monitoreo y observabilidad """ # Solo admin puede ver configuración de monitoreo if not current_user.is_admin:\n raise"""
 # HTTPException( status_code=403, detail="Solo administradores pueden ver configuración de m \ onitoreo", ) \nfrom
 # habilitar_monitoreo_basico(current_user:\n User = Depends(get_current_user)):\n """ ⚡ Habilitar monitoreo básico sin
-# dependencias externas """ if not current_user.is_admin:\n raise HTTPException
+# dependencias externas """ if not current_user.is_admin:\n raise HTTPException"""
 # administradores pueden configurar monitoreo", ) try:\n # Configurar logging estructurado básico # Configurar formato
 # (lineno)d] - %(message)s", datefmt="%Y-%m-%d %H:\n%M:\n%S", ) # Logger específico para el sistema de financiamiento
 # finance_logger = logging.getLogger("financiamiento_automotriz") finance_logger.setLevel(logging.INFO) return 
@@ -29,7 +29,7 @@ from datetime import date
 # "categorias_disponibles":\n list(configuracion_agrupada.keys()), "total_configuraciones":\n len(configs), } except
 # Exception as e:\n raise HTTPException( status_code=500, detail=f"Error obteniendo configuración:\n {str(e)}"
 # )@router.get("/validadores")\ndef obtener_configuracion_validadores():\n """ 🔍 Obtener configuración completa de
-# validadores para el módulo de configuración """ try:\n pass return 
+# validadores para el módulo de configuración """ try:\n pass return """
 # "validacion_tiempo_real":\n True, }, "fecha":\n 
 # "validacion_tiempo_real":\n True, "requiere_calendario":\n True, }, "email":\n 
 # automática a minúsculas (incluyendo @)", }, "configuracion_frontend":\n 
@@ -37,7 +37,7 @@ from datetime import date
 # False) ), }, } except Exception as e:\n raise HTTPException
 # {str(e)}" )@router.get("/sistema/categoria/{categoria}")\ndef obtener_configuracion_categoria
 # Session = Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 📋 Obtener configuración de una
-# categoría específica """ try:\n # Solo admin puede ver configuración de categoría if not current_user.is_admin:\n raise
+# categoría específica """ try:\n # Solo admin puede ver configuración de categoría if not current_user.is_admin:\n raise"""
 # HTTPException( status_code=403, detail="Solo administradores pueden ver configuración de categoría", ) configs = 
 # db.query(ConfiguracionSistema) .filter( ConfiguracionSistema.categoria == categoria.upper(),
 # ConfiguracionSistema.visible_frontend, ) .all() ) if not configs:\n raise HTTPException
@@ -66,13 +66,13 @@ from datetime import date
 # current_user:\n User, db:\n Session):\n """Registrar operación en auditoría""" \nfrom app.core.constants \nimport
 # TipoAccion \nfrom app.models.auditoria \nimport Auditoria auditoria = Auditoria.registrar
 # actualizar_configuracion_sistema( configuraciones:\n Dict[str, Dict[str, Any]], db:\n Session = Depends(get_db),
-# current_user:\n User = Depends(get_current_user),):\n """ ✏️ Actualizar configuraciones del sistema (VERSIÓN REFACTORIZADA)
+# current_user:\n User = Depends(get_current_user),):\n """ ✏️ Actualizar configuraciones del sistema (VERSIÓN REFACTORIZADA)"""
 # Formato:\n { "AI":\n { "OPENAI_API_KEY":\n "sk-...", "AI_SCORING_ENABLED":\n true }, "EMAIL":\n 
-# "smtp.gmail.com", "SMTP_USERNAME":\n "empresa@gmail.com" } } """ # Solo admin puede actualizar configuración if not
+# "smtp.gmail.com", "SMTP_USERNAME":\n "empresa@gmail.com" } } """ # Solo admin puede actualizar configuración if not"""
 # current_user.is_admin:\n raise HTTPException
 # HTTPException( status_code=500, detail=f"Error actualizando configuraciones:\n {str(e)}",
 # Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 🧪 Probar integración de una categoría específica
-# """ if not current_user.is_admin:\n raise HTTPException
+# """ if not current_user.is_admin:\n raise HTTPException"""
 # integraciones", ) try:\n categoria = categoria.upper() if categoria == "EMAIL":\n return _probar_configuracion_email(db)
 # elif categoria == "WHATSAPP":\n return _probar_configuracion_whatsapp(db) elif categoria == "AI":\n return
 # _probar_configuracion_ai(db) elif categoria == "DATABASE":\n return _probar_configuracion_database(db) else:\n raise
@@ -95,7 +95,7 @@ from datetime import date
 # ============================================# CONFIGURACIÓN DE IA#
 # ============================================@router.get("/ia")\ndef obtener_configuracion_ia
 # Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 🤖 Obtener configuración de Inteligencia
-# Artificial """ try:\n # Solo admin puede ver configuración de IA if not current_user.is_admin:\n raise HTTPException
+# Artificial """ try:\n # Solo admin puede ver configuración de IA if not current_user.is_admin:\n raise HTTPException"""
 # status_code=403, detail="Solo administradores pueden ver configuración de IA", ) configs_ia = 
 # db.query(ConfiguracionSistema) .filter( ConfiguracionSistema.categoria == "AI", ConfiguracionSistema.visible_frontend, )
 # - 4)}{config.valor[-4:\n]}" if len(config.valor) > 4 else "****" ) configuracion[config.clave] = 
@@ -124,7 +124,7 @@ from datetime import date
 # ConfiguracionSistema.obtener_por_clave( db, "AI", "AI_PREDICTION_ENABLED" ) if config:\n
 # config.actualizar_valor(prediction_enabled, current_user.full_name) return "AI_PREDICTION_ENABLED" return None\ndef
 # _actualizar_config_chatbot( chatbot_enabled:\n bool, current_user:\n User, db:\n Session) -> Optional[str]:\n """Actualizar
-# configuración de chatbot""" if chatbot_enabled is not None:\n config = ConfiguracionSistema.obtener_por_clave
+# configuración de chatbot""" if chatbot_enabled is not None:\n config = ConfiguracionSistema.obtener_por_clave"""
 # "AI_CHATBOT_ENABLED" ) if config:\n config.actualizar_valor(chatbot_enabled, current_user.full_name) return
 # Optional[str] = None, openai_model:\n Optional[str] = None, scoring_enabled:\n Optional[bool] = None, prediction_enabled:\n
 # Optional[bool] = None, chatbot_enabled:\n Optional[bool] = None, db:\n Session = Depends(get_db), current_user:\n User =
@@ -167,7 +167,7 @@ from datetime import date
 # {str(e)}", )# ============================================# DASHBOARD DE CONFIGURACIÓN#
 # ============================================@router.get("/dashboard")\ndef dashboard_configuracion_sistema
 # Depends(get_db), current_user:\n User = Depends(get_current_user),):\n """ 📊 Dashboard principal de configuración del
-# sistema """ if not current_user.is_admin:\n raise HTTPException
+# sistema """ if not current_user.is_admin:\n raise HTTPException"""
 # dashboard de configuración", ) try:\n \nfrom app.models.configuracion_sistema \nimport 
 # ConfiguracionSistema, ) # Estadísticas de configuración total_configs = db.query(ConfiguracionSistema).count()
 # configs_configuradas = ( db.query(ConfiguracionSistema) .filter( ConfiguracionSistema.valor.isnot(None),
@@ -206,13 +206,13 @@ from datetime import date
 # = Depends(get_current_user),):\n """ Obtener configuración de tasas de interés. """ return
 # _config_cache["tasas"]@router.put("/tasas")\ndef actualizar_configuracion_tasas
 # current_user:\n User = Depends(get_current_user)):\n """ Actualizar configuración de tasas de interés. Solo accesible para
-# ADMIN. """ if not current_user.is_admin:\n raise HTTPException
+# ADMIN. """ if not current_user.is_admin:\n raise HTTPException"""
 # modificar tasas", ) _config_cache["tasas"] = 
 # config.tasa_descuento_pronto_pago else 0.0 ), } logger.info
 # _config_cache["tasas"], }@router.get("/limites")\ndef obtener_configuracion_limites
 # _config_cache["limites"]@router.put("/limites")\ndef actualizar_configuracion_limites
 # current_user:\n User = Depends(get_current_user),):\n """ Actualizar configuración de límites. Solo accesible para ADMIN.
-# """ if not current_user.is_admin:\n raise HTTPException
+# """ if not current_user.is_admin:\n raise HTTPException"""
 # límites", ) # Validar que máximo > mínimo if config.monto_maximo_prestamo <= config.monto_minimo_prestamo:\n raise
 # HTTPException( status_code=400, detail="El monto máximo debe ser mayor al monto mínimo", ) if config.plazo_maximo_meses <=
 # config.plazo_minimo_meses:\n raise HTTPException
@@ -220,7 +220,7 @@ from datetime import date
 # config.whatsapp_notificaciones, "sms_notificaciones":\n config.sms_notificaciones, } logger.info
 # "notificaciones":\n _config_cache["notificaciones"], }@router.put("/general")\ndef actualizar_configuracion_general
 # config:\n ConfiguracionGeneral, current_user:\n User = Depends(get_current_user),):\n """ Actualizar configuración general.
-# Solo accesible para ADMIN. """ if not current_user.is_admin:\n raise HTTPException
+# Solo accesible para ADMIN. """ if not current_user.is_admin:\n raise HTTPException"""
 # administradores pueden modificar configuración general", ) _config_cache["general"] = 
 # config.email, "horario_atencion":\n config.horario_atencion, "zona_horaria":\n config.zona_horaria, }
 # logger.info(f"Configuración general actualizada por {current_user.email}") return 
@@ -250,7 +250,7 @@ from datetime import date
 # "monto_solicitado":\n monto_solicitado, **validaciones, } except Exception as e:\n raise HTTPException
 # detail=f"Error validando límites:\n {str(e)}" )# ============================================# FUNCIONES AUXILIARES#
 # ============================================\ndef _validar_configuracion(config, nuevo_valor):\n """Validar nuevo valor de
-# configuración""" try:\n if config.tipo_dato == "INTEGER":\n int(nuevo_valor) elif config.tipo_dato == "DECIMAL":\n
+# configuración""" try:\n if config.tipo_dato == "INTEGER":\n int(nuevo_valor) elif config.tipo_dato == "DECIMAL":\n"""
 # Decimal(str(nuevo_valor)) elif config.tipo_dato == "BOOLEAN":\n if nuevo_valor.lower() not in ["true", "false", "1",
 # "0"]:\n return "Valor booleano inválido" elif config.tipo_dato == "EMAIL":\n if "@" not in str(nuevo_valor):\n return
 # "Formato de email inválido" return None except Exception as e:\n return f"Error de validación:\n {str(e)}"\ndef
@@ -260,4 +260,4 @@ from datetime import date
 # estado in estado_categorias.items():\n if estado["porcentaje_configurado"] < 80:\n alertas.append
 # {categoria}", "porcentaje":\n estado["porcentaje_configurado"], } ) return alertas
 
-"""
+""""""

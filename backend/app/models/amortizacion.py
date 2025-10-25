@@ -1,9 +1,9 @@
 from datetime import date
 # backend/app/models/amortizacion.py
-"""Modelo de Cuota/Amortización
+"""Modelo de Cuota/Amortización"""
 
 Representa cada cuota de un préstamo con su detalle de capital, interés
-"""
+""""""
 
 from decimal import Decimal
 # from sqlalchemy import  # TODO: Agregar imports específicos
@@ -12,10 +12,10 @@ from app.db.session import Base
 
 
 class Cuota(Base):
-    """
+    """"""
     Modelo de Cuota de Préstamo
     Cada registro representa una cuota en la tabla de amortización
-    """
+    """"""
     __tablename__ = "cuotas"
 
     # Identificación
@@ -97,13 +97,13 @@ class Cuota(Base):
 
 
     def calcular_mora(self, tasa_mora_diaria: Decimal) -> Decimal:
-        """
+        """"""
         Calcula el monto de mora acumulado
         Args:
             tasa_mora_diaria: Tasa de mora diaria (%)
         Returns:
             Decimal: Monto de mora calculado
-        """
+        """"""
         if self.estado == "PAGADA" or not self.esta_vencida:
             return Decimal("0.00")
 
@@ -119,13 +119,13 @@ class Cuota(Base):
 
 
     def aplicar_pago(self, monto_pago: Decimal) -> dict:
-        """
+        """"""
         Aplica un pago a la cuota siguiendo el orden: mora -> interés -> capital
         Args:
             monto_pago: Monto del pago a aplicar
         Returns:
             dict: Detalle de cómo se aplicó el pago
-        """
+        """"""
         detalle = 
         saldo = monto_pago
 
@@ -197,4 +197,4 @@ pago_cuotas = Table
     Column("aplicado_a_mora", Numeric(12, 2), default=Decimal("0.00")),
 
 """
-"""
+""""""

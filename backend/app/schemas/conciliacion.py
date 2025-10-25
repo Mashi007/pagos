@@ -189,9 +189,7 @@ class FiltroConciliacion(BaseModel):
 
 
     class Config:
-        json_encoders = 
-
-
+        json_encoders = None
 # ============================================
 # PENDIENTES
 # ============================================

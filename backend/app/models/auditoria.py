@@ -1,7 +1,7 @@
 # backend/app/models/auditoria.py
-"""Modelo de Auditoría
+"""Modelo de Auditoría"""
 Registra todas las acciones importantes del sistema para trazabilidad
-"""
+""""""
 
 from enum import Enum
 # from sqlalchemy import  # TODO: Agregar imports específicos
@@ -13,7 +13,7 @@ from app.db.session import Base
 
 class TipoAccion(str, Enum):
     """
-    """
+    """"""
     CREAR = "CREAR"
     ACTUALIZAR = "ACTUALIZAR"
     ELIMINAR = "ELIMINAR"
@@ -28,9 +28,9 @@ class TipoAccion(str, Enum):
 
 
 class Auditoria(Base):
-    """
+    """"""
     Modelo de Auditoría para registro de acciones del sistema
-    """
+    """"""
     __tablename__ = "auditorias"
 
     # Identificación
@@ -89,7 +89,7 @@ class Auditoria(Base):
 
     @classmethod
     def registrar
-        """
+        """"""
 
         Args:
             usuario_id: ID del usuario que realizó la acción
@@ -106,5 +106,5 @@ class Auditoria(Base):
 
         Returns:
             Auditoria: Instancia del registro de auditoría
-        """
+        """"""
         return cls

@@ -11,11 +11,11 @@ MAX_PERCENTAGE = 100
 DECIMAL_PRECISION = 2
 MIN_PASSWORD_LENGTH = 8
 
-DecimalAmount = Annotated[
+DecimalAmount = Annotated[]
     Decimal,
     Field(ge=0, description="Monto en formato decimal con 2 decimales"),
 
-DecimalPercentage = Annotated[
+DecimalPercentage = Annotated[]
     Decimal,
     Field(ge=0, le=MAX_PERCENTAGE, description="Porcentaje con 2 decimales"),
 

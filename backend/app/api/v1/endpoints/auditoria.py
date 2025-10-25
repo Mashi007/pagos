@@ -1,6 +1,6 @@
 from datetime import date
 """Endpoints de auditoría del sistema
-"""
+""""""
 
 import io
 import logging
@@ -73,9 +73,9 @@ def listar_auditoria
     orden: str = Query("desc", description="Orden: asc o desc"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     REFACTORIZADA)
-    """
+    """"""
     try:
         # Construir query base
         query = db.query(Auditoria)
@@ -105,9 +105,9 @@ def listar_auditoria
 def obtener_estadisticas_auditoria
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     📊 Obtener estadísticas de auditoría
-    """
+    """"""
     try:
         # Total de acciones
         total_acciones = db.query(Auditoria).count()
@@ -171,9 +171,9 @@ def exportar_auditoria_excel
     accion: Optional[str] = Query(None, description="Filtrar por acción"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     📊 Exportar auditoría a Excel (SOLO ADMIN)
-    """
+    """"""
     try:
         if not current_user.is_admin:
             raise HTTPException
@@ -208,9 +208,9 @@ def exportar_auditoria_excel
 def obtener_auditoria
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    """
+    """"""
     🔍 Obtener un registro de auditoría por ID
-    """
+    """"""
     try:
         auditoria = 
             db.query(Auditoria).filter(Auditoria.id == auditoria_id).first()
@@ -224,4 +224,4 @@ def obtener_auditoria
         raise HTTPException
 
 """
-"""
+""""""

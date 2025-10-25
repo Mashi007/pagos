@@ -1,7 +1,7 @@
 from datetime import date
-"""
+""""""
 Solo 2 roles: ADMIN (acceso completo) y USER (acceso limitado)
-"""
+""""""
 
 from enum import Enum
 from typing import List
@@ -143,7 +143,7 @@ USER_PERMISSIONS: List[Permission] = [
 
 
 def has_permission(user_is_admin: bool, permission: Permission) -> bool:
-    """
+    """"""
     Verificar si un usuario tiene un permiso específico
 
     Args:
@@ -152,7 +152,7 @@ def has_permission(user_is_admin: bool, permission: Permission) -> bool:
 
     Returns:
         True si tiene el permiso, False en caso contrario
-    """
+    """"""
     if user_is_admin:
         return permission in ADMIN_PERMISSIONS
     else:
@@ -160,13 +160,13 @@ def has_permission(user_is_admin: bool, permission: Permission) -> bool:
 
 
 def get_user_permissions(user_is_admin: bool) -> List[Permission]:
-    """
+    """"""
 
     Args:
         user_is_admin: True si es admin, False si es user
 
     Returns:
-    """
+    """"""
     if user_is_admin:
         return ADMIN_PERMISSIONS
     else:
