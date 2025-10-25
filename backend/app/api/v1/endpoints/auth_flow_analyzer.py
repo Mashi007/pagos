@@ -89,9 +89,7 @@ class AuthFlowTracer:
         self._detect_anomalies(trace_data)
 
         logger.info(
-            f"🏁 AUTH_TRACE [{
-                self.trace_id}] COMPLETED: {overall_status} ({
-                total_duration:.2f}ms)")
+            f"🏁 AUTH_TRACE [{self.trace_id}] COMPLETED: {overall_status} ({total_duration:.2f}ms)")
 
     def _detect_anomalies(self, trace_data: Dict):
         """Detectar patrones anómalos en el trace"""
