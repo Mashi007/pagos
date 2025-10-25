@@ -64,14 +64,14 @@ app_logger.addHandler(logging.StreamHandler(sys.stdout))
 
 # Log de inicio
 logger.info(
-    "🚀 Iniciando aplicación FastAPI - Sistema de Préstamos y Cobranza"
+    "Iniciando aplicación FastAPI - Sistema de Préstamos y Cobranza"
 )
 logger.info(
-    f"📊 Configuración: Environment={settings.ENVIRONMENT}, "
+    f"Configuración: Environment={settings.ENVIRONMENT}, "
     f"Log Level={settings.LOG_LEVEL}"
 )
-logger.info(f"🌐 CORS Origins: {settings.CORS_ORIGINS}")
-logger.info(f"🔗 Database URL configurada: {bool(settings.DATABASE_URL)}")
+logger.info(f"CORS Origins: {settings.CORS_ORIGINS}")
+logger.info(f"Database URL configurada: {bool(settings.DATABASE_URL)}")
 
 # Configurar rate limiter - TEMPORALMENTE DESACTIVADO
 # limiter = Limiter(key_func=get_remote_address)
@@ -151,15 +151,15 @@ app = FastAPI(
 app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS - MIDDLEWARE SIMPLE PARA OPTIONS
-logger.info(f"🌐 CORS Origins configurados: {settings.CORS_ORIGINS}")
+logger.info(f"CORS Origins configurados: {settings.CORS_ORIGINS}")
 logger.info(
-    "✅ CORS: Middleware simple para OPTIONS + Headers directos en POST"
+    "CORS: Middleware simple para OPTIONS + Headers directos en POST"
 )
 
 # MIDDLEWARE CORS CENTRALIZADO - USANDO CONFIGURACIÓN DE SETTINGS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,  # ✅ Usar configuración de settings
+    allow_origins=settings.CORS_ORIGINS,  # Usar configuración de settings
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=[
@@ -314,7 +314,7 @@ async def root():
         "status": "running",
         "docs": "/docs",
         "deploy_timestamp": (
-            "2025-10-16T10:30:00Z"
-        ),  # Fix modelo_vehiculo_id error - ready for real data
+            "2025-10-25T04:30:00Z"
+        ),  # Fix main.py deployment error
         "real_data_ready": True,
     }
