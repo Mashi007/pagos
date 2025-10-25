@@ -189,9 +189,95 @@ class ValidadorTelefono:
             }
 
     @staticmethod
+    def _crear_error_formato(telefono_limpio: str, error: str, config: Dict, longitud_actual: int = None) -> Dict[str, Any]:
+        """Crear respuesta de error para formato de teléfono"""
+        resultado = {
+            "valido": False,
+            "error": error,
+            "valor_original": telefono_limpio,
+            "valor_formateado": None,
+            "requisitos": config["requisitos"],
+        }
+        if longitud_actual is not None:
+            resultado["longitud_actual"] = longitud_actual
+        return resultado
+
+    @staticmethod
+    def _crear_exito_formato(telefono_limpio: str, numero_formateado: str, config: Dict) -> Dict[str, Any]:
+        """Crear respuesta de éxito para formato de teléfono"""
+        return {
+            "valido": True,
+            "valor_original": telefono_limpio,
+            "valor_formateado": numero_formateado,
+            "pais": "VENEZUELA",
+            "cambio_realizado": telefono_limpio != numero_formateado,
+            "codigo_pais": "+58",
+            "numero_local": numero_formateado[3:],  # Sin +58
+            "requisitos_cumplidos": {
+                "empieza_por_58": True,
+                "longitud_10_digitos": True,
+                "primer_digito_no_cero": numero_formateado[3] != "0",
+            },
+        }
+
+    @staticmethod
+    def _validar_primer_digito(numero_sin_codigo: str, telefono_limpio: str, config: Dict) -> Optional[Dict[str, Any]]:
+        """Validar que el primer dígito no sea 0"""
+        if numero_sin_codigo[0] == "0":
+            return ValidadorTelefono._crear_error_formato(
+                telefono_limpio,
+                "El primer dígito del número no puede ser 0",
+                config
+            )
+        return None
+
+    @staticmethod
+    def _procesar_telefono_con_58(telefono_limpio: str, config: Dict) -> Optional[Dict[str, Any]]:
+        """Procesar teléfono que empieza con 58"""
+        numero_sin_codigo = telefono_limpio[2:]  # Quitar "58"
+        if len(numero_sin_codigo) != 10:
+            return ValidadorTelefono._crear_error_formato(
+                telefono_limpio,
+                f"Longitud incorrecta. Debe tener 10 dígitos después de +58, tiene {len(numero_sin_codigo)}",
+                config
+            )
+
+        error_primer_digito = ValidadorTelefono._validar_primer_digito(numero_sin_codigo, telefono_limpio, config)
+        if error_primer_digito:
+            return error_primer_digito
+
+        return ValidadorTelefono._crear_exito_formato(telefono_limpio, f"+58{numero_sin_codigo}", config)
+
+    @staticmethod
+    def _procesar_telefono_con_mas_58(telefono_limpio: str, config: Dict) -> Optional[Dict[str, Any]]:
+        """Procesar teléfono que empieza con +58"""
+        numero_sin_codigo = telefono_limpio[3:]  # Quitar "+58"
+        if len(numero_sin_codigo) != 10:
+            return ValidadorTelefono._crear_error_formato(
+                telefono_limpio,
+                f"Longitud incorrecta. Debe tener 10 dígitos después de +58, tiene {len(numero_sin_codigo)}",
+                config
+            )
+
+        error_primer_digito = ValidadorTelefono._validar_primer_digito(numero_sin_codigo, telefono_limpio, config)
+        if error_primer_digito:
+            return error_primer_digito
+
+        return ValidadorTelefono._crear_exito_formato(telefono_limpio, telefono_limpio, config)
+
+    @staticmethod
+    def _procesar_telefono_local(telefono_limpio: str, config: Dict) -> Optional[Dict[str, Any]]:
+        """Procesar teléfono local de 10 dígitos"""
+        error_primer_digito = ValidadorTelefono._validar_primer_digito(telefono_limpio, telefono_limpio, config)
+        if error_primer_digito:
+            return error_primer_digito
+
+        return ValidadorTelefono._crear_exito_formato(telefono_limpio, f"+58{telefono_limpio}", config)
+
+    @staticmethod
     def _formatear_telefono_venezolano(telefono_limpio: str, config: Dict) -> Dict[str, Any]:
         """
-        📱 Formatear teléfono venezolano con nuevos requisitos:
+        📱 Formatear teléfono venezolano con nuevos requisitos (VERSIÓN REFACTORIZADA):
         - Debe empezar por +58
         - Seguido de 10 dígitos
         - El primer dígito no puede ser 0
@@ -200,112 +286,44 @@ class ValidadorTelefono:
             # Casos de entrada
             if telefono_limpio.startswith("58"):
                 # Ya tiene código de país sin +: "581234567890"
-                numero_sin_codigo = telefono_limpio[2:]  # Quitar "58"
-                if len(numero_sin_codigo) == 10:
-                    # Validar que el primer dígito no sea 0
-                    if numero_sin_codigo[0] == "0":
-                        return {
-                            "valido": False,
-                            "error": "El primer dígito del número no puede ser 0",
-                            "valor_original": telefono_limpio,
-                            "valor_formateado": None,
-                            "requisitos": config["requisitos"],
-                        }
-                    numero_formateado = f"+58{numero_sin_codigo}"
-                else:
-                    return {
-                        "valido": False,
-                        "error": (
-                            f"Longitud incorrecta. Debe tener 10 dígitos después de +58, tiene {len(numero_sin_codigo)}"
-                        ),
-                        "valor_original": telefono_limpio,
-                        "valor_formateado": None,
-                        "requisitos": config["requisitos"],
-                    }
+                resultado = ValidadorTelefono._procesar_telefono_con_58(telefono_limpio, config)
+                if resultado:
+                    return resultado
 
             elif telefono_limpio.startswith("+58"):
                 # Ya tiene +58: "+581234567890"
-                numero_sin_codigo = telefono_limpio[3:]  # Quitar "+58"
-                if len(numero_sin_codigo) == 10:
-                    # Validar que el primer dígito no sea 0
-                    if numero_sin_codigo[0] == "0":
-                        return {
-                            "valido": False,
-                            "error": "El primer dígito del número no puede ser 0",
-                            "valor_original": telefono_limpio,
-                            "valor_formateado": None,
-                            "requisitos": config["requisitos"],
-                        }
-                    numero_formateado = telefono_limpio
-                else:
-                    return {
-                        "valido": False,
-                        "error": (
-                            f"Longitud incorrecta. Debe tener 10 dígitos después de +58, tiene {len(numero_sin_codigo)}"
-                        ),
-                        "valor_original": telefono_limpio,
-                        "valor_formateado": None,
-                        "requisitos": config["requisitos"],
-                    }
+                resultado = ValidadorTelefono._procesar_telefono_con_mas_58(telefono_limpio, config)
+                if resultado:
+                    return resultado
 
             elif len(telefono_limpio) == 10:
                 # Solo número local: "1234567890"
-                # Validar que el primer dígito no sea 0
-                if telefono_limpio[0] == "0":
-                    return {
-                        "valido": False,
-                        "error": "El primer dígito del número no puede ser 0",
-                        "valor_original": telefono_limpio,
-                        "valor_formateado": None,
-                        "requisitos": config["requisitos"],
-                    }
-                numero_formateado = f"+58{telefono_limpio}"
+                resultado = ValidadorTelefono._procesar_telefono_local(telefono_limpio, config)
+                if resultado:
+                    return resultado
 
             else:
-                return {
-                    "valido": False,
-                    "error": (
-                        "Longitud incorrecta. Formato esperado: +58 seguido de 10 dígitos (primer dígito no puede ser 0)"
-                    ),
-                    "valor_original": telefono_limpio,
-                    "valor_formateado": None,
-                    "longitud_actual": len(telefono_limpio),
-                    "requisitos": config["requisitos"],
-                }
+                return ValidadorTelefono._crear_error_formato(
+                    telefono_limpio,
+                    "Longitud incorrecta. Formato esperado: +58 seguido de 10 dígitos (primer dígito no puede ser 0)",
+                    config,
+                    len(telefono_limpio)
+                )
 
-            # Validar formato final con regex
-            if re.match(config["patron_completo"], numero_formateado):
-                return {
-                    "valido": True,
-                    "valor_original": telefono_limpio,
-                    "valor_formateado": numero_formateado,
-                    "pais": "VENEZUELA",
-                    "cambio_realizado": telefono_limpio != numero_formateado,
-                    "codigo_pais": "+58",
-                    "numero_local": numero_formateado[3:],  # Sin +58
-                    "requisitos_cumplidos": {
-                        "empieza_por_58": True,
-                        "longitud_10_digitos": True,
-                        "primer_digito_no_cero": numero_formateado[3] != "0",
-                    },
-                }
-            else:
-                return {
-                    "valido": False,
-                    "error": "Formato final no cumple con los requisitos",
-                    "valor_original": telefono_limpio,
-                    "valor_formateado": numero_formateado,
-                    "requisitos": config["requisitos"],
-                }
+            # Si llegamos aquí, algo salió mal
+            return ValidadorTelefono._crear_error_formato(
+                telefono_limpio,
+                "Error interno en el procesamiento",
+                config
+            )
 
         except Exception as e:
             logger.error(f"Error formateando teléfono venezolano: {e}")
-            return {
-                "valido": False,
-                "error": f"Error de formateo: {str(e)}",
-                "valor_original": telefono_limpio,
-                "valor_formateado": None,
-            }
+            return ValidadorTelefono._crear_error_formato(
+                telefono_limpio,
+                f"Error de formateo: {str(e)}",
+                config
+            )
 
 
 class ValidadorCedula:
@@ -767,9 +785,54 @@ class ValidadorFecha:
             }
 
     @staticmethod
+    def _convertir_numero_serie_excel(fecha_limpia: str) -> Optional[date]:
+        """Convertir número de serie de Excel a fecha"""
+        if not (fecha_limpia.isdigit() and len(fecha_limpia) >= 4):
+            return None
+
+        try:
+            numero_serie = int(fecha_limpia)
+            # Excel cuenta desde 1900-01-01, pero tiene un bug del año bisiesto
+            # Fórmula: fecha = datetime(1900, 1, 1) + timedelta(days=numero_serie-2)
+            fecha_excel = datetime(1900, 1, 1) + timedelta(days=numero_serie - 2)
+            return fecha_excel.date()
+        except (ValueError, OverflowError):
+            return None
+
+    @staticmethod
+    def _validar_formato_fecha(fecha_limpia: str) -> bool:
+        """Validar formato básico DD/MM/YYYY con regex"""
+        return bool(re.match(r"^\d{2}/\d{2}/\d{4}$", fecha_limpia))
+
+    @staticmethod
+    def _validar_componentes_fecha(dia: str, mes: str, año: str) -> bool:
+        """Validar componentes individuales de la fecha"""
+        # Validar que el día sea válido (01-31)
+        if not (1 <= int(dia) <= 31):
+            return False
+
+        # Validar que el mes sea válido (01-12)
+        if not (1 <= int(mes) <= 12):
+            return False
+
+        # Validar que el año sea razonable (1900-2100)
+        if not (1900 <= int(año) <= 2100):
+            return False
+
+        return True
+
+    @staticmethod
+    def _validar_fecha_completa(fecha_limpia: str) -> Optional[date]:
+        """Validar que la fecha sea válida (ej: 31/02/2024 no existe)"""
+        try:
+            return datetime.strptime(fecha_limpia, "%d/%m/%Y").date()
+        except ValueError:
+            return None
+
+    @staticmethod
     def _parsear_fecha_flexible(fecha_str: str) -> Optional[date]:
         """
-        Parsear fecha con validación estricta de formato DD/MM/YYYY
+        Parsear fecha con validación estricta de formato DD/MM/YYYY (VERSIÓN REFACTORIZADA)
         También soporta números de serie de Excel
 
         Requisitos:
@@ -781,46 +844,28 @@ class ValidadorFecha:
         """
         fecha_limpia = fecha_str.strip()
 
-        # NUEVO: Detectar números de serie de Excel
-        if fecha_limpia.isdigit() and len(fecha_limpia) >= 4:
-            try:
-                numero_serie = int(fecha_limpia)
-                # Excel cuenta desde 1900-01-01, pero tiene un bug del año bisiesto
-                # Fórmula: fecha = datetime(1900, 1, 1) + timedelta(days=numero_serie-2)
-                fecha_excel = datetime(1900, 1, 1) + timedelta(days=numero_serie - 2)
-                return fecha_excel.date()
-            except (ValueError, OverflowError):
-                pass
+        # 1. Detectar números de serie de Excel
+        fecha_excel = ValidadorFecha._convertir_numero_serie_excel(fecha_limpia)
+        if fecha_excel:
+            return fecha_excel
 
-        # Validar formato básico con regex
-        if not re.match(r"^\d{2}/\d{2}/\d{4}$", fecha_limpia):
+        # 2. Validar formato básico con regex
+        if not ValidadorFecha._validar_formato_fecha(fecha_limpia):
             return None
 
         try:
-            # Parsear estrictamente como DD/MM/YYYY
+            # 3. Parsear estrictamente como DD/MM/YYYY
             fecha_parseada = datetime.strptime(fecha_limpia, "%d/%m/%Y").date()
 
-            # Validaciones adicionales
+            # 4. Validaciones adicionales
             dia, mes, año = fecha_limpia.split("/")
 
-            # Validar que el día sea válido (01-31)
-            if not (1 <= int(dia) <= 31):
+            # 5. Validar componentes individuales
+            if not ValidadorFecha._validar_componentes_fecha(dia, mes, año):
                 return None
 
-            # Validar que el mes sea válido (01-12)
-            if not (1 <= int(mes) <= 12):
-                return None
-
-            # Validar que el año sea razonable (1900-2100)
-            if not (1900 <= int(año) <= 2100):
-                return None
-
-            # Validar que la fecha sea válida (ej: 31/02/2024 no existe)
-            try:
-                datetime.strptime(fecha_limpia, "%d/%m/%Y").date()
-                return fecha_parseada
-            except ValueError:
-                return None
+            # 6. Validar fecha completa
+            return ValidadorFecha._validar_fecha_completa(fecha_limpia)
 
         except (ValueError, IndexError):
             return None
