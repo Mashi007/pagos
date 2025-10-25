@@ -137,10 +137,57 @@ def test_cedula_custom(cedula: str):
         return {"error": str(e), "cedula_test": cedula}
 
 
+def _validar_campo_telefono(valor: str, pais: str) -> Dict[str, Any]:
+    """Validar campo de teléfono"""
+    return ValidadorTelefono.validar_y_formatear_telefono(valor, pais)
+
+
+def _validar_campo_cedula(valor: str, pais: str) -> Dict[str, Any]:
+    """Validar campo de cédula"""
+    return ValidadorCedula.validar_y_formatear_cedula(valor, pais)
+
+
+def _validar_campo_email(valor: str) -> Dict[str, Any]:
+    """Validar campo de email"""
+    return ValidadorEmail.validar_email(valor)
+
+
+def _validar_campo_fecha_entrega(valor: str) -> Dict[str, Any]:
+    """Validar campo de fecha de entrega"""
+    return ValidadorFecha.validar_fecha_entrega(valor)
+
+
+def _validar_campo_fecha_pago(valor: str) -> Dict[str, Any]:
+    """Validar campo de fecha de pago"""
+    return ValidadorFecha.validar_fecha_pago(valor)
+
+
+def _validar_campo_monto(valor: str, campo: str, contexto: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Validar campo de monto"""
+    saldo_maximo = None
+    if contexto and "saldo_pendiente" in contexto:
+        saldo_maximo = Decimal(str(contexto["saldo_pendiente"]))
+    return ValidadorMonto.validar_y_formatear_monto(valor, campo.upper(), saldo_maximo)
+
+
+def _validar_campo_amortizaciones(valor: str) -> Dict[str, Any]:
+    """Validar campo de amortizaciones"""
+    return ValidadorAmortizaciones.validar_amortizaciones(valor)
+
+
+def _crear_error_campo_no_soportado(campo: str, valor: str) -> Dict[str, Any]:
+    """Crear error para campo no soportado"""
+    return {
+        "valido": False,
+        "error": f"Campo '{campo}' no soporta validación automática",
+        "valor_original": valor,
+    }
+
+
 @router.post("/validar-campo")
 def validar_campo_tiempo_real(validacion: ValidacionCampo):
     """
-    🔍 Validar campo individual en tiempo real (para frontend)
+    🔍 Validar campo individual en tiempo real (VERSIÓN REFACTORIZADA)
 
     Ejemplos de uso:
     • Teléfono: "4241234567" → "+58 424 1234567"
@@ -154,37 +201,23 @@ def validar_campo_tiempo_real(validacion: ValidacionCampo):
         valor = validacion.valor
         pais = validacion.pais
 
+        # Validar según el tipo de campo
         if campo == "telefono":
-            resultado = ValidadorTelefono.validar_y_formatear_telefono(valor, pais)
-
+            resultado = _validar_campo_telefono(valor, pais)
         elif campo == "cedula":
-            resultado = ValidadorCedula.validar_y_formatear_cedula(valor, pais)
-
+            resultado = _validar_campo_cedula(valor, pais)
         elif campo == "email":
-            resultado = ValidadorEmail.validar_email(valor)
-
+            resultado = _validar_campo_email(valor)
         elif campo == "fecha_entrega":
-            resultado = ValidadorFecha.validar_fecha_entrega(valor)
-
+            resultado = _validar_campo_fecha_entrega(valor)
         elif campo == "fecha_pago":
-            resultado = ValidadorFecha.validar_fecha_pago(valor)
-
+            resultado = _validar_campo_fecha_pago(valor)
         elif campo in ["total_financiamiento", "monto_pagado", "cuota_inicial"]:
-            saldo_maximo = None
-            if validacion.contexto and "saldo_pendiente" in validacion.contexto:
-                saldo_maximo = Decimal(str(validacion.contexto["saldo_pendiente"]))
-
-            resultado = ValidadorMonto.validar_y_formatear_monto(valor, campo.upper(), saldo_maximo)
-
+            resultado = _validar_campo_monto(valor, campo, validacion.contexto)
         elif campo == "amortizaciones":
-            resultado = ValidadorAmortizaciones.validar_amortizaciones(valor)
-
+            resultado = _validar_campo_amortizaciones(valor)
         else:
-            return {
-                "valido": False,
-                "error": f"Campo '{campo}' no soporta validación automática",
-                "valor_original": valor,
-            }
+            return _crear_error_campo_no_soportado(campo, valor)
 
         return {
             "campo": validacion.campo,

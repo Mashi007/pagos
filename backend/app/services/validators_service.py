@@ -74,9 +74,98 @@ class ValidadorTelefono:
     }
 
     @staticmethod
+    def _validar_entrada_telefono(telefono: str) -> Optional[Dict[str, Any]]:
+        """Validar entrada básica de teléfono"""
+        if not telefono:
+            return {
+                "valido": False,
+                "error": "Teléfono requerido",
+                "valor_original": telefono,
+                "valor_formateado": None,
+            }
+        return None
+
+    @staticmethod
+    def _validar_pais_soportado(pais: str, telefono: str) -> Optional[Dict[str, Any]]:
+        """Validar que el país esté soportado"""
+        config = ValidadorTelefono.PAISES_CONFIG.get(pais.upper())
+        if not config:
+            return {
+                "valido": False,
+                "error": f"País '{pais}' no soportado",
+                "valor_original": telefono,
+                "valor_formateado": None,
+            }
+        return config
+
+    @staticmethod
+    def _formatear_telefono_con_codigo(telefono_limpio: str, config: Dict[str, Any]) -> str:
+        """Formatear teléfono que ya tiene código de país"""
+        return (
+            "+"
+            + telefono_limpio[:2]
+            + " "
+            + telefono_limpio[2:5]
+            + " "
+            + telefono_limpio[5:]
+        )
+
+    @staticmethod
+    def _formatear_telefono_con_plus(telefono_limpio: str, config: Dict[str, Any]) -> str:
+        """Formatear teléfono que ya tiene + y código"""
+        numero_sin_plus = telefono_limpio[1:]
+        return (
+            "+"
+            + numero_sin_plus[:2]
+            + " "
+            + numero_sin_plus[2:5]
+            + " "
+            + numero_sin_plus[5:]
+        )
+
+    @staticmethod
+    def _formatear_telefono_local(telefono_limpio: str, config: Dict[str, Any], pais: str, telefono_original: str) -> Dict[str, Any]:
+        """Formatear teléfono local sin código de país"""
+        operadora = telefono_limpio[:3]
+        if operadora in config["operadoras"]:
+            numero_formateado = f"{config['codigo_pais']} {operadora} {telefono_limpio[3:]}"
+            return {"numero_formateado": numero_formateado, "error": None}
+        else:
+            return {
+                "numero_formateado": None,
+                "error": {
+                    "valido": False,
+                    "error": f"Operadora '{operadora}' no válida para {pais}. Válidas: {', '.join(config['operadoras'])}",
+                    "valor_original": telefono_original,
+                    "valor_formateado": None,
+                    "sugerencia": f"Debe comenzar con: {', '.join(config['operadoras'])}",
+                }
+            }
+
+    @staticmethod
+    def _validar_formato_final(numero_formateado: str, config: Dict[str, Any], telefono_original: str) -> Dict[str, Any]:
+        """Validar formato final del teléfono"""
+        if re.match(config["patron_completo"], numero_formateado):
+            return {
+                "valido": True,
+                "valor_original": telefono_original,
+                "valor_formateado": numero_formateado,
+                "pais": config.get("pais", "VENEZUELA"),
+                "operadora": numero_formateado.split()[1],
+                "cambio_realizado": telefono_original != numero_formateado,
+            }
+        else:
+            return {
+                "valido": False,
+                "error": "Formato final inválido",
+                "valor_original": telefono_original,
+                "valor_formateado": numero_formateado,
+            }
+
+    @staticmethod
     def validar_y_formatear_telefono(telefono: str, pais: str = "VENEZUELA") -> Dict[str, Any]:
         """
-        📱 Validar y formatear número de teléfono
+        📱 Validar y formatear número de teléfono (VERSIÓN REFACTORIZADA)
 
         Ejemplos de entrada:
         - "4241234567" → "+58 424 1234567"
@@ -84,100 +173,50 @@ class ValidadorTelefono:
         - "+58 424 1234567" → "+58 424 1234567" (ya correcto)
         """
         try:
-            if not telefono:
-                return {
-                    "valido": False,
-                    "error": "Teléfono requerido",
-                    "valor_original": telefono,
-                    "valor_formateado": None,
-                }
+            # 1. Validar entrada básica
+            error_entrada = ValidadorTelefono._validar_entrada_telefono(telefono)
+            if error_entrada:
+                return error_entrada
 
-            # Limpiar entrada
+            # 2. Limpiar entrada
             telefono_limpio = re.sub(r"[^\d+]", "", telefono.strip())
 
-            config = ValidadorTelefono.PAISES_CONFIG.get(pais.upper())
-            if not config:
-                return {
-                    "valido": False,
-                    "error": f"País '{pais}' no soportado",
-                    "valor_original": telefono,
-                    "valor_formateado": None,
-                }
+            # 3. Validar país soportado
+            config = ValidadorTelefono._validar_pais_soportado(pais, telefono)
+            if isinstance(config, dict) and "valido" in config:
+                return config
 
-            # Casos de formateo específicos por país
+            # 4. Casos de formateo específicos por país
             if pais.upper() == "VENEZUELA":
                 return ValidadorTelefono._formatear_telefono_venezolano(telefono_limpio, config)
-            else:
-                # Lógica original para otros países
-                if telefono_limpio.startswith(config["codigo_pais"].replace("+", "")):
-                    # Ya tiene código de país: "584241234567"
-                    numero_formateado = (
-                        "+"
-                        + telefono_limpio[:2]
-                        + " "
-                        + telefono_limpio[2:5]
-                        + " "
-                        + telefono_limpio[5:]
-                    )
 
-                elif telefono_limpio.startswith(config["codigo_pais"]):
-                    # Ya tiene + y código: "+584241234567"
-                    numero_sin_plus = telefono_limpio[1:]
-                    numero_formateado = (
-                        "+"
-                        + numero_sin_plus[:2]
-                        + " "
-                        + numero_sin_plus[2:5]
-                        + " "
-                        + numero_sin_plus[5:]
-                    )
+            # 5. Lógica para otros países
+            numero_formateado = None
 
-                elif len(telefono_limpio) == config["longitud_sin_codigo"]:
-                    # Solo número local: "4241234567"
-                    operadora = telefono_limpio[:3]
-                    if operadora in config["operadoras"]:
-                        numero_formateado = (
-                            f"{config['codigo_pais']} {operadora} {telefono_limpio[3:]}"
-                        )
-                    else:
-                        return {
-                            "valido": False,
-                            "error": (
-                                f"Operadora '{operadora}' no válida para {pais}. Válidas: {', '.join(config['operadoras'])}"
-                            ),
-                            "valor_original": telefono,
-                            "valor_formateado": None,
-                            "sugerencia": f"Debe comenzar con: {', '.join(config['operadoras'])}",
-                        }
-                else:
-                    return {
-                        "valido": False,
-                        "error": (
-                            f"Longitud incorrecta. Formato esperado: {config['formato_display']}"
-                        ),
-                        "valor_original": telefono,
-                        "valor_formateado": None,
-                        "longitud_actual": len(telefono_limpio),
-                        "longitud_esperada": config["longitud_sin_codigo"],
-                    }
-
-            # Validar formato final
-            if re.match(config["patron_completo"], numero_formateado):
-                return {
-                    "valido": True,
-                    "valor_original": telefono,
-                    "valor_formateado": numero_formateado,
-                    "pais": pais,
-                    "operadora": numero_formateado.split()[1],
-                    "cambio_realizado": telefono != numero_formateado,
-                }
+            if telefono_limpio.startswith(config["codigo_pais"].replace("+", "")):
+                # Ya tiene código de país: "584241234567"
+                numero_formateado = ValidadorTelefono._formatear_telefono_con_codigo(telefono_limpio, config)
+            elif telefono_limpio.startswith(config["codigo_pais"]):
+                # Ya tiene + y código: "+584241234567"
+                numero_formateado = ValidadorTelefono._formatear_telefono_con_plus(telefono_limpio, config)
+            elif len(telefono_limpio) == config["longitud_sin_codigo"]:
+                # Solo número local: "4241234567"
+                resultado_local = ValidadorTelefono._formatear_telefono_local(telefono_limpio, config, pais, telefono)
+                if resultado_local["error"]:
+                    return resultado_local["error"]
+                numero_formateado = resultado_local["numero_formateado"]
             else:
                 return {
                     "valido": False,
-                    "error": "Formato final inválido",
+                    "error": f"Longitud incorrecta. Formato esperado: {config['formato_display']}",
                     "valor_original": telefono,
-                    "valor_formateado": numero_formateado,
+                    "valor_formateado": None,
+                    "longitud_actual": len(telefono_limpio),
+                    "longitud_esperada": config["longitud_sin_codigo"],
                 }
+
+            # 6. Validar formato final
+            return ValidadorTelefono._validar_formato_final(numero_formateado, config, telefono)
 
         except Exception as e:
             logger.error(f"Error validando teléfono: {e}")
@@ -1559,9 +1598,83 @@ class ValidadorEdad:
     EDAD_MAXIMA = 80  # Límite prudencial
 
     @staticmethod
+    def _convertir_fecha_nacimiento(fecha_nacimiento: str) -> tuple[Optional[date], Optional[Dict[str, Any]]]:
+        """Convertir string de fecha de nacimiento a objeto date"""
+        if isinstance(fecha_nacimiento, str):
+            # Intentar diferentes formatos
+            for formato in ["%d/%m/%Y", "%Y-%m-%d", "%Y/%m/%d"]:
+                try:
+                    fecha = datetime.strptime(fecha_nacimiento, formato).date()
+                    return fecha, None
+                except ValueError:
+                    continue
+
+            error = {
+                "valido": False,
+                "error": "Formato de fecha inválido. Use DD/MM/YYYY",
+                "edad": None,
+            }
+            return None, error
+
+        elif isinstance(fecha_nacimiento, date):
+            return fecha_nacimiento, None
+        else:
+            error = {
+                "valido": False,
+                "error": "Tipo de dato inválido para fecha",
+                "edad": None,
+            }
+            return None, error
+
+    @staticmethod
+    def _calcular_edad(fecha: date) -> int:
+        """Calcular edad basada en fecha de nacimiento"""
+        hoy = date.today()
+        return hoy.year - fecha.year - ((hoy.month, hoy.day) < (fecha.month, fecha.day))
+
+    @staticmethod
+    def _validar_fecha_futura(fecha: date) -> Optional[Dict[str, Any]]:
+        """Validar que la fecha no sea futura"""
+        hoy = date.today()
+        if fecha > hoy:
+            return {
+                "valido": False,
+                "error": "La fecha de nacimiento no puede ser futura",
+                "edad": None,
+                "fecha_nacimiento": fecha.isoformat(),
+            }
+        return None
+
+    @staticmethod
+    def _validar_edad_minima(edad: int, fecha: date) -> Optional[Dict[str, Any]]:
+        """Validar edad mínima"""
+        if edad < ValidadorEdad.EDAD_MINIMA:
+            return {
+                "valido": False,
+                "error": f"El cliente debe ser mayor de {ValidadorEdad.EDAD_MINIMA} años (edad actual: {edad} años)",
+                "edad": edad,
+                "edad_minima": ValidadorEdad.EDAD_MINIMA,
+                "fecha_nacimiento": fecha.isoformat(),
+            }
+        return None
+
+    @staticmethod
+    def _validar_edad_maxima(edad: int, fecha: date) -> Optional[Dict[str, Any]]:
+        """Validar edad máxima"""
+        if edad > ValidadorEdad.EDAD_MAXIMA:
+            return {
+                "valido": False,
+                "error": f"La edad máxima permitida es {ValidadorEdad.EDAD_MAXIMA} años (edad actual: {edad} años)",
+                "edad": edad,
+                "edad_maxima": ValidadorEdad.EDAD_MAXIMA,
+                "fecha_nacimiento": fecha.isoformat(),
+            }
+        return None
+
+    @staticmethod
     def validar_edad(fecha_nacimiento: str) -> Dict[str, Any]:
         """
-        Validar que el cliente tenga edad legal para contratar
+        Validar que el cliente tenga edad legal para contratar (VERSIÓN REFACTORIZADA)
 
         Args:
             fecha_nacimiento: Fecha en formato DD/MM/YYYY, YYYY-MM-DD o date object
@@ -1570,68 +1683,30 @@ class ValidadorEdad:
             Dict con validación y edad calculada
         """
         try:
-            # Convertir a date si es string
-            if isinstance(fecha_nacimiento, str):
-                # Intentar diferentes formatos
-                for formato in ["%d/%m/%Y", "%Y-%m-%d", "%Y/%m/%d"]:
-                    try:
-                        fecha = datetime.strptime(fecha_nacimiento, formato).date()
-                        break
-                    except ValueError:
-                        continue
-                else:
-                    return {
-                        "valido": False,
-                        "error": "Formato de fecha inválido. Use DD/MM/YYYY",
-                        "edad": None,
-                    }
-            elif isinstance(fecha_nacimiento, date):
-                fecha = fecha_nacimiento
-            else:
-                return {
-                    "valido": False,
-                    "error": "Tipo de dato inválido para fecha",
-                    "edad": None,
-                }
+            # 1. Convertir fecha de nacimiento
+            fecha, error_conversion = ValidadorEdad._convertir_fecha_nacimiento(fecha_nacimiento)
+            if error_conversion:
+                return error_conversion
 
-            # Calcular edad
-            hoy = date.today()
-            edad = hoy.year - fecha.year - ((hoy.month, hoy.day) < (fecha.month, fecha.day))
+            # 2. Calcular edad
+            edad = ValidadorEdad._calcular_edad(fecha)
 
-            # Validar que no sea fecha futura
-            if fecha > hoy:
-                return {
-                    "valido": False,
-                    "error": "La fecha de nacimiento no puede ser futura",
-                    "edad": None,
-                    "fecha_nacimiento": fecha.isoformat(),
-                }
+            # 3. Validar fecha futura
+            error_futura = ValidadorEdad._validar_fecha_futura(fecha)
+            if error_futura:
+                return error_futura
 
-            # Validar edad mínima
-            if edad < ValidadorEdad.EDAD_MINIMA:
-                return {
-                    "valido": False,
-                    "error": (
-                        f"El cliente debe ser mayor de {ValidadorEdad.EDAD_MINIMA} años (edad actual: {edad} años)"
-                    ),
-                    "edad": edad,
-                    "edad_minima": ValidadorEdad.EDAD_MINIMA,
-                    "fecha_nacimiento": fecha.isoformat(),
-                }
+            # 4. Validar edad mínima
+            error_minima = ValidadorEdad._validar_edad_minima(edad, fecha)
+            if error_minima:
+                return error_minima
 
-            # Validar edad máxima
-            if edad > ValidadorEdad.EDAD_MAXIMA:
-                return {
-                    "valido": False,
-                    "error": (
-                        f"La edad máxima permitida es {ValidadorEdad.EDAD_MAXIMA} años (edad actual: {edad} años)"
-                    ),
-                    "edad": edad,
-                    "edad_maxima": ValidadorEdad.EDAD_MAXIMA,
-                    "fecha_nacimiento": fecha.isoformat(),
-                }
+            # 5. Validar edad máxima
+            error_maxima = ValidadorEdad._validar_edad_maxima(edad, fecha)
+            if error_maxima:
+                return error_maxima
 
-            # Todo correcto
+            # 6. Todo correcto
             return {
                 "valido": True,
                 "edad": edad,

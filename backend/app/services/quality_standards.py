@@ -207,31 +207,43 @@ class QualityStandards:
         return True
 
     @staticmethod
+    def _verificar_manejo_errores_en_funcion(node: ast.FunctionDef) -> bool:
+        """Verificar si una función tiene manejo de errores"""
+        for item in node.body:
+            if isinstance(item, (ast.Try, ast.Raise)):
+                return True
+        return False
+
+    @staticmethod
+    def _verificar_llamadas_externas_en_funcion(node: ast.FunctionDef) -> bool:
+        """Verificar si una función hace llamadas externas"""
+        for item in ast.walk(node):
+            if isinstance(item, ast.Call):
+                if isinstance(item.func, ast.Attribute):
+                    return True
+        return False
+
+    @staticmethod
+    def _validar_funcion_error_handling(node: ast.FunctionDef) -> bool:
+        """Validar manejo de errores en una función específica"""
+        has_error_handling = QualityStandards._verificar_manejo_errores_en_funcion(node)
+        has_external_calls = QualityStandards._verificar_llamadas_externas_en_funcion(node)
+
+        # Si la función hace llamadas externas, debería tener manejo de errores
+        if has_external_calls and not has_error_handling:
+            return False
+
+        return True
+
+    @staticmethod
     def _validate_error_handling(content: str) -> bool:
-        """Validar manejo de errores"""
-        # Buscar funciones que podrían lanzar excepciones
+        """Validar manejo de errores (VERSIÓN REFACTORIZADA)"""
         try:
             tree = ast.parse(content)
 
             for node in ast.walk(tree):
                 if isinstance(node, ast.FunctionDef):
-                    # Verificar si la función tiene try/except o manejo de errores
-                    has_error_handling = False
-
-                    for item in node.body:
-                        if isinstance(item, (ast.Try, ast.Raise)):
-                            has_error_handling = True
-                            break
-
-                    # Si la función hace llamadas externas, debería tener manejo de errores
-                    has_external_calls = False
-                    for item in ast.walk(node):
-                        if isinstance(item, ast.Call):
-                            if isinstance(item.func, ast.Attribute):
-                                has_external_calls = True
-                                break
-
-                    if has_external_calls and not has_error_handling:
+                    if not QualityStandards._validar_funcion_error_handling(node):
                         return False
 
             return True

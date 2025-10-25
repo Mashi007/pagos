@@ -52,28 +52,48 @@ class ConfiguracionSistema(Base):
     def __repr__(self):
         return f"<ConfiguracionSistema({self.categoria}.{self.clave}={self.valor})>"
 
+    def _procesar_valor_boolean(self) -> bool:
+        """Procesar valor de tipo BOOLEAN"""
+        return self.valor.lower() in ["true", "1", "yes", "on"] if self.valor else False
+
+    def _procesar_valor_integer(self) -> int:
+        """Procesar valor de tipo INTEGER"""
+        try:
+            return int(self.valor) if self.valor else 0
+        except (ValueError, TypeError):
+            return 0
+
+    def _procesar_valor_decimal(self) -> float:
+        """Procesar valor de tipo DECIMAL"""
+        try:
+            return float(self.valor) if self.valor else 0.0
+        except (ValueError, TypeError):
+            return 0.0
+
+    def _procesar_valor_json(self) -> dict:
+        """Procesar valor de tipo JSON"""
+        try:
+            return json.loads(self.valor) if self.valor else {}
+        except (json.JSONDecodeError, TypeError):
+            return self.valor_json or {}
+
+    def _procesar_valor_string(self) -> str:
+        """Procesar valor de tipo STRING"""
+        return self.valor or ""
+
     @property
     def valor_procesado(self):
-        """Obtener valor procesado según el tipo de dato"""
+        """Obtener valor procesado según el tipo de dato (VERSIÓN REFACTORIZADA)"""
         if self.tipo_dato == "BOOLEAN":
-            return self.valor.lower() in ["true", "1", "yes", "on"] if self.valor else False
+            return self._procesar_valor_boolean()
         elif self.tipo_dato == "INTEGER":
-            try:
-                return int(self.valor) if self.valor else 0
-            except (ValueError, TypeError):
-                return 0
+            return self._procesar_valor_integer()
         elif self.tipo_dato == "DECIMAL":
-            try:
-                return float(self.valor) if self.valor else 0.0
-            except (ValueError, TypeError):
-                return 0.0
+            return self._procesar_valor_decimal()
         elif self.tipo_dato == "JSON":
-            try:
-                return json.loads(self.valor) if self.valor else {}
-            except (json.JSONDecodeError, TypeError):
-                return self.valor_json or {}
+            return self._procesar_valor_json()
         else:
-            return self.valor or ""
+            return self._procesar_valor_string()
 
     def actualizar_valor(self, nuevo_valor: Any, usuario: str = None):
         """Actualizar valor con validación"""

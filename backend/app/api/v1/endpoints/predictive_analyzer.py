@@ -381,96 +381,130 @@ async def get_predictive_analysis():
 router.get("/health-score")
 
 
+def _validar_datos_health_score(historical_metrics: list) -> Optional[Dict[str, Any]]:
+    """Validar que hay suficientes datos para health score"""
+    if len(historical_metrics) < 3:
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "status": "insufficient_data",
+            "message": "Need at least 3 data points for health score",
+        }
+    return None
+
+
+def _calcular_componente_success_rate(recent_metrics: list) -> Dict[str, Any]:
+    """Calcular componente de tasa de éxito (40% del score)"""
+    avg_success_rate = statistics.mean([m.success_rate for m in recent_metrics])
+    success_score = min(100, avg_success_rate * 100)
+    return {
+        "value": avg_success_rate,
+        "score": success_score,
+        "weight": 0.4,
+    }
+
+
+def _calcular_componente_response_time(recent_metrics: list) -> Dict[str, Any]:
+    """Calcular componente de tiempo de respuesta (30% del score)"""
+    avg_response_time = statistics.mean([m.avg_response_time for m in recent_metrics])
+    # Score basado en tiempo de respuesta (mejor = más rápido)
+    response_score = max(0, 100 - (avg_response_time / 50))  # Penalizar >5s
+    return {
+        "value": avg_response_time,
+        "score": response_score,
+        "weight": 0.3,
+    }
+
+
+def _calcular_componente_error_stability(recent_metrics: list) -> Dict[str, Any]:
+    """Calcular componente de estabilidad de errores (20% del score)"""
+    error_counts = [m.error_count for m in recent_metrics]
+    error_variance = statistics.variance(error_counts) if len(error_counts) > 1 else 0
+    avg_errors = statistics.mean(error_counts)
+    stability_score = max(0, 100 - (error_variance / 10) - (avg_errors / 2))
+    return {
+        "value": avg_errors,
+        "variance": error_variance,
+        "score": stability_score,
+        "weight": 0.2,
+    }
+
+
+def _calcular_componente_user_availability(recent_metrics: list) -> Dict[str, Any]:
+    """Calcular componente de disponibilidad de usuarios (10% del score)"""
+    avg_unique_users = statistics.mean([m.unique_users for m in recent_metrics])
+    user_score = min(100, (avg_unique_users / 10) * 100)  # Normalizar a 10 usuarios
+    return {
+        "value": avg_unique_users,
+        "score": user_score,
+        "weight": 0.1,
+    }
+
+
+def _calcular_score_total(components: Dict[str, Any]) -> float:
+    """Calcular score total ponderado"""
+    return (
+        components["success_rate"]["score"] * components["success_rate"]["weight"]
+        + components["response_time"]["score"] * components["response_time"]["weight"]
+        + components["error_stability"]["score"] * components["error_stability"]["weight"]
+        + components["user_availability"]["score"] * components["user_availability"]["weight"]
+    )
+
+
+def _determinar_estado_salud(total_score: float) -> tuple[str, str]:
+    """Determinar estado de salud basado en score total"""
+    if total_score >= 90:
+        return "excellent", "green"
+    elif total_score >= 75:
+        return "good", "yellow"
+    elif total_score >= 60:
+        return "fair", "orange"
+    else:
+        return "poor", "red"
+
+
+def _generar_recomendaciones_health_score(components: Dict[str, Any]) -> List[str]:
+    """Generar recomendaciones basadas en componentes"""
+    recommendations = []
+    if components["success_rate"]["score"] < 80:
+        recommendations.append("🔧 Mejorar tasa de éxito de autenticación")
+    if components["response_time"]["score"] < 70:
+        recommendations.append("⚡ Optimizar tiempo de respuesta")
+    if components["error_stability"]["score"] < 60:
+        recommendations.append("🛡️ Reducir variabilidad en errores")
+    if components["user_availability"]["score"] < 50:
+        recommendations.append("👥 Verificar disponibilidad de usuarios")
+    return recommendations
+
+
 async def calculate_authentication_health_score():
     """
-    🏥 Calcular puntuación de salud del sistema de autenticación
+    🏥 Calcular puntuación de salud del sistema de autenticación (VERSIÓN REFACTORIZADA)
     """
     try:
-        if len(historical_metrics) < 3:
-            return {
-                "timestamp": datetime.now().isoformat(),
-                "status": "insufficient_data",
-                "message": "Need at least 3 data points for health score",
-            }
+        # 1. Validar datos suficientes
+        validation_error = _validar_datos_health_score(historical_metrics)
+        if validation_error:
+            return validation_error
 
-        # Obtener métricas más recientes
+        # 2. Obtener métricas más recientes
         recent_metrics = list(historical_metrics)[-5:]  # Últimos 5 puntos
 
-        # Calcular componentes del health score
-        components = {}
-
-        # 1. Tasa de éxito (40% del score)
-        avg_success_rate = statistics.mean([m.success_rate for m in recent_metrics])
-        success_score = min(100, avg_success_rate * 100)
-        components["success_rate"] = {
-            "value": avg_success_rate,
-            "score": success_score,
-            "weight": 0.4,
+        # 3. Calcular componentes del health score
+        components = {
+            "success_rate": _calcular_componente_success_rate(recent_metrics),
+            "response_time": _calcular_componente_response_time(recent_metrics),
+            "error_stability": _calcular_componente_error_stability(recent_metrics),
+            "user_availability": _calcular_componente_user_availability(recent_metrics),
         }
 
-        # 2. Tiempo de respuesta (30% del score)
-        avg_response_time = statistics.mean([m.avg_response_time for m in recent_metrics])
-        # Score basado en tiempo de respuesta (mejor = más rápido)
-        response_score = max(0, 100 - (avg_response_time / 50))  # Penalizar >5s
-        components["response_time"] = {
-            "value": avg_response_time,
-            "score": response_score,
-            "weight": 0.3,
-        }
+        # 4. Calcular score total ponderado
+        total_score = _calcular_score_total(components)
 
-        # 3. Estabilidad de errores (20% del score)
-        error_counts = [m.error_count for m in recent_metrics]
-        error_variance = statistics.variance(error_counts) if len(error_counts) > 1 else 0
-        avg_errors = statistics.mean(error_counts)
-        stability_score = max(0, 100 - (error_variance / 10) - (avg_errors / 2))
-        components["error_stability"] = {
-            "value": avg_errors,
-            "variance": error_variance,
-            "score": stability_score,
-            "weight": 0.2,
-        }
+        # 5. Determinar estado de salud
+        health_status, health_color = _determinar_estado_salud(total_score)
 
-        # 4. Disponibilidad de usuarios (10% del score)
-        avg_unique_users = statistics.mean([m.unique_users for m in recent_metrics])
-        user_score = min(100, (avg_unique_users / 10) * 100)  # Normalizar a 10 usuarios
-        components["user_availability"] = {
-            "value": avg_unique_users,
-            "score": user_score,
-            "weight": 0.1,
-        }
-
-        # Calcular score total ponderado
-        total_score = (
-            success_score * components["success_rate"]["weight"]
-            + response_score * components["response_time"]["weight"]
-            + stability_score * components["error_stability"]["weight"]
-            + user_score * components["user_availability"]["weight"]
-        )
-
-        # Determinar estado de salud
-        if total_score >= 90:
-            health_status = "excellent"
-            health_color = "green"
-        elif total_score >= 75:
-            health_status = "good"
-            health_color = "yellow"
-        elif total_score >= 60:
-            health_status = "fair"
-            health_color = "orange"
-        else:
-            health_status = "poor"
-            health_color = "red"
-
-        # Generar recomendaciones basadas en componentes
-        recommendations = []
-        if success_score < 80:
-            recommendations.append("🔧 Mejorar tasa de éxito de autenticación")
-        if response_score < 70:
-            recommendations.append("⚡ Optimizar tiempo de respuesta")
-        if stability_score < 60:
-            recommendations.append("🛡️ Reducir variabilidad en errores")
-        if user_score < 50:
-            recommendations.append("👥 Verificar disponibilidad de usuarios")
+        # 6. Generar recomendaciones
+        recommendations = _generar_recomendaciones_health_score(components)
 
         return {
             "timestamp": datetime.now().isoformat(),
