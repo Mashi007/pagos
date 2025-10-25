@@ -32,6 +32,7 @@ from . import (
     intelligent_alerts,
     intelligent_alerts_system,
     intermittent_failure_analyzer,
+    impact_analysis,
     kpis,
     migracion_emergencia,
     modelos_vehiculos,
