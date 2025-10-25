@@ -4,20 +4,18 @@ Script de Validación de Calidad para Services
 Aplica normas de linting, formateo y trazabilidad
 """
 
-import sys
 import json
+import sys
+from datetime import datetime
 from pathlib import Path
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+
 
 # Agregar el directorio del proyecto al path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from app.services.quality_standards import apply_quality_standards
 from app.services.logging_config import configure_service_logging
+from app.services.quality_standards import apply_quality_standards
+
 
 def main():
     """
@@ -44,7 +42,7 @@ def main():
     report = apply_quality_standards(str(services_dir))
 
     # Mostrar resultados
-    print(f"RESULTADOS DEL ANALISIS")
+    print("RESULTADOS DEL ANALISIS")
     print("-" * 40)
     print(f"Servicios analizados: {report['services_analyzed']}")
     print(f"Score general: {report['overall_score']:.2f}%")
@@ -106,8 +104,11 @@ def main():
         print()
 
     # Guardar reporte
-    report_file = Path(__file__).parent / f"quality_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    with open(report_file, 'w', encoding='utf-8') as f:
+    report_file = (
+        Path(__file__).parent
+        / f"quality_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    )
+    with open(report_file, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
 
     print(f"Reporte guardado en: {report_file}")
@@ -122,6 +123,7 @@ def main():
     else:
         print("Calidad insuficiente")
         return 2
+
 
 if __name__ == "__main__":
     exit_code = main()

@@ -4,19 +4,17 @@ Servicio de Validadores y Auto-Formateo
 Sistema completo para validar y corregir formatos incorrectos de datos
 """
 import logging
-import time
 import re
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from sqlalchemy.orm import Session
-from sqlalchemy import func, desc, asc
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from typing import Any, Dict, Optional
+
 
 from app.models.cliente import Cliente
 from app.models.pago import Pago
 
 logger = logging.getLogger(__name__)
+
 
 class ValidadorTelefono:
     """
@@ -36,29 +34,46 @@ class ValidadorTelefono:
                 "debe_empezar_por": "+58",
                 "longitud_total": 10,
                 "primer_digito": "No puede ser 0",
-                "digitos_validos": "0-9"
-            }
+                "digitos_validos": "0-9",
+            },
         },
         "DOMINICANA": {
             "codigo_pais": "+1",
             "operadoras": ["809", "829", "849"],
             "longitud_sin_codigo": 10,  # 809 1234567
             "patron_completo": r"^\+1\s?[0-9]{3}\s?[0-9]{7}$",
-            "formato_display": "+1 XXX XXXXXXX"
+            "formato_display": "+1 XXX XXXXXXX",
         },
         "COLOMBIA": {
             "codigo_pais": "+57",
-            "operadoras": ["300", "301", "302", "310", "311", "312", "313", "314", "315", "316", "317", "318", "319", "320", "321", "322", "323"],
+            "operadoras": [
+                "300",
+                "301",
+                "302",
+                "310",
+                "311",
+                "312",
+                "313",
+                "314",
+                "315",
+                "316",
+                "317",
+                "318",
+                "319",
+                "320",
+                "321",
+                "322",
+                "323",
+            ],
             "longitud_sin_codigo": 10,
             "patron_completo": r"^\+57\s?[0-9]{3}\s?[0-9]{7}$",
-            "formato_display": "+57 XXX XXXXXXX"
-        }
+            "formato_display": "+57 XXX XXXXXXX",
+        },
     }
 
     @staticmethod
     def validar_y_formatear_telefono(
-        telefono: str, 
-        pais: str = "VENEZUELA"
+        telefono: str, pais: str = "VENEZUELA"
     ) -> Dict[str, Any]:
         """
         📱 Validar y formatear número de teléfono
@@ -74,11 +89,11 @@ class ValidadorTelefono:
                     "valido": False,
                     "error": "Teléfono requerido",
                     "valor_original": telefono,
-                    "valor_formateado": None
+                    "valor_formateado": None,
                 }
 
             # Limpiar entrada
-            telefono_limpio = re.sub(r'[^\d+]', '', telefono.strip())
+            telefono_limpio = re.sub(r"[^\d+]", "", telefono.strip())
 
             config = ValidadorTelefono.PAISES_CONFIG.get(pais.upper())
             if not config:
@@ -86,35 +101,53 @@ class ValidadorTelefono:
                     "valido": False,
                     "error": f"País '{pais}' no soportado",
                     "valor_original": telefono,
-                    "valor_formateado": None
+                    "valor_formateado": None,
                 }
 
             # Casos de formateo específicos por país
             if pais.upper() == "VENEZUELA":
-                return ValidadorTelefono._formatear_telefono_venezolano(telefono_limpio, config)
+                return ValidadorTelefono._formatear_telefono_venezolano(
+                    telefono_limpio, config
+                )
             else:
                 # Lógica original para otros países
                 if telefono_limpio.startswith(config["codigo_pais"].replace("+", "")):
                     # Ya tiene código de país: "584241234567"
-                    numero_formateado = "+" + telefono_limpio[:2] + " " + telefono_limpio[2:5] + " " + telefono_limpio[5:]
+                    numero_formateado = (
+                        "+"
+                        + telefono_limpio[:2]
+                        + " "
+                        + telefono_limpio[2:5]
+                        + " "
+                        + telefono_limpio[5:]
+                    )
 
                 elif telefono_limpio.startswith(config["codigo_pais"]):
                     # Ya tiene + y código: "+584241234567"
                     numero_sin_plus = telefono_limpio[1:]
-                    numero_formateado = "+" + numero_sin_plus[:2] + " " + numero_sin_plus[2:5] + " " + numero_sin_plus[5:]
+                    numero_formateado = (
+                        "+"
+                        + numero_sin_plus[:2]
+                        + " "
+                        + numero_sin_plus[2:5]
+                        + " "
+                        + numero_sin_plus[5:]
+                    )
 
                 elif len(telefono_limpio) == config["longitud_sin_codigo"]:
                     # Solo número local: "4241234567"
                     operadora = telefono_limpio[:3]
                     if operadora in config["operadoras"]:
-                        numero_formateado = f"{config['codigo_pais']} {operadora} {telefono_limpio[3:]}"
+                        numero_formateado = (
+                            f"{config['codigo_pais']} {operadora} {telefono_limpio[3:]}"
+                        )
                     else:
                         return {
                             "valido": False,
                             "error": f"Operadora '{operadora}' no válida para {pais}. Válidas: {', '.join(config['operadoras'])}",
                             "valor_original": telefono,
                             "valor_formateado": None,
-                            "sugerencia": f"Debe comenzar con: {', '.join(config['operadoras'])}"
+                            "sugerencia": f"Debe comenzar con: {', '.join(config['operadoras'])}",
                         }
                 else:
                     return {
@@ -123,7 +156,7 @@ class ValidadorTelefono:
                         "valor_original": telefono,
                         "valor_formateado": None,
                         "longitud_actual": len(telefono_limpio),
-                        "longitud_esperada": config["longitud_sin_codigo"]
+                        "longitud_esperada": config["longitud_sin_codigo"],
                     }
 
             # Validar formato final
@@ -134,14 +167,14 @@ class ValidadorTelefono:
                     "valor_formateado": numero_formateado,
                     "pais": pais,
                     "operadora": numero_formateado.split()[1],
-                    "cambio_realizado": telefono != numero_formateado
+                    "cambio_realizado": telefono != numero_formateado,
                 }
             else:
                 return {
                     "valido": False,
                     "error": "Formato final inválido",
                     "valor_original": telefono,
-                    "valor_formateado": numero_formateado
+                    "valor_formateado": numero_formateado,
                 }
 
         except Exception as e:
@@ -150,11 +183,13 @@ class ValidadorTelefono:
                 "valido": False,
                 "error": f"Error de validación: {str(e)}",
                 "valor_original": telefono,
-                "valor_formateado": None
+                "valor_formateado": None,
             }
 
     @staticmethod
-    def _formatear_telefono_venezolano(telefono_limpio: str, config: Dict) -> Dict[str, Any]:
+    def _formatear_telefono_venezolano(
+        telefono_limpio: str, config: Dict
+    ) -> Dict[str, Any]:
         """
         📱 Formatear teléfono venezolano con nuevos requisitos:
         - Debe empezar por +58
@@ -174,7 +209,7 @@ class ValidadorTelefono:
                             "error": "El primer dígito del número no puede ser 0",
                             "valor_original": telefono_limpio,
                             "valor_formateado": None,
-                            "requisitos": config["requisitos"]
+                            "requisitos": config["requisitos"],
                         }
                     numero_formateado = f"+58{numero_sin_codigo}"
                 else:
@@ -183,7 +218,7 @@ class ValidadorTelefono:
                         "error": f"Longitud incorrecta. Debe tener 10 dígitos después de +58, tiene {len(numero_sin_codigo)}",
                         "valor_original": telefono_limpio,
                         "valor_formateado": None,
-                        "requisitos": config["requisitos"]
+                        "requisitos": config["requisitos"],
                     }
 
             elif telefono_limpio.startswith("+58"):
@@ -197,7 +232,7 @@ class ValidadorTelefono:
                             "error": "El primer dígito del número no puede ser 0",
                             "valor_original": telefono_limpio,
                             "valor_formateado": None,
-                            "requisitos": config["requisitos"]
+                            "requisitos": config["requisitos"],
                         }
                     numero_formateado = telefono_limpio
                 else:
@@ -206,7 +241,7 @@ class ValidadorTelefono:
                         "error": f"Longitud incorrecta. Debe tener 10 dígitos después de +58, tiene {len(numero_sin_codigo)}",
                         "valor_original": telefono_limpio,
                         "valor_formateado": None,
-                        "requisitos": config["requisitos"]
+                        "requisitos": config["requisitos"],
                     }
 
             elif len(telefono_limpio) == 10:
@@ -218,7 +253,7 @@ class ValidadorTelefono:
                         "error": "El primer dígito del número no puede ser 0",
                         "valor_original": telefono_limpio,
                         "valor_formateado": None,
-                        "requisitos": config["requisitos"]
+                        "requisitos": config["requisitos"],
                     }
                 numero_formateado = f"+58{telefono_limpio}"
 
@@ -229,7 +264,7 @@ class ValidadorTelefono:
                     "valor_original": telefono_limpio,
                     "valor_formateado": None,
                     "longitud_actual": len(telefono_limpio),
-                    "requisitos": config["requisitos"]
+                    "requisitos": config["requisitos"],
                 }
 
             # Validar formato final con regex
@@ -245,8 +280,8 @@ class ValidadorTelefono:
                     "requisitos_cumplidos": {
                         "empieza_por_58": True,
                         "longitud_10_digitos": True,
-                        "primer_digito_no_cero": numero_formateado[3] != "0"
-                    }
+                        "primer_digito_no_cero": numero_formateado[3] != "0",
+                    },
                 }
             else:
                 return {
@@ -254,7 +289,7 @@ class ValidadorTelefono:
                     "error": "Formato final no cumple con los requisitos",
                     "valor_original": telefono_limpio,
                     "valor_formateado": numero_formateado,
-                    "requisitos": config["requisitos"]
+                    "requisitos": config["requisitos"],
                 }
 
         except Exception as e:
@@ -263,8 +298,9 @@ class ValidadorTelefono:
                 "valido": False,
                 "error": f"Error de formateo: {str(e)}",
                 "valor_original": telefono_limpio,
-                "valor_formateado": None
+                "valor_formateado": None,
             }
+
 
 class ValidadorCedula:
     """
@@ -283,29 +319,33 @@ class ValidadorCedula:
                 "debe_empezar_por": "V, E o J",
                 "longitud_digitos": "Entre 7 y 10 dígitos",
                 "sin_caracteres_especiales": "Solo letra inicial + números",
-                "ejemplos_validos": ["V1234567", "E12345678", "J123456789", "V1234567890"]
-            }
+                "ejemplos_validos": [
+                    "V1234567",
+                    "E12345678",
+                    "J123456789",
+                    "V1234567890",
+                ],
+            },
         },
         "DOMINICANA": {
             "prefijos": [],  # Sin prefijo de letra
             "longitud_numero": [11],  # XXX-XXXXXXX-X
             "patron": r"^\d{3}-\d{7}-\d{1}$",
             "formato_display": "001-1234567-8",
-            "descripcion": "Cédula dominicana: XXX-XXXXXXX-X"
+            "descripcion": "Cédula dominicana: XXX-XXXXXXX-X",
         },
         "COLOMBIA": {
             "prefijos": [],  # Sin prefijo
             "longitud_numero": [8, 9, 10],
             "patron": r"^\d{8,10}$",
             "formato_display": "12345678",
-            "descripcion": "Cédula colombiana: 8-10 dígitos"
-        }
+            "descripcion": "Cédula colombiana: 8-10 dígitos",
+        },
     }
 
     @staticmethod
     def validar_y_formatear_cedula(
-        cedula: str,
-        pais: str = "VENEZUELA"
+        cedula: str, pais: str = "VENEZUELA"
     ) -> Dict[str, Any]:
         """
         📝 Validar y formatear cédula
@@ -321,7 +361,7 @@ class ValidadorCedula:
                     "valido": False,
                     "error": "Cédula requerida",
                     "valor_original": cedula,
-                    "valor_formateado": None
+                    "valor_formateado": None,
                 }
 
             config = ValidadorCedula.PAISES_CEDULA.get(pais.upper())
@@ -330,23 +370,27 @@ class ValidadorCedula:
                     "valido": False,
                     "error": f"País '{pais}' no soportado",
                     "valor_original": cedula,
-                    "valor_formateado": None
+                    "valor_formateado": None,
                 }
 
             # Limpiar entrada
-            cedula_limpia = re.sub(r'[^\w]', '', cedula.strip().upper())
+            cedula_limpia = re.sub(r"[^\w]", "", cedula.strip().upper())
 
             if pais.upper() == "VENEZUELA":
-                return ValidadorCedula._formatear_cedula_venezolana(cedula_limpia, config)
+                return ValidadorCedula._formatear_cedula_venezolana(
+                    cedula_limpia, config
+                )
             elif pais.upper() == "DOMINICANA":
                 return ValidadorCedula._formatear_cedula_dominicana(cedula, config)
             elif pais.upper() == "COLOMBIA":
-                return ValidadorCedula._formatear_cedula_colombiana(cedula_limpia, config)
+                return ValidadorCedula._formatear_cedula_colombiana(
+                    cedula_limpia, config
+                )
             else:
                 return {
                     "valido": False,
                     "error": "País no implementado",
-                    "valor_original": cedula
+                    "valor_original": cedula,
                 }
 
         except Exception as e:
@@ -355,11 +399,13 @@ class ValidadorCedula:
                 "valido": False,
                 "error": f"Error de validación: {str(e)}",
                 "valor_original": cedula,
-                "valor_formateado": None
+                "valor_formateado": None,
             }
 
     @staticmethod
-    def _formatear_cedula_venezolana(cedula_limpia: str, config: Dict) -> Dict[str, Any]:
+    def _formatear_cedula_venezolana(
+        cedula_limpia: str, config: Dict
+    ) -> Dict[str, Any]:
         """
         Formatear cédula venezolana con validación estricta:
         - DEBE empezar por V, E o J (siempre)
@@ -367,10 +413,10 @@ class ValidadorCedula:
         - Sin caracteres especiales
         """
         # Limpiar entrada: solo letras y números
-        cedula_limpia = re.sub(r'[^VEJ\d]', '', cedula_limpia.upper())
+        cedula_limpia = re.sub(r"[^VEJ\d]", "", cedula_limpia.upper())
 
         # Validar que tenga un prefijo válido desde el inicio
-        if cedula_limpia and cedula_limpia[0] not in ['V', 'E', 'J']:
+        if cedula_limpia and cedula_limpia[0] not in ["V", "E", "J"]:
             # Si no tiene prefijo válido, rechazar inmediatamente
             return {
                 "valido": False,
@@ -378,7 +424,7 @@ class ValidadorCedula:
                 "valor_original": cedula_limpia,
                 "valor_formateado": None,
                 "formato_esperado": config["descripcion"],
-                "requisitos": config["requisitos"]
+                "requisitos": config["requisitos"],
             }
 
         # Si no tiene prefijo, asumir V
@@ -400,7 +446,7 @@ class ValidadorCedula:
                     "valor_original": cedula_limpia,
                     "valor_formateado": None,
                     "formato_esperado": config["descripcion"],
-                    "requisitos": config["requisitos"]
+                    "requisitos": config["requisitos"],
                 }
 
             # Validar longitud del número (exactamente entre 7 y 10)
@@ -413,7 +459,7 @@ class ValidadorCedula:
                     "formato_esperado": config["descripcion"],
                     "requisitos": config["requisitos"],
                     "longitud_actual": len(numero),
-                    "longitud_requerida": "7-10 dígitos"
+                    "longitud_requerida": "7-10 dígitos",
                 }
 
             # Validar que todos los dígitos sean números (sin caracteres especiales)
@@ -424,7 +470,7 @@ class ValidadorCedula:
                     "valor_original": cedula_limpia,
                     "valor_formateado": None,
                     "formato_esperado": config["descripcion"],
-                    "requisitos": config["requisitos"]
+                    "requisitos": config["requisitos"],
                 }
 
             return {
@@ -432,11 +478,9 @@ class ValidadorCedula:
                 "valor_original": cedula_limpia,
                 "valor_formateado": cedula_formateada,
                 "pais": "VENEZUELA",
-                "tipo": {
-                    "V": "Venezolano",
-                    "E": "Extranjero", 
-                    "J": "Jurídico"
-                }.get(prefijo, "Desconocido"),
+                "tipo": {"V": "Venezolano", "E": "Extranjero", "J": "Jurídico"}.get(
+                    prefijo, "Desconocido"
+                ),
                 "cambio_realizado": cedula_limpia != cedula_formateada,
                 "prefijo": prefijo,
                 "numero": numero,
@@ -445,8 +489,8 @@ class ValidadorCedula:
                     "prefijo_valido": prefijo in ["V", "E", "J"],
                     "longitud_correcta": 7 <= len(numero) <= 10,
                     "solo_numeros": numero.isdigit(),
-                    "sin_caracteres_especiales": True
-                }
+                    "sin_caracteres_especiales": True,
+                },
             }
 
         return {
@@ -456,14 +500,14 @@ class ValidadorCedula:
             "valor_formateado": cedula_formateada,
             "formato_esperado": config["descripcion"],
             "requisitos": config["requisitos"],
-            "ejemplos_validos": config["requisitos"]["ejemplos_validos"]
+            "ejemplos_validos": config["requisitos"]["ejemplos_validos"],
         }
 
     @staticmethod
     def _formatear_cedula_dominicana(cedula: str, config: Dict) -> Dict[str, Any]:
         """Formatear cédula dominicana"""
         # Limpiar y formatear XXX-XXXXXXX-X
-        numeros = re.sub(r'[^\d]', '', cedula)
+        numeros = re.sub(r"[^\d]", "", cedula)
 
         if len(numeros) == 11:
             cedula_formateada = f"{numeros[:3]}-{numeros[3:10]}-{numeros[10]}"
@@ -474,18 +518,20 @@ class ValidadorCedula:
                     "valor_original": cedula,
                     "valor_formateado": cedula_formateada,
                     "pais": "DOMINICANA",
-                    "cambio_realizado": cedula != cedula_formateada
+                    "cambio_realizado": cedula != cedula_formateada,
                 }
 
         return {
             "valido": False,
             "error": f"Formato inválido. Esperado: {config['formato_display']}",
             "valor_original": cedula,
-            "formato_esperado": config["descripcion"]
+            "formato_esperado": config["descripcion"],
         }
 
     @staticmethod
-    def _formatear_cedula_colombiana(cedula_limpia: str, config: Dict) -> Dict[str, Any]:
+    def _formatear_cedula_colombiana(
+        cedula_limpia: str, config: Dict
+    ) -> Dict[str, Any]:
         """Formatear cédula colombiana"""
         if cedula_limpia.isdigit() and len(cedula_limpia) in config["longitud_numero"]:
             return {
@@ -493,15 +539,16 @@ class ValidadorCedula:
                 "valor_original": cedula_limpia,
                 "valor_formateado": cedula_limpia,
                 "pais": "COLOMBIA",
-                "cambio_realizado": False
+                "cambio_realizado": False,
             }
 
         return {
             "valido": False,
             "error": f"Formato inválido. Esperado: {config['formato_display']}",
             "valor_original": cedula_limpia,
-            "formato_esperado": config["descripcion"]
+            "formato_esperado": config["descripcion"],
         }
+
 
 class ValidadorNombre:
     """
@@ -525,7 +572,7 @@ class ValidadorNombre:
                     "error": "Nombre requerido",
                     "valor_original": nombre,
                     "palabras_encontradas": 0,
-                    "palabras_requeridas": 4
+                    "palabras_requeridas": 4,
                 }
 
             # Limpiar y dividir en palabras
@@ -538,7 +585,7 @@ class ValidadorNombre:
                     "valor_original": nombre,
                     "palabras_encontradas": len(palabras),
                     "palabras_requeridas": 4,
-                    "palabras": palabras
+                    "palabras": palabras,
                 }
 
             # Validar que cada palabra tenga al menos 2 caracteres
@@ -549,7 +596,7 @@ class ValidadorNombre:
                     "error": f"Palabras muy cortas: {palabras_invalidas}",
                     "valor_original": nombre,
                     "palabras_encontradas": len(palabras),
-                    "palabras_invalidas": palabras_invalidas
+                    "palabras_invalidas": palabras_invalidas,
                 }
 
             return {
@@ -561,7 +608,7 @@ class ValidadorNombre:
                 "primer_nombre": palabras[0],
                 "segundo_nombre": palabras[1] if len(palabras) > 1 else "",
                 "primer_apellido": palabras[-2] if len(palabras) > 2 else palabras[-1],
-                "segundo_apellido": palabras[-1] if len(palabras) > 3 else ""
+                "segundo_apellido": palabras[-1] if len(palabras) > 3 else "",
             }
 
         except Exception as e:
@@ -569,8 +616,9 @@ class ValidadorNombre:
             return {
                 "valido": False,
                 "error": f"Error de validación: {str(e)}",
-                "valor_original": nombre
+                "valor_original": nombre,
             }
+
 
 class ValidadorFecha:
     """
@@ -594,7 +642,7 @@ class ValidadorFecha:
                     "error": "Fecha de entrega requerida",
                     "valor_original": fecha_str,
                     "valor_formateado": None,
-                    "requiere_calendario": True
+                    "requiere_calendario": True,
                 }
 
             # Intentar parsear diferentes formatos
@@ -607,7 +655,7 @@ class ValidadorFecha:
                     "valor_original": fecha_str,
                     "valor_formateado": None,
                     "formatos_aceptados": ["DD/MM/YYYY", "YYYY-MM-DD", "DD-MM-YYYY"],
-                    "requiere_calendario": True
+                    "requiere_calendario": True,
                 }
 
             # Validar reglas de negocio: desde hace 2 años hasta 4 años adelante
@@ -624,7 +672,7 @@ class ValidadorFecha:
                     "valor_original": fecha_str,
                     "valor_formateado": fecha_parseada.strftime("%d/%m/%Y"),
                     "fecha_minima": fecha_minima.strftime("%d/%m/%Y"),
-                    "requiere_calendario": True
+                    "requiere_calendario": True,
                 }
 
             if fecha_parseada > fecha_maxima:
@@ -634,7 +682,7 @@ class ValidadorFecha:
                     "valor_original": fecha_str,
                     "valor_formateado": fecha_parseada.strftime("%d/%m/%Y"),
                     "fecha_maxima": fecha_maxima.strftime("%d/%m/%Y"),
-                    "requiere_calendario": True
+                    "requiere_calendario": True,
                 }
 
             return {
@@ -644,7 +692,7 @@ class ValidadorFecha:
                 "fecha_iso": fecha_parseada.isoformat(),
                 "cambio_realizado": fecha_str != fecha_parseada.strftime("%d/%m/%Y"),
                 "requiere_recalculo_amortizacion": True,
-                "mensaje_recalculo": "¿Desea recalcular la tabla de amortización con la nueva fecha?"
+                "mensaje_recalculo": "¿Desea recalcular la tabla de amortización con la nueva fecha?",
             }
 
         except Exception as e:
@@ -653,7 +701,7 @@ class ValidadorFecha:
                 "valido": False,
                 "error": f"Error de validación: {str(e)}",
                 "valor_original": fecha_str,
-                "valor_formateado": None
+                "valor_formateado": None,
             }
 
     @staticmethod
@@ -671,7 +719,7 @@ class ValidadorFecha:
                     "valido": False,
                     "error": "Fecha de pago requerida",
                     "valor_original": fecha_str,
-                    "valor_formateado": None
+                    "valor_formateado": None,
                 }
 
             fecha_parseada = ValidadorFecha._parsear_fecha_flexible(fecha_str)
@@ -681,7 +729,7 @@ class ValidadorFecha:
                     "valido": False,
                     "error": "Formato de fecha inválido",
                     "valor_original": fecha_str,
-                    "formatos_aceptados": ["DD/MM/YYYY", "YYYY-MM-DD"]
+                    "formatos_aceptados": ["DD/MM/YYYY", "YYYY-MM-DD"],
                 }
 
             # Validar reglas de negocio
@@ -694,7 +742,7 @@ class ValidadorFecha:
                     "error": "La fecha de pago no puede ser más de 1 día en el futuro",
                     "valor_original": fecha_str,
                     "valor_formateado": fecha_parseada.strftime("%d/%m/%Y"),
-                    "fecha_maxima": manana.strftime("%d/%m/%Y")
+                    "fecha_maxima": manana.strftime("%d/%m/%Y"),
                 }
 
             return {
@@ -702,14 +750,14 @@ class ValidadorFecha:
                 "valor_original": fecha_str,
                 "valor_formateado": fecha_parseada.strftime("%d/%m/%Y"),
                 "fecha_iso": fecha_parseada.isoformat(),
-                "cambio_realizado": fecha_str != fecha_parseada.strftime("%d/%m/%Y")
+                "cambio_realizado": fecha_str != fecha_parseada.strftime("%d/%m/%Y"),
             }
 
         except Exception as e:
             return {
                 "valido": False,
                 "error": f"Error de validación: {str(e)}",
-                "valor_original": fecha_str
+                "valor_original": fecha_str,
             }
 
     @staticmethod
@@ -720,7 +768,7 @@ class ValidadorFecha:
 
         Requisitos:
         - Día: 2 dígitos (01-31)
-        - Mes: 2 dígitos (01-12)  
+        - Mes: 2 dígitos (01-12)
         - Año: 4 dígitos
         - Separador: / (barra)
         - Números de serie de Excel (ej: 45940)
@@ -739,7 +787,7 @@ class ValidadorFecha:
                 pass
 
         # Validar formato básico con regex
-        if not re.match(r'^\d{2}/\d{2}/\d{4}$', fecha_limpia):
+        if not re.match(r"^\d{2}/\d{2}/\d{4}$", fecha_limpia):
             return None
 
         try:
@@ -747,7 +795,7 @@ class ValidadorFecha:
             fecha_parseada = datetime.strptime(fecha_limpia, "%d/%m/%Y").date()
 
             # Validaciones adicionales
-            dia, mes, año = fecha_limpia.split('/')
+            dia, mes, año = fecha_limpia.split("/")
 
             # Validar que el día sea válido (01-31)
             if not (1 <= int(dia) <= 31):
@@ -771,6 +819,7 @@ class ValidadorFecha:
         except (ValueError, IndexError):
             return None
 
+
 class ValidadorMonto:
     """
     💰 Validador y formateador de montos financieros
@@ -780,7 +829,7 @@ class ValidadorMonto:
     def validar_y_formatear_monto(
         monto_str: str,
         tipo_monto: str = "GENERAL",
-        saldo_maximo: Optional[Decimal] = None
+        saldo_maximo: Optional[Decimal] = None,
     ) -> Dict[str, Any]:
         """
         💰 Validar y formatear monto
@@ -798,11 +847,11 @@ class ValidadorMonto:
                     "error": f"Monto {tipo_monto.lower()} requerido",
                     "valor_original": monto_str,
                     "valor_formateado": None,
-                    "requiere_input_numerico": True
+                    "requiere_input_numerico": True,
                 }
 
             # Limpiar entrada (quitar $, comas, espacios)
-            monto_limpio = re.sub(r'[$,\s]', '', monto_str.strip())
+            monto_limpio = re.sub(r"[$,\s]", "", monto_str.strip())
 
             # Intentar convertir a decimal
             try:
@@ -813,7 +862,7 @@ class ValidadorMonto:
                     "error": "Formato numérico inválido",
                     "valor_original": monto_str,
                     "valor_formateado": None,
-                    "ejemplo_valido": "15000.00 o 15,000.50"
+                    "ejemplo_valido": "15000.00 o 15,000.50",
                 }
 
             # Validar que sea positivo
@@ -822,21 +871,23 @@ class ValidadorMonto:
                     "valido": False,
                     "error": "El monto debe ser mayor a cero",
                     "valor_original": monto_str,
-                    "valor_formateado": str(monto_decimal)
+                    "valor_formateado": str(monto_decimal),
                 }
 
             # Validar límites específicos por tipo
-            error_limite = ValidadorMonto._validar_limites_por_tipo(monto_decimal, tipo_monto, saldo_maximo)
+            error_limite = ValidadorMonto._validar_limites_por_tipo(
+                monto_decimal, tipo_monto, saldo_maximo
+            )
             if error_limite:
                 return {
                     "valido": False,
                     "error": error_limite,
                     "valor_original": monto_str,
-                    "valor_formateado": f"{monto_decimal:.2f}"
+                    "valor_formateado": f"{monto_decimal:.2f}",
                 }
 
             # Formatear a 2 decimales
-            monto_formateado = monto_decimal.quantize(Decimal('0.01'))
+            monto_formateado = monto_decimal.quantize(Decimal("0.01"))
 
             return {
                 "valido": True,
@@ -845,7 +896,7 @@ class ValidadorMonto:
                 "valor_decimal": monto_formateado,
                 "valor_display": f"${monto_formateado:,.2f}",
                 "cambio_realizado": monto_str != str(monto_formateado),
-                "tipo_monto": tipo_monto
+                "tipo_monto": tipo_monto,
             }
 
         except Exception as e:
@@ -853,11 +904,13 @@ class ValidadorMonto:
             return {
                 "valido": False,
                 "error": f"Error de validación: {str(e)}",
-                "valor_original": monto_str
+                "valor_original": monto_str,
             }
 
     @staticmethod
-    def _validar_limites_por_tipo(monto: Decimal, tipo: str, saldo_maximo: Optional[Decimal]) -> Optional[str]:
+    def _validar_limites_por_tipo(
+        monto: Decimal, tipo: str, saldo_maximo: Optional[Decimal]
+    ) -> Optional[str]:
         """Validar límites específicos por tipo de monto"""
         if tipo == "TOTAL_FINANCIAMIENTO":
             if monto < Decimal("1"):
@@ -869,13 +922,16 @@ class ValidadorMonto:
             if monto < Decimal("1"):
                 return "Monto mínimo de pago: $1"
             if saldo_maximo and monto > saldo_maximo:
-                return f"Monto no puede exceder el saldo pendiente: ${saldo_maximo:,.2f}"
+                return (
+                    f"Monto no puede exceder el saldo pendiente: ${saldo_maximo:,.2f}"
+                )
 
         elif tipo == "CUOTA_INICIAL":
             if monto < Decimal("0"):
                 return "Cuota inicial no puede ser negativa"
 
         return None  # Sin errores
+
 
 class ValidadorAmortizaciones:
     """
@@ -899,7 +955,7 @@ class ValidadorAmortizaciones:
                     "error": "Número de amortizaciones requerido",
                     "valor_original": amortizaciones_str,
                     "valor_formateado": None,
-                    "rango_valido": "1 - 84 meses"
+                    "rango_valido": "1 - 84 meses",
                 }
 
             # Intentar convertir a entero
@@ -910,7 +966,7 @@ class ValidadorAmortizaciones:
                     "valido": False,
                     "error": "Debe ser un número entero",
                     "valor_original": amortizaciones_str,
-                    "valor_formateado": None
+                    "valor_formateado": None,
                 }
 
             # Validar rango
@@ -919,7 +975,7 @@ class ValidadorAmortizaciones:
                     "valido": False,
                     "error": "Mínimo 1 amortización",
                     "valor_original": amortizaciones_str,
-                    "valor_formateado": str(amortizaciones)
+                    "valor_formateado": str(amortizaciones),
                 }
 
             if amortizaciones > 84:
@@ -927,7 +983,7 @@ class ValidadorAmortizaciones:
                     "valido": False,
                     "error": "Máximo 84 amortizaciones (7 años)",
                     "valor_original": amortizaciones_str,
-                    "valor_formateado": str(amortizaciones)
+                    "valor_formateado": str(amortizaciones),
                 }
 
             return {
@@ -936,7 +992,7 @@ class ValidadorAmortizaciones:
                 "valor_formateado": str(amortizaciones),
                 "valor_entero": amortizaciones,
                 "equivalente_anos": round(amortizaciones / 12, 1),
-                "cambio_realizado": amortizaciones_str.strip() != str(amortizaciones)
+                "cambio_realizado": amortizaciones_str.strip() != str(amortizaciones),
             }
 
         except Exception as e:
@@ -944,8 +1000,9 @@ class ValidadorAmortizaciones:
             return {
                 "valido": False,
                 "error": f"Error de validación: {str(e)}",
-                "valor_original": amortizaciones_str
+                "valor_original": amortizaciones_str,
             }
+
 
 class ValidadorEmail:
     """
@@ -953,8 +1010,11 @@ class ValidadorEmail:
     """
 
     DOMINIOS_BLOQUEADOS = [
-        "tempmail.org", "10minutemail.com", "guerrillamail.com",
-        "mailinator.com", "throwaway.email"
+        "tempmail.org",
+        "10minutemail.com",
+        "guerrillamail.com",
+        "mailinator.com",
+        "throwaway.email",
     ]
 
     @staticmethod
@@ -974,24 +1034,24 @@ class ValidadorEmail:
                     "valido": False,
                     "error": "Email requerido",
                     "valor_original": email_str,
-                    "valor_formateado": None
+                    "valor_formateado": None,
                 }
 
             # Normalizar email: quitar espacios y convertir a minúsculas
             email_limpio = email_str.strip().lower()
 
             # Validar que contenga el símbolo @
-            if '@' not in email_limpio:
+            if "@" not in email_limpio:
                 return {
                     "valido": False,
                     "error": "Email debe contener el símbolo @",
                     "valor_original": email_str,
                     "valor_formateado": email_limpio,
-                    "formato_esperado": "usuario@dominio.com"
+                    "formato_esperado": "usuario@dominio.com",
                 }
 
             # Validar formato RFC 5322
-            patron_email = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            patron_email = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
 
             if not re.match(patron_email, email_limpio):
                 return {
@@ -1000,11 +1060,11 @@ class ValidadorEmail:
                     "valor_original": email_str,
                     "valor_formateado": email_limpio,
                     "formato_esperado": "usuario@dominio.com",
-                    "ejemplo_valido": "usuario@ejemplo.com"
+                    "ejemplo_valido": "usuario@ejemplo.com",
                 }
 
             # Extraer partes del email
-            partes_email = email_limpio.split('@')
+            partes_email = email_limpio.split("@")
             usuario = partes_email[0]
             dominio = partes_email[1]
 
@@ -1014,7 +1074,7 @@ class ValidadorEmail:
                     "valido": False,
                     "error": "La parte del usuario no puede estar vacía",
                     "valor_original": email_str,
-                    "valor_formateado": email_limpio
+                    "valor_formateado": email_limpio,
                 }
 
             if len(dominio) == 0:
@@ -1022,7 +1082,7 @@ class ValidadorEmail:
                     "valido": False,
                     "error": "El dominio no puede estar vacío",
                     "valor_original": email_str,
-                    "valor_formateado": email_limpio
+                    "valor_formateado": email_limpio,
                 }
 
             # Verificar dominio bloqueado
@@ -1034,7 +1094,7 @@ class ValidadorEmail:
                         "valor_original": email_str,
                         "valor_formateado": email_limpio,
                         "razon": "Dominio de email temporal bloqueado",
-                        "dominios_bloqueados": ValidadorEmail.DOMINIOS_BLOQUEADOS
+                        "dominios_bloqueados": ValidadorEmail.DOMINIOS_BLOQUEADOS,
                     }
 
             # Determinar qué cambios se realizaron
@@ -1056,8 +1116,8 @@ class ValidadorEmail:
                 "normalizacion": {
                     "espacios_removidos": email_str.strip() != email_str,
                     "convertido_minusculas": email_str.lower() != email_str,
-                    "aroba_normalizada": '@' in email_limpio
-                }
+                    "aroba_normalizada": "@" in email_limpio,
+                },
             }
 
         except Exception as e:
@@ -1065,8 +1125,9 @@ class ValidadorEmail:
             return {
                 "valido": False,
                 "error": f"Error de validación: {str(e)}",
-                "valor_original": email_str
+                "valor_original": email_str,
             }
+
 
 class ServicioCorreccionDatos:
     """
@@ -1075,9 +1136,7 @@ class ServicioCorreccionDatos:
 
     @staticmethod
     def corregir_datos_cliente(
-        cliente_id: int,
-        datos_correccion: Dict[str, Any],
-        pais: str = "VENEZUELA"
+        cliente_id: int, datos_correccion: Dict[str, Any], pais: str = "VENEZUELA"
     ) -> Dict[str, Any]:
         """
         Corregir múltiples datos de un cliente
@@ -1088,17 +1147,21 @@ class ServicioCorreccionDatos:
                 "correcciones_aplicadas": [],
                 "errores_encontrados": [],
                 "requiere_recalculo_amortizacion": False,
-                "cambios_realizados": False
+                "cambios_realizados": False,
             }
 
             # Procesar cada campo a corregir
             for campo, nuevo_valor in datos_correccion.items():
                 try:
                     if campo == "telefono":
-                        resultado = ValidadorTelefono.validar_y_formatear_telefono(nuevo_valor, pais)
+                        resultado = ValidadorTelefono.validar_y_formatear_telefono(
+                            nuevo_valor, pais
+                        )
 
                     elif campo == "cedula":
-                        resultado = ValidadorCedula.validar_y_formatear_cedula(nuevo_valor, pais)
+                        resultado = ValidadorCedula.validar_y_formatear_cedula(
+                            nuevo_valor, pais
+                        )
 
                     elif campo == "email":
                         resultado = ValidadorEmail.validar_email(nuevo_valor)
@@ -1106,17 +1169,27 @@ class ServicioCorreccionDatos:
                     elif campo == "fecha_entrega":
                         resultado = ValidadorFecha.validar_fecha_entrega(nuevo_valor)
                         if resultado.get("requiere_recalculo_amortizacion"):
-                            resultados_correccion["requiere_recalculo_amortizacion"] = True
+                            resultados_correccion["requiere_recalculo_amortizacion"] = (
+                                True
+                            )
 
                     elif campo == "fecha_pago":
                         resultado = ValidadorFecha.validar_fecha_pago(nuevo_valor)
 
-                    elif campo in ["total_financiamiento", "monto_pagado", "cuota_inicial"]:
+                    elif campo in [
+                        "total_financiamiento",
+                        "monto_pagado",
+                        "cuota_inicial",
+                    ]:
                         tipo_monto = campo.upper()
-                        resultado = ValidadorMonto.validar_y_formatear_monto(nuevo_valor, tipo_monto)
+                        resultado = ValidadorMonto.validar_y_formatear_monto(
+                            nuevo_valor, tipo_monto
+                        )
 
                     elif campo == "amortizaciones":
-                        resultado = ValidadorAmortizaciones.validar_amortizaciones(nuevo_valor)
+                        resultado = ValidadorAmortizaciones.validar_amortizaciones(
+                            nuevo_valor
+                        )
 
                     else:
                         # Campo no requiere validación especial
@@ -1124,34 +1197,43 @@ class ServicioCorreccionDatos:
                             "valido": True,
                             "valor_original": nuevo_valor,
                             "valor_formateado": str(nuevo_valor).strip(),
-                            "cambio_realizado": False
+                            "cambio_realizado": False,
                         }
 
                     # Agregar resultado
                     if resultado["valido"]:
-                        resultados_correccion["correcciones_aplicadas"].append({
-                            "campo": campo,
-                            "valor_anterior": resultado["valor_original"],
-                            "valor_nuevo": resultado["valor_formateado"],
-                            "cambio_realizado": resultado.get("cambio_realizado", False)
-                        })
+                        resultados_correccion["correcciones_aplicadas"].append(
+                            {
+                                "campo": campo,
+                                "valor_anterior": resultado["valor_original"],
+                                "valor_nuevo": resultado["valor_formateado"],
+                                "cambio_realizado": resultado.get(
+                                    "cambio_realizado", False
+                                ),
+                            }
+                        )
 
                         if resultado.get("cambio_realizado"):
                             resultados_correccion["cambios_realizados"] = True
                     else:
-                        resultados_correccion["errores_encontrados"].append({
-                            "campo": campo,
-                            "error": resultado["error"],
-                            "valor_intentado": nuevo_valor,
-                            "sugerencia": resultado.get("formato_esperado") or resultado.get("ejemplo_valido")
-                        })
+                        resultados_correccion["errores_encontrados"].append(
+                            {
+                                "campo": campo,
+                                "error": resultado["error"],
+                                "valor_intentado": nuevo_valor,
+                                "sugerencia": resultado.get("formato_esperado")
+                                or resultado.get("ejemplo_valido"),
+                            }
+                        )
 
                 except Exception as e:
-                    resultados_correccion["errores_encontrados"].append({
-                        "campo": campo,
-                        "error": f"Error procesando campo: {str(e)}",
-                        "valor_intentado": nuevo_valor
-                    })
+                    resultados_correccion["errores_encontrados"].append(
+                        {
+                            "campo": campo,
+                            "error": f"Error procesando campo: {str(e)}",
+                            "valor_intentado": nuevo_valor,
+                        }
+                    )
 
             return resultados_correccion
 
@@ -1161,7 +1243,7 @@ class ServicioCorreccionDatos:
                 "cliente_id": cliente_id,
                 "error_general": str(e),
                 "correcciones_aplicadas": [],
-                "errores_encontrados": []
+                "errores_encontrados": [],
             }
 
     @staticmethod
@@ -1171,7 +1253,9 @@ class ServicioCorreccionDatos:
         """
         try:
             # Obtener clientes con posibles errores
-            clientes = db.query(Cliente).filter(Cliente.activo.is_(True)).limit(limite).all()
+            clientes = (
+                db.query(Cliente).filter(Cliente.activo.is_(True)).limit(limite).all()
+            )
 
             clientes_con_errores = []
             tipos_errores = {
@@ -1179,7 +1263,7 @@ class ServicioCorreccionDatos:
                 "cedula_sin_letra": 0,
                 "email_invalido": 0,
                 "fecha_error": 0,
-                "monto_error": 0
+                "monto_error": 0,
             }
 
             for cliente in clientes:
@@ -1187,47 +1271,58 @@ class ServicioCorreccionDatos:
 
                 # Verificar teléfono
                 if cliente.telefono and not cliente.telefono.startswith("+"):
-                    errores_cliente.append({
-                        "campo": "telefono",
-                        "valor_actual": cliente.telefono,
-                        "problema": "Sin código de país",
-                        "solucion_sugerida": f"+58 {cliente.telefono}"
-                    })
+                    errores_cliente.append(
+                        {
+                            "campo": "telefono",
+                            "valor_actual": cliente.telefono,
+                            "problema": "Sin código de país",
+                            "solucion_sugerida": f"+58 {cliente.telefono}",
+                        }
+                    )
                     tipos_errores["telefono_mal_formateado"] += 1
 
                 # Verificar cédula
                 if cliente.cedula and cliente.cedula.isdigit():
-                    errores_cliente.append({
-                        "campo": "cedula",
-                        "valor_actual": cliente.cedula,
-                        "problema": "Sin letra V/E",
-                        "solucion_sugerida": f"V{cliente.cedula}"
-                    })
+                    errores_cliente.append(
+                        {
+                            "campo": "cedula",
+                            "valor_actual": cliente.cedula,
+                            "problema": "Sin letra V/E",
+                            "solucion_sugerida": f"V{cliente.cedula}",
+                        }
+                    )
                     tipos_errores["cedula_sin_letra"] += 1
 
                 # Verificar email
                 if cliente.email and "@" not in cliente.email:
-                    errores_cliente.append({
-                        "campo": "email",
-                        "valor_actual": cliente.email,
-                        "problema": "Formato de email inválido",
-                        "solucion_sugerida": "Corregir formato"
-                    })
+                    errores_cliente.append(
+                        {
+                            "campo": "email",
+                            "valor_actual": cliente.email,
+                            "problema": "Formato de email inválido",
+                            "solucion_sugerida": "Corregir formato",
+                        }
+                    )
                     tipos_errores["email_invalido"] += 1
 
                 if errores_cliente:
-                    clientes_con_errores.append({
-                        "cliente_id": cliente.id,
-                        "nombre": cliente.nombre_completo,
-                        "cedula": cliente.cedula,
-                        "errores": errores_cliente,
-                        "total_errores": len(errores_cliente)
-                    })
+                    clientes_con_errores.append(
+                        {
+                            "cliente_id": cliente.id,
+                            "nombre": cliente.nombre_completo,
+                            "cedula": cliente.cedula,
+                            "errores": errores_cliente,
+                            "total_errores": len(errores_cliente),
+                        }
+                    )
 
             # Verificar pagos con errores
-            pagos_error = db.query(Pago).filter(
-                Pago.observaciones.like("%ERROR%")
-            ).limit(50).all()
+            pagos_error = (
+                db.query(Pago)
+                .filter(Pago.observaciones.like("%ERROR%"))
+                .limit(50)
+                .all()
+            )
 
             for pago in pagos_error:
                 if "MONTO PAGADO" in pago.observaciones:
@@ -1238,29 +1333,28 @@ class ServicioCorreccionDatos:
                 "fecha_analisis": datetime.now().isoformat(),
                 "clientes_analizados": len(clientes),
                 "clientes_con_errores": len(clientes_con_errores),
-                "porcentaje_errores": round(len(clientes_con_errores) / len(clientes) * 100, 2),
-
+                "porcentaje_errores": round(
+                    len(clientes_con_errores) / len(clientes) * 100, 2
+                ),
                 "tipos_errores_encontrados": tipos_errores,
-
                 "clientes_requieren_correccion": clientes_con_errores[:20],  # Top 20
-
                 "acciones_recomendadas": [
                     "Usar herramienta de corrección masiva",
                     "Configurar validadores en formularios",
                     "Implementar auto-formateo en frontend",
-                    "Capacitar usuarios en formatos correctos"
+                    "Capacitar usuarios en formatos correctos",
                 ],
-
                 "herramientas_disponibles": {
                     "correccion_individual": "POST /api/v1/validadores/corregir-cliente/{id}",
                     "correccion_masiva": "POST /api/v1/validadores/corregir-masivo",
-                    "validacion_tiempo_real": "POST /api/v1/validadores/validar-campo"
-                }
+                    "validacion_tiempo_real": "POST /api/v1/validadores/validar-campo",
+                },
             }
 
         except Exception as e:
             logger.error(f"Error detectando datos incorrectos: {e}")
             return {"error": str(e)}
+
 
 class AutoFormateador:
     """
@@ -1268,7 +1362,9 @@ class AutoFormateador:
     """
 
     @staticmethod
-    def formatear_mientras_escribe(campo: str, valor: str, pais: str = "VENEZUELA") -> Dict[str, Any]:
+    def formatear_mientras_escribe(
+        campo: str, valor: str, pais: str = "VENEZUELA"
+    ) -> Dict[str, Any]:
         """
         ✨ Formatear valor mientras el usuario escribe (para frontend)
         """
@@ -1283,7 +1379,7 @@ class AutoFormateador:
                 return {
                     "valor_formateado": valor,
                     "cursor_posicion": len(valor),
-                    "valido": True
+                    "valido": True,
                 }
 
         except Exception as e:
@@ -1291,37 +1387,53 @@ class AutoFormateador:
                 "valor_formateado": valor,
                 "cursor_posicion": len(valor),
                 "valido": False,
-                "error": str(e)
+                "error": str(e),
             }
 
     @staticmethod
     def _formatear_telefono_tiempo_real(valor: str, pais: str) -> Dict[str, Any]:
         """Formatear teléfono mientras se escribe"""
         # Limpiar solo números
-        numeros = re.sub(r'[^\d]', '', valor)
+        numeros = re.sub(r"[^\d]", "", valor)
 
         if pais.upper() == "VENEZUELA":
             if len(numeros) == 0:
                 return {"valor_formateado": "", "cursor_posicion": 0, "valido": False}
             elif len(numeros) <= 3:
-                return {"valor_formateado": f"+58 {numeros}", "cursor_posicion": len(f"+58 {numeros}"), "valido": False}
+                return {
+                    "valor_formateado": f"+58 {numeros}",
+                    "cursor_posicion": len(f"+58 {numeros}"),
+                    "valido": False,
+                }
             elif len(numeros) <= 10:
                 formatted = f"+58 {numeros[:3]} {numeros[3:]}"
-                return {"valor_formateado": formatted, "cursor_posicion": len(formatted), "valido": len(numeros) == 10}
+                return {
+                    "valor_formateado": formatted,
+                    "cursor_posicion": len(formatted),
+                    "valido": len(numeros) == 10,
+                }
             else:
                 # Truncar si es muy largo
                 numeros = numeros[:10]
                 formatted = f"+58 {numeros[:3]} {numeros[3:]}"
-                return {"valor_formateado": formatted, "cursor_posicion": len(formatted), "valido": True}
+                return {
+                    "valor_formateado": formatted,
+                    "cursor_posicion": len(formatted),
+                    "valido": True,
+                }
 
-        return {"valor_formateado": valor, "cursor_posicion": len(valor), "valido": False}
+        return {
+            "valor_formateado": valor,
+            "cursor_posicion": len(valor),
+            "valido": False,
+        }
 
     @staticmethod
     def _formatear_cedula_tiempo_real(valor: str, pais: str) -> Dict[str, Any]:
         """Formatear cédula mientras se escribe con validación estricta"""
         if pais.upper() == "VENEZUELA":
             # Limpiar entrada: solo V, E, J y números
-            limpio = re.sub(r'[^VEJ\d]', '', valor.upper())
+            limpio = re.sub(r"[^VEJ\d]", "", valor.upper())
 
             # Auto-agregar V si empieza con número
             if limpio and limpio[0].isdigit():
@@ -1335,9 +1447,11 @@ class AutoFormateador:
             elif len(limpio) >= 2:
                 prefijo = limpio[0]
                 numero = limpio[1:]
-                valido = (prefijo in ["V", "E", "J"] and 
-                         numero.isdigit() and 
-                         7 <= len(numero) <= 10)
+                valido = (
+                    prefijo in ["V", "E", "J"]
+                    and numero.isdigit()
+                    and 7 <= len(numero) <= 10
+                )
             else:
                 valido = False
 
@@ -1348,33 +1462,37 @@ class AutoFormateador:
                 "requisitos": {
                     "prefijo": "V, E o J",
                     "longitud": "7-10 dígitos",
-                    "sin_caracteres_especiales": True
-                }
+                    "sin_caracteres_especiales": True,
+                },
             }
 
-        return {"valor_formateado": valor, "cursor_posicion": len(valor), "valido": False}
+        return {
+            "valor_formateado": valor,
+            "cursor_posicion": len(valor),
+            "valido": False,
+        }
 
     @staticmethod
     def _formatear_monto_tiempo_real(valor: str) -> Dict[str, Any]:
         """Formatear monto mientras se escribe"""
         # Limpiar entrada
-        numeros = re.sub(r'[^\d.]', '', valor)
+        numeros = re.sub(r"[^\d.]", "", valor)
 
         # Validar formato decimal
-        partes = numeros.split('.')
+        partes = numeros.split(".")
         if len(partes) > 2:
             # Más de un punto decimal
-            numeros = partes[0] + '.' + ''.join(partes[1:])[:2]
+            numeros = partes[0] + "." + "".join(partes[1:])[:2]
         elif len(partes) == 2 and len(partes[1]) > 2:
             # Más de 2 decimales
-            numeros = partes[0] + '.' + partes[1][:2]
+            numeros = partes[0] + "." + partes[1][:2]
 
         try:
             if numeros and numeros != ".":
                 monto = float(numeros)
                 # Formatear con comas para miles
-                if '.' in numeros:
-                    entero, decimal = numeros.split('.')
+                if "." in numeros:
+                    entero, decimal = numeros.split(".")
                     entero_formateado = f"{int(entero):,}" if entero else "0"
                     formateado = f"${entero_formateado}.{decimal}"
                 else:
@@ -1383,17 +1501,23 @@ class AutoFormateador:
                 return {
                     "valor_formateado": formateado,
                     "cursor_posicion": len(formateado),
-                    "valido": monto > 0
+                    "valido": monto > 0,
                 }
             else:
                 return {"valor_formateado": "$", "cursor_posicion": 1, "valido": False}
 
         except ValueError:
-            return {"valor_formateado": valor, "cursor_posicion": len(valor), "valido": False}
+            return {
+                "valor_formateado": valor,
+                "cursor_posicion": len(valor),
+                "valido": False,
+            }
+
 
 # ============================================
 # VALIDADORES ADICIONALES CRÍTICOS
 # ============================================
+
 
 class ValidadorEdad:
     """
@@ -1429,7 +1553,7 @@ class ValidadorEdad:
                     return {
                         "valido": False,
                         "error": "Formato de fecha inválido. Use DD/MM/YYYY",
-                        "edad": None
+                        "edad": None,
                     }
             elif isinstance(fecha_nacimiento, date):
                 fecha = fecha_nacimiento
@@ -1437,12 +1561,16 @@ class ValidadorEdad:
                 return {
                     "valido": False,
                     "error": "Tipo de dato inválido para fecha",
-                    "edad": None
+                    "edad": None,
                 }
 
             # Calcular edad
             hoy = date.today()
-            edad = hoy.year - fecha.year - ((hoy.month, hoy.day) < (fecha.month, fecha.day))
+            edad = (
+                hoy.year
+                - fecha.year
+                - ((hoy.month, hoy.day) < (fecha.month, fecha.day))
+            )
 
             # Validar que no sea fecha futura
             if fecha > hoy:
@@ -1450,7 +1578,7 @@ class ValidadorEdad:
                     "valido": False,
                     "error": "La fecha de nacimiento no puede ser futura",
                     "edad": None,
-                    "fecha_nacimiento": fecha.isoformat()
+                    "fecha_nacimiento": fecha.isoformat(),
                 }
 
             # Validar edad mínima
@@ -1460,7 +1588,7 @@ class ValidadorEdad:
                     "error": f"El cliente debe ser mayor de {ValidadorEdad.EDAD_MINIMA} años (edad actual: {edad} años)",
                     "edad": edad,
                     "edad_minima": ValidadorEdad.EDAD_MINIMA,
-                    "fecha_nacimiento": fecha.isoformat()
+                    "fecha_nacimiento": fecha.isoformat(),
                 }
 
             # Validar edad máxima
@@ -1470,7 +1598,7 @@ class ValidadorEdad:
                     "error": f"La edad máxima permitida es {ValidadorEdad.EDAD_MAXIMA} años (edad actual: {edad} años)",
                     "edad": edad,
                     "edad_maxima": ValidadorEdad.EDAD_MAXIMA,
-                    "fecha_nacimiento": fecha.isoformat()
+                    "fecha_nacimiento": fecha.isoformat(),
                 }
 
             # Todo correcto
@@ -1478,7 +1606,7 @@ class ValidadorEdad:
                 "valido": True,
                 "edad": edad,
                 "fecha_nacimiento": fecha.isoformat(),
-                "mensaje": f"Cliente tiene {edad} años (edad válida para contrato)"
+                "mensaje": f"Cliente tiene {edad} años (edad válida para contrato)",
             }
 
         except Exception as e:
@@ -1486,8 +1614,9 @@ class ValidadorEdad:
             return {
                 "valido": False,
                 "error": f"Error al validar edad: {str(e)}",
-                "edad": None
+                "edad": None,
             }
+
 
 class ValidadorCoherenciaFinanciera:
     """
@@ -1503,7 +1632,7 @@ class ValidadorCoherenciaFinanciera:
         total_financiamiento: Decimal,
         cuota_inicial: Decimal,
         numero_amortizaciones: int,
-        modalidad_pago: str = "MENSUAL"
+        modalidad_pago: str = "MENSUAL",
     ) -> Dict[str, Any]:
         """
         Validar coherencia entre datos financieros
@@ -1526,17 +1655,31 @@ class ValidadorCoherenciaFinanciera:
 
             # 1. Cuota inicial no puede ser mayor al total
             if cuota_inicial > total_financiamiento:
-                errores.append("La cuota inicial no puede ser mayor al total del financiamiento")
+                errores.append(
+                    "La cuota inicial no puede ser mayor al total del financiamiento"
+                )
 
             # 2. Validar cuota inicial mínima (10%)
-            cuota_minima = total_financiamiento * Decimal(ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE) / Decimal("100")
+            cuota_minima = (
+                total_financiamiento
+                * Decimal(ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE)
+                / Decimal("100")
+            )
             if cuota_inicial < cuota_minima:
-                errores.append(f"La cuota inicial debe ser al menos el {ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE}% del total (mínimo: ${cuota_minima:.2f})")
+                errores.append(
+                    f"La cuota inicial debe ser al menos el {ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MINIMA_PORCENTAJE}% del total (mínimo: ${cuota_minima:.2f})"
+                )
 
             # 3. Advertencia si cuota inicial es muy alta
-            cuota_maxima_recomendada = total_financiamiento * Decimal(ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MAXIMA_PORCENTAJE) / Decimal("100")
+            cuota_maxima_recomendada = (
+                total_financiamiento
+                * Decimal(ValidadorCoherenciaFinanciera.CUOTA_INICIAL_MAXIMA_PORCENTAJE)
+                / Decimal("100")
+            )
             if cuota_inicial > cuota_maxima_recomendada:
-                advertencias.append(f"La cuota inicial es muy alta ({(cuota_inicial/total_financiamiento*100):.1f}% del total)")
+                advertencias.append(
+                    f"La cuota inicial es muy alta ({(cuota_inicial/total_financiamiento*100):.1f}% del total)"
+                )
 
             # 4. Monto financiado debe ser positivo
             monto_financiado = total_financiamiento - cuota_inicial
@@ -1544,16 +1687,30 @@ class ValidadorCoherenciaFinanciera:
                 errores.append("El monto a financiar debe ser mayor a cero")
 
             # 5. Validar número de amortizaciones coherente con modalidad
-            if modalidad_pago == "SEMANAL" and numero_amortizaciones > 208:  # 4 años máximo
-                advertencias.append("Número de amortizaciones muy alto para modalidad semanal")
-            elif modalidad_pago == "QUINCENAL" and numero_amortizaciones > 96:  # 4 años máximo
-                advertencias.append("Número de amortizaciones muy alto para modalidad quincenal")
-            elif modalidad_pago == "MENSUAL" and numero_amortizaciones > 84:  # 7 años máximo
-                advertencias.append("Número de amortizaciones muy alto para modalidad mensual")
+            if (
+                modalidad_pago == "SEMANAL" and numero_amortizaciones > 208
+            ):  # 4 años máximo
+                advertencias.append(
+                    "Número de amortizaciones muy alto para modalidad semanal"
+                )
+            elif (
+                modalidad_pago == "QUINCENAL" and numero_amortizaciones > 96
+            ):  # 4 años máximo
+                advertencias.append(
+                    "Número de amortizaciones muy alto para modalidad quincenal"
+                )
+            elif (
+                modalidad_pago == "MENSUAL" and numero_amortizaciones > 84
+            ):  # 7 años máximo
+                advertencias.append(
+                    "Número de amortizaciones muy alto para modalidad mensual"
+                )
 
             # Calcular cuota aproximada
             if monto_financiado > 0 and numero_amortizaciones > 0:
-                cuota_aproximada = monto_financiado / Decimal(str(numero_amortizaciones))
+                cuota_aproximada = monto_financiado / Decimal(
+                    str(numero_amortizaciones)
+                )
             else:
                 cuota_aproximada = Decimal("0")
 
@@ -1567,9 +1724,13 @@ class ValidadorCoherenciaFinanciera:
                         "total_financiamiento": float(total_financiamiento),
                         "cuota_inicial": float(cuota_inicial),
                         "monto_financiado": float(monto_financiado),
-                        "porcentaje_cuota_inicial": float((cuota_inicial / total_financiamiento * 100)) if total_financiamiento > 0 else 0,
-                        "cuota_aproximada": float(cuota_aproximada)
-                    }
+                        "porcentaje_cuota_inicial": (
+                            float((cuota_inicial / total_financiamiento * 100))
+                            if total_financiamiento > 0
+                            else 0
+                        ),
+                        "cuota_aproximada": float(cuota_aproximada),
+                    },
                 }
             else:
                 return {
@@ -1580,17 +1741,19 @@ class ValidadorCoherenciaFinanciera:
                         "total_financiamiento": float(total_financiamiento),
                         "cuota_inicial": float(cuota_inicial),
                         "monto_financiado": float(monto_financiado),
-                        "porcentaje_cuota_inicial": float((cuota_inicial / total_financiamiento * 100)) if total_financiamiento > 0 else 0,
-                        "cuota_aproximada": float(cuota_aproximada)
-                    }
+                        "porcentaje_cuota_inicial": (
+                            float((cuota_inicial / total_financiamiento * 100))
+                            if total_financiamiento > 0
+                            else 0
+                        ),
+                        "cuota_aproximada": float(cuota_aproximada),
+                    },
                 }
 
         except Exception as e:
             logger.error(f"Error validando coherencia financiera: {e}")
-            return {
-                "valido": False,
-                "error": f"Error al validar coherencia: {str(e)}"
-            }
+            return {"valido": False, "error": f"Error al validar coherencia: {str(e)}"}
+
 
 class ValidadorDuplicados:
     """
@@ -1599,7 +1762,9 @@ class ValidadorDuplicados:
     """
 
     @staticmethod
-    def validar_chasis_unico(chasis: str, db_session, cliente_id: Optional[int] = None) -> Dict[str, Any]:
+    def validar_chasis_unico(
+        chasis: str, db_session, cliente_id: Optional[int] = None
+    ) -> Dict[str, Any]:
         """
         Validar que el número de chasis sea único en la BD
 
@@ -1609,12 +1774,11 @@ class ValidadorDuplicados:
             cliente_id: ID del cliente (para excluir en updates)
         """
         try:
-            
 
             if not chasis or not chasis.strip():
                 return {
                     "valido": True,  # Chasis es opcional
-                    "mensaje": "Chasis no proporcionado (opcional)"
+                    "mensaje": "Chasis no proporcionado (opcional)",
                 }
 
             # Limpiar y normalizar
@@ -1637,35 +1801,33 @@ class ValidadorDuplicados:
                     "cliente_existente": {
                         "id": existe.id,
                         "nombre": existe.nombre_completo,
-                        "cedula": existe.cedula
-                    }
+                        "cedula": existe.cedula,
+                    },
                 }
 
             return {
                 "valido": True,
                 "chasis": chasis_limpio,
-                "mensaje": "Número de chasis único"
+                "mensaje": "Número de chasis único",
             }
 
         except Exception as e:
             logger.error(f"Error validando chasis: {e}")
-            return {
-                "valido": False,
-                "error": f"Error al validar chasis: {str(e)}"
-            }
+            return {"valido": False, "error": f"Error al validar chasis: {str(e)}"}
 
     @staticmethod
-    def validar_email_unico(email: str, db_session, cliente_id: Optional[int] = None) -> Dict[str, Any]:
+    def validar_email_unico(
+        email: str, db_session, cliente_id: Optional[int] = None
+    ) -> Dict[str, Any]:
         """
         Validar que el email sea único (opcional, puede haber clientes sin email)
         """
         try:
-            
 
             if not email or not email.strip():
                 return {
                     "valido": True,  # Email es opcional
-                    "mensaje": "Email no proporcionado (opcional)"
+                    "mensaje": "Email no proporcionado (opcional)",
                 }
 
             # Normalizar
@@ -1688,19 +1850,12 @@ class ValidadorDuplicados:
                     "cliente_existente": {
                         "id": existe.id,
                         "nombre": existe.nombre_completo,
-                        "cedula": existe.cedula
-                    }
+                        "cedula": existe.cedula,
+                    },
                 }
 
-            return {
-                "valido": True,
-                "email": email_limpio,
-                "mensaje": "Email único"
-            }
+            return {"valido": True, "email": email_limpio, "mensaje": "Email único"}
 
         except Exception as e:
             logger.error(f"Error validando email: {e}")
-            return {
-                "valido": False,
-                "error": f"Error al validar email: {str(e)}"
-            }
+            return {"valido": False, "error": f"Error al validar email: {str(e)}"}

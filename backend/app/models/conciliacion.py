@@ -3,20 +3,23 @@
 Modelo de Conciliación Bancaria
 Registra la conciliación entre pagos del sistema y movimientos bancarios
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
+from datetime import datetime
 from decimal import Decimal
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Numeric, Text
-from sqlalchemy.orm import Session, relationship
+
+from sqlalchemy import (Column, DateTime, ForeignKey, Integer, Numeric, String,
+                        Text)
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.db.session import Base
+
 
 class Conciliacion(Base):
     """
     Modelo de Conciliación Bancaria
     Relaciona pagos del sistema con movimientos bancarios
     """
+
     __tablename__ = "conciliacion"
 
     # Identificación
@@ -24,10 +27,7 @@ class Conciliacion(Base):
 
     # Relación con pago
     pago_id = Column(
-        Integer,
-        ForeignKey("pagos.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
+        Integer, ForeignKey("pagos.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
     # Información bancaria
@@ -37,10 +37,7 @@ class Conciliacion(Base):
 
     # Estado del match
     estado_match = Column(
-        String(20),
-        nullable=False,
-        default="PENDIENTE",
-        index=True
+        String(20), nullable=False, default="PENDIENTE", index=True
     )  # PENDIENTE, CONCILIADO, RECHAZADO, MANUAL
 
     # Usuario que realizó la conciliación
@@ -48,7 +45,7 @@ class Conciliacion(Base):
         Integer,
         ForeignKey("usuarios.id", ondelete="SET NULL"),
         nullable=True,
-        index=True
+        index=True,
     )
 
     # Información adicional

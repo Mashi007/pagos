@@ -1,8 +1,9 @@
 # backend/app/core/config.py
-from typing import Optional, List
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
 from functools import lru_cache
+from typing import List, Optional
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Constantes de configuración
 DEFAULT_TOKEN_EXPIRE_MINUTES = 30
@@ -32,6 +33,7 @@ DEFAULT_UVICORN_WORKERS = 1
 DEFAULT_UVICORN_TIMEOUT_KEEP_ALIVE = 120
 DEFAULT_UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN = 30
 
+
 class Settings(BaseSettings):
     """Configuración centralizada de la aplicación"""
 
@@ -58,7 +60,7 @@ class Settings(BaseSettings):
         "https://rapicredit.onrender.com",  # ✅ Frontend en Render
         "https://pagos-f2qf.onrender.com",  # ✅ Backend en Render (para referencias)
         "null",  # ✅ Para requests sin origin (scripts, herramientas)
-        "*"  # ✅ Temporalmente permisivo para debugging
+        "*",  # ✅ Temporalmente permisivo para debugging
     ]
 
     # ============================================
@@ -85,7 +87,9 @@ class Settings(BaseSettings):
     # USUARIO ADMINISTRADOR INICIAL
     # ============================================
     ADMIN_EMAIL: str = "itmaster@rapicreditca.com"
-    ADMIN_PASSWORD: str = Field(default="R@pi_2025**", env="ADMIN_PASSWORD")  # ✅ Variable de entorno
+    ADMIN_PASSWORD: str = Field(
+        default="R@pi_2025**", env="ADMIN_PASSWORD"
+    )  # ✅ Variable de entorno
 
     # ============================================
     # VALIDACIÓN DE CONFIGURACIÓN
@@ -95,7 +99,9 @@ class Settings(BaseSettings):
         if not self.ADMIN_EMAIL or not self.ADMIN_PASSWORD:
             return False
         if self.ADMIN_PASSWORD == "R@pi_2025**" and self.ENVIRONMENT == "production":
-            raise ValueError("⚠️ CRÍTICO: Contraseña por defecto detectada en producción. Configure ADMIN_PASSWORD")
+            raise ValueError(
+                "⚠️ CRÍTICO: Contraseña por defecto detectada en producción. Configure ADMIN_PASSWORD"
+            )
         return True
 
     def validate_cors_origins(self) -> bool:
@@ -169,7 +175,14 @@ class Settings(BaseSettings):
     # FILE UPLOADS
     # ============================================
     MAX_UPLOAD_SIZE: int = DEFAULT_MAX_UPLOAD_SIZE  # 10 MB
-    ALLOWED_UPLOAD_EXTENSIONS: List[str] = [".pdf", ".jpg", ".jpeg", ".png", ".xlsx", ".xls"]
+    ALLOWED_UPLOAD_EXTENSIONS: List[str] = [
+        ".pdf",
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".xlsx",
+        ".xls",
+    ]
     UPLOAD_DIR: str = "/tmp/uploads"
 
     # ============================================
@@ -282,13 +295,17 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
-        extra="allow"  # Permite variables extra del .env
+        extra="allow",  # Permite variables extra del .env
     )
 
+
 lru_cache()
+
+
 def get_settings() -> Settings:
     """Obtiene configuración singleton (cache)"""
     return Settings()
+
 
 # Instancia global
 settings = get_settings()

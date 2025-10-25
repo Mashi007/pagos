@@ -4,15 +4,18 @@ Schemas de usuario simplificado.
 Solo 2 roles: ADMIN (acceso completo) y USER (acceso limitado)
 Compatible con Pydantic v2.
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from pydantic import BaseModel, Field, ConfigDict, EmailStr
+from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
 
 # ============================================
 # SCHEMAS BASE
 # ============================================
 class UserBase(BaseModel):
     """Schema base de usuario (campos comunes)."""
+
     email: EmailStr
     nombre: str = Field(..., min_length=1, max_length=100)
     apellido: str = Field(..., min_length=1, max_length=100)
@@ -20,12 +23,16 @@ class UserBase(BaseModel):
     is_admin: bool = Field(default=False)  # Cambio clave: rol → is_admin
     is_active: bool = Field(default=True)
 
+
 class UserCreate(UserBase):
     """Schema para crear usuario."""
+
     password: str = Field(..., min_length=8)
+
 
 class UserUpdate(BaseModel):
     """Schema para actualizar usuario."""
+
     email: Optional[EmailStr] = None
     nombre: Optional[str] = Field(None, min_length=1, max_length=100)
     apellido: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -34,11 +41,13 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     password: Optional[str] = Field(None, min_length=8)
 
+
 # ============================================
 # SCHEMAS DE RESPUESTA
 # ============================================
 class UserResponse(UserBase):
     """Schema de respuesta de usuario."""
+
     id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -51,30 +60,38 @@ class UserResponse(UserBase):
         """Nombre completo del usuario."""
         return f"{self.nombre} {self.apellido}"
 
+
 class UserListResponse(BaseModel):
     """Schema para lista de usuarios."""
+
     items: list[UserResponse]
     total: int
     page: int
     page_size: int
+
 
 # ============================================
 # SCHEMAS DE AUTENTICACIÓN
 # ============================================
 class LoginRequest(BaseModel):
     """Schema para login."""
+
     email: EmailStr
     password: str
     remember_me: bool = Field(default=False)
 
+
 class LoginResponse(BaseModel):
     """Schema de respuesta de login."""
+
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
 
+
 class TokenPayload(BaseModel):
     """Schema del payload del token JWT."""
+
     sub: str  # email del usuario
     is_admin: bool  # Cambio clave: rol → is_admin
     exp: int

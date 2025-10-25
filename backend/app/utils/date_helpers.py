@@ -3,10 +3,12 @@
 Utilidades para manejo de fechas
 Cálculos de vencimientos, períodos, días hábiles, etc.
 """
-from datetime import date, datetime, timedelta
-from typing import Optional, List
-from dateutil.relativedelta import relativedelta
 import calendar
+from datetime import date, timedelta
+from typing import List, Optional
+
+from dateutil.relativedelta import relativedelta
+
 
 def add_months(start_date: date, months: int) -> date:
     """
@@ -21,6 +23,7 @@ def add_months(start_date: date, months: int) -> date:
     """
     return start_date + relativedelta(months=months)
 
+
 def add_weeks(start_date: date, weeks: int) -> date:
     """
     Suma semanas a una fecha
@@ -34,10 +37,9 @@ def add_weeks(start_date: date, weeks: int) -> date:
     """
     return start_date + timedelta(weeks=weeks)
 
+
 def calculate_payment_dates(
-    start_date: date,
-    num_payments: int,
-    frequency: str = "MENSUAL"
+    start_date: date, num_payments: int, frequency: str = "MENSUAL"
 ) -> List[date]:
     """
     Calcula las fechas de vencimiento de pagos
@@ -72,6 +74,7 @@ def calculate_payment_dates(
 
     return payment_dates
 
+
 def days_between(date1: date, date2: date) -> int:
     """
     Calcula los días entre dos fechas
@@ -84,6 +87,7 @@ def days_between(date1: date, date2: date) -> int:
         int: Número de días (puede ser negativo si date2 < date1)
     """
     return (date2 - date1).days
+
 
 def is_overdue(due_date: date, reference_date: Optional[date] = None) -> bool:
     """
@@ -100,6 +104,7 @@ def is_overdue(due_date: date, reference_date: Optional[date] = None) -> bool:
         reference_date = date.today()
 
     return reference_date > due_date
+
 
 def days_overdue(due_date: date, reference_date: Optional[date] = None) -> int:
     """
@@ -118,6 +123,7 @@ def days_overdue(due_date: date, reference_date: Optional[date] = None) -> int:
     days = days_between(due_date, reference_date)
     return max(0, days)
 
+
 def get_last_day_of_month(year: int, month: int) -> date:
     """
     Obtiene el último día del mes
@@ -132,6 +138,7 @@ def get_last_day_of_month(year: int, month: int) -> date:
     last_day = calendar.monthrange(year, month)[1]
     return date(year, month, last_day)
 
+
 def get_first_day_of_month(year: int, month: int) -> date:
     """
     Obtiene el primer día del mes
@@ -144,6 +151,7 @@ def get_first_day_of_month(year: int, month: int) -> date:
         date: Primer día del mes
     """
     return date(year, month, 1)
+
 
 def get_month_range(reference_date: Optional[date] = None) -> tuple[date, date]:
     """
@@ -162,6 +170,7 @@ def get_month_range(reference_date: Optional[date] = None) -> tuple[date, date]:
     last_day = get_last_day_of_month(reference_date.year, reference_date.month)
 
     return first_day, last_day
+
 
 def get_quarter_range(reference_date: Optional[date] = None) -> tuple[date, date]:
     """
@@ -185,6 +194,7 @@ def get_quarter_range(reference_date: Optional[date] = None) -> tuple[date, date
 
     return first_day, last_day
 
+
 def get_year_range(year: Optional[int] = None) -> tuple[date, date]:
     """
     Obtiene el rango de fechas del año
@@ -202,6 +212,7 @@ def get_year_range(year: Optional[int] = None) -> tuple[date, date]:
     last_day = date(year, 12, 31)
 
     return first_day, last_day
+
 
 def is_business_day(check_date: date, holidays: Optional[List[date]] = None) -> bool:
     """
@@ -224,10 +235,8 @@ def is_business_day(check_date: date, holidays: Optional[List[date]] = None) -> 
 
     return True
 
-def next_business_day(
-    start_date: date, 
-    holidays: Optional[List[date]] = None
-) -> date:
+
+def next_business_day(start_date: date, holidays: Optional[List[date]] = None) -> date:
     """
     Obtiene el siguiente día hábil
 
@@ -245,10 +254,9 @@ def next_business_day(
 
     return next_day
 
+
 def calculate_interest_days(
-    start_date: date,
-    end_date: date,
-    day_count_convention: str = "30/360"
+    start_date: date, end_date: date, day_count_convention: str = "30/360"
 ) -> int:
     """
     Calcula días para cálculo de intereses según convención
@@ -266,9 +274,11 @@ def calculate_interest_days(
         d1 = min(start_date.day, 30)
         d2 = min(end_date.day, 30)
 
-        days = (end_date.year - start_date.year) * 360 + \
-               (end_date.month - start_date.month) * 30 + \
-               (d2 - d1)
+        days = (
+            (end_date.year - start_date.year) * 360
+            + (end_date.month - start_date.month) * 30
+            + (d2 - d1)
+        )
 
         return days
 
@@ -284,6 +294,7 @@ def calculate_interest_days(
         # Por defecto, días reales
         return (end_date - start_date).days
 
+
 def format_date_es(date_obj: date) -> str:
     """
     Formatea fecha en español
@@ -295,12 +306,22 @@ def format_date_es(date_obj: date) -> str:
         str: Fecha formateada (ej: "15 de enero de 2024")
     """
     months_es = {
-        1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
-        5: "mayo", 6: "junio", 7: "julio", 8: "agosto",
-        9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"
+        1: "enero",
+        2: "febrero",
+        3: "marzo",
+        4: "abril",
+        5: "mayo",
+        6: "junio",
+        7: "julio",
+        8: "agosto",
+        9: "septiembre",
+        10: "octubre",
+        11: "noviembre",
+        12: "diciembre",
     }
 
     return f"{date_obj.day} de {months_es[date_obj.month]} de {date_obj.year}"
+
 
 def get_age_in_days(birth_date: date, reference_date: Optional[date] = None) -> int:
     """
@@ -318,9 +339,9 @@ def get_age_in_days(birth_date: date, reference_date: Optional[date] = None) -> 
 
     return (reference_date - birth_date).days
 
+
 def get_notification_dates(
-    due_date: date,
-    days_before: List[int] = [3, 1, 0]
+    due_date: date, days_before: List[int] = [3, 1, 0]
 ) -> List[tuple[date, str]]:
     """
     Calcula fechas para envío de notificaciones
@@ -348,10 +369,9 @@ def get_notification_dates(
 
     return notification_dates
 
+
 def calculate_days_in_period(
-    start_date: date,
-    end_date: date,
-    frequency: str = "MENSUAL"
+    start_date: date, end_date: date, frequency: str = "MENSUAL"
 ) -> int:
     """
     Calcula el número esperado de días en un período según frecuencia

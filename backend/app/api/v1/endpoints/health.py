@@ -5,14 +5,16 @@ Implementa monitoreo de salud del sistema con métricas de impacto
 """
 
 import logging
-import time
 import os
+import time
+from datetime import datetime
+from typing import Any, Dict
+
 import psutil
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import text
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
+from sqlalchemy.orm import Session
+
 from app.api.deps import get_db
 from app.core.config import settings
 from app.db.base import Base
@@ -28,12 +30,12 @@ DISK_THRESHOLD_PERCENT = 90
 
 TABLES_TO_DROP = [
     "pagos",
-    "prestamos", 
+    "prestamos",
     "notificaciones",
     "aprobaciones",
     "auditorias",
     "clientes",
-    "users"
+    "users",
 ]
 
 router = APIRouter()
@@ -46,8 +48,9 @@ _last_db_check: Dict[str, Any] = {
     "cache_duration": CACHE_DURATION_SECONDS,
     "response_time_ms": 0,
     "cpu_usage": 0,
-    "memory_usage": 0
+    "memory_usage": 0,
 }
+
 
 def get_system_metrics() -> Dict[str, Any]:
     """
@@ -56,7 +59,7 @@ def get_system_metrics() -> Dict[str, Any]:
     try:
         cpu_percent = psutil.cpu_percent(interval=0.1)
         memory = psutil.virtual_memory()
-        disk = psutil.disk_usage('/')
+        disk = psutil.disk_usage("/")
 
         return {
             "cpu_percent": cpu_percent,
@@ -65,7 +68,7 @@ def get_system_metrics() -> Dict[str, Any]:
             "disk_percent": disk.percent,
             "disk_free_gb": disk.free // (1024 * 1024 * 1024),
             "process_count": len(psutil.pids()),
-            "load_average": os.getloadavg() if hasattr(os, 'getloadavg') else [0, 0, 0]
+            "load_average": os.getloadavg() if hasattr(os, "getloadavg") else [0, 0, 0],
         }
     except Exception as e:
         logger.warning(f"Error obteniendo métricas del sistema: {e}")
@@ -76,8 +79,9 @@ def get_system_metrics() -> Dict[str, Any]:
             "disk_percent": 0,
             "disk_free_gb": 0,
             "process_count": 0,
-            "load_average": [0, 0, 0]
+            "load_average": [0, 0, 0],
         }
+
 
 def check_database_cached() -> Dict[str, Any]:
     """
@@ -88,50 +92,64 @@ def check_database_cached() -> Dict[str, Any]:
     now = datetime.utcnow()
 
     # Si no hay cache o expiró, hacer check real
-    if (_last_db_check["timestamp"] is None or 
-        (now - _last_db_check["timestamp"]).total_seconds() > _last_db_check["cache_duration"]):
+    if (
+        _last_db_check["timestamp"] is None
+        or (now - _last_db_check["timestamp"]).total_seconds()
+        > _last_db_check["cache_duration"]
+    ):
 
         try:
             from app.db.init_db import check_database_connection
+
             db_status = check_database_connection()
 
             response_time = (time.time() - start_time) * 1000  # Convertir a ms
             system_metrics = get_system_metrics()
 
-            _last_db_check.update({
-                "timestamp": now,
-                "status": db_status,
-                "response_time_ms": response_time,
-                "cpu_usage": system_metrics["cpu_percent"],
-                "memory_usage": system_metrics["memory_percent"],
-                "system_metrics": system_metrics
-            })
+            _last_db_check.update(
+                {
+                    "timestamp": now,
+                    "status": db_status,
+                    "response_time_ms": response_time,
+                    "cpu_usage": system_metrics["cpu_percent"],
+                    "memory_usage": system_metrics["memory_percent"],
+                    "system_metrics": system_metrics,
+                }
+            )
 
-            logger.info(f"DB Check realizado: {db_status}, Response time: {response_time:.2f}ms")
+            logger.info(
+                f"DB Check realizado: {db_status}, Response time: {response_time:.2f}ms"
+            )
         except Exception as e:
             response_time = (time.time() - start_time) * 1000
-            logger.error(f"Error en DB check: {e}, Response time: {response_time:.2f}ms")
-            _last_db_check.update({
-                "timestamp": now,
-                "status": False,
-                "response_time_ms": response_time,
-                "cpu_usage": 0,
-                "memory_usage": 0
-            })
+            logger.error(
+                f"Error en DB check: {e}, Response time: {response_time:.2f}ms"
+            )
+            _last_db_check.update(
+                {
+                    "timestamp": now,
+                    "status": False,
+                    "response_time_ms": response_time,
+                    "cpu_usage": 0,
+                    "memory_usage": 0,
+                }
+            )
 
     return _last_db_check
+
 
 @router.get("/cors-debug")
 async def cors_debug():
     """Endpoint para debuggear CORS"""
-    
+
     return {
         "cors_origins": settings.CORS_ORIGINS,
         "cors_origins_type": str(type(settings.CORS_ORIGINS)),
         "cors_origins_list": list(settings.CORS_ORIGINS),
         "environment": settings.ENVIRONMENT,
-        "message": "CORS Debug Info"
+        "message": "CORS Debug Info",
     }
+
 
 @router.get("/health/render")
 @router.head("/health/render")
@@ -148,8 +166,9 @@ async def render_health_check():
         "status": "ok",
         "service": "pagos-backend",
         "timestamp": datetime.utcnow().isoformat(),
-        "render_optimized": True
+        "render_optimized": True,
     }
+
 
 @router.get("/health/detailed", status_code=status.HTTP_200_OK)
 async def detailed_health_check(response: Response):
@@ -179,37 +198,46 @@ async def detailed_health_check(response: Response):
                 "response_time_ms": total_response_time,
                 "cpu_usage_percent": system_metrics["cpu_percent"],
                 "memory_usage_percent": system_metrics["memory_percent"],
-                "impact_level": "LOW" if total_response_time < MAX_RESPONSE_TIME_MS else "MEDIUM"
+                "impact_level": (
+                    "LOW" if total_response_time < MAX_RESPONSE_TIME_MS else "MEDIUM"
+                ),
             },
             "system_status": {
                 "cpu_healthy": system_metrics["cpu_percent"] < CPU_THRESHOLD_PERCENT,
-                "memory_healthy": system_metrics["memory_percent"] < MEMORY_THRESHOLD_PERCENT,
-                "disk_healthy": system_metrics["disk_percent"] < DISK_THRESHOLD_PERCENT
+                "memory_healthy": system_metrics["memory_percent"]
+                < MEMORY_THRESHOLD_PERCENT,
+                "disk_healthy": system_metrics["disk_percent"] < DISK_THRESHOLD_PERCENT,
             },
-            "alerts": []
+            "alerts": [],
         }
 
         # Generar alertas si hay umbrales excedidos
         if system_metrics["cpu_percent"] > CPU_THRESHOLD_PERCENT:
-            impact_analysis["alerts"].append({
-                "type": "CPU_HIGH",
-                "message": f"CPU usage {system_metrics['cpu_percent']:.1f}% exceeds threshold {CPU_THRESHOLD_PERCENT}%",
-                "severity": "WARNING"
-            })
+            impact_analysis["alerts"].append(
+                {
+                    "type": "CPU_HIGH",
+                    "message": f"CPU usage {system_metrics['cpu_percent']:.1f}% exceeds threshold {CPU_THRESHOLD_PERCENT}%",
+                    "severity": "WARNING",
+                }
+            )
 
         if system_metrics["memory_percent"] > MEMORY_THRESHOLD_PERCENT:
-            impact_analysis["alerts"].append({
-                "type": "MEMORY_HIGH",
-                "message": f"Memory usage {system_metrics['memory_percent']:.1f}% exceeds threshold {MEMORY_THRESHOLD_PERCENT}%",
-                "severity": "WARNING"
-            })
+            impact_analysis["alerts"].append(
+                {
+                    "type": "MEMORY_HIGH",
+                    "message": f"Memory usage {system_metrics['memory_percent']:.1f}% exceeds threshold {MEMORY_THRESHOLD_PERCENT}%",
+                    "severity": "WARNING",
+                }
+            )
 
         if system_metrics["disk_percent"] > DISK_THRESHOLD_PERCENT:
-            impact_analysis["alerts"].append({
-                "type": "DISK_HIGH",
-                "message": f"Disk usage {system_metrics['disk_percent']:.1f}% exceeds threshold {DISK_THRESHOLD_PERCENT}%",
-                "severity": "CRITICAL"
-            })
+            impact_analysis["alerts"].append(
+                {
+                    "type": "DISK_HIGH",
+                    "message": f"Disk usage {system_metrics['disk_percent']:.1f}% exceeds threshold {DISK_THRESHOLD_PERCENT}%",
+                    "severity": "CRITICAL",
+                }
+            )
 
         # Determinar estado general
         overall_status = "healthy"
@@ -225,12 +253,12 @@ async def detailed_health_check(response: Response):
             "database": {
                 "status": "connected" if db_check["status"] else "disconnected",
                 "response_time_ms": db_check.get("response_time_ms", 0),
-                "last_check": db_check.get("timestamp", datetime.utcnow()).isoformat()
+                "last_check": db_check.get("timestamp", datetime.utcnow()).isoformat(),
             },
             "system_metrics": system_metrics,
             "impact_analysis": impact_analysis,
             "environment": settings.ENVIRONMENT,
-            "version": settings.APP_VERSION
+            "version": settings.APP_VERSION,
         }
 
     except Exception as e:
@@ -241,8 +269,9 @@ async def detailed_health_check(response: Response):
             "service": "pagos-backend",
             "timestamp": datetime.utcnow().isoformat(),
             "error": str(e),
-            "response_time_ms": (time.time() - start_time) * 1000
+            "response_time_ms": (time.time() - start_time) * 1000,
         }
+
 
 @router.get("/health/full", status_code=status.HTTP_200_OK)
 async def health_check_full(response: Response):
@@ -266,7 +295,7 @@ async def health_check_full(response: Response):
             "version": settings.APP_VERSION,
             "environment": settings.ENVIRONMENT,
             "database": "disconnected",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
         }
 
     return {
@@ -275,9 +304,14 @@ async def health_check_full(response: Response):
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
         "database": "connected",
-        "database_last_check": _last_db_check["timestamp"].isoformat() if _last_db_check["timestamp"] else None,
-        "timestamp": datetime.utcnow().isoformat()
+        "database_last_check": (
+            _last_db_check["timestamp"].isoformat()
+            if _last_db_check["timestamp"]
+            else None
+        ),
+        "timestamp": datetime.utcnow().isoformat(),
     }
+
 
 @router.get("/health/ready")
 async def readiness_check(db: Session = Depends(get_db)):
@@ -301,15 +335,16 @@ async def readiness_check(db: Session = Depends(get_db)):
         return Response(
             content='{"status": "not_ready"}',
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            media_type="application/json"
+            media_type="application/json",
         )
 
     return {
         "status": "ready",
         "app": settings.APP_NAME,
         "database": "connected",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
+
 
 @router.get("/health/live")
 async def liveness_check():
@@ -320,10 +355,8 @@ async def liveness_check():
     - No hace checks externos
     - Usar para Kubernetes liveness probes
     """
-    return {
-        "status": "alive",
-        "timestamp": datetime.utcnow().isoformat()
-    }
+    return {"status": "alive", "timestamp": datetime.utcnow().isoformat()}
+
 
 @router.post("/test/init-db")
 async def initialize_database(db: Session = Depends(get_db)):
@@ -351,13 +384,6 @@ async def initialize_database(db: Session = Depends(get_db)):
         logger.info("🔄 Recreando tablas...")
 
         # Importar modelos
-        
-        
-        
-        
-        
-        
-        
 
         # Crear tablas
         Base.metadata.create_all(bind=engine)
@@ -371,13 +397,10 @@ async def initialize_database(db: Session = Depends(get_db)):
             "status": "success",
             "message": "✅ Base de datos recreada exitosamente",
             "tables_dropped": len(tables_to_drop),
-            "tables_created": len(Base.metadata.tables)
+            "tables_created": len(Base.metadata.tables),
         }
 
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Error: {str(e)}")
-        return {
-            "status": "error",
-            "message": f"❌ Error: {str(e)}"
-        }
+        return {"status": "error", "message": f"❌ Error: {str(e)}"}

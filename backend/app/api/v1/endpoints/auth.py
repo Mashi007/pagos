@@ -4,36 +4,31 @@ Endpoints de autenticación - VERSIÓN SIMPLIFICADA SIN AUDITORÍA
 Solución temporal para resolver error 503
 """
 import logging
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Request, Response
+from fastapi import (APIRouter, Depends, HTTPException, Request, Response,
+                     status)
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_user, get_db
 from app.core.config import settings
-from app.core.security import verify_password, get_password_hash, create_refresh_token, create_access_token
-from app.schemas.auth import (
-    LoginRequest,
-    Token,
-    LoginResponse,
-    RefreshTokenRequest,
-    ChangePasswordRequest
-)
+from app.core.security import (create_access_token, create_refresh_token,
+                               get_password_hash, verify_password)
+from app.models.user import User
+from app.schemas.auth import (ChangePasswordRequest, LoginRequest,
+                              LoginResponse, RefreshTokenRequest, Token)
 from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
-from app.api.deps import get_db, get_current_user
-from app.models.user import User
 from app.utils.validators import validate_password_strength
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
 def add_cors_headers(request: Request, response: Response) -> None:
     """
     Helper function para agregar headers CORS de forma consistente
     """
-    
 
     origin = request.headers.get("origin")
     logger.info(f"CORS Debug - Origin recibido: {origin}")
@@ -56,15 +51,18 @@ def add_cors_headers(request: Request, response: Response) -> None:
             logger.info(f"CORS Debug - Usando fallback: {settings.CORS_ORIGINS[0]}")
 
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+    response.headers["Access-Control-Allow-Headers"] = (
+        "Content-Type, Authorization, X-Requested-With"
+    )
     response.headers["Access-Control-Allow-Credentials"] = "true"
+
 
 @router.post("/login", response_model=LoginResponse)
 async def login(
     request: Request,
     response: Response,
     login_data: LoginRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     🔐 Login de usuario - VERSIÓN SIMPLIFICADA
@@ -87,16 +85,13 @@ async def login(
             logger.warning(f"Login fallido para: {login_data.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Credenciales inválidas"
+                detail="Credenciales inválidas",
             )
 
         # Generar tokens
         access_token = create_access_token(
             subject=user.id,
-            additional_claims={
-                "is_admin": user.is_admin,
-                "email": user.email
-            }
+            additional_claims={"is_admin": user.is_admin, "email": user.email},
         )
 
         # Generar refresh token nuevo
@@ -111,7 +106,7 @@ async def login(
             access_token=access_token,
             refresh_token=refresh_token,
             token_type="bearer",
-            user=user_dict
+            user=user_dict,
         )
 
     except HTTPException:
@@ -120,14 +115,13 @@ async def login(
         logger.error(f"Error en login: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error interno del servidor"
+            detail="Error interno del servidor",
         )
+
 
 @router.get("/me", response_model=UserMeResponse)
 async def get_current_user_info(
-    request: Request,
-    response: Response,
-    current_user: User = Depends(get_current_user)
+    request: Request, response: Response, current_user: User = Depends(get_current_user)
 ):
     """
     👤 Obtener información del usuario actual
@@ -142,14 +136,13 @@ async def get_current_user_info(
         logger.error(f"Error obteniendo usuario actual: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error interno del servidor"
+            detail="Error interno del servidor",
         )
+
 
 @router.post("/logout")
 async def logout(
-    request: Request,
-    response: Response,
-    current_user: User = Depends(get_current_user)
+    request: Request, response: Response, current_user: User = Depends(get_current_user)
 ):
     """
     🚪 Logout de usuario
@@ -166,15 +159,16 @@ async def logout(
         logger.error(f"Error en logout: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error interno del servidor"
+            detail="Error interno del servidor",
         )
+
 
 @router.post("/refresh", response_model=Token)
 async def refresh_token(
     request: Request,
     response: Response,
     refresh_data: RefreshTokenRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     🔄 Refrescar token de acceso
@@ -185,7 +179,9 @@ async def refresh_token(
 
         # Validar token de refresh usando el método correcto
         try:
-            token_data = AuthService.refresh_access_token(db, refresh_data.refresh_token)
+            token_data = AuthService.refresh_access_token(
+                db, refresh_data.refresh_token
+            )
             return token_data
         except HTTPException as e:
             raise e
@@ -196,8 +192,9 @@ async def refresh_token(
         logger.error(f"Error refrescando token: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error interno del servidor"
+            detail="Error interno del servidor",
         )
+
 
 @router.post("/change-password")
 async def change_password(
@@ -205,7 +202,7 @@ async def change_password(
     response: Response,
     password_data: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     🔑 Cambiar contraseña
@@ -215,19 +212,18 @@ async def change_password(
         add_cors_headers(request, response)
 
         # Verificar contraseña actual
-        if not verify_password(password_data.current_password, current_user.hashed_password):
+        if not verify_password(
+            password_data.current_password, current_user.hashed_password
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Contraseña actual incorrecta"
+                detail="Contraseña actual incorrecta",
             )
 
         # Validar fortaleza de nueva contraseña
         is_valid, message = validate_password_strength(password_data.new_password)
         if not is_valid:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=message
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
         # Actualizar contraseña
         new_hashed_password = get_password_hash(password_data.new_password)
@@ -245,8 +241,9 @@ async def change_password(
         logger.error(f"Error cambiando contraseña: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error interno del servidor"
+            detail="Error interno del servidor",
         )
+
 
 @router.options("/{path:path}")
 async def options_handler(request: Request, response: Response, path: str):

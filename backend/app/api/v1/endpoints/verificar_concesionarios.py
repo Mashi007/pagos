@@ -3,77 +3,97 @@ Endpoint temporal para verificar datos de concesionarios
 """
 
 import logging
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_user
+from app.api.deps import get_current_user, get_db
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
 @router.get("/verificar-concesionarios")
 def verificar_datos_concesionarios(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """
     🔍 Verificar los datos reales de concesionarios en la base de datos
     """
     try:
-        logger.info(f"🔍 Verificando datos de concesionarios - Usuario: {current_user.email}")
+        logger.info(
+            f"🔍 Verificando datos de concesionarios - Usuario: {current_user.email}"
+        )
 
         # 1. Contar total de concesionarios
         total_result = db.execute(text("SELECT COUNT(*) as total FROM concesionarios"))
         total = total_result.fetchone()[0]
 
         # 2. Verificar estructura de la tabla
-        columns_result = db.execute(text("""
-            SELECT column_name, data_type, is_nullable 
-            FROM information_schema.columns 
+        columns_result = db.execute(
+            text(
+                """
+            SELECT column_name, data_type, is_nullable
+            FROM information_schema.columns
             WHERE table_name = 'concesionarios'
             ORDER BY ordinal_position
-        """))
+        """
+            )
+        )
         columns = columns_result.fetchall()
 
         # 3. Mostrar algunos registros de ejemplo
-        registros_result = db.execute(text("""
-            SELECT id, nombre, activo, created_at, updated_at 
-            FROM concesionarios 
-            ORDER BY id 
+        registros_result = db.execute(
+            text(
+                """
+            SELECT id, nombre, activo, created_at, updated_at
+            FROM concesionarios
+            ORDER BY id
             LIMIT 10
-        """))
+        """
+            )
+        )
         registros = registros_result.fetchall()
 
         # 4. Verificar si hay datos genéricos vs reales
-        stats_result = db.execute(text("""
-            SELECT 
+        stats_result = db.execute(
+            text(
+                """
+            SELECT
                 COUNT(*) as total,
                 COUNT(CASE WHEN nombre LIKE 'Concesionario #%' THEN 1 END) as genericos,
                 COUNT(CASE WHEN nombre NOT LIKE 'Concesionario #%' THEN 1 END) as reales
             FROM concesionarios
-        """))
+        """
+            )
+        )
         stats = stats_result.fetchone()
 
         # 5. Mostrar algunos nombres reales si existen
-        nombres_reales_result = db.execute(text("""
-            SELECT nombre 
-            FROM concesionarios 
+        nombres_reales_result = db.execute(
+            text(
+                """
+            SELECT nombre
+            FROM concesionarios
             WHERE nombre NOT LIKE 'Concesionario #%'
             LIMIT 5
-        """))
+        """
+            )
+        )
         nombres_reales = nombres_reales_result.fetchall()
 
         # 6. Verificar concesionarios activos
-        activos_result = db.execute(text("""
-            SELECT COUNT(*) as activos 
-            FROM concesionarios 
+        activos_result = db.execute(
+            text(
+                """
+            SELECT COUNT(*) as activos
+            FROM concesionarios
             WHERE activo = true
-        """))
+        """
+            )
+        )
         activos = activos_result.fetchone()[0]
 
         # Preparar respuesta
@@ -83,11 +103,8 @@ def verificar_datos_concesionarios(
             "analisis": {
                 "total_concesionarios": total,
                 "estructura_tabla": [
-                    {
-                        "columna": col[0],
-                        "tipo": col[1],
-                        "nullable": col[2] == "YES"
-                    } for col in columns
+                    {"columna": col[0], "tipo": col[1], "nullable": col[2] == "YES"}
+                    for col in columns
                 ],
                 "registros_ejemplo": [
                     {
@@ -95,23 +112,30 @@ def verificar_datos_concesionarios(
                         "nombre": reg[1],
                         "activo": reg[2],
                         "created_at": reg[3].isoformat() if reg[3] else None,
-                        "updated_at": reg[4].isoformat() if reg[4] else None
-                    } for reg in registros
+                        "updated_at": reg[4].isoformat() if reg[4] else None,
+                    }
+                    for reg in registros
                 ],
                 "estadisticas": {
                     "total": stats[0],
                     "genericos": stats[1],
                     "reales": stats[2],
-                    "porcentaje_reales": round((stats[2] / stats[0]) * 100, 2) if stats[0] > 0 else 0
+                    "porcentaje_reales": (
+                        round((stats[2] / stats[0]) * 100, 2) if stats[0] > 0 else 0
+                    ),
                 },
                 "nombres_reales": [nombre[0] for nombre in nombres_reales],
-                "concesionarios_activos": activos
+                "concesionarios_activos": activos,
             },
             "conclusion": {
                 "tiene_datos_reales": stats[2] > 0,
-                "problema_identificado": "Datos genéricos" if stats[1] > stats[2] else "Datos reales",
-                "recomendacion": "Migrar datos reales" if stats[1] > stats[2] else "Datos correctos"
-            }
+                "problema_identificado": (
+                    "Datos genéricos" if stats[1] > stats[2] else "Datos reales"
+                ),
+                "recomendacion": (
+                    "Migrar datos reales" if stats[1] > stats[2] else "Datos correctos"
+                ),
+            },
         }
 
         logger.info(f"✅ Verificación completada - Total: {total}, Reales: {stats[2]}")
@@ -121,5 +145,5 @@ def verificar_datos_concesionarios(
         logger.error(f"❌ Error verificando concesionarios: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error verificando datos de concesionarios: {str(e)}"
+            detail=f"Error verificando datos de concesionarios: {str(e)}",
         )

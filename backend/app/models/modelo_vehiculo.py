@@ -2,12 +2,12 @@
 """
 Modelo SQLAlchemy para modelos de vehículos configurables
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
-from sqlalchemy.orm import Session, relationship
+
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.sql import func
+
 from app.db.session import Base
+
 
 class ModeloVehiculo(Base):
     __tablename__ = "modelos_vehiculos"
@@ -18,7 +18,9 @@ class ModeloVehiculo(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     def __repr__(self):
         return f"<ModeloVehiculo(id={self.id}, modelo='{self.modelo}', activo={self.activo})>"
@@ -29,5 +31,5 @@ class ModeloVehiculo(Base):
             "modelo": self.modelo,
             "activo": self.activo,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

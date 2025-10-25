@@ -1,11 +1,9 @@
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+
+from sqlalchemy import (Boolean, Column, DateTime, Integer, String)
 from sqlalchemy.sql import func
+
 from app.db.session import Base
+
 
 class Concesionario(Base):
     __tablename__ = "concesionarios"
@@ -16,7 +14,9 @@ class Concesionario(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
     fecha_eliminacion = Column(DateTime(timezone=True), nullable=True)
 
     def __repr__(self):
@@ -29,5 +29,7 @@ class Concesionario(Base):
             "activo": self.activo,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "fecha_eliminacion": self.fecha_eliminacion.isoformat() if self.fecha_eliminacion else None
+            "fecha_eliminacion": (
+                self.fecha_eliminacion.isoformat() if self.fecha_eliminacion else None
+            ),
         }

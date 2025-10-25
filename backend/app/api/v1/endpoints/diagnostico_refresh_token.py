@@ -3,25 +3,25 @@ Endpoint de diagnóstico específico para problemas de refresh token
 """
 
 import logging
+from datetime import datetime
+
 import jwt
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from jwt import PyJWTError
-from app.api.deps import get_db, get_current_user
-from app.models.user import User
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_user, get_db
 from app.core.config import settings
-from app.core.security import create_access_token, create_refresh_token, decode_token
+from app.core.security import (create_access_token, create_refresh_token,
+                               decode_token)
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
 @router.post("/diagnosticar-refresh-token")
-async def diagnosticar_refresh_token(
-    request: Request,
-    db: Session = Depends(get_db)
-):
+async def diagnosticar_refresh_token(request: Request, db: Session = Depends(get_db)):
     """
     🔍 Diagnóstico específico para problemas de refresh token
     """
@@ -37,7 +37,7 @@ async def diagnosticar_refresh_token(
                 "timestamp": datetime.now().isoformat(),
                 "status": "error",
                 "error": "No refresh token provided",
-                "recomendacion": "Verificar que el frontend esté enviando el refresh_token correctamente"
+                "recomendacion": "Verificar que el frontend esté enviando el refresh_token correctamente",
             }
 
         logger.info(f"🔍 Refresh token recibido: {refresh_token[:20]}...")
@@ -45,7 +45,9 @@ async def diagnosticar_refresh_token(
         # 1. Verificar formato del token
         try:
             # Decodificar sin verificar para obtener información básica
-            payload_unverified = jwt.decode(refresh_token, options={"verify_signature": False})
+            payload_unverified = jwt.decode(
+                refresh_token, options={"verify_signature": False}
+            )
 
             token_info = {
                 "formato_valido": True,
@@ -53,7 +55,7 @@ async def diagnosticar_refresh_token(
                 "user_id": payload_unverified.get("sub"),
                 "token_type": payload_unverified.get("type"),
                 "exp": payload_unverified.get("exp"),
-                "iat": payload_unverified.get("iat")
+                "iat": payload_unverified.get("iat"),
             }
 
             # Verificar si está expirado
@@ -64,14 +66,16 @@ async def diagnosticar_refresh_token(
 
                 token_info["expired"] = now > exp_datetime
                 token_info["expires_at"] = exp_datetime.isoformat()
-                token_info["time_until_expiry"] = str(exp_datetime - now) if not token_info["expired"] else "EXPIRED"
+                token_info["time_until_expiry"] = (
+                    str(exp_datetime - now) if not token_info["expired"] else "EXPIRED"
+                )
 
         except Exception as e:
             return {
                 "timestamp": datetime.now().isoformat(),
                 "status": "error",
                 "error": f"Token format invalid: {str(e)}",
-                "recomendacion": "El refresh token tiene un formato inválido"
+                "recomendacion": "El refresh token tiene un formato inválido",
             }
 
         # 2. Verificar con decode_token (con verificación)
@@ -89,7 +93,7 @@ async def diagnosticar_refresh_token(
                     "status": "error",
                     "error": "Refresh token expired",
                     "token_info": token_info,
-                    "recomendacion": "El refresh token ha expirado. El usuario debe hacer login nuevamente."
+                    "recomendacion": "El refresh token ha expirado. El usuario debe hacer login nuevamente.",
                 }
             else:
                 return {
@@ -97,7 +101,7 @@ async def diagnosticar_refresh_token(
                     "status": "error",
                     "error": f"Token verification failed: {str(e)}",
                     "token_info": token_info,
-                    "recomendacion": "El refresh token es inválido o corrupto."
+                    "recomendacion": "El refresh token es inválido o corrupto.",
                 }
 
         # 3. Verificar tipo de token
@@ -107,7 +111,7 @@ async def diagnosticar_refresh_token(
                 "status": "error",
                 "error": "Token type is not 'refresh'",
                 "token_info": token_info,
-                "recomendacion": "El token enviado no es un refresh token válido."
+                "recomendacion": "El token enviado no es un refresh token válido.",
             }
 
         # 4. Verificar usuario en BD
@@ -118,7 +122,7 @@ async def diagnosticar_refresh_token(
                 "status": "error",
                 "error": "No user ID in token",
                 "token_info": token_info,
-                "recomendacion": "El refresh token no contiene un user_id válido."
+                "recomendacion": "El refresh token no contiene un user_id válido.",
             }
 
         user = db.query(User).filter(User.id == int(user_id)).first()
@@ -128,7 +132,7 @@ async def diagnosticar_refresh_token(
                 "status": "error",
                 "error": "User not found",
                 "token_info": token_info,
-                "recomendacion": f"Usuario con ID {user_id} no existe en la base de datos."
+                "recomendacion": f"Usuario con ID {user_id} no existe en la base de datos.",
             }
 
         if not user.is_active:
@@ -140,19 +144,16 @@ async def diagnosticar_refresh_token(
                 "user_info": {
                     "email": user.email,
                     "active": user.is_active,
-                    "admin": user.is_admin
+                    "admin": user.is_admin,
                 },
-                "recomendacion": "El usuario está inactivo. Contactar administrador."
+                "recomendacion": "El usuario está inactivo. Contactar administrador.",
             }
 
         # 5. Intentar generar nuevos tokens
         try:
             new_access_token = create_access_token(
                 subject=user.id,
-                additional_claims={
-                    "is_admin": user.is_admin,
-                    "email": user.email
-                }
+                additional_claims={"is_admin": user.is_admin, "email": user.email},
             )
 
             new_refresh_token = create_refresh_token(subject=user.id)
@@ -168,13 +169,13 @@ async def diagnosticar_refresh_token(
                 "user_info": {
                     "email": user.email,
                     "active": user.is_active,
-                    "admin": user.is_admin
+                    "admin": user.is_admin,
                 },
                 "nuevos_tokens": {
                     "access_token": new_access_token,
-                    "refresh_token": new_refresh_token
+                    "refresh_token": new_refresh_token,
                 },
-                "recomendacion": "El refresh token es válido. El problema puede estar en el frontend."
+                "recomendacion": "El refresh token es válido. El problema puede estar en el frontend.",
             }
 
         except Exception as e:
@@ -183,7 +184,7 @@ async def diagnosticar_refresh_token(
                 "status": "error",
                 "error": f"Error generating new tokens: {str(e)}",
                 "token_info": token_info,
-                "recomendacion": "Error interno al generar nuevos tokens."
+                "recomendacion": "Error interno al generar nuevos tokens.",
             }
 
     except Exception as e:
@@ -192,26 +193,28 @@ async def diagnosticar_refresh_token(
             "timestamp": datetime.now().isoformat(),
             "status": "error",
             "error": f"Error interno: {str(e)}",
-            "recomendacion": "Error interno del servidor."
+            "recomendacion": "Error interno del servidor.",
         }
+
 
 @router.get("/estado-refresh-tokens")
 async def estado_refresh_tokens(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """
     📊 Estado general de los refresh tokens en el sistema
     """
     try:
-        logger.info(f"📊 Verificando estado de refresh tokens - Usuario: {current_user.email}")
+        logger.info(
+            f"📊 Verificando estado de refresh tokens - Usuario: {current_user.email}"
+        )
 
         # Información del usuario actual
         user_info = {
             "id": current_user.id,
             "email": current_user.email,
             "active": current_user.is_active,
-            "admin": current_user.is_admin
+            "admin": current_user.is_admin,
         }
 
         # Generar tokens de prueba para el usuario actual
@@ -219,8 +222,8 @@ async def estado_refresh_tokens(
             subject=current_user.id,
             additional_claims={
                 "is_admin": current_user.is_admin,
-                "email": current_user.email
-            }
+                "email": current_user.email,
+            },
         )
 
         test_refresh_token = create_refresh_token(subject=current_user.id)
@@ -230,20 +233,22 @@ async def estado_refresh_tokens(
             "usuario": user_info,
             "tokens_generados": {
                 "access_token": test_access_token,
-                "refresh_token": test_refresh_token
+                "refresh_token": test_refresh_token,
             },
             "configuracion": {
-                "jwt_secret_key": "CONFIGURED" if settings.SECRET_KEY else "NOT_CONFIGURED",
+                "jwt_secret_key": (
+                    "CONFIGURED" if settings.SECRET_KEY else "NOT_CONFIGURED"
+                ),
                 "jwt_algorithm": "HS256",
                 "access_token_expire_minutes": 30,
-                "refresh_token_expire_days": 7
+                "refresh_token_expire_days": 7,
             },
-            "recomendacion": "Tokens generados correctamente. Verificar configuración del frontend."
+            "recomendacion": "Tokens generados correctamente. Verificar configuración del frontend.",
         }
 
     except Exception as e:
         logger.error(f"❌ Error verificando estado de refresh tokens: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error verificando estado de refresh tokens: {str(e)}"
+            detail=f"Error verificando estado de refresh tokens: {str(e)}",
         )

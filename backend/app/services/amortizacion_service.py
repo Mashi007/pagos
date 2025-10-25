@@ -3,29 +3,25 @@
 Servicio de Amortización
 Lógica de negocio para generación y gestión de tablas de amortización
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from decimal import Decimal, ROUND_HALF_UP
-from sqlalchemy.orm import Session
+from datetime import date
+from decimal import ROUND_HALF_UP, Decimal
+from typing import List, Optional
+
 from sqlalchemy import and_
-import logging
+from sqlalchemy.orm import Session
 
-from app.models.amortizacion import Cuota, pago_cuotas
-
-from app.schemas.amortizacion import (
-    TablaAmortizacionRequest,
-    CuotaDetalle,
-    TablaAmortizacionResponse
-)
-
+from app.models.amortizacion import Cuota
+from app.schemas.amortizacion import (CuotaDetalle, TablaAmortizacionRequest,
+                                      TablaAmortizacionResponse)
 from app.utils.date_helpers import calculate_payment_dates
+
 
 class AmortizacionService:
     """Servicio para gestión de amortización"""
 
     @staticmethod
     def generar_tabla_amortizacion(
-        request: TablaAmortizacionRequest
+        request: TablaAmortizacionRequest,
     ) -> TablaAmortizacionResponse:
         """
         Genera tabla de amortización según sistema especificado
@@ -43,10 +39,14 @@ class AmortizacionService:
         elif request.sistema_amortizacion == "AMERICANO":
             return AmortizacionService._generar_americano(request)
         else:
-            raise ValueError(f"Sistema de amortización no soportado: {request.sistema_amortizacion}")
+            raise ValueError(
+                f"Sistema de amortización no soportado: {request.sistema_amortizacion}"
+            )
 
     @staticmethod
-    def _generar_frances(request: TablaAmortizacionRequest) -> TablaAmortizacionResponse:
+    def _generar_frances(
+        request: TablaAmortizacionRequest,
+    ) -> TablaAmortizacionResponse:
         """
         Sistema Francés: Cuota fija
         Fórmula: C = P * [i(1+i)^n] / [(1+i)^n - 1]
@@ -71,20 +71,19 @@ class AmortizacionService:
 
         # Calcular cuota fija (si tasa > 0)
         if tasa_periodo > 0:
-            factor = (tasa_periodo * (1 + tasa_periodo) ** n_cuotas) / \
-                    ((1 + tasa_periodo) ** n_cuotas - 1)
+            factor = (tasa_periodo * (1 + tasa_periodo) ** n_cuotas) / (
+                (1 + tasa_periodo) ** n_cuotas - 1
+            )
             cuota_fija = monto * factor
         else:
             # Sin interés, solo dividir el monto
             cuota_fija = monto / Decimal(n_cuotas)
 
-        cuota_fija = cuota_fija.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        cuota_fija = cuota_fija.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         # Generar fechas de vencimiento
         fechas = calculate_payment_dates(
-            request.fecha_primer_vencimiento,
-            n_cuotas,
-            request.modalidad
+            request.fecha_primer_vencimiento, n_cuotas, request.modalidad
         )
 
         # Generar cuotas
@@ -95,7 +94,9 @@ class AmortizacionService:
 
         for i in range(n_cuotas):
             # Calcular interés del período
-            interes = (saldo * tasa_periodo).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            interes = (saldo * tasa_periodo).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
 
             # Calcular capital (cuota - interés)
             capital = cuota_fija - interes
@@ -115,7 +116,7 @@ class AmortizacionService:
                 capital=capital,
                 interes=interes,
                 cuota=cuota_fija,
-                saldo_final=nuevo_saldo
+                saldo_final=nuevo_saldo,
             )
 
             cuotas.append(cuota)
@@ -131,7 +132,7 @@ class AmortizacionService:
             "total_interes": total_interes,
             "total_pagar": total_capital + total_interes,
             "cuota_promedio": cuota_fija,
-            "tasa_efectiva": tasa_periodo * Decimal("100")
+            "tasa_efectiva": tasa_periodo * Decimal("100"),
         }
 
         # Preparar parámetros
@@ -140,13 +141,11 @@ class AmortizacionService:
             "tasa_interes_anual": request.tasa_interes_anual,
             "numero_cuotas": n_cuotas,
             "modalidad": request.modalidad,
-            "sistema": "FRANCES"
+            "sistema": "FRANCES",
         }
 
         return TablaAmortizacionResponse(
-            cuotas=cuotas,
-            resumen=resumen,
-            parametros=parametros
+            cuotas=cuotas, resumen=resumen, parametros=parametros
         )
 
     @staticmethod
@@ -167,13 +166,13 @@ class AmortizacionService:
             tasa_periodo = tasa_anual / Decimal("12")
 
         # Capital fijo por cuota
-        capital_fijo = (monto / Decimal(n_cuotas)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        capital_fijo = (monto / Decimal(n_cuotas)).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
 
         # Generar fechas
         fechas = calculate_payment_dates(
-            request.fecha_primer_vencimiento,
-            n_cuotas,
-            request.modalidad
+            request.fecha_primer_vencimiento, n_cuotas, request.modalidad
         )
 
         # Generar cuotas
@@ -184,7 +183,9 @@ class AmortizacionService:
 
         for i in range(n_cuotas):
             # Interés sobre saldo
-            interes = (saldo * tasa_periodo).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            interes = (saldo * tasa_periodo).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
 
             # Capital fijo (ajuste en última cuota)
             if i == n_cuotas - 1:
@@ -205,7 +206,7 @@ class AmortizacionService:
                 capital=capital,
                 interes=interes,
                 cuota=cuota_total,
-                saldo_final=nuevo_saldo
+                saldo_final=nuevo_saldo,
             )
 
             cuotas.append(cuota)
@@ -220,7 +221,7 @@ class AmortizacionService:
             "total_pagar": total_capital + total_interes,
             "capital_por_cuota": capital_fijo,
             "primera_cuota": cuotas[0].cuota,
-            "ultima_cuota": cuotas[-1].cuota
+            "ultima_cuota": cuotas[-1].cuota,
         }
 
         parametros = {
@@ -228,17 +229,17 @@ class AmortizacionService:
             "tasa_interes_anual": request.tasa_interes_anual,
             "numero_cuotas": n_cuotas,
             "modalidad": request.modalidad,
-            "sistema": "ALEMAN"
+            "sistema": "ALEMAN",
         }
 
         return TablaAmortizacionResponse(
-            cuotas=cuotas,
-            resumen=resumen,
-            parametros=parametros
+            cuotas=cuotas, resumen=resumen, parametros=parametros
         )
 
     @staticmethod
-    def _generar_americano(request: TablaAmortizacionRequest) -> TablaAmortizacionResponse:
+    def _generar_americano(
+        request: TablaAmortizacionRequest,
+    ) -> TablaAmortizacionResponse:
         """
         Sistema Americano: Solo interés en cuotas, capital al final
         """
@@ -250,13 +251,13 @@ class AmortizacionService:
         tasa_periodo = tasa_anual / Decimal("12")
 
         # Interés fijo por período
-        interes_fijo = (monto * tasa_periodo).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        interes_fijo = (monto * tasa_periodo).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
 
         # Generar fechas
         fechas = calculate_payment_dates(
-            request.fecha_primer_vencimiento,
-            n_cuotas,
-            request.modalidad
+            request.fecha_primer_vencimiento, n_cuotas, request.modalidad
         )
 
         # Generar cuotas
@@ -284,7 +285,7 @@ class AmortizacionService:
                 capital=capital,
                 interes=interes,
                 cuota=cuota_total,
-                saldo_final=saldo_final
+                saldo_final=saldo_final,
             )
 
             cuotas.append(cuota)
@@ -295,7 +296,7 @@ class AmortizacionService:
             "total_interes": total_interes,
             "total_pagar": monto + total_interes,
             "cuota_periodica": interes_fijo,
-            "cuota_final": cuotas[-1].cuota
+            "cuota_final": cuotas[-1].cuota,
         }
 
         parametros = {
@@ -303,20 +304,16 @@ class AmortizacionService:
             "tasa_interes_anual": request.tasa_interes_anual,
             "numero_cuotas": n_cuotas,
             "modalidad": request.modalidad,
-            "sistema": "AMERICANO"
+            "sistema": "AMERICANO",
         }
 
         return TablaAmortizacionResponse(
-            cuotas=cuotas,
-            resumen=resumen,
-            parametros=parametros
+            cuotas=cuotas, resumen=resumen, parametros=parametros
         )
 
     @staticmethod
     def crear_cuotas_prestamo(
-        db: Session,
-        prestamo_id: int,
-        tabla: TablaAmortizacionResponse
+        db: Session, prestamo_id: int, tabla: TablaAmortizacionResponse
     ) -> List[Cuota]:
         """
         Crea las cuotas en la BD para un préstamo
@@ -343,7 +340,7 @@ class AmortizacionService:
                 saldo_capital_final=cuota_detalle.saldo_final,
                 capital_pendiente=cuota_detalle.capital,
                 interes_pendiente=cuota_detalle.interes,
-                estado="PENDIENTE"
+                estado="PENDIENTE",
             )
 
             db.add(cuota)
@@ -355,9 +352,7 @@ class AmortizacionService:
 
     @staticmethod
     def obtener_cuotas_prestamo(
-        db: Session,
-        prestamo_id: int,
-        estado: Optional[str] = None
+        db: Session, prestamo_id: int, estado: Optional[str] = None
     ) -> List[Cuota]:
         """Obtiene las cuotas de un préstamo"""
         query = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id)
@@ -372,7 +367,7 @@ class AmortizacionService:
         db: Session,
         prestamo_id: int,
         tasa_mora_diaria: Decimal,
-        fecha_calculo: Optional[date] = None
+        fecha_calculo: Optional[date] = None,
     ) -> dict:
         """
         Recalcula la mora de todas las cuotas vencidas de un préstamo
@@ -390,13 +385,17 @@ class AmortizacionService:
             fecha_calculo = date.today()
 
         # Obtener cuotas vencidas
-        cuotas = db.query(Cuota).filter(
-            and_(
-                Cuota.prestamo_id == prestamo_id,
-                Cuota.estado.in_(["VENCIDA", "PARCIAL"]),
-                Cuota.fecha_vencimiento < fecha_calculo
+        cuotas = (
+            db.query(Cuota)
+            .filter(
+                and_(
+                    Cuota.prestamo_id == prestamo_id,
+                    Cuota.estado.in_(["VENCIDA", "PARCIAL"]),
+                    Cuota.fecha_vencimiento < fecha_calculo,
+                )
             )
-        ).all()
+            .all()
+        )
 
         total_mora_anterior = Decimal("0.00")
         total_mora_nueva = Decimal("0.00")
@@ -422,5 +421,5 @@ class AmortizacionService:
             "cuotas_actualizadas": cuotas_actualizadas,
             "total_mora_anterior": total_mora_anterior,
             "total_mora_nueva": total_mora_nueva,
-            "diferencia": total_mora_nueva - total_mora_anterior
+            "diferencia": total_mora_nueva - total_mora_anterior,
         }

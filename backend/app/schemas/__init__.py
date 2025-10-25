@@ -13,35 +13,7 @@ Schemas organizados por módulo:
 # ============================================
 # SCHEMAS DE CLIENTE
 # ============================================
-from app.schemas.cliente import (
-    ClienteCreate,
-    ClienteUpdate,
-    ClienteResponse,
-)
-
-# ============================================
-# SCHEMAS DE PRÉSTAMO
-# ============================================
-from app.schemas.prestamo import (
-    PrestamoCreate,
-    PrestamoUpdate,
-    PrestamoResponse,
-)
-
-# ============================================
-# SCHEMAS DE PAGO
-# ============================================
-from app.schemas.pago import (
-    PagoCreate,
-    PagoUpdate,
-    PagoResponse,
-    PagoListResponse,
-    ConciliacionCreate,
-    ConciliacionResponse,
-    KPIsPagos,
-    ResumenCliente,
-)
-
+from app.schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
 # ============================================
 # SCHEMAS DE USUARIO Y AUTENTICACIÓN
 # ============================================
@@ -51,42 +23,38 @@ from app.schemas.pago import (
 # ============================================
 # SCHEMAS DE CONCILIACIÓN BANCARIA
 # ============================================
-from app.schemas.conciliacion import (
-    EstadoConciliacion,
-    TipoMatch,
-    MovimientoBancario,
-    MovimientoBancarioResponse,
-    ConciliacionCreate,
-    ConciliacionMatch,
-    ResultadoConciliacion,
-    ConciliacionResponse,
-    ConfirmacionConciliacion,
-    ConfirmacionResponse,
-    ReporteConciliacionMensual,
-    FiltroConciliacion,
-    PagoPendienteConciliacion,
-    ExtractoBancarioUpload,
-    ValidacionExtracto,
-    EstadisticasConciliacion,
-)
-
+from app.schemas.conciliacion import (ConciliacionCreate, ConciliacionMatch,
+                                      ConciliacionResponse,
+                                      ConfirmacionConciliacion,
+                                      ConfirmacionResponse,
+                                      EstadisticasConciliacion,
+                                      EstadoConciliacion,
+                                      ExtractoBancarioUpload,
+                                      FiltroConciliacion, MovimientoBancario,
+                                      MovimientoBancarioResponse,
+                                      PagoPendienteConciliacion,
+                                      ReporteConciliacionMensual,
+                                      ResultadoConciliacion, TipoMatch,
+                                      ValidacionExtracto)
 # ============================================
 # SCHEMAS DE KPIs
 # ============================================
 # ACTUALIZADO: Importaciones corregidas para coincidir con kpis.py
-from app.schemas.kpis import (
-    KPIBase,
-    KPICreate,
-    KPIUpdate,
-    KPIResponse,
-    KPIValorBase,
-    KPIValorCreate,
-    KPIValorUpdate,
-    KPIValorResponse,
-    KPIConValores,
-    KPIEstadisticas,
-    DashboardKPIs,
-)
+from app.schemas.kpis import (DashboardKPIs, KPIBase, KPIConValores, KPICreate,
+                              KPIEstadisticas, KPIResponse, KPIUpdate,
+                              KPIValorBase, KPIValorCreate, KPIValorResponse,
+                              KPIValorUpdate)
+# ============================================
+# SCHEMAS DE PAGO
+# ============================================
+from app.schemas.pago import (ConciliacionCreate, ConciliacionResponse,
+                              KPIsPagos, PagoCreate, PagoListResponse,
+                              PagoResponse, PagoUpdate, ResumenCliente)
+# ============================================
+# SCHEMAS DE PRÉSTAMO
+# ============================================
+from app.schemas.prestamo import (PrestamoCreate, PrestamoResponse,
+                                  PrestamoUpdate)
 
 # ============================================
 # EXPORTS PÚBLICOS
@@ -96,12 +64,10 @@ __all__ = [
     "ClienteCreate",
     "ClienteUpdate",
     "ClienteResponse",
-
     # ========== PRÉSTAMO ==========
     "PrestamoCreate",
     "PrestamoUpdate",
     "PrestamoResponse",
-
     # ========== PAGO ==========
     "PagoCreate",
     "PagoUpdate",
@@ -111,11 +77,9 @@ __all__ = [
     "ConciliacionResponse",
     "KPIsPagos",
     "ResumenCliente",
-
     # ========== USUARIO ==========
     # NOTA: UserRole eliminado - ahora se usa is_admin boolean
     # Los schemas de usuario están disponibles directamente desde app.schemas.user
-
     # ========== CONCILIACIÓN ==========
     "EstadoConciliacion",
     "TipoMatch",
@@ -133,7 +97,6 @@ __all__ = [
     "ExtractoBancarioUpload",
     "ValidacionExtracto",
     "EstadisticasConciliacion",
-
     # ========== KPIs (ACTUALIZADO) ==========
     "KPIBase",
     "KPICreate",
@@ -153,4 +116,6 @@ __all__ = [
 # ============================================
 __version__ = "1.0.0"
 __author__ = "Sistema de Gestión de Préstamos"
-__description__ = "Schemas Pydantic v2 para validación de API - SIMPLIFICADO (sin UserRole)"
+__description__ = (
+    "Schemas Pydantic v2 para validación de API - SIMPLIFICADO (sin UserRole)"
+)

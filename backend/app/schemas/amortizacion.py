@@ -3,23 +3,36 @@
 Schemas de Amortización/Cuotas
 Validación y serialización de datos de cuotas
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from decimal import Decimal, ROUND_HALF_UP
-from pydantic import BaseModel, field_validator, ConfigDict, Field
+from datetime import date, datetime
+from decimal import ROUND_HALF_UP, Decimal
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
 
 class CuotaBase(BaseModel):
     """Schema base para Cuota"""
+
     numero_cuota: int = Field(..., gt=0, description="Número de la cuota")
     fecha_vencimiento: date = Field(..., description="Fecha de vencimiento")
     monto_cuota: Decimal = Field(..., gt=0, description="Monto total de la cuota")
     monto_capital: Decimal = Field(..., ge=0, description="Monto de capital")
     monto_interes: Decimal = Field(..., ge=0, description="Monto de interés")
-    saldo_capital_inicial: Decimal = Field(..., ge=0, description="Saldo inicial de capital")
-    saldo_capital_final: Decimal = Field(..., ge=0, description="Saldo final de capital")
+    saldo_capital_inicial: Decimal = Field(
+        ..., ge=0, description="Saldo inicial de capital"
+    )
+    saldo_capital_final: Decimal = Field(
+        ..., ge=0, description="Saldo final de capital"
+    )
 
-    @field_validator('monto_cuota', 'monto_capital', 'monto_interes', 
-                     'saldo_capital_inicial', 'saldo_capital_final', mode='before')
+    @field_validator(
+        "monto_cuota",
+        "monto_capital",
+        "monto_interes",
+        "saldo_capital_inicial",
+        "saldo_capital_final",
+        mode="before",
+    )
     @classmethod
     def validate_decimal_places(cls, v):
         """Validar y normalizar decimales a 2 posiciones"""
@@ -27,14 +40,18 @@ class CuotaBase(BaseModel):
             return v
         if not isinstance(v, Decimal):
             v = Decimal(str(v))
-        return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
 
 class CuotaCreate(CuotaBase):
     """Schema para crear una cuota"""
+
     prestamo_id: int
+
 
 class CuotaUpdate(BaseModel):
     """Schema para actualizar una cuota"""
+
     fecha_pago: Optional[date] = None
     capital_pagado: Optional[Decimal] = Field(None, ge=0)
     interes_pagado: Optional[Decimal] = Field(None, ge=0)
@@ -42,7 +59,7 @@ class CuotaUpdate(BaseModel):
     estado: Optional[str] = None
     observaciones: Optional[str] = None
 
-    @field_validator('capital_pagado', 'interes_pagado', 'mora_pagada', mode='before')
+    @field_validator("capital_pagado", "interes_pagado", "mora_pagada", mode="before")
     @classmethod
     def validate_decimal_places(cls, v):
         """Validar y normalizar decimales a 2 posiciones"""
@@ -50,10 +67,12 @@ class CuotaUpdate(BaseModel):
             return v
         if not isinstance(v, Decimal):
             v = Decimal(str(v))
-        return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
 
 class CuotaResponse(CuotaBase):
     """Schema para respuesta de cuota"""
+
     id: int
     prestamo_id: int
     fecha_pago: Optional[date] = None
@@ -79,16 +98,24 @@ class CuotaResponse(CuotaBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class TablaAmortizacionRequest(BaseModel):
     """Schema para solicitar generación de tabla de amortización"""
-    monto_financiado: Decimal = Field(..., gt=0, description="Monto a financiar")
-    tasa_interes_anual: Decimal = Field(..., ge=0, le=100, description="Tasa de interés anual (%)")
-    numero_cuotas: int = Field(..., gt=0, le=360, description="Número de cuotas")
-    fecha_primer_vencimiento: date = Field(..., description="Fecha del primer vencimiento")
-    modalidad: str = Field(default="MENSUAL", description="SEMANAL, QUINCENAL, MENSUAL")
-    sistema_amortizacion: str = Field(default="FRANCES", description="FRANCES, ALEMAN, AMERICANO")
 
-    @field_validator('monto_financiado', 'tasa_interes_anual', mode='before')
+    monto_financiado: Decimal = Field(..., gt=0, description="Monto a financiar")
+    tasa_interes_anual: Decimal = Field(
+        ..., ge=0, le=100, description="Tasa de interés anual (%)"
+    )
+    numero_cuotas: int = Field(..., gt=0, le=360, description="Número de cuotas")
+    fecha_primer_vencimiento: date = Field(
+        ..., description="Fecha del primer vencimiento"
+    )
+    modalidad: str = Field(default="MENSUAL", description="SEMANAL, QUINCENAL, MENSUAL")
+    sistema_amortizacion: str = Field(
+        default="FRANCES", description="FRANCES, ALEMAN, AMERICANO"
+    )
+
+    @field_validator("monto_financiado", "tasa_interes_anual", mode="before")
     @classmethod
     def validate_decimal_places(cls, v):
         """Validar y normalizar decimales a 2 posiciones"""
@@ -96,28 +123,38 @@ class TablaAmortizacionRequest(BaseModel):
             return v
         if not isinstance(v, Decimal):
             v = Decimal(str(v))
-        return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-    @field_validator('modalidad')
+    @field_validator("modalidad")
     @classmethod
     def validate_modalidad(cls, v):
         """Validar modalidad"""
-        modalidades_validas = ['SEMANAL', 'QUINCENAL', 'MENSUAL', 'BIMENSUAL', 'TRIMESTRAL']
+        modalidades_validas = [
+            "SEMANAL",
+            "QUINCENAL",
+            "MENSUAL",
+            "BIMENSUAL",
+            "TRIMESTRAL",
+        ]
         if v not in modalidades_validas:
-            raise ValueError(f'Modalidad debe ser una de: {", ".join(modalidades_validas)}')
+            raise ValueError(
+                f'Modalidad debe ser una de: {", ".join(modalidades_validas)}'
+            )
         return v
 
-    @field_validator('sistema_amortizacion')
+    @field_validator("sistema_amortizacion")
     @classmethod
     def validate_sistema(cls, v):
         """Validar sistema de amortización"""
-        sistemas_validos = ['FRANCES', 'ALEMAN', 'AMERICANO']
+        sistemas_validos = ["FRANCES", "ALEMAN", "AMERICANO"]
         if v not in sistemas_validos:
             raise ValueError(f'Sistema debe ser uno de: {", ".join(sistemas_validos)}')
         return v
 
+
 class CuotaDetalle(BaseModel):
     """Detalle de una cuota en la tabla de amortización"""
+
     numero_cuota: int
     fecha_vencimiento: date
     saldo_inicial: Decimal
@@ -126,7 +163,9 @@ class CuotaDetalle(BaseModel):
     cuota: Decimal
     saldo_final: Decimal
 
-    @field_validator('saldo_inicial', 'capital', 'interes', 'cuota', 'saldo_final', mode='before')
+    @field_validator(
+        "saldo_inicial", "capital", "interes", "cuota", "saldo_final", mode="before"
+    )
     @classmethod
     def validate_decimal_places(cls, v):
         """Validar y normalizar decimales a 2 posiciones"""
@@ -134,30 +173,33 @@ class CuotaDetalle(BaseModel):
             return v
         if not isinstance(v, Decimal):
             v = Decimal(str(v))
-        return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
 
 class TablaAmortizacionResponse(BaseModel):
     """Schema para respuesta de tabla de amortización"""
+
     cuotas: List[CuotaDetalle]
     resumen: dict = Field(
         default_factory=dict,
-        description="Resumen con totales: total_capital, total_interes, total_pagar, etc."
+        description="Resumen con totales: total_capital, total_interes, total_pagar, etc.",
     )
     parametros: dict = Field(
-        default_factory=dict,
-        description="Parámetros usados para generar la tabla"
+        default_factory=dict, description="Parámetros usados para generar la tabla"
     )
+
 
 class AplicarPagoRequest(BaseModel):
     """Schema para aplicar un pago a cuotas"""
+
     cuota_ids: List[int] = Field(..., description="IDs de cuotas a aplicar el pago")
     monto_total: Decimal = Field(..., gt=0, description="Monto total del pago")
     orden_aplicacion: str = Field(
         default="SECUENCIAL",
-        description="SECUENCIAL (orden de cuotas) o VENCIDAS_PRIMERO"
+        description="SECUENCIAL (orden de cuotas) o VENCIDAS_PRIMERO",
     )
 
-    @field_validator('monto_total', mode='before')
+    @field_validator("monto_total", mode="before")
     @classmethod
     def validate_decimal_places(cls, v):
         """Validar y normalizar decimales a 2 posiciones"""
@@ -165,24 +207,27 @@ class AplicarPagoRequest(BaseModel):
             return v
         if not isinstance(v, Decimal):
             v = Decimal(str(v))
-        return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
 
 class AplicarPagoResponse(BaseModel):
     """Schema para respuesta de aplicación de pago"""
+
     cuotas_afectadas: List[int]
     detalle_aplicacion: List[dict]
     monto_aplicado: Decimal
     monto_sobrante: Decimal
     mensaje: str
 
+
 class EstadoCuentaResponse(BaseModel):
     """Schema para estado de cuenta de un préstamo"""
+
     prestamo_id: int
     codigo_prestamo: str
     cliente: dict
     resumen: dict = Field(
-        default_factory=dict,
-        description="Resumen financiero del préstamo"
+        default_factory=dict, description="Resumen financiero del préstamo"
     )
     cuotas_pagadas: List[CuotaResponse]
     cuotas_pendientes: List[CuotaResponse]
@@ -192,16 +237,17 @@ class EstadoCuentaResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class ProyeccionPagoRequest(BaseModel):
     """Schema para solicitar proyección de pagos"""
+
     prestamo_id: int
     monto_pago: Decimal = Field(..., gt=0, description="Monto que se planea pagar")
     fecha_proyeccion: Optional[date] = Field(
-        default=None,
-        description="Fecha para la proyección (default: hoy)"
+        default=None, description="Fecha para la proyección (default: hoy)"
     )
 
-    @field_validator('monto_pago', mode='before')
+    @field_validator("monto_pago", mode="before")
     @classmethod
     def validate_decimal_places(cls, v):
         """Validar y normalizar decimales a 2 posiciones"""
@@ -209,10 +255,12 @@ class ProyeccionPagoRequest(BaseModel):
             return v
         if not isinstance(v, Decimal):
             v = Decimal(str(v))
-        return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
 
 class ProyeccionPagoResponse(BaseModel):
     """Schema para respuesta de proyección de pagos"""
+
     cuotas_que_se_pagarian: List[CuotaResponse]
     monto_a_mora: Decimal
     monto_a_interes: Decimal
@@ -222,21 +270,22 @@ class ProyeccionPagoResponse(BaseModel):
     cuotas_restantes: int
     mensaje: str
 
+
 class RecalcularMoraRequest(BaseModel):
     """Schema para solicitar recálculo de mora"""
+
     prestamo_id: int
     tasa_mora_diaria: Optional[Decimal] = Field(
         None,
         ge=0,
         le=10,
-        description="Tasa de mora diaria (%). Si no se especifica, usa la configurada en el sistema"
+        description="Tasa de mora diaria (%). Si no se especifica, usa la configurada en el sistema",
     )
     fecha_calculo: Optional[date] = Field(
-        default=None,
-        description="Fecha para el cálculo (default: hoy)"
+        default=None, description="Fecha para el cálculo (default: hoy)"
     )
 
-    @field_validator('tasa_mora_diaria', mode='before')
+    @field_validator("tasa_mora_diaria", mode="before")
     @classmethod
     def validate_decimal_places(cls, v):
         """Validar y normalizar decimales a 2 posiciones"""
@@ -244,10 +293,12 @@ class RecalcularMoraRequest(BaseModel):
             return v
         if not isinstance(v, Decimal):
             v = Decimal(str(v))
-        return v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
 
 class RecalcularMoraResponse(BaseModel):
     """Schema para respuesta de recálculo de mora"""
+
     prestamo_id: int
     cuotas_actualizadas: int
     total_mora_anterior: Decimal

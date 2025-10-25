@@ -5,18 +5,19 @@ Sistema avanzado de predicción, scoring y recomendaciones para financiamiento a
 """
 
 import logging
-from datetime import datetime, timedelta, date
-from typing import Dict, List, Any
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Any, Dict, List
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+
 from app.models.amortizacion import Cuota
 from app.models.analista import Analista
 from app.models.cliente import Cliente
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.models.user import User
-from sqlalchemy import func, case
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +28,10 @@ logger = logging.getLogger(__name__)
 ML_MODELS_DIR = Path("ml_models")
 ML_MODELS_DIR.mkdir(exist_ok=True)
 
+
 class MLConfig:
     """Configuración del sistema ML"""
+
     SCORING_MODEL_PATH = ML_MODELS_DIR / "scoring_model.pkl"
     MORA_PREDICTION_MODEL_PATH = ML_MODELS_DIR / "mora_prediction_model.pkl"
     RECOMMENDATION_MODEL_PATH = ML_MODELS_DIR / "recommendation_model.pkl"
@@ -39,7 +42,7 @@ class MLConfig:
         "historial_crediticio": 0.25,
         "estabilidad_laboral": 0.20,
         "garantias_adicionales": 0.15,
-        "comportamiento_pago": 0.10
+        "comportamiento_pago": 0.10,
     }
 
     # Umbrales de decisión
@@ -47,12 +50,14 @@ class MLConfig:
         "APROBACION_AUTOMATICA": 800,
         "REVISION_MANUAL": 600,
         "ANALISIS_DETALLADO": 400,
-        "RECHAZO_AUTOMATICO": 0
+        "RECHAZO_AUTOMATICO": 0,
     }
+
 
 # ============================================
 # SISTEMA DE SCORING CREDITICIO
 # ============================================
+
 
 class ScoringCrediticio:
     """
@@ -62,9 +67,7 @@ class ScoringCrediticio:
 
     @staticmethod
     def calcular_score_completo(
-        cliente_data: Dict,
-        prestamo_data: Dict,
-        db: Session
+        cliente_data: Dict, prestamo_data: Dict, db: Session
     ) -> Dict[str, Any]:
         """
         Calcular score crediticio completo (0-1000)
@@ -85,9 +88,7 @@ class ScoringCrediticio:
             scores_componentes["historial"] = score_historial
 
             # 3. ESTABILIDAD LABORAL (20%)
-            score_laboral = ScoringCrediticio._calcular_score_laboral(
-                cliente_data
-            )
+            score_laboral = ScoringCrediticio._calcular_score_laboral(cliente_data)
             scores_componentes["laboral"] = score_laboral
 
             # 4. GARANTÍAS ADICIONALES (15%)
@@ -104,11 +105,11 @@ class ScoringCrediticio:
 
             # SCORE FINAL PONDERADO
             score_final = (
-                score_ingresos * MLConfig.SCORING_WEIGHTS["ingresos_vs_cuota"] +
-                score_historial * MLConfig.SCORING_WEIGHTS["historial_crediticio"] +
-                score_laboral * MLConfig.SCORING_WEIGHTS["estabilidad_laboral"] +
-                score_garantias * MLConfig.SCORING_WEIGHTS["garantias_adicionales"] +
-                score_comportamiento * MLConfig.SCORING_WEIGHTS["comportamiento_pago"]
+                score_ingresos * MLConfig.SCORING_WEIGHTS["ingresos_vs_cuota"]
+                + score_historial * MLConfig.SCORING_WEIGHTS["historial_crediticio"]
+                + score_laboral * MLConfig.SCORING_WEIGHTS["estabilidad_laboral"]
+                + score_garantias * MLConfig.SCORING_WEIGHTS["garantias_adicionales"]
+                + score_comportamiento * MLConfig.SCORING_WEIGHTS["comportamiento_pago"]
             )
 
             # RECOMENDACIÓN AUTOMÁTICA
@@ -127,7 +128,7 @@ class ScoringCrediticio:
                 "factores_riesgo": factores_riesgo,
                 "fecha_calculo": datetime.now().isoformat(),
                 "version_algoritmo": "1.0",
-                "confianza": ScoringCrediticio._calcular_confianza(scores_componentes)
+                "confianza": ScoringCrediticio._calcular_confianza(scores_componentes),
             }
 
         except Exception as e:
@@ -136,7 +137,7 @@ class ScoringCrediticio:
                 "score_final": 0,
                 "clasificacion": "ERROR",
                 "recomendacion": "REVISAR_MANUALMENTE",
-                "error": str(e)
+                "error": str(e),
             }
 
     @staticmethod
@@ -173,15 +174,20 @@ class ScoringCrediticio:
             cedula = cliente_data.get("cedula")
 
             # Buscar historial previo en el sistema
-            cliente_existente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
+            cliente_existente = (
+                db.query(Cliente).filter(Cliente.cedula == cedula).first()
+            )
 
             if not cliente_existente:
                 return 600  # Score neutro para cliente nuevo
 
             # Analizar comportamiento de pagos previos
-            pagos_cliente = db.query(Pago).join(Prestamo).filter(
-                Prestamo.cliente_id == cliente_existente.id
-            ).all()
+            pagos_cliente = (
+                db.query(Pago)
+                .join(Prestamo)
+                .filter(Prestamo.cliente_id == cliente_existente.id)
+                .all()
+            )
 
             if not pagos_cliente:
                 return 600  # Sin historial
@@ -189,7 +195,7 @@ class ScoringCrediticio:
             # Calcular métricas de comportamiento
             total_pagos = len(pagos_cliente)
             pagos_puntuales = len([p for p in pagos_cliente if p.dias_mora == 0])
-            pagos_con_mora = len([p for p in pagos_cliente if p.dias_mora > 0])
+            len([p for p in pagos_cliente if p.dias_mora > 0])
 
             # Score basado en puntualidad
             tasa_puntualidad = pagos_puntuales / total_pagos if total_pagos > 0 else 0
@@ -224,7 +230,7 @@ class ScoringCrediticio:
             elif tipo_empleo in ["EMPLEADO_PRIVADO", "PROFESIONAL"]:
                 score_base += 100  # Estable
             elif tipo_empleo in ["INDEPENDIENTE", "COMERCIANTE"]:
-                score_base += 50   # Moderadamente estable
+                score_base += 50  # Moderadamente estable
 
             # Bonificación por antigüedad
             if antiguedad_laboral >= 60:  # 5+ años
@@ -236,8 +242,13 @@ class ScoringCrediticio:
 
             # Bonificación por ocupación
             ocupaciones_estables = [
-                "MEDICO", "INGENIERO", "ABOGADO", "USER", 
-                "MAESTRO", "ENFERMERA", "FUNCIONARIO"
+                "MEDICO",
+                "INGENIERO",
+                "ABOGADO",
+                "USER",
+                "MAESTRO",
+                "ENFERMERA",
+                "FUNCIONARIO",
             ]
             if any(ocu in ocupacion for ocu in ocupaciones_estables):
                 score_base += 100
@@ -298,10 +309,14 @@ class ScoringCrediticio:
                 return 600  # Neutro para cliente nuevo
 
             # Analizar patrones de pago
-            pagos_recientes = db.query(Pago).join(Prestamo).filter(
-                Prestamo.cliente_id == cliente.id,
-                Pago.fecha_pago >= fecha_limite
-            ).all()
+            pagos_recientes = (
+                db.query(Pago)
+                .join(Prestamo)
+                .filter(
+                    Prestamo.cliente_id == cliente.id, Pago.fecha_pago >= fecha_limite
+                )
+                .all()
+            )
 
             if not pagos_recientes:
                 return 600  # Sin historial reciente
@@ -340,16 +355,19 @@ class ScoringCrediticio:
                 "mensaje": "Cliente de bajo riesgo - Aprobación automática recomendada",
                 "condiciones_especiales": [],
                 "tasa_recomendada": "TASA_PREFERENCIAL",
-                "plazo_maximo": 84  # 7 años
+                "plazo_maximo": 84,  # 7 años
             }
         elif score >= MLConfig.SCORE_THRESHOLDS["REVISION_MANUAL"]:
             return {
                 "decision": "REVISAR_MANUALMENTE",
                 "color": "#ffc107",
                 "mensaje": "Cliente de riesgo medio - Revisión manual recomendada",
-                "condiciones_especiales": ["Verificar ingresos", "Solicitar referencias"],
+                "condiciones_especiales": [
+                    "Verificar ingresos",
+                    "Solicitar referencias",
+                ],
                 "tasa_recomendada": "TASA_ESTANDAR",
-                "plazo_maximo": 72  # 6 años
+                "plazo_maximo": 72,  # 6 años
             }
         elif score >= MLConfig.SCORE_THRESHOLDS["ANALISIS_DETALLADO"]:
             return {
@@ -360,10 +378,10 @@ class ScoringCrediticio:
                     "Solicitar aval",
                     "Aumentar cuota inicial",
                     "Reducir plazo",
-                    "Verificar garantías adicionales"
+                    "Verificar garantías adicionales",
                 ],
                 "tasa_recomendada": "TASA_PREMIUM",
-                "plazo_maximo": 60  # 5 años
+                "plazo_maximo": 60,  # 5 años
             }
         else:
             return {
@@ -372,7 +390,7 @@ class ScoringCrediticio:
                 "mensaje": "Cliente de muy alto riesgo - Rechazo recomendado",
                 "condiciones_especiales": ["No aprobar sin garantías extraordinarias"],
                 "tasa_recomendada": "NO_APLICABLE",
-                "plazo_maximo": 0
+                "plazo_maximo": 0,
             }
 
     @staticmethod
@@ -397,28 +415,34 @@ class ScoringCrediticio:
         factores = []
 
         if scores["ingresos"] < 600:
-            factores.append({
-                "factor": "INGRESOS_INSUFICIENTES",
-                "descripcion": "Relación cuota/ingresos muy alta",
-                "impacto": "ALTO",
-                "recomendacion": "Reducir monto o aumentar plazo"
-            })
+            factores.append(
+                {
+                    "factor": "INGRESOS_INSUFICIENTES",
+                    "descripcion": "Relación cuota/ingresos muy alta",
+                    "impacto": "ALTO",
+                    "recomendacion": "Reducir monto o aumentar plazo",
+                }
+            )
 
         if scores["historial"] < 500:
-            factores.append({
-                "factor": "HISTORIAL_NEGATIVO",
-                "descripcion": "Historial de pagos con problemas",
-                "impacto": "ALTO",
-                "recomendacion": "Solicitar garantías adicionales"
-            })
+            factores.append(
+                {
+                    "factor": "HISTORIAL_NEGATIVO",
+                    "descripcion": "Historial de pagos con problemas",
+                    "impacto": "ALTO",
+                    "recomendacion": "Solicitar garantías adicionales",
+                }
+            )
 
         if scores["laboral"] < 400:
-            factores.append({
-                "factor": "INESTABILIDAD_LABORAL",
-                "descripcion": "Empleo inestable o reciente",
-                "impacto": "MEDIO",
-                "recomendacion": "Verificar estabilidad de ingresos"
-            })
+            factores.append(
+                {
+                    "factor": "INESTABILIDAD_LABORAL",
+                    "descripcion": "Empleo inestable o reciente",
+                    "impacto": "MEDIO",
+                    "recomendacion": "Verificar estabilidad de ingresos",
+                }
+            )
 
         return factores
 
@@ -431,9 +455,11 @@ class ScoringCrediticio:
 
         return round((datos_disponibles / total_componentes) * 100, 1)
 
+
 # ============================================
 # PREDICCIÓN DE MORA CON MACHINE LEARNING
 # ============================================
+
 
 class PrediccionMora:
     """
@@ -442,9 +468,7 @@ class PrediccionMora:
 
     @staticmethod
     def predecir_probabilidad_mora(
-        cliente_id: int,
-        horizonte_dias: int,
-        db: Session
+        cliente_id: int, horizonte_dias: int, db: Session
     ) -> Dict[str, Any]:
         """
         Predecir probabilidad de mora en los próximos N días
@@ -470,12 +494,14 @@ class PrediccionMora:
                 "cliente_id": cliente_id,
                 "cliente_nombre": cliente.nombre_completo,
                 "probabilidad_mora": round(probabilidad * 100, 2),
-                "clasificacion_riesgo": PrediccionMora._clasificar_riesgo_mora(probabilidad),
+                "clasificacion_riesgo": PrediccionMora._clasificar_riesgo_mora(
+                    probabilidad
+                ),
                 "horizonte_dias": horizonte_dias,
                 "features_analizadas": features,
                 "recomendaciones": recomendaciones,
                 "fecha_prediccion": datetime.now().isoformat(),
-                "confianza_modelo": 0.87  # 87% de precisión
+                "confianza_modelo": 0.87,  # 87% de precisión
             }
 
         except Exception as e:
@@ -483,7 +509,7 @@ class PrediccionMora:
             return {
                 "error": str(e),
                 "probabilidad_mora": 0,
-                "clasificacion_riesgo": "ERROR"
+                "clasificacion_riesgo": "ERROR",
             }
 
     @staticmethod
@@ -501,25 +527,40 @@ class PrediccionMora:
 
             # Features del vehículo
             if cliente.anio_vehiculo:
-                features["vehiculo_antiguedad"] = date.today().year - cliente.anio_vehiculo
+                features["vehiculo_antiguedad"] = (
+                    date.today().year - cliente.anio_vehiculo
+                )
             else:
                 features["vehiculo_antiguedad"] = 5  # Promedio
 
             # Features financieras
             if cliente.total_financiamiento:
                 features["monto_financiado"] = float(cliente.total_financiamiento)
-                features["porcentaje_cuota_inicial"] = float(cliente.cuota_inicial or 0) / float(cliente.total_financiamiento)
+                features["porcentaje_cuota_inicial"] = float(
+                    cliente.cuota_inicial or 0
+                ) / float(cliente.total_financiamiento)
 
             # Features de comportamiento de pago
-            pagos_cliente = db.query(Pago).join(Prestamo).filter(
-                Prestamo.cliente_id == cliente.id
-            ).order_by(Pago.fecha_pago.desc()).limit(12).all()  # Últimos 12 pagos
+            pagos_cliente = (
+                db.query(Pago)
+                .join(Prestamo)
+                .filter(Prestamo.cliente_id == cliente.id)
+                .order_by(Pago.fecha_pago.desc())
+                .limit(12)
+                .all()
+            )  # Últimos 12 pagos
 
             if pagos_cliente:
                 features["pagos_ultimos_12_meses"] = len(pagos_cliente)
-                features["promedio_dias_mora"] = sum(p.dias_mora for p in pagos_cliente) / len(pagos_cliente)
-                features["pagos_puntuales_ratio"] = len([p for p in pagos_cliente if p.dias_mora == 0]) / len(pagos_cliente)
-                features["ultimo_pago_dias"] = (date.today() - pagos_cliente[0].fecha_pago).days
+                features["promedio_dias_mora"] = sum(
+                    p.dias_mora for p in pagos_cliente
+                ) / len(pagos_cliente)
+                features["pagos_puntuales_ratio"] = len(
+                    [p for p in pagos_cliente if p.dias_mora == 0]
+                ) / len(pagos_cliente)
+                features["ultimo_pago_dias"] = (
+                    date.today() - pagos_cliente[0].fecha_pago
+                ).days
             else:
                 features["pagos_ultimos_12_meses"] = 0
                 features["promedio_dias_mora"] = 0
@@ -529,7 +570,7 @@ class PrediccionMora:
             # Features estacionales
             mes_actual = date.today().month
             features["mes_diciembre"] = 1 if mes_actual == 12 else 0  # Navidad
-            features["mes_enero"] = 1 if mes_actual == 1 else 0      # Post-navidad
+            features["mes_enero"] = 1 if mes_actual == 1 else 0  # Post-navidad
             features["mes_verano"] = 1 if mes_actual in [6, 7, 8] else 0  # Vacaciones
 
             return features
@@ -584,96 +625,104 @@ class PrediccionMora:
             return {
                 "nivel": "MUY_ALTO",
                 "color": "#dc3545",
-                "descripcion": "Riesgo crítico - Acción inmediata requerida"
+                "descripcion": "Riesgo crítico - Acción inmediata requerida",
             }
         elif probabilidad >= 0.50:
             return {
-                "nivel": "ALTO", 
+                "nivel": "ALTO",
                 "color": "#fd7e14",
-                "descripcion": "Riesgo alto - Monitoreo cercano requerido"
+                "descripcion": "Riesgo alto - Monitoreo cercano requerido",
             }
         elif probabilidad >= 0.30:
             return {
                 "nivel": "MEDIO",
                 "color": "#ffc107",
-                "descripcion": "Riesgo medio - Seguimiento recomendado"
+                "descripcion": "Riesgo medio - Seguimiento recomendado",
             }
         elif probabilidad >= 0.15:
             return {
                 "nivel": "BAJO",
                 "color": "#20c997",
-                "descripcion": "Riesgo bajo - Cliente estable"
+                "descripcion": "Riesgo bajo - Cliente estable",
             }
         else:
             return {
                 "nivel": "MUY_BAJO",
                 "color": "#28a745",
-                "descripcion": "Riesgo muy bajo - Cliente excelente"
+                "descripcion": "Riesgo muy bajo - Cliente excelente",
             }
 
     @staticmethod
     def _generar_recomendaciones_mora(
-        probabilidad: float, 
-        features: Dict, 
-        horizonte_dias: int
+        probabilidad: float, features: Dict, horizonte_dias: int
     ) -> List[Dict]:
         """Generar recomendaciones específicas para prevenir mora"""
         recomendaciones = []
 
         if probabilidad >= 0.70:
-            recomendaciones.extend([
-                {
-                    "accion": "CONTACTO_INMEDIATO",
-                    "prioridad": "CRITICA",
-                    "descripcion": "Contactar cliente inmediatamente",
-                    "canal": "TELEFONO_Y_VISITA"
-                },
-                {
-                    "accion": "REESTRUCTURAR_DEUDA",
-                    "prioridad": "ALTA",
-                    "descripcion": "Evaluar reestructuración de deuda",
-                    "canal": "REUNION_PRESENCIAL"
-                }
-            ])
+            recomendaciones.extend(
+                [
+                    {
+                        "accion": "CONTACTO_INMEDIATO",
+                        "prioridad": "CRITICA",
+                        "descripcion": "Contactar cliente inmediatamente",
+                        "canal": "TELEFONO_Y_VISITA",
+                    },
+                    {
+                        "accion": "REESTRUCTURAR_DEUDA",
+                        "prioridad": "ALTA",
+                        "descripcion": "Evaluar reestructuración de deuda",
+                        "canal": "REUNION_PRESENCIAL",
+                    },
+                ]
+            )
         elif probabilidad >= 0.50:
-            recomendaciones.extend([
-                {
-                    "accion": "RECORDATORIO_PROACTIVO",
-                    "prioridad": "ALTA",
-                    "descripcion": "Enviar recordatorio 5 días antes del vencimiento",
-                    "canal": "WHATSAPP_Y_EMAIL"
-                },
-                {
-                    "accion": "OFERTA_DESCUENTO",
-                    "prioridad": "MEDIA",
-                    "descripcion": "Ofrecer descuento por pago puntual",
-                    "canal": "LLAMADA_TELEFONICA"
-                }
-            ])
+            recomendaciones.extend(
+                [
+                    {
+                        "accion": "RECORDATORIO_PROACTIVO",
+                        "prioridad": "ALTA",
+                        "descripcion": "Enviar recordatorio 5 días antes del vencimiento",
+                        "canal": "WHATSAPP_Y_EMAIL",
+                    },
+                    {
+                        "accion": "OFERTA_DESCUENTO",
+                        "prioridad": "MEDIA",
+                        "descripcion": "Ofrecer descuento por pago puntual",
+                        "canal": "LLAMADA_TELEFONICA",
+                    },
+                ]
+            )
         elif probabilidad >= 0.30:
-            recomendaciones.extend([
-                {
-                    "accion": "SEGUIMIENTO_REGULAR",
-                    "prioridad": "MEDIA",
-                    "descripcion": "Incluir en lista de seguimiento semanal",
-                    "canal": "EMAIL_AUTOMATICO"
-                }
-            ])
+            recomendaciones.extend(
+                [
+                    {
+                        "accion": "SEGUIMIENTO_REGULAR",
+                        "prioridad": "MEDIA",
+                        "descripcion": "Incluir en lista de seguimiento semanal",
+                        "canal": "EMAIL_AUTOMATICO",
+                    }
+                ]
+            )
 
         # Recomendaciones específicas por features
         if features.get("ultimo_pago_dias", 0) > 30:
-            recomendaciones.append({
-                "accion": "VERIFICAR_SITUACION",
-                "prioridad": "ALTA",
-                "descripcion": "Cliente sin pagos recientes - verificar situación",
-                "canal": "LLAMADA_TELEFONICA"
-            })
+            recomendaciones.append(
+                {
+                    "accion": "VERIFICAR_SITUACION",
+                    "prioridad": "ALTA",
+                    "descripcion": "Cliente sin pagos recientes - verificar situación",
+                    "canal": "LLAMADA_TELEFONICA",
+                }
+            )
 
         return recomendaciones
+
 
 # ============================================
 # SISTEMA DE RECOMENDACIONES INTELIGENTES
 # ============================================
+
 
 class SistemaRecomendaciones:
     """
@@ -681,10 +730,7 @@ class SistemaRecomendaciones:
     """
 
     @staticmethod
-    def recomendar_estrategia_cobranza(
-        cliente_id: int,
-        db: Session
-    ) -> Dict[str, Any]:
+    def recomendar_estrategia_cobranza(cliente_id: int, db: Session) -> Dict[str, Any]:
         """
         Recomendar mejor estrategia de cobranza para cliente específico
         """
@@ -697,14 +743,16 @@ class SistemaRecomendaciones:
             perfil = SistemaRecomendaciones._analizar_perfil_cliente(cliente, db)
 
             # Generar estrategia personalizada
-            estrategia = SistemaRecomendaciones._generar_estrategia_personalizada(perfil)
+            estrategia = SistemaRecomendaciones._generar_estrategia_personalizada(
+                perfil
+            )
 
             return {
                 "cliente_id": cliente_id,
                 "cliente_nombre": cliente.nombre_completo,
                 "perfil_cliente": perfil,
                 "estrategia_recomendada": estrategia,
-                "fecha_recomendacion": datetime.now().isoformat()
+                "fecha_recomendacion": datetime.now().isoformat(),
             }
 
         except Exception as e:
@@ -715,9 +763,14 @@ class SistemaRecomendaciones:
     def _analizar_perfil_cliente(cliente: Cliente, db: Session) -> Dict:
         """Analizar perfil completo del cliente"""
         # Comportamiento de pago
-        pagos = db.query(Pago).join(Prestamo).filter(
-            Prestamo.cliente_id == cliente.id
-        ).order_by(Pago.fecha_pago.desc()).limit(24).all()
+        pagos = (
+            db.query(Pago)
+            .join(Prestamo)
+            .filter(Prestamo.cliente_id == cliente.id)
+            .order_by(Pago.fecha_pago.desc())
+            .limit(24)
+            .all()
+        )
 
         if pagos:
             dias_mora_promedio = sum(p.dias_mora for p in pagos) / len(pagos)
@@ -738,27 +791,27 @@ class SistemaRecomendaciones:
                 "dias_mora_promedio": dias_mora_promedio,
                 "tasa_puntualidad": tasa_puntualidad,
                 "total_pagos": len(pagos),
-                "ultimo_pago": ultimo_pago
+                "ultimo_pago": ultimo_pago,
             },
             "perfil_demografico": {
                 "edad": edad,
                 "tiene_telefono": bool(cliente.telefono),
                 "tiene_email": bool(cliente.email),
-                "ocupacion": cliente.ocupacion
+                "ocupacion": cliente.ocupacion,
             },
             "perfil_financiero": {
                 "monto_financiado": float(cliente.total_financiamiento or 0),
                 "dias_mora_actual": cliente.dias_mora or 0,
-                "estado_actual": cliente.estado_financiero
-            }
+                "estado_actual": cliente.estado_financiero,
+            },
         }
 
     @staticmethod
     def _generar_estrategia_personalizada(perfil: Dict) -> Dict:
         """Generar estrategia de cobranza personalizada"""
         comportamiento = perfil["comportamiento_pago"]
-        demografico = perfil["perfil_demografico"]
-        financiero = perfil["perfil_financiero"]
+        perfil["perfil_demografico"]
+        perfil["perfil_financiero"]
 
         # Estrategia basada en comportamiento
         if comportamiento["tasa_puntualidad"] > 0.9:
@@ -771,8 +824,8 @@ class SistemaRecomendaciones:
                 "acciones": [
                     "Enviar recordatorio 3 días antes",
                     "Ofrecer descuentos por pago anticipado",
-                    "Invitar a programa de clientes VIP"
-                ]
+                    "Invitar a programa de clientes VIP",
+                ],
             }
         elif comportamiento["tasa_puntualidad"] > 0.7:
             return {
@@ -784,8 +837,8 @@ class SistemaRecomendaciones:
                 "acciones": [
                     "Recordatorio 2 días antes",
                     "Seguimiento el día del vencimiento",
-                    "Ofrecer facilidades de pago"
-                ]
+                    "Ofrecer facilidades de pago",
+                ],
             }
         elif comportamiento["dias_mora_promedio"] > 15:
             return {
@@ -798,8 +851,8 @@ class SistemaRecomendaciones:
                     "Llamada 1 día antes del vencimiento",
                     "Visita domiciliaria si no paga",
                     "Proponer plan de pagos",
-                    "Evaluar reestructuración"
-                ]
+                    "Evaluar reestructuración",
+                ],
             }
         else:
             return {
@@ -811,13 +864,15 @@ class SistemaRecomendaciones:
                 "acciones": [
                     "Recordatorio 2 días antes",
                     "SMS el día del vencimiento",
-                    "Llamada si no paga en 2 días"
-                ]
+                    "Llamada si no paga en 2 días",
+                ],
             }
+
 
 # ============================================
 # ANÁLISIS PREDICTIVO DE CARTERA
 # ============================================
+
 
 class AnalisisPredictivoCartera:
     """
@@ -826,8 +881,7 @@ class AnalisisPredictivoCartera:
 
     @staticmethod
     def analizar_tendencias_cartera(
-        horizonte_meses: int,
-        db: Session
+        horizonte_meses: int, db: Session
     ) -> Dict[str, Any]:
         """
         Análisis predictivo de tendencias de la cartera
@@ -837,17 +891,25 @@ class AnalisisPredictivoCartera:
             fecha_inicio = date.today() - timedelta(days=730)
 
             # Tendencias de mora
-            tendencia_mora = AnalisisPredictivoCartera._analizar_tendencia_mora(db, fecha_inicio)
+            tendencia_mora = AnalisisPredictivoCartera._analizar_tendencia_mora(
+                db, fecha_inicio
+            )
 
             # Proyección de flujo de caja
-            proyeccion_flujo = AnalisisPredictivoCartera._proyectar_flujo_caja(db, horizonte_meses)
+            proyeccion_flujo = AnalisisPredictivoCartera._proyectar_flujo_caja(
+                db, horizonte_meses
+            )
 
             # Análisis de segmentos
-            analisis_segmentos = AnalisisPredictivoCartera._analizar_segmentos_riesgo(db)
+            analisis_segmentos = AnalisisPredictivoCartera._analizar_segmentos_riesgo(
+                db
+            )
 
             # Recomendaciones estratégicas
-            recomendaciones = AnalisisPredictivoCartera._generar_recomendaciones_estrategicas(
-                tendencia_mora, proyeccion_flujo, analisis_segmentos
+            recomendaciones = (
+                AnalisisPredictivoCartera._generar_recomendaciones_estrategicas(
+                    tendencia_mora, proyeccion_flujo, analisis_segmentos
+                )
             )
 
             return {
@@ -857,7 +919,7 @@ class AnalisisPredictivoCartera:
                 "proyeccion_flujo_caja": proyeccion_flujo,
                 "analisis_segmentos": analisis_segmentos,
                 "recomendaciones_estrategicas": recomendaciones,
-                "confianza_prediccion": 0.82  # 82% de confianza
+                "confianza_prediccion": 0.82,  # 82% de confianza
             }
 
         except Exception as e:
@@ -871,27 +933,36 @@ class AnalisisPredictivoCartera:
         datos_mensuales = []
 
         for i in range(24):  # Últimos 24 meses
-            fecha_mes = fecha_inicio + timedelta(days=30*i)
+            fecha_mes = fecha_inicio + timedelta(days=30 * i)
 
-            clientes_mora = db.query(Cliente).filter(
-                Cliente.fecha_registro <= fecha_mes,
-                Cliente.activo ,
-                Cliente.dias_mora > 0
-            ).count()
+            clientes_mora = (
+                db.query(Cliente)
+                .filter(
+                    Cliente.fecha_registro <= fecha_mes,
+                    Cliente.activo,
+                    Cliente.dias_mora > 0,
+                )
+                .count()
+            )
 
-            total_clientes = db.query(Cliente).filter(
-                Cliente.fecha_registro <= fecha_mes,
-                Cliente.activo 
-            ).count()
+            total_clientes = (
+                db.query(Cliente)
+                .filter(Cliente.fecha_registro <= fecha_mes, Cliente.activo)
+                .count()
+            )
 
-            tasa_mora = (clientes_mora / total_clientes * 100) if total_clientes > 0 else 0
+            tasa_mora = (
+                (clientes_mora / total_clientes * 100) if total_clientes > 0 else 0
+            )
 
-            datos_mensuales.append({
-                "mes": fecha_mes.strftime("%Y-%m"),
-                "tasa_mora": round(tasa_mora, 2),
-                "clientes_mora": clientes_mora,
-                "total_clientes": total_clientes
-            })
+            datos_mensuales.append(
+                {
+                    "mes": fecha_mes.strftime("%Y-%m"),
+                    "tasa_mora": round(tasa_mora, 2),
+                    "clientes_mora": clientes_mora,
+                    "total_clientes": total_clientes,
+                }
+            )
 
         # Calcular tendencia
         tasas = [d["tasa_mora"] for d in datos_mensuales[-12:]]  # Últimos 12 meses
@@ -908,7 +979,7 @@ class AnalisisPredictivoCartera:
             "tendencia": tendencia,
             "tasa_actual": tasas[-1] if tasas else 0,
             "tasa_promedio": sum(tasas) / len(tasas) if tasas else 0,
-            "proyeccion_3_meses": AnalisisPredictivoCartera._proyectar_mora(tasas)
+            "proyeccion_3_meses": AnalisisPredictivoCartera._proyectar_mora(tasas),
         }
 
     @staticmethod
@@ -917,30 +988,40 @@ class AnalisisPredictivoCartera:
         proyecciones = []
 
         for mes in range(1, horizonte_meses + 1):
-            fecha_proyeccion = date.today() + timedelta(days=30*mes)
+            fecha_proyeccion = date.today() + timedelta(days=30 * mes)
 
             # Cuotas programadas para ese mes
-            cuotas_programadas = db.query(func.sum(Cuota.monto_cuota)).filter(
-                func.extract('year', Cuota.fecha_vencimiento) == fecha_proyeccion.year,
-                func.extract('month', Cuota.fecha_vencimiento) == fecha_proyeccion.month,
-                Cuota.estado.in_(["PENDIENTE", "PARCIAL"])
-            ).scalar() or 0
+            cuotas_programadas = (
+                db.query(func.sum(Cuota.monto_cuota))
+                .filter(
+                    func.extract("year", Cuota.fecha_vencimiento)
+                    == fecha_proyeccion.year,
+                    func.extract("month", Cuota.fecha_vencimiento)
+                    == fecha_proyeccion.month,
+                    Cuota.estado.in_(["PENDIENTE", "PARCIAL"]),
+                )
+                .scalar()
+                or 0
+            )
 
             # Aplicar factor de cobranza basado en historial
             factor_cobranza = 0.85  # 85% de efectividad promedio
             flujo_esperado = float(cuotas_programadas) * factor_cobranza
 
-            proyecciones.append({
-                "mes": fecha_proyeccion.strftime("%Y-%m"),
-                "cuotas_programadas": float(cuotas_programadas),
-                "flujo_esperado": flujo_esperado,
-                "factor_cobranza": factor_cobranza
-            })
+            proyecciones.append(
+                {
+                    "mes": fecha_proyeccion.strftime("%Y-%m"),
+                    "cuotas_programadas": float(cuotas_programadas),
+                    "flujo_esperado": flujo_esperado,
+                    "factor_cobranza": factor_cobranza,
+                }
+            )
 
         return {
             "proyecciones_mensuales": proyecciones,
             "total_proyectado": sum(p["flujo_esperado"] for p in proyecciones),
-            "promedio_mensual": sum(p["flujo_esperado"] for p in proyecciones) / len(proyecciones)
+            "promedio_mensual": sum(p["flujo_esperado"] for p in proyecciones)
+            / len(proyecciones),
         }
 
     @staticmethod
@@ -960,7 +1041,7 @@ class AnalisisPredictivoCartera:
         sum_xy = sum(x[i] * y[i] for i in range(n))
         sum_x2 = sum(x[i] ** 2 for i in range(n))
 
-        pendiente = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x ** 2)
+        pendiente = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x**2)
         intercepto = (sum_y - pendiente * sum_x) / n
 
         # Proyectar 3 meses adelante
@@ -968,9 +1049,11 @@ class AnalisisPredictivoCartera:
 
         return max(0, min(proyeccion, 50))  # Entre 0% y 50%
 
+
 # ============================================
 # OPTIMIZACIÓN INTELIGENTE DE TASAS
 # ============================================
+
 
 class OptimizadorTasas:
     """
@@ -979,9 +1062,7 @@ class OptimizadorTasas:
 
     @staticmethod
     def optimizar_condiciones_prestamo(
-        cliente_data: Dict,
-        prestamo_data: Dict,
-        db: Session
+        cliente_data: Dict, prestamo_data: Dict, db: Session
     ) -> Dict[str, Any]:
         """
         Optimizar tasas y condiciones basado en perfil del cliente
@@ -1004,9 +1085,7 @@ class OptimizadorTasas:
 
             # Calcular cuota optimizada
             cuota_optimizada = OptimizadorTasas._calcular_cuota_optimizada(
-                prestamo_data["monto_financiado"],
-                tasa_optimizada,
-                plazo_optimizado
+                prestamo_data["monto_financiado"], tasa_optimizada, plazo_optimizado
             )
 
             return {
@@ -1015,16 +1094,16 @@ class OptimizadorTasas:
                     "tasa_interes_anual": tasa_optimizada,
                     "plazo_meses": plazo_optimizado,
                     "cuota_mensual": cuota_optimizada,
-                    "cuota_inicial_minima": prestamo_data["monto_total"] * 0.10
+                    "cuota_inicial_minima": prestamo_data["monto_total"] * 0.10,
                 },
                 "comparacion": {
                     "tasa_original": prestamo_data.get("tasa_interes", 0),
                     "tasa_optimizada": tasa_optimizada,
                     "ahorro_cliente": OptimizadorTasas._calcular_ahorro(
                         prestamo_data, tasa_optimizada, plazo_optimizado
-                    )
+                    ),
                 },
-                "justificacion": OptimizadorTasas._justificar_condiciones(scoring)
+                "justificacion": OptimizadorTasas._justificar_condiciones(scoring),
             }
 
         except Exception as e:
@@ -1071,7 +1150,9 @@ class OptimizadorTasas:
             return max(plazo_base - 12, 24)  # Plazo reducido para alto riesgo
 
     @staticmethod
-    def _calcular_cuota_optimizada(monto: float, tasa_anual: float, plazo_meses: int) -> float:
+    def _calcular_cuota_optimizada(
+        monto: float, tasa_anual: float, plazo_meses: int
+    ) -> float:
         """Calcular cuota mensual optimizada"""
         try:
             tasa_mensual = tasa_anual / 100 / 12
@@ -1080,17 +1161,22 @@ class OptimizadorTasas:
                 return monto / plazo_meses
 
             # Fórmula de cuota fija (sistema francés)
-            cuota = monto * (tasa_mensual * (1 + tasa_mensual) ** plazo_meses) / \
-                   ((1 + tasa_mensual) ** plazo_meses - 1)
+            cuota = (
+                monto
+                * (tasa_mensual * (1 + tasa_mensual) ** plazo_meses)
+                / ((1 + tasa_mensual) ** plazo_meses - 1)
+            )
 
             return round(cuota, 2)
 
         except Exception:
             return monto / plazo_meses  # Cuota simple en caso de error
 
+
 # ============================================
 # CHATBOT INTELIGENTE DE COBRANZA
 # ============================================
+
 
 class ChatbotCobranza:
     """
@@ -1099,9 +1185,7 @@ class ChatbotCobranza:
 
     @staticmethod
     def generar_mensaje_personalizado(
-        cliente_id: int,
-        tipo_mensaje: str,
-        db: Session
+        cliente_id: int, tipo_mensaje: str, db: Session
     ) -> Dict[str, Any]:
         """
         Generar mensaje personalizado para cliente
@@ -1125,7 +1209,7 @@ class ChatbotCobranza:
                 "mensaje_generado": mensaje,
                 "canal_recomendado": ChatbotCobranza._recomendar_canal(contexto),
                 "momento_optimo": ChatbotCobranza._calcular_momento_optimo(contexto),
-                "fecha_generacion": datetime.now().isoformat()
+                "fecha_generacion": datetime.now().isoformat(),
             }
 
         except Exception as e:
@@ -1136,10 +1220,16 @@ class ChatbotCobranza:
     def _obtener_contexto_cliente(cliente: Cliente, db: Session) -> Dict:
         """Obtener contexto completo del cliente"""
         # Última cuota vencida
-        ultima_cuota = db.query(Cuota).join(Prestamo).filter(
-            Prestamo.cliente_id == cliente.id,
-            Cuota.estado.in_(["PENDIENTE", "VENCIDA"])
-        ).order_by(Cuota.fecha_vencimiento.asc()).first()
+        ultima_cuota = (
+            db.query(Cuota)
+            .join(Prestamo)
+            .filter(
+                Prestamo.cliente_id == cliente.id,
+                Cuota.estado.in_(["PENDIENTE", "VENCIDA"]),
+            )
+            .order_by(Cuota.fecha_vencimiento.asc())
+            .first()
+        )
 
         # Historial de contactos (simulado)
         ultimo_contacto = datetime.now() - timedelta(days=7)  # Placeholder
@@ -1151,12 +1241,14 @@ class ChatbotCobranza:
             "ultima_cuota": {
                 "numero": ultima_cuota.numero_cuota if ultima_cuota else 0,
                 "monto": float(ultima_cuota.monto_cuota) if ultima_cuota else 0,
-                "fecha_vencimiento": ultima_cuota.fecha_vencimiento if ultima_cuota else None
+                "fecha_vencimiento": (
+                    ultima_cuota.fecha_vencimiento if ultima_cuota else None
+                ),
             },
             "tiene_whatsapp": bool(cliente.telefono),
             "tiene_email": bool(cliente.email),
             "ultimo_contacto": ultimo_contacto,
-            "perfil_pago": "PUNTUAL" if cliente.dias_mora == 0 else "MOROSO"
+            "perfil_pago": "PUNTUAL" if cliente.dias_mora == 0 else "MOROSO",
         }
 
     @staticmethod
@@ -1168,7 +1260,7 @@ class ChatbotCobranza:
         mensajes = {
             "RECORDATORIO_AMIGABLE": {
                 "whatsapp": f"""
- Hola {nombre}! 
+ Hola {nombre}!
 
 Te recordamos que tu cuota #{contexto['ultima_cuota']['numero']} de tu {vehiculo} vence el {contexto['ultima_cuota']['fecha_vencimiento']}.
 
@@ -1192,9 +1284,8 @@ Para mayor comodidad, puede realizar su pago a través de nuestros canales digit
 
 Saludos cordiales,
 Equipo de Cobranzas
-                """
+                """,
             },
-
             "MORA_TEMPRANA": {
                 "whatsapp": f"""
 ️ {nombre}, tu cuota #{contexto['ultima_cuota']['numero']} está vencida.
@@ -1207,9 +1298,8 @@ Para evitar cargos adicionales, realiza tu pago hoy.
 
 Necesitas ayuda? Responde este mensaje.
                 """,
-                "sms": f"FINANCIERA: {nombre}, tu cuota está vencida ({contexto['dias_mora']} días). Monto: ${contexto['ultima_cuota']['monto']:,.0f}. Paga hoy para evitar cargos. Info: 809-XXX-XXXX"
+                "sms": f"FINANCIERA: {nombre}, tu cuota está vencida ({contexto['dias_mora']} días). Monto: ${contexto['ultima_cuota']['monto']:,.0f}. Paga hoy para evitar cargos. Info: 809-XXX-XXXX",
             },
-
             "MORA_AVANZADA": {
                 "llamada_script": f"""
 Buenos días {nombre}, le habla [NOMBRE] de Cobranzas.
@@ -1221,12 +1311,11 @@ Cuándo podría realizar el pago de ${contexto['ultima_cuota']['monto']:,.0f}?
 Podemos ofrecerle facilidades de pago si lo necesita.
                 """
             },
-
             "FELICITACION_PUNTUALIDAD": {
                 "whatsapp": f"""
  ¡Felicidades {nombre}!
 
-Has mantenido tu {vehiculo} al día con todos los pagos. 
+Has mantenido tu {vehiculo} al día con todos los pagos.
 
 Como cliente puntual, tienes beneficios especiales:
  Descuentos en renovaciones
@@ -1235,7 +1324,7 @@ Como cliente puntual, tienes beneficios especiales:
 
 Gracias por ser un cliente ejemplar! ⭐
                 """
-            }
+            },
         }
 
         return mensajes.get(tipo, {"mensaje": "Tipo de mensaje no encontrado"})
@@ -1259,18 +1348,20 @@ Gracias por ser un cliente ejemplar! ⭐
             return {
                 "dias_antes_vencimiento": 3,
                 "hora_optima": "09:00",
-                "dia_semana": "MARTES_O_MIERCOLES"
+                "dia_semana": "MARTES_O_MIERCOLES",
             }
         else:
             return {
                 "dias_antes_vencimiento": 1,
                 "hora_optima": "10:00",
-                "dia_semana": "LUNES_O_JUEVES"
+                "dia_semana": "LUNES_O_JUEVES",
             }
+
 
 # ============================================
 # DETECTOR DE PATRONES Y ANOMALÍAS
 # ============================================
+
 
 class DetectorPatrones:
     """
@@ -1288,38 +1379,46 @@ class DetectorPatrones:
             # 1. CLIENTES CON CAMBIO SÚBITO EN COMPORTAMIENTO
             clientes_cambio = DetectorPatrones._detectar_cambio_comportamiento(db)
             if clientes_cambio:
-                anomalias.append({
-                    "tipo": "CAMBIO_COMPORTAMIENTO",
-                    "descripcion": "Clientes con cambio súbito en patrón de pago",
-                    "cantidad": len(clientes_cambio),
-                    "clientes": clientes_cambio[:10],  # Top 10
-                    "accion_recomendada": "CONTACTAR_PROACTIVAMENTE"
-                })
+                anomalias.append(
+                    {
+                        "tipo": "CAMBIO_COMPORTAMIENTO",
+                        "descripcion": "Clientes con cambio súbito en patrón de pago",
+                        "cantidad": len(clientes_cambio),
+                        "clientes": clientes_cambio[:10],  # Top 10
+                        "accion_recomendada": "CONTACTAR_PROACTIVAMENTE",
+                    }
+                )
 
             # 2. CONCENTRACIÓN DE MORA POR USER
-            concentracion_mora = DetectorPatrones._detectar_concentracion_mora_analista(db)
+            concentracion_mora = DetectorPatrones._detectar_concentracion_mora_analista(
+                db
+            )
             if concentracion_mora:
-                anomalias.append({
-                    "tipo": "CONCENTRACION_MORA_USER",
-                    "descripcion": "Asesores con alta concentración de mora",
-                    "datos": concentracion_mora,
-                    "accion_recomendada": "REVISAR_PROCESO_APROBACION"
-                })
+                anomalias.append(
+                    {
+                        "tipo": "CONCENTRACION_MORA_USER",
+                        "descripcion": "Asesores con alta concentración de mora",
+                        "datos": concentracion_mora,
+                        "accion_recomendada": "REVISAR_PROCESO_APROBACION",
+                    }
+                )
 
             # 3. PATRONES ESTACIONALES
             patrones_estacionales = DetectorPatrones._detectar_patrones_estacionales(db)
-            anomalias.append({
-                "tipo": "PATRONES_ESTACIONALES",
-                "descripcion": "Patrones de mora por época del año",
-                "datos": patrones_estacionales,
-                "accion_recomendada": "AJUSTAR_ESTRATEGIA_ESTACIONAL"
-            })
+            anomalias.append(
+                {
+                    "tipo": "PATRONES_ESTACIONALES",
+                    "descripcion": "Patrones de mora por época del año",
+                    "datos": patrones_estacionales,
+                    "accion_recomendada": "AJUSTAR_ESTRATEGIA_ESTACIONAL",
+                }
+            )
 
             return {
                 "fecha_analisis": datetime.now().isoformat(),
                 "total_anomalias": len(anomalias),
                 "anomalias_detectadas": anomalias,
-                "nivel_alerta": "ALTO" if len(anomalias) > 2 else "NORMAL"
+                "nivel_alerta": "ALTO" if len(anomalias) > 2 else "NORMAL",
             }
 
         except Exception as e:
@@ -1330,38 +1429,60 @@ class DetectorPatrones:
     def _detectar_cambio_comportamiento(db: Session) -> List[Dict]:
         """Detectar clientes con cambio súbito en comportamiento"""
         # Clientes que pasaron de puntuales a morosos recientemente
-        clientes_cambio = db.query(Cliente).filter(
-            Cliente.activo ,
-            Cliente.dias_mora > 15,  # Actualmente en mora
-            Cliente.estado_financiero == "EN_MORA"
-        ).all()
+        clientes_cambio = (
+            db.query(Cliente)
+            .filter(
+                Cliente.activo,
+                Cliente.dias_mora > 15,  # Actualmente en mora
+                Cliente.estado_financiero == "EN_MORA",
+            )
+            .all()
+        )
 
         resultado = []
         for cliente in clientes_cambio:
             # Analizar historial reciente vs anterior
-            pagos_recientes = db.query(Pago).join(Prestamo).filter(
-                Prestamo.cliente_id == cliente.id,
-                Pago.fecha_pago >= date.today() - timedelta(days=90)
-            ).all()
+            pagos_recientes = (
+                db.query(Pago)
+                .join(Prestamo)
+                .filter(
+                    Prestamo.cliente_id == cliente.id,
+                    Pago.fecha_pago >= date.today() - timedelta(days=90),
+                )
+                .all()
+            )
 
-            pagos_anteriores = db.query(Pago).join(Prestamo).filter(
-                Prestamo.cliente_id == cliente.id,
-                Pago.fecha_pago < date.today() - timedelta(days=90)
-            ).all()
+            pagos_anteriores = (
+                db.query(Pago)
+                .join(Prestamo)
+                .filter(
+                    Prestamo.cliente_id == cliente.id,
+                    Pago.fecha_pago < date.today() - timedelta(days=90),
+                )
+                .all()
+            )
 
             if pagos_anteriores and pagos_recientes:
-                mora_anterior = sum(p.dias_mora for p in pagos_anteriores) / len(pagos_anteriores)
-                mora_reciente = sum(p.dias_mora for p in pagos_recientes) / len(pagos_recientes)
+                mora_anterior = sum(p.dias_mora for p in pagos_anteriores) / len(
+                    pagos_anteriores
+                )
+                mora_reciente = sum(p.dias_mora for p in pagos_recientes) / len(
+                    pagos_recientes
+                )
 
                 # Si la mora reciente es significativamente mayor
                 if mora_reciente > mora_anterior * 2:
-                    resultado.append({
-                        "cliente_id": cliente.id,
-                        "nombre": cliente.nombre_completo,
-                        "mora_anterior": round(mora_anterior, 1),
-                        "mora_reciente": round(mora_reciente, 1),
-                        "cambio_porcentual": round((mora_reciente - mora_anterior) / mora_anterior * 100, 1)
-                    })
+                    resultado.append(
+                        {
+                            "cliente_id": cliente.id,
+                            "nombre": cliente.nombre_completo,
+                            "mora_anterior": round(mora_anterior, 1),
+                            "mora_reciente": round(mora_reciente, 1),
+                            "cambio_porcentual": round(
+                                (mora_reciente - mora_anterior) / mora_anterior * 100, 1
+                            ),
+                        }
+                    )
 
         return resultado[:20]  # Top 20
 
@@ -1369,15 +1490,21 @@ class DetectorPatrones:
     def _detectar_concentracion_mora_analista(db: Session) -> List[Dict]:
         """Detectar analistaes con alta concentración de mora"""
         # Agrupar mora por analista
-        mora_por_analista = db.query(
-            User.id,
-            User.full_name,
-            func.count(Cliente.id).label('total_clientes'),
-            func.sum(func.case([(Cliente.dias_mora > 0, 1)], else_=0)).label('clientes_mora'),
-            func.avg(Cliente.dias_mora).label('promedio_mora')
-        ).join(Cliente, Analista.id == Cliente.analista_id).filter(
-            Cliente.activo 
-        ).group_by(User.id, User.full_name).all()
+        mora_por_analista = (
+            db.query(
+                User.id,
+                User.full_name,
+                func.count(Cliente.id).label("total_clientes"),
+                func.sum(func.case([(Cliente.dias_mora > 0, 1)], else_=0)).label(
+                    "clientes_mora"
+                ),
+                func.avg(Cliente.dias_mora).label("promedio_mora"),
+            )
+            .join(Cliente, Analista.id == Cliente.analista_id)
+            .filter(Cliente.activo)
+            .group_by(User.id, User.full_name)
+            .all()
+        )
 
         resultado = []
         for analista in mora_por_analista:
@@ -1386,14 +1513,18 @@ class DetectorPatrones:
 
                 # Alertar si tasa de mora > 20%
                 if tasa_mora > 20:
-                    resultado.append({
-                        "analista_id": analista.id,
-                        "analista_nombre": analista.full_name,
-                        "total_clientes": analista.total_clientes,
-                        "clientes_mora": analista.clientes_mora,
-                        "tasa_mora": round(tasa_mora, 2),
-                        "promedio_dias_mora": round(float(analista.promedio_mora or 0), 1)
-                    })
+                    resultado.append(
+                        {
+                            "analista_id": analista.id,
+                            "analista_nombre": analista.full_name,
+                            "total_clientes": analista.total_clientes,
+                            "clientes_mora": analista.clientes_mora,
+                            "tasa_mora": round(tasa_mora, 2),
+                            "promedio_dias_mora": round(
+                                float(analista.promedio_mora or 0), 1
+                            ),
+                        }
+                    )
 
         return sorted(resultado, key=lambda x: x["tasa_mora"], reverse=True)
 
@@ -1404,28 +1535,43 @@ class DetectorPatrones:
         mora_por_mes = {}
 
         for mes in range(1, 13):
-            clientes_mes = db.query(Cliente).filter(
-                func.extract('month', Cliente.fecha_registro) == mes,
-                Cliente.activo 
-            ).all()
+            clientes_mes = (
+                db.query(Cliente)
+                .filter(
+                    func.extract("month", Cliente.fecha_registro) == mes, Cliente.activo
+                )
+                .all()
+            )
 
             if clientes_mes:
                 total_mora = sum(c.dias_mora or 0 for c in clientes_mes)
                 promedio_mora = total_mora / len(clientes_mes)
                 mora_por_mes[mes] = {
                     "mes_nombre": [
-                        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-                        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-                    ][mes-1],
+                        "Enero",
+                        "Febrero",
+                        "Marzo",
+                        "Abril",
+                        "Mayo",
+                        "Junio",
+                        "Julio",
+                        "Agosto",
+                        "Septiembre",
+                        "Octubre",
+                        "Noviembre",
+                        "Diciembre",
+                    ][mes - 1],
                     "promedio_mora": round(promedio_mora, 2),
-                    "total_clientes": len(clientes_mes)
+                    "total_clientes": len(clientes_mes),
                 }
 
         return mora_por_mes
 
+
 # ============================================
 # SISTEMA DE ALERTAS INTELIGENTES
 # ============================================
+
 
 class AlertasInteligentes:
     """
@@ -1443,44 +1589,54 @@ class AlertasInteligentes:
             # 1. CLIENTES EN RIESGO DE MORA
             clientes_riesgo = AlertasInteligentes._identificar_clientes_riesgo(db)
             if clientes_riesgo:
-                alertas.append({
-                    "tipo": "RIESGO_MORA",
-                    "prioridad": "ALTA",
-                    "titulo": f"{len(clientes_riesgo)} clientes en riesgo de mora",
-                    "descripcion": "Clientes con alta probabilidad de entrar en mora en los próximos 7 días",
-                    "clientes": clientes_riesgo[:10],
-                    "accion_recomendada": "Contacto proactivo inmediato"
-                })
+                alertas.append(
+                    {
+                        "tipo": "RIESGO_MORA",
+                        "prioridad": "ALTA",
+                        "titulo": f"{len(clientes_riesgo)} clientes en riesgo de mora",
+                        "descripcion": "Clientes con alta probabilidad de entrar en mora en los próximos 7 días",
+                        "clientes": clientes_riesgo[:10],
+                        "accion_recomendada": "Contacto proactivo inmediato",
+                    }
+                )
 
             # 2. DETERIORO DE CARTERA
             deterioro = AlertasInteligentes._detectar_deterioro_cartera(db)
             if deterioro["alerta"]:
-                alertas.append({
-                    "tipo": "DETERIORO_CARTERA",
-                    "prioridad": "MEDIA",
-                    "titulo": "Deterioro detectado en calidad de cartera",
-                    "descripcion": f"Incremento de {deterioro['incremento']}% en mora este mes",
-                    "datos": deterioro,
-                    "accion_recomendada": "Revisar políticas de aprobación"
-                })
+                alertas.append(
+                    {
+                        "tipo": "DETERIORO_CARTERA",
+                        "prioridad": "MEDIA",
+                        "titulo": "Deterioro detectado en calidad de cartera",
+                        "descripcion": f"Incremento de {deterioro['incremento']}% en mora este mes",
+                        "datos": deterioro,
+                        "accion_recomendada": "Revisar políticas de aprobación",
+                    }
+                )
 
             # 3. OPORTUNIDADES DE NEGOCIO
             oportunidades = AlertasInteligentes._identificar_oportunidades(db)
             if oportunidades:
-                alertas.append({
-                    "tipo": "OPORTUNIDADES",
-                    "prioridad": "BAJA",
-                    "titulo": f"{len(oportunidades)} oportunidades de negocio",
-                    "descripcion": "Clientes elegibles para productos adicionales",
-                    "oportunidades": oportunidades,
-                    "accion_recomendada": "Contacto comercial"
-                })
+                alertas.append(
+                    {
+                        "tipo": "OPORTUNIDADES",
+                        "prioridad": "BAJA",
+                        "titulo": f"{len(oportunidades)} oportunidades de negocio",
+                        "descripcion": "Clientes elegibles para productos adicionales",
+                        "oportunidades": oportunidades,
+                        "accion_recomendada": "Contacto comercial",
+                    }
+                )
 
             return {
                 "fecha_generacion": datetime.now().isoformat(),
                 "total_alertas": len(alertas),
                 "alertas": alertas,
-                "nivel_sistema": "CRITICO" if any(a["prioridad"] == "ALTA" for a in alertas) else "NORMAL"
+                "nivel_sistema": (
+                    "CRITICO"
+                    if any(a["prioridad"] == "ALTA" for a in alertas)
+                    else "NORMAL"
+                ),
             }
 
         except Exception as e:
@@ -1493,27 +1649,30 @@ class AlertasInteligentes:
         # Clientes actualmente al día pero con señales de riesgo
         clientes_riesgo = []
 
-        clientes_al_dia = db.query(Cliente).filter(
-            Cliente.activo ,
-            Cliente.estado_financiero == "AL_DIA"
-        ).all()
+        clientes_al_dia = (
+            db.query(Cliente)
+            .filter(Cliente.activo, Cliente.estado_financiero == "AL_DIA")
+            .all()
+        )
 
         for cliente in clientes_al_dia:
             # Calcular probabilidad de mora
-            probabilidad = PrediccionMora.predecir_probabilidad_mora(
-                cliente.id, 7, db
-            )
+            probabilidad = PrediccionMora.predecir_probabilidad_mora(cliente.id, 7, db)
 
             if probabilidad.get("probabilidad_mora", 0) > 50:  # >50% probabilidad
-                clientes_riesgo.append({
-                    "cliente_id": cliente.id,
-                    "nombre": cliente.nombre_completo,
-                    "cedula": cliente.cedula,
-                    "probabilidad_mora": probabilidad["probabilidad_mora"],
-                    "factores_riesgo": probabilidad.get("recomendaciones", [])
-                })
+                clientes_riesgo.append(
+                    {
+                        "cliente_id": cliente.id,
+                        "nombre": cliente.nombre_completo,
+                        "cedula": cliente.cedula,
+                        "probabilidad_mora": probabilidad["probabilidad_mora"],
+                        "factores_riesgo": probabilidad.get("recomendaciones", []),
+                    }
+                )
 
-        return sorted(clientes_riesgo, key=lambda x: x["probabilidad_mora"], reverse=True)[:20]
+        return sorted(
+            clientes_riesgo, key=lambda x: x["probabilidad_mora"], reverse=True
+        )[:20]
 
     @staticmethod
     def _detectar_deterioro_cartera(db: Session) -> Dict:
@@ -1522,12 +1681,11 @@ class AlertasInteligentes:
         hoy = date.today()
         mes_anterior = hoy - timedelta(days=30)
 
-        mora_actual = db.query(Cliente).filter(
-            Cliente.activo ,
-            Cliente.dias_mora > 0
-        ).count()
+        mora_actual = (
+            db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).count()
+        )
 
-        total_actual = db.query(Cliente).filter(Cliente.activo ).count()
+        total_actual = db.query(Cliente).filter(Cliente.activo).count()
         tasa_actual = (mora_actual / total_actual * 100) if total_actual > 0 else 0
 
         # Simular tasa del mes anterior (en producción sería histórica)
@@ -1540,18 +1698,22 @@ class AlertasInteligentes:
             "tasa_actual": round(tasa_actual, 2),
             "tasa_anterior": round(tasa_anterior, 2),
             "incremento": round(incremento, 2),
-            "clientes_afectados": mora_actual
+            "clientes_afectados": mora_actual,
         }
 
     @staticmethod
     def _identificar_oportunidades(db: Session) -> List[Dict]:
         """Identificar oportunidades de negocio"""
         # Clientes puntuales elegibles para productos adicionales
-        clientes_excelentes = db.query(Cliente).filter(
-            Cliente.activo ,
-            Cliente.estado_financiero == "AL_DIA",
-            Cliente.dias_mora == 0
-        ).all()
+        clientes_excelentes = (
+            db.query(Cliente)
+            .filter(
+                Cliente.activo,
+                Cliente.estado_financiero == "AL_DIA",
+                Cliente.dias_mora == 0,
+            )
+            .all()
+        )
 
         oportunidades = []
         for cliente in clientes_excelentes[:20]:  # Top 20
@@ -1561,15 +1723,17 @@ class AlertasInteligentes:
             )
 
             if scoring["score_final"] > 800:
-                oportunidades.append({
-                    "cliente_id": cliente.id,
-                    "nombre": cliente.nombre_completo,
-                    "score": scoring["score_final"],
-                    "productos_sugeridos": [
-                        "Segundo vehículo",
-                        "Refinanciamiento con mejor tasa",
-                        "Línea de crédito personal"
-                    ]
-                })
+                oportunidades.append(
+                    {
+                        "cliente_id": cliente.id,
+                        "nombre": cliente.nombre_completo,
+                        "score": scoring["score_final"],
+                        "productos_sugeridos": [
+                            "Segundo vehículo",
+                            "Refinanciamiento con mejor tasa",
+                            "Línea de crédito personal",
+                        ],
+                    }
+                )
 
         return oportunidades

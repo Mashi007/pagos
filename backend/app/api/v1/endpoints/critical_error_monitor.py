@@ -5,12 +5,14 @@ Monitorea específicamente errores que causan fallos de despliegue y 503
 
 import logging
 import threading
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from collections import deque, defaultdict
+from collections import defaultdict, deque
+from datetime import datetime
+from typing import Any, Dict, List
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from app.api.deps import get_db, get_current_user
+
+from app.api.deps import get_current_user, get_db
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -19,6 +21,7 @@ router = APIRouter()
 # ============================================
 # SISTEMA DE MONITOREO DE ERRORES CRÍTICOS
 # ============================================
+
 
 class CriticalErrorMonitor:
     """Monitor específico para errores críticos que causan fallos de despliegue"""
@@ -33,68 +36,72 @@ class CriticalErrorMonitor:
 
         # Patrones de errores críticos identificados
         self.critical_patterns = {
-            'import_errors': [
-                'NameError: name',
-                'ImportError:',
-                'ModuleNotFoundError:',
-                'AttributeError:'
+            "import_errors": [
+                "NameError: name",
+                "ImportError:",
+                "ModuleNotFoundError:",
+                "AttributeError:",
             ],
-            'schema_errors': [
-                'UndefinedColumn',
+            "schema_errors": [
+                "UndefinedColumn",
                 'column ".*" does not exist',
-                'relation ".*" does not exist'
+                'relation ".*" does not exist',
             ],
-            'deployment_errors': [
-                'Port scan timeout',
-                'no open ports detected',
-                'Stopping parent process'
+            "deployment_errors": [
+                "Port scan timeout",
+                "no open ports detected",
+                "Stopping parent process",
             ],
-            'frontend_errors': [
-                'Cannot read properties of undefined',
-                'TypeError:',
-                'ReferenceError:'
-            ]
+            "frontend_errors": [
+                "Cannot read properties of undefined",
+                "TypeError:",
+                "ReferenceError:",
+            ],
         }
 
     def log_critical_error(self, error_type: str, error_data: Dict[str, Any]):
         """Registrar error crítico específico"""
         with self.lock:
             error_entry = {
-                'timestamp': datetime.now(),
-                'error_type': error_type,
-                'error_data': error_data,
-                'severity': self._determine_severity(error_type, error_data),
-                'pattern_matched': self._match_error_patterns(error_data.get('message', ''))
+                "timestamp": datetime.now(),
+                "error_type": error_type,
+                "error_data": error_data,
+                "severity": self._determine_severity(error_type, error_data),
+                "pattern_matched": self._match_error_patterns(
+                    error_data.get("message", "")
+                ),
             }
 
             self.critical_errors.append(error_entry)
 
             # Clasificar por tipo
-            if error_type == 'deployment_failure':
+            if error_type == "deployment_failure":
                 self.deployment_failures.append(error_entry)
-            elif error_type == 'import_error':
+            elif error_type == "import_error":
                 self.import_errors.append(error_entry)
-            elif error_type == 'schema_error':
+            elif error_type == "schema_error":
                 self.schema_errors.append(error_entry)
-            elif error_type == 'frontend_error':
+            elif error_type == "frontend_error":
                 self.frontend_errors.append(error_entry)
 
-            logger.critical(f"🚨 Error crítico registrado: {error_type} - {error_data.get('message', '')}")
+            logger.critical(
+                f"🚨 Error crítico registrado: {error_type} - {error_data.get('message', '')}"
+            )
 
     def _determine_severity(self, error_type: str, error_data: Dict[str, Any]) -> str:
         """Determinar severidad del error"""
-        message = error_data.get('message', '').lower()
+        message = error_data.get("message", "").lower()
 
-        if 'deque' in message and 'not defined' in message:
-            return 'critical'  # Causa fallo de despliegue
-        elif 'undefinedcolumn' in message:
-            return 'critical'  # Causa errores 503
-        elif 'port scan timeout' in message:
-            return 'critical'  # Causa fallo de despliegue
-        elif 'cannot read properties of undefined' in message:
-            return 'high'  # Causa errores de frontend
+        if "deque" in message and "not defined" in message:
+            return "critical"  # Causa fallo de despliegue
+        elif "undefinedcolumn" in message:
+            return "critical"  # Causa errores 503
+        elif "port scan timeout" in message:
+            return "critical"  # Causa fallo de despliegue
+        elif "cannot read properties of undefined" in message:
+            return "high"  # Causa errores de frontend
 
-        return 'medium'
+        return "medium"
 
     def _match_error_patterns(self, message: str) -> List[str]:
         """Identificar patrones de error específicos"""
@@ -111,16 +118,16 @@ class CriticalErrorMonitor:
         """Analizar tendencias de errores críticos"""
         with self.lock:
             if not self.critical_errors:
-                return {'error': 'No hay errores críticos registrados'}
+                return {"error": "No hay errores críticos registrados"}
 
             analysis = {
-                'timestamp': datetime.now().isoformat(),
-                'total_critical_errors': len(self.critical_errors),
-                'error_distribution': self._analyze_error_distribution(),
-                'severity_analysis': self._analyze_severity_distribution(),
-                'pattern_analysis': self._analyze_pattern_distribution(),
-                'trend_analysis': self._analyze_error_trends(),
-                'recommendations': self._generate_recommendations()
+                "timestamp": datetime.now().isoformat(),
+                "total_critical_errors": len(self.critical_errors),
+                "error_distribution": self._analyze_error_distribution(),
+                "severity_analysis": self._analyze_severity_distribution(),
+                "pattern_analysis": self._analyze_pattern_distribution(),
+                "trend_analysis": self._analyze_error_trends(),
+                "recommendations": self._generate_recommendations(),
             }
 
             return analysis
@@ -130,7 +137,7 @@ class CriticalErrorMonitor:
         distribution = defaultdict(int)
 
         for error in self.critical_errors:
-            distribution[error['error_type']] += 1
+            distribution[error["error_type"]] += 1
 
         return dict(distribution)
 
@@ -139,7 +146,7 @@ class CriticalErrorMonitor:
         severity_dist = defaultdict(int)
 
         for error in self.critical_errors:
-            severity_dist[error['severity']] += 1
+            severity_dist[error["severity"]] += 1
 
         return dict(severity_dist)
 
@@ -148,7 +155,7 @@ class CriticalErrorMonitor:
         pattern_dist = defaultdict(int)
 
         for error in self.critical_errors:
-            for pattern in error['pattern_matched']:
+            for pattern in error["pattern_matched"]:
                 pattern_dist[pattern] += 1
 
         return dict(pattern_dist)
@@ -156,19 +163,24 @@ class CriticalErrorMonitor:
     def _analyze_error_trends(self) -> Dict[str, Any]:
         """Analizar tendencias temporales de errores"""
         if len(self.critical_errors) < 2:
-            return {'error': 'Datos insuficientes para análisis de tendencias'}
+            return {"error": "Datos insuficientes para análisis de tendencias"}
 
         # Agrupar por hora
         hourly_errors = defaultdict(int)
 
         for error in self.critical_errors:
-            hour = error['timestamp'].hour
+            hour = error["timestamp"].hour
             hourly_errors[hour] += 1
 
         return {
-            'hourly_distribution': dict(hourly_errors),
-            'peak_error_hour': max(hourly_errors.items(), key=lambda x: x[1])[0] if hourly_errors else None,
-            'error_frequency': len(self.critical_errors) / 24  # Errores por hora promedio
+            "hourly_distribution": dict(hourly_errors),
+            "peak_error_hour": (
+                max(hourly_errors.items(), key=lambda x: x[1])[0]
+                if hourly_errors
+                else None
+            ),
+            "error_frequency": len(self.critical_errors)
+            / 24,  # Errores por hora promedio
         }
 
     def _generate_recommendations(self) -> List[Dict[str, Any]]:
@@ -178,39 +190,47 @@ class CriticalErrorMonitor:
         # Analizar errores más frecuentes
         error_counts = defaultdict(int)
         for error in self.critical_errors:
-            error_counts[error['error_type']] += 1
+            error_counts[error["error_type"]] += 1
 
-        most_frequent = max(error_counts.items(), key=lambda x: x[1]) if error_counts else None
+        most_frequent = (
+            max(error_counts.items(), key=lambda x: x[1]) if error_counts else None
+        )
 
         if most_frequent:
             error_type, count = most_frequent
 
-            if error_type == 'import_error':
-                recommendations.append({
-                    'type': 'import_fix',
-                    'priority': 'critical',
-                    'description': 'Corregir imports faltantes que causan fallos de despliegue',
-                    'action': 'Verificar y corregir imports en otros archivos',
-                    'impact': 'Resuelve fallos de despliegue'
-                })
+            if error_type == "import_error":
+                recommendations.append(
+                    {
+                        "type": "import_fix",
+                        "priority": "critical",
+                        "description": "Corregir imports faltantes que causan fallos de despliegue",
+                        "action": "Verificar y corregir imports en otros archivos",
+                        "impact": "Resuelve fallos de despliegue",
+                    }
+                )
 
-            elif error_type == 'schema_error':
-                recommendations.append({
-                    'type': 'schema_fix',
-                    'priority': 'critical',
-                    'description': 'Corregir inconsistencias de esquema que causan errores 503',
-                    'action': 'Agregar columna created_at a tabla analistas o corregir queries',
-                    'impact': 'Resuelve errores 503 en endpoints'
-                })
+            elif error_type == "schema_error":
+                recommendations.append(
+                    {
+                        "type": "schema_fix",
+                        "priority": "critical",
+                        "description": "Corregir inconsistencias de esquema que causan errores 503",
+                        "action": "Agregar columna created_at a tabla analistas o corregir queries",
+                        "impact": "Resuelve errores 503 en endpoints",
+                    }
+                )
 
-            elif error_type == 'deployment_failure':
-                recommendations.append({
-                    'type': 'deployment_fix',
-                    'priority': 'critical',
-                    'description': 'Resolver problemas de despliegue que causan timeouts',
-                    'action': 'Verificar configuración de puertos y dependencias',
-                    'impact': 'Permite despliegues exitosos'
-                })
+            elif error_type == "deployment_failure":
+                recommendations.append(
+                    {
+                        "type": "deployment_fix",
+                        "priority": "critical",
+                        "description": "Resolver problemas de despliegue que causan timeouts",
+                        "action": "Verificar configuración de puertos y dependencias",
+                        "impact": "Permite despliegues exitosos",
+                    }
+                )
 
         return recommendations
 
@@ -218,16 +238,19 @@ class CriticalErrorMonitor:
         """Obtener resumen de errores críticos"""
         with self.lock:
             return {
-                'timestamp': datetime.now().isoformat(),
-                'summary': {
-                    'total_critical_errors': len(self.critical_errors),
-                    'deployment_failures': len(self.deployment_failures),
-                    'import_errors': len(self.import_errors),
-                    'schema_errors': len(self.schema_errors),
-                    'frontend_errors': len(self.frontend_errors),
-                    'last_error': self.critical_errors[-1] if self.critical_errors else None
-                }
+                "timestamp": datetime.now().isoformat(),
+                "summary": {
+                    "total_critical_errors": len(self.critical_errors),
+                    "deployment_failures": len(self.deployment_failures),
+                    "import_errors": len(self.import_errors),
+                    "schema_errors": len(self.schema_errors),
+                    "frontend_errors": len(self.frontend_errors),
+                    "last_error": (
+                        self.critical_errors[-1] if self.critical_errors else None
+                    ),
+                },
             }
+
 
 # Instancia global del monitor de errores críticos
 critical_error_monitor = CriticalErrorMonitor()
@@ -236,18 +259,19 @@ critical_error_monitor = CriticalErrorMonitor()
 # ENDPOINTS DE MONITOREO DE ERRORES CRÍTICOS
 # ============================================
 
+
 @router.post("/log-critical-error")
 async def log_critical_error_endpoint(
     error_data: Dict[str, Any],
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     🚨 Registrar error crítico específico
     """
     try:
-        error_type = error_data.get('error_type')
-        error_details = error_data.get('error_details', {})
+        error_type = error_data.get("error_type")
+        error_details = error_data.get("error_details", {})
 
         if not error_type:
             raise HTTPException(status_code=400, detail="error_type requerido")
@@ -257,7 +281,7 @@ async def log_critical_error_endpoint(
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "logged",
-            "message": "Error crítico registrado"
+            "message": "Error crítico registrado",
         }
 
     except HTTPException:
@@ -267,13 +291,13 @@ async def log_critical_error_endpoint(
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "error",
-            "error": str(e)
+            "error": str(e),
         }
+
 
 @router.get("/critical-error-analysis")
 async def get_critical_error_analysis(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """
     📊 Análisis de tendencias de errores críticos
@@ -284,7 +308,7 @@ async def get_critical_error_analysis(
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
-            "analysis": analysis
+            "analysis": analysis,
         }
 
     except Exception as e:
@@ -292,13 +316,13 @@ async def get_critical_error_analysis(
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "error",
-            "error": str(e)
+            "error": str(e),
         }
+
 
 @router.get("/critical-error-summary")
 async def get_critical_error_summary_endpoint(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """
     📋 Resumen de errores críticos
@@ -309,7 +333,7 @@ async def get_critical_error_summary_endpoint(
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
-            "summary": summary
+            "summary": summary,
         }
 
     except Exception as e:
@@ -317,5 +341,5 @@ async def get_critical_error_summary_endpoint(
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "error",
-            "error": str(e)
+            "error": str(e),
         }

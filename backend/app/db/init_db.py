@@ -6,14 +6,14 @@ This module handles database setup, migrations, and admin user creation.
 import logging
 import os
 import subprocess
-import time
 import traceback
 from datetime import datetime
-from sqlalchemy import text, inspect
-from app.db.session import engine, Base, SessionLocal
-from app.core.config import settings
-from app.models.user import User
 
+from sqlalchemy import inspect, text
+
+from app.core.config import settings
+from app.db.session import Base, SessionLocal, engine
+from app.models.user import User
 
 # Constantes de configuración
 DEFAULT_TIMEOUT_SECONDS = 60
@@ -21,6 +21,7 @@ DEFAULT_SEPARATOR_LENGTH = 50
 MAIN_TABLES = ["usuarios", "clientes", "prestamos", "pagos"]
 
 logger = logging.getLogger(__name__)
+
 
 def check_database_connection() -> bool:
     """Verifica si la conexión a la base de datos está funcionando"""
@@ -32,6 +33,7 @@ def check_database_connection() -> bool:
         logger.error(f"Error conectando a base de datos: {e}")
         return False
 
+
 def table_exists(table_name: str) -> bool:
     """Verifica si una tabla existe en la base de datos"""
     try:
@@ -40,6 +42,7 @@ def table_exists(table_name: str) -> bool:
     except Exception as e:
         logger.error(f"Error verificando tabla {table_name}: {e}")
         return False
+
 
 def create_tables():
     """Crea todas las tablas definidas en los modelos"""
@@ -55,6 +58,7 @@ def create_tables():
         logger.error(f"Error creando tablas: {e}")
         return False
 
+
 def run_migrations():
     """Ejecuta las migraciones de Alembic"""
     try:
@@ -69,7 +73,7 @@ def run_migrations():
             ["alembic", "upgrade", "head"],
             capture_output=True,
             text=True,
-            timeout=DEFAULT_TIMEOUT_SECONDS
+            timeout=DEFAULT_TIMEOUT_SECONDS,
         )
 
         if result.returncode == 0:
@@ -83,6 +87,7 @@ def run_migrations():
         logger.error(f"Error ejecutando migraciones: {e}")
         return False
 
+
 def create_admin_user():
     """Crea el usuario administrador si no existe"""
     try:
@@ -93,15 +98,21 @@ def create_admin_user():
         db = SessionLocal()
 
         # Verificar si ya existe el admin correcto
-        existing_admin = db.query(User).filter(User.email == "itmaster@rapicreditca.com").first()
+        existing_admin = (
+            db.query(User).filter(User.email == "itmaster@rapicreditca.com").first()
+        )
 
         if existing_admin:
-            logger.info(f"Usuario itmaster@rapicreditca.com ya existe: {existing_admin.email}")
+            logger.info(
+                f"Usuario itmaster@rapicreditca.com ya existe: {existing_admin.email}"
+            )
             db.close()
             return True
 
         # Eliminar admin@financiamiento.com si existe
-        wrong_admin = db.query(User).filter(User.email == "admin@financiamiento.com").first()
+        wrong_admin = (
+            db.query(User).filter(User.email == "admin@financiamiento.com").first()
+        )
         if wrong_admin:
             logger.info(f"Eliminando usuario incorrecto: {wrong_admin.email}")
             db.delete(wrong_admin)
@@ -117,7 +128,7 @@ def create_admin_user():
             hashed_password=get_password_hash(settings.ADMIN_PASSWORD),
             is_admin=True,  # Cambio clave: rol → is_admin
             is_active=True,
-            created_at=datetime.utcnow()
+            created_at=datetime.utcnow(),
         )
 
         db.add(admin)
@@ -134,12 +145,13 @@ def create_admin_user():
     except LookupError as e:
         # Error de enum - esto es esperado si la DB tiene roles antiguos
         logger.warning(f"Error de enum detectado (esperado): {e}")
-        logger.warning(f"Esto se resolverá ejecutando /api/v1/emergency/migrate-roles")
+        logger.warning("Esto se resolverá ejecutando /api/v1/emergency/migrate-roles")
         return False
     except Exception as e:
         logger.error(f"Error creando usuario admin: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         return False
+
 
 def init_db() -> bool:
     """Inicializa la base de datos creando las tablas si no existen"""
@@ -152,7 +164,9 @@ def init_db() -> bool:
 
         # NO ejecutar migraciones automáticamente para evitar conflictos con enum
         # Las migraciones deben ejecutarse manualmente vía endpoint de emergencia
-        logger.info("Saltando migraciones automáticas (usar endpoint de emergencia si es necesario)")
+        logger.info(
+            "Saltando migraciones automáticas (usar endpoint de emergencia si es necesario)"
+        )
 
         tables_exist = all(table_exists(table) for table in MAIN_TABLES)
 
@@ -176,14 +190,16 @@ def init_db() -> bool:
         logger.error(f"Error inicializando base de datos: {e}")
         return False
 
+
 init_database = init_db
+
 
 def init_db_startup():
     """Función que se llama al inicio de la aplicación"""
     try:
-        logger.info("\n" + "="*DEFAULT_SEPARATOR_LENGTH)
+        logger.info("\n" + "=" * DEFAULT_SEPARATOR_LENGTH)
         logger.info(f"Sistema de Préstamos y Cobranza v{settings.APP_VERSION}")
-        logger.info("="*DEFAULT_SEPARATOR_LENGTH)
+        logger.info("=" * DEFAULT_SEPARATOR_LENGTH)
         logger.info(f"Base de datos: {settings.get_database_url(hide_password=True)}")
 
         # Intentar inicializar la base de datos pero no fallar si no se puede conectar
@@ -198,7 +214,9 @@ def init_db_startup():
             else:
                 logger.warning("Advertencia: Error inicializando tablas")
         except Exception as db_error:
-            logger.error(f"Error de base de datos (la aplicación continuará): {db_error}")
+            logger.error(
+                f"Error de base de datos (la aplicación continuará): {db_error}"
+            )
 
         if not db_initialized:
             logger.warning("La aplicación iniciará en modo de funcionalidad limitada")
@@ -207,17 +225,19 @@ def init_db_startup():
         logger.info(f"Entorno: {settings.ENVIRONMENT}")
         logger.info("Documentación: /docs")
         logger.info(f"Debug mode: {'ON' if settings.DEBUG else 'OFF'}")
-        logger.info("="*DEFAULT_SEPARATOR_LENGTH)
+        logger.info("=" * DEFAULT_SEPARATOR_LENGTH)
         logger.info("")
 
     except Exception as e:
         logger.error(f"Error en startup de DB: {e}")
         logger.warning("Continuando sin conexión a base de datos")
 
+
 def init_db_shutdown():
     """Función que se llama al cerrar la aplicación"""
     try:
         from app.db.session import close_db_connections
+
         close_db_connections()
         logger.info("")
         logger.info("Sistema de Préstamos y Cobranza detenido")

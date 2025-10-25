@@ -1,10 +1,8 @@
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, ConfigDict
-from typing import Dict, Any
+
 
 class AuditoriaBase(BaseModel):
     usuario_id: Optional[int] = None
@@ -21,8 +19,10 @@ class AuditoriaBase(BaseModel):
     resultado: str = "EXITOSO"
     mensaje_error: Optional[str] = None
 
+
 class AuditoriaCreate(AuditoriaBase):
     pass
+
 
 class AuditoriaResponse(AuditoriaBase):
     id: int
@@ -30,12 +30,14 @@ class AuditoriaResponse(AuditoriaBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class AuditoriaListResponse(BaseModel):
     items: List[AuditoriaResponse]
     total: int
     page: int
     page_size: int
     total_pages: int
+
 
 class AuditoriaStatsResponse(BaseModel):
     total_acciones: int

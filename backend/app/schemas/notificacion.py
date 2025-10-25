@@ -2,13 +2,15 @@
 """
 Schemas de Pydantic para Notificación
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from pydantic import BaseModel, Field, ConfigDict, EmailStr
+from datetime import datetime
+from typing import Any, Dict, Optional
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 # ============================================================================
 # Schemas Base
 # ============================================================================
+
 
 class NotificacionBase(BaseModel):
     """Schema base para Notificación"""
@@ -22,7 +24,9 @@ class NotificacionBase(BaseModel):
 
     # Tipo y categoría
     tipo: str = Field(..., description="EMAIL, SMS, WHATSAPP, PUSH")
-    categoria: str = Field(..., description="RECORDATORIO_PAGO, PRESTAMO_APROBADO, etc.")
+    categoria: str = Field(
+        ..., description="RECORDATORIO_PAGO, PRESTAMO_APROBADO, etc."
+    )
 
     # Contenido
     asunto: Optional[str] = Field(None, max_length=255)
@@ -36,9 +40,11 @@ class NotificacionBase(BaseModel):
     programada_para: Optional[datetime] = None
     max_intentos: int = Field(default=3, ge=1, le=10)
 
+
 class NotificacionCreate(NotificacionBase):
     """Schema para crear una notificación"""
-    pass
+
+
 
 class NotificacionUpdate(BaseModel):
     """Schema para actualizar una notificación"""
@@ -50,9 +56,11 @@ class NotificacionUpdate(BaseModel):
     programada_para: Optional[datetime] = None
     prioridad: Optional[str] = None
 
+
 # ============================================================================
 # Schemas de Respuesta
 # ============================================================================
+
 
 class NotificacionInDB(NotificacionBase):
     """Schema de notificación en base de datos"""
@@ -75,6 +83,7 @@ class NotificacionInDB(NotificacionBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class NotificacionResponse(NotificacionInDB):
     """Schema de respuesta de notificación"""
 
@@ -84,17 +93,23 @@ class NotificacionResponse(NotificacionInDB):
     fallo: bool = False
     puede_reintentar: bool = False
 
+
 # ============================================================================
 # Schemas para acciones específicas
 # ============================================================================
 
+
 class NotificacionMarcarEnviada(BaseModel):
     """Schema para marcar notificación como enviada"""
+
     respuesta_servicio: Optional[str] = None
+
 
 class NotificacionMarcarFallida(BaseModel):
     """Schema para marcar notificación como fallida"""
+
     error_mensaje: str
+
 
 class NotificacionRecordatorioPago(BaseModel):
     """Schema para crear recordatorio de pago"""
@@ -104,13 +119,14 @@ class NotificacionRecordatorioPago(BaseModel):
     mensaje: str
     programada_para: Optional[datetime] = None
     extra_data: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Datos adicionales como monto, fecha_vencimiento, etc."
+        None, description="Datos adicionales como monto, fecha_vencimiento, etc."
     )
+
 
 # ============================================================================
 # Schemas de Listado y Filtrado
 # ============================================================================
+
 
 class NotificacionFilter(BaseModel):
     """Filtros para listar notificaciones"""
@@ -124,6 +140,7 @@ class NotificacionFilter(BaseModel):
     fecha_desde: Optional[datetime] = None
     fecha_hasta: Optional[datetime] = None
 
+
 class NotificacionList(BaseModel):
     """Schema para lista de notificaciones"""
 
@@ -133,9 +150,11 @@ class NotificacionList(BaseModel):
     page_size: int
     total_pages: int
 
+
 # ============================================================================
 # Schemas de Estadísticas
 # ============================================================================
+
 
 class NotificacionStats(BaseModel):
     """Estadísticas de notificaciones"""

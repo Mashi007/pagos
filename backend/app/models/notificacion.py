@@ -3,32 +3,39 @@
 Modelo de Notificación
 Sistema de notificaciones por email, SMS o WhatsApp
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
+from datetime import datetime
 from enum import Enum as PyEnum
-from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Enum, ForeignKey
-from sqlalchemy.orm import Session, relationship
+
+from sqlalchemy import (JSON, Column, DateTime, Enum, ForeignKey, Integer,
+                        String, Text)
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.db.session import Base
 
+
 # Enums para mejor validación y tipado
 class EstadoNotificacion(str, PyEnum):
     """Estados posibles de una notificación"""
+
     PENDIENTE = "PENDIENTE"
     ENVIADA = "ENVIADA"
     FALLIDA = "FALLIDA"
     LEIDA = "LEIDA"
 
+
 class TipoNotificacion(str, PyEnum):
     """Tipos de notificación disponibles"""
+
     EMAIL = "EMAIL"
     SMS = "SMS"
     WHATSAPP = "WHATSAPP"
     PUSH = "PUSH"
 
+
 class CategoriaNotificacion(str, PyEnum):
     """Categorías de notificación"""
+
     RECORDATORIO_PAGO = "RECORDATORIO_PAGO"
     PRESTAMO_APROBADO = "PRESTAMO_APROBADO"
     PRESTAMO_RECHAZADO = "PRESTAMO_RECHAZADO"
@@ -38,17 +45,21 @@ class CategoriaNotificacion(str, PyEnum):
     MORA_APLICADA = "MORA_APLICADA"
     GENERAL = "GENERAL"
 
+
 class PrioridadNotificacion(str, PyEnum):
     """Niveles de prioridad"""
+
     BAJA = "BAJA"
     NORMAL = "NORMAL"
     ALTA = "ALTA"
     URGENTE = "URGENTE"
 
+
 class Notificacion(Base):
     """
     Modelo de Notificación para comunicaciones con usuarios/clientes
     """
+
     __tablename__ = "notificaciones"
 
     # Identificación
@@ -59,13 +70,13 @@ class Notificacion(Base):
         Integer,
         ForeignKey("usuarios.id", ondelete="CASCADE"),
         nullable=True,
-        index=True
+        index=True,
     )
     cliente_id = Column(
         Integer,
         ForeignKey("clientes.id", ondelete="CASCADE"),
         nullable=True,
-        index=True
+        index=True,
     )
 
     # Destinatario manual (si no es user ni cliente registrado)
@@ -74,18 +85,14 @@ class Notificacion(Base):
     destinatario_nombre = Column(String(255), nullable=True)
 
     # Tipo de notificación
-    tipo = Column(
-        Enum(TipoNotificacion),
-        nullable=False,
-        index=True
-    )
+    tipo = Column(Enum(TipoNotificacion), nullable=False, index=True)
 
     # Categoría
     categoria = Column(
         Enum(CategoriaNotificacion),
         nullable=False,
         default=CategoriaNotificacion.GENERAL,
-        index=True
+        index=True,
     )
 
     # Contenido
@@ -100,7 +107,7 @@ class Notificacion(Base):
         Enum(EstadoNotificacion),
         nullable=False,
         default=EstadoNotificacion.PENDIENTE,
-        index=True
+        index=True,
     )
 
     # Intentos de envío
@@ -109,9 +116,7 @@ class Notificacion(Base):
 
     # Fechas
     programada_para = Column(
-        DateTime(timezone=True),
-        nullable=True,
-        index=True
+        DateTime(timezone=True), nullable=True, index=True
     )  # Para notificaciones programadas
 
     enviada_en = Column(DateTime(timezone=True), nullable=True)
@@ -125,7 +130,7 @@ class Notificacion(Base):
     prioridad = Column(
         Enum(PrioridadNotificacion),
         nullable=False,
-        default=PrioridadNotificacion.NORMAL
+        default=PrioridadNotificacion.NORMAL,
     )
 
     # Auditoría
@@ -182,7 +187,7 @@ class Notificacion(Base):
         cliente_id: int,
         tipo: TipoNotificacion,
         mensaje: str,
-        programada_para: datetime = None
+        programada_para: datetime = None,
     ):
         """
         Helper para crear notificaciones de recordatorio de pago
@@ -203,5 +208,5 @@ class Notificacion(Base):
             asunto="Recordatorio de Pago",
             mensaje=mensaje,
             programada_para=programada_para,
-            prioridad=PrioridadNotificacion.ALTA
+            prioridad=PrioridadNotificacion.ALTA,
         )

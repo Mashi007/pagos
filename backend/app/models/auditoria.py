@@ -3,21 +3,23 @@
 Modelo de Auditoría
 Registra todas las acciones importantes del sistema para trazabilidad
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy.sql import func
 from enum import Enum
 
+from sqlalchemy import (JSON, Column, DateTime, ForeignKey, Integer, String,
+                        Text)
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+
 from app.db.session import Base
+
 
 class TipoAccion(str, Enum):
     """
     Enum para los tipos de acciones de auditoría
     """
+
     CREAR = "CREAR"
-    ACTUALIZAR = "ACTUALIZAR" 
+    ACTUALIZAR = "ACTUALIZAR"
     ELIMINAR = "ELIMINAR"
     ANULAR = "ANULAR"
     LOGIN = "LOGIN"
@@ -28,10 +30,12 @@ class TipoAccion(str, Enum):
     ACTIVAR = "ACTIVAR"
     DESACTIVAR = "DESACTIVAR"
 
+
 class Auditoria(Base):
     """
     Modelo de Auditoría para registro de acciones del sistema
     """
+
     __tablename__ = "auditorias"
 
     # Identificación
@@ -42,35 +46,25 @@ class Auditoria(Base):
         Integer,
         ForeignKey("usuarios.id", ondelete="SET NULL"),
         nullable=True,
-        index=True
+        index=True,
     )
 
     # Email del usuario (para ordenamiento rápido)
-    usuario_email = Column(
-        String(255),
-        nullable=True,
-        index=True
-    )
+    usuario_email = Column(String(255), nullable=True, index=True)
 
     # Acción realizada
     accion = Column(
-        String(50),
-        nullable=False,
-        index=True
+        String(50), nullable=False, index=True
     )  # CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.
 
     # Módulo del sistema
     modulo = Column(
-        String(50),
-        nullable=False,
-        index=True
+        String(50), nullable=False, index=True
     )  # USUARIOS, CLIENTES, PRESTAMOS, PAGOS, etc.
 
     # Entidad afectada
     tabla = Column(
-        String(50),
-        nullable=False,
-        index=True
+        String(50), nullable=False, index=True
     )  # Cliente, Prestamo, Pago, User, etc.
 
     registro_id = Column(Integer, nullable=True, index=True)
@@ -80,7 +74,7 @@ class Auditoria(Base):
 
     # Datos relevantes (JSON)
     datos_anteriores = Column(JSON, nullable=True)  # Estado antes del cambio
-    datos_nuevos = Column(JSON, nullable=True)      # Estado después del cambio
+    datos_nuevos = Column(JSON, nullable=True)  # Estado después del cambio
 
     # Metadata
     ip_address = Column(String(45), nullable=True)  # IPv4 o IPv6
@@ -88,19 +82,14 @@ class Auditoria(Base):
 
     # Resultado de la acción
     resultado = Column(
-        String(20),
-        nullable=False,
-        default="EXITOSO"
+        String(20), nullable=False, default="EXITOSO"
     )  # EXITOSO, FALLIDO, PARCIAL
 
     mensaje_error = Column(Text, nullable=True)
 
     # Timestamp
     fecha = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-        index=True
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
 
     # Relaciones
@@ -124,7 +113,7 @@ class Auditoria(Base):
         ip_address: str = None,
         user_agent: str = None,
         resultado: str = "EXITOSO",
-        mensaje_error: str = None
+        mensaje_error: str = None,
     ):
         """
         Método helper para crear registros de auditoría
@@ -160,5 +149,5 @@ class Auditoria(Base):
             ip_address=ip_address,
             user_agent=user_agent,
             resultado=resultado,
-            mensaje_error=mensaje_error
+            mensaje_error=mensaje_error,
         )

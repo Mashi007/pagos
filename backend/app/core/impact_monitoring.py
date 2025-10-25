@@ -3,22 +3,22 @@ Sistema de Monitoreo con Análisis de Impacto en Performance
 Implementa monitoreo avanzado con métricas de impacto en recursos del sistema
 """
 
+import json
 import logging
+import os
 import threading
 import time
-import os
-import json
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from dataclasses import dataclass, asdict
+from collections import deque
+from dataclasses import asdict, dataclass
+from datetime import datetime
 from enum import Enum
-from collections import deque, defaultdict
+from typing import Any, Dict, List, Optional
 
-from sqlalchemy.orm import Session
 
 # Import condicional de psutil
 try:
     import psutil
+
     PSUTIL_AVAILABLE = True
 except ImportError:
     PSUTIL_AVAILABLE = False
@@ -35,15 +35,19 @@ MAX_METRICS_HISTORY = 1000
 
 logger = logging.getLogger(__name__)
 
+
 class AlertSeverity(Enum):
     """Severidad de alertas"""
+
     INFO = "INFO"
     WARNING = "WARNING"
     CRITICAL = "CRITICAL"
 
+
 @dataclass
 class SystemMetrics:
     """Métricas del sistema"""
+
     timestamp: datetime
     cpu_percent: float
     memory_percent: float
@@ -55,9 +59,11 @@ class SystemMetrics:
     network_bytes_sent: int
     network_bytes_recv: int
 
+
 @dataclass
 class PerformanceImpact:
     """Análisis de impacto en performance"""
+
     endpoint: str
     response_time_ms: float
     cpu_usage_percent: float
@@ -65,9 +71,11 @@ class PerformanceImpact:
     impact_level: str
     timestamp: datetime
 
+
 @dataclass
 class Alert:
     """Estructura de alerta"""
+
     id: str
     type: str
     severity: AlertSeverity
@@ -75,6 +83,7 @@ class Alert:
     timestamp: datetime
     metrics: Dict[str, Any]
     resolved: bool = False
+
 
 class ImpactAnalyzer:
     """
@@ -95,7 +104,9 @@ class ImpactAnalyzer:
             return
 
         self.monitoring_active = True
-        self.monitor_thread = threading.Thread(target=self._monitoring_loop, daemon=True)
+        self.monitor_thread = threading.Thread(
+            target=self._monitoring_loop, daemon=True
+        )
         self.monitor_thread.start()
         logger.info("Monitoreo de impacto iniciado")
 
@@ -124,7 +135,7 @@ class ImpactAnalyzer:
             if PSUTIL_AVAILABLE:
                 cpu_percent = psutil.cpu_percent(interval=0.1)
                 memory = psutil.virtual_memory()
-                disk = psutil.disk_usage('/')
+                disk = psutil.disk_usage("/")
                 network = psutil.net_io_counters()
 
                 metrics = SystemMetrics(
@@ -135,9 +146,13 @@ class ImpactAnalyzer:
                     disk_percent=disk.percent,
                     disk_free_gb=disk.free // (1024 * 1024 * 1024),
                     process_count=len(psutil.pids()),
-                    load_average=list(os.getloadavg()) if hasattr(os, 'getloadavg') else [0, 0, 0],
+                    load_average=(
+                        list(os.getloadavg())
+                        if hasattr(os, "getloadavg")
+                        else [0, 0, 0]
+                    ),
                     network_bytes_sent=network.bytes_sent,
-                    network_bytes_recv=network.bytes_recv
+                    network_bytes_recv=network.bytes_recv,
                 )
             else:
                 # Métricas simuladas cuando psutil no está disponible
@@ -151,11 +166,13 @@ class ImpactAnalyzer:
                     process_count=0,
                     load_average=[0, 0, 0],
                     network_bytes_sent=0,
-                    network_bytes_recv=0
+                    network_bytes_recv=0,
                 )
 
             self.metrics_history.append(metrics)
-            logger.debug(f"Métricas recolectadas: CPU {metrics.cpu_percent:.1f}%, Memory {metrics.memory_percent:.1f}%")
+            logger.debug(
+                f"Métricas recolectadas: CPU {metrics.cpu_percent:.1f}%, Memory {metrics.memory_percent:.1f}%"
+            )
 
         except Exception as e:
             logger.error(f"Error recolectando métricas: {e}")
@@ -170,7 +187,7 @@ class ImpactAnalyzer:
 
         # Calcular deltas
         cpu_delta = current.cpu_percent - previous.cpu_percent
-        memory_delta = current.memory_percent - previous.memory_percent
+        current.memory_percent - previous.memory_percent
         memory_mb_delta = previous.memory_available_mb - current.memory_available_mb
 
         # Determinar nivel de impacto
@@ -187,11 +204,13 @@ class ImpactAnalyzer:
             cpu_usage_percent=cpu_delta,
             memory_usage_mb=memory_mb_delta,
             impact_level=impact_level,
-            timestamp=current.timestamp
+            timestamp=current.timestamp,
         )
 
         self.performance_history.append(impact)
-        logger.debug(f"Análisis de impacto: {impact_level}, CPU delta: {cpu_delta:.1f}%")
+        logger.debug(
+            f"Análisis de impacto: {impact_level}, CPU delta: {cpu_delta:.1f}%"
+        )
 
     def _check_alerts(self):
         """Verificar condiciones de alerta"""
@@ -206,7 +225,7 @@ class ImpactAnalyzer:
                 alert_type="CPU_HIGH",
                 severity=AlertSeverity.WARNING,
                 message=f"CPU usage {current.cpu_percent:.1f}% exceeds threshold {ALERT_THRESHOLD_CPU}%",
-                metrics={"cpu_percent": current.cpu_percent}
+                metrics={"cpu_percent": current.cpu_percent},
             )
 
         # Verificar memoria
@@ -215,7 +234,7 @@ class ImpactAnalyzer:
                 alert_type="MEMORY_HIGH",
                 severity=AlertSeverity.WARNING,
                 message=f"Memory usage {current.memory_percent:.1f}% exceeds threshold {ALERT_THRESHOLD_MEMORY}%",
-                metrics={"memory_percent": current.memory_percent}
+                metrics={"memory_percent": current.memory_percent},
             )
 
         # Verificar disco
@@ -224,17 +243,22 @@ class ImpactAnalyzer:
                 alert_type="DISK_HIGH",
                 severity=AlertSeverity.CRITICAL,
                 message=f"Disk usage {current.disk_percent:.1f}% exceeds threshold {ALERT_THRESHOLD_DISK}%",
-                metrics={"disk_percent": current.disk_percent}
+                metrics={"disk_percent": current.disk_percent},
             )
 
-    def _create_alert(self, alert_type: str, severity: AlertSeverity, message: str, metrics: Dict[str, Any]):
+    def _create_alert(
+        self,
+        alert_type: str,
+        severity: AlertSeverity,
+        message: str,
+        metrics: Dict[str, Any],
+    ):
         """Crear nueva alerta"""
         alert_id = f"{alert_type}_{int(time.time())}"
 
         # Verificar si ya existe una alerta similar no resuelta
         existing_alert = next(
-            (a for a in self.alerts if a.type == alert_type and not a.resolved),
-            None
+            (a for a in self.alerts if a.type == alert_type and not a.resolved), None
         )
 
         if existing_alert:
@@ -246,7 +270,7 @@ class ImpactAnalyzer:
             severity=severity,
             message=message,
             timestamp=datetime.utcnow(),
-            metrics=metrics
+            metrics=metrics,
         )
 
         self.alerts.append(alert)
@@ -273,7 +297,7 @@ class ImpactAnalyzer:
             cpu_usage_percent=current_metrics.cpu_percent,
             memory_usage_mb=current_metrics.memory_available_mb,
             impact_level=impact_level,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.utcnow(),
         )
 
         self.performance_history.append(impact)
@@ -284,7 +308,7 @@ class ImpactAnalyzer:
                 alert_type="SLOW_RESPONSE",
                 severity=AlertSeverity.WARNING,
                 message=f"Endpoint {endpoint} response time {response_time_ms:.2f}ms exceeds threshold",
-                metrics={"endpoint": endpoint, "response_time_ms": response_time_ms}
+                metrics={"endpoint": endpoint, "response_time_ms": response_time_ms},
             )
 
     def get_current_status(self) -> Dict[str, Any]:
@@ -305,13 +329,12 @@ class ImpactAnalyzer:
             "status": "healthy" if not active_alerts else "degraded",
             "timestamp": current.timestamp.isoformat(),
             "current_metrics": asdict(current),
-            "trends": {
-                "cpu_trend": cpu_trend,
-                "memory_trend": memory_trend
-            },
+            "trends": {"cpu_trend": cpu_trend, "memory_trend": memory_trend},
             "active_alerts": len(active_alerts),
-            "alerts": [asdict(alert) for alert in active_alerts[-5:]],  # Últimas 5 alertas
-            "monitoring_active": self.monitoring_active
+            "alerts": [
+                asdict(alert) for alert in active_alerts[-5:]
+            ],  # Últimas 5 alertas
+            "monitoring_active": self.monitoring_active,
         }
 
     def _calculate_trend(self, metric_name: str) -> str:
@@ -332,10 +355,10 @@ class ImpactAnalyzer:
         sum_xy = sum(x[i] * y[i] for i in range(n))
         sum_x2 = sum(x[i] ** 2 for i in range(n))
 
-        if n * sum_x2 - sum_x ** 2 == 0:
+        if n * sum_x2 - sum_x**2 == 0:
             return "stable"
 
-        slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x ** 2)
+        slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x**2)
 
         if slope > 0.5:
             return "increasing"
@@ -349,19 +372,25 @@ class ImpactAnalyzer:
         if not self.performance_history:
             return {"message": "No hay datos de performance disponibles"}
 
-        recent_performance = list(self.performance_history)[-10:]  # Últimos 10 registros
+        recent_performance = list(self.performance_history)[
+            -10:
+        ]  # Últimos 10 registros
 
         # Calcular estadísticas
-        response_times = [p.response_time_ms for p in recent_performance if p.response_time_ms > 0]
+        response_times = [
+            p.response_time_ms for p in recent_performance if p.response_time_ms > 0
+        ]
         impact_levels = [p.impact_level for p in recent_performance]
 
-        avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+        avg_response_time = (
+            sum(response_times) / len(response_times) if response_times else 0
+        )
         max_response_time = max(response_times) if response_times else 0
 
         impact_counts = {
             "LOW": impact_levels.count("LOW"),
             "MEDIUM": impact_levels.count("MEDIUM"),
-            "HIGH": impact_levels.count("HIGH")
+            "HIGH": impact_levels.count("HIGH"),
         }
 
         return {
@@ -370,21 +399,29 @@ class ImpactAnalyzer:
                 "avg_response_time_ms": avg_response_time,
                 "max_response_time_ms": max_response_time,
                 "total_requests": len(recent_performance),
-                "impact_distribution": impact_counts
+                "impact_distribution": impact_counts,
             },
             "recent_performance": [asdict(p) for p in recent_performance[-5:]],
-            "recommendations": self._generate_recommendations(impact_counts, avg_response_time)
+            "recommendations": self._generate_recommendations(
+                impact_counts, avg_response_time
+            ),
         }
 
-    def _generate_recommendations(self, impact_counts: Dict[str, int], avg_response_time: float) -> List[str]:
+    def _generate_recommendations(
+        self, impact_counts: Dict[str, int], avg_response_time: float
+    ) -> List[str]:
         """Generar recomendaciones basadas en el análisis"""
         recommendations = []
 
         if impact_counts["HIGH"] > impact_counts["LOW"]:
-            recommendations.append("Considerar optimización de endpoints con alto impacto")
+            recommendations.append(
+                "Considerar optimización de endpoints con alto impacto"
+            )
 
         if avg_response_time > 500:
-            recommendations.append("Implementar caching para reducir tiempos de respuesta")
+            recommendations.append(
+                "Implementar caching para reducir tiempos de respuesta"
+            )
 
         if impact_counts["MEDIUM"] + impact_counts["HIGH"] > impact_counts["LOW"]:
             recommendations.append("Revisar configuración de recursos del sistema")
@@ -394,24 +431,30 @@ class ImpactAnalyzer:
 
         return recommendations
 
+
 # Instancia global del analizador
 impact_analyzer = ImpactAnalyzer()
+
 
 def get_impact_analyzer() -> ImpactAnalyzer:
     """Obtener instancia del analizador de impacto"""
     return impact_analyzer
 
+
 def start_monitoring():
     """Iniciar monitoreo del sistema"""
     impact_analyzer.start_monitoring()
+
 
 def stop_monitoring():
     """Detener monitoreo del sistema"""
     impact_analyzer.stop_monitoring()
 
+
 def record_endpoint_performance(endpoint: str, response_time_ms: float):
     """Registrar performance de un endpoint"""
     impact_analyzer.record_endpoint_performance(endpoint, response_time_ms)
+
 
 if __name__ == "__main__":
     # Ejemplo de uso

@@ -3,10 +3,12 @@
 SQLAlchemy configuration: Engine, SessionLocal and Base.
 """
 import logging
+
+from fastapi import HTTPException
 from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from fastapi import HTTPException
+
 from app.core.config import settings
 
 # CORRECTO: Importar desde app.core.config
@@ -34,19 +36,16 @@ engine = create_engine(
     connect_args={
         "connect_timeout": DEFAULT_CONNECT_TIMEOUT,  # Timeout de conexión
         "application_name": "rapicredit_backend",
-        "options": f"-c statement_timeout={DEFAULT_STATEMENT_TIMEOUT}"  # Timeout de queries
-    }
+        "options": f"-c statement_timeout={DEFAULT_STATEMENT_TIMEOUT}",  # Timeout de queries
+    },
 )
 
 # SessionLocal para crear sesiones de BD
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Base para los modelos
 Base = declarative_base()
+
 
 # Dependency para FastAPI
 def get_db():
@@ -77,7 +76,7 @@ def get_db():
             raise e
 
         # CORRECCIÓN CRÍTICA: NO sobrescribir HTTPException que ya tienen mensajes específicos
-        
+
         if isinstance(e, HTTPException):
             # Re-lanzar HTTPException sin modificar (preservar mensaje específico)
             raise e
@@ -88,8 +87,8 @@ def get_db():
 
         # Solo para errores que NO son HTTPException
         raise HTTPException(
-            status_code=503, 
-            detail="Servicio de base de datos temporalmente no disponible"
+            status_code=503,
+            detail="Servicio de base de datos temporalmente no disponible",
         )
     finally:
         if db:
@@ -97,6 +96,7 @@ def get_db():
                 db.close()
             except Exception:
                 pass  # Ignorar errores al cerrar
+
 
 def close_db_connections():
     """Cierra todas las conexiones de la pool al shutdown"""

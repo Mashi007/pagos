@@ -5,19 +5,18 @@ Integración con Sentry, Prometheus y logging estructurado
 """
 
 import logging
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from datetime import datetime
+from typing import Optional
 
+import sentry_sdk
 from fastapi import FastAPI
 from prometheus_fastapi_instrumentator import Instrumentator
-import sentry_sdk
+from pythonjsonlogger import jsonlogger
 from sentry_sdk.integrations.fastapi import FastAPIIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-from pythonjsonlogger import jsonlogger
+
 from app.core.config import settings
+
 
 def configure_sentry(app: FastAPI) -> None:
     """
@@ -49,6 +48,7 @@ def configure_sentry(app: FastAPI) -> None:
 
     logging.info(f"Sentry configurado - Environment: {settings.ENVIRONMENT}")
 
+
 def before_send_sentry(event, hint):
     """
     Hook para modificar eventos antes de enviar a Sentry
@@ -64,6 +64,7 @@ def before_send_sentry(event, hint):
                     event["request"]["headers"][header] = "[FILTERED]"
 
     return event
+
 
 def configure_prometheus(app: FastAPI) -> Optional[Instrumentator]:
     """
@@ -94,7 +95,21 @@ def configure_prometheus(app: FastAPI) -> Optional[Instrumentator]:
     instrumentator.add(
         # Duración de requests por endpoint
         instrumentator.metrics.latency(
-            buckets=(0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0)
+            buckets=(
+                0.01,
+                0.025,
+                0.05,
+                0.075,
+                0.1,
+                0.25,
+                0.5,
+                0.75,
+                1.0,
+                2.5,
+                5.0,
+                7.5,
+                10.0,
+            )
         )
     )
 
@@ -113,6 +128,7 @@ def configure_prometheus(app: FastAPI) -> Optional[Instrumentator]:
 
     return instrumentator
 
+
 def configure_structured_logging() -> None:
     """
     Configura logging estructurado en formato JSON
@@ -128,7 +144,7 @@ def configure_structured_logging() -> None:
             "levelname": "level",
             "pathname": "file",
             "lineno": "line",
-        }
+        },
     )
     log_handler.setFormatter(formatter)
 
@@ -155,6 +171,7 @@ def configure_structured_logging() -> None:
         logger.propagate = False
 
     logging.info(f"Logging estructurado configurado - Level: {log_level}")
+
 
 def setup_monitoring(app: FastAPI) -> dict:
     """
@@ -194,18 +211,17 @@ def setup_monitoring(app: FastAPI) -> dict:
     except Exception as e:
         logging.error(f"Error configurando monitoreo: {str(e)}")
         # No fallar si el monitoreo falla
-        pass
 
     return config_applied
+
 
 # ============================================
 # MÉTRICAS PERSONALIZADAS DE FINANCIAMIENTO AUTOMOTRIZ
 # ============================================
 
+
 def track_business_metrics(
-    metric_name: str,
-    value: float,
-    labels: Optional[dict] = None
+    metric_name: str, value: float, labels: Optional[dict] = None
 ) -> None:
     """
     Registra métricas de negocio personalizadas para financiamiento automotriz
@@ -230,8 +246,8 @@ def track_business_metrics(
                 "metric_value": value,
                 "labels": labels or {},
                 "timestamp": datetime.now().isoformat(),
-                "system": "financiamiento_automotriz"
-            }
+                "system": "financiamiento_automotriz",
+            },
         )
 
         # Si Prometheus está habilitado, registrar métrica
@@ -242,12 +258,13 @@ def track_business_metrics(
     except Exception as e:
         logging.error(f"Error registrando métrica de negocio: {e}")
 
+
 def track_financial_operation(
     operation_type: str,
     amount: float,
     client_id: int,
     user_id: int,
-    additional_data: Optional[dict] = None
+    additional_data: Optional[dict] = None,
 ) -> None:
     """
     Trackear operaciones financieras específicas
@@ -266,15 +283,16 @@ def track_financial_operation(
             "operation_type": operation_type,
             "client_id": client_id,
             "user_id": user_id,
-            **(additional_data or {})
-        }
+            **(additional_data or {}),
+        },
     )
+
 
 def track_approval_workflow(
     workflow_step: str,
     request_type: str,
     user_role: str,
-    processing_time_seconds: Optional[float] = None
+    processing_time_seconds: Optional[float] = None,
 ) -> None:
     """
     Trackear flujo de aprobaciones
@@ -291,24 +309,28 @@ def track_approval_workflow(
         {
             "workflow_step": workflow_step,
             "request_type": request_type,
-            "user_role": user_role
-        }
+            "user_role": user_role,
+        },
     )
 
+
 def track_bulk_migration(
-    total_records: int,
-    successful: int,
-    failed: int,
-    warnings: int,
-    migration_type: str
+    total_records: int, successful: int, failed: int, warnings: int, migration_type: str
 ) -> None:
     """
     Trackear migraciones masivas
     """
-    track_business_metrics("bulk_migration_total", total_records, {"type": migration_type})
-    track_business_metrics("bulk_migration_successful", successful, {"type": migration_type})
+    track_business_metrics(
+        "bulk_migration_total", total_records, {"type": migration_type}
+    )
+    track_business_metrics(
+        "bulk_migration_successful", successful, {"type": migration_type}
+    )
     track_business_metrics("bulk_migration_failed", failed, {"type": migration_type})
-    track_business_metrics("bulk_migration_warnings", warnings, {"type": migration_type})
+    track_business_metrics(
+        "bulk_migration_warnings", warnings, {"type": migration_type}
+    )
+
 
 # Context managers para tracking
 class track_operation:
@@ -320,6 +342,7 @@ class track_operation:
             # código
             pass
     """
+
     def __init__(self, operation_name: str, **kwargs):
         self.operation_name = operation_name
         self.context = kwargs
@@ -333,14 +356,18 @@ class track_operation:
             logging.error(
                 f"Error en operación: {self.operation_name}",
                 extra={**self.context, "error": str(exc_val)},
-                exc_info=True
+                exc_info=True,
             )
         else:
-            logging.info(f"Operación completada: {self.operation_name}", extra=self.context)
+            logging.info(
+                f"Operación completada: {self.operation_name}", extra=self.context
+            )
+
 
 # ============================================
 # ENDPOINT DE VERIFICACIÓN DE MONITOREO
 # ============================================
+
 
 def get_monitoring_status() -> dict:
     """
@@ -349,72 +376,68 @@ def get_monitoring_status() -> dict:
     return {
         "titulo": "🔍 ESTADO DEL SISTEMA DE MONITOREO",
         "fecha_verificacion": datetime.now().isoformat(),
-
         "servicios_monitoreo": {
             "sentry": {
-                "habilitado": bool(getattr(settings, 'SENTRY_DSN', None)),
-                "dsn_configurado": bool(getattr(settings, 'SENTRY_DSN', None)),
-                "environment": getattr(settings, 'ENVIRONMENT', 'production'),
-                "traces_sample_rate": getattr(settings, 'SENTRY_TRACES_SAMPLE_RATE', 0.1),
-                "descripcion": "Tracking de errores y performance"
+                "habilitado": bool(getattr(settings, "SENTRY_DSN", None)),
+                "dsn_configurado": bool(getattr(settings, "SENTRY_DSN", None)),
+                "environment": getattr(settings, "ENVIRONMENT", "production"),
+                "traces_sample_rate": getattr(
+                    settings, "SENTRY_TRACES_SAMPLE_RATE", 0.1
+                ),
+                "descripcion": "Tracking de errores y performance",
             },
             "prometheus": {
-                "habilitado": getattr(settings, 'PROMETHEUS_ENABLED', False),
+                "habilitado": getattr(settings, "PROMETHEUS_ENABLED", False),
                 "endpoint": "/metrics",
-                "descripcion": "Métricas de aplicación y negocio"
+                "descripcion": "Métricas de aplicación y negocio",
             },
             "logging_estructurado": {
                 "habilitado": True,
                 "formato": "JSON",
-                "nivel": getattr(settings, 'LOG_LEVEL', 'INFO'),
-                "descripcion": "Logs estructurados para análisis"
-            }
+                "nivel": getattr(settings, "LOG_LEVEL", "INFO"),
+                "descripcion": "Logs estructurados para análisis",
+            },
         },
-
         "metricas_negocio_disponibles": {
             "financieras": [
                 "clientes_creados",
-                "pagos_procesados", 
+                "pagos_procesados",
                 "prestamos_aprobados",
                 "mora_acumulada",
-                "conciliacion_exitosa"
+                "conciliacion_exitosa",
             ],
             "operacionales": [
                 "approval_workflow_solicitud",
                 "approval_workflow_aprobacion",
                 "bulk_migration_total",
-                "financial_operation_pago"
+                "financial_operation_pago",
             ],
             "rendimiento": [
                 "http_requests_total",
                 "http_request_duration_seconds",
-                "database_connections"
-            ]
+                "database_connections",
+            ],
         },
-
         "integracion_actual": {
             "main_py": "❌ No integrado",
             "endpoints": "❌ No utilizado",
-            "recomendacion": "Integrar en main.py para habilitar monitoreo completo"
+            "recomendacion": "Integrar en main.py para habilitar monitoreo completo",
         },
-
         "beneficios_implementacion": [
             "🔍 Tracking automático de errores con Sentry",
             "📊 Métricas de performance con Prometheus",
             "📋 Logs estructurados para análisis",
             "⚡ Alertas automáticas de problemas",
             "📈 Métricas de negocio específicas",
-            "🔧 Debugging mejorado en producción"
+            "🔧 Debugging mejorado en producción",
         ],
-
         "pasos_integracion": [
             "1. Agregar variables de entorno (SENTRY_DSN, etc.)",
             "2. Importar setup_monitoring en main.py",
             "3. Llamar setup_monitoring(app) al inicio",
             "4. Usar track_operation en endpoints críticos",
-            "5. Configurar alertas en Sentry/Prometheus"
+            "5. Configurar alertas en Sentry/Prometheus",
         ],
-
         "utilidad_para_financiamiento": {
             "alta": "✅ Muy útil para sistema empresarial",
             "razones": [
@@ -423,7 +446,7 @@ def get_monitoring_status() -> dict:
                 "Alertas de errores en pagos/conciliación",
                 "Métricas de rendimiento de analistaes",
                 "Análisis de patrones de mora",
-                "Debugging de migraciones masivas"
-            ]
-        }
+                "Debugging de migraciones masivas",
+            ],
+        },
     }

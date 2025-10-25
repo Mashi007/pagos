@@ -4,40 +4,43 @@ Sistema avanzado de monitoreo y alertas basado en patrones y umbrales
 """
 
 import logging
-import uuid
-import time
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from collections import deque, defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.api.deps import get_db, get_current_user
-from app.models.user import User
+from app.api.deps import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
 class AlertSeverity(Enum):
     """Severidad de alertas"""
+
     INFO = "info"
     WARNING = "warning"
     CRITICAL = "critical"
     EMERGENCY = "emergency"
 
+
 class AlertStatus(Enum):
     """Estado de alertas"""
+
     ACTIVE = "active"
     ACKNOWLEDGED = "acknowledged"
     RESOLVED = "resolved"
     SUPPRESSED = "suppressed"
 
+
 @dataclass
 class AlertRule:
     """Regla de alerta"""
+
     name: str
     condition: str
     threshold: float
@@ -45,9 +48,11 @@ class AlertRule:
     cooldown_minutes: int = 15
     enabled: bool = True
 
+
 @dataclass
 class Alert:
     """Alerta generada"""
+
     id: str
     rule_name: str
     severity: AlertSeverity
@@ -59,11 +64,13 @@ class Alert:
     acknowledged_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
 
+
 # Almacenamiento de alertas
 active_alerts = deque(maxlen=500)  # Alertas activas
 alert_history = deque(maxlen=2000)  # Historial de alertas
 alert_rules = {}  # Reglas de alerta configuradas
 alert_cooldowns = {}  # Cooldowns de alertas
+
 
 class IntelligentAlertSystem:
     """Sistema inteligente de alertas"""
@@ -79,43 +86,43 @@ class IntelligentAlertSystem:
                 condition="error_rate > threshold",
                 threshold=0.3,  # 30%
                 severity=AlertSeverity.CRITICAL,
-                cooldown_minutes=10
+                cooldown_minutes=10,
             ),
             AlertRule(
                 name="slow_response_time",
                 condition="avg_response_time > threshold",
                 threshold=3000,  # 3 segundos
                 severity=AlertSeverity.WARNING,
-                cooldown_minutes=15
+                cooldown_minutes=15,
             ),
             AlertRule(
                 name="token_expiry_spike",
                 condition="token_expiry_rate > threshold",
                 threshold=0.2,  # 20%
                 severity=AlertSeverity.WARNING,
-                cooldown_minutes=20
+                cooldown_minutes=20,
             ),
             AlertRule(
                 name="authentication_failure_spike",
                 condition="auth_failures_per_minute > threshold",
                 threshold=10,  # 10 fallos por minuto
                 severity=AlertSeverity.CRITICAL,
-                cooldown_minutes=5
+                cooldown_minutes=5,
             ),
             AlertRule(
                 name="database_connection_issues",
                 condition="db_connection_failures > threshold",
                 threshold=3,  # 3 fallos de conexión
                 severity=AlertSeverity.EMERGENCY,
-                cooldown_minutes=5
+                cooldown_minutes=5,
             ),
             AlertRule(
                 name="unusual_user_patterns",
                 condition="unusual_user_activity > threshold",
                 threshold=0.5,  # 50% de actividad inusual
                 severity=AlertSeverity.WARNING,
-                cooldown_minutes=30
-            )
+                cooldown_minutes=30,
+            ),
         ]
 
         for rule in default_rules:
@@ -133,7 +140,9 @@ class IntelligentAlertSystem:
             # Verificar cooldown
             if rule_name in alert_cooldowns:
                 last_alert_time = alert_cooldowns[rule_name]
-                if current_time - last_alert_time < timedelta(minutes=rule.cooldown_minutes):
+                if current_time - last_alert_time < timedelta(
+                    minutes=rule.cooldown_minutes
+                ):
                     continue
 
             # Evaluar condición
@@ -194,7 +203,7 @@ class IntelligentAlertSystem:
             "threshold": rule.threshold,
             "current_value": self._get_current_value(rule.name, metrics),
             "metrics": metrics,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         alert = Alert(
@@ -204,7 +213,7 @@ class IntelligentAlertSystem:
             message=message,
             details=details,
             timestamp=datetime.now(),
-            status=AlertStatus.ACTIVE
+            status=AlertStatus.ACTIVE,
         )
 
         # Agregar a almacenamiento
@@ -212,7 +221,9 @@ class IntelligentAlertSystem:
         alert_history.append(alert)
 
         # Log de alerta
-        logger.warning(f"🚨 ALERT [{rule.severity.value.upper()}] {rule.name}: {message}")
+        logger.warning(
+            f"🚨 ALERT [{rule.severity.value.upper()}] {rule.name}: {message}"
+        )
 
         return alert
 
@@ -226,10 +237,12 @@ class IntelligentAlertSystem:
             "token_expiry_spike": f"Pico de tokens expirados: {current_value:.1%} (umbral: {rule.threshold:.1%})",
             "authentication_failure_spike": f"Pico de fallos de autenticación: {current_value:.0f}/min (umbral: {rule.threshold:.0f}/min)",
             "database_connection_issues": f"Problemas de conexión a BD: {current_value:.0f} fallos (umbral: {rule.threshold:.0f})",
-            "unusual_user_patterns": f"Patrones de usuario inusuales: {current_value:.1%} (umbral: {rule.threshold:.1%})"
+            "unusual_user_patterns": f"Patrones de usuario inusuales: {current_value:.1%} (umbral: {rule.threshold:.1%})",
         }
 
-        return messages.get(rule.name, f"Alerta {rule.name}: {current_value} > {rule.threshold}")
+        return messages.get(
+            rule.name, f"Alerta {rule.name}: {current_value} > {rule.threshold}"
+        )
 
     def _get_current_value(self, rule_name: str, metrics: Dict[str, Any]) -> float:
         """Obtener valor actual para la regla"""
@@ -239,18 +252,18 @@ class IntelligentAlertSystem:
             "token_expiry_spike": metrics.get("token_expiry_rate", 0),
             "authentication_failure_spike": metrics.get("auth_failures_per_minute", 0),
             "database_connection_issues": metrics.get("db_connection_failures", 0),
-            "unusual_user_patterns": metrics.get("unusual_user_activity", 0)
+            "unusual_user_patterns": metrics.get("unusual_user_activity", 0),
         }
 
         return value_map.get(rule_name, 0)
 
+
 # Instancia global del sistema de alertas
 alert_system = IntelligentAlertSystem()
 
+
 @router.post("/evaluate-alerts")
-async def evaluate_alerts(
-    db: Session = Depends(get_db)
-):
+async def evaluate_alerts(db: Session = Depends(get_db)):
     """
     🚨 Evaluar condiciones y generar alertas
     """
@@ -267,7 +280,7 @@ async def evaluate_alerts(
             "auth_failures_per_minute": 3,  # Simulado
             "db_connection_failures": 0,  # Simulado
             "unusual_user_activity": 0.1,  # Simulado
-            "timestamp": current_time.isoformat()
+            "timestamp": current_time.isoformat(),
         }
 
         # Evaluar condiciones
@@ -280,7 +293,7 @@ async def evaluate_alerts(
                 "metrics": metrics,
                 "rules_evaluated": len(alert_rules),
                 "new_alerts": len(new_alerts),
-                "active_alerts_count": len(active_alerts)
+                "active_alerts_count": len(active_alerts),
             },
             "new_alerts": [
                 {
@@ -288,10 +301,10 @@ async def evaluate_alerts(
                     "rule_name": alert.rule_name,
                     "severity": alert.severity.value,
                     "message": alert.message,
-                    "timestamp": alert.timestamp.isoformat()
+                    "timestamp": alert.timestamp.isoformat(),
                 }
                 for alert in new_alerts
-            ]
+            ],
         }
 
     except Exception as e:
@@ -299,8 +312,9 @@ async def evaluate_alerts(
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "error",
-            "error": str(e)
+            "error": str(e),
         }
+
 
 @router.get("/active-alerts")
 async def get_active_alerts():
@@ -309,18 +323,22 @@ async def get_active_alerts():
     """
     try:
         # Filtrar alertas activas
-        current_alerts = [alert for alert in active_alerts if alert.status == AlertStatus.ACTIVE]
+        current_alerts = [
+            alert for alert in active_alerts if alert.status == AlertStatus.ACTIVE
+        ]
 
         # Agrupar por severidad
         alerts_by_severity = defaultdict(list)
         for alert in current_alerts:
-            alerts_by_severity[alert.severity.value].append({
-                "id": alert.id,
-                "rule_name": alert.rule_name,
-                "message": alert.message,
-                "timestamp": alert.timestamp.isoformat(),
-                "details": alert.details
-            })
+            alerts_by_severity[alert.severity.value].append(
+                {
+                    "id": alert.id,
+                    "rule_name": alert.rule_name,
+                    "message": alert.message,
+                    "timestamp": alert.timestamp.isoformat(),
+                    "details": alert.details,
+                }
+            )
 
         return {
             "timestamp": datetime.now().isoformat(),
@@ -335,11 +353,11 @@ async def get_active_alerts():
                         "severity": alert.severity.value,
                         "message": alert.message,
                         "timestamp": alert.timestamp.isoformat(),
-                        "status": alert.status.value
+                        "status": alert.status.value,
                     }
                     for alert in current_alerts
-                ]
-            }
+                ],
+            },
         }
 
     except Exception as e:
@@ -347,14 +365,12 @@ async def get_active_alerts():
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "error",
-            "error": str(e)
+            "error": str(e),
         }
 
+
 @router.post("/acknowledge-alert/{alert_id}")
-async def acknowledge_alert(
-    alert_id: str,
-    acknowledged_by: str = "system"
-):
+async def acknowledge_alert(alert_id: str, acknowledged_by: str = "system"):
     """
     ✅ Reconocer alerta
     """
@@ -373,13 +389,13 @@ async def acknowledge_alert(
             return {
                 "timestamp": datetime.now().isoformat(),
                 "status": "error",
-                "error": "Alert not found or already acknowledged"
+                "error": "Alert not found or already acknowledged",
             }
 
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
-            "message": f"Alert {alert_id} acknowledged by {acknowledged_by}"
+            "message": f"Alert {alert_id} acknowledged by {acknowledged_by}",
         }
 
     except Exception as e:
@@ -387,14 +403,12 @@ async def acknowledge_alert(
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "error",
-            "error": str(e)
+            "error": str(e),
         }
 
+
 @router.post("/resolve-alert/{alert_id}")
-async def resolve_alert(
-    alert_id: str,
-    resolved_by: str = "system"
-):
+async def resolve_alert(alert_id: str, resolved_by: str = "system"):
     """
     ✅ Resolver alerta
     """
@@ -412,13 +426,13 @@ async def resolve_alert(
             return {
                 "timestamp": datetime.now().isoformat(),
                 "status": "error",
-                "error": "Alert not found"
+                "error": "Alert not found",
             }
 
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
-            "message": f"Alert {alert_id} resolved by {resolved_by}"
+            "message": f"Alert {alert_id} resolved by {resolved_by}",
         }
 
     except Exception as e:
@@ -426,8 +440,9 @@ async def resolve_alert(
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "error",
-            "error": str(e)
+            "error": str(e),
         }
+
 
 @router.get("/alert-rules")
 async def get_alert_rules():
@@ -443,14 +458,14 @@ async def get_alert_rules():
                 "threshold": rule.threshold,
                 "severity": rule.severity.value,
                 "cooldown_minutes": rule.cooldown_minutes,
-                "enabled": rule.enabled
+                "enabled": rule.enabled,
             }
 
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
             "rules": rules_data,
-            "total_rules": len(alert_rules)
+            "total_rules": len(alert_rules),
         }
 
     except Exception as e:
@@ -458,15 +473,16 @@ async def get_alert_rules():
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "error",
-            "error": str(e)
+            "error": str(e),
         }
+
 
 @router.post("/update-alert-rule")
 async def update_alert_rule(
     rule_name: str,
     threshold: float = None,
     enabled: bool = None,
-    cooldown_minutes: int = None
+    cooldown_minutes: int = None,
 ):
     """
     ⚙️ Actualizar regla de alerta
@@ -476,7 +492,7 @@ async def update_alert_rule(
             return {
                 "timestamp": datetime.now().isoformat(),
                 "status": "error",
-                "error": f"Rule '{rule_name}' not found"
+                "error": f"Rule '{rule_name}' not found",
             }
 
         rule = alert_rules[rule_name]
@@ -496,8 +512,8 @@ async def update_alert_rule(
                 "name": rule.name,
                 "threshold": rule.threshold,
                 "enabled": rule.enabled,
-                "cooldown_minutes": rule.cooldown_minutes
-            }
+                "cooldown_minutes": rule.cooldown_minutes,
+            },
         }
 
     except Exception as e:
@@ -505,8 +521,9 @@ async def update_alert_rule(
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "error",
-            "error": str(e)
+            "error": str(e),
         }
+
 
 @router.get("/alert-summary")
 async def get_alert_summary():
@@ -516,8 +533,12 @@ async def get_alert_summary():
     try:
         # Estadísticas de alertas activas
         active_count = len([a for a in active_alerts if a.status == AlertStatus.ACTIVE])
-        acknowledged_count = len([a for a in active_alerts if a.status == AlertStatus.ACKNOWLEDGED])
-        resolved_count = len([a for a in alert_history if a.status == AlertStatus.RESOLVED])
+        acknowledged_count = len(
+            [a for a in active_alerts if a.status == AlertStatus.ACKNOWLEDGED]
+        )
+        resolved_count = len(
+            [a for a in alert_history if a.status == AlertStatus.RESOLVED]
+        )
 
         # Estadísticas por severidad
         severity_stats = defaultdict(int)
@@ -530,7 +551,9 @@ async def get_alert_summary():
         for alert in alert_history:
             rule_frequency[alert.rule_name] += 1
 
-        most_frequent = sorted(rule_frequency.items(), key=lambda x: x[1], reverse=True)[:5]
+        most_frequent = sorted(
+            rule_frequency.items(), key=lambda x: x[1], reverse=True
+        )[:5]
 
         return {
             "timestamp": datetime.now().isoformat(),
@@ -542,8 +565,8 @@ async def get_alert_summary():
                 "by_severity": dict(severity_stats),
                 "most_frequent_rules": most_frequent,
                 "total_rules": len(alert_rules),
-                "enabled_rules": len([r for r in alert_rules.values() if r.enabled])
-            }
+                "enabled_rules": len([r for r in alert_rules.values() if r.enabled]),
+            },
         }
 
     except Exception as e:
@@ -551,5 +574,5 @@ async def get_alert_summary():
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "error",
-            "error": str(e)
+            "error": str(e),
         }

@@ -1,23 +1,24 @@
-import logging
 import io
+import logging
+from datetime import datetime
+
 import pandas as pd
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session
+from fastapi import (APIRouter, Depends, File, HTTPException, UploadFile,
+                     status)
 from sqlalchemy import and_
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
-from app.api.deps import get_db, get_current_user
-from app.models.user import User
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_user, get_db
 from app.models.pago import Pago
-from app.schemas.conciliacion import ConciliacionResponse, ConciliacionCreate
+from app.models.user import User
+from app.schemas.conciliacion import ConciliacionCreate, ConciliacionResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
 @router.get("/template-conciliacion")
-async def generar_template_conciliacion(
-    current_user: User = Depends(get_current_user)
-):
+async def generar_template_conciliacion(current_user: User = Depends(get_current_user)):
     """Generar template Excel para conciliación bancaria"""
     try:
         logger.info(f"Usuario {current_user.email} generando template de conciliación")
@@ -25,7 +26,7 @@ async def generar_template_conciliacion(
         # Crear workbook
         from openpyxl import Workbook
         from openpyxl.worksheet.datavalidation import DataValidation
-        
+
         wb = Workbook()
 
         # HOJA 1: INSTRUCCIONES
@@ -76,7 +77,7 @@ async def generar_template_conciliacion(
             ["   - Se registra en auditoría"],
             [""],
             ["FECHA DE GENERACIÓN: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
-            ["GENERADO POR: " + current_user.email]
+            ["GENERADO POR: " + current_user.email],
         ]
 
         # Agregar instrucciones a la hoja
@@ -98,7 +99,9 @@ async def generar_template_conciliacion(
 
         # Aplicar validaciones
         # Validación para fecha (formato YYYY-MM-DD)
-        dv_fecha = DataValidation(type="date", formula1="2020-01-01", formula2="2030-12-31")
+        dv_fecha = DataValidation(
+            type="date", formula1="2020-01-01", formula2="2030-12-31"
+        )
         dv_fecha.add("A2:A100")
         ws_template.add_data_validation(dv_fecha)
 
@@ -113,31 +116,32 @@ async def generar_template_conciliacion(
             "success": True,
             "message": "Template generado exitosamente",
             "filename": f"Template_Conciliacion_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-            "content": output.getvalue()
+            "content": output.getvalue(),
         }
 
     except Exception as e:
         logger.error(f"Error generando template de conciliación: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error interno del servidor: {str(e)}"
+            detail=f"Error interno del servidor: {str(e)}",
         )
+
 
 @router.post("/procesar-conciliacion")
 async def procesar_conciliacion(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Procesar archivo Excel de conciliación bancaria"""
     try:
         logger.info(f"Usuario {current_user.email} procesando conciliación bancaria")
 
         # Validar tipo de archivo
-        if not file.filename.endswith(('.xlsx', '.xls')):
+        if not file.filename.endswith((".xlsx", ".xls")):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Archivo debe ser Excel (.xlsx o .xls)"
+                detail="Archivo debe ser Excel (.xlsx o .xls)",
             )
 
         # Leer archivo Excel
@@ -145,18 +149,18 @@ async def procesar_conciliacion(
         df = pd.read_excel(io.BytesIO(file_content), sheet_name=1)  # Segunda hoja
 
         # Validar columnas requeridas
-        required_columns = ['fecha', 'numero_documento']
+        required_columns = ["fecha", "numero_documento"]
         if not all(col in df.columns for col in required_columns):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Columnas requeridas: {required_columns}"
+                detail=f"Columnas requeridas: {required_columns}",
             )
 
         # Validar límite de registros
         if len(df) > 100:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Máximo 100 registros por archivo"
+                detail="Máximo 100 registros por archivo",
             )
 
         # Procesar cada registro
@@ -165,16 +169,17 @@ async def procesar_conciliacion(
         pendientes = 0
 
         for index, row in df.iterrows():
-            fecha = row['fecha']
-            numero_documento = str(row['numero_documento']).strip()
+            fecha = row["fecha"]
+            numero_documento = str(row["numero_documento"]).strip()
 
             # Buscar pago en BD
-            pago = db.query(Pago).filter(
-                and_(
-                    Pago.activo == True,
-                    Pago.numero_documento == numero_documento
+            pago = (
+                db.query(Pago)
+                .filter(
+                    and_(Pago.activo, Pago.numero_documento == numero_documento)
                 )
-            ).first()
+                .first()
+            )
 
             if pago:
                 # Marcar como conciliado
@@ -186,18 +191,23 @@ async def procesar_conciliacion(
                 pendientes += 1
                 estado = "PENDIENTE"
 
-            resultados.append({
-                "fila": index + 2,  # +2 porque Excel es 1-indexed y primera fila es encabezado
-                "fecha": str(fecha),
-                "numero_documento": numero_documento,
-                "estado": estado,
-                "pago_id": pago.id if pago else None
-            })
+            resultados.append(
+                {
+                    "fila": index
+                    + 2,  # +2 porque Excel es 1-indexed y primera fila es encabezado
+                    "fecha": str(fecha),
+                    "numero_documento": numero_documento,
+                    "estado": estado,
+                    "pago_id": pago.id if pago else None,
+                }
+            )
 
         # Guardar cambios
         db.commit()
 
-        logger.info(f"Conciliación procesada: {conciliados} conciliados, {pendientes} pendientes")
+        logger.info(
+            f"Conciliación procesada: {conciliados} conciliados, {pendientes} pendientes"
+        )
 
         return {
             "success": True,
@@ -205,9 +215,9 @@ async def procesar_conciliacion(
             "resumen": {
                 "total_registros": len(df),
                 "conciliados": conciliados,
-                "pendientes": pendientes
+                "pendientes": pendientes,
             },
-            "resultados": resultados
+            "resultados": resultados,
         }
 
     except HTTPException:
@@ -217,32 +227,44 @@ async def procesar_conciliacion(
         logger.error(f"Error procesando conciliación: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error interno del servidor: {str(e)}"
+            detail=f"Error interno del servidor: {str(e)}",
         )
 
-@router.post("/desconciliar-pago", response_model=ConciliacionResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/desconciliar-pago",
+    response_model=ConciliacionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def desconciliar_pago(
     conciliacion_data: ConciliacionCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Desconciliar un pago ya conciliado"""
     try:
-        logger.info(f"Usuario {current_user.email} desconciliando pago {conciliacion_data.numero_documento_anterior}")
+        logger.info(
+            f"Usuario {current_user.email} desconciliando pago {conciliacion_data.numero_documento_anterior}"
+        )
 
         # Buscar el pago a desconciliar
-        pago = db.query(Pago).filter(
-            and_(
-                Pago.activo == True,
-                Pago.numero_documento == conciliacion_data.numero_documento_anterior,
-                Pago.conciliado == True
+        pago = (
+            db.query(Pago)
+            .filter(
+                and_(
+                    Pago.activo,
+                    Pago.numero_documento
+                    == conciliacion_data.numero_documento_anterior,
+                    Pago.conciliado,
+                )
             )
-        ).first()
+            .first()
+        )
 
         if not pago:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Pago no encontrado o no está conciliado"
+                detail="Pago no encontrado o no está conciliado",
             )
 
         # Desconciliar el pago
@@ -259,12 +281,14 @@ async def desconciliar_pago(
             "nota": conciliacion_data.nota,
             "fecha": datetime.now(),
             "responsable": current_user.email,
-            "pago_id": pago.id
+            "pago_id": pago.id,
         }
 
         db.commit()
 
-        logger.info(f"Pago {conciliacion_data.numero_documento_anterior} desconciliado exitosamente")
+        logger.info(
+            f"Pago {conciliacion_data.numero_documento_anterior} desconciliado exitosamente"
+        )
 
         return conciliacion_record
 
@@ -275,25 +299,29 @@ async def desconciliar_pago(
         logger.error(f"Error desconciliando pago: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error interno del servidor: {str(e)}"
+            detail=f"Error interno del servidor: {str(e)}",
         )
+
 
 @router.get("/estado-conciliacion")
 async def obtener_estado_conciliacion(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """Obtener estado general de conciliación"""
     try:
         # Estadísticas generales
-        total_pagos = db.query(Pago).filter(Pago.activo == True).count()
-        pagos_conciliados = db.query(Pago).filter(
-            and_(Pago.activo == True, Pago.conciliado == True)
-        ).count()
+        total_pagos = db.query(Pago).filter(Pago.activo).count()
+        pagos_conciliados = (
+            db.query(Pago)
+            .filter(and_(Pago.activo, Pago.conciliado))
+            .count()
+        )
         pagos_pendientes = total_pagos - pagos_conciliados
 
         # Porcentaje de conciliación
-        porcentaje_conciliacion = (pagos_conciliados / total_pagos * 100) if total_pagos > 0 else 0
+        porcentaje_conciliacion = (
+            (pagos_conciliados / total_pagos * 100) if total_pagos > 0 else 0
+        )
 
         return {
             "success": True,
@@ -301,14 +329,14 @@ async def obtener_estado_conciliacion(
                 "total_pagos": total_pagos,
                 "pagos_conciliados": pagos_conciliados,
                 "pagos_pendientes": pagos_pendientes,
-                "porcentaje_conciliacion": round(porcentaje_conciliacion, 2)
+                "porcentaje_conciliacion": round(porcentaje_conciliacion, 2),
             },
-            "fecha_actualizacion": datetime.now()
+            "fecha_actualizacion": datetime.now(),
         }
 
     except Exception as e:
         logger.error(f"Error obteniendo estado de conciliación: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error interno del servidor: {str(e)}"
+            detail=f"Error interno del servidor: {str(e)}",
         )

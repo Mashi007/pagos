@@ -4,19 +4,19 @@ Endpoints de gestión de usuarios
 CRUD completo (solo para ADMIN)
 """
 import logging
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
+from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_admin_user, get_current_user, get_pagination_params, PaginationParams, get_db
+from app.api.deps import (PaginationParams, get_admin_user, get_current_user,
+                          get_db, get_pagination_params)
 from app.core.security import get_password_hash
 from app.models.user import User
-from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserListResponse
-from app.utils.auditoria_helper import (
-    registrar_creacion, registrar_eliminacion
-)
+from app.schemas.user import (UserCreate, UserListResponse, UserResponse,
+                              UserUpdate)
+from app.utils.auditoria_helper import (registrar_creacion,
+                                        registrar_eliminacion)
 from app.utils.validators import validate_password_strength
 
 logger = logging.getLogger(__name__)
@@ -27,31 +27,35 @@ router = APIRouter()
 # VERIFICACIÓN DE ADMINISTRADORES
 # ============================================
 
+
 @router.get("/verificar-admin")
-def verificar_rol_administracion(
-    db: Session = Depends(get_db)
-):
+def verificar_rol_administracion(db: Session = Depends(get_db)):
     """
     🔍 Verificar estado del rol de administración en el sistema
     """
     try:
         # Buscar todos los administradores
-        admins = db.query(User).filter(User.is_admin).all()  # Cambio clave: rol → is_admin
-        admins_activos = db.query(User).filter(
-            User.is_admin,  # Cambio clave: rol → is_admin
-            User.is_active
-        ).all()
+        admins = (
+            db.query(User).filter(User.is_admin).all()
+        )  # Cambio clave: rol → is_admin
+        admins_activos = (
+            db.query(User)
+            .filter(User.is_admin, User.is_active)  # Cambio clave: rol → is_admin
+            .all()
+        )
 
         # Estadísticas de usuarios por tipo
         tipos_stats = {
             "ADMIN": {
                 "total": db.query(User).filter(User.is_admin).count(),
-                "activos": db.query(User).filter(User.is_admin, User.is_active).count()
+                "activos": db.query(User).filter(User.is_admin, User.is_active).count(),
             },
             "USER": {
                 "total": db.query(User).filter(~User.is_admin).count(),
-                "activos": db.query(User).filter(~User.is_admin, User.is_active).count()
-            }
+                "activos": db.query(User)
+                .filter(~User.is_admin, User.is_active)
+                .count(),
+            },
         }
 
         # Estado del sistema
@@ -60,14 +64,16 @@ def verificar_rol_administracion(
         return {
             "titulo": "🔍 VERIFICACIÓN DEL ROL DE ADMINISTRACIÓN",
             "fecha_verificacion": datetime.now().isoformat(),
-
             "estado_administracion": {
                 "activo": sistema_funcional,
                 "total_admins": len(admins),
                 "admins_activos": len(admins_activos),
-                "estado": "✅ FUNCIONAL" if sistema_funcional else "❌ SIN ADMINISTRADOR ACTIVO"
+                "estado": (
+                    "✅ FUNCIONAL"
+                    if sistema_funcional
+                    else "❌ SIN ADMINISTRADOR ACTIVO"
+                ),
             },
-
             "administradores_registrados": [
                 {
                     "id": admin.id,
@@ -75,12 +81,11 @@ def verificar_rol_administracion(
                     "nombre_completo": admin.full_name,
                     "activo": admin.is_active,
                     "fecha_creacion": admin.created_at,
-                    "ultimo_login": getattr(admin, 'last_login', None),
-                    "estado": "✅ ACTIVO" if admin.is_active else "❌ INACTIVO"
+                    "ultimo_login": getattr(admin, "last_login", None),
+                    "estado": "✅ ACTIVO" if admin.is_active else "❌ INACTIVO",
                 }
                 for admin in admins
             ],
-
             "permisos_administrador": {
                 "gestion_usuarios": "✅ Crear, editar, eliminar usuarios",
                 "gestion_clientes": "✅ Acceso completo a todos los clientes",
@@ -90,47 +95,63 @@ def verificar_rol_administracion(
                 "aprobaciones": "✅ Aprobar/rechazar solicitudes",
                 "carga_masiva": "✅ Realizar migraciones masivas",
                 "auditoria": "✅ Ver logs completos del sistema",
-                "dashboard": "✅ Dashboard administrativo completo"
+                "dashboard": "✅ Dashboard administrativo completo",
             },
-
             "estadisticas_usuarios": {
                 "por_tipo": tipos_stats,
                 "total_usuarios": sum(stats["total"] for stats in tipos_stats.values()),
-                "usuarios_activos": sum(stats["activos"] for stats in tipos_stats.values())
+                "usuarios_activos": sum(
+                    stats["activos"] for stats in tipos_stats.values()
+                ),
             },
-
             "recomendaciones": [
-                "✅ Sistema funcional" if sistema_funcional else "❌ Crear usuario administrador",
-                "🔐 Cambiar contraseñas por defecto" if any(admin.email == "itmaster@rapicreditca.com" for admin in admins) else None,
+                (
+                    "✅ Sistema funcional"
+                    if sistema_funcional
+                    else "❌ Crear usuario administrador"
+                ),
+                (
+                    "🔐 Cambiar contraseñas por defecto"
+                    if any(
+                        admin.email == "itmaster@rapicreditca.com" for admin in admins
+                    )
+                    else None
+                ),
                 "👥 Crear usuarios para otros roles según necesidades",
                 "📊 Revisar dashboard administrativo regularmente",
-                "🔔 Configurar notificaciones automáticas"
+                "🔔 Configurar notificaciones automáticas",
             ],
-
             "acciones_disponibles": {
                 "crear_admin": "python backend/scripts/create_admin.py",
                 "modo_interactivo": "python backend/scripts/create_admin.py --interactive",
                 "listar_admins": "python backend/scripts/create_admin.py --list",
-                "verificar_sistema": "python backend/scripts/create_admin.py --verify"
+                "verificar_sistema": "python backend/scripts/create_admin.py --verify",
             },
-
             "urls_sistema": {
                 "aplicacion": "https://pagos-f2qf.onrender.com",
                 "documentacion": "https://pagos-f2qf.onrender.com/docs",
                 "login": "POST /api/v1/auth/login",
                 "dashboard_admin": "GET /api/v1/dashboard/admin",
-                "verificar_admin": "GET /api/v1/users/verificar-admin"
-            }
+                "verificar_admin": "GET /api/v1/users/verificar-admin",
+            },
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error verificando administración: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error verificando administración: {str(e)}"
+        )
 
-@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED, summary="Crear usuario")
+
+@router.post(
+    "/",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear usuario",
+)
 def create_user(
     user_data: UserCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_admin_user)
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Crear un nuevo usuario (solo ADMIN)
@@ -148,16 +169,13 @@ def create_user(
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El email ya está registrado"
+            detail="El email ya está registrado",
         )
 
     # Validar fortaleza de contraseña
     is_valid, message = validate_password_strength(user_data.password)
     if not is_valid:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=message
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
     # Crear usuario
     new_user = User(
@@ -168,7 +186,7 @@ def create_user(
         is_admin=user_data.is_admin,  # Cambio clave: rol → is_admin
         hashed_password=get_password_hash(user_data.password),
         is_active=user_data.is_active,
-        created_at=datetime.utcnow()
+        created_at=datetime.utcnow(),
     )
 
     db.add(new_user)
@@ -189,18 +207,17 @@ def create_user(
                 "nombre": new_user.nombre,
                 "apellido": new_user.apellido,
                 "is_admin": new_user.is_admin,  # Cambio clave: rol → is_admin
-                "is_active": new_user.is_active
-            }
+                "is_active": new_user.is_active,
+            },
         )
     except Exception as e:
         logger.warning(f"Error registrando auditoría de creación de usuario: {e}")
 
     return new_user
 
+
 @router.get("/test-simple")
-def test_users_simple(
-    db: Session = Depends(get_db)
-):
+def test_users_simple(db: Session = Depends(get_db)):
     """
     Test endpoint simple para verificar usuarios (sin autenticación)
     """
@@ -210,34 +227,34 @@ def test_users_simple(
 
         users_data = []
         for user in users:
-            users_data.append({
-                "id": user.id,
-                "email": user.email,
-                "nombre": user.nombre,
-                "apellido": user.apellido,
-                "is_admin": user.is_admin,  # Cambio clave: rol → is_admin
-                "is_active": user.is_active,
-                "created_at": user.created_at.isoformat() if user.created_at else None
-            })
+            users_data.append(
+                {
+                    "id": user.id,
+                    "email": user.email,
+                    "nombre": user.nombre,
+                    "apellido": user.apellido,
+                    "is_admin": user.is_admin,  # Cambio clave: rol → is_admin
+                    "is_active": user.is_active,
+                    "created_at": (
+                        user.created_at.isoformat() if user.created_at else None
+                    ),
+                }
+            )
 
         return {
             "success": True,
             "total_users": total_users,
             "users": users_data,
-            "message": "Test endpoint funcionando"
+            "message": "Test endpoint funcionando",
         }
     except Exception as e:
         logger.error(f"Error en test endpoint: {str(e)}")
-        return {
-            "success": False,
-            "error": str(e),
-            "message": "Error en test endpoint"
-        }
+        return {"success": False, "error": str(e), "message": "Error en test endpoint"}
+
 
 @router.get("/test")
 def test_users_endpoint(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """
     Test endpoint para verificar usuarios
@@ -248,14 +265,16 @@ def test_users_endpoint(
 
         users_data = []
         for user in users:
-            users_data.append({
-                "id": user.id,
-                "email": user.email,
-                "nombre": user.nombre,
-                "apellido": user.apellido,
-                "is_admin": user.is_admin,  # Cambio clave: rol → is_admin
-                "is_active": user.is_active
-            })
+            users_data.append(
+                {
+                    "id": user.id,
+                    "email": user.email,
+                    "nombre": user.nombre,
+                    "apellido": user.apellido,
+                    "is_admin": user.is_admin,  # Cambio clave: rol → is_admin
+                    "is_active": user.is_active,
+                }
+            )
 
         return {
             "status": "success",
@@ -263,24 +282,21 @@ def test_users_endpoint(
             "current_user": {
                 "id": current_user.id,
                 "email": current_user.email,
-                "is_admin": current_user.is_admin  # Cambio clave: rol → is_admin
+                "is_admin": current_user.is_admin,  # Cambio clave: rol → is_admin
             },
-            "users": users_data
+            "users": users_data,
         }
 
     except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e),
-            "message": "Error en test endpoint"
-        }
+        return {"status": "error", "error": str(e), "message": "Error en test endpoint"}
+
 
 @router.get("/")
 def list_users(
     db: Session = Depends(get_db),
     pagination: PaginationParams = Depends(get_pagination_params),
     current_user: User = Depends(get_admin_user),
-    is_active: bool = None
+    is_active: bool = None,
 ):
     """
     Listar usuarios con paginación (solo ADMIN)
@@ -302,17 +318,15 @@ def list_users(
     users = query.offset(pagination.skip).limit(pagination.limit).all()
 
     return UserListResponse(
-        items=users,
-        total=total,
-        page=pagination.page,
-        page_size=pagination.page_size
+        items=users, total=total, page=pagination.page, page_size=pagination.page_size
     )
+
 
 @router.get("/{user_id}", response_model=UserResponse, summary="Obtener usuario")
 def get_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_admin_user)
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Obtener un usuario por ID (solo ADMIN)
@@ -321,18 +335,18 @@ def get_user(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado"
         )
 
     return user
+
 
 @router.put("/{user_id}", response_model=UserResponse, summary="Actualizar usuario")
 def update_user(
     user_id: int,
     user_data: UserUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_admin_user)
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Actualizar un usuario (solo ADMIN)
@@ -343,8 +357,7 @@ def update_user(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado"
         )
 
     # Verificar email único si se está actualizando
@@ -353,15 +366,15 @@ def update_user(
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El email ya está registrado"
+                detail="El email ya está registrado",
             )
 
     # Actualizar campos
     update_data = user_data.model_dump(exclude_unset=True)
 
     # Manejar contraseña especial - solo actualizar si se proporciona un valor no vacío
-    if 'password' in update_data:
-        password_value = update_data.pop('password')
+    if "password" in update_data:
+        password_value = update_data.pop("password")
         if password_value and password_value.strip():
             # Solo actualizar contraseña si se proporciona un valor no vacío
             user.hashed_password = get_password_hash(password_value)
@@ -377,11 +390,12 @@ def update_user(
 
     return user
 
+
 @router.delete("/{user_id}", status_code=status.HTTP_200_OK, summary="Eliminar usuario")
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_admin_user)
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Eliminar un usuario (HARD DELETE - borrado completo de BD)
@@ -392,15 +406,14 @@ def delete_user(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado"
         )
 
     # No permitir eliminar el propio usuario
     if user.id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No puedes desactivar tu propio usuario"
+            detail="No puedes desactivar tu propio usuario",
         )
 
     # HARD DELETE - eliminar completamente de la base de datos
@@ -420,8 +433,8 @@ def delete_user(
                 "nombre": user.nombre,
                 "apellido": user.apellido,
                 "is_admin": user.is_admin,  # Cambio clave: rol → is_admin
-                "is_active": user.is_active
-            }
+                "is_active": user.is_active,
+            },
         )
     except Exception as e:
         logger.warning(f"Error registrando auditoría de eliminación de usuario: {e}")
@@ -433,11 +446,14 @@ def delete_user(
         "message": f"Usuario {user_email} eliminado completamente de la base de datos"
     }
 
-@router.post("/{user_id}/activate", response_model=UserResponse, summary="Activar usuario")
+
+@router.post(
+    "/{user_id}/activate", response_model=UserResponse, summary="Activar usuario"
+)
 def activate_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_admin_user)
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Reactivar un usuario desactivado (solo ADMIN)
@@ -446,8 +462,7 @@ def activate_user(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado"
         )
 
     user.is_active = True
@@ -458,11 +473,14 @@ def activate_user(
 
     return user
 
-@router.post("/{user_id}/deactivate", response_model=UserResponse, summary="Desactivar usuario")
+
+@router.post(
+    "/{user_id}/deactivate", response_model=UserResponse, summary="Desactivar usuario"
+)
 def deactivate_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_admin_user)
+    current_user: User = Depends(get_admin_user),
 ):
     """
     Desactivar un usuario (solo ADMIN)
@@ -471,8 +489,7 @@ def deactivate_user(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado"
         )
 
     user.is_active = False

@@ -3,52 +3,48 @@
 Modelo de Aprobación
 Sistema de workflow para solicitudes que requieren aprobación
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Date, Boolean
-from sqlalchemy.orm import Session, relationship
+from datetime import date, datetime
+
+from sqlalchemy import (Boolean, Column, Date, DateTime, ForeignKey, Integer,
+                        String, Text)
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
-from app.db.session import Base
 from app.core.constants import EstadoAprobacion
+from app.db.session import Base
+
 
 class Aprobacion(Base):
     """
     Modelo de Aprobación para workflow de solicitudes
     """
+
     __tablename__ = "aprobaciones"
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = {"extend_existing": True}
 
     # Identificación
     id = Column(Integer, primary_key=True, index=True)
 
     # Estado - Valores posibles: PENDIENTE, APROBADA, RECHAZADA, CANCELADA
-    estado = Column(
-        String(20),
-        nullable=False,
-        default="PENDIENTE",
-        index=True
-    )
+    estado = Column(String(20), nullable=False, default="PENDIENTE", index=True)
 
     # Solicitante y revisor
     solicitante_id = Column(
         Integer,
         ForeignKey("usuarios.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
     revisor_id = Column(
         Integer,
         ForeignKey("usuarios.id", ondelete="SET NULL"),
         nullable=True,
-        index=True
+        index=True,
     )
 
     # Detalles de la solicitud
     tipo_solicitud = Column(
-        String(50),
-        nullable=False,
-        index=True
+        String(50), nullable=False, index=True
     )  # PRESTAMO, MODIFICACION_MONTO, ANULACION, etc.
 
     entidad = Column(String(50), nullable=False)  # Cliente, Prestamo, Pago, etc.
@@ -63,21 +59,23 @@ class Aprobacion(Base):
 
     # Fechas
     fecha_solicitud = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     fecha_revision = Column(DateTime(timezone=True), nullable=True)
 
     # NUEVOS CAMPOS PARA SISTEMA COMPLETO DE APROBACIONES
     archivo_evidencia = Column(String(255), nullable=True)  # Path del archivo adjunto
-    tipo_archivo = Column(String(50), nullable=True)        # PDF, IMG, DOC, etc.
-    tamaño_archivo = Column(Integer, nullable=True)         # Tamaño en bytes
-    prioridad = Column(String(20), default="NORMAL")        # BAJA, NORMAL, ALTA, URGENTE
-    fecha_limite = Column(Date, nullable=True)              # Fecha límite para respuesta
-    notificado_admin = Column(Boolean, default=False)       # Si ya se notificó al admin
-    notificado_solicitante = Column(Boolean, default=False) # Si ya se notificó resultado
-    bloqueado_temporalmente = Column(Boolean, default=True) # Si está bloqueado el registro
+    tipo_archivo = Column(String(50), nullable=True)  # PDF, IMG, DOC, etc.
+    tamaño_archivo = Column(Integer, nullable=True)  # Tamaño en bytes
+    prioridad = Column(String(20), default="NORMAL")  # BAJA, NORMAL, ALTA, URGENTE
+    fecha_limite = Column(Date, nullable=True)  # Fecha límite para respuesta
+    notificado_admin = Column(Boolean, default=False)  # Si ya se notificó al admin
+    notificado_solicitante = Column(
+        Boolean, default=False
+    )  # Si ya se notificó resultado
+    bloqueado_temporalmente = Column(
+        Boolean, default=True
+    )  # Si está bloqueado el registro
 
     # Campos de seguimiento
     visto_por_admin = Column(Boolean, default=False)
@@ -90,14 +88,10 @@ class Aprobacion(Base):
 
     # Relaciones
     solicitante = relationship(
-        "User",
-        foreign_keys=[solicitante_id],
-        back_populates="aprobaciones_solicitadas"
+        "User", foreign_keys=[solicitante_id], back_populates="aprobaciones_solicitadas"
     )
     revisor = relationship(
-        "User",
-        foreign_keys=[revisor_id],
-        back_populates="aprobaciones_revisadas"
+        "User", foreign_keys=[revisor_id], back_populates="aprobaciones_revisadas"
     )
 
     def __repr__(self):
@@ -174,7 +168,7 @@ class Aprobacion(Base):
         """Verificar si la solicitud está vencida"""
         if not self.fecha_limite:
             return False
-        
+
         return date.today() > self.fecha_limite
 
     @property
@@ -189,7 +183,5 @@ class Aprobacion(Base):
     def requiere_atencion_urgente(self) -> bool:
         """Si requiere atención urgente"""
         return (
-            self.prioridad == "URGENTE" or
-            self.esta_vencida or
-            self.dias_pendiente > 2
+            self.prioridad == "URGENTE" or self.esta_vencida or self.dias_pendiente > 2
         )

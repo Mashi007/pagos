@@ -5,17 +5,15 @@ Evita consultas repetidas a la base de datos
 
 import logging
 import time
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
-from collections import defaultdict
+from typing import Any, Dict, Optional
 
-from app.models.analista import Analista
 
 # Configurar logger
 logger = logging.getLogger(__name__)
 
 # Constantes de configuración
 DEFAULT_TTL_SECONDS = 300  # 5 minutos por defecto
+
 
 class AnalistasCache:
     def __init__(self, ttl_seconds: int = DEFAULT_TTL_SECONDS):
@@ -26,9 +24,9 @@ class AnalistasCache:
         """Obtener datos del cache si no han expirado"""
         if key in self.cache:
             data = self.cache[key]
-            if time.time() - data['timestamp'] < self.ttl:
+            if time.time() - data["timestamp"] < self.ttl:
                 logger.info(f"Cache hit para key: {key}")
-                return data['data']
+                return data["data"]
             else:
                 # Cache expirado, eliminar
                 del self.cache[key]
@@ -37,10 +35,7 @@ class AnalistasCache:
 
     def set(self, key: str, data: Dict[str, Any]) -> None:
         """Guardar datos en el cache"""
-        self.cache[key] = {
-            'data': data,
-            'timestamp': time.time()
-        }
+        self.cache[key] = {"data": data, "timestamp": time.time()}
         logger.info(f"Datos guardados en cache para key: {key}")
 
     def clear(self) -> None:
@@ -51,16 +46,19 @@ class AnalistasCache:
     def get_stats(self) -> Dict[str, Any]:
         """Obtener estadísticas del cache"""
         return {
-            'total_keys': len(self.cache),
-            'keys': list(self.cache.keys()),
-            'ttl_seconds': self.ttl
+            "total_keys": len(self.cache),
+            "keys": list(self.cache.keys()),
+            "ttl_seconds": self.ttl,
         }
+
 
 # Instancia global del cache
 analistas_cache = AnalistasCache(ttl_seconds=DEFAULT_TTL_SECONDS)
 
+
 def cache_analistas(key_func):
     """Decorator para cachear resultados de analistas"""
+
     def decorator(func):
         def wrapper(*args, **kwargs):
             # Generar clave del cache basada en parámetros
@@ -79,13 +77,15 @@ def cache_analistas(key_func):
         wrapper.__name__ = func.__name__
         wrapper.__doc__ = func.__doc__
         return wrapper
+
     return decorator
 
+
 def generate_cache_key(
-    skip: int = 0, 
-    limit: int = 100, 
-    activo: Optional[bool] = None, 
-    search: Optional[str] = None
+    skip: int = 0,
+    limit: int = 100,
+    activo: Optional[bool] = None,
+    search: Optional[str] = None,
 ) -> str:
     """
     Generar clave única para el cache basada en parámetros

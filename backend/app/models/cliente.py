@@ -1,9 +1,6 @@
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Text, Boolean
+
+from sqlalchemy import (TIMESTAMP, Boolean, Column, Date, Integer, String,
+                        Text)
 from sqlalchemy.sql import func
 
 from app.db.session import Base
@@ -20,6 +17,7 @@ ANALYST_LENGTH = 100
 STATE_LENGTH = 20
 USER_LENGTH = 100
 
+
 class Cliente(Base):
     __tablename__ = "clientes"
 
@@ -32,8 +30,12 @@ class Cliente(Base):
     # Datos personales - OBLIGATORIOS
     nombres = Column(String(NAME_LENGTH), nullable=False)  # 1-2 palabras máximo
     apellidos = Column(String(NAME_LENGTH), nullable=False)  # 1-2 palabras máximo
-    telefono = Column(String(PHONE_LENGTH), nullable=False, index=True)  # Validado por validadores
-    email = Column(String(EMAIL_LENGTH), nullable=False, index=True)  # Validado por validadores
+    telefono = Column(
+        String(PHONE_LENGTH), nullable=False, index=True
+    )  # Validado por validadores
+    email = Column(
+        String(EMAIL_LENGTH), nullable=False, index=True
+    )  # Validado por validadores
     direccion = Column(Text, nullable=False)  # Libre
     fecha_nacimiento = Column(Date, nullable=False)  # Validado por validadores
     ocupacion = Column(String(OCCUPATION_LENGTH), nullable=False)  # Texto libre
@@ -42,18 +44,32 @@ class Cliente(Base):
     # DATOS DEL VEHÍCULO Y FINANCIAMIENTO - OBLIGATORIOS
     # ============================================
     # Campos de configuración necesarios para formulario y Excel
-    modelo_vehiculo = Column(String(VEHICLE_MODEL_LENGTH), nullable=False, index=True)  # Configuración
-    concesionario = Column(String(DEALER_LENGTH), nullable=False, index=True)  # Configuración
-    analista = Column(String(ANALYST_LENGTH), nullable=False, index=True)  # Configuración
+    modelo_vehiculo = Column(
+        String(VEHICLE_MODEL_LENGTH), nullable=False, index=True
+    )  # Configuración
+    concesionario = Column(
+        String(DEALER_LENGTH), nullable=False, index=True
+    )  # Configuración
+    analista = Column(
+        String(ANALYST_LENGTH), nullable=False, index=True
+    )  # Configuración
 
     # Estado y control - OBLIGATORIOS
-    estado = Column(String(STATE_LENGTH), nullable=False, default="ACTIVO", index=True)  # Activo/Inactivo/Finalizado
+    estado = Column(
+        String(STATE_LENGTH), nullable=False, default="ACTIVO", index=True
+    )  # Activo/Inactivo/Finalizado
     activo = Column(Boolean, nullable=False, default=True, index=True)
 
     # Auditoría - OBLIGATORIOS
-    fecha_registro = Column(TIMESTAMP, nullable=False, default=func.now())  # Validado por validadores
-    fecha_actualizacion = Column(TIMESTAMP, nullable=False, default=func.now(), onupdate=func.now())  # Automático
-    usuario_registro = Column(String(USER_LENGTH), nullable=False)  # Email del usuario logueado (automático)
+    fecha_registro = Column(
+        TIMESTAMP, nullable=False, default=func.now()
+    )  # Validado por validadores
+    fecha_actualizacion = Column(
+        TIMESTAMP, nullable=False, default=func.now(), onupdate=func.now()
+    )  # Automático
+    usuario_registro = Column(
+        String(USER_LENGTH), nullable=False
+    )  # Email del usuario logueado (automático)
 
     # Notas - OPCIONAL
     notas = Column(Text, nullable=True, default="NA")  # Si no llena "NA"

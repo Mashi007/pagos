@@ -1,18 +1,17 @@
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
 
+from sqlalchemy import (Boolean, Column, DateTime, Integer, String)
 from sqlalchemy.sql import func
+
 from app.db.session import Base
+
 
 class Analista(Base):
     __tablename__ = "analistas"
 
     id = Column(Integer, primary_key=True, index=True)
-    nombre = Column(String(255), nullable=False, index=True)  # Nombre completo (incluye apellido)
+    nombre = Column(
+        String(255), nullable=False, index=True
+    )  # Nombre completo (incluye apellido)
     activo = Column(Boolean, default=True, nullable=False)
 
     # Timestamps
@@ -36,7 +35,7 @@ class Analista(Base):
         if self.nombre:
             partes = self.nombre.strip().split()
             if len(partes) > 1:
-                return ' '.join(partes[1:])  # Todo después del primer nombre
+                return " ".join(partes[1:])  # Todo después del primer nombre
         return ""
 
     @property
@@ -60,5 +59,7 @@ class Analista(Base):
             "activo": self.activo,
             "notas": "",
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "fecha_eliminacion": self.fecha_eliminacion.isoformat() if self.fecha_eliminacion else None
+            "fecha_eliminacion": (
+                self.fecha_eliminacion.isoformat() if self.fecha_eliminacion else None
+            ),
         }

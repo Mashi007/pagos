@@ -5,17 +5,17 @@ Proporciona métricas y análisis de impacto del sistema
 
 import logging
 import time
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from app.api.deps import get_db, get_current_user
-from app.models.user import User
-from app.core.impact_monitoring import get_impact_analyzer, get_error_analyzer
+from typing import Any, Dict
 
+from fastapi import APIRouter, Depends, HTTPException, status
+
+from app.api.deps import get_current_user
+from app.core.impact_monitoring import get_error_analyzer, get_impact_analyzer
+from app.models.user import User
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
 
 @router.get("/health", response_model=Dict[str, Any])
 async def get_health_impact_analysis_public():
@@ -30,22 +30,17 @@ async def get_health_impact_analysis_public():
         analyzer = get_impact_analyzer()
         status_data = analyzer.get_current_status()
 
-        return {
-            "status": "success",
-            "data": status_data,
-            "timestamp": time.time()
-        }
+        return {"status": "success", "data": status_data, "timestamp": time.time()}
     except Exception as e:
         logger.error(f"Error obteniendo análisis de health: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error obteniendo análisis de health: {str(e)}"
+            detail=f"Error obteniendo análisis de health: {str(e)}",
         )
 
+
 @router.get("/impact/health", response_model=Dict[str, Any])
-async def get_health_impact_analysis(
-    current_user: User = Depends(get_current_user)
-):
+async def get_health_impact_analysis(current_user: User = Depends(get_current_user)):
     """
     Obtener análisis de impacto de health checks
 
@@ -57,21 +52,18 @@ async def get_health_impact_analysis(
         analyzer = get_impact_analyzer()
         status_data = analyzer.get_current_status()
 
-        return {
-            "status": "success",
-            "data": status_data,
-            "timestamp": time.time()
-        }
+        return {"status": "success", "data": status_data, "timestamp": time.time()}
     except Exception as e:
         logger.error(f"Error obteniendo análisis de health: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error obteniendo análisis de health: {str(e)}"
+            detail=f"Error obteniendo análisis de health: {str(e)}",
         )
+
 
 @router.get("/impact/performance", response_model=Dict[str, Any])
 async def get_performance_impact_analysis(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Obtener análisis de impacto en performance
@@ -84,22 +76,17 @@ async def get_performance_impact_analysis(
         analyzer = get_impact_analyzer()
         report = analyzer.get_performance_report()
 
-        return {
-            "status": "success",
-            "data": report,
-            "timestamp": time.time()
-        }
+        return {"status": "success", "data": report, "timestamp": time.time()}
     except Exception as e:
         logger.error(f"Error obteniendo análisis de performance: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error obteniendo análisis de performance: {str(e)}"
+            detail=f"Error obteniendo análisis de performance: {str(e)}",
         )
 
+
 @router.get("/impact/errors", response_model=Dict[str, Any])
-async def get_error_impact_analysis(
-    current_user: User = Depends(get_current_user)
-):
+async def get_error_impact_analysis(current_user: User = Depends(get_current_user)):
     """
     Obtener análisis de impacto de errores
 
@@ -119,20 +106,21 @@ async def get_error_impact_analysis(
             "data": {
                 "impact_analysis": analysis.__dict__,
                 "endpoint_summary": summary,
-                "recent_errors": recent_errors
+                "recent_errors": recent_errors,
             },
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
     except Exception as e:
         logger.error(f"Error obteniendo análisis de errores: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error obteniendo análisis de errores: {str(e)}"
+            detail=f"Error obteniendo análisis de errores: {str(e)}",
         )
+
 
 @router.get("/impact/comprehensive", response_model=Dict[str, Any])
 async def get_comprehensive_impact_analysis(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Obtener análisis integral de impacto del sistema
@@ -153,7 +141,9 @@ async def get_comprehensive_impact_analysis(
         error_summary = error_analyzer.get_endpoint_error_summary()
 
         # Calcular score general del sistema
-        system_score = _calculate_system_score(health_status, performance_report, error_analysis)
+        system_score = _calculate_system_score(
+            health_status, performance_report, error_analysis
+        )
 
         # Generar recomendaciones generales
         general_recommendations = _generate_general_recommendations(
@@ -168,24 +158,23 @@ async def get_comprehensive_impact_analysis(
                 "performance_analysis": performance_report,
                 "error_analysis": {
                     "impact_analysis": error_analysis.__dict__,
-                    "endpoint_summary": error_summary
+                    "endpoint_summary": error_summary,
                 },
                 "general_recommendations": general_recommendations,
-                "analysis_timestamp": time.time()
+                "analysis_timestamp": time.time(),
             },
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
     except Exception as e:
         logger.error(f"Error obteniendo análisis integral: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error obteniendo análisis integral: {str(e)}"
+            detail=f"Error obteniendo análisis integral: {str(e)}",
         )
 
+
 @router.post("/impact/monitoring/start")
-async def start_impact_monitoring(
-    current_user: User = Depends(get_current_user)
-):
+async def start_impact_monitoring(current_user: User = Depends(get_current_user)):
     """
     Iniciar monitoreo de impacto del sistema
 
@@ -194,7 +183,7 @@ async def start_impact_monitoring(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requieren permisos de administrador"
+            detail="Se requieren permisos de administrador",
         )
 
     try:
@@ -204,19 +193,18 @@ async def start_impact_monitoring(
         return {
             "status": "success",
             "message": "Monitoreo de impacto iniciado",
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
     except Exception as e:
         logger.error(f"Error iniciando monitoreo: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error iniciando monitoreo: {str(e)}"
+            detail=f"Error iniciando monitoreo: {str(e)}",
         )
 
+
 @router.post("/impact/monitoring/stop")
-async def stop_impact_monitoring(
-    current_user: User = Depends(get_current_user)
-):
+async def stop_impact_monitoring(current_user: User = Depends(get_current_user)):
     """
     Detener monitoreo de impacto del sistema
 
@@ -225,7 +213,7 @@ async def stop_impact_monitoring(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requieren permisos de administrador"
+            detail="Se requieren permisos de administrador",
         )
 
     try:
@@ -235,16 +223,19 @@ async def stop_impact_monitoring(
         return {
             "status": "success",
             "message": "Monitoreo de impacto detenido",
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
     except Exception as e:
         logger.error(f"Error deteniendo monitoreo: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error deteniendo monitoreo: {str(e)}"
+            detail=f"Error deteniendo monitoreo: {str(e)}",
         )
 
-def _calculate_system_score(health_status: Dict, performance_report: Dict, error_analysis: Any) -> Dict[str, Any]:
+
+def _calculate_system_score(
+    health_status: Dict, performance_report: Dict, error_analysis: Any
+) -> Dict[str, Any]:
     """Calcular score general del sistema"""
     score = 100
 
@@ -253,7 +244,10 @@ def _calculate_system_score(health_status: Dict, performance_report: Dict, error
         score -= health_status["active_alerts"] * 10
 
     # Penalizar por performance
-    if performance_report.get("performance_summary", {}).get("avg_response_time_ms", 0) > 500:
+    if (
+        performance_report.get("performance_summary", {}).get("avg_response_time_ms", 0)
+        > 500
+    ):
         score -= 20
 
     # Penalizar por tasa de error
@@ -283,13 +277,18 @@ def _calculate_system_score(health_status: Dict, performance_report: Dict, error
         "level": level,
         "factors": {
             "health_alerts": health_status.get("active_alerts", 0),
-            "avg_response_time": performance_report.get("performance_summary", {}).get("avg_response_time_ms", 0),
+            "avg_response_time": performance_report.get("performance_summary", {}).get(
+                "avg_response_time_ms", 0
+            ),
             "error_rate": error_analysis.error_rate,
-            "consecutive_errors": error_analysis.consecutive_errors
-        }
+            "consecutive_errors": error_analysis.consecutive_errors,
+        },
     }
 
-def _generate_general_recommendations(health_status: Dict, performance_report: Dict, error_analysis: Any) -> list:
+
+def _generate_general_recommendations(
+    health_status: Dict, performance_report: Dict, error_analysis: Any
+) -> list:
     """Generar recomendaciones generales del sistema"""
     recommendations = []
 
@@ -298,7 +297,9 @@ def _generate_general_recommendations(health_status: Dict, performance_report: D
         recommendations.append("Revisar alertas activas del sistema")
 
     # Recomendaciones basadas en performance
-    avg_response_time = performance_report.get("performance_summary", {}).get("avg_response_time_ms", 0)
+    avg_response_time = performance_report.get("performance_summary", {}).get(
+        "avg_response_time_ms", 0
+    )
     if avg_response_time > 1000:
         recommendations.append("Optimizar endpoints con tiempo de respuesta > 1s")
 

@@ -6,25 +6,27 @@ Sin IA - Basado en templates y reglas de negocio
 """
 
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, List, Any
+from datetime import date, datetime, timedelta
 from enum import Enum
+from typing import Any, Dict, List
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+
 from app.models.amortizacion import Cuota
-from app.models.notificacion import Notificacion
 from app.models.cliente import Cliente
+from app.models.notificacion import Notificacion
 from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.services.email_service import EmailService
 from app.services.whatsapp_service import WhatsAppService
-from sqlalchemy import func
-from datetime import date
 
 logger = logging.getLogger(__name__)
 
+
 class TipoNotificacionCliente(str, Enum):
     """Tipos de notificaciones a clientes"""
+
     RECORDATORIO_3_DIAS = "RECORDATORIO_3_DIAS"
     RECORDATORIO_1_DIA = "RECORDATORIO_1_DIA"
     DIA_VENCIMIENTO = "DIA_VENCIMIENTO"
@@ -33,12 +35,15 @@ class TipoNotificacionCliente(str, Enum):
     MORA_5_DIAS = "MORA_5_DIAS"
     CONFIRMACION_PAGO = "CONFIRMACION_PAGO"
 
+
 class CanalNotificacion(str, Enum):
     """Canales de notificación disponibles"""
+
     EMAIL = "EMAIL"
     WHATSAPP = "WHATSAPP"
     AMBOS = "AMBOS"
     NINGUNO = "NINGUNO"
+
 
 class PreferenciasNotificacion:
     """Gestión de preferencias de notificación por cliente"""
@@ -71,9 +76,7 @@ class PreferenciasNotificacion:
 
     @staticmethod
     def actualizar_preferencias_cliente(
-        cliente_id: int, 
-        canal_preferido: CanalNotificacion,
-        db: Session
+        cliente_id: int, canal_preferido: CanalNotificacion, db: Session
     ) -> bool:
         """Actualizar preferencias de notificación del cliente"""
         try:
@@ -81,13 +84,16 @@ class PreferenciasNotificacion:
             # Por ahora, guardar en observaciones del cliente
             cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
             if cliente:
-                cliente.observaciones = f"PREFERENCIA_NOTIFICACION: {canal_preferido.value}"
+                cliente.observaciones = (
+                    f"PREFERENCIA_NOTIFICACION: {canal_preferido.value}"
+                )
                 db.commit()
                 return True
             return False
         except Exception as e:
             logger.error(f"Error actualizando preferencias: {e}")
             return False
+
 
 class NotificacionMulticanal:
     """
@@ -107,7 +113,7 @@ class NotificacionMulticanal:
             TipoNotificacionCliente.MORA_1_DIA: "10:00",
             TipoNotificacionCliente.MORA_3_DIAS: "10:00",
             TipoNotificacionCliente.MORA_5_DIAS: "10:00",
-            TipoNotificacionCliente.CONFIRMACION_PAGO: "INMEDIATO"
+            TipoNotificacionCliente.CONFIRMACION_PAGO: "INMEDIATO",
         }
 
         # Límites anti-spam
@@ -130,7 +136,7 @@ class NotificacionMulticanal:
                 "exitosas": 0,
                 "fallidas": 0,
                 "por_tipo": {},
-                "errores": []
+                "errores": [],
             }
 
             # Procesar cada tipo de notificación
@@ -152,7 +158,9 @@ class NotificacionMulticanal:
             if self._es_hora_reporte_diario():
                 await self._generar_reporte_diario(resultados)
 
-            logger.info(f"✅ Procesamiento completado: {resultados['exitosas']} exitosas, {resultados['fallidas']} fallidas")
+            logger.info(
+                f"✅ Procesamiento completado: {resultados['exitosas']} exitosas, {resultados['fallidas']} fallidas"
+            )
 
             return resultados
 
@@ -171,7 +179,7 @@ class NotificacionMulticanal:
                 "total": len(clientes_objetivo),
                 "exitosas": 0,
                 "fallidas": 0,
-                "detalles": []
+                "detalles": [],
             }
 
             for cliente_data in clientes_objetivo:
@@ -181,8 +189,10 @@ class NotificacionMulticanal:
                         continue
 
                     # Obtener preferencias del cliente
-                    preferencias = PreferenciasNotificacion.obtener_preferencias_cliente(
-                        cliente_data["cliente_id"], self.db
+                    preferencias = (
+                        PreferenciasNotificacion.obtener_preferencias_cliente(
+                            cliente_data["cliente_id"], self.db
+                        )
                     )
 
                     if preferencias == CanalNotificacion.NINGUNO:
@@ -201,16 +211,26 @@ class NotificacionMulticanal:
                     resultado["detalles"].append(resultado_envio)
 
                 except Exception as e:
-                    logger.error(f"Error enviando notificación a cliente {cliente_data.get('cliente_id')}: {e}")
+                    logger.error(
+                        f"Error enviando notificación a cliente {cliente_data.get('cliente_id')}: {e}"
+                    )
                     resultado["fallidas"] += 1
 
             return resultado
 
         except Exception as e:
             logger.error(f"Error procesando tipo {tipo.value}: {e}")
-            return {"tipo": tipo.value, "total": 0, "exitosas": 0, "fallidas": 0, "error": str(e)}
+            return {
+                "tipo": tipo.value,
+                "total": 0,
+                "exitosas": 0,
+                "fallidas": 0,
+                "error": str(e),
+            }
 
-    def _obtener_clientes_para_notificacion(self, tipo: TipoNotificacionCliente) -> List[Dict]:
+    def _obtener_clientes_para_notificacion(
+        self, tipo: TipoNotificacionCliente
+    ) -> List[Dict]:
         """Obtener clientes que requieren notificación específica"""
         try:
             hoy = date.today()
@@ -219,73 +239,117 @@ class NotificacionMulticanal:
             if tipo == TipoNotificacionCliente.RECORDATORIO_3_DIAS:
                 # Cuotas que vencen en 3 días
                 fecha_objetivo = hoy + timedelta(days=3)
-                cuotas = self.db.query(Cuota).join(Prestamo).join(Cliente).filter(
-                    Cuota.fecha_vencimiento == fecha_objetivo,
-                    Cuota.estado.in_(["PENDIENTE", "PARCIAL"]),
-                    Cliente.activo 
-                ).all()
+                cuotas = (
+                    self.db.query(Cuota)
+                    .join(Prestamo)
+                    .join(Cliente)
+                    .filter(
+                        Cuota.fecha_vencimiento == fecha_objetivo,
+                        Cuota.estado.in_(["PENDIENTE", "PARCIAL"]),
+                        Cliente.activo,
+                    )
+                    .all()
+                )
 
             elif tipo == TipoNotificacionCliente.RECORDATORIO_1_DIA:
                 # Cuotas que vencen mañana
                 fecha_objetivo = hoy + timedelta(days=1)
-                cuotas = self.db.query(Cuota).join(Prestamo).join(Cliente).filter(
-                    Cuota.fecha_vencimiento == fecha_objetivo,
-                    Cuota.estado.in_(["PENDIENTE", "PARCIAL"]),
-                    Cliente.activo 
-                ).all()
+                cuotas = (
+                    self.db.query(Cuota)
+                    .join(Prestamo)
+                    .join(Cliente)
+                    .filter(
+                        Cuota.fecha_vencimiento == fecha_objetivo,
+                        Cuota.estado.in_(["PENDIENTE", "PARCIAL"]),
+                        Cliente.activo,
+                    )
+                    .all()
+                )
 
             elif tipo == TipoNotificacionCliente.DIA_VENCIMIENTO:
                 # Cuotas que vencen hoy
-                cuotas = self.db.query(Cuota).join(Prestamo).join(Cliente).filter(
-                    Cuota.fecha_vencimiento == hoy,
-                    Cuota.estado.in_(["PENDIENTE", "PARCIAL"]),
-                    Cliente.activo 
-                ).all()
+                cuotas = (
+                    self.db.query(Cuota)
+                    .join(Prestamo)
+                    .join(Cliente)
+                    .filter(
+                        Cuota.fecha_vencimiento == hoy,
+                        Cuota.estado.in_(["PENDIENTE", "PARCIAL"]),
+                        Cliente.activo,
+                    )
+                    .all()
+                )
 
             elif tipo == TipoNotificacionCliente.MORA_1_DIA:
                 # Cuotas con 1 día de mora
                 fecha_vencida = hoy - timedelta(days=1)
-                cuotas = self.db.query(Cuota).join(Prestamo).join(Cliente).filter(
-                    Cuota.fecha_vencimiento == fecha_vencida,
-                    Cuota.estado.in_(["PENDIENTE", "PARCIAL", "VENCIDA"]),
-                    Cliente.activo 
-                ).all()
+                cuotas = (
+                    self.db.query(Cuota)
+                    .join(Prestamo)
+                    .join(Cliente)
+                    .filter(
+                        Cuota.fecha_vencimiento == fecha_vencida,
+                        Cuota.estado.in_(["PENDIENTE", "PARCIAL", "VENCIDA"]),
+                        Cliente.activo,
+                    )
+                    .all()
+                )
 
             elif tipo == TipoNotificacionCliente.MORA_3_DIAS:
                 # Cuotas con 3 días de mora
                 fecha_vencida = hoy - timedelta(days=3)
-                cuotas = self.db.query(Cuota).join(Prestamo).join(Cliente).filter(
-                    Cuota.fecha_vencimiento == fecha_vencida,
-                    Cuota.estado.in_(["PENDIENTE", "PARCIAL", "VENCIDA"]),
-                    Cliente.activo 
-                ).all()
+                cuotas = (
+                    self.db.query(Cuota)
+                    .join(Prestamo)
+                    .join(Cliente)
+                    .filter(
+                        Cuota.fecha_vencimiento == fecha_vencida,
+                        Cuota.estado.in_(["PENDIENTE", "PARCIAL", "VENCIDA"]),
+                        Cliente.activo,
+                    )
+                    .all()
+                )
 
             elif tipo == TipoNotificacionCliente.MORA_5_DIAS:
                 # Cuotas con 5 días de mora
                 fecha_vencida = hoy - timedelta(days=5)
-                cuotas = self.db.query(Cuota).join(Prestamo).join(Cliente).filter(
-                    Cuota.fecha_vencimiento == fecha_vencida,
-                    Cuota.estado.in_(["PENDIENTE", "PARCIAL", "VENCIDA"]),
-                    Cliente.activo 
-                ).all()
+                cuotas = (
+                    self.db.query(Cuota)
+                    .join(Prestamo)
+                    .join(Cliente)
+                    .filter(
+                        Cuota.fecha_vencimiento == fecha_vencida,
+                        Cuota.estado.in_(["PENDIENTE", "PARCIAL", "VENCIDA"]),
+                        Cliente.activo,
+                    )
+                    .all()
+                )
             else:
                 cuotas = []
 
             # Convertir cuotas a datos de cliente
             for cuota in cuotas:
                 cliente = cuota.prestamo.cliente
-                clientes_objetivo.append({
-                    "cliente_id": cliente.id,
-                    "nombre": cliente.nombre_completo,
-                    "email": cliente.email,
-                    "telefono": cliente.telefono,
-                    "cuota_numero": cuota.numero_cuota,
-                    "monto_cuota": float(cuota.monto_cuota),
-                    "fecha_vencimiento": cuota.fecha_vencimiento,
-                    "dias_mora": (hoy - cuota.fecha_vencimiento).days if cuota.fecha_vencimiento < hoy else 0,
-                    "saldo_pendiente": float(cuota.capital_pendiente + cuota.interes_pendiente),
-                    "vehiculo": cliente.vehiculo_completo or "Vehículo"
-                })
+                clientes_objetivo.append(
+                    {
+                        "cliente_id": cliente.id,
+                        "nombre": cliente.nombre_completo,
+                        "email": cliente.email,
+                        "telefono": cliente.telefono,
+                        "cuota_numero": cuota.numero_cuota,
+                        "monto_cuota": float(cuota.monto_cuota),
+                        "fecha_vencimiento": cuota.fecha_vencimiento,
+                        "dias_mora": (
+                            (hoy - cuota.fecha_vencimiento).days
+                            if cuota.fecha_vencimiento < hoy
+                            else 0
+                        ),
+                        "saldo_pendiente": float(
+                            cuota.capital_pendiente + cuota.interes_pendiente
+                        ),
+                        "vehiculo": cliente.vehiculo_completo or "Vehículo",
+                    }
+                )
 
             return clientes_objetivo
 
@@ -297,7 +361,7 @@ class NotificacionMulticanal:
         self,
         cliente_data: Dict,
         tipo: TipoNotificacionCliente,
-        preferencias: CanalNotificacion
+        preferencias: CanalNotificacion,
     ) -> Dict[str, Any]:
         """
         📧📱 Enviar notificación por múltiples canales
@@ -311,7 +375,7 @@ class NotificacionMulticanal:
                 "canales_exitosos": [],
                 "canales_fallidos": [],
                 "exitoso": False,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
             # Determinar canales a usar
@@ -330,14 +394,18 @@ class NotificacionMulticanal:
 
                 try:
                     if canal == "EMAIL":
-                        exito_email = await self._enviar_email_cliente(cliente_data, tipo)
+                        exito_email = await self._enviar_email_cliente(
+                            cliente_data, tipo
+                        )
                         if exito_email:
                             resultado["canales_exitosos"].append("EMAIL")
                         else:
                             resultado["canales_fallidos"].append("EMAIL")
 
                     elif canal == "WHATSAPP":
-                        exito_whatsapp = await self._enviar_whatsapp_cliente(cliente_data, tipo)
+                        exito_whatsapp = await self._enviar_whatsapp_cliente(
+                            cliente_data, tipo
+                        )
                         if exito_whatsapp:
                             resultado["canales_exitosos"].append("WHATSAPP")
                         else:
@@ -360,10 +428,12 @@ class NotificacionMulticanal:
             return {
                 "cliente_id": cliente_data["cliente_id"],
                 "exitoso": False,
-                "error": str(e)
+                "error": str(e),
             }
 
-    async def _enviar_email_cliente(self, cliente_data: Dict, tipo: TipoNotificacionCliente) -> bool:
+    async def _enviar_email_cliente(
+        self, cliente_data: Dict, tipo: TipoNotificacionCliente
+    ) -> bool:
         """Enviar notificación por email"""
         try:
             # Obtener template de email
@@ -373,7 +443,7 @@ class NotificacionMulticanal:
             resultado = await self.email_service.send_email(
                 to_email=cliente_data["email"],
                 subject=template_email["asunto"],
-                html_content=template_email["cuerpo_html"]
+                html_content=template_email["cuerpo_html"],
             )
 
             return resultado.get("exitoso", False)
@@ -382,7 +452,9 @@ class NotificacionMulticanal:
             logger.error(f"Error enviando email: {e}")
             return False
 
-    async def _enviar_whatsapp_cliente(self, cliente_data: Dict, tipo: TipoNotificacionCliente) -> bool:
+    async def _enviar_whatsapp_cliente(
+        self, cliente_data: Dict, tipo: TipoNotificacionCliente
+    ) -> bool:
         """Enviar notificación por WhatsApp"""
         try:
             # Obtener template de WhatsApp
@@ -390,8 +462,7 @@ class NotificacionMulticanal:
 
             # Enviar WhatsApp
             resultado = await self.whatsapp_service.send_message(
-                to_phone=cliente_data["telefono"],
-                message=template_whatsapp["mensaje"]
+                to_phone=cliente_data["telefono"], message=template_whatsapp["mensaje"]
             )
 
             return resultado.get("exitoso", False)
@@ -400,7 +471,9 @@ class NotificacionMulticanal:
             logger.error(f"Error enviando WhatsApp: {e}")
             return False
 
-    def _obtener_template_email(self, tipo: TipoNotificacionCliente, cliente_data: Dict) -> Dict[str, str]:
+    def _obtener_template_email(
+        self, tipo: TipoNotificacionCliente, cliente_data: Dict
+    ) -> Dict[str, str]:
         """Obtener template de email según tipo de notificación"""
 
         # Variables comunes
@@ -414,7 +487,7 @@ class NotificacionMulticanal:
             "saldo_pendiente": f"${cliente_data['saldo_pendiente']:,.0f}",
             "vehiculo": cliente_data["vehiculo"],
             "nombre_empresa": "Financiamiento Automotriz",
-            "telefono_empresa": "809-XXX-XXXX"
+            "telefono_empresa": "809-XXX-XXXX",
         }
 
         templates = {
@@ -458,9 +531,8 @@ class NotificacionMulticanal:
                         </div>
                     </div>
                 </div>
-                """
+                """,
             },
-
             TipoNotificacionCliente.MORA_1_DIA: {
                 "asunto": f"⚠️ Tu cuota #{variables['cuota']} está vencida - 1 día de atraso",
                 "cuerpo_html": f"""
@@ -499,9 +571,8 @@ class NotificacionMulticanal:
                         </div>
                     </div>
                 </div>
-                """
+                """,
             },
-
             TipoNotificacionCliente.CONFIRMACION_PAGO: {
                 "asunto": f"✅ Pago recibido - Cuota #{variables['cuota']}",
                 "cuerpo_html": f"""
@@ -538,16 +609,21 @@ class NotificacionMulticanal:
                         </div>
                     </div>
                 </div>
-                """
-            }
+                """,
+            },
         }
 
-        return templates.get(tipo, {
-            "asunto": "Notificación del sistema",
-            "cuerpo_html": "<p>Notificación automática del sistema.</p>"
-        })
+        return templates.get(
+            tipo,
+            {
+                "asunto": "Notificación del sistema",
+                "cuerpo_html": "<p>Notificación automática del sistema.</p>",
+            },
+        )
 
-    def _obtener_template_whatsapp(self, tipo: TipoNotificacionCliente, cliente_data: Dict) -> Dict[str, str]:
+    def _obtener_template_whatsapp(
+        self, tipo: TipoNotificacionCliente, cliente_data: Dict
+    ) -> Dict[str, str]:
         """Obtener template de WhatsApp según tipo (más cortos que email)"""
 
         # Variables comunes
@@ -573,7 +649,6 @@ Dudas? Responde este mensaje.
 Gracias,
 Financiamiento Automotriz"""
             },
-
             TipoNotificacionCliente.RECORDATORIO_1_DIA: {
                 "mensaje": f"""⏰ {nombre}, tu cuota vence MAÑANA
 
@@ -585,7 +660,6 @@ No olvides realizar tu pago!
 
 Financiamiento Automotriz"""
             },
-
             TipoNotificacionCliente.DIA_VENCIMIENTO: {
                 "mensaje": f"""📅 {nombre}, tu cuota vence HOY
 
@@ -597,7 +671,6 @@ Realiza tu pago antes de las 6:00 PM para evitar mora.
 
 Financiamiento Automotriz"""
             },
-
             TipoNotificacionCliente.MORA_1_DIA: {
                 "mensaje": f"""⚠️ {nombre}, tu cuota está vencida
 
@@ -611,7 +684,6 @@ Necesitas ayuda? Responde este mensaje.
 
 Financiamiento Automotriz"""
             },
-
             TipoNotificacionCliente.MORA_3_DIAS: {
                 "mensaje": f"""🚨 {nombre}, URGENTE - 3 días de atraso
 
@@ -625,7 +697,6 @@ Responde AHORA o llama: 809-XXX-XXXX
 
 Financiamiento Automotriz"""
             },
-
             TipoNotificacionCliente.MORA_5_DIAS: {
                 "mensaje": f"""🚨 {nombre}, CRÍTICO - 5 días de atraso
 
@@ -639,7 +710,6 @@ LLAMA AHORA: 809-XXX-XXXX
 
 Financiamiento Automotriz"""
             },
-
             TipoNotificacionCliente.CONFIRMACION_PAGO: {
                 "mensaje": f"""✅ ¡Pago confirmado!
 
@@ -651,7 +721,7 @@ Gracias {nombre} por tu pago de {monto}.
 Tu cuenta está al día!
 
 Financiamiento Automotriz"""
-            }
+            },
         }
 
         return templates.get(tipo, {"mensaje": "Notificación del sistema."})
@@ -662,23 +732,35 @@ Financiamiento Automotriz"""
             hoy = date.today()
 
             # Contar notificaciones enviadas hoy al cliente
-            notificaciones_hoy = self.db.query(Notificacion).filter(
-                Notificacion.usuario_id == cliente_id,  # Asumiendo que cliente_id = usuario_id
-                func.date(Notificacion.creado_en) == hoy
-            ).count()
+            notificaciones_hoy = (
+                self.db.query(Notificacion)
+                .filter(
+                    Notificacion.usuario_id
+                    == cliente_id,  # Asumiendo que cliente_id = usuario_id
+                    func.date(Notificacion.creado_en) == hoy,
+                )
+                .count()
+            )
 
             if notificaciones_hoy >= self.LIMITE_NOTIFICACIONES_DIA:
-                logger.warning(f"Cliente {cliente_id} alcanzó límite diario de notificaciones")
+                logger.warning(
+                    f"Cliente {cliente_id} alcanzó límite diario de notificaciones"
+                )
                 return False
 
             # Verificar intervalo mínimo
-            ultima_notificacion = self.db.query(Notificacion).filter(
-                Notificacion.usuario_id == cliente_id
-            ).order_by(Notificacion.creado_en.desc()).first()
+            ultima_notificacion = (
+                self.db.query(Notificacion)
+                .filter(Notificacion.usuario_id == cliente_id)
+                .order_by(Notificacion.creado_en.desc())
+                .first()
+            )
 
             if ultima_notificacion:
                 tiempo_transcurrido = datetime.now() - ultima_notificacion.creado_en
-                if tiempo_transcurrido.total_seconds() < (self.INTERVALO_MINIMO_HORAS * 3600):
+                if tiempo_transcurrido.total_seconds() < (
+                    self.INTERVALO_MINIMO_HORAS * 3600
+                ):
                     logger.warning(f"Cliente {cliente_id} no cumple intervalo mínimo")
                     return False
 
@@ -689,19 +771,20 @@ Financiamiento Automotriz"""
             return True  # En caso de error, permitir envío
 
     async def _registrar_en_historial(
-        self, 
-        cliente_data: Dict, 
-        tipo: TipoNotificacionCliente, 
-        resultado: Dict
+        self, cliente_data: Dict, tipo: TipoNotificacionCliente, resultado: Dict
     ):
         """Registrar notificación en historial completo"""
         try:
             # Registrar para cada canal intentado
             for canal in resultado["canales_intentados"]:
-                estado = "ENTREGADO" if canal in resultado["canales_exitosos"] else "ERROR"
+                estado = (
+                    "ENTREGADO" if canal in resultado["canales_exitosos"] else "ERROR"
+                )
 
                 notificacion = Notificacion(
-                    usuario_id=cliente_data["cliente_id"],  # Asumiendo cliente_id = usuario_id
+                    usuario_id=cliente_data[
+                        "cliente_id"
+                    ],  # Asumiendo cliente_id = usuario_id
                     tipo=tipo.value,
                     categoria="CLIENTE",
                     prioridad="NORMAL",
@@ -709,15 +792,23 @@ Financiamiento Automotriz"""
                     mensaje=f"Notificación enviada por {canal} al cliente {cliente_data['nombre']}",
                     canal=canal,
                     estado=estado,
-                    destinatario_email=cliente_data["email"] if canal == "EMAIL" else None,
-                    destinatario_telefono=cliente_data["telefono"] if canal == "WHATSAPP" else None,
+                    destinatario_email=(
+                        cliente_data["email"] if canal == "EMAIL" else None
+                    ),
+                    destinatario_telefono=(
+                        cliente_data["telefono"] if canal == "WHATSAPP" else None
+                    ),
                     destinatario_nombre=cliente_data["nombre"],
-                    extra_data=str({
-                        "cuota_numero": cliente_data["cuota_numero"],
-                        "monto_cuota": cliente_data["monto_cuota"],
-                        "fecha_vencimiento": cliente_data["fecha_vencimiento"].isoformat(),
-                        "tipo_notificacion": tipo.value
-                    })
+                    extra_data=str(
+                        {
+                            "cuota_numero": cliente_data["cuota_numero"],
+                            "monto_cuota": cliente_data["monto_cuota"],
+                            "fecha_vencimiento": cliente_data[
+                                "fecha_vencimiento"
+                            ].isoformat(),
+                            "tipo_notificacion": tipo.value,
+                        }
+                    ),
                 )
 
                 self.db.add(notificacion)
@@ -737,11 +828,15 @@ Financiamiento Automotriz"""
         """Generar reporte diario de notificaciones"""
         try:
             # Obtener usuarios de cobranzas para enviar reporte
-            usuarios_cobranzas = self.db.query(User).filter(
-                User.is_admin ,  # Cambio clave: rol → is_admin
-                User.is_active ,
-                User.email.isnot(None)
-            ).all()
+            usuarios_cobranzas = (
+                self.db.query(User)
+                .filter(
+                    User.is_admin,  # Cambio clave: rol → is_admin
+                    User.is_active,
+                    User.email.isnot(None),
+                )
+                .all()
+            )
 
             # Crear reporte
             reporte_html = f"""
@@ -766,7 +861,7 @@ Financiamiento Automotriz"""
             reporte_html += "</ul>"
 
             if resultados["errores"]:
-                reporte_html += f"""
+                reporte_html += """
                 <h3>⚠️ Errores Detectados:</h3>
                 <ul>
                 """
@@ -779,7 +874,7 @@ Financiamiento Automotriz"""
                 await self.email_service.send_email(
                     to_email=usuario.email,
                     subject=f"📊 Reporte Diario de Notificaciones - {date.today().strftime('%d/%m/%Y')}",
-                    html_content=reporte_html
+                    html_content=reporte_html,
                 )
 
             logger.info("📧 Reporte diario enviado al equipo de cobranzas")
@@ -787,9 +882,11 @@ Financiamiento Automotriz"""
         except Exception as e:
             logger.error(f"Error generando reporte diario: {e}")
 
+
 # ============================================
 # SCHEDULER DE NOTIFICACIONES
 # ============================================
+
 
 class NotificationScheduler:
     """
@@ -820,12 +917,14 @@ class NotificationScheduler:
             resultados = await servicio_notif.procesar_notificaciones_automaticas()
 
             # Log de resultados
-            logger.info(f"✅ Ciclo completado: {resultados.get('exitosas', 0)} exitosas, {resultados.get('fallidas', 0)} fallidas")
+            logger.info(
+                f"✅ Ciclo completado: {resultados.get('exitosas', 0)} exitosas, {resultados.get('fallidas', 0)} fallidas"
+            )
 
             return {
                 "mensaje": "✅ Ciclo de notificaciones completado exitosamente",
                 "timestamp": datetime.now().isoformat(),
-                "resultados": resultados
+                "resultados": resultados,
             }
 
         except Exception as e:
@@ -833,7 +932,7 @@ class NotificationScheduler:
             return {
                 "mensaje": "❌ Error en ciclo de notificaciones",
                 "error": str(e),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
         finally:
             self.is_running = False
@@ -846,7 +945,7 @@ class NotificationScheduler:
             return {
                 "email_configurado": ConfigHelper.is_email_configured(db),
                 "whatsapp_habilitado": ConfigHelper.is_whatsapp_enabled(db),
-                "puede_enviar_notificaciones": True  # Al menos email siempre debe estar
+                "puede_enviar_notificaciones": True,  # Al menos email siempre debe estar
             }
 
         except Exception as e:
@@ -854,12 +953,14 @@ class NotificationScheduler:
             return {
                 "email_configurado": False,
                 "whatsapp_habilitado": False,
-                "puede_enviar_notificaciones": False
+                "puede_enviar_notificaciones": False,
             }
+
 
 # ============================================
 # GESTIÓN DE REINTENTOS
 # ============================================
+
 
 class GestorReintentos:
     """
@@ -873,17 +974,22 @@ class GestorReintentos:
         """
         try:
             # Buscar notificaciones fallidas que requieren reintento
-            notificaciones_reintento = db.query(Notificacion).filter(
-                Notificacion.estado == "ERROR",
-                Notificacion.intentos < Notificacion.max_intentos,
-                Notificacion.creado_en >= datetime.now() - timedelta(hours=24)  # Solo últimas 24h
-            ).all()
+            notificaciones_reintento = (
+                db.query(Notificacion)
+                .filter(
+                    Notificacion.estado == "ERROR",
+                    Notificacion.intentos < Notificacion.max_intentos,
+                    Notificacion.creado_en
+                    >= datetime.now() - timedelta(hours=24),  # Solo últimas 24h
+                )
+                .all()
+            )
 
             resultados = {
                 "total_reintentos": len(notificaciones_reintento),
                 "exitosos": 0,
                 "fallidos": 0,
-                "detalles": []
+                "detalles": [],
             }
 
             for notificacion in notificaciones_reintento:
@@ -895,7 +1001,9 @@ class GestorReintentos:
                     if notificacion.canal == "EMAIL":
                         exito = await GestorReintentos._reintentar_email(notificacion)
                     elif notificacion.canal == "WHATSAPP":
-                        exito = await GestorReintentos._reintentar_whatsapp(notificacion)
+                        exito = await GestorReintentos._reintentar_whatsapp(
+                            notificacion
+                        )
                     else:
                         exito = False
 
@@ -908,12 +1016,16 @@ class GestorReintentos:
 
                         # Si agotó reintentos, notificar a admin
                         if notificacion.intentos >= notificacion.max_intentos:
-                            await GestorReintentos._notificar_admin_fallo_critico(notificacion, db)
+                            await GestorReintentos._notificar_admin_fallo_critico(
+                                notificacion, db
+                            )
 
                     db.commit()
 
                 except Exception as e:
-                    logger.error(f"Error en reintento de notificación {notificacion.id}: {e}")
+                    logger.error(
+                        f"Error en reintento de notificación {notificacion.id}: {e}"
+                    )
                     resultados["fallidos"] += 1
 
             return resultados
@@ -932,7 +1044,7 @@ class GestorReintentos:
             resultado = await email_service.send_email(
                 to_email=notificacion.destinatario_email,
                 subject=notificacion.titulo,
-                html_content=notificacion.mensaje
+                html_content=notificacion.mensaje,
             )
 
             return resultado.get("exitoso", False)
@@ -950,7 +1062,7 @@ class GestorReintentos:
 
             resultado = await whatsapp_service.send_message(
                 to_phone=notificacion.destinatario_telefono,
-                message=notificacion.mensaje
+                message=notificacion.mensaje,
             )
 
             return resultado.get("exitoso", False)
@@ -964,11 +1076,15 @@ class GestorReintentos:
         """Notificar a admin sobre fallo crítico en notificaciones"""
         try:
             # Obtener administradores
-            admins = db.query(User).filter(
-                User.is_admin ,  # Cambio clave: rol → is_admin
-                User.is_active ,
-                User.email.isnot(None)
-            ).all()
+            admins = (
+                db.query(User)
+                .filter(
+                    User.is_admin,  # Cambio clave: rol → is_admin
+                    User.is_active,
+                    User.email.isnot(None),
+                )
+                .all()
+            )
 
             # Crear notificación de fallo crítico
             for admin in admins:
@@ -989,7 +1105,7 @@ ltimo error: {notificacion.error_mensaje}
 
 Acción requerida: Revisar configuración del servicio.
                     """,
-                    estado="PENDIENTE"
+                    estado="PENDIENTE",
                 )
 
                 db.add(notif_admin)
@@ -1000,9 +1116,11 @@ Acción requerida: Revisar configuración del servicio.
         except Exception as e:
             logger.error(f"Error notificando fallo crítico: {e}")
 
+
 # ============================================
 # CONFIGURACIÓN DE TEMPLATES WHATSAPP
 # ============================================
+
 
 class WhatsAppTemplateManager:
     """
@@ -1015,66 +1133,43 @@ class WhatsAppTemplateManager:
             "categoria": "MARKETING",
             "idioma": "es",
             "componentes": [
-                {
-                    "tipo": "HEADER",
-                    "formato": "TEXT",
-                    "texto": "Recordatorio de Pago"
-                },
+                {"tipo": "HEADER", "formato": "TEXT", "texto": "Recordatorio de Pago"},
                 {
                     "tipo": "BODY",
-                    "texto": "👋 Hola {{1}},\n\n🚗 Te recordamos que tu cuota #{{2}} de tu {{3}} vence el {{4}}.\n\n💰 Monto: {{5}}\n\nPor favor realiza tu pago a tiempo. 💳\n\n¿Dudas? Responde este mensaje."
+                    "texto": "👋 Hola {{1}},\n\n🚗 Te recordamos que tu cuota #{{2}} de tu {{3}} vence el {{4}}.\n\n💰 Monto: {{5}}\n\nPor favor realiza tu pago a tiempo. 💳\n\n¿Dudas? Responde este mensaje.",
                 },
-                {
-                    "tipo": "FOOTER",
-                    "texto": "Financiamiento Automotriz"
-                }
+                {"tipo": "FOOTER", "texto": "Financiamiento Automotriz"},
             ],
-            "variables": ["nombre", "cuota", "vehiculo", "fecha", "monto"]
+            "variables": ["nombre", "cuota", "vehiculo", "fecha", "monto"],
         },
-
         "mora_1_dia": {
             "nombre": "mora_1_dia",
             "categoria": "UTILITY",
             "idioma": "es",
             "componentes": [
-                {
-                    "tipo": "HEADER",
-                    "formato": "TEXT",
-                    "texto": "⚠️ Cuota Vencida"
-                },
+                {"tipo": "HEADER", "formato": "TEXT", "texto": "⚠️ Cuota Vencida"},
                 {
                     "tipo": "BODY",
-                    "texto": "{{1}}, tu cuota #{{2}} está vencida.\n\n🚗 Vehículo: {{3}}\n💰 Monto: {{4}}\n📅 Días de atraso: {{5}}\n\nPara evitar cargos adicionales, paga hoy.\n\n¿Necesitas ayuda? Responde este mensaje."
+                    "texto": "{{1}}, tu cuota #{{2}} está vencida.\n\n🚗 Vehículo: {{3}}\n💰 Monto: {{4}}\n📅 Días de atraso: {{5}}\n\nPara evitar cargos adicionales, paga hoy.\n\n¿Necesitas ayuda? Responde este mensaje.",
                 },
-                {
-                    "tipo": "FOOTER",
-                    "texto": "Financiamiento Automotriz"
-                }
+                {"tipo": "FOOTER", "texto": "Financiamiento Automotriz"},
             ],
-            "variables": ["nombre", "cuota", "vehiculo", "monto", "dias_mora"]
+            "variables": ["nombre", "cuota", "vehiculo", "monto", "dias_mora"],
         },
-
         "confirmacion_pago": {
             "nombre": "confirmacion_pago",
             "categoria": "UTILITY",
             "idioma": "es",
             "componentes": [
-                {
-                    "tipo": "HEADER",
-                    "formato": "TEXT",
-                    "texto": "✅ Pago Confirmado"
-                },
+                {"tipo": "HEADER", "formato": "TEXT", "texto": "✅ Pago Confirmado"},
                 {
                     "tipo": "BODY",
-                    "texto": "¡Gracias {{1}}!\n\nHemos recibido tu pago de {{2}}.\n\n🚗 {{3}}\n📅 Cuota #{{4}}: ✅ PAGADA\n\n¡Tu cuenta está al día!"
+                    "texto": "¡Gracias {{1}}!\n\nHemos recibido tu pago de {{2}}.\n\n🚗 {{3}}\n📅 Cuota #{{4}}: ✅ PAGADA\n\n¡Tu cuenta está al día!",
                 },
-                {
-                    "tipo": "FOOTER",
-                    "texto": "Financiamiento Automotriz"
-                }
+                {"tipo": "FOOTER", "texto": "Financiamiento Automotriz"},
             ],
-            "variables": ["nombre", "monto", "vehiculo", "cuota"]
-        }
+            "variables": ["nombre", "monto", "vehiculo", "cuota"],
+        },
     }
 
     @staticmethod
@@ -1092,7 +1187,7 @@ class WhatsAppTemplateManager:
             "language": template["idioma"],
             "components": template["componentes"],
             "status": "PENDING_APPROVAL",
-            "descripcion": f"Template para {template_name.replace('_', ' ').title()}"
+            "descripcion": f"Template para {template_name.replace('_', ' ').title()}",
         }
 
     @staticmethod
@@ -1103,10 +1198,11 @@ class WhatsAppTemplateManager:
                 "nombre": nombre,
                 "descripcion": template["categoria"],
                 "variables": template["variables"],
-                "estado": "PENDIENTE_APROBACION"  # En producción sería dinámico
+                "estado": "PENDIENTE_APROBACION",  # En producción sería dinámico
             }
             for nombre, template in WhatsAppTemplateManager.TEMPLATES_WHATSAPP.items()
         ]
+
 
 # ============================================
 # INSTANCIA GLOBAL DEL SCHEDULER

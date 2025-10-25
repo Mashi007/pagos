@@ -3,12 +3,12 @@ Modelo de Préstamo
 Define la estructura básica de un préstamo.
 Sincronizado con el endpoint de aprobaciones.
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Text, Numeric, ForeignKey
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy.sql import func
+
 from enum import Enum
+
+from sqlalchemy import (TIMESTAMP, Column, Date, ForeignKey, Integer, Numeric,
+                        String, Text)
+from sqlalchemy.sql import func
 
 from app.db.session import Base
 
@@ -22,32 +22,39 @@ ESTADO_LENGTH = 20
 
 # --- Enumeraciones ---
 
+
 class EstadoPrestamo(str, Enum):
     """Estados posibles de un préstamo."""
-    PENDIENTE = "PENDIENTE"         # Solicitud inicial
-    EN_APROBACION = "EN_APROBACION" # <== AÑADIDO: Usado por el endpoint de aprobaciones
-    APROBADO = "APROBADO"           # <== USADO por el endpoint
-    RECHAZADO = "RECHAZADO"         # <== AÑADIDO: Usado por el endpoint al rechazar
+
+    PENDIENTE = "PENDIENTE"  # Solicitud inicial
+    EN_APROBACION = (
+        "EN_APROBACION"  # <== AÑADIDO: Usado por el endpoint de aprobaciones
+    )
+    APROBADO = "APROBADO"  # <== USADO por el endpoint
+    RECHAZADO = "RECHAZADO"  # <== AÑADIDO: Usado por el endpoint al rechazar
     CANCELADO = "CANCELADO"
     ACTIVO = "ACTIVO"
     COMPLETADO = "COMPLETADO"
     REFINANCIADO = "REFINANCIADO"
     EN_MORA = "EN_MORA"
 
+
 class ModalidadPago(str, Enum):
     """Modalidades de pago disponibles"""
+
     TRADICIONAL = "TRADICIONAL"
     SEMANAL = "SEMANAL"
     QUINCENAL = "QUINCENAL"
     MENSUAL = "MENSUAL"
     BIMESTRAL = "BIMESTRAL"
 
+
 class Prestamo(Base):
     __tablename__ = "prestamos"
 
     id = Column(Integer, primary_key=True, index=True)
     # CORREGIDO: Usamos "clientes.id" para referenciar correctamente al modelo Cliente
-    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False) 
+    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False)
     codigo_prestamo = Column(String(CODIGO_LENGTH), unique=True, index=True)
 
     # Montos
@@ -61,10 +68,12 @@ class Prestamo(Base):
     monto_cuota = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
     cuotas_pagadas = Column(Integer, default=0)
     # Se recomienda que cuotas_pendientes sea calculado, pero se mantiene como columna por diseño.
-    cuotas_pendientes = Column(Integer) 
+    cuotas_pendientes = Column(Integer)
 
     # Fechas
-    fecha_aprobacion = Column(Date, nullable=True) # Hacemos nullable, ya que solo se llena al ser APROBADO
+    fecha_aprobacion = Column(
+        Date, nullable=True
+    )  # Hacemos nullable, ya que solo se llena al ser APROBADO
     fecha_desembolso = Column(Date)
     fecha_primer_vencimiento = Column(Date, nullable=False)
     fecha_ultimo_vencimiento = Column(Date)
@@ -90,6 +99,6 @@ class Prestamo(Base):
 
     # Relaciones
     # CORREGIDO: Relación correcta con el modelo Cliente
-    # cliente = relationship("Cliente", back_populates="prestamos")  # COMENTADO: Tabla prestamos vacía 
+    # cliente = relationship("Cliente", back_populates="prestamos")  # COMENTADO: Tabla prestamos vacía
     # cuotas = relationship("Cuota", back_populates="prestamo", cascade="all, delete-orphan")  # COMENTADO: Solo plantilla vacía
     # pagos = relationship("Pago", back_populates="prestamo")  # COMENTADO: Solo plantilla vacía

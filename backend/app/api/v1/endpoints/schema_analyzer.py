@@ -5,14 +5,14 @@ Identifica inconsistencias específicas entre modelos y esquema real
 
 import logging
 import threading
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from collections import deque, defaultdict
+from collections import deque
+from datetime import datetime
+from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_user
+from app.api.deps import get_current_user, get_db
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -22,18 +22,28 @@ router = APIRouter()
 # SISTEMA DE ANÁLISIS DE ESQUEMA DE BD
 # ============================================
 
+
 class DatabaseSchemaAnalyzer:
     """Analizador específico para inconsistencias de esquema de BD"""
 
     def __init__(self):
         self.schema_inconsistencies = deque(maxlen=1000)
         self.model_vs_schema_analysis = {}
-        self.critical_tables = ['analistas', 'clientes', 'users', 'usuarios']
+        self.critical_tables = ["analistas", "clientes", "users", "usuarios"]
         self.expected_columns = {
-            'analistas': ['id', 'nombre', 'activo', 'created_at', 'updated_at'],
-            'clientes': ['id', 'cedula', 'nombres', 'apellidos', 'estado', 'created_at', 'updated_at', 'fecha_registro'],
-            'users': ['id', 'email', 'is_active', 'created_at', 'updated_at'],
-            'usuarios': ['id', 'email', 'is_active', 'created_at', 'updated_at']
+            "analistas": ["id", "nombre", "activo", "created_at", "updated_at"],
+            "clientes": [
+                "id",
+                "cedula",
+                "nombres",
+                "apellidos",
+                "estado",
+                "created_at",
+                "updated_at",
+                "fecha_registro",
+            ],
+            "users": ["id", "email", "is_active", "created_at", "updated_at"],
+            "usuarios": ["id", "email", "is_active", "created_at", "updated_at"],
         }
         self.lock = threading.Lock()
 
@@ -41,18 +51,20 @@ class DatabaseSchemaAnalyzer:
         """Analizar inconsistencias específicas del esquema"""
         with self.lock:
             analysis = {
-                'timestamp': datetime.now().isoformat(),
-                'critical_issues': [],
-                'schema_analysis': {},
-                'recommendations': []
+                "timestamp": datetime.now().isoformat(),
+                "critical_issues": [],
+                "schema_analysis": {},
+                "recommendations": [],
             }
 
             for table in self.critical_tables:
                 table_analysis = self._analyze_table_schema(db, table)
-                analysis['schema_analysis'][table] = table_analysis
+                analysis["schema_analysis"][table] = table_analysis
 
-                if table_analysis['critical_issues']:
-                    analysis['critical_issues'].extend(table_analysis['critical_issues'])
+                if table_analysis["critical_issues"]:
+                    analysis["critical_issues"].extend(
+                        table_analysis["critical_issues"]
+                    )
 
             return analysis
 
@@ -77,66 +89,74 @@ class DatabaseSchemaAnalyzer:
 
             critical_issues = []
             if missing_columns:
-                critical_issues.append({
-                    'type': 'missing_columns',
-                    'table': table_name,
-                    'columns': missing_columns,
-                    'severity': 'critical',
-                    'impact': 'causes_503_errors'
-                })
+                critical_issues.append(
+                    {
+                        "type": "missing_columns",
+                        "table": table_name,
+                        "columns": missing_columns,
+                        "severity": "critical",
+                        "impact": "causes_503_errors",
+                    }
+                )
 
             if extra_columns:
-                critical_issues.append({
-                    'type': 'extra_columns',
-                    'table': table_name,
-                    'columns': extra_columns,
-                    'severity': 'warning',
-                    'impact': 'potential_confusion'
-                })
+                critical_issues.append(
+                    {
+                        "type": "extra_columns",
+                        "table": table_name,
+                        "columns": extra_columns,
+                        "severity": "warning",
+                        "impact": "potential_confusion",
+                    }
+                )
 
             return {
-                'table_name': table_name,
-                'real_columns': real_columns,
-                'expected_columns': expected,
-                'missing_columns': missing_columns,
-                'extra_columns': extra_columns,
-                'critical_issues': critical_issues,
-                'schema_consistency': len(missing_columns) == 0
+                "table_name": table_name,
+                "real_columns": real_columns,
+                "expected_columns": expected,
+                "missing_columns": missing_columns,
+                "extra_columns": extra_columns,
+                "critical_issues": critical_issues,
+                "schema_consistency": len(missing_columns) == 0,
             }
 
         except Exception as e:
             logger.error(f"Error analizando esquema de tabla {table_name}: {e}")
             return {
-                'table_name': table_name,
-                'error': str(e),
-                'critical_issues': [{'type': 'analysis_error', 'error': str(e)}]
+                "table_name": table_name,
+                "error": str(e),
+                "critical_issues": [{"type": "analysis_error", "error": str(e)}],
             }
 
     def generate_schema_fixes(self, db: Session) -> Dict[str, Any]:
         """Generar fixes específicos para el esquema"""
         fixes = {
-            'timestamp': datetime.now().isoformat(),
-            'sql_fixes': [],
-            'model_fixes': [],
-            'priority': 'high'
+            "timestamp": datetime.now().isoformat(),
+            "sql_fixes": [],
+            "model_fixes": [],
+            "priority": "high",
         }
 
         # Fix específico para tabla analistas
-        fixes['sql_fixes'].append({
-            'table': 'analistas',
-            'fix_type': 'add_column',
-            'sql': 'ALTER TABLE analistas ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;',
-            'description': 'Agregar columna created_at faltante que causa error 503',
-            'priority': 'critical'
-        })
+        fixes["sql_fixes"].append(
+            {
+                "table": "analistas",
+                "fix_type": "add_column",
+                "sql": "ALTER TABLE analistas ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;",
+                "description": "Agregar columna created_at faltante que causa error 503",
+                "priority": "critical",
+            }
+        )
 
         # Fix para queries que usan created_at
-        fixes['model_fixes'].append({
-            'file': 'backend/app/api/v1/endpoints/analistas.py',
-            'fix_type': 'query_fix',
-            'description': 'Cambiar queries de created_at a updated_at en tabla analistas',
-            'priority': 'critical'
-        })
+        fixes["model_fixes"].append(
+            {
+                "file": "backend/app/api/v1/endpoints/analistas.py",
+                "fix_type": "query_fix",
+                "description": "Cambiar queries de created_at a updated_at en tabla analistas",
+                "priority": "critical",
+            }
+        )
 
         return fixes
 
@@ -158,13 +178,14 @@ class DatabaseSchemaAnalyzer:
                     current_state[table] = [row[0] for row in result.fetchall()]
 
                 except Exception as e:
-                    current_state[table] = {'error': str(e)}
+                    current_state[table] = {"error": str(e)}
 
             return {
-                'timestamp': datetime.now().isoformat(),
-                'current_schema_state': current_state,
-                'monitoring_active': True
+                "timestamp": datetime.now().isoformat(),
+                "current_schema_state": current_state,
+                "monitoring_active": True,
             }
+
 
 # Instancia global del analizador de esquema
 schema_analyzer = DatabaseSchemaAnalyzer()
@@ -173,10 +194,10 @@ schema_analyzer = DatabaseSchemaAnalyzer()
 # ENDPOINTS DE ANÁLISIS DE ESQUEMA
 # ============================================
 
+
 @router.get("/schema-inconsistencies")
 async def get_schema_inconsistencies(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """
     🔍 Analizar inconsistencias específicas del esquema de BD
@@ -187,7 +208,7 @@ async def get_schema_inconsistencies(
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
-            "analysis": analysis
+            "analysis": analysis,
         }
 
     except Exception as e:
@@ -195,13 +216,13 @@ async def get_schema_inconsistencies(
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "error",
-            "error": str(e)
+            "error": str(e),
         }
+
 
 @router.get("/schema-fixes")
 async def get_schema_fixes(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """
     🔧 Generar fixes específicos para el esquema
@@ -212,7 +233,7 @@ async def get_schema_fixes(
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
-            "fixes": fixes
+            "fixes": fixes,
         }
 
     except Exception as e:
@@ -220,13 +241,13 @@ async def get_schema_fixes(
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "error",
-            "error": str(e)
+            "error": str(e),
         }
+
 
 @router.get("/schema-monitoring")
 async def get_schema_monitoring(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """
     📊 Monitorear estado actual del esquema
@@ -237,7 +258,7 @@ async def get_schema_monitoring(
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "success",
-            "monitoring": monitoring
+            "monitoring": monitoring,
         }
 
     except Exception as e:
@@ -245,5 +266,5 @@ async def get_schema_monitoring(
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "error",
-            "error": str(e)
+            "error": str(e),
         }

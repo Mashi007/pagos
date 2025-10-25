@@ -2,25 +2,21 @@
 Endpoint de clientes - VERSIÓN CON AUDITORÍA AUTOMÁTICA
 Sistema completo de gestión de clientes con validaciones y auditoría
 """
+
 import logging
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
+from datetime import datetime
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Path
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import or_
+from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_user, require_permission, Permission
+from app.api.deps import (get_current_user, get_db)
+from app.models.auditoria import Auditoria, TipoAccion
 from app.models.cliente import Cliente
 from app.models.user import User
-from app.models.auditoria import Auditoria, TipoAccion
-from app.schemas.cliente import (
-    ClienteResponse, 
-    ClienteCreate, 
-    ClienteUpdate, 
-    ClienteCreateWithConfirmation
-)
-
+from app.schemas.cliente import (ClienteCreate, ClienteCreateWithConfirmation,
+                                 ClienteResponse, ClienteUpdate)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -29,6 +25,7 @@ logger = logging.getLogger(__name__)
 # FUNCIONES DE AUDITORÍA
 # ============================================
 
+
 def serializar_datos_auditoria(datos: dict) -> dict:
     """Serializar datos para auditoría, convirtiendo fechas a strings"""
     if not datos:
@@ -36,7 +33,7 @@ def serializar_datos_auditoria(datos: dict) -> dict:
 
     datos_serializados = {}
     for key, value in datos.items():
-        if hasattr(value, 'isoformat'):  # datetime.date o datetime.datetime
+        if hasattr(value, "isoformat"):  # datetime.date o datetime.datetime
             datos_serializados[key] = value.isoformat()
         elif isinstance(value, dict):
             datos_serializados[key] = serializar_datos_auditoria(value)
@@ -45,6 +42,7 @@ def serializar_datos_auditoria(datos: dict) -> dict:
 
     return datos_serializados
 
+
 def registrar_auditoria_cliente(
     db: Session,
     usuario_email: str,
@@ -52,7 +50,7 @@ def registrar_auditoria_cliente(
     cliente_id: int,
     datos_anteriores: dict = None,
     datos_nuevos: dict = None,
-    descripcion: str = ""
+    descripcion: str = "",
 ):
     """Registrar auditoría para operaciones de cliente - VERSIÓN LIGERA"""
     try:
@@ -75,7 +73,7 @@ def registrar_auditoria_cliente(
             datos_anteriores=datos_anteriores_serializados,
             datos_nuevos=datos_nuevos_serializados,
             ip_address="127.0.0.1",
-            user_agent="Sistema Interno"
+            user_agent="Sistema Interno",
         )
         db.add(auditoria)
         db.commit()
@@ -84,13 +82,14 @@ def registrar_auditoria_cliente(
         )
     except Exception as e:
         logger.error(f"Error registrando auditoría: {e}")
-        # ✅ OPTIMIZACIÓN: No hacer rollback de auditoría para evitar 
+        # ✅ OPTIMIZACIÓN: No hacer rollback de auditoría para evitar
         # problemas de transacción
-        pass
+
 
 # ============================================
 # ENDPOINTS DE CONSULTA
 # ============================================
+
 
 @router.get("", response_model=dict)
 @router.get("/", response_model=dict)
@@ -98,15 +97,12 @@ def listar_clientes(
     # Paginación
     page: int = Query(1, ge=1, description="Número de página"),
     per_page: int = Query(20, ge=1, le=1000, description="Tamaño de página"),
-
     # Búsqueda de texto
     search: Optional[str] = Query(None, description="Buscar en nombre, cédula o móvil"),
-
     # Filtros específicos
     estado: Optional[str] = Query(None, description="ACTIVO, INACTIVO, FINALIZADO"),
-
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     📋 Listar clientes con paginación y filtros
@@ -132,7 +128,7 @@ def listar_clientes(
                     Cliente.nombres.ilike(search_pattern),
                     Cliente.apellidos.ilike(search_pattern),
                     Cliente.cedula.ilike(search_pattern),
-                    Cliente.telefono.ilike(search_pattern)
+                    Cliente.telefono.ilike(search_pattern),
                 )
             )
 
@@ -162,8 +158,9 @@ def listar_clientes(
                     "email": cliente.email,
                     "direccion": cliente.direccion,
                     "fecha_nacimiento": (
-                        cliente.fecha_nacimiento.isoformat() 
-                        if cliente.fecha_nacimiento else None
+                        cliente.fecha_nacimiento.isoformat()
+                        if cliente.fecha_nacimiento
+                        else None
                     ),
                     "ocupacion": cliente.ocupacion,
                     "modelo_vehiculo": cliente.modelo_vehiculo,
@@ -172,15 +169,17 @@ def listar_clientes(
                     "estado": cliente.estado,
                     "activo": cliente.activo,
                     "fecha_registro": (
-                        cliente.fecha_registro.isoformat() 
-                        if cliente.fecha_registro else None
+                        cliente.fecha_registro.isoformat()
+                        if cliente.fecha_registro
+                        else None
                     ),
                     "fecha_actualizacion": (
-                        cliente.fecha_actualizacion.isoformat() 
-                        if cliente.fecha_actualizacion else None
+                        cliente.fecha_actualizacion.isoformat()
+                        if cliente.fecha_actualizacion
+                        else None
                     ),
                     "usuario_registro": cliente.usuario_registro,
-                    "notas": cliente.notas
+                    "notas": cliente.notas,
                 }
                 clientes_dict.append(cliente_data)
             except Exception as e:
@@ -198,22 +197,20 @@ def listar_clientes(
                 "por_pagina": per_page,
                 "total_paginas": total_pages,
                 "tiene_siguiente": page < total_pages,
-                "tiene_anterior": page > 1
-            }
+                "tiene_anterior": page > 1,
+            },
         }
 
     except Exception as e:
         logger.error(f"Error en listar_clientes: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor"
-        )
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
 
 @router.get("/{cliente_id}", response_model=ClienteResponse)
 def obtener_cliente(
     cliente_id: int = Path(..., description="ID del cliente"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     👤 Obtener cliente por ID
@@ -229,10 +226,7 @@ def obtener_cliente(
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
 
         if not cliente:
-            raise HTTPException(
-                status_code=404,
-                detail="Cliente no encontrado"
-            )
+            raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
         return ClienteResponse.model_validate(cliente)
 
@@ -240,21 +234,20 @@ def obtener_cliente(
         raise
     except Exception as e:
         logger.error(f"Error en obtener_cliente: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor"
-        )
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
 
 # ============================================
 # ENDPOINTS DE CREACIÓN
 # ============================================
+
 
 @router.post("", response_model=ClienteResponse, status_code=201)
 @router.post("/", response_model=ClienteResponse, status_code=201)
 def crear_cliente(
     cliente_data: ClienteCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     ➕ Crear nuevo cliente
@@ -270,7 +263,9 @@ def crear_cliente(
         logger.info(f"Datos recibidos: {cliente_data}")
 
         # CORREGIDO: Detectar cédulas duplicadas y manejar confirmación
-        cliente_existente = db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
+        cliente_existente = (
+            db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
+        )
         if cliente_existente:
             # ✅ NUEVO: Si el usuario confirma el duplicado, actualizar el cliente existente
             if cliente_data.confirm_duplicate:
@@ -306,13 +301,13 @@ def crear_cliente(
                     datos_anteriores={
                         "cedula": cliente_data.cedula,
                         "nombres": "Cliente existente",
-                        "apellidos": "Datos anteriores"
+                        "apellidos": "Datos anteriores",
                     },
                     datos_nuevos=cliente_data.model_dump(),
                     descripcion=(
                         f"Cliente actualizado por confirmación de duplicado: "
                         f"{cliente_data.nombres} {cliente_data.apellidos}"
-                    )
+                    ),
                 )
 
                 logger.info(
@@ -340,10 +335,10 @@ def crear_cliente(
                             "nombres": cliente_existente.nombres,
                             "apellidos": cliente_existente.apellidos,
                             "telefono": cliente_existente.telefono,
-                            "email": cliente_existente.email
+                            "email": cliente_existente.email,
                         },
-                        "action": "SHOW_DUPLICATE_POPUP"
-                    }
+                        "action": "SHOW_DUPLICATE_POPUP",
+                    },
                 )
 
         # Crear nuevo cliente
@@ -363,7 +358,7 @@ def crear_cliente(
             notas=cliente_data.notas or "NA",
             usuario_registro=current_user.email,  # Automático
             fecha_registro=datetime.now(),
-            fecha_actualizacion=datetime.now()
+            fecha_actualizacion=datetime.now(),
         )
 
         db.add(nuevo_cliente)
@@ -379,7 +374,7 @@ def crear_cliente(
             datos_nuevos=cliente_data.model_dump(),
             descripcion=(
                 f"Cliente creado: {cliente_data.nombres} {cliente_data.apellidos}"
-            )
+            ),
         )
 
         logger.info(f"Cliente creado exitosamente: {nuevo_cliente.id}")
@@ -394,16 +389,14 @@ def crear_cliente(
         # ✅ OPTIMIZACIÓN: Logging simplificado
         logger.error(f"❌ Error inesperado en crear_cliente: {str(e)}")
         db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor"
-        )
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
 
 @router.post("/confirmar-duplicado", response_model=ClienteResponse, status_code=201)
 def crear_cliente_con_confirmacion(
     request_data: ClienteCreateWithConfirmation,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     ➕ Crear cliente con confirmación de duplicado
@@ -424,7 +417,7 @@ def crear_cliente_con_confirmacion(
         if not request_data.confirmacion:
             raise HTTPException(
                 status_code=400,
-                detail="Confirmación requerida para crear cliente duplicado"
+                detail="Confirmación requerida para crear cliente duplicado",
             )
 
         cliente_data = request_data.cliente_data
@@ -449,7 +442,7 @@ def crear_cliente_con_confirmacion(
             ),
             usuario_registro=current_user.email,
             fecha_registro=datetime.now(),
-            fecha_actualizacion=datetime.now()
+            fecha_actualizacion=datetime.now(),
         )
 
         db.add(nuevo_cliente)
@@ -467,7 +460,7 @@ def crear_cliente_con_confirmacion(
                 f"Cliente creado con confirmación de duplicado: "
                 f"{cliente_data.nombres} {cliente_data.apellidos} | "
                 f"Comentarios: {request_data.comentarios}"
-            )
+            ),
         )
 
         logger.info(f"Cliente creado con confirmación exitosamente: {nuevo_cliente.id}")
@@ -480,19 +473,21 @@ def crear_cliente_con_confirmacion(
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail="Error interno del servidor al crear cliente con confirmación"
+            detail="Error interno del servidor al crear cliente con confirmación",
         )
+
 
 # ============================================
 # ENDPOINTS DE ACTUALIZACIÓN
 # ============================================
+
 
 @router.put("/{cliente_id}", response_model=ClienteResponse)
 def actualizar_cliente(
     cliente_id: int = Path(..., description="ID del cliente"),
     cliente_data: ClienteUpdate = ...,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     ✏️ Actualizar cliente
@@ -509,10 +504,7 @@ def actualizar_cliente(
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
 
         if not cliente:
-            raise HTTPException(
-                status_code=404,
-                detail="Cliente no encontrado"
-            )
+            raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
         # Guardar datos anteriores para auditoría
         datos_anteriores = {
@@ -523,15 +515,16 @@ def actualizar_cliente(
             "email": cliente.email,
             "direccion": cliente.direccion,
             "fecha_nacimiento": (
-                cliente.fecha_nacimiento.isoformat() 
-                if cliente.fecha_nacimiento else None
+                cliente.fecha_nacimiento.isoformat()
+                if cliente.fecha_nacimiento
+                else None
             ),
             "ocupacion": cliente.ocupacion,
             "modelo_vehiculo": cliente.modelo_vehiculo,
             "concesionario": cliente.concesionario,
             "analista": cliente.analista,
             "estado": cliente.estado,
-            "notas": cliente.notas
+            "notas": cliente.notas,
         }
 
         # Actualizar campos
@@ -554,7 +547,7 @@ def actualizar_cliente(
             cliente_id=cliente_id,
             datos_anteriores=datos_anteriores,
             datos_nuevos=update_data,
-            descripcion=f"Cliente actualizado: {cliente.nombres} {cliente.apellidos}"
+            descripcion=f"Cliente actualizado: {cliente.nombres} {cliente.apellidos}",
         )
 
         logger.info(f"Cliente actualizado exitosamente: {cliente_id}")
@@ -565,20 +558,19 @@ def actualizar_cliente(
     except Exception as e:
         logger.error(f"Error en actualizar_cliente: {e}")
         db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor"
-        )
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
 
 # ============================================
 # ENDPOINTS DE ELIMINACIÓN
 # ============================================
 
+
 @router.delete("/{cliente_id}")
 def eliminar_cliente(
     cliente_id: int = Path(..., description="ID del cliente"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     🗑️ Eliminar cliente (hard delete)
@@ -594,10 +586,7 @@ def eliminar_cliente(
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
 
         if not cliente:
-            raise HTTPException(
-                status_code=404,
-                detail="Cliente no encontrado"
-            )
+            raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
         # Guardar datos para auditoría
         datos_anteriores = {
@@ -605,7 +594,7 @@ def eliminar_cliente(
             "nombres": cliente.nombres,
             "apellidos": cliente.apellidos,
             "estado": cliente.estado,
-            "activo": cliente.activo
+            "activo": cliente.activo,
         }
 
         # Hard delete - eliminar físicamente de la BD
@@ -623,7 +612,7 @@ def eliminar_cliente(
             descripcion=(
                 f"Cliente eliminado físicamente: "
                 f"{cliente.nombres} {cliente.apellidos}"
-            )
+            ),
         )
 
         logger.info(f"Cliente eliminado exitosamente: {cliente_id}")
@@ -634,10 +623,8 @@ def eliminar_cliente(
     except Exception as e:
         logger.error(f"Error en eliminar_cliente: {e}")
         db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor"
-        )
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
 
 # TEMPORALMENTE COMENTADO PARA EVITAR ERROR 503
 # @router.get("/buscar-cedula/{cedula}", response_model=ClienteResponse)
@@ -647,7 +634,7 @@ def eliminar_cliente(
 # ):
 #     """
 #     🔍 Buscar cliente por cédula
-#     
+#
 #     Características:
 #     - Búsqueda exacta por cédula
 #     - Retorna datos completos del cliente
@@ -655,18 +642,18 @@ def eliminar_cliente(
 #     """
 #     try:
 #         logger.info(f"Buscando cliente por cédula: {cedula}")
-#         
+#
 #         cliente = db.query(Cliente).filter(Cliente.cedula == cedula.upper().strip()).first()
-#         
+#
 #         if not cliente:
 #             raise HTTPException(
 #                 status_code=404,
 #                 detail="Cliente no encontrado"
 #             )
-#         
+#
 #         logger.info(f"Cliente encontrado: {cliente.nombres} {cliente.apellidos}")
 #         return cliente
-#         
+#
 #     except HTTPException:
 #         raise
 #     except Exception as e:
@@ -676,11 +663,12 @@ def eliminar_cliente(
 #             detail=f"Error interno del servidor: {str(e)}"
 #         )
 
+
 # ENDPOINT TEMPORAL CON DATOS MOCK PARA EVITAR ERROR 503
 @router.get("/buscar-cedula/{cedula}", response_model=ClienteResponse)
 def buscar_cliente_por_cedula(
     cedula: str = Path(..., description="Cédula del cliente"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     🔍 Buscar cliente por cédula - DATOS MOCK TEMPORALES
@@ -690,8 +678,7 @@ def buscar_cliente_por_cedula(
 
         # Datos mock temporales hasta que se resuelva el problema de BD
         raise HTTPException(
-            status_code=404,
-            detail="Cliente no encontrado - Datos mock temporales"
+            status_code=404, detail="Cliente no encontrado - Datos mock temporales"
         )
 
     except HTTPException:
@@ -699,6 +686,5 @@ def buscar_cliente_por_cedula(
     except Exception as e:
         logger.error(f"Error en buscar_cliente_por_cedula: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )

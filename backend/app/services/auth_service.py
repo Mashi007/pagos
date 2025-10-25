@@ -3,25 +3,22 @@
 Servicio de autenticación
 Lógica de negocio para login, logout, refresh tokens
 """
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-
-from app.schemas.auth import LoginRequest, Token
-from app.models.user import User
-from app.core.security import (
-    verify_password,
-    get_password_hash,
-    create_access_token,
-    create_refresh_token,
-    decode_token,
-    validate_password_strength
-)
 import logging
+from datetime import datetime
+from typing import Optional, Tuple
+
+from fastapi import HTTPException, status
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from app.core.security import (create_access_token, create_refresh_token,
+                               decode_token, get_password_hash,
+                               validate_password_strength, verify_password)
+from app.models.user import User
+from app.schemas.auth import LoginRequest, Token
 
 logger = logging.getLogger(__name__)
+
 
 class AuthService:
     """Servicio de autenticación"""
@@ -43,22 +40,31 @@ class AuthService:
         # CASE INSENSITIVE: Normalizar email a minúsculas para búsqueda
         email_normalized = email.lower().strip()
 
-        logger.info(f"AuthService.authenticate_user - Intentando autenticar usuario: {email_normalized}")
+        logger.info(
+            f"AuthService.authenticate_user - Intentando autenticar usuario: {email_normalized}"
+        )
 
-        user = db.query(User).filter(
-            func.lower(User.email) == email_normalized,
-            User.is_active 
-        ).first()
+        user = (
+            db.query(User)
+            .filter(func.lower(User.email) == email_normalized, User.is_active)
+            .first()
+        )
 
         if not user:
-            logger.warning(f"AuthService.authenticate_user - Usuario no encontrado: {email_normalized}")
+            logger.warning(
+                f"AuthService.authenticate_user - Usuario no encontrado: {email_normalized}"
+            )
             return None
 
         if not verify_password(password, user.hashed_password):
-            logger.warning(f"AuthService.authenticate_user - Contraseña incorrecta para: {email_normalized}")
+            logger.warning(
+                f"AuthService.authenticate_user - Contraseña incorrecta para: {email_normalized}"
+            )
             return None
 
-        logger.info(f"AuthService.authenticate_user - Autenticación exitosa para: {email_normalized}")
+        logger.info(
+            f"AuthService.authenticate_user - Autenticación exitosa para: {email_normalized}"
+        )
         return user
 
     @staticmethod
@@ -77,16 +83,16 @@ class AuthService:
             HTTPException: Si las credenciales son inválidas o el usuario está inactivo
         """
         # Autenticar usuario
-        logger.info(f"AuthService.login - Iniciando proceso de login para: {login_data.email}")
-
-        user = AuthService.authenticate_user(
-            db,
-            login_data.email,
-            login_data.password
+        logger.info(
+            f"AuthService.login - Iniciando proceso de login para: {login_data.email}"
         )
 
+        user = AuthService.authenticate_user(db, login_data.email, login_data.password)
+
         if not user:
-            logger.warning(f"AuthService.login - Fallo en autenticación para: {login_data.email}")
+            logger.warning(
+                f"AuthService.login - Fallo en autenticación para: {login_data.email}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Email o contraseña incorrectos",
@@ -98,7 +104,7 @@ class AuthService:
             logger.warning(f"AuthService.login - Usuario inactivo: {login_data.email}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Usuario inactivo. Contacte al administrador."
+                detail="Usuario inactivo. Contacte al administrador.",
             )
 
         # Actualizar last_login
@@ -112,15 +118,13 @@ class AuthService:
             subject=user.id,
             additional_claims={
                 "is_admin": user.is_admin,  # Cambio clave: rol → is_admin
-                "email": user.email
-            }
+                "email": user.email,
+            },
         )
         refresh_token = create_refresh_token(subject=user.id)
 
         token = Token(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            token_type="bearer"
+            access_token=access_token, refresh_token=refresh_token, token_type="bearer"
         )
 
         return token, user
@@ -146,15 +150,13 @@ class AuthService:
             # Verificar que sea un refresh token
             if payload.get("type") != "refresh":
                 raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Token inválido"
+                    status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido"
                 )
 
             user_id = payload.get("sub")
             if not user_id:
                 raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Token inválido"
+                    status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido"
                 )
 
             # Buscar usuario
@@ -163,13 +165,12 @@ class AuthService:
             if not user:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Usuario no encontrado"
+                    detail="Usuario no encontrado",
                 )
 
             if not user.is_active:
                 raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Usuario inactivo"
+                    status_code=status.HTTP_403_FORBIDDEN, detail="Usuario inactivo"
                 )
 
             # Crear nuevos tokens
@@ -177,29 +178,26 @@ class AuthService:
                 subject=user.id,
                 additional_claims={
                     "is_admin": user.is_admin,  # Cambio clave: rol → is_admin
-                    "email": user.email
-                }
+                    "email": user.email,
+                },
             )
             new_refresh_token = create_refresh_token(subject=user.id)
 
             return Token(
                 access_token=new_access_token,
                 refresh_token=new_refresh_token,
-                token_type="bearer"
+                token_type="bearer",
             )
 
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Error procesando token: {str(e)}"
+                detail=f"Error procesando token: {str(e)}",
             )
 
     @staticmethod
     def change_password(
-        db: Session,
-        user: User,
-        current_password: str,
-        new_password: str
+        db: Session, user: User, current_password: str, new_password: str
     ) -> User:
         """
         Cambia la contraseña de un usuario
@@ -220,16 +218,13 @@ class AuthService:
         if not verify_password(current_password, user.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Contraseña actual incorrecta"
+                detail="Contraseña actual incorrecta",
             )
 
         # Validar fortaleza de nueva contraseña
         is_valid, message = validate_password_strength(new_password)
         if not is_valid:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=message
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
         # Actualizar contraseña
         user.hashed_password = get_password_hash(new_password)
@@ -252,7 +247,9 @@ class AuthService:
         """
         try:
             # Usar is_admin directamente - evitar conflicto de nombres
-            from app.core.permissions_simple import get_user_permissions as get_permissions
+            from app.core.permissions_simple import \
+                get_user_permissions as get_permissions
+
             permissions = get_permissions(user.is_admin)
             permission_strings = [perm.value for perm in permissions]
 

@@ -1,12 +1,15 @@
 """
 Sistema de seguridad: JWT, hashing de passwords, tokens y dependencias de FastAPI
 """
-import jwt
+
 from datetime import datetime, timedelta
-from typing import Optional, Any
+from typing import Any, Optional
+
+import jwt
+from fastapi.security import OAuth2PasswordBearer
 from jwt import PyJWTError
 from passlib.context import CryptContext
-from fastapi.security import OAuth2PasswordBearer
+
 from app.core.config import settings
 
 # Constantes de seguridad
@@ -25,7 +28,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = DEFAULT_ACCESS_TOKEN_EXPIRE_MINUTES
 REFRESH_TOKEN_EXPIRE_DAYS = DEFAULT_REFRESH_TOKEN_EXPIRE_DAYS
 
 # Esquema OAuth2 para FastAPI, que define dónde esperar el token (Authorization: Bearer <token>)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login") 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
@@ -33,16 +37,18 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     return pwd_context.verify(plain_password, hashed_password)
 
+
 def get_password_hash(password: str) -> str:
     """
     Genera un hash de una contraseña
     """
     return pwd_context.hash(password)
 
+
 def create_access_token(
     subject: str | int,
     expires_delta: Optional[timedelta] = None,
-    additional_claims: Optional[dict[str, Any]] = None
+    additional_claims: Optional[dict[str, Any]] = None,
 ) -> str:
     """
     Crea un token de acceso JWT
@@ -52,11 +58,7 @@ def create_access_token(
     else:
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    to_encode = {
-        "exp": expire,
-        "sub": str(subject),
-        "type": "access"
-    }
+    to_encode = {"exp": expire, "sub": str(subject), "type": "access"}
 
     # Añadir claims adicionales si existen
     if additional_claims:
@@ -65,20 +67,18 @@ def create_access_token(
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+
 def create_refresh_token(subject: str | int) -> str:
     """
     Crea un token de refresh JWT
     """
     expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
 
-    to_encode = {
-        "exp": expire,
-        "sub": str(subject),
-        "type": "refresh"
-    }
+    to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
 
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
 
 def decode_token(token: str) -> dict:
     """
@@ -94,6 +94,7 @@ def decode_token(token: str) -> dict:
         # Re-lanza PyJWTError para que el manejador de excepciones de FastAPI lo capture
         raise PyJWTError(f"Error decodificando token: {str(e)}")
 
+
 # -------------------------------------------------------------
 # DEPENDENCIAS DE AUTENTICACIÓN PARA FASTAPI (ELIMINADAS - DUPLICADAS)
 # -------------------------------------------------------------
@@ -104,6 +105,7 @@ def decode_token(token: str) -> dict:
 # [Resto de funciones originales]
 # -------------------------------------------------------------
 
+
 def verify_token_type(token: str, expected_type: str) -> bool:
     """
     Verifica que el token sea del tipo esperado (access o refresh)
@@ -113,6 +115,7 @@ def verify_token_type(token: str, expected_type: str) -> bool:
         return payload.get("type") == expected_type
     except PyJWTError:
         return False
+
 
 def validate_password_strength(password: str) -> tuple[bool, str]:
     """
@@ -136,20 +139,20 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
 
     return True, "Contraseña válida"
 
+
 def generate_password_reset_token(email: str) -> str:
     """
     Genera un token para reset de contraseña
     """
-    expire = datetime.utcnow() + timedelta(hours=PASSWORD_RESET_EXPIRE_HOURS)  # Expira en 1 hora
+    expire = datetime.utcnow() + timedelta(
+        hours=PASSWORD_RESET_EXPIRE_HOURS
+    )  # Expira en 1 hora
 
-    to_encode = {
-        "exp": expire,
-        "sub": email,
-        "type": "password_reset"
-    }
+    to_encode = {"exp": expire, "sub": email, "type": "password_reset"}
 
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
 
 def verify_password_reset_token(token: str) -> Optional[str]:
     """

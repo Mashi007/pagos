@@ -1,13 +1,12 @@
-from datetime import datetime, date, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import ForeignKey, Text, Numeric, JSON, Boolean, Enum
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, field_validator, ConfigDict
+from datetime import datetime
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, field_validator
+
 
 class AnalistaBase(BaseModel):
     nombre: str  # Nombre completo (incluye apellido)
-    apellido: Optional[str] = ''
+    apellido: Optional[str] = ""
     email: Optional[str] = None
     telefono: Optional[str] = None
     especialidad: Optional[str] = None
@@ -15,15 +14,17 @@ class AnalistaBase(BaseModel):
     activo: bool = True
     notas: Optional[str] = None
 
-    @field_validator('nombre')
+    @field_validator("nombre")
     @classmethod
     def name_must_not_be_empty(cls, v):
         if not v or not v.strip():
-            raise ValueError('El nombre no puede estar vacío')
+            raise ValueError("El nombre no puede estar vacío")
         return v.strip()
+
 
 class AnalistaCreate(AnalistaBase):
     pass
+
 
 class AnalistaUpdate(BaseModel):
     nombre: Optional[str] = None
@@ -35,12 +36,13 @@ class AnalistaUpdate(BaseModel):
     activo: Optional[bool] = None
     notas: Optional[str] = None
 
-    @field_validator('nombre')
+    @field_validator("nombre")
     @classmethod
     def name_must_not_be_empty(cls, v):
         if v is not None and (not v or not v.strip()):
-            raise ValueError('El nombre no puede estar vacío')
+            raise ValueError("El nombre no puede estar vacío")
         return v.strip() if v else v
+
 
 class AnalistaResponse(AnalistaBase):
     id: int
@@ -50,6 +52,7 @@ class AnalistaResponse(AnalistaBase):
     fecha_eliminacion: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
 
 class AnalistaListResponse(BaseModel):
     items: List[AnalistaResponse]
