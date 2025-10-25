@@ -972,6 +972,157 @@ async def _analizar_archivo_pagos(
 # ============================================
 
 
+def _validar_correccion_cedula(valor: str) -> tuple[bool, str, str]:
+    """Validar corrección de cédula"""
+    resultado = ValidadorCedula.validar_y_formatear_cedula(valor, "VENEZUELA")
+    if not resultado.get("valido"):
+        return False, f"Cédula: {resultado.get('mensaje')}", ""
+    return True, "", resultado.get("valor_formateado")
+
+
+def _validar_correccion_movil(valor: str) -> tuple[bool, str, str]:
+    """Validar corrección de móvil"""
+    resultado = ValidadorTelefono.validar_y_formatear_telefono(valor, "VENEZUELA")
+    if not resultado.get("valido"):
+        return False, f"Móvil: {resultado.get('mensaje')}", ""
+    return True, "", resultado.get("valor_formateado")
+
+
+def _validar_correccion_email(valor: str) -> tuple[bool, str, str]:
+    """Validar corrección de email"""
+    resultado = ValidadorEmail.validar_email(valor)
+    if not resultado.get("valido"):
+        return False, f"Email: {resultado.get('mensaje')}", ""
+    return True, "", resultado.get("valor_formateado")
+
+
+def _validar_correccion_fecha(valor: str) -> tuple[bool, str, str]:
+    """Validar corrección de fecha"""
+    resultado = ValidadorFecha.validar_y_formatear_fecha(valor)
+    if not resultado.get("valido"):
+        return False, f"Fecha: {resultado.get('mensaje')}", ""
+    return True, "", resultado.get("valor_formateado")
+
+
+def _validar_correccion_monto(valor: str) -> tuple[bool, str, str]:
+    """Validar corrección de monto"""
+    resultado = ValidadorMonto.validar_y_formatear_monto(valor)
+    if not resultado.get("valido"):
+        return False, f"Monto: {resultado.get('mensaje')}", ""
+    return True, "", resultado.get("valor_formateado")
+
+
+def _validar_correccion_concesionario(valor: str, db: Session) -> tuple[bool, str, str, int]:
+    """Validar corrección de concesionario"""
+    concesionario = (
+        db.query(Concesionario)
+        .filter(Concesionario.nombre.ilike(f"%{valor}%"), Concesionario.activo)
+        .first()
+    )
+    if not concesionario:
+        return False, f"Concesionario '{valor}' no existe en la BD", "", 0
+    return True, "", valor, concesionario.id
+
+
+def _validar_correccion_modelo_vehiculo(valor: str, db: Session) -> tuple[bool, str, str, int]:
+    """Validar corrección de modelo de vehículo"""
+    modelo = (
+        db.query(ModeloVehiculo)
+        .filter(ModeloVehiculo.modelo.ilike(f"%{valor}%"), ModeloVehiculo.activo)
+        .first()
+    )
+    if not modelo:
+        return False, f"Modelo '{valor}' no existe en la BD", "", 0
+    return True, "", valor, modelo.id
+
+
+def _validar_correccion_asesor(valor: str, db: Session) -> tuple[bool, str, str, int]:
+    """Validar corrección de asesor"""
+    asesor = (
+        db.query(Analista)
+        .filter(Analista.nombre.ilike(f"%{valor}%"), Analista.activo)
+        .first()
+    )
+    if not asesor:
+        return False, f"Analista '{valor}' no existe en la BD", "", 0
+    return True, "", valor, asesor.id
+
+
+def _validar_correccion_modalidad_pago(valor: str) -> tuple[bool, str, str]:
+    """Validar corrección de modalidad de pago"""
+    modalidades_validas = ["SEMANAL", "QUINCENAL", "MENSUAL", "BIMENSUAL"]
+    if valor.upper() not in modalidades_validas:
+        return False, f"Modalidad '{valor}' no es válida. Use: {', '.join(modalidades_validas)}", ""
+    return True, "", valor.upper()
+
+
+def _procesar_correccion_campo(campo: str, valor: str, db: Session) -> tuple[bool, str, dict]:
+    """Procesar corrección de un campo específico"""
+    datos_corregidos = {}
+
+    if campo == "cedula":
+        valido, error, valor_formateado = _validar_correccion_cedula(valor)
+        if valido:
+            datos_corregidos[campo] = valor_formateado
+        return valido, error, datos_corregidos
+
+    elif campo == "movil":
+        valido, error, valor_formateado = _validar_correccion_movil(valor)
+        if valido:
+            datos_corregidos[campo] = valor_formateado
+        return valido, error, datos_corregidos
+
+    elif campo == "email":
+        valido, error, valor_formateado = _validar_correccion_email(valor)
+        if valido:
+            datos_corregidos[campo] = valor_formateado
+        return valido, error, datos_corregidos
+
+    elif campo in ["fecha_entrega", "fecha_pago"]:
+        valido, error, valor_formateado = _validar_correccion_fecha(valor)
+        if valido:
+            datos_corregidos[campo] = valor_formateado
+        return valido, error, datos_corregidos
+
+    elif campo in ["total_financiamiento", "cuota_inicial", "monto_pagado"]:
+        valido, error, valor_formateado = _validar_correccion_monto(valor)
+        if valido:
+            datos_corregidos[campo] = valor_formateado
+        return valido, error, datos_corregidos
+
+    elif campo == "concesionario":
+        valido, error, valor_formateado, concesionario_id = _validar_correccion_concesionario(valor, db)
+        if valido:
+            datos_corregidos[campo] = valor_formateado
+            datos_corregidos["concesionario_id"] = concesionario_id
+        return valido, error, datos_corregidos
+
+    elif campo == "modelo_vehiculo":
+        valido, error, valor_formateado, modelo_id = _validar_correccion_modelo_vehiculo(valor, db)
+        if valido:
+            datos_corregidos[campo] = valor_formateado
+            datos_corregidos["modelo_vehiculo_id"] = modelo_id
+        return valido, error, datos_corregidos
+
+    elif campo == "asesor":
+        valido, error, valor_formateado, asesor_id = _validar_correccion_asesor(valor, db)
+        if valido:
+            datos_corregidos[campo] = valor_formateado
+            datos_corregidos["asesor_id"] = asesor_id
+        return valido, error, datos_corregidos
+
+    elif campo == "modalidad_pago":
+        valido, error, valor_formateado = _validar_correccion_modalidad_pago(valor)
+        if valido:
+            datos_corregidos[campo] = valor_formateado
+        return valido, error, datos_corregidos
+
+    else:
+        # Otros campos sin validación especial
+        datos_corregidos[campo] = valor
+        return True, "", datos_corregidos
+
+
 @router.post("/corregir-registro")
 async def corregir_registro_en_linea(
     correccion: CorreccionRegistro,
@@ -979,7 +1130,7 @@ async def corregir_registro_en_linea(
     current_user: User = Depends(get_current_user),
 ):
     """
-    ✏️ PASO 2: Corregir un registro con errores en línea
+    ✏️ PASO 2: Corregir un registro con errores en línea (VERSIÓN REFACTORIZADA)
 
     Proceso:
     1. Recibir correcciones del usuario
@@ -993,92 +1144,12 @@ async def corregir_registro_en_linea(
 
         # Validar cada corrección
         for campo, valor in correccion.correcciones.items():
-            if campo == "cedula":
-                resultado = ValidadorCedula.validar_y_formatear_cedula(valor, "VENEZUELA")
-                if not resultado.get("valido"):
-                    errores_validacion.append(f"Cédula: {resultado.get('mensaje')}")
-                else:
-                    datos_corregidos[campo] = resultado.get("valor_formateado")
+            valido, error, datos_campo = _procesar_correccion_campo(campo, valor, db)
 
-            elif campo == "movil":
-                resultado = ValidadorTelefono.validar_y_formatear_telefono(valor, "VENEZUELA")
-                if not resultado.get("valido"):
-                    errores_validacion.append(f"Móvil: {resultado.get('mensaje')}")
-                else:
-                    datos_corregidos[campo] = resultado.get("valor_formateado")
-
-            elif campo == "email":
-                resultado = ValidadorEmail.validar_email(valor)
-                if not resultado.get("valido"):
-                    errores_validacion.append(f"Email: {resultado.get('mensaje')}")
-                else:
-                    datos_corregidos[campo] = resultado.get("valor_formateado")
-
-            elif campo == "fecha_entrega" or campo == "fecha_pago":
-                resultado = ValidadorFecha.validar_y_formatear_fecha(valor)
-                if not resultado.get("valido"):
-                    errores_validacion.append(f"Fecha: {resultado.get('mensaje')}")
-                else:
-                    datos_corregidos[campo] = resultado.get("valor_formateado")
-
-            elif campo in ["total_financiamiento", "cuota_inicial", "monto_pagado"]:
-                resultado = ValidadorMonto.validar_y_formatear_monto(valor)
-                if not resultado.get("valido"):
-                    errores_validacion.append(f"Monto: {resultado.get('mensaje')}")
-                else:
-                    datos_corregidos[campo] = resultado.get("valor_formateado")
-
-            elif campo == "concesionario":
-                # Verificar que existe
-                concesionario = (
-                    db.query(Concesionario)
-                    .filter(Concesionario.nombre.ilike(f"%{valor}%"), Concesionario.activo)
-                    .first()
-                )
-                if not concesionario:
-                    errores_validacion.append(f"Concesionario '{valor}' no existe en la BD")
-                else:
-                    datos_corregidos[campo] = valor
-                    datos_corregidos["concesionario_id"] = concesionario.id
-
-            elif campo == "modelo_vehiculo":
-                # Verificar que existe
-                modelo = (
-                    db.query(ModeloVehiculo)
-                    .filter(ModeloVehiculo.modelo.ilike(f"%{valor}%"), ModeloVehiculo.activo)
-                    .first()
-                )
-                if not modelo:
-                    errores_validacion.append(f"Modelo '{valor}' no existe en la BD")
-                else:
-                    datos_corregidos[campo] = valor
-                    datos_corregidos["modelo_vehiculo_id"] = modelo.id
-
-            elif campo == "asesor":
-                # Verificar que existe
-                asesor = (
-                    db.query(Analista)
-                    .filter(Analista.nombre.ilike(f"%{valor}%"), Analista.activo)
-                    .first()
-                )
-                if not asesor:
-                    errores_validacion.append(f"Analista '{valor}' no existe en la BD")
-                else:
-                    datos_corregidos[campo] = valor
-                    datos_corregidos["asesor_id"] = asesor.id
-
-            elif campo == "modalidad_pago":
-                modalidades_validas = ["SEMANAL", "QUINCENAL", "MENSUAL", "BIMENSUAL"]
-                if valor.upper() not in modalidades_validas:
-                    errores_validacion.append(
-                        f"Modalidad '{valor}' no es válida. Use: {', '.join(modalidades_validas)}"
-                    )
-                else:
-                    datos_corregidos[campo] = valor.upper()
-
+            if not valido:
+                errores_validacion.append(error)
             else:
-                # Otros campos sin validación especial
-                datos_corregidos[campo] = valor
+                datos_corregidos.update(datos_campo)
 
         # Si hay errores, retornar sin guardar
         if errores_validacion:
