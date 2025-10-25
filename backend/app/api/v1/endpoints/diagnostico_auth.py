@@ -5,7 +5,7 @@ Sistema de auditoría para encontrar causa raíz de problemas 401
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Any
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException
 from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.user import User

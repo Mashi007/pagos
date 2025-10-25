@@ -28,7 +28,7 @@ def __init__(self):
         self.deployment_failures = deque(maxlen=100)
         self.service_503_errors = deque(maxlen=200)
         self.lock = threading.Lock()
-        
+    
     def log_critical_error(
         self, 
         error_type: str, 

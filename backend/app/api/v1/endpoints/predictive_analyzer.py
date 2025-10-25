@@ -4,11 +4,11 @@ Machine Learning y análisis estadístico para predecir problemas de autenticaci
 
 import logging
 import statistics
-from collections import deque
+from collections import deque, defaultdict, Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException
 from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.user import User

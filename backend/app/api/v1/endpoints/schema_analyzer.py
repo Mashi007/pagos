@@ -7,7 +7,7 @@ import threading
 from collections import deque
 from datetime import datetime
 from typing import Any, Dict
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.user import User

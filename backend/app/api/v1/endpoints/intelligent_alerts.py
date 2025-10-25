@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException
 from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
@@ -52,9 +52,9 @@ class Alert:
 # ============================================
 
 class IntelligentAlertSystem:
-    """Sistema inteligente de alertas"""
+    """Sistema inteligente de alertas"""    
     
-    def __init__(self):
+def __init__(self):
         self.alerts = deque(maxlen=1000)
         self.alert_rules = {}
         self.user_metrics = defaultdict(lambda: {
