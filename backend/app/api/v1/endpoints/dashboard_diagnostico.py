@@ -6,7 +6,7 @@ import logging
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Request, Response, HTTPException, status
 from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.core.config import settings
@@ -75,7 +75,7 @@ class AuditLogger:
         ]
     
     @staticmethod
-    def get_error_summary() -> Dict[str, Any]:
+def get_error_summary() -> Dict[str, Any]:
         """Obtener resumen de errores"""
         return {
             "total_errors": sum(error_patterns.values()),

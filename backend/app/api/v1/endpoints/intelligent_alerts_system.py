@@ -110,7 +110,7 @@ def _start_background_monitoring(self):
         monitor_thread.start()
         logger.info("Monitoreo de alertas iniciado")
     
-def _check_alert_conditions(self):
+    def _check_alert_conditions(self):
         """Verificar condiciones de alerta"""
         with self.lock:
             current_time = datetime.now()
@@ -250,7 +250,7 @@ def _check_alert_conditions(self):
                 return True
             return False
     
-    def get_alert_statistics(self) -> Dict[str, Any]:
+def get_alert_statistics(self) -> Dict[str, Any]:
         """Obtener estadísticas de alertas"""
         with self.lock:
             total_alerts = len(self.alert_history)
