@@ -1,77 +1,43 @@
-""""""
+"""
 Sistema de cache inteligente para analistas
-""""""
+"""
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Optional, Dict, Any
+from functools import wraps
+from datetime import datetime, timedelta
 
-# Configurar logger
 logger = logging.getLogger(__name__)
 
-# Constantes de configuración
+# Cache simple en memoria
+_cache: Dict[str, Any] = {}
+_cache_timestamps: Dict[str, datetime] = {}
 
 
-class AnalistasCache:
-
-
-    def __init__(self, ttl_seconds: int = DEFAULT_TTL_SECONDS):
-        self.cache: Dict[str, Dict[str, Any]] = {}
-        self.ttl = ttl_seconds
-
-
-    def get(self, key: str) -> Optional[Dict[str, Any]]:
-        if key in self.cache:
-            data = self.cache[key]
-                logger.info(f"Cache hit para key: {key}")
-                return data["data"]
-            else:
-                # Cache expirado, eliminar
-                del self.cache[key]
-                logger.info(f"Cache expirado para key: {key}")
-        return None
-
-
-    def set(self, key: str, data: Dict[str, Any]) -> None:
-
-
-    def clear(self) -> None:
-        """Limpiar todo el cache"""
-        self.cache.clear()
-        logger.info("Cache limpiado completamente")
-
-
-    def get_stats(self) -> Dict[str, Any]:
-        """Obtener estadísticas del cache"""
-        return 
-
-
-# Instancia global del cache
-analistas_cache = AnalistasCache(ttl_seconds=DEFAULT_TTL_SECONDS)
-
-
-def cache_analistas(key_func):
-
-
+def cache_result(ttl_seconds: int = 300):
+    """Decorador para cachear resultados con TTL"""
     def decorator(func):
-
-
+        @wraps(func)
         def wrapper(*args, **kwargs):
-            cache_key = key_func(*args, **kwargs)
-
-            # Intentar obtener del cache
-            cached_result = analistas_cache.get(cache_key)
-            if cached_result is not None:
-                return cached_result
-
-            # Si no está en cache, ejecutar función y guardar resultado
+            # Generar clave de cache
+            cache_key = f"{func.__name__}_{hash(str(args) + str(kwargs))}"
+            
+            # Verificar si existe en cache y no ha expirado
+            if cache_key in _cache:
+                timestamp = _cache_timestamps.get(cache_key)
+                if timestamp and datetime.now() - timestamp < timedelta(seconds=ttl_seconds):
+                    logger.debug(f"Cache hit para {cache_key}")
+                    return _cache[cache_key]
+            
+            # Ejecutar función y cachear resultado
             result = func(*args, **kwargs)
-            analistas_cache.set(cache_key, result)
+            _cache[cache_key] = result
+            _cache_timestamps[cache_key] = datetime.now()
+            
+            logger.debug(f"Resultado cacheado para {cache_key}")
             return result
-
-        wrapper.__name__ = func.__name__
-        wrapper.__doc__ = func.__doc__
+        
         return wrapper
-
     return decorator
 
 
@@ -81,13 +47,46 @@ def generate_cache_key(
     skip: int = 0,
     limit: int = 100
 ) -> str:
-    """"""
-
+    """
+    Generar clave de cache para consultas de analistas
+    
     Args:
         activo: Filtro de estado activo
         search: Término de búsqueda
-
+        skip: Offset de paginación
+        limit: Límite de resultados
+    
     Returns:
-        str: Clave única para el cache
-    """"""
-    return f"analistas_{skip}_{limit}_{activo}_{search or ''}"
+        str: Clave de cache generada
+    """
+    key_parts = [
+        f"activo_{activo}" if activo is not None else "activo_all",
+        f"search_{search}" if search else "search_none",
+        f"skip_{skip}",
+        f"limit_{limit}"
+    ]
+    return "_".join(key_parts)
+
+
+def clear_cache():
+    """Limpiar todo el cache"""
+    _cache.clear()
+    _cache_timestamps.clear()
+    logger.info("Cache limpiado completamente")
+
+
+def clear_expired_cache():
+    """Limpiar entradas expiradas del cache"""
+    now = datetime.now()
+    expired_keys = []
+    
+    for key, timestamp in _cache_timestamps.items():
+        if now - timestamp > timedelta(hours=1):  # Limpiar entradas de más de 1 hora
+            expired_keys.append(key)
+    
+    for key in expired_keys:
+        _cache.pop(key, None)
+        _cache_timestamps.pop(key, None)
+    
+    if expired_keys:
+        logger.info(f"Limpiadas {len(expired_keys)} entradas expiradas del cache")
