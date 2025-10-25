@@ -260,7 +260,7 @@ class ValidadorTelefono:
             else:
                 return {
                     "valido": False,
-                    "error": f"Longitud incorrecta. Formato esperado: +58 seguido de 10 dígitos (primer dígito no puede ser 0)",
+                    "error": "Longitud incorrecta. Formato esperado: +58 seguido de 10 dígitos (primer dígito no puede ser 0)",
                     "valor_original": telefono_limpio,
                     "valor_formateado": None,
                     "longitud_actual": len(telefono_limpio),
@@ -495,7 +495,7 @@ class ValidadorCedula:
 
         return {
             "valido": False,
-            "error": f"Formato inválido. DEBE empezar por V/E/J seguido de 7-10 dígitos",
+            "error": "Formato inválido. DEBE empezar por V/E/J seguido de 7-10 dígitos",
             "valor_original": cedula_limpia,
             "valor_formateado": cedula_formateada,
             "formato_esperado": config["descripcion"],
