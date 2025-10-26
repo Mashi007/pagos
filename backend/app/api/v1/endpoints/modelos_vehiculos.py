@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
@@ -56,6 +56,16 @@ def listar_modelos_vehiculos(
         page_size=limit,
         total_pages=(total + limit - 1) // limit,
     )
+
+
+@router.get("/activos", response_model=List[ModeloVehiculoResponse])
+def listar_modelos_activos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Listar solo modelos activos (para formularios)"""
+    modelos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo == True).all()
+    return modelos
 
 
 @router.get("/{modelo_id}", response_model=ModeloVehiculoResponse)

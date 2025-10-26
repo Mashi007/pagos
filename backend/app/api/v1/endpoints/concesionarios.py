@@ -130,6 +130,16 @@ def list_concesionarios(
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
+@router.get("/activos")
+def list_concesionarios_activos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Listar solo concesionarios activos (para formularios)"""
+    concesionarios = db.query(Concesionario).filter(Concesionario.activo == True).all()
+    return [c.to_dict() for c in concesionarios]
+
+
 @router.get("/dropdown")
 def get_concesionarios_dropdown(
     db: Session = Depends(get_db),
