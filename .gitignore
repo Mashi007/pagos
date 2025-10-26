@@ -60,3 +60,6 @@ htmlcov/
 ~$*.xlsm
 ~$*.xltx
 ~$*.xltm
+
+   # Datos sensibles
+   pagos/
