@@ -843,19 +843,6 @@ class ValidadorMonto:
                                                 "'123.456' (3 dígitos). NO '1234.56' (primera parte > 3 dígitos)"
                                             ),
                                         }
-                                    # No puede ser solo ceros
-                                    if parte == "000":
-                                        return {
-                                            "valido": False,
-                                            "error": "Grupo de miles inválido (solo ceros)",
-                                            "valor_original": monto,
-                                            "valor_formateado": None,
-                                            "formato_esperado": "Grupos válidos de 1-3 dígitos",
-                                            "sugerencia": (
-                                                "No se permiten grupos de solo ceros. "
-                                                "Ejemplo: '1.500' es correcto, '1.000' debe escribirse como '1500'"
-                                            ),
-                                        }
                                 else:
                                     # Las siguientes partes deben tener exactamente 3 dígitos
                                     if len(parte) != 3:
@@ -869,19 +856,6 @@ class ValidadorMonto:
                                                 "Cada grupo después del primer punto debe tener exactamente 3 dígitos. "
                                                 "Ejemplo: '10.500,50' (grupo '500' tiene 3 dígitos) "
                                                 "NO '10.50,50' (grupo '50' tiene solo 2 dígitos)"
-                                            ),
-                                        }
-                                    # No puede ser solo ceros
-                                    if parte == "000":
-                                        return {
-                                            "valido": False,
-                                            "error": "Grupo de miles inválido (solo ceros)",
-                                            "valor_original": monto,
-                                            "valor_formateado": None,
-                                            "formato_esperado": "Grupos válidos de exactamente 3 dígitos",
-                                            "sugerencia": (
-                                                "No se permiten grupos de solo ceros. "
-                                                "Ejemplo: '1.500' es correcto, '1.000' debe escribirse como '1500'"
                                             ),
                                         }
                             
