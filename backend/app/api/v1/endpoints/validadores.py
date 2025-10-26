@@ -124,6 +124,8 @@ def probar_validador(
         # Importar validador correspondiente
         from app.services.validators_service import (
             ValidadorCedula,
+            ValidadorEmail,
+            ValidadorFecha,
             ValidadorNombre,
             ValidadorTelefono,
         )
@@ -137,39 +139,9 @@ def probar_validador(
         elif tipo == "nombre" or tipo == "apellido":
             resultado = ValidadorNombre.validar_y_formatear_nombre(valor)
         elif tipo == "email":
-            # Validación simple de email
-            import re
-
-            email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-            es_valido = re.match(email_pattern, valor)
-            resultado = {
-                "valido": es_valido is not None,
-                "error": "" if es_valido else "Formato de email inválido",
-                "valor_original": valor,
-                "valor_formateado": valor.lower() if es_valido else None,
-                "cambio_realizado": False,
-            }
+            resultado = ValidadorEmail.validar_y_formatear_email(valor)
         elif tipo == "fecha":
-            # Validación simple de fecha
-            try:
-                from datetime import datetime
-
-                datetime.strptime(valor, "%d/%m/%Y")  # Solo validar, no asignar
-                resultado = {
-                    "valido": True,
-                    "error": "",
-                    "valor_original": valor,
-                    "valor_formateado": valor,
-                    "cambio_realizado": False,
-                }
-            except ValueError:
-                resultado = {
-                    "valido": False,
-                    "error": "Formato de fecha inválido (usar DD/MM/YYYY)",
-                    "valor_original": valor,
-                    "valor_formateado": None,
-                    "cambio_realizado": False,
-                }
+            resultado = ValidadorFecha.validar_y_formatear_fecha(valor)
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

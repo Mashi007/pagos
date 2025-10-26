@@ -303,6 +303,195 @@ class ValidadorCedula:
             }
 
 
+class ValidadorFecha:
+    """Validador y formateador de fechas"""
+
+    @staticmethod
+    def validar_y_formatear_fecha(fecha: Any) -> Dict[str, Any]:
+        """
+        Validar y formatear fecha en formato DD/MM/YYYY
+
+        Args:
+            fecha: Fecha a validar (formato DD/MM/YYYY)
+
+        Returns:
+            Dict con resultado de validación y formateo
+        """
+        try:
+            if not fecha or not isinstance(fecha, str):
+                return {
+                    "valido": False,
+                    "error": "Fecha requerida",
+                    "valor_original": fecha,
+                    "valor_formateado": None,
+                }
+
+            fecha_original = fecha.strip()
+
+            # Intentar parsear la fecha en formato DD/MM/YYYY
+            # Pero primero aceptar variaciones como D/M/YYYY o DD/M/YYYY
+            try:
+                # Intentar con formato completo DD/MM/YYYY
+                partes = fecha_original.split('/')
+                if len(partes) != 3:
+                    return {
+                        "valido": False,
+                        "error": "Formato debe ser DD/MM/YYYY",
+                        "valor_original": fecha,
+                        "valor_formateado": None,
+                    }
+
+                dia_str, mes_str, año_str = partes
+                
+                # Convertir a enteros para validar
+                dia = int(dia_str)
+                mes = int(mes_str)
+                año = int(año_str)
+
+                # Validar que el año tenga 4 dígitos
+                if año < 1000 or año > 9999:
+                    return {
+                        "valido": False,
+                        "error": "El año debe tener 4 dígitos (ejemplo: 2025)",
+                        "valor_original": fecha,
+                        "valor_formateado": None,
+                    }
+
+                # Validar rangos
+                if mes < 1 or mes > 12:
+                    return {
+                        "valido": False,
+                        "error": "El mes debe estar entre 01 y 12",
+                        "valor_original": fecha,
+                        "valor_formateado": None,
+                    }
+
+                if dia < 1 or dia > 31:
+                    return {
+                        "valido": False,
+                        "error": "El día debe estar entre 01 y 31",
+                        "valor_original": fecha,
+                        "valor_formateado": None,
+                    }
+
+                # Validar fechas válidas (por ejemplo, no puede haber 31 de febrero)
+                from datetime import datetime
+                try:
+                    # Intentar parsear con formato completo DD/MM/YYYY
+                    datetime.strptime(f"{dia:02d}/{mes:02d}/{año}", "%d/%m/%Y")
+                except ValueError:
+                    return {
+                        "valido": False,
+                        "error": "Fecha inválida (ejemplo: no existe 31 de febrero)",
+                        "valor_original": fecha,
+                        "valor_formateado": None,
+                    }
+
+                # Formatear: día y mes siempre 2 dígitos, año siempre 4 dígitos
+                fecha_formateada = f"{dia:02d}/{mes:02d}/{año}"
+
+                return {
+                    "valido": True,
+                    "valor_original": fecha,
+                    "valor_formateado": fecha_formateada,
+                    "cambio_realizado": fecha_formateada != fecha_original,
+                }
+
+            except ValueError as e:
+                return {
+                    "valido": False,
+                    "error": f"Valores de fecha inválidos: {str(e)}",
+                    "valor_original": fecha,
+                    "valor_formateado": None,
+                }
+
+        except Exception as e:
+            logger.error(f"Error validando fecha: {e}")
+            return {
+                "valido": False,
+                "error": f"Error de validación: {str(e)}",
+                "valor_original": fecha,
+                "valor_formateado": None,
+            }
+
+
+class ValidadorEmail:
+    """Validador y formateador de emails"""
+
+    @staticmethod
+    def validar_y_formatear_email(email: Any) -> Dict[str, Any]:
+        """
+        Validar y formatear email según RFC 5322
+
+        Args:
+            email: Email a validar
+
+        Returns:
+            Dict con resultado de validación y formateo
+        """
+        try:
+            if not email or not isinstance(email, str):
+                return {
+                    "valido": False,
+                    "error": "Email requerido",
+                    "valor_original": email,
+                    "valor_formateado": None,
+                }
+
+            email_original = email.strip()
+
+            # Validar que no tenga espacios
+            if ' ' in email_original:
+                return {
+                    "valido": False,
+                    "error": "Email no puede contener espacios",
+                    "valor_original": email,
+                    "valor_formateado": None,
+                }
+
+            # Validar que no tenga comas
+            if ',' in email_original:
+                return {
+                    "valido": False,
+                    "error": "Email no puede contener comas",
+                    "valor_original": email,
+                    "valor_formateado": None,
+                }
+
+            # Patrón RFC 5322 estricto
+            # Caracteres permitidos antes del @: a-z, A-Z, 0-9, ., _, %, +, -
+            # Caracteres permitidos en dominio: a-z, A-Z, 0-9, ., -
+            # TLD: mínimo 2 caracteres alfabéticos
+            email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+            
+            if not re.match(email_pattern, email_original):
+                return {
+                    "valido": False,
+                    "error": "Formato de email inválido según RFC 5322",
+                    "valor_original": email,
+                    "valor_formateado": None,
+                }
+
+            # Formatear: todo a minúsculas
+            email_formateado = email_original.lower()
+
+            return {
+                "valido": True,
+                "valor_original": email,
+                "valor_formateado": email_formateado,
+                "cambio_realizado": email_formateado != email_original,
+            }
+
+        except Exception as e:
+            logger.error(f"Error validando email: {e}")
+            return {
+                "valido": False,
+                "error": f"Error de validación: {str(e)}",
+                "valor_original": email,
+                "valor_formateado": None,
+            }
+
+
 class ValidadorNombre:
     """Validador y formateador de nombres y apellidos"""
 
