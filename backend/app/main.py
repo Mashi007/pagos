@@ -22,6 +22,7 @@ from app.api.v1.endpoints import (
     configuracion,
     dashboard,
     health,
+    modelos_vehiculos,
     notificaciones,
     pagos,
     prestamos,
@@ -169,6 +170,11 @@ app.include_router(
     configuracion.router, prefix="/api/v1/configuracion", tags=["configuracion"]
 )
 app.include_router(analistas.router, prefix="/api/v1/analistas", tags=["analistas"])
+app.include_router(
+    modelos_vehiculos.router,
+    prefix="/api/v1/modelos-vehiculos",
+    tags=["modelos-vehiculos"],
+)
 app.include_router(
     validadores.router, prefix="/api/v1/validadores", tags=["validadores"]
 )
