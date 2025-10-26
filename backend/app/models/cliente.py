@@ -25,7 +25,9 @@ class Cliente(Base):
     # misma cédula
     cedula = Column(String(CEDULA_LENGTH), nullable=False, index=True)
 
-    nombres = Column(String(NAME_LENGTH), nullable=False)  # 2-4 palabras (nombres + apellidos unificados)
+    nombres = Column(
+        String(NAME_LENGTH), nullable=False
+    )  # 2-4 palabras (nombres + apellidos unificados)
     telefono = Column(
         String(PHONE_LENGTH), nullable=False, index=True
     )  # Validado por validadores
@@ -67,7 +69,9 @@ class Cliente(Base):
     )  # Email del usuario logueado (automático)
 
     # Notas - OBLIGATORIO con default 'NA'
-    notas = Column(Text, nullable=False, default="NA")  # Obligatorio pero puede ser "NA"
+    notas = Column(
+        Text, nullable=False, default="NA"
+    )  # Obligatorio pero puede ser "NA"
 
     # ============================================
     # RELACIONES CON OTROS MODELOS
@@ -78,6 +82,4 @@ class Cliente(Base):
     #                          cascade="all, delete-orphan")
 
     def __repr__(self):
-        return (
-            f"<Cliente(id={self.id}, cedula='{self.cedula}', nombres='{self.nombres}', estado='{self.estado}', activo={self.activo})>"
-        )
+        return f"<Cliente(id={self.id}, cedula='{self.cedula}', nombres='{self.nombres}', estado='{self.estado}', activo={self.activo})>"

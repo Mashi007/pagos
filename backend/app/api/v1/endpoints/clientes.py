@@ -119,7 +119,7 @@ def crear_cliente(
 
         # Preparar datos
         cliente_dict = cliente_data.model_dump()
-        
+
         # Sincronizar estado y activo (crear siempre con ACTIVO=True)
         cliente_dict["estado"] = "ACTIVO"
         cliente_dict["activo"] = True
@@ -156,7 +156,7 @@ def actualizar_cliente(
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
         update_data = cliente_data.model_dump(exclude_unset=True)
-        
+
         # Sincronizar estado y activo SI se actualiza el estado
         if "estado" in update_data:
             nuevo_estado = update_data["estado"]
@@ -164,7 +164,7 @@ def actualizar_cliente(
                 update_data["activo"] = True
             elif nuevo_estado in ["INACTIVO", "FINALIZADO"]:
                 update_data["activo"] = False
-        
+
         # Aplicar actualizaciones
         for field, value in update_data.items():
             if hasattr(cliente, field):
