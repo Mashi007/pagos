@@ -78,7 +78,7 @@ class ValidadorTelefono:
         # Eliminar el + y el código de país (58)
         # telefono_limpio = "+581234567890"
         # Quitar "+58" (3 caracteres, no 4!)
-        numero_sin_codigo = telefono_limpio[len(config["codigo_pais"]) :]
+        numero_sin_codigo = telefono_limpio[len(config["codigo_pais"]):]
         # numero_sin_codigo = "1234567890"
 
         # Retornar con formato: +58 + 10 dígitos
@@ -122,7 +122,7 @@ class ValidadorTelefono:
         return {
             "valido": True,
             "numero_formateado": numero_formateado,
-        }
+            }
 
     @staticmethod
     def _validar_formato_final(
@@ -284,13 +284,13 @@ class ValidadorCedula:
         try:
             if not cedula:
                 return {
-                "valido": False,
-                "error": "Cédula requerida",
-                "valor_original": cedula,
-                "valor_formateado": None,
+                    "valido": False,
+                    "error": "Cédula requerida",
+                    "valor_original": cedula,
+                    "valor_formateado": None,
                 "formato_esperado": "V, E o J + 7-10 dígitos",
                 "sugerencia": "Ingrese una cédula. Ejemplo: 'V12345678'",
-            }
+                }
 
             # Limpiar entrada
             cedula_limpia = cedula.strip().upper()
@@ -322,13 +322,13 @@ class ValidadorCedula:
                         ),
                     }
                 else:
-                    return {
-                        "valido": False,
-                        "error": f"Formato inválido para {config['descripcion']}",
-                        "valor_original": cedula,
-                        "valor_formateado": None,
-                        "formato_esperado": config["formato_display"],
-                    }
+                return {
+                    "valido": False,
+                    "error": f"Formato inválido para {config['descripcion']}",
+                    "valor_original": cedula,
+                    "valor_formateado": None,
+                    "formato_esperado": config["formato_display"],
+                }
 
             # Formatear según país
             if pais.upper() == "VENEZUELA":
