@@ -135,10 +135,13 @@ def crear_cliente(
 
     except Exception as e:
         import traceback
+
         error_detail = f"{str(e)}: {traceback.format_exc()}"
         logger.error(f"Error en crear_cliente: {error_detail}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.put("/{cliente_id}", response_model=ClienteResponse)
