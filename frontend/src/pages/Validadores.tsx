@@ -242,6 +242,18 @@ export function Validadores() {
                   </Badge>
                 </div>
 
+                {/* Moneda configurada */}
+                <div>
+                  <h3 className="font-medium text-gray-900 mb-3">Moneda</h3>
+                  <div className="flex gap-2">
+                    <Badge variant="default" className="text-lg px-4 py-2">
+                      💵 USD - Dólar Americano
+                    </Badge>
+                    <Badge variant="outline" className="text-lg px-4 py-2">
+                      💰 Bs. - Bolívares (Venezuela)
+                    </Badge>
+                  </div>
+                </div>
 
                 {/* Endpoints disponibles */}
                 <div>
