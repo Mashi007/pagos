@@ -78,7 +78,7 @@ class ValidadorTelefono:
         # Eliminar el + y el código de país (58)
         # telefono_limpio = "+581234567890"
         # Quitar "+58" (3 caracteres, no 4!)
-        numero_sin_codigo = telefono_limpio[len(config["codigo_pais"]):]  # noqa: E203
+        numero_sin_codigo = telefono_limpio[len(config["codigo_pais"]) :]  # noqa: E203
         # numero_sin_codigo = "1234567890"
 
         # Retornar con formato: +58 + 10 dígitos
@@ -805,7 +805,7 @@ class ValidadorMonto:
         if ultimo_coma > ultimo_punto:
             # Formato europeo: "1.234,56"
             antes_coma = monto_limpio[:ultimo_coma]
-            despues_coma = monto_limpio[ultimo_coma + 1:]  # noqa: E203
+            despues_coma = monto_limpio[ultimo_coma + 1 :]  # noqa: E203
 
             # Validar decimales
             if not (1 <= len(despues_coma) <= 2):
