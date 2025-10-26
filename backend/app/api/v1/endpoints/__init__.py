@@ -24,7 +24,6 @@ from . import (
     intelligent_alerts_system,
     intermittent_failure_analyzer,
     kpis,
-    logo,
     migracion_emergencia,
     notificaciones,
     pagos,
@@ -79,5 +78,4 @@ __all__ = [
     "critical_error_monitor",
     "strategic_measurements",
     "validadores",
-    "logo",
 ]
