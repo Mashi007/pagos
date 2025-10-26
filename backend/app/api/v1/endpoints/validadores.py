@@ -3,6 +3,7 @@ Endpoints para validadores del sistema
 """
 
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -27,40 +28,72 @@ def obtener_configuracion_validadores(
             f"Obteniendo configuración de validadores - Usuario: {current_user.email}"
         )
 
-        # Configuración de validadores disponibles
-        validadores = {
-            "cedula": {
-                "nombre": "Cédula",
-                "descripcion": "Valida y formatea cédulas venezolanas (V/E/J + 7-10 dígitos)",
-                "ejemplo": "V12345678",
-                "activo": True,
-                "pais": "VE",
-            },
-            "telefono": {
-                "nombre": "Teléfono",
-                "descripcion": "Valida y formatea teléfonos venezolanos (+58 + 10 dígitos)",
-                "ejemplo": "+58 424 1234567",
-                "activo": True,
-                "pais": "VE",
-            },
-            "email": {
-                "nombre": "Email",
-                "descripcion": "Valida y normaliza emails RFC 5322",
-                "ejemplo": "usuario@dominio.com",
-                "activo": True,
-            },
-            "fecha": {
-                "nombre": "Fecha",
-                "descripcion": "Valida fechas con reglas de negocio (DD/MM/YYYY)",
-                "ejemplo": "15/03/2024",
-                "activo": True,
-            },
-        }
-
+        # Estructura completa que espera el frontend
         return {
-            "total_validadores": len(validadores),
-            "validadores": validadores,
-            "paises_soportados": ["VE"],
+            "consultado_por": current_user.email,
+            "fecha_consulta": datetime.now().isoformat(),
+            "validadores_disponibles": {
+                "telefono": {
+                    "descripcion": "Validación y formateo de números telefónicos",
+                    "auto_formateo": True,
+                    "validacion_tiempo_real": True,
+                    "paises_soportados": {
+                        "venezuela": {
+                            "formato": "+58 XXX XXX XXXX",
+                            "requisitos": {
+                                "debe_empezar_por": "4 o 2",
+                                "longitud_total": "10 dígitos",
+                                "primer_digito": "4 o 2"
+                            },
+                            "ejemplos_validos": ["+58 412 1234567", "+58 212 7654321"],
+                            "ejemplos_invalidos": ["412 1234567", "1234567"]
+                        }
+                    }
+                },
+                "cedula": {
+                    "descripcion": "Validación de cédulas por país",
+                    "auto_formateo": True,
+                    "validacion_tiempo_real": True,
+                    "paises_soportados": {
+                        "venezuela": {
+                            "prefijos_validos": ["V", "E", "J"],
+                            "longitud": "7-10 dígitos",
+                            "requisitos": {
+                                "prefijos": "V, E o J",
+                                "dígitos": "7-10",
+                                "longitud": "7 a 10 dígitos"
+                            }
+                        }
+                    }
+                },
+                "fecha": {
+                    "descripcion": "Validación estricta de fechas",
+                    "auto_formateo": False,
+                    "validacion_tiempo_real": True,
+                    "requisitos": {
+                        "dia": "01-31",
+                        "mes": "01-12",
+                        "año": "YYYY",
+                        "separador": "/"
+                    }
+                },
+                "email": {
+                    "descripcion": "Validación y normalización de emails",
+                    "auto_formateo": True,
+                    "validacion_tiempo_real": True,
+                    "caracteristicas": {
+                        "normalizacion": "Minúsculas",
+                        "limpieza": "Espacios y caracteres especiales",
+                        "validacion": "RFC 5322",
+                        "dominios_bloqueados": ["temp.com", "test.com", "example.com"]
+                    }
+                }
+            },
+            "reglas_negocio": {
+                "validacion_obligatoria": "Todos los campos deben validarse antes de guardar",
+                "formateo_automatico": "Los datos se formatean automáticamente según reglas",
+                "validacion_tiempo_real": "La validación ocurre mientras el usuario escribe"
+            }
         }
 
     except Exception as e:
