@@ -135,8 +135,12 @@ def list_concesionarios_activos(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Listar solo concesionarios activos (para formularios)"""
-    concesionarios = db.query(Concesionario).filter(Concesionario.activo.is_(True)).all()
+    """Listar solo concesionarios activos (para formularios)."""
+    concesionarios = (
+        db.query(Concesionario)
+        .filter(Concesionario.activo.is_(True))
+        .all()
+    )
     return [c.to_dict() for c in concesionarios]
 
 

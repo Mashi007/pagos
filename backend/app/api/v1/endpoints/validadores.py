@@ -1,6 +1,4 @@
-"""
-Endpoints para validadores del sistema.
-"""
+"""Endpoints para validadores del sistema."""
 
 import logging
 from datetime import datetime
@@ -20,9 +18,7 @@ def obtener_configuracion_validadores(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Obtener configuración de validadores disponibles
-    """
+    """Obtener configuración de validadores disponibles."""
     try:
         logger.info(
             f"Obteniendo configuración de validadores - Usuario: {current_user.email}"
@@ -132,9 +128,7 @@ def probar_validador(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Probar un validador específico con un valor de prueba
-    """
+    """Probar un validador específico con un valor de prueba."""
     try:
         logger.info(f"Probando validador {tipo} - Usuario: {current_user.email}")
 
