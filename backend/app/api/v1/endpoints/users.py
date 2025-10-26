@@ -32,7 +32,7 @@ def verificar_rol_administracion(db: Session = Depends(get_db)):
                 "email": admin.email,
                 "nombre": admin.nombre,
                 "apellido": admin.apellido,
-                "activo": admin.activo,
+                "activo": admin.is_active,
                 "fecha_creacion": admin.created_at,
                 "ultimo_login": getattr(admin, "last_login", None),
             },
@@ -90,7 +90,7 @@ def create_user(
         cargo=user_data.cargo,
         is_admin=user_data.is_admin,
         hashed_password=get_password_hash(user_data.password),
-        is_active=user_data.activo,
+        is_active=user_data.is_active,
     )
 
     db.add(new_user)
