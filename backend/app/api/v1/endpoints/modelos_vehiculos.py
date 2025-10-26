@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -40,8 +41,8 @@ def listar_modelos_vehiculos(
     if activo is not None:
         query = query.filter(ModeloVehiculo.activo == activo)
 
-    # Ordenar por modelo
-    query = query.order_by(ModeloVehiculo.modelo)
+    # Ordenar por ID
+    query = query.order_by(ModeloVehiculo.id)
 
     # Contar total
     total = query.count()
@@ -128,6 +129,9 @@ def actualizar_modelo_vehiculo(
     # Actualizar campos
     for field, value in modelo_data.dict(exclude_unset=True).items():
         setattr(modelo, field, value)
+    
+    # Actualizar timestamp manualmente
+    modelo.updated_at = datetime.utcnow()
 
     db.commit()
     db.refresh(modelo)
