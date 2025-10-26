@@ -34,6 +34,7 @@ import { formatDate } from '@/utils'
 import { ValidadoresConfig } from '@/components/configuracion/ValidadoresConfig'
 import { ConcesionariosConfig } from '@/components/configuracion/ConcesionariosConfig'
 import { AnalistasConfig } from '@/components/configuracion/AnalistasConfig'
+import { ModelosVehiculosConfig } from '@/components/configuracion/ModelosVehiculosConfig'
 import { configuracionGeneralService, ConfiguracionGeneral } from '@/services/configuracionGeneralService'
 import { toast } from 'sonner'
 import UsuariosConfig from '@/components/configuracion/UsuariosConfig'
@@ -1067,6 +1068,7 @@ export function Configuracion() {
       case 'validadores': return <ValidadoresConfig />
       case 'concesionarios': return <ConcesionariosConfig />
       case 'analistaes': return <AnalistasConfig />
+      case 'modelosVehiculos': return <ModelosVehiculosConfig />
       case 'usuarios': return <UsuariosConfig />
       default: return renderSeccionGeneral()
     }
