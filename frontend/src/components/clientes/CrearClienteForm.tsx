@@ -215,10 +215,15 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
           message: resultado.validacion.mensaje || 'Campo válido' 
         }
       } else {
+        // Incluir sugerencia en el mensaje de error
+        const errorMsg = resultado.validacion.error || 'Campo inválido'
+        const sugerencia = resultado.validacion.sugerencia || ''
+        const mensajeCompleto = sugerencia ? `${errorMsg}. ${sugerencia}` : errorMsg
+        
         return { 
           field, 
           isValid: false, 
-          message: resultado.validacion.error || 'Campo inválido' 
+          message: mensajeCompleto
         }
       }
     } catch (error) {
