@@ -242,58 +242,6 @@ export function Validadores() {
                   </Badge>
                 </div>
 
-                {/* Reglas de negocio */}
-                <div>
-                  <h3 className="font-medium text-gray-900 mb-3">Reglas de Negocio</h3>
-                  {loadingConfig ? (
-                    <div className="text-center py-4">
-                      <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
-                      <p className="text-sm text-gray-500">Cargando configuración...</p>
-                    </div>
-                  ) : configuracion ? (
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="p-3 bg-gray-50 rounded-lg">
-                        <p className="text-sm font-medium">Cédula Venezuela</p>
-                        <p className="text-xs text-gray-600 mt-1">{configuracion.cedula_venezuela.descripcion}</p>
-                        <div className="mt-2 space-y-1">
-                          <p className="text-xs text-gray-500">• {configuracion.cedula_venezuela.requisitos.debe_empezar_por}</p>
-                          <p className="text-xs text-gray-500">• {configuracion.cedula_venezuela.requisitos.longitud_digitos}</p>
-                          <p className="text-xs text-gray-500">• {configuracion.cedula_venezuela.requisitos.sin_caracteres_especiales}</p>
-                        </div>
-                      </div>
-                      <div className="p-3 bg-gray-50 rounded-lg">
-                        <p className="text-sm font-medium">Teléfono Venezuela</p>
-                        <p className="text-xs text-gray-600 mt-1">{configuracion.telefono_venezuela.descripcion}</p>
-                        <div className="mt-2 space-y-1">
-                          <p className="text-xs text-gray-500">• {configuracion.telefono_venezuela.requisitos.debe_empezar_por}</p>
-                          <p className="text-xs text-gray-500">• {configuracion.telefono_venezuela.requisitos.longitud_total} dígitos</p>
-                          <p className="text-xs text-gray-500">• {configuracion.telefono_venezuela.requisitos.primer_digito}</p>
-                        </div>
-                      </div>
-                      <div className="p-3 bg-gray-50 rounded-lg">
-                        <p className="text-sm font-medium">Fecha formato</p>
-                        <p className="text-xs text-gray-600 mt-1">{configuracion.fecha.descripcion}</p>
-                        <div className="mt-2 space-y-1">
-                          <p className="text-xs text-gray-500">• {configuracion.fecha.requisitos.formato}</p>
-                          <p className="text-xs text-gray-500">• {configuracion.fecha.requisitos.dia}</p>
-                          <p className="text-xs text-gray-500">• {configuracion.fecha.requisitos.mes}</p>
-                        </div>
-                      </div>
-                      <div className="p-3 bg-gray-50 rounded-lg">
-                        <p className="text-sm font-medium">Email normalización</p>
-                        <p className="text-xs text-gray-600 mt-1">{configuracion.email.descripcion}</p>
-                        <div className="mt-2 space-y-1">
-                          <p className="text-xs text-gray-500">• {configuracion.email.requisitos.formato}</p>
-                          <p className="text-xs text-gray-500">• {configuracion.email.requisitos.normalizacion}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-4">
-                      <p className="text-sm text-gray-500">Error cargando configuración</p>
-                    </div>
-                  )}
-                </div>
 
                 {/* Endpoints disponibles */}
                 <div>
