@@ -70,27 +70,6 @@ export function ModelosVehiculos() {
       return 'El modelo es requerido'
     }
     
-    // Limpiar espacios extras
-    const modeloLimpio = modelo.trim().replace(/\s+/g, ' ')
-    
-    // Verificar cantidad de palabras (mínimo 2, máximo 4)
-    const palabras = modeloLimpio.split(' ')
-    
-    if (palabras.length < 2) {
-      return 'Debe ingresar al menos 2 palabras'
-    }
-    
-    if (palabras.length > 4) {
-      return 'Debe ingresar máximo 4 palabras'
-    }
-    
-    // Verificar que cada palabra tenga al menos 2 caracteres
-    for (const palabra of palabras) {
-      if (palabra.length < 2) {
-        return 'Cada palabra debe tener al menos 2 caracteres'
-      }
-    }
-    
     return ''
   }
 
@@ -118,7 +97,7 @@ export function ModelosVehiculos() {
   const handleCreateOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Validar modelo
+    // Validar modelo (solo que no esté vacío)
     const error = validateModelo(formData.modelo)
     if (error) {
       setValidationError(error)
@@ -430,7 +409,7 @@ export function ModelosVehiculos() {
                         setFormData({ ...formData, modelo: e.target.value })
                         setValidationError('') // Limpiar error al escribir
                       }}
-                      placeholder="Ingrese nombre del modelo (2-4 palabras)"
+                      placeholder="Ingrese nombre del modelo"
                       required
                       autoFocus
                       className={validationError ? 'border-red-500' : ''}
@@ -442,7 +421,7 @@ export function ModelosVehiculos() {
                     )}
                     {!editingModelo && !validationError && (
                       <p className="text-xs text-gray-500 mt-1">
-                        Ejemplo: Toyota Corolla (mínimo 2, máximo 4 palabras)
+                        Ejemplo: Toyota Corolla
                       </p>
                     )}
                   </div>
