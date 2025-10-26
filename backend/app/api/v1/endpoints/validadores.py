@@ -54,12 +54,15 @@ def obtener_configuracion_validadores(
             "telefono_venezuela": {
                 "descripcion": "Validación y formateo de teléfonos venezolanos con código +58",
                 "requisitos": {
-                    "debe_empezar_por": "4 o 2",
-                    "longitud_total": 10,
-                    "primer_digito": "4 o 2",
+                    "debe_empezar_por": "Debe tener prefijo +58 (se agrega automáticamente si falta)",
+                    "longitud_total": "12 dígitos (código país + 10 dígitos locales)",
+                    "operadoras_validas": "412, 414, 416, 424, 426",
+                    "no_puede_empezar_por": "0 - NO se aceptan números que empiecen por 0",
+                    "digitos_validos": "10 dígitos (0-9, excepto 0 al inicio)",
                 },
                 "patron_regex": r"^\+58\s?[4-9]\d{2}\s?\d{7}$",
                 "formato_display": "+58 XXX XXX XXXX",
+                "ejemplos": "+58 424 1234567, 584241234567, 4241234567",
             },
             "email": {
                 "descripcion": "Validación de emails según RFC 5322 con normalización",

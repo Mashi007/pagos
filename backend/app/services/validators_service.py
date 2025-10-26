@@ -74,17 +74,19 @@ class ValidadorTelefono:
     def _formatear_telefono_con_plus(
         telefono_limpio: str, config: Dict[str, Any]
     ) -> str:
-        """Formatear teléfono que ya tiene + y código"""
-        numero_sin_plus = telefono_limpio[1:]
-        return (
-            config["codigo_pais"]
-            + " "
-            + numero_sin_plus[:2]
-            + " "
-            + numero_sin_plus[2:5]
-            + " "
-            + numero_sin_plus[5:]
-        )
+        """Formatear teléfono que ya tiene + y código (ejemplo: +584241234567)"""
+        # Eliminar el + y el código de país (58)
+        # telefono_limpio = "+584241234567"
+        # Quitar "+58" (4 caracteres)
+        numero_sin_codigo = telefono_limpio[len(config["codigo_pais"]) + 1:]
+        # numero_sin_codigo = "4241234567"
+        
+        # Extraer operadora (primeros 3 dígitos)
+        operadora = numero_sin_codigo[:3]
+        # Resto del número (7 dígitos)
+        resto = numero_sin_codigo[3:]
+        
+        return f"{config['codigo_pais']} {operadora} {resto}"
 
     @staticmethod
     def _formatear_telefono_local(
@@ -158,19 +160,39 @@ class ValidadorTelefono:
             # 2. Limpiar entrada
             telefono_limpio = re.sub(r"[^\d+]", "", telefono.strip())
 
-            # 3. Validar país soportado
+            # 3. Validar que NO empiece por 0
+            if telefono_limpio.startswith("0"):
+                return {
+                    "valido": False,
+                    "error": "El número de teléfono NO puede empezar por 0",
+                    "valor_original": telefono,
+                    "valor_formateado": None,
+                    "sugerencia": "Use operadoras válidas: 412, 414, 416, 424, 426",
+                }
+
+            # 4. Validar país soportado
             config = ValidadorTelefono._validar_pais_soportado(pais, telefono)
             if isinstance(config, dict) and "valido" in config:
                 return config
 
-            # 4. Determinar formato y procesar
+            # 5. Agregar +58 automáticamente si no tiene
+            if not telefono_limpio.startswith("+") and not telefono_limpio.startswith(
+                config["codigo_pais"].replace("+", "")
+            ):
+                # No tiene +58 ni 58, agregar +58
+                telefono_limpio = config["codigo_pais"].replace("+", "") + telefono_limpio
+
+            # 6. Determinar formato y procesar
             numero_formateado = None
 
             if config and telefono_limpio.startswith(
                 config["codigo_pais"].replace("+", "")
             ):
                 # Ya tiene código de país: "584241234567"
-                numero_formateado = ValidadorTelefono._formatear_telefono_con_codigo(
+                # Agregar + al inicio si no lo tiene
+                if not telefono_limpio.startswith("+"):
+                    telefono_limpio = "+" + telefono_limpio
+                numero_formateado = ValidadorTelefono._formatear_telefono_con_plus(
                     telefono_limpio, config
                 )
             elif config and telefono_limpio.startswith(config["codigo_pais"]):

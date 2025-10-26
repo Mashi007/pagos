@@ -77,9 +77,9 @@ export function Validadores() {
     {
       nombre: 'Teléfono',
       campo: 'telefono_venezuela',
-      formato: '+58 + 10 dígitos',
-      ejemplo: '+58 424 1234567',
-      descripcion: 'Valida y formatea teléfonos venezolanos'
+      formato: '+58 + 10 dígitos (NO empieza por 0)',
+      ejemplo: '+58 424 1234567 o 4241234567',
+      descripcion: 'Valida y formatea teléfonos venezolanos. Se agrega +58 automáticamente. NO acepta números que empiecen por 0.'
     },
     {
       nombre: 'Email',
