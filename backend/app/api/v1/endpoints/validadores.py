@@ -1,5 +1,5 @@
 """
-Endpoints para validadores del sistema
+Endpoints para validadores del sistema.
 """
 
 import logging
