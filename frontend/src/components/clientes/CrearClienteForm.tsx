@@ -73,6 +73,16 @@ interface CrearClienteFormProps {
 }
 
 export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated }: CrearClienteFormProps) {
+  // ✅ Función para convertir DD/MM/YYYY a YYYY-MM-DD
+  const convertirFechaAISO = (fechaDDMMYYYY: string): string => {
+    const partes = fechaDDMMYYYY.split('/')
+    if (partes.length === 3) {
+      const [dia, mes, ano] = partes
+      return `${ano}-${mes}-${dia}`
+    }
+    return fechaDDMMYYYY
+  }
+
   // ✅ Función para obtener fecha de hoy en formato DD/MM/YYYY
   const getTodayDate = () => {
     const today = new Date()
