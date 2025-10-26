@@ -167,7 +167,8 @@ class ValidadorTelefono:
                     "error": "El número de teléfono NO puede empezar por 0",
                     "valor_original": telefono,
                     "valor_formateado": None,
-                    "sugerencia": "Use operadoras válidas: 412, 414, 416, 424, 426",
+                    "formato_esperado": "+58 424 1234567",
+                    "sugerencia": "El número debe empezar por operadora válida: 412, 414, 416, 424, 426",
                 }
 
             # 4. Validar país soportado
@@ -211,12 +212,11 @@ class ValidadorTelefono:
             else:
                 return {
                     "valido": False,
-                    "error": (
-                        f"Longitud incorrecta. Formato esperado: "
-                        f"{config['formato_display'] if config else 'N/A'}"
-                    ),
+                    "error": f"Formato inválido. Longitud: {len(telefono_limpio)}",
                     "valor_original": telefono,
                     "valor_formateado": None,
+                    "formato_esperado": config["formato_display"] if config else "N/A",
+                    "sugerencia": f"Ingrese 10 dígitos (sin espacios). Ejemplo: '4241234567' o '{config['formato_display']}'",
                     "longitud_actual": len(telefono_limpio),
                     "longitud_esperada": config["longitud_sin_codigo"] if config else 0,
                 }
@@ -333,27 +333,33 @@ class ValidadorFecha:
     @staticmethod
     def _validar_rangos_fecha(dia: int, mes: int, año: int, fecha: str) -> Optional[Dict[str, Any]]:
         """Validar rangos de día, mes y año"""
-        if año < 1000 or año > 9999:
-            return {
-                "valido": False,
-                "error": "El año debe tener 4 dígitos (ejemplo: 2025)",
-                "valor_original": fecha,
-                "valor_formateado": None,
-            }
-        if mes < 1 or mes > 12:
-            return {
-                "valido": False,
-                "error": "El mes debe estar entre 01 y 12",
-                "valor_original": fecha,
-                "valor_formateado": None,
-            }
-        if dia < 1 or dia > 31:
-            return {
-                "valido": False,
-                "error": "El día debe estar entre 01 y 31",
-                "valor_original": fecha,
-                "valor_formateado": None,
-            }
+            if año < 1000 or año > 9999:
+                return {
+                    "valido": False,
+                    "error": "El año debe tener 4 dígitos",
+                    "valor_original": fecha,
+                    "valor_formateado": None,
+                    "formato_esperado": "DD/MM/YYYY",
+                    "sugerencia": f"El año '{año}' debe tener 4 dígitos. Use año completo como: 2025",
+                }
+            if mes < 1 or mes > 12:
+                return {
+                    "valido": False,
+                    "error": f"El mes {mes} es inválido",
+                    "valor_original": fecha,
+                    "valor_formateado": None,
+                    "formato_esperado": "DD/MM/YYYY",
+                    "sugerencia": f"Los meses van del 01 al 12. Ejemplos: 15/01/2025, 20/12/2025",
+                }
+            if dia < 1 or dia > 31:
+                return {
+                    "valido": False,
+                    "error": f"El día {dia} es inválido",
+                    "valor_original": fecha,
+                    "valor_formateado": None,
+                    "formato_esperado": "DD/MM/YYYY",
+                    "sugerencia": f"Los días van del 01 al 31. Ejemplos: 01/05/2025, 31/12/2025",
+                }
         return None
 
     @staticmethod
@@ -366,9 +372,11 @@ class ValidadorFecha:
         except ValueError:
             return {
                 "valido": False,
-                "error": "Fecha inválida (ejemplo: no existe 31 de febrero)",
+                "error": "Fecha inválida",
                 "valor_original": fecha,
                 "valor_formateado": None,
+                "formato_esperado": "DD/MM/YYYY",
+                "sugerencia": f"La fecha {dia}/{mes}/{año} no existe. Use una fecha válida (no existe 31 de febrero).",
             }
 
     @staticmethod
@@ -401,9 +409,11 @@ class ValidadorFecha:
                 if len(partes) != 3:
                     return {
                         "valido": False,
-                        "error": "Formato debe ser DD/MM/YYYY",
+                        "error": "Formato inválido, debe usar barras /",
                         "valor_original": fecha,
                         "valor_formateado": None,
+                        "formato_esperado": "DD/MM/YYYY",
+                        "sugerencia": "Use formato día/mes/año. Ejemplo: '15/03/2024' o '1/3/2024'",
                     }
 
                 dia_str, mes_str, año_str = partes
@@ -439,6 +449,8 @@ class ValidadorFecha:
                     "error": f"Valores de fecha inválidos: {str(e)}",
                     "valor_original": fecha,
                     "valor_formateado": None,
+                    "formato_esperado": "DD/MM/YYYY",
+                    "sugerencia": "Use formato día/mes/año con números. Ejemplos: '15/03/2024', '1/3/2025'",
                 }
 
         except Exception as e:
@@ -483,6 +495,8 @@ class ValidadorEmail:
                     "error": "Email no puede contener espacios",
                     "valor_original": email,
                     "valor_formateado": None,
+                    "formato_esperado": "usuario@dominio.com",
+                    "sugerencia": "Quite los espacios. Ejemplo: 'usuario@ejemplo.com'",
                 }
 
             # Validar que no tenga comas
@@ -492,6 +506,8 @@ class ValidadorEmail:
                     "error": "Email no puede contener comas",
                     "valor_original": email,
                     "valor_formateado": None,
+                    "formato_esperado": "usuario@dominio.com",
+                    "sugerencia": "Quite las comas. Ejemplo: 'usuario@ejemplo.com'",
                 }
 
             # Patrón RFC 5322 estricto
@@ -506,6 +522,8 @@ class ValidadorEmail:
                     "error": "Formato de email inválido según RFC 5322",
                     "valor_original": email,
                     "valor_formateado": None,
+                    "formato_esperado": "usuario@dominio.com",
+                    "sugerencia": "Use formato: nombre@dominio.com. Ejemplos: 'juan@ejemplo.com', 'maria.perez@empresa.net'",
                 }
 
             # Formatear: todo a minúsculas
@@ -571,6 +589,8 @@ class ValidadorNombre:
                     "error": "Nombre solo puede contener letras y espacios",
                     "valor_original": texto,
                     "valor_formateado": None,
+                    "formato_esperado": "Juan Carlos o Maria",
+                    "sugerencia": "Use solo letras (sin números o símbolos). Ejemplos: 'Juan', 'Maria Elena', 'Carlos'",
                 }
 
             # Validar longitud de palabras (1-2 palabras, cada una de 2-40 caracteres)
@@ -578,25 +598,31 @@ class ValidadorNombre:
             if len(palabras) > 2:
                 return {
                     "valido": False,
-                    "error": "Nombre debe tener máximo 2 palabras",
+                    "error": f"Nombre debe tener máximo 2 palabras (tiene {len(palabras)})",
                     "valor_original": texto,
                     "valor_formateado": None,
+                    "formato_esperado": "Juan Carlos (1-2 palabras)",
+                    "sugerencia": f"Use máximo 2 palabras. Ejemplo: {' '.join(palabras[:2])}",
                 }
 
             for palabra in palabras:
                 if len(palabra) < 2:
                     return {
                         "valido": False,
-                        "error": "Cada palabra debe tener al menos 2 caracteres",
+                        "error": f"La palabra '{palabra}' debe tener al menos 2 caracteres",
                         "valor_original": texto,
                         "valor_formateado": None,
+                        "formato_esperado": "Cada palabra debe tener 2-40 caracteres",
+                        "sugerencia": f"Use palabras con al menos 2 letras. La palabra '{palabra}' es muy corta.",
                     }
                 if len(palabra) > 40:
                     return {
                         "valido": False,
-                        "error": "Cada palabra no debe exceder 40 caracteres",
+                        "error": f"La palabra '{palabra[:20]}...' excede 40 caracteres ({len(palabra)} caracteres)",
                         "valor_original": texto,
                         "valor_formateado": None,
+                        "formato_esperado": "Cada palabra máximo 40 caracteres",
+                        "sugerencia": f"Use palabras más cortas. La palabra '{palabra}' tiene {len(palabra)} caracteres, máximo permitido: 40",
                     }
 
             # Formatear: Primera letra de cada palabra en mayúscula, resto en minúscula
@@ -703,9 +729,11 @@ class ValidadorMonto:
             except (InvalidOperation, ValueError):
                 return {
                     "valido": False,
-                    "error": "Formato de monto inválido. Use: 1500.50 o 1.500,50 o 1500,50",
+                    "error": "Formato de monto inválido",
                     "valor_original": monto,
                     "valor_formateado": None,
+                    "formato_esperado": "Número decimal (1-20000)",
+                    "sugerencia": "Use números con punto o coma como decimal. Ejemplos: '1500.50', '1500,50', '1.500,50', '20000'",
                 }
 
             # Validar rango mínimo (1.00)
@@ -715,6 +743,8 @@ class ValidadorMonto:
                     "error": f"El monto mínimo es {config_moneda['simbolo']}1.00",
                     "valor_original": monto,
                     "valor_formateado": None,
+                    "formato_esperado": f"Rango: {config_moneda['simbolo']}1.00 - {config_moneda['simbolo']}20,000.00",
+                    "sugerencia": f"Use un monto mínimo de {config_moneda['simbolo']}1.00. Ejemplo: '{config_moneda['simbolo']}1.00' o '{config_moneda['simbolo']}100.00'",
                 }
 
             # Validar rango máximo (20000.00)
@@ -724,6 +754,8 @@ class ValidadorMonto:
                     "error": f"El monto máximo es {config_moneda['simbolo']}20,000.00",
                     "valor_original": monto,
                     "valor_formateado": None,
+                    "formato_esperado": f"Rango: {config_moneda['simbolo']}1.00 - {config_moneda['simbolo']}20,000.00",
+                    "sugerencia": f"Use un monto máximo de {config_moneda['simbolo']}20,000.00. Ejemplo: '{config_moneda['simbolo']}20000' o '{config_moneda['simbolo']}15000.50'",
                 }
 
             # Formatear con 2 decimales
