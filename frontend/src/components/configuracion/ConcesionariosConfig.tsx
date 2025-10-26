@@ -322,7 +322,7 @@ export function ConcesionariosConfig() {
                         size="sm"
                         onClick={() => handleEdit(concesionario)}
                         title="Editar concesionario"
-                        disabled={loading || isSubmitting}
+                        disabled={isSubmitting}
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -332,7 +332,7 @@ export function ConcesionariosConfig() {
                         onClick={() => handleDelete(concesionario.id)}
                         className="text-red-600 hover:text-red-700"
                         title="Eliminar concesionario"
-                        disabled={loading || isSubmitting}
+                        disabled={isSubmitting}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
