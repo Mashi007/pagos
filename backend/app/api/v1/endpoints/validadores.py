@@ -46,9 +46,9 @@ def obtener_configuracion_validadores(
                                 "primer_digito": "4 o 2"
                             },
                             "ejemplos_validos": ["+58 412 1234567", "+58 212 7654321"],
-                            "ejemplos_invalidos": ["412 1234567", "1234567"]
-                        }
-                    }
+                            "ejemplos_invalidos": ["412 1234567", "1234567"],
+                        },
+                    },
                 },
                 "cedula": {
                     "descripcion": "Validación de cédulas por país",
@@ -61,10 +61,10 @@ def obtener_configuracion_validadores(
                             "requisitos": {
                                 "prefijos": "V, E o J",
                                 "dígitos": "7-10",
-                                "longitud": "7 a 10 dígitos"
-                            }
-                        }
-                    }
+                                "longitud": "7 a 10 dígitos",
+                            },
+                        },
+                    },
                 },
                 "fecha": {
                     "descripcion": "Validación estricta de fechas",
@@ -74,8 +74,8 @@ def obtener_configuracion_validadores(
                         "dia": "01-31",
                         "mes": "01-12",
                         "año": "YYYY",
-                        "separador": "/"
-                    }
+                        "separador": "/",
+                    },
                 },
                 "email": {
                     "descripcion": "Validación y normalización de emails",
@@ -85,15 +85,15 @@ def obtener_configuracion_validadores(
                         "normalizacion": "Minúsculas",
                         "limpieza": "Espacios y caracteres especiales",
                         "validacion": "RFC 5322",
-                        "dominios_bloqueados": ["temp.com", "test.com", "example.com"]
-                    }
-                }
+                        "dominios_bloqueados": ["temp.com", "test.com", "example.com"],
+                    },
+                },
             },
             "reglas_negocio": {
                 "validacion_obligatoria": "Todos los campos deben validarse antes de guardar",
                 "formateo_automatico": "Los datos se formatean automáticamente según reglas",
-                "validacion_tiempo_real": "La validación ocurre mientras el usuario escribe"
-            }
+                "validacion_tiempo_real": "La validación ocurre mientras el usuario escribe",
+            },
         }
 
     except Exception as e:
