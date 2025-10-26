@@ -18,6 +18,9 @@ class ModeloVehiculo(Base):
     activo = Column(Boolean, nullable=False, default=True, index=True)
 
     # Timestamps
+    created_at = Column(
+        DateTime(timezone=True), default=datetime.utcnow, nullable=True
+    )
     updated_at = Column(
         DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
     )
@@ -26,4 +29,10 @@ class ModeloVehiculo(Base):
         return f"<ModeloVehiculo(id={self.id}, modelo='{self.modelo}', activo={self.activo})>"
 
     def to_dict(self):
-        return {"id": self.id, "modelo": self.modelo, "activo": self.activo}
+        return {
+            "id": self.id,
+            "modelo": self.modelo,
+            "activo": self.activo,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

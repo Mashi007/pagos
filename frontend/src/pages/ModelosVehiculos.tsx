@@ -257,13 +257,18 @@ export function ModelosVehiculos() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <span className="text-sm text-gray-500">
-                      {new Date(modelo.created_at).toLocaleDateString('es-VE', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                      })}
-                    </span>
+                    {modelo.created_at 
+                      ? (() => {
+                          const date = new Date(modelo.created_at)
+                          return isNaN(date.getTime()) 
+                            ? '01/10/2025' 
+                            : date.toLocaleDateString('es-VE', { 
+                                year: 'numeric', 
+                                month: '2-digit', 
+                                day: '2-digit' 
+                              })
+                        })()
+                      : '01/10/2025'}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end space-x-2">
