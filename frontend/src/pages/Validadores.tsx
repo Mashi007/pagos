@@ -38,7 +38,19 @@ export function Validadores() {
   const handleTestValidacion = async () => {
     setIsLoading(true)
     try {
-      const resultado = await validadoresService.validarCampo(campoTest, valorTest, 'VENEZUELA')
+      // Mapear campos del dropdown a nombres del backend
+      const campoMapper: Record<string, string> = {
+        'cedula': 'cedula_venezuela',
+        'telefono_venezuela': 'telefono_venezuela',
+        'email': 'email',
+        'fecha': 'fecha',
+        'monto': 'monto',
+        'nombre': 'nombre',
+        'apellido': 'apellido',
+      }
+      
+      const campoBackend = campoMapper[campoTest] || campoTest
+      const resultado = await validadoresService.validarCampo(campoBackend, valorTest, 'VENEZUELA')
       setResultadoTest(resultado)
     } catch (error) {
       console.error('Error probando validador:', error)
@@ -58,7 +70,7 @@ export function Validadores() {
     },
     {
       nombre: 'Teléfono',
-      campo: 'telefono',
+      campo: 'telefono_venezuela',
       formato: '+58 + 10 dígitos',
       ejemplo: '+58 424 1234567',
       descripcion: 'Valida y formatea teléfonos venezolanos'
@@ -68,21 +80,35 @@ export function Validadores() {
       campo: 'email',
       formato: 'usuario@dominio.com',
       ejemplo: 'usuario@ejemplo.com',
-      descripcion: 'Valida formato RFC 5322 y normaliza'
+      descripcion: 'Valida formato RFC 5322, sin espacios/comas, minúsculas'
     },
     {
       nombre: 'Fecha',
-      campo: 'fecha_entrega',
+      campo: 'fecha',
       formato: 'DD/MM/YYYY',
       ejemplo: '15/03/2024',
-      descripcion: 'Valida fechas con reglas de negocio'
+      descripcion: 'Valida fechas DD/MM/YYYY, auto-completado, año 4 dígitos'
     },
     {
       nombre: 'Monto',
-      campo: 'total_financiamiento',
-      formato: 'Número positivo',
-      ejemplo: '25000.00',
-      descripcion: 'Valida montos con límites'
+      campo: 'monto',
+      formato: 'Rango 1-20000 (USD/VES)',
+      ejemplo: '1500.00',
+      descripcion: 'Valida montos rango 1-20000, soporte USD y VES'
+    },
+    {
+      nombre: 'Nombre',
+      campo: 'nombre',
+      formato: '1-2 palabras, primera letra mayúscula',
+      ejemplo: 'Juan Carlos',
+      descripcion: 'Valida nombres con formato correcto'
+    },
+    {
+      nombre: 'Apellido',
+      campo: 'apellido',
+      formato: '1-2 palabras, primera letra mayúscula',
+      ejemplo: 'Pérez González',
+      descripcion: 'Valida apellidos con formato correcto'
     }
   ]
 
