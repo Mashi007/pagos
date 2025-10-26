@@ -309,6 +309,47 @@ class ValidadorFecha:
     """Validador y formateador de fechas"""
 
     @staticmethod
+    def _validar_rangos_fecha(dia: int, mes: int, año: int, fecha: str) -> Optional[Dict[str, Any]]:
+        """Validar rangos de día, mes y año"""
+        if año < 1000 or año > 9999:
+            return {
+                "valido": False,
+                "error": "El año debe tener 4 dígitos (ejemplo: 2025)",
+                "valor_original": fecha,
+                "valor_formateado": None,
+            }
+        if mes < 1 or mes > 12:
+            return {
+                "valido": False,
+                "error": "El mes debe estar entre 01 y 12",
+                "valor_original": fecha,
+                "valor_formateado": None,
+            }
+        if dia < 1 or dia > 31:
+            return {
+                "valido": False,
+                "error": "El día debe estar entre 01 y 31",
+                "valor_original": fecha,
+                "valor_formateado": None,
+            }
+        return None
+
+    @staticmethod
+    def _validar_fecha_real(dia: int, mes: int, año: int, fecha: str) -> Optional[Dict[str, Any]]:
+        """Validar que la fecha sea real (ej. no existe 31 de febrero)"""
+        from datetime import datetime
+        try:
+            datetime.strptime(f"{dia:02d}/{mes:02d}/{año}", "%d/%m/%Y")
+            return None
+        except ValueError:
+            return {
+                "valido": False,
+                "error": "Fecha inválida (ejemplo: no existe 31 de febrero)",
+                "valor_original": fecha,
+                "valor_formateado": None,
+            }
+
+    @staticmethod
     def validar_y_formatear_fecha(fecha: Any) -> Dict[str, Any]:
         """
         Validar y formatear fecha en formato DD/MM/YYYY
@@ -350,44 +391,15 @@ class ValidadorFecha:
                 mes = int(mes_str)
                 año = int(año_str)
 
-                # Validar que el año tenga 4 dígitos
-                if año < 1000 or año > 9999:
-                    return {
-                        "valido": False,
-                        "error": "El año debe tener 4 dígitos (ejemplo: 2025)",
-                        "valor_original": fecha,
-                        "valor_formateado": None,
-                    }
+                # Validar rangos de día, mes y año
+                error_rangos = ValidadorFecha._validar_rangos_fecha(dia, mes, año, fecha)
+                if error_rangos:
+                    return error_rangos
 
-                # Validar rangos
-                if mes < 1 or mes > 12:
-                    return {
-                        "valido": False,
-                        "error": "El mes debe estar entre 01 y 12",
-                        "valor_original": fecha,
-                        "valor_formateado": None,
-                    }
-
-                if dia < 1 or dia > 31:
-                    return {
-                        "valido": False,
-                        "error": "El día debe estar entre 01 y 31",
-                        "valor_original": fecha,
-                        "valor_formateado": None,
-                    }
-
-                # Validar fechas válidas (por ejemplo, no puede haber 31 de febrero)
-                from datetime import datetime
-                try:
-                    # Intentar parsear con formato completo DD/MM/YYYY
-                    datetime.strptime(f"{dia:02d}/{mes:02d}/{año}", "%d/%m/%Y")
-                except ValueError:
-                    return {
-                        "valido": False,
-                        "error": "Fecha inválida (ejemplo: no existe 31 de febrero)",
-                        "valor_original": fecha,
-                        "valor_formateado": None,
-                    }
+                # Validar que la fecha sea real
+                error_fecha_real = ValidadorFecha._validar_fecha_real(dia, mes, año, fecha)
+                if error_fecha_real:
+                    return error_fecha_real
 
                 # Formatear: día y mes siempre 2 dígitos, año siempre 4 dígitos
                 fecha_formateada = f"{dia:02d}/{mes:02d}/{año}"
