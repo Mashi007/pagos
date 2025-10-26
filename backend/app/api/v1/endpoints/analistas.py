@@ -15,6 +15,7 @@ router = APIRouter()
 
 @router.get("/", response_model=List[AnalistaResponse])
 def listar_analistas(
+    limit: int = Query(100, ge=1, le=1000, description="Límite de resultados"),
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -26,7 +27,7 @@ def listar_analistas(
         if activo is not None:
             query = query.filter(Analista.activo == activo)
 
-        analistas = query.all()
+        analistas = query.limit(limit).all()
         return analistas
 
     except Exception as e:
@@ -68,16 +69,6 @@ def crear_analista(
 ):
     # Crear nuevo analista
     try:
-        # Verificar que no exista un analista con el mismo email
-        analista_existente = (
-            db.query(Analista).filter(Analista.email == analista_data.email).first()
-        )
-
-        if analista_existente:
-            raise HTTPException(
-                status_code=400, detail="Ya existe un analista con este email"
-            )
-
         nuevo_analista = Analista(**analista_data.model_dump())
 
         db.add(nuevo_analista)
@@ -109,21 +100,6 @@ def actualizar_analista(
 
         if not analista:
             raise HTTPException(status_code=404, detail="Analista no encontrado")
-
-        # Verificar email único si se está cambiando
-        if analista_data.email and analista_data.email != analista.email:
-            analista_existente = (
-                db.query(Analista)
-                .filter(
-                    Analista.email == analista_data.email, Analista.id != analista_id
-                )
-                .first()
-            )
-
-            if analista_existente:
-                raise HTTPException(
-                    status_code=400, detail="Ya existe un analista con este email"
-                )
 
         # Actualizar campos
         for field, value in analista_data.model_dump(exclude_unset=True).items():
