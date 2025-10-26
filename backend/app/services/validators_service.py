@@ -805,11 +805,11 @@ class ValidadorMonto:
                                     "formato_esperado": "Número decimal (1-20000)",
                                     "sugerencia": (
                                         "Los decimales deben ser 1-2 dígitos. "
-                                        "Ejemplo: '1.500,50' o '1500,50'"
+                                        "Ejemplo: '10.500,50' o '10500,50'"
                                     ),
                                 }
                             
-                            # Antes de coma debe ser entero o miles válido
+                            # Validar miles con punto cada 3 dígitos
                             antes_coma_sin_puntos = antes_coma.replace(".", "")
                             if not antes_coma_sin_puntos.isdigit():
                                 return {
@@ -819,10 +819,42 @@ class ValidadorMonto:
                                     "valor_formateado": None,
                                     "formato_esperado": "Número decimal (1-20000)",
                                     "sugerencia": (
-                                        "Use formato válido. Ejemplo: '1.500,50' "
-                                        "o '1500,50'"
+                                        "Use formato válido. Ejemplo: '10.500,50' "
+                                        "o '10500,50'"
                                     ),
                                 }
+                            
+                            # Validar que los puntos estén cada 3 dígitos
+                            partes_miles = antes_coma.split(".")
+                            for i, parte in enumerate(partes_miles):
+                                if i == 0:
+                                    # Primera parte puede tener 1-3 dígitos
+                                    if len(parte) > 3 or len(parte) == 0:
+                                        return {
+                                            "valido": False,
+                                            "error": "Formato de miles inválido",
+                                            "valor_original": monto,
+                                            "valor_formateado": None,
+                                            "formato_esperado": "Punto cada 3 dígitos para miles",
+                                            "sugerencia": (
+                                                "Use punto cada 3 dígitos. "
+                                                "Ejemplos: '10.500' o '1.234' (NO '123.45' o '1.23')"
+                                            ),
+                                        }
+                                else:
+                                    # Las siguientes partes deben tener exactamente 3 dígitos
+                                    if len(parte) != 3:
+                                        return {
+                                            "valido": False,
+                                            "error": "Formato de miles inválido",
+                                            "valor_original": monto,
+                                            "valor_formateado": None,
+                                            "formato_esperado": "Punto cada 3 dígitos para miles",
+                                            "sugerencia": (
+                                                "Cada punto debe separar exactamente 3 dígitos. "
+                                                "Ejemplo: '10.500,50' (NO '1.50,50' o '10.5,50')"
+                                            ),
+                                        }
                             
                             monto_limpio = antes_coma_sin_puntos + "." + despues_coma
                         else:
