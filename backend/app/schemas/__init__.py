@@ -88,6 +88,7 @@ __all__ = [
     "KPIConValores",
     "KPIEstadisticas",
     "DashboardKPIs",
+]
 
 # ============================================
 # INFORMACIÓN DEL MÓDULO
