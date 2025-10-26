@@ -17,13 +17,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Analista } from '@/services/analistaService'
-import { useAnalistas, useDeleteAnalista } from '@/hooks/useAnalistas'
+import { Analista, AnalistaUpdate } from '@/services/analistaService'
+import { useAnalistas, useDeleteAnalista, useUpdateAnalista } from '@/hooks/useAnalistas'
 import toast from 'react-hot-toast'
 
 export function Analistas() {
   const [searchTerm, setSearchTerm] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [editingAnalista, setEditingAnalista] = useState<Analista | null>(null)
 
   // Usar hooks de React Query
   const { 
@@ -34,6 +35,7 @@ export function Analistas() {
   } = useAnalistas({ limit: 100 })
   
   const deleteAnalistaMutation = useDeleteAnalista()
+  const updateAnalistaMutation = useUpdateAnalista()
 
   const analistas = analistasData?.items || []
 
@@ -55,14 +57,19 @@ export function Analistas() {
     }
   }
 
-  const handleToggleActivo = async (analista: Analista) => {
-    try {
-      // TODO: Implementar actualización de estado
-      toast.success(`Analista ${analista.activo ? 'desactivado' : 'activado'} exitosamente`)
-      refetch() // Recargar lista
-    } catch (err) {
-      toast.error('Error al cambiar estado del analista')
-      console.error('Error:', err)
+  const handleEdit = (analista: Analista) => {
+    setEditingAnalista(analista)
+    setShowCreateForm(true)
+  }
+
+  const handleSave = async (data: AnalistaUpdate) => {
+    if (editingAnalista) {
+      await updateAnalistaMutation.mutateAsync({
+        id: editingAnalista.id,
+        data
+      })
+      setEditingAnalista(null)
+      setShowCreateForm(false)
     }
   }
 
@@ -229,18 +236,8 @@ export function Analistas() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleToggleActivo(analista)}
-                      >
-                        {analista.activo ? (
-                          <UserX className="h-4 w-4" />
-                        ) : (
-                          <UserCheck className="h-4 w-4" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowCreateForm(true)}
+                        onClick={() => handleEdit(analista)}
+                        title="Editar analista"
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -249,6 +246,7 @@ export function Analistas() {
                         size="sm"
                         onClick={() => handleEliminar(analista.id)}
                         className="text-red-600 hover:text-red-700"
+                        title="Eliminar analista"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
