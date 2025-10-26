@@ -142,7 +142,7 @@ app.add_middleware(
 
 # Registrar routers principales
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
+app.include_router(users.router, prefix="/api/v1/usuarios", tags=["usuarios"])
 app.include_router(clientes.router, prefix="/api/v1/clientes", tags=["clientes"])
 app.include_router(
     concesionarios.router, prefix="/api/v1/concesionarios", tags=["concesionarios"]
