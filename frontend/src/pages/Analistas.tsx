@@ -294,57 +294,61 @@ export function Analistas() {
 
       {/* Create/Edit Form Modal */}
       {showCreateForm && (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {editingAnalista ? 'Editar Analista' : 'Nuevo Analista'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleCreateOrUpdate} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Nombre del Analista *
-                </label>
-                <Input
-                  value={formData.nombre}
-                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                  placeholder="Ingrese el nombre del analista"
-                  required
-                  autoFocus
-                />
-                {!editingAnalista && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    El analista se creará como "Activo" por defecto
-                  </p>
-                )}
-              </div>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {editingAnalista ? 'Editar Analista' : 'Nuevo Analista'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleCreateOrUpdate} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Nombre del Analista *
+                    </label>
+                    <Input
+                      value={formData.nombre}
+                      onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                      placeholder="Ingrese el nombre del analista"
+                      required
+                      autoFocus
+                    />
+                    {!editingAnalista && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        El analista se creará como "Activo" por defecto
+                      </p>
+                    )}
+                  </div>
 
-              <div className="flex items-center space-x-2 pt-4">
-                <Button 
-                  type="submit" 
-                  disabled={createAnalistaMutation.isPending || updateAnalistaMutation.isPending}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  {createAnalistaMutation.isPending || updateAnalistaMutation.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Guardando...
-                    </>
-                  ) : (
-                    <>
-                      <Edit className="h-4 w-4 mr-2" />
-                      {editingAnalista ? 'Actualizar' : 'Crear'} Analista
-                    </>
-                  )}
-                </Button>
-                <Button type="button" variant="outline" onClick={resetForm}>
-                  Cancelar
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+                  <div className="flex items-center space-x-2 pt-4">
+                    <Button 
+                      type="submit" 
+                      disabled={createAnalistaMutation.isPending || updateAnalistaMutation.isPending}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      {createAnalistaMutation.isPending || updateAnalistaMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Guardando...
+                        </>
+                      ) : (
+                        <>
+                          <Edit className="h-4 w-4 mr-2" />
+                          {editingAnalista ? 'Actualizar' : 'Crear'} Analista
+                        </>
+                      )}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={resetForm}>
+                      Cancelar
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       )}
     </div>
   )
