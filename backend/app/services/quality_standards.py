@@ -35,7 +35,7 @@ class QualityStandards:
     @staticmethod
     def validate_file_structure(file_path: str) -> Dict[str, Any]:
         """Validar estructura y organización del archivo"""
-        results = {
+        results: Dict[str, Any] = {
             "file_path": file_path,
             "validations": {},
             "issues": [],
@@ -156,7 +156,7 @@ class QualityStandards:
         if not services_path.exists():
             return {"error": "Directorio de servicios no encontrado"}
 
-        report = {
+        report: Dict[str, Any] = {
             "overall_score": 0,
             "services": [],
             "recommendations": [],

@@ -109,11 +109,6 @@ class UserMeResponse(UserResponse):
 
     permissions: list[str] = Field(default_factory=list)
 
-    @property
-    def rol(self) -> str:
-        """Propiedad para compatibilidad hacia atrás."""
-        return "ADMIN" if self.is_admin else "USER"
-
 
 class TokenPayload(BaseModel):
     """Schema del payload del token JWT."""

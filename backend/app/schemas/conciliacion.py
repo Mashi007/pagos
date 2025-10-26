@@ -97,7 +97,7 @@ class ConciliacionMatch(BaseModel):
     monto_pago: Decimal
     fecha_pago: date
     tipo_match: TipoMatch
-    confianza: float = Field
+    confianza: float = Field(..., ge=0.0, le=1.0)
 
     model_config = ConfigDict(
         json_encoders={

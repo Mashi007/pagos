@@ -163,7 +163,7 @@ def get_year_range(year: Optional[int] = None) -> tuple[date, date]:
     return first_day, last_day
 
 
-def is_business_day(check_date: date, holidays: List[date] = None) -> bool:
+def is_business_day(check_date: date, holidays: Optional[List[date]] = None) -> bool:
     # Args:
     #     check_date: Fecha a verificar
     #     holidays: Lista de fechas feriadas
@@ -180,7 +180,7 @@ def is_business_day(check_date: date, holidays: List[date] = None) -> bool:
     return True
 
 
-def next_business_day(start_date: date, holidays: List[date] = None) -> date:
+def next_business_day(start_date: date, holidays: Optional[List[date]] = None) -> date:
     # Obtiene el siguiente día hábil
     # Args:
     #     start_date: Fecha inicial
@@ -248,7 +248,7 @@ def format_date_es(date_obj: date) -> str:
     return f"{date_obj.day} de {months_es[date_obj.month]} de {date_obj.year}"
 
 
-def get_age_in_days(birth_date: date, reference_date: date = None) -> int:
+def get_age_in_days(birth_date: date, reference_date: Optional[date] = None) -> int:
     # Calcula la edad en días
     # Args:
     #     birth_date: Fecha de nacimiento
