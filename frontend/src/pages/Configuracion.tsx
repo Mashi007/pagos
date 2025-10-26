@@ -35,7 +35,6 @@ import { ValidadoresConfig } from '@/components/configuracion/ValidadoresConfig'
 import { ConcesionariosConfig } from '@/components/configuracion/ConcesionariosConfig'
 import { AnalistasConfig } from '@/components/configuracion/AnalistasConfig'
 import { configuracionGeneralService, ConfiguracionGeneral } from '@/services/configuracionGeneralService'
-import { logoService } from '@/services/logoService'
 import { toast } from 'sonner'
 import UsuariosConfig from '@/components/configuracion/UsuariosConfig'
 
@@ -117,24 +116,11 @@ export function Configuracion() {
   const [mostrarPassword, setMostrarPassword] = useState(false)
   const [cambiosPendientes, setCambiosPendientes] = useState(false)
   const [submenuAbierto, setSubmenuAbierto] = useState(false)
-  const [logo, setLogo] = useState<string | null>(null)
 
   // Cargar configuración general al montar el componente
   useEffect(() => {
     cargarConfiguracionGeneral()
-    cargarLogo()
   }, [])
-
-  const cargarLogo = async () => {
-    try {
-      const logoUrl = await logoService.obtenerLogo()
-      if (logoUrl) {
-        setLogo(logoUrl)
-      }
-    } catch (error) {
-      console.error('Error cargando logo:', error)
-    }
-  }
 
   const cargarConfiguracionGeneral = async () => {
     try {
@@ -307,57 +293,6 @@ export function Configuracion() {
               <SelectItem value="EUR">Euro (EUR)</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <label className="text-sm font-medium">Logo de la Empresa</label>
-          <div className="space-y-4">
-            {logo ? (
-              <div className="flex items-center space-x-4">
-                <img src={logo} alt="Logo" className="w-16 h-16 object-contain border rounded-lg p-2" />
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={async () => {
-                    try {
-                      await logoService.eliminarLogo()
-                      setLogo(null)
-                      toast.success('Logo eliminado exitosamente')
-                    } catch (error) {
-                      console.error('Error eliminando logo:', error)
-                      toast.error('Error al eliminar logo')
-                    }
-                  }}
-                >
-                  Eliminar
-                </Button>
-              </div>
-            ) : (
-              <div>
-                <Input
-                  type="file"
-                  accept="image/*"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0]
-                    if (file) {
-                      try {
-                        await logoService.subirLogo(file)
-                        const logoUrl = await logoService.obtenerLogo()
-                        if (logoUrl) {
-                          setLogo(logoUrl)
-                        }
-                        toast.success('Logo cargado exitosamente')
-                      } catch (error) {
-                        console.error('Error subiendo logo:', error)
-                        toast.error('Error al cargar logo')
-                      }
-                    }
-                  }}
-                  className="cursor-pointer"
-                />
-                <p className="text-xs text-gray-500 mt-1">Formatos permitidos: PNG, JPG, SVG</p>
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </div>

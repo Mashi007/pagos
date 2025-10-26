@@ -8,7 +8,6 @@ from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
 from app.models.concesionario import Concesionario
 from app.models.configuracion_sistema import ConfiguracionSistema
-from app.models.logo import Logo
 from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.notificacion import Notificacion
 from app.models.pago import Pago
@@ -29,5 +28,4 @@ __all__ = [
     "Concesionario",
     "Analista",
     "ModeloVehiculo",
-    "Logo",
 ]

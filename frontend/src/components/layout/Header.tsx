@@ -5,7 +5,6 @@ import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { logoService } from '@/services/logoService'
 
 // Constantes de configuración
 const SEARCH_BAR_WIDTH = 96
@@ -23,24 +22,7 @@ interface HeaderProps {
 export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
-  const [logo, setLogo] = useState<string | null>(null)
   const { logout, user, refreshUser } = useSimpleAuth()
-  
-  // Cargar logo desde backend
-  useEffect(() => {
-    const cargarLogo = async () => {
-      try {
-        const logoUrl = await logoService.obtenerLogo()
-        if (logoUrl) {
-          setLogo(logoUrl)
-        }
-      } catch (error) {
-        console.error('Error cargando logo en Header:', error)
-      }
-    }
-    
-    cargarLogo()
-  }, [])
 
   // Variables derivadas del usuario
   const userInitials = user ? `${user.nombre?.charAt(0) || ''}${user.apellido?.charAt(0) || ''}`.toUpperCase() : 'U'
@@ -99,19 +81,11 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
 
           <div className="hidden lg:block">
         <div className="flex items-center space-x-3">
-          {logo ? (
-            <img 
-              src={logo} 
-              alt="Logo" 
-              className="w-8 h-8 object-contain"
-            />
-          ) : (
-            <img 
-              src="/logo-compact.svg" 
-              alt="RAPICREDIT Logo" 
-              className="w-8 h-8"
-            />
-          )}
+          <img 
+            src="/logo-compact.svg" 
+            alt="RAPICREDIT Logo" 
+            className="w-8 h-8"
+          />
           <h1 className="text-xl font-semibold text-gray-900">
             RAPICREDIT
           </h1>

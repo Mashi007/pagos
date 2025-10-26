@@ -30,7 +30,6 @@ import { cn } from '@/utils'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { logoService } from '@/services/logoService'
 
 interface SidebarProps {
   isOpen: boolean
@@ -51,7 +50,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { user } = useSimpleAuth()
   const userRole = user?.is_admin ? 'ADMIN' : 'USER'  // Cambio clave: rol → is_admin
   const [openSubmenus, setOpenSubmenus] = useState<string[]>([])
-  const [logo, setLogo] = useState<string | null>(null)
 
   const toggleSubmenu = (title: string) => {
     setOpenSubmenus(prev =>
@@ -60,27 +58,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         : [...prev, title]
     )
   }
-
-  // Cargar logo desde backend
-  useEffect(() => {
-    const cargarLogo = async () => {
-      try {
-        const logoUrl = await logoService.obtenerLogo()
-        if (logoUrl) {
-          setLogo(logoUrl)
-        }
-      } catch (error) {
-        console.error('Error cargando logo en Sidebar:', error)
-      }
-    }
-    
-    cargarLogo()
-    
-    // Recargar logo cada 30 segundos (por si cambia en otro dispositivo)
-    const interval = setInterval(cargarLogo, 30000)
-    
-    return () => clearInterval(interval)
-  }, [])
 
   const menuItems: MenuItem[] = [
     {
@@ -218,19 +195,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200">
             <div className="flex items-center space-x-3">
-              {logo ? (
-                <img 
-                  src={logo} 
-                  alt="Logo" 
-                  className="w-10 h-10 object-contain"
-                />
-              ) : (
-                <img 
-                  src="/logo-compact.svg" 
-                  alt="RAPICREDIT Logo" 
-                  className="w-10 h-10"
-                />
-              )}
+              <img 
+                src="/logo-compact.svg" 
+                alt="RAPICREDIT Logo" 
+                className="w-10 h-10"
+              />
               <div>
                 <h2 className="font-bold text-gray-900 text-sm">RAPICREDIT</h2>
                 <p className="text-xs text-gray-500">Sistema v1.0</p>

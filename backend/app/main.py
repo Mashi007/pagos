@@ -21,7 +21,6 @@ from app.api.v1.endpoints import (
     concesionarios,
     configuracion,
     dashboard,
-    logo,
     notificaciones,
     pagos,
     prestamos,
@@ -76,12 +75,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # XSS Protection
         response.headers["X-XSS-Protection"] = "1; mode=block"
 
-        # CSP actualizado: permite blob: para previsualizaciones de imágenes
+        # CSP para seguridad
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
             "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: https: blob:; "  # Permitir blob: para preview de logos
+            "img-src 'self' data: https:; "
             "font-src 'self' data:; "
             "connect-src 'self'"
         )
@@ -172,7 +171,6 @@ app.include_router(analistas.router, prefix="/api/v1/analistas", tags=["analista
 app.include_router(
     validadores.router, prefix="/api/v1/validadores", tags=["validadores"]
 )
-app.include_router(logo.router, prefix="/api/v1", tags=["logo"])
 
 logger.info("Todos los routers registrados correctamente")
 
