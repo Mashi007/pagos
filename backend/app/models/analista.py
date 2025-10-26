@@ -8,6 +8,7 @@ from sqlalchemy import Boolean, Column, DateTime, Integer, String
 
 from app.db.session import Base
 
+
 class Analista(Base):
     """
     Modelo para analistas del sistema
@@ -23,9 +24,7 @@ class Analista(Base):
     activo = Column(Boolean, default=True, nullable=False)
 
     # Timestamps
-    created_at = Column(
-        DateTime(timezone=True), default=datetime.utcnow, nullable=True
-    )
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=True)
     updated_at = Column(
         DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
     )

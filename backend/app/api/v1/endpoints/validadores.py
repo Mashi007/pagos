@@ -14,12 +14,15 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
 class ValidarCampoRequest(BaseModel):
     """Request para validar campo individual"""
+
     campo: str
     valor: str
     pais: str = "VENEZUELA"
     moneda: Optional[str] = None
+
 
 @router.get("/configuracion-validadores")
 def obtener_configuracion_validadores(
@@ -96,7 +99,7 @@ def obtener_configuracion_validadores(
                             "1,500.50 (coma miles), "
                             "1500,50 (sin miles cuando > 999), "
                             "20000 (sin miles)"
-                        )
+                        ),
                     },
                     "ejemplos": {
                         "validos": (
@@ -106,7 +109,7 @@ def obtener_configuracion_validadores(
                         "invalidos": (
                             "1500.50 (punto decimal), 1,500.50 (coma miles), "
                             "1500,50 (sin miles > 999), 20000 (sin miles > 999)"
-                        )
+                        ),
                     },
                     "rango_minimo": "USD$1,00 o VES Bs.1,00",
                     "rango_maximo": "USD$20.000,00 o VES Bs.20.000,00",
@@ -144,6 +147,7 @@ def obtener_configuracion_validadores(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error interno del servidor: {str(e)}",
         )
+
 
 @router.post("/probar-validador")
 def probar_validador(
@@ -198,6 +202,7 @@ def probar_validador(
             detail=f"Error interno del servidor: {str(e)}",
         )
 
+
 @router.post("/validar-campo")
 def validar_campo(
     request: ValidarCampoRequest,
@@ -234,9 +239,13 @@ def validar_campo(
         resultado = {}
 
         if tipo == "cedula":
-            resultado = ValidadorCedula.validar_y_formatear_cedula(request.valor, request.pais)
+            resultado = ValidadorCedula.validar_y_formatear_cedula(
+                request.valor, request.pais
+            )
         elif tipo == "telefono":
-            resultado = ValidadorTelefono.validar_y_formatear_telefono(request.valor, request.pais)
+            resultado = ValidadorTelefono.validar_y_formatear_telefono(
+                request.valor, request.pais
+            )
         elif tipo == "nombre" or tipo == "apellido":
             resultado = ValidadorNombre.validar_y_formatear_nombre(request.valor)
         elif tipo == "email":
@@ -253,9 +262,7 @@ def validar_campo(
             )
 
         # Estructura que espera el frontend
-        return {
-            "validacion": resultado
-        }
+        return {"validacion": resultado}
 
     except HTTPException:
         raise

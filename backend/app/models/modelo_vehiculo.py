@@ -18,9 +18,7 @@ class ModeloVehiculo(Base):
     activo = Column(Boolean, nullable=False, default=True, index=True)
 
     # Timestamps
-    created_at = Column(
-        DateTime(timezone=True), default=datetime.utcnow, nullable=True
-    )
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=True)
     updated_at = Column(
         DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
     )

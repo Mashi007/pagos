@@ -4,6 +4,7 @@ from sqlalchemy import Boolean, Column, DateTime, Integer, String
 
 from app.db.session import Base
 
+
 class Concesionario(Base):
     """
     Modelo para concesionarios
@@ -17,9 +18,7 @@ class Concesionario(Base):
     activo = Column(Boolean, default=True, nullable=False)
 
     # Timestamps
-    created_at = Column(
-        DateTime(timezone=True), default=datetime.utcnow, nullable=True
-    )
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=True)
     updated_at = Column(
         DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
     )

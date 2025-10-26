@@ -26,6 +26,7 @@ from app.utils.validators import validate_password_strength
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
 def add_cors_headers(request: Request, response: Response):
     """Agregar headers CORS manualmente"""
     origin = request.headers.get("origin")
@@ -45,6 +46,7 @@ def add_cors_headers(request: Request, response: Response):
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     response.headers["Access-Control-Allow-Credentials"] = "true"
+
 
 @router.post("/login", response_model=LoginResponse)
 async def login(
@@ -100,7 +102,9 @@ async def login(
         }
 
         # Calcular tiempo de expiración en segundos (4 horas = 240 minutos)
-        expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # 14400 segundos (4 horas)
+        expires_in = (
+            settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        )  # 14400 segundos (4 horas)
 
         return LoginResponse(
             access_token=access_token,
@@ -118,6 +122,7 @@ async def login(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno del servidor",
         )
+
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
@@ -185,6 +190,7 @@ async def refresh_token(
             detail="Error interno del servidor",
         )
 
+
 @router.get("/me", response_model=UserMeResponse)
 async def get_current_user_info(
     current_user: User = Depends(get_current_user),
@@ -193,6 +199,7 @@ async def get_current_user_info(
     👤 Obtener información del usuario actual
     """
     return UserMeResponse.model_validate(current_user)
+
 
 @router.post("/change-password")
 async def change_password(
@@ -236,6 +243,7 @@ async def change_password(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno del servidor",
         )
+
 
 @router.options("/login")
 @router.options("/refresh")

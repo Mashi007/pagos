@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+
 class ValidadorTelefono:
     """Validador y formateador de teléfonos"""
 
@@ -77,7 +78,7 @@ class ValidadorTelefono:
         # Eliminar el + y el código de país (58)
         # telefono_limpio = "+581234567890"
         # Quitar "+58" (3 caracteres, no 4!)
-        numero_sin_codigo = telefono_limpio[len(config["codigo_pais"]):]  # noqa: E203
+        numero_sin_codigo = telefono_limpio[len(config["codigo_pais"]) :]  # noqa: E203
         # numero_sin_codigo = "1234567890"
 
         # Retornar con formato: +58 + 10 dígitos
@@ -121,7 +122,7 @@ class ValidadorTelefono:
         return {
             "valido": True,
             "numero_formateado": numero_formateado,
-            }
+        }
 
     @staticmethod
     def _validar_formato_final(
@@ -197,7 +198,7 @@ class ValidadorTelefono:
                 "longitud_actual": len(telefono_limpio),
                 "longitud_esperada": config["longitud_sin_codigo"] if config else 0,
             },
-            }
+        }
 
     @staticmethod
     def validar_y_formatear_telefono(
@@ -266,6 +267,7 @@ class ValidadorTelefono:
                 "formato_esperado": "+58 XXXXXXXXXX (10 dígitos)",
                 "sugerencia": "Verifique el formato. Ejemplo: '+58 1234567890'",
             }
+
 
 class ValidadorCedula:
     """Validador y formateador de cédulas"""
@@ -376,11 +378,14 @@ class ValidadorCedula:
                 "sugerencia": "Verifique el formato de la cédula. Ejemplo: 'V12345678'",
             }
 
+
 class ValidadorFecha:
     """Validador y formateador de fechas"""
 
     @staticmethod
-    def _validar_rangos_fecha(dia: int, mes: int, año: int, fecha: str) -> Optional[Dict[str, Any]]:
+    def _validar_rangos_fecha(
+        dia: int, mes: int, año: int, fecha: str
+    ) -> Optional[Dict[str, Any]]:
         """Validar rangos de día, mes y año"""
         if año < 1000 or año > 9999:
             return {
@@ -412,9 +417,12 @@ class ValidadorFecha:
         return None
 
     @staticmethod
-    def _validar_fecha_real(dia: int, mes: int, año: int, fecha: str) -> Optional[Dict[str, Any]]:
+    def _validar_fecha_real(
+        dia: int, mes: int, año: int, fecha: str
+    ) -> Optional[Dict[str, Any]]:
         """Validar que la fecha sea real (ej. no existe 31 de febrero)"""
         from datetime import datetime
+
         try:
             datetime.strptime(f"{dia:02d}/{mes:02d}/{año}", "%d/%m/%Y")
             return None
@@ -456,7 +464,7 @@ class ValidadorFecha:
             # Pero primero aceptar variaciones como D/M/YYYY o DD/M/YYYY
             try:
                 # Intentar con formato completo DD/MM/YYYY
-                partes = fecha_original.split('/')
+                partes = fecha_original.split("/")
                 if len(partes) != 3:
                     return {
                         "valido": False,
@@ -486,12 +494,16 @@ class ValidadorFecha:
                 año = int(año_str)
 
                 # Validar rangos de día, mes y año
-                error_rangos = ValidadorFecha._validar_rangos_fecha(dia, mes, año, fecha)
+                error_rangos = ValidadorFecha._validar_rangos_fecha(
+                    dia, mes, año, fecha
+                )
                 if error_rangos:
                     return error_rangos
 
                 # Validar que la fecha sea real
-                error_fecha_real = ValidadorFecha._validar_fecha_real(dia, mes, año, fecha)
+                error_fecha_real = ValidadorFecha._validar_fecha_real(
+                    dia, mes, año, fecha
+                )
                 if error_fecha_real:
                     return error_fecha_real
 
@@ -526,6 +538,7 @@ class ValidadorFecha:
                 "sugerencia": "Verifique el formato de la fecha. Ejemplo: '01/12/2025'",
             }
 
+
 class ValidadorEmail:
     """Validador y formateador de emails"""
 
@@ -554,7 +567,7 @@ class ValidadorEmail:
             email_original = email.strip()
 
             # Validar que no tenga espacios
-            if ' ' in email_original:
+            if " " in email_original:
                 return {
                     "valido": False,
                     "error": "Email no puede contener espacios",
@@ -565,7 +578,7 @@ class ValidadorEmail:
                 }
 
             # Validar que no tenga comas
-            if ',' in email_original:
+            if "," in email_original:
                 return {
                     "valido": False,
                     "error": "Email no puede contener comas",
@@ -611,6 +624,7 @@ class ValidadorEmail:
                 "formato_esperado": "usuario@dominio.com",
                 "sugerencia": "Verifique el formato del email. Ejemplo: 'usuario@ejemplo.com'",
             }
+
 
 class ValidadorNombre:
     """Validador y formateador de nombres y apellidos"""
@@ -722,6 +736,7 @@ class ValidadorNombre:
                 "sugerencia": "Verifique el formato del nombre. Ejemplo: 'Juan' o 'Maria Elena'",
             }
 
+
 class ValidadorMonto:
     """Validador y formateador de montos"""
 
@@ -777,7 +792,9 @@ class ValidadorMonto:
                     "valor_original": monto,
                     "valor_formateado": None,
                     "formato_esperado": "Número decimal (1-20000)",
-                    "sugerencia": ("Use formato válido. Ejemplo: '10.500,50' " "o '10500,50'"),
+                    "sugerencia": (
+                        "Use formato válido. Ejemplo: '10.500,50' " "o '10500,50'"
+                    ),
                     "monto_limpio": None,
                 }
 
@@ -888,9 +905,7 @@ class ValidadorMonto:
         return {"valido": True, "monto_limpio": monto_limpio}
 
     @staticmethod
-    def validar_y_formatear_monto(
-        monto: Any, moneda: str = "USD"
-    ) -> Dict[str, Any]:
+    def validar_y_formatear_monto(monto: Any, moneda: str = "USD") -> Dict[str, Any]:
         """
         Validar y formatear monto monetario (rango 1-20000)
 
@@ -932,15 +947,19 @@ class ValidadorMonto:
 
                     if "," in monto_limpio and "." in monto_limpio:
                         # Usar función auxiliar para procesar formato europeo completo
-                        resultado = ValidadorMonto._procesar_formato_europeo_con_separadores(
-                            monto_limpio, monto
+                        resultado = (
+                            ValidadorMonto._procesar_formato_europeo_con_separadores(
+                                monto_limpio, monto
+                            )
                         )
                         if not resultado["valido"]:
                             return resultado
                         monto_limpio = resultado["monto_limpio"]
                     elif "," in monto_limpio:
                         # Usar función auxiliar para procesar formato solo con coma
-                        resultado = ValidadorMonto._procesar_formato_solo_coma(monto_limpio, monto)
+                        resultado = ValidadorMonto._procesar_formato_solo_coma(
+                            monto_limpio, monto
+                        )
                         if not resultado["valido"]:
                             return resultado
                         monto_limpio = resultado["monto_limpio"]
@@ -1059,6 +1078,7 @@ class ValidadorMonto:
                 "sugerencia": "Verifique el formato del monto. Ejemplo: '1500.50'",
             }
 
+
 def _validar_campo_cliente(
     campo: str, valor: Any, validador_func, resultados: Dict[str, Any]
 ) -> None:
@@ -1071,6 +1091,7 @@ def _validar_campo_cliente(
     else:
         resultados["valido"] = False
         resultados["errores"].append(f"{campo.title()}: {resultado['error']}")
+
 
 def validar_datos_cliente(cliente_data: Dict[str, Any]) -> Dict[str, Any]:
     """
