@@ -56,6 +56,22 @@ def listar_analistas(
         )
 
 
+@router.get("/activos", response_model=List[AnalistaResponse])
+def listar_analistas_activos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Listar solo analistas activos"""
+    try:
+        analistas = db.query(Analista).filter(Analista.activo.is_(True)).all()
+        return analistas
+    except Exception as e:
+        logger.error(f"Error listando analistas activos: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
+
+
 @router.get("/{analista_id}", response_model=AnalistaResponse)
 def obtener_analista(
     analista_id: int,
