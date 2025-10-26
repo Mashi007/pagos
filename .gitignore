@@ -61,4 +61,5 @@ htmlcov/
 ~$*.xltx
 ~$*.xltm
 
-Hola
+   # Datos sensibles
+   pagos/
