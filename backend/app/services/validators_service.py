@@ -333,33 +333,33 @@ class ValidadorFecha:
     @staticmethod
     def _validar_rangos_fecha(dia: int, mes: int, año: int, fecha: str) -> Optional[Dict[str, Any]]:
         """Validar rangos de día, mes y año"""
-            if año < 1000 or año > 9999:
-                return {
-                    "valido": False,
-                    "error": "El año debe tener 4 dígitos",
-                    "valor_original": fecha,
-                    "valor_formateado": None,
-                    "formato_esperado": "DD/MM/YYYY",
-                    "sugerencia": f"El año '{año}' debe tener 4 dígitos. Use año completo como: 2025",
-                }
-            if mes < 1 or mes > 12:
-                return {
-                    "valido": False,
-                    "error": f"El mes {mes} es inválido",
-                    "valor_original": fecha,
-                    "valor_formateado": None,
-                    "formato_esperado": "DD/MM/YYYY",
-                    "sugerencia": f"Los meses van del 01 al 12. Ejemplos: 15/01/2025, 20/12/2025",
-                }
-            if dia < 1 or dia > 31:
-                return {
-                    "valido": False,
-                    "error": f"El día {dia} es inválido",
-                    "valor_original": fecha,
-                    "valor_formateado": None,
-                    "formato_esperado": "DD/MM/YYYY",
-                    "sugerencia": f"Los días van del 01 al 31. Ejemplos: 01/05/2025, 31/12/2025",
-                }
+        if año < 1000 or año > 9999:
+            return {
+                "valido": False,
+                "error": "El año debe tener 4 dígitos",
+                "valor_original": fecha,
+                "valor_formateado": None,
+                "formato_esperado": "DD/MM/YYYY",
+                "sugerencia": f"El año '{año}' debe tener 4 dígitos. Use año completo como: 2025",
+            }
+        if mes < 1 or mes > 12:
+            return {
+                "valido": False,
+                "error": f"El mes {mes} es inválido",
+                "valor_original": fecha,
+                "valor_formateado": None,
+                "formato_esperado": "DD/MM/YYYY",
+                "sugerencia": f"Los meses van del 01 al 12. Ejemplos: 15/01/2025, 20/12/2025",
+            }
+        if dia < 1 or dia > 31:
+            return {
+                "valido": False,
+                "error": f"El día {dia} es inválido",
+                "valor_original": fecha,
+                "valor_formateado": None,
+                "formato_esperado": "DD/MM/YYYY",
+                "sugerencia": f"Los días van del 01 al 31. Ejemplos: 01/05/2025, 31/12/2025",
+            }
         return None
 
     @staticmethod
