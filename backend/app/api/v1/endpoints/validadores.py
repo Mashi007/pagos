@@ -82,9 +82,11 @@ def obtener_configuracion_validadores(
             "monto": {
                 "descripcion": "Validación de montos (rango 1-20000) con soporte USD y VES",
                 "requisitos": {
-                    "formato": "Decimal con 2 posiciones",
-                    "rango_minimo": "1.00",
-                    "rango_maximo": "20,000.00",
+                    "formato": "Número decimal (1-20000)",
+                    "separador_decimal": "Punto (.) o Coma (,) - ambos aceptados",
+                    "ejemplos": "1500.50, 1,500.50, 1500,50, 1.500,50",
+                    "rango_minimo": "$1.00 o Bs.1,00",
+                    "rango_maximo": "$20,000.00 o Bs.20.000,00",
                     "monedas_soportadas": {
                         "USD": "Dólares Americanos ($)",
                         "VES": "Bolívares Venezolanos (Bs.)",

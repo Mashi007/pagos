@@ -98,9 +98,9 @@ export function Validadores() {
     {
       nombre: 'Monto',
       campo: 'monto',
-      formato: 'Rango 1-20000 (USD/VES)',
-      ejemplo: '1500.00',
-      descripcion: 'Valida montos rango 1-20000, soporte USD y VES'
+      formato: '1-20000 (Acepta 1500.50 o 1.500,50)',
+      ejemplo: '1500.50 o 1.500,50',
+      descripcion: 'Valida montos rango 1-20000, acepta punto o coma como decimal'
     },
     {
       nombre: 'Nombre',

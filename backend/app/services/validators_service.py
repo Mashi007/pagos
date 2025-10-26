@@ -654,15 +654,34 @@ class ValidadorMonto:
             # Convertir a Decimal
             try:
                 if isinstance(monto, str):
-                    # Limpiar string
+                    # Limpiar string: mantener solo dígitos, puntos y comas
                     monto_limpio = re.sub(r"[^\d.,]", "", monto)
-                    monto_decimal = Decimal(monto_limpio.replace(",", "."))
+                    
+                    # Lógica: detectar separador decimal
+                    # - Si tiene 1 punto y 1 coma: el último define decimales
+                    # - Si tiene solo coma: es decimal (formato venezolano/europeo)
+                    # - Si tiene solo punto: es decimal (formato internacional)
+                    
+                    if "," in monto_limpio and "." in monto_limpio:
+                        # Ambos presentes: el último indica decimales
+                        if monto_limpio.rindex(",") > monto_limpio.rindex("."):
+                            # Ejemplo: 1.234,56 → decimal: ,
+                            monto_limpio = monto_limpio.replace(".", "").replace(",", ".")
+                        else:
+                            # Ejemplo: 1,234.56 → decimal: .
+                            monto_limpio = monto_limpio.replace(",", "")
+                    elif "," in monto_limpio:
+                        # Solo coma: es decimal
+                        monto_limpio = monto_limpio.replace(",", ".")
+                    # Si solo tiene punto o ninguno, se deja como está
+                    
+                    monto_decimal = Decimal(monto_limpio)
                 else:
                     monto_decimal = Decimal(str(monto))
             except (InvalidOperation, ValueError):
                 return {
                     "valido": False,
-                    "error": "Formato de monto inválido",
+                    "error": "Formato de monto inválido. Use: 1500.50 o 1.500,50 o 1500,50",
                     "valor_original": monto,
                     "valor_formateado": None,
                 }
