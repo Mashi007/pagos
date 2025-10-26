@@ -84,8 +84,8 @@ async def login(
 
         # Generar refresh token nuevo (7 días)
         refresh_token = create_access_token(
-            subject=str(user.id), 
-            expires_delta=timedelta(days=7)
+            subject=str(user.id),
+            expires_delta=timedelta(days=7),
         )
 
         logger.info(f"Login exitoso para: {login_data.email}")
@@ -165,8 +165,8 @@ async def refresh_token(
         new_access_token = create_access_token(subject=str(user.id))
         # Generar nuevo refresh token (7 días)
         new_refresh_token = create_access_token(
-            subject=str(user.id), 
-            expires_delta=timedelta(days=7)
+            subject=str(user.id),
+            expires_delta=timedelta(days=7),
         )
 
         # Calcular tiempo de expiración en segundos (4 horas = 240 minutos)

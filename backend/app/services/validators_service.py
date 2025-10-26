@@ -78,14 +78,14 @@ class ValidadorTelefono:
         # Eliminar el + y el código de país (58)
         # telefono_limpio = "+584241234567"
         # Quitar "+58" (4 caracteres)
-        numero_sin_codigo = telefono_limpio[len(config["codigo_pais"]) + 1:]
+        numero_sin_codigo = telefono_limpio[len(config["codigo_pais"]) + 1 :]
         # numero_sin_codigo = "4241234567"
-        
+
         # Extraer operadora (primeros 3 dígitos)
         operadora = numero_sin_codigo[:3]
         # Resto del número (7 dígitos)
         resto = numero_sin_codigo[3:]
-        
+
         return f"{config['codigo_pais']} {operadora} {resto}"
 
     @staticmethod
@@ -618,11 +618,17 @@ class ValidadorNombre:
                 if len(palabra) > 40:
                     return {
                         "valido": False,
-                        "error": f"La palabra '{palabra[:20]}...' excede 40 caracteres ({len(palabra)} caracteres)",
+                        "error": (
+                            f"La palabra '{palabra[:20]}...' excede 40 caracteres "
+                            f"({len(palabra)} caracteres)"
+                        ),
                         "valor_original": texto,
                         "valor_formateado": None,
                         "formato_esperado": "Cada palabra máximo 40 caracteres",
-                        "sugerencia": f"Use palabras más cortas. La palabra '{palabra}' tiene {len(palabra)} caracteres, máximo permitido: 40",
+                        "sugerencia": (
+                            f"Use palabras más cortas. La palabra '{palabra}' tiene "
+                            f"{len(palabra)} caracteres, máximo permitido: 40"
+                        ),
                     }
 
             # Formatear: Primera letra de cada palabra en mayúscula, resto en minúscula
@@ -704,12 +710,12 @@ class ValidadorMonto:
                 if isinstance(monto, str):
                     # Limpiar string: mantener solo dígitos, puntos y comas
                     monto_limpio = re.sub(r"[^\d.,]", "", monto)
-                    
+
                     # Lógica: detectar separador decimal
                     # - Si tiene 1 punto y 1 coma: el último define decimales
                     # - Si tiene solo coma: es decimal (formato venezolano/europeo)
                     # - Si tiene solo punto: es decimal (formato internacional)
-                    
+
                     if "," in monto_limpio and "." in monto_limpio:
                         # Ambos presentes: el último indica decimales
                         if monto_limpio.rindex(",") > monto_limpio.rindex("."):
@@ -722,7 +728,7 @@ class ValidadorMonto:
                         # Solo coma: es decimal
                         monto_limpio = monto_limpio.replace(",", ".")
                     # Si solo tiene punto o ninguno, se deja como está
-                    
+
                     monto_decimal = Decimal(monto_limpio)
                 else:
                     monto_decimal = Decimal(str(monto))
@@ -733,7 +739,10 @@ class ValidadorMonto:
                     "valor_original": monto,
                     "valor_formateado": None,
                     "formato_esperado": "Número decimal (1-20000)",
-                    "sugerencia": "Use números con punto o coma como decimal. Ejemplos: '1500.50', '1500,50', '1.500,50', '20000'",
+                    "sugerencia": (
+                        "Use números con punto o coma como decimal. "
+                        "Ejemplos: '1500.50', '1500,50', '1.500,50', '20000'"
+                    ),
                 }
 
             # Validar rango mínimo (1.00)
@@ -743,8 +752,15 @@ class ValidadorMonto:
                     "error": f"El monto mínimo es {config_moneda['simbolo']}1.00",
                     "valor_original": monto,
                     "valor_formateado": None,
-                    "formato_esperado": f"Rango: {config_moneda['simbolo']}1.00 - {config_moneda['simbolo']}20,000.00",
-                    "sugerencia": f"Use un monto mínimo de {config_moneda['simbolo']}1.00. Ejemplo: '{config_moneda['simbolo']}1.00' o '{config_moneda['simbolo']}100.00'",
+                    "formato_esperado": (
+                        f"Rango: {config_moneda['simbolo']}1.00 - "
+                        f"{config_moneda['simbolo']}20,000.00"
+                    ),
+                    "sugerencia": (
+                        f"Use un monto mínimo de {config_moneda['simbolo']}1.00. "
+                        f"Ejemplo: '{config_moneda['simbolo']}1.00' o "
+                        f"'{config_moneda['simbolo']}100.00'"
+                    ),
                 }
 
             # Validar rango máximo (20000.00)
@@ -754,8 +770,15 @@ class ValidadorMonto:
                     "error": f"El monto máximo es {config_moneda['simbolo']}20,000.00",
                     "valor_original": monto,
                     "valor_formateado": None,
-                    "formato_esperado": f"Rango: {config_moneda['simbolo']}1.00 - {config_moneda['simbolo']}20,000.00",
-                    "sugerencia": f"Use un monto máximo de {config_moneda['simbolo']}20,000.00. Ejemplo: '{config_moneda['simbolo']}20000' o '{config_moneda['simbolo']}15000.50'",
+                    "formato_esperado": (
+                        f"Rango: {config_moneda['simbolo']}1.00 - "
+                        f"{config_moneda['simbolo']}20,000.00"
+                    ),
+                    "sugerencia": (
+                        f"Use un monto máximo de {config_moneda['simbolo']}20,000.00. "
+                        f"Ejemplo: '{config_moneda['simbolo']}20000' o "
+                        f"'{config_moneda['simbolo']}15000.50'"
+                    ),
                 }
 
             # Formatear con 2 decimales
