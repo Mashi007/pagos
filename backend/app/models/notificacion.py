@@ -87,7 +87,9 @@ class Notificacion(Base):
     @property
     def puede_reintentar(self) -> bool:
         """Verifica si se puede reintentar el envío"""
-        return str(self.estado) == EstadoNotificacion.FALLIDA.value and self.intentos < 3
+        return (
+            str(self.estado) == EstadoNotificacion.FALLIDA.value and self.intentos < 3
+        )
 
     def marcar_enviada(self, respuesta: str = None):
         """Marca la notificación como enviada"""
@@ -108,7 +110,11 @@ class Notificacion(Base):
 
     @classmethod
     def crear_recordatorio_pago(
-        cls, cliente_id: int, tipo: str, mensaje: str, programada_para: Optional[datetime] = None
+        cls,
+        cliente_id: int,
+        tipo: str,
+        mensaje: str,
+        programada_para: Optional[datetime] = None,
     ):
         """
         Helper para crear notificaciones de recordatorio de pago
