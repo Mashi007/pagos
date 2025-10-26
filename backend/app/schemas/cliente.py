@@ -32,7 +32,7 @@ class ClienteBase(BaseModel):
         ...,
         min_length=MIN_NAME_LENGTH,
         max_length=MAX_NAME_LENGTH,
-        description="1-2 palabras máximo",
+        description="2-4 palabras (nombres + apellidos unificados)",
     )
     telefono: str = Field(
         ...,
@@ -52,7 +52,7 @@ class ClienteBase(BaseModel):
         ...,
         min_length=MIN_NAME_LENGTH,
         max_length=MAX_NAME_LENGTH,
-        description="Ocupación del cliente",
+        description="Ocupación del cliente (máximo 2 palabras)",
     )
 
     modelo_vehiculo: str = Field(
@@ -72,20 +72,38 @@ class ClienteBase(BaseModel):
         description="Activo/Inactivo/Finalizado",
     )
 
-    # Notas - OPCIONAL
-    notas: Optional[str] = Field(
-        None, max_length=MAX_NOTES_LENGTH, description="Notas adicionales"
+    # Notas - OBLIGATORIO con default 'NA'
+    notas: str = Field(
+        default="NA", max_length=MAX_NOTES_LENGTH, description="Notas adicionales (default 'NA')"
     )
 
     @classmethod
-    def validate_name_words(cls, v):
+    def validate_nombres(cls, v):
+        """Validar nombres: 2-4 palabras, primera letra mayúscula"""
+        if not v:
+            raise ValueError("Nombres requeridos")
+        
         words = v.strip().split()
         words = [word for word in words if word]  # Filtrar palabras vacías
 
         if len(words) < 2:
-            raise ValueError("Mínimo 2 palabras requeridas")
+            raise ValueError("Mínimo 2 palabras requeridas (nombre + apellido)")
+        if len(words) > 4:
+            raise ValueError("Máximo 4 palabras permitidas")
+
+        return v
+    
+    @classmethod
+    def validate_ocupacion(cls, v):
+        """Validar ocupacion: máximo 2 palabras, primera letra mayúscula"""
+        if not v:
+            raise ValueError("Ocupación requerida")
+        
+        words = v.strip().split()
+        words = [word for word in words if word]  # Filtrar palabras vacías
+
         if len(words) > 2:
-            raise ValueError("Máximo 2 palabras permitidas")
+            raise ValueError("Máximo 2 palabras permitidas en ocupación")
 
         return v
 
@@ -95,6 +113,22 @@ class ClienteBase(BaseModel):
         if v is None or v == "":
             return "NA" if v is None else v
         return sanitize_html(v)
+    
+    @field_validator("nombres", mode="before")
+    @classmethod
+    def validate_nombres_words(cls, v):
+        """Validar y formatear nombres: 2-4 palabras, primera letra mayúscula"""
+        if not v:
+            raise ValueError("Nombres requeridos")
+        return cls.validate_nombres(v)
+    
+    @field_validator("ocupacion", mode="before")
+    @classmethod
+    def validate_ocupacion_words(cls, v):
+        """Validar y formatear ocupacion: max 2 palabras"""
+        if not v:
+            raise ValueError("Ocupación requerida")
+        return cls.validate_ocupacion(v)
 
     @field_validator("estado", mode="before")
     @classmethod
@@ -122,14 +156,14 @@ class ClienteCreateWithConfirmation(BaseModel):
 class ClienteUpdate(BaseModel):
 
     cedula: Optional[str] = Field(None, min_length=8, max_length=20)
-    nombres: Optional[str] = Field(None, min_length=2, max_length=100)
+    nombres: Optional[str] = Field(None, min_length=2, max_length=100)  # 2-4 palabras validado
     telefono: Optional[str] = Field(
         None, min_length=MIN_PHONE_LENGTH, max_length=MAX_PHONE_LENGTH
     )
     email: Optional[EmailStr] = None
     direccion: Optional[str] = Field(None, min_length=5, max_length=500)
     fecha_nacimiento: Optional[date] = None
-    ocupacion: Optional[str] = Field(None, min_length=2, max_length=100)
+    ocupacion: Optional[str] = Field(None, min_length=2, max_length=100)  # Max 2 palabras validado
 
     modelo_vehiculo: Optional[str] = Field(None, min_length=1, max_length=100)
     concesionario: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -139,20 +173,31 @@ class ClienteUpdate(BaseModel):
     estado: Optional[str] = Field(None, pattern="^(ACTIVO|INACTIVO|FINALIZADO)$")
     activo: Optional[bool] = None
 
-    # Notas
+    # Notas - OBLIGATORIO con default 'NA'
     notas: Optional[str] = Field(None, max_length=1000)
 
     @classmethod
-    def validate_name_words(cls, v):
+    def validate_nombres(cls, v):
+        """Validar nombres: 2-4 palabras"""
         if v:
             words = v.strip().split()
-            words = [word for word in words if word]  # Filtrar palabras vacías
+            words = [word for word in words if word]
 
             if len(words) < 2:
                 raise ValueError("Mínimo 2 palabras requeridas")
-            if len(words) > 2:
-                raise ValueError("Máximo 2 palabras permitidas")
+            if len(words) > 4:
+                raise ValueError("Máximo 4 palabras permitidas")
+        return v
+    
+    @classmethod
+    def validate_ocupacion(cls, v):
+        """Validar ocupacion: máximo 2 palabras"""
+        if v:
+            words = v.strip().split()
+            words = [word for word in words if word]
 
+            if len(words) > 2:
+                raise ValueError("Máximo 2 palabras permitidas en ocupación")
         return v
 
     @field_validator("notas", "direccion", mode="before")
@@ -160,6 +205,20 @@ class ClienteUpdate(BaseModel):
     def sanitize_text_fields(cls, v):
         if v:
             return sanitize_html(v)
+        return v
+    
+    @field_validator("nombres", mode="before")
+    @classmethod
+    def validate_nombres_on_update(cls, v):
+        if v:
+            return ClienteBase.validate_nombres(v)
+        return v
+    
+    @field_validator("ocupacion", mode="before")
+    @classmethod
+    def validate_ocupacion_on_update(cls, v):
+        if v:
+            return ClienteBase.validate_ocupacion(v)
         return v
 
 

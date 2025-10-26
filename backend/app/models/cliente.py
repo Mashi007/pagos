@@ -25,7 +25,7 @@ class Cliente(Base):
     # misma cédula
     cedula = Column(String(CEDULA_LENGTH), nullable=False, index=True)
 
-    nombres = Column(String(NAME_LENGTH), nullable=False)  # 1-2 palabras máximo
+    nombres = Column(String(NAME_LENGTH), nullable=False)  # 2-4 palabras (nombres + apellidos unificados)
     telefono = Column(
         String(PHONE_LENGTH), nullable=False, index=True
     )  # Validado por validadores
@@ -58,16 +58,16 @@ class Cliente(Base):
     # Auditoría - OBLIGATORIOS
     fecha_registro = Column(
         TIMESTAMP, nullable=False, default=func.now()
-    )  # Validado por validadores
+    )  # Validado por validadores - Fecha de creación del cliente
     fecha_actualizacion = Column(
         TIMESTAMP, nullable=False, default=func.now(), onupdate=func.now()
-    )  # Automático
+    )  # Automático - Se actualiza al editar cualquier campo
     usuario_registro = Column(
         String(USER_LENGTH), nullable=False
     )  # Email del usuario logueado (automático)
 
-    # Notas - OPCIONAL
-    notas = Column(Text, nullable=True, default="NA")  # Si no llena "NA"
+    # Notas - OBLIGATORIO con default 'NA'
+    notas = Column(Text, nullable=False, default="NA")  # Obligatorio pero puede ser "NA"
 
     # ============================================
     # RELACIONES CON OTROS MODELOS
@@ -79,5 +79,5 @@ class Cliente(Base):
 
     def __repr__(self):
         return (
-            f"<Cliente(id={self.id}, cedula='{self.cedula}', nombres='{self.nombres}')>"
+            f"<Cliente(id={self.id}, cedula='{self.cedula}', nombres='{self.nombres}', estado='{self.estado}', activo={self.activo})>"
         )

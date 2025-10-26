@@ -40,13 +40,12 @@ import { ConfirmacionDuplicadoModal } from './ConfirmacionDuplicadoModal'
 interface FormData {
   // Datos personales - OBLIGATORIOS
   cedula: string
-  nombres: string
-  apellidos: string
+  nombres: string  // ✅ UNIFICA nombres + apellidos (2-4 palabras)
   telefono: string
   email: string
   direccion: string
   fechaNacimiento: string
-  ocupacion: string
+  ocupacion: string  // ✅ MÁXIMO 2 palabras
   
   // Datos del vehículo - OBLIGATORIOS
   modeloVehiculo: string
@@ -56,7 +55,7 @@ interface FormData {
   // Estado - OBLIGATORIO
   estado: 'ACTIVO' | 'INACTIVO' | 'FINALIZADO'
   
-  // Notas - OPCIONAL
+  // Notas - OBLIGATORIO (default 'NA')
   notas: string
 }
 
@@ -82,8 +81,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
   const [formData, setFormData] = useState<FormData>({
     cedula: '',
-    nombres: '',
-    apellidos: '',
+    nombres: '',  // ✅ UNIFICA nombres + apellidos
     telefono: '',
     email: '',
     direccion: '',
@@ -93,7 +91,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     concesionario: '',
     analista: '',
     estado: 'ACTIVO',
-    notas: ''
+    notas: 'NA'  // ✅ Default 'NA'
   })
 
   const [validations, setValidations] = useState<ValidationResult[]>([])
@@ -116,10 +114,12 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   useEffect(() => {
     if (cliente) {
       // Debug logs removidos según normas
+      // Dividir nombres si vienen unificados de la BD
+      let nombresValue = cliente.nombres || ''
+      
       setFormData({
         cedula: cliente.cedula || '',
-        nombres: cliente.nombres || '',
-        apellidos: cliente.apellidos || '',
+        nombres: nombresValue,  // ✅ nombres unificados
         telefono: cliente.telefono || '',
         email: cliente.email || '',
         direccion: cliente.direccion || '',
@@ -129,7 +129,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         concesionario: cliente.concesionario || '',
         analista: cliente.analista || '',
         estado: cliente.estado || 'ACTIVO',
-        notas: cliente.notas || ''
+        notas: cliente.notas || 'NA'
       })
     }
   }, [cliente])
@@ -187,8 +187,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     // Mapeo de campos del formulario a tipos de validadores del backend
     const campoMapper: Record<string, string> = {
       'cedula': 'cedula_venezuela',
-      'nombres': 'nombre',
-      'apellidos': 'apellido',
+      'nombres': 'nombre',  // ✅ Ahora unifica nombres + apellidos
       'telefono': 'telefono_venezuela',
       'email': 'email',
       'fechaNacimiento': 'fecha',
@@ -248,7 +247,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
   const isFormValid = () => {
     const requiredFields: (keyof FormData)[] = [
-      'cedula', 'nombres', 'apellidos', 'telefono', 'email', 
+      'cedula', 'nombres', 'telefono', 'email', 
       'direccion', 'fechaNacimiento', 'ocupacion', 'modeloVehiculo', 
       'concesionario', 'analista'
     ]
@@ -271,8 +270,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     try {
       const clienteData = {
         cedula: formData.cedula,
-        nombres: formData.nombres,
-        apellidos: formData.apellidos,
+        nombres: formData.nombres,  // ✅ nombres unificados (nombres + apellidos)
         telefono: formData.telefono,
         email: formData.email,
         direccion: formData.direccion,
@@ -357,8 +355,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     try {
       const clienteData = {
         cedula: formData.cedula,
-        nombres: formData.nombres,
-        apellidos: formData.apellidos,
+        nombres: formData.nombres,  // ✅ nombres unificados (nombres + apellidos)
         telefono: formData.telefono,
         email: formData.email,
         direccion: formData.direccion,
@@ -490,7 +487,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
                 <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
-                  Nombres <span className="text-red-500">*</span>
+                  Nombres y Apellidos <span className="text-red-500">*</span> <span className="text-gray-500 text-xs">(2-4 palabras)</span>
                   </label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -499,7 +496,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     value={formData.nombres}
                     onChange={(e) => handleInputChange('nombres', e.target.value)}
                     className={`pl-10 ${getFieldValidation('nombres')?.isValid === false ? 'border-red-500' : ''}`}
-                    placeholder="Juan Carlos"
+                    placeholder="Ejemplo: Juan Carlos Pérez González"
                   />
                 </div>
                 {getFieldValidation('nombres') && (
@@ -515,34 +512,6 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     </div>
                   )}
               </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Apellidos <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input
-                    type="text"
-                    value={formData.apellidos}
-                    onChange={(e) => handleInputChange('apellidos', e.target.value)}
-                    className={`pl-10 ${getFieldValidation('apellidos')?.isValid === false ? 'border-red-500' : ''}`}
-                    placeholder="Pérez González"
-                  />
-                </div>
-                {getFieldValidation('apellidos') && (
-                  <div className={`text-xs flex items-center gap-1 ${
-                    getFieldValidation('apellidos')?.isValid ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {getFieldValidation('apellidos')?.isValid ? (
-                      <CheckCircle className="w-3 h-3" />
-                    ) : (
-                      <XCircle className="w-3 h-3" />
-                    )}
-                    {getFieldValidation('apellidos')?.message}
-                  </div>
-                )}
-                </div>
 
                 <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">

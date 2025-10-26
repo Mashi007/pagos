@@ -52,8 +52,8 @@ def listar_clientes(
         if estado:
             query = query.filter(Cliente.estado == estado)
 
-        # Ordenamiento
-        query = query.order_by(Cliente.id.desc())
+        # Ordenamiento por ID (ascendente)
+        query = query.order_by(Cliente.id)
 
         # Contar total
         total = query.count()
@@ -117,8 +117,16 @@ def crear_cliente(
     try:
         logger.info(f"Crear cliente - Usuario: {current_user.email}")
 
+        # Preparar datos
+        cliente_dict = cliente_data.model_dump()
+        
+        # Sincronizar estado y activo (crear siempre con ACTIVO=True)
+        cliente_dict["estado"] = "ACTIVO"
+        cliente_dict["activo"] = True
+        cliente_dict["usuario_registro"] = current_user.email
+
         # Crear nuevo cliente
-        nuevo_cliente = Cliente(**cliente_data.model_dump())
+        nuevo_cliente = Cliente(**cliente_dict)
 
         db.add(nuevo_cliente)
         db.commit()
@@ -148,12 +156,22 @@ def actualizar_cliente(
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
         update_data = cliente_data.model_dump(exclude_unset=True)
+        
+        # Sincronizar estado y activo SI se actualiza el estado
+        if "estado" in update_data:
+            nuevo_estado = update_data["estado"]
+            if nuevo_estado == "ACTIVO":
+                update_data["activo"] = True
+            elif nuevo_estado in ["INACTIVO", "FINALIZADO"]:
+                update_data["activo"] = False
+        
+        # Aplicar actualizaciones
         for field, value in update_data.items():
             if hasattr(cliente, field):
                 setattr(cliente, field, value)
 
-        # Actualizar fecha de actualizacion automaticamente
-        cliente.updated_at = datetime.utcnow()
+        # Actualizar fecha_actualizacion manualmente
+        cliente.fecha_actualizacion = datetime.utcnow()
 
         db.commit()
         db.refresh(cliente)
