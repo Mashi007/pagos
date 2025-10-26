@@ -100,11 +100,15 @@ async def login(
             "is_active": user.is_active,
         }
 
+        # Calcular tiempo de expiración en segundos (4 horas = 240 minutos)
+        expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # 14400 segundos
+
         return LoginResponse(
             access_token=access_token,
             refresh_token=refresh_token,
             token_type="bearer",
             user=user_info,
+            expires_in=expires_in,
         )
 
     except HTTPException:

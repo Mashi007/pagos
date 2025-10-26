@@ -23,6 +23,7 @@ class LoginResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    expires_in: int  # Tiempo de expiración en segundos
     user: Dict[str, Any]  # Información básica del usuario
 
 
