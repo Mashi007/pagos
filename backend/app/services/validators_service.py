@@ -322,13 +322,13 @@ class ValidadorCedula:
                         ),
                     }
                 else:
-                return {
-                    "valido": False,
-                    "error": f"Formato inválido para {config['descripcion']}",
-                    "valor_original": cedula,
-                    "valor_formateado": None,
-                    "formato_esperado": config["formato_display"],
-                }
+                    return {
+                        "valido": False,
+                        "error": f"Formato inválido para {config['descripcion']}",
+                        "valor_original": cedula,
+                        "valor_formateado": None,
+                        "formato_esperado": config["formato_display"],
+                    }
 
             # Formatear según país
             if pais.upper() == "VENEZUELA":
@@ -821,21 +821,39 @@ class ValidadorMonto:
                                     ),
                                 }
                             
-                            # Validar que los puntos estén cada 3 dígitos
+                            # Validar que los puntos estén cada 3 dígitos (de derecha a izquierda)
+                            # En formato europeo, los últimos 3 dígitos NO tienen punto
+                            # Ejemplos válidos: "1.500,50" (4 dígitos antes de coma)
+                            #                "10.500,50" (5 dígitos antes de coma)
+                            #                "100.500,50" (6 dígitos antes de coma)
                             partes_miles = antes_coma.split(".")
                             for i, parte in enumerate(partes_miles):
                                 if i == 0:
-                                    # Primera parte puede tener 1-3 dígitos
+                                    # Primera parte (izquierda) puede tener 1-3 dígitos
                                     if len(parte) > 3 or len(parte) == 0:
                                         return {
                                             "valido": False,
-                                            "error": "Formato de miles inválido",
+                                            "error": "Formato de miles inválido (primera parte)",
                                             "valor_original": monto,
                                             "valor_formateado": None,
-                                            "formato_esperado": "Punto cada 3 dígitos para miles",
+                                            "formato_esperado": "Punto cada 3 dígitos desde la derecha",
                                             "sugerencia": (
-                                                "Use punto cada 3 dígitos. "
-                                                "Ejemplos: '10.500' o '1.234' (NO '123.45' o '1.23')"
+                                                "El primer grupo puede tener 1-3 dígitos. "
+                                                "Ejemplos: '1.500' (1 dígito al inicio), '12.500' (2 dígitos), "
+                                                "'123.456' (3 dígitos). NO '1234.56' (primera parte > 3 dígitos)"
+                                            ),
+                                        }
+                                    # No puede ser solo ceros
+                                    if parte == "000":
+                                        return {
+                                            "valido": False,
+                                            "error": "Grupo de miles inválido (solo ceros)",
+                                            "valor_original": monto,
+                                            "valor_formateado": None,
+                                            "formato_esperado": "Grupos válidos de 1-3 dígitos",
+                                            "sugerencia": (
+                                                "No se permiten grupos de solo ceros. "
+                                                "Ejemplo: '1.500' es correcto, '1.000' debe escribirse como '1500'"
                                             ),
                                         }
                                 else:
@@ -843,13 +861,27 @@ class ValidadorMonto:
                                     if len(parte) != 3:
                                         return {
                                             "valido": False,
-                                            "error": "Formato de miles inválido",
+                                            "error": "Formato de miles inválido (grupo intermedio)",
                                             "valor_original": monto,
                                             "valor_formateado": None,
-                                            "formato_esperado": "Punto cada 3 dígitos para miles",
+                                            "formato_esperado": "Punto cada 3 dígitos desde la derecha",
                                             "sugerencia": (
-                                                "Cada punto debe separar exactamente 3 dígitos. "
-                                                "Ejemplo: '10.500,50' (NO '1.50,50' o '10.5,50')"
+                                                "Cada grupo después del primer punto debe tener exactamente 3 dígitos. "
+                                                "Ejemplo: '10.500,50' (grupo '500' tiene 3 dígitos) "
+                                                "NO '10.50,50' (grupo '50' tiene solo 2 dígitos)"
+                                            ),
+                                        }
+                                    # No puede ser solo ceros
+                                    if parte == "000":
+                                        return {
+                                            "valido": False,
+                                            "error": "Grupo de miles inválido (solo ceros)",
+                                            "valor_original": monto,
+                                            "valor_formateado": None,
+                                            "formato_esperado": "Grupos válidos de exactamente 3 dígitos",
+                                            "sugerencia": (
+                                                "No se permiten grupos de solo ceros. "
+                                                "Ejemplo: '1.500' es correcto, '1.000' debe escribirse como '1500'"
                                             ),
                                         }
                             

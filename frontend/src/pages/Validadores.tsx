@@ -98,9 +98,9 @@ export function Validadores() {
     {
       nombre: 'Monto',
       campo: 'monto',
-      formato: 'Formato europeo: punto miles, coma decimal',
-      ejemplo: '10.000 o 10.500,50 o 1.234,56',
-      descripcion: 'Solo formato europeo: punto (.) cada 3 dígitos para miles, coma (,) para decimales. Rango: 1-20000.'
+      formato: 'Formato europeo: punto cada 3 desde derecha, coma decimal',
+      ejemplo: '1.500,50 o 10.500 o 100.000,25',
+      descripcion: 'Sistema europeo: punto (.) cada 3 dígitos desde la derecha (últimos 3 sin punto), coma (,) para decimales. NO grupos de solo ceros (ej: 1.000). Rango: 1-20000.'
     },
     {
       nombre: 'Nombre',
