@@ -34,13 +34,13 @@ def listar_analistas(
 
         # Contar total
         total = query.count()
-        
+
         # Paginar
         analistas = query.limit(limit).all()
-        
+
         # Calcular páginas
         pages = (total + limit - 1) // limit if limit > 0 else 0
-        
+
         return AnalistaListResponse(
             items=analistas,
             total=total,
