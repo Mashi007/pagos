@@ -17,14 +17,18 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Analista, AnalistaUpdate } from '@/services/analistaService'
-import { useAnalistas, useDeleteAnalista, useUpdateAnalista } from '@/hooks/useAnalistas'
+import { Analista, AnalistaUpdate, AnalistaCreate } from '@/services/analistaService'
+import { useAnalistas, useDeleteAnalista, useUpdateAnalista, useCreateAnalista } from '@/hooks/useAnalistas'
 import toast from 'react-hot-toast'
 
 export function Analistas() {
   const [searchTerm, setSearchTerm] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingAnalista, setEditingAnalista] = useState<Analista | null>(null)
+  const [formData, setFormData] = useState<AnalistaCreate>({
+    nombre: '',
+    activo: true
+  })
 
   // Usar hooks de React Query
   const { 
@@ -36,6 +40,7 @@ export function Analistas() {
   
   const deleteAnalistaMutation = useDeleteAnalista()
   const updateAnalistaMutation = useUpdateAnalista()
+  const createAnalistaMutation = useCreateAnalista()
 
   const analistas = analistasData?.items || []
 
@@ -59,18 +64,41 @@ export function Analistas() {
 
   const handleEdit = (analista: Analista) => {
     setEditingAnalista(analista)
+    setFormData({
+      nombre: analista.nombre,
+      activo: analista.activo
+    })
     setShowCreateForm(true)
   }
 
-  const handleSave = async (data: AnalistaUpdate) => {
-    if (editingAnalista) {
-      await updateAnalistaMutation.mutateAsync({
-        id: editingAnalista.id,
-        data
-      })
-      setEditingAnalista(null)
-      setShowCreateForm(false)
+  const handleCreateOrUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      if (editingAnalista) {
+        await updateAnalistaMutation.mutateAsync({
+          id: editingAnalista.id,
+          data: formData
+        })
+        toast.success('✅ Analista actualizado exitosamente')
+      } else {
+        await createAnalistaMutation.mutateAsync(formData)
+        toast.success('✅ Analista creado exitosamente')
+      }
+      resetForm()
+      refetch()
+    } catch (err) {
+      console.error('Error:', err)
+      toast.error('❌ Error al guardar analista')
     }
+  }
+
+  const resetForm = () => {
+    setFormData({
+      nombre: '',
+      activo: true
+    })
+    setEditingAnalista(null)
+    setShowCreateForm(false)
   }
 
   const handleRefresh = () => {
@@ -261,6 +289,70 @@ export function Analistas() {
           )}
         </CardContent>
       </Card>
+
+      {/* Create/Edit Form Modal */}
+      {showCreateForm && (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {editingAnalista ? 'Editar Analista' : 'Nuevo Analista'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleCreateOrUpdate} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Nombre Completo *
+                </label>
+                <Input
+                  value={formData.nombre}
+                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                  placeholder="Ingrese el nombre completo del analista"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Estado *
+                </label>
+                <select
+                  value={formData.activo ? 'ACTIVO' : 'INACTIVO'}
+                  onChange={(e) => setFormData({ ...formData, activo: e.target.value === 'ACTIVO' })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  <option value="ACTIVO">Activo</option>
+                  <option value="INACTIVO">Inactivo</option>
+                </select>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-4">
+                <Button 
+                  type="submit" 
+                  disabled={createAnalistaMutation.isPending || updateAnalistaMutation.isPending}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {createAnalistaMutation.isPending || updateAnalistaMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    <>
+                      <Edit className="h-4 w-4 mr-2" />
+                      {editingAnalista ? 'Actualizar' : 'Crear'} Analista
+                    </>
+                  )}
+                </Button>
+                <Button type="button" variant="outline" onClick={resetForm}>
+                  Cancelar
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
