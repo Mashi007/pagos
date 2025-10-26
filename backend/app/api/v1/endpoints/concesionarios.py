@@ -238,7 +238,7 @@ def actualizar_concesionario(
         update_data = concesionario_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(concesionario, field, value)
-        
+
         # Actualizar timestamp manually
         concesionario.updated_at = datetime.utcnow()
 
