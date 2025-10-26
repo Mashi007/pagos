@@ -342,7 +342,7 @@ class ValidadorFecha:
                     }
 
                 dia_str, mes_str, año_str = partes
-                
+
                 # Convertir a enteros para validar
                 dia = int(dia_str)
                 mes = int(mes_str)
@@ -463,7 +463,7 @@ class ValidadorEmail:
             # Caracteres permitidos en dominio: a-z, A-Z, 0-9, ., -
             # TLD: mínimo 2 caracteres alfabéticos
             email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-            
+
             if not re.match(email_pattern, email_original):
                 return {
                     "valido": False,
