@@ -388,7 +388,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         telefono: formData.telefono,
         email: formData.email,
         direccion: formData.direccion,
-        fecha_nacimiento: formData.fechaNacimiento,
+        fecha_nacimiento: convertirFechaAISO(formData.fechaNacimiento), // ✅ Convertir DD/MM/YYYY → YYYY-MM-DD
         ocupacion: formData.ocupacion,
         modelo_vehiculo: formData.modeloVehiculo,
         concesionario: formData.concesionario,
@@ -473,7 +473,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         telefono: formData.telefono,
         email: formData.email,
         direccion: formData.direccion,
-        fecha_nacimiento: formData.fechaNacimiento,
+        fecha_nacimiento: convertirFechaAISO(formData.fechaNacimiento), // ✅ Convertir DD/MM/YYYY → YYYY-MM-DD
         ocupacion: formData.ocupacion,
         modelo_vehiculo: formData.modeloVehiculo,
         concesionario: formData.concesionario,
