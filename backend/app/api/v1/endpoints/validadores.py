@@ -14,14 +14,12 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-
 class ValidarCampoRequest(BaseModel):
     """Request para validar campo individual"""
     campo: str
     valor: str
     pais: str = "VENEZUELA"
     moneda: Optional[str] = None
-
 
 @router.get("/configuracion-validadores")
 def obtener_configuracion_validadores(
@@ -147,7 +145,6 @@ def obtener_configuracion_validadores(
             detail=f"Error interno del servidor: {str(e)}",
         )
 
-
 @router.post("/probar-validador")
 def probar_validador(
     tipo: str,
@@ -200,7 +197,6 @@ def probar_validador(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error interno del servidor: {str(e)}",
         )
-
 
 @router.post("/validar-campo")
 def validar_campo(

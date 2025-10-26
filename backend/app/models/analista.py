@@ -8,7 +8,6 @@ from sqlalchemy import Boolean, Column, DateTime, Integer, String
 
 from app.db.session import Base
 
-
 class Analista(Base):
     """
     Modelo para analistas del sistema

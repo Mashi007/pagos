@@ -11,7 +11,6 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-
 class ValidadorTelefono:
     """Validador y formateador de teléfonos"""
 
@@ -250,7 +249,6 @@ class ValidadorTelefono:
                 "sugerencia": "Verifique que el número tenga formato válido. Ejemplo: '+58 1234567890'",
             }
 
-
 class ValidadorCedula:
     """Validador y formateador de cédulas"""
 
@@ -359,7 +357,6 @@ class ValidadorCedula:
                 "formato_esperado": "V, E o J + 7-10 dígitos",
                 "sugerencia": "Verifique el formato de la cédula. Ejemplo: 'V12345678'",
             }
-
 
 class ValidadorFecha:
     """Validador y formateador de fechas"""
@@ -511,7 +508,6 @@ class ValidadorFecha:
                 "sugerencia": "Verifique el formato de la fecha. Ejemplo: '01/12/2025'",
             }
 
-
 class ValidadorEmail:
     """Validador y formateador de emails"""
 
@@ -597,7 +593,6 @@ class ValidadorEmail:
                 "formato_esperado": "usuario@dominio.com",
                 "sugerencia": "Verifique el formato del email. Ejemplo: 'usuario@ejemplo.com'",
             }
-
 
 class ValidadorNombre:
     """Validador y formateador de nombres y apellidos"""
@@ -708,7 +703,6 @@ class ValidadorNombre:
                 "formato_esperado": "Juan Carlos o Maria",
                 "sugerencia": "Verifique el formato del nombre. Ejemplo: 'Juan' o 'Maria Elena'",
             }
-
 
 class ValidadorMonto:
     """Validador y formateador de montos"""
@@ -1049,7 +1043,6 @@ class ValidadorMonto:
                 "sugerencia": "Verifique el formato del monto. Ejemplo: '1500.50'",
             }
 
-
 def _validar_campo_cliente(
     campo: str, valor: Any, validador_func, resultados: Dict[str, Any]
 ) -> None:
@@ -1062,7 +1055,6 @@ def _validar_campo_cliente(
     else:
         resultados["valido"] = False
         resultados["errores"].append(f"{campo.title()}: {resultado['error']}")
-
 
 def validar_datos_cliente(cliente_data: Dict[str, Any]) -> Dict[str, Any]:
     """

@@ -17,7 +17,6 @@ from app.schemas.analista import (
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-
 @router.get("/", response_model=AnalistaListResponse)
 def listar_analistas(
     limit: int = Query(100, ge=1, le=1000, description="Límite de resultados"),
@@ -55,7 +54,6 @@ def listar_analistas(
             status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
 
-
 @router.get("/activos", response_model=List[AnalistaResponse])
 def listar_analistas_activos(
     db: Session = Depends(get_db),
@@ -70,7 +68,6 @@ def listar_analistas_activos(
         raise HTTPException(
             status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
-
 
 @router.get("/{analista_id}", response_model=AnalistaResponse)
 def obtener_analista(
@@ -94,7 +91,6 @@ def obtener_analista(
         raise HTTPException(
             status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
-
 
 @router.post("/", response_model=AnalistaResponse, status_code=status.HTTP_201_CREATED)
 def crear_analista(
@@ -120,7 +116,6 @@ def crear_analista(
         raise HTTPException(
             status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
-
 
 @router.put("/{analista_id}", response_model=AnalistaResponse)
 def actualizar_analista(
@@ -153,7 +148,6 @@ def actualizar_analista(
         raise HTTPException(
             status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
-
 
 @router.delete("/{analista_id}")
 def eliminar_analista(

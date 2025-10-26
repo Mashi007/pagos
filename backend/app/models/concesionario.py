@@ -4,7 +4,6 @@ from sqlalchemy import Boolean, Column, DateTime, Integer, String
 
 from app.db.session import Base
 
-
 class Concesionario(Base):
     """
     Modelo para concesionarios
