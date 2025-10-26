@@ -117,7 +117,7 @@ def crear_cliente(
         logger.info(f"Crear cliente - Usuario: {current_user.email}")
 
         # Preparar datos
-        cliente_dict = cliente_data.model_dump()
+        cliente_dict = cliente_data.model_dump(exclude={"confirm_duplicate"})
 
         # Sincronizar estado y activo (crear siempre con ACTIVO=True)
         cliente_dict["estado"] = "ACTIVO"
