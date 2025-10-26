@@ -166,7 +166,7 @@ Equipo de {settings.APP_NAME}
         message = f"""
 ¡Hola {client_name}!
 
-Bienvenido a {settings.APP_NAME}. 
+Bienvenido a {settings.APP_NAME}.
 
 Tu cuenta ha sido creada exitosamente. Ahora puedes acceder a nuestros servicios de préstamos.
 

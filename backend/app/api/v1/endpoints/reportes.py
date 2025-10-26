@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 # Imports para Excel
-from openpyxl.styles import Font, PatternFill
 from pydantic import BaseModel
 from reportlab.lib.pagesizes import A4, letter
 

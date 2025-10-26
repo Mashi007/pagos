@@ -4,7 +4,7 @@ Registra todas las acciones importantes del sistema para trazabilidad
 """
 
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship

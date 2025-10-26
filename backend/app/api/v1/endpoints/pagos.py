@@ -3,7 +3,6 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
