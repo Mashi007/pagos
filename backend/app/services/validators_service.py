@@ -774,23 +774,198 @@ class ValidadorMonto:
                     # Limpiar string: mantener solo dígitos, puntos y comas
                     monto_limpio = re.sub(r"[^\d.,]", "", monto)
 
-                    # Lógica: detectar separador decimal
-                    # - Si tiene 1 punto y 1 coma: el último define decimales
-                    # - Si tiene solo coma: es decimal (formato venezolano/europeo)
-                    # - Si tiene solo punto: es decimal (formato internacional)
+                    # Validar formato estricto antes de procesar
+                    # Formatos válidos:
+                    # 1. Entero: "10000" o "10"
+                    # 2. Decimal con punto: "10000.50" o "10.5"
+                    # 3. Decimal con coma: "10000,50" o "10,5"
+                    # 4. Miles con punto y decimal con coma: "1.000,50"
+                    # 5. Miles con coma y decimal con punto: "1,000.50"
 
                     if "," in monto_limpio and "." in monto_limpio:
-                        # Ambos presentes: el último indica decimales
-                        if monto_limpio.rindex(",") > monto_limpio.rindex("."):
-                            # Ejemplo: 1.234,56 → decimal: ,
-                            monto_limpio = monto_limpio.replace(".", "").replace(",", ".")
+                        # Ambos presentes: verificar formato correcto
+                        # El separador de miles debe estar cada 3 dígitos
+                        # El último separador indica decimales
+                        
+                        # Encontrar posición del último separador
+                        ultimo_coma = monto_limpio.rindex(",")
+                        ultimo_punto = monto_limpio.rindex(".")
+                        
+                        if ultimo_coma > ultimo_punto:
+                            # Formato europeo: "1.234,56"
+                            # Validar que antes de la coma solo haya un punto cada 3 dígitos
+                            antes_coma = monto_limpio[:ultimo_coma]
+                            despues_coma = monto_limpio[ultimo_coma+1:]
+                            
+                            # Después de coma debe haber 1-2 dígitos
+                            if not (1 <= len(despues_coma) <= 2):
+                                return {
+                                    "valido": False,
+                                    "error": "Formato de monto inválido (decimales)",
+                                    "valor_original": monto,
+                                    "valor_formateado": None,
+                                    "formato_esperado": "Número decimal (1-20000)",
+                                    "sugerencia": (
+                                        "En formato europeo (1.234,56), los decimales "
+                                        "deben ser 1-2 dígitos. Ejemplo: '1.500,50'"
+                                    ),
+                                }
+                            
+                            # Antes de coma debe ser entero o miles válido
+                            antes_coma_sin_puntos = antes_coma.replace(".", "")
+                            if not antes_coma_sin_puntos.isdigit():
+                                return {
+                                    "valido": False,
+                                    "error": "Formato de monto inválido",
+                                    "valor_original": monto,
+                                    "valor_formateado": None,
+                                    "formato_esperado": "Número decimal (1-20000)",
+                                    "sugerencia": (
+                                        "Use formato válido. Ejemplo: '1.500,50' "
+                                        "o '1500,50'"
+                                    ),
+                                }
+                            
+                            monto_limpio = antes_coma_sin_puntos + "." + despues_coma
                         else:
-                            # Ejemplo: 1,234.56 → decimal: .
-                            monto_limpio = monto_limpio.replace(",", "")
+                            # Formato americano: "1,234.56"
+                            # Validar que antes del punto solo haya una coma cada 3 dígitos
+                            antes_punto = monto_limpio[:ultimo_punto]
+                            despues_punto = monto_limpio[ultimo_punto+1:]
+                            
+                            # Después de punto debe haber 1-2 dígitos
+                            if not (1 <= len(despues_punto) <= 2):
+                                return {
+                                    "valido": False,
+                                    "error": "Formato de monto inválido (decimales)",
+                                    "valor_original": monto,
+                                    "valor_formateado": None,
+                                    "formato_esperado": "Número decimal (1-20000)",
+                                    "sugerencia": (
+                                        "En formato americano (1,234.56), los decimales "
+                                        "deben ser 1-2 dígitos. Ejemplo: '1,500.50'"
+                                    ),
+                                }
+                            
+                            # Antes de punto debe ser entero o miles válido
+                            antes_punto_sin_comas = antes_punto.replace(",", "")
+                            if not antes_punto_sin_comas.isdigit():
+                                return {
+                                    "valido": False,
+                                    "error": "Formato de monto inválido",
+                                    "valor_original": monto,
+                                    "valor_formateado": None,
+                                    "formato_esperado": "Número decimal (1-20000)",
+                                    "sugerencia": (
+                                        "Use formato válido. Ejemplo: '1,500.50' "
+                                        "o '1500.50'"
+                                    ),
+                                }
+                            
+                            monto_limpio = antes_punto_sin_comas + "." + despues_punto
                     elif "," in monto_limpio:
-                        # Solo coma: es decimal
-                        monto_limpio = monto_limpio.replace(",", ".")
-                    # Si solo tiene punto o ninguno, se deja como está
+                        # Solo coma: debe ser un número con coma decimal
+                        # Validar que después de coma haya 1-2 dígitos
+                        partes_coma = monto_limpio.split(",")
+                        if len(partes_coma) != 2:
+                            return {
+                                "valido": False,
+                                "error": "Formato de monto inválido (múltiples comas)",
+                                "valor_original": monto,
+                                "valor_formateado": None,
+                                "formato_esperado": "Número decimal (1-20000)",
+                                "sugerencia": (
+                                    "Use una sola coma para decimales. "
+                                    "Ejemplo: '1500,50'"
+                                ),
+                            }
+                        
+                        antes_coma = partes_coma[0]
+                        despues_coma = partes_coma[1]
+                        
+                        # Después de coma debe haber 1-2 dígitos
+                        if not (1 <= len(despues_coma) <= 2):
+                            return {
+                                "valido": False,
+                                "error": "Formato de monto inválido (decimales)",
+                                "valor_original": monto,
+                                "valor_formateado": None,
+                                "formato_esperado": "Número decimal (1-20000)",
+                                "sugerencia": (
+                                    "Los decimales deben ser 1-2 dígitos. "
+                                    "Ejemplo: '1500,50'"
+                                ),
+                            }
+                        
+                        # Antes de coma debe ser número válido
+                        if not antes_coma.isdigit():
+                            return {
+                                "valido": False,
+                                "error": "Formato de monto inválido",
+                                "valor_original": monto,
+                                "valor_formateado": None,
+                                "formato_esperado": "Número decimal (1-20000)",
+                                "sugerencia": "Use formato válido. Ejemplo: '1500,50'",
+                            }
+                        
+                        monto_limpio = antes_coma + "." + despues_coma
+                    elif "." in monto_limpio:
+                        # Solo punto: debe ser un número con punto decimal
+                        # Validar que después de punto haya 1-2 dígitos
+                        partes_punto = monto_limpio.split(".")
+                        if len(partes_punto) != 2:
+                            return {
+                                "valido": False,
+                                "error": "Formato de monto inválido (múltiples puntos)",
+                                "valor_original": monto,
+                                "valor_formateado": None,
+                                "formato_esperado": "Número decimal (1-20000)",
+                                "sugerencia": (
+                                    "Use un solo punto para decimales. "
+                                    "Ejemplo: '1500.50'"
+                                ),
+                            }
+                        
+                        antes_punto = partes_punto[0]
+                        despues_punto = partes_punto[1]
+                        
+                        # Después de punto debe haber 1-2 dígitos
+                        if not (1 <= len(despues_punto) <= 2):
+                            return {
+                                "valido": False,
+                                "error": "Formato de monto inválido (decimales)",
+                                "valor_original": monto,
+                                "valor_formateado": None,
+                                "formato_esperado": "Número decimal (1-20000)",
+                                "sugerencia": (
+                                    "Los decimales deben ser 1-2 dígitos. "
+                                    "Ejemplo: '1500.50'"
+                                ),
+                            }
+                        
+                        # Antes de punto debe ser número válido
+                        if not antes_punto.isdigit():
+                            return {
+                                "valido": False,
+                                "error": "Formato de monto inválido",
+                                "valor_original": monto,
+                                "valor_formateado": None,
+                                "formato_esperado": "Número decimal (1-20000)",
+                                "sugerencia": "Use formato válido. Ejemplo: '1500.50'",
+                            }
+                        
+                        monto_limpio = antes_punto + "." + despues_punto
+                    else:
+                        # Sin separador: debe ser solo dígitos
+                        if not monto_limpio.isdigit():
+                            return {
+                                "valido": False,
+                                "error": "Formato de monto inválido",
+                                "valor_original": monto,
+                                "valor_formateado": None,
+                                "formato_esperado": "Número decimal (1-20000)",
+                                "sugerencia": "Use solo dígitos. Ejemplo: '1500'",
+                            }
 
                     monto_decimal = Decimal(monto_limpio)
                 else:
@@ -803,8 +978,8 @@ class ValidadorMonto:
                     "valor_formateado": None,
                     "formato_esperado": "Número decimal (1-20000)",
                     "sugerencia": (
-                        "Use números con punto o coma como decimal. "
-                        "Ejemplos: '1500.50', '1500,50', '1.500,50', '20000'"
+                        "Use formato válido. Ejemplos: '1500.50', '1.500,50', "
+                        "'1500,50', '20000'"
                     ),
                 }
 
