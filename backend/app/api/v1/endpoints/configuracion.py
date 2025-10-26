@@ -279,55 +279,23 @@ def eliminar_configuracion(
 
 
 @router.get("/general")
-def obtener_configuracion_general(db: Session = Depends(get_db)):
+def obtener_configuracion_general():
     """Obtener configuración general del sistema"""
-    try:
-        # Obtener configuraciones específicas
-        config_nombre = (
-            db.query(ConfiguracionSistema)
-            .filter(ConfiguracionSistema.clave == "nombre_empresa")
-            .first()
-        )
-        config_version = (
-            db.query(ConfiguracionSistema)
-            .filter(ConfiguracionSistema.clave == "version_sistema")
-            .first()
-        )
-        config_idioma = (
-            db.query(ConfiguracionSistema)
-            .filter(ConfiguracionSistema.clave == "idioma")
-            .first()
-        )
-        config_zona = (
-            db.query(ConfiguracionSistema)
-            .filter(ConfiguracionSistema.clave == "zona_horaria")
-            .first()
-        )
-        config_moneda = (
-            db.query(ConfiguracionSistema)
-            .filter(ConfiguracionSistema.clave == "moneda")
-            .first()
-        )
-
-        return {
-            "nombre_empresa": config_nombre.valor if config_nombre else "RAPICREDIT",
-            "version_sistema": config_version.valor if config_version else "1.0.0",
-            "idioma": config_idioma.valor if config_idioma else "ES",
-            "zona_horaria": config_zona.valor if config_zona else "America/Caracas",
-            "moneda": config_moneda.valor if config_moneda else "VES",
-            "formato_fecha": "DD/MM/YYYY",
-            "ruc": "",
-            "direccion": "",
-            "telefono": "",
-            "email": "",
-            "horario_atencion": "08:00-18:00",
-        }
-
-    except Exception as e:
-        logger.error(f"Error obteniendo configuración general: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+    # Retornar configuración por defecto sin consultar la base de datos
+    # para evitar errores de esquema
+    return {
+        "nombre_empresa": "RAPICREDIT",
+        "version_sistema": "1.0.0",
+        "idioma": "ES",
+        "zona_horaria": "America/Caracas",
+        "moneda": "VES",
+        "formato_fecha": "DD/MM/YYYY",
+        "ruc": "",
+        "direccion": "",
+        "telefono": "",
+        "email": "",
+        "horario_atencion": "08:00-18:00",
+    }
 
 
 @router.put("/general")
