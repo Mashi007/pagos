@@ -63,7 +63,7 @@ async def subir_archivo(
             )
 
         # Leer contenido del archivo
-        contenido = await archivo.read()
+        await archivo.read()
 
         # Procesar archivo (simulación básica)
         resultado = {

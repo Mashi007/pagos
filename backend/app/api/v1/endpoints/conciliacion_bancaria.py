@@ -1,6 +1,6 @@
 import io
 import logging
-from datetime import date, datetime
+from datetime import datetime
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -68,7 +68,7 @@ async def generar_template_conciliacion(
 
         # Validación para columna CONCILIAR
         validation = DataValidation(type="list", formula1='"SI,NO"')
-        validation.add(f"D2:D1000")
+        validation.add("D2:D1000")
         ws_datos.add_data_validation(validation)
 
         # Guardar en memoria

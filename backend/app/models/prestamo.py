@@ -7,7 +7,6 @@ Sincronizado con el endpoint de aprobaciones.
 from enum import Enum
 
 from sqlalchemy import (
-    Boolean,
     Column,
     Date,
     DateTime,
@@ -17,7 +16,6 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.db.session import Base

@@ -7,16 +7,12 @@ from decimal import Decimal
 from sqlalchemy import (
     Boolean,
     Column,
-    Date,
-    DateTime,
     ForeignKey,
     Integer,
     Numeric,
     String,
     Table,
-    Text,
 )
-from sqlalchemy.orm import relationship
 
 from app.db.session import Base
 

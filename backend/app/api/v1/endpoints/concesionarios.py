@@ -39,7 +39,7 @@ def test_simple():
     try:
         logger.info("Test endpoint simple")
         return {"message": "Test simple exitoso"}
-    except Exception as e:
+    except Exception:
         return {"error": "Error interno"}
 
 
@@ -55,9 +55,6 @@ def test_auth(
     except Exception as e:
         logger.error(f"Error en test_auth: {e}")
         return {"error": "Error interno"}
-        return
-    except Exception as e:
-        return
 
 
 @router.get("/list-no-auth")
