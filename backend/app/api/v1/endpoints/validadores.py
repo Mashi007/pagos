@@ -30,6 +30,7 @@ def obtener_configuracion_validadores(
 
         # Estructura completa que espera el frontend
         return {
+            "titulo": "Configuración de Validadores",
             "consultado_por": current_user.email,
             "fecha_consulta": datetime.now().isoformat(),
             "validadores_disponibles": {
@@ -39,11 +40,13 @@ def obtener_configuracion_validadores(
                     "validacion_tiempo_real": True,
                     "paises_soportados": {
                         "venezuela": {
+                            "codigo": "+58",
                             "formato": "+58 XXX XXX XXXX",
                             "requisitos": {
                                 "debe_empezar_por": "4 o 2",
                                 "longitud_total": "10 dígitos",
-                                "primer_digito": "4 o 2"
+                                "primer_digito": "4 o 2",
+                                "digitos_validos": "0-9",
                             },
                             "ejemplos_validos": ["+58 412 1234567", "+58 212 7654321"],
                             "ejemplos_invalidos": ["412 1234567", "1234567"],
@@ -63,11 +66,14 @@ def obtener_configuracion_validadores(
                                 "dígitos": "7-10",
                                 "longitud": "7 a 10 dígitos",
                             },
+                            "ejemplos_validos": ["V12345678", "E87654321", "J1234567"],
+                            "ejemplos_invalidos": ["12345678", "A1234567", "V123"],
                         },
                     },
                 },
                 "fecha": {
                     "descripcion": "Validación estricta de fechas",
+                    "formato_requerido": "DD/MM/YYYY",
                     "auto_formateo": False,
                     "validacion_tiempo_real": True,
                     "requisitos": {
@@ -76,6 +82,9 @@ def obtener_configuracion_validadores(
                         "año": "YYYY",
                         "separador": "/",
                     },
+                    "ejemplos_validos": ["15/03/2024", "01/01/2024", "31/12/2023"],
+                    "ejemplos_invalidos": ["32/01/2024", "15/13/2024", "15-03-2024"],
+                    "requiere_calendario": True,
                 },
                 "email": {
                     "descripcion": "Validación y normalización de emails",
@@ -87,12 +96,24 @@ def obtener_configuracion_validadores(
                         "validacion": "RFC 5322",
                         "dominios_bloqueados": ["temp.com", "test.com", "example.com"],
                     },
+                    "ejemplos_validos": ["usuario@dominio.com", "nombre.apellido@empresa.com"],
+                    "ejemplos_invalidos": ["usuario@", "@dominio.com", "sinarroba"],
                 },
             },
             "reglas_negocio": {
                 "validacion_obligatoria": "Todos los campos deben validarse antes de guardar",
                 "formateo_automatico": "Los datos se formatean automáticamente según reglas",
                 "validacion_tiempo_real": "La validación ocurre mientras el usuario escribe",
+            },
+            "configuracion_frontend": {
+                "version": "1.0",
+                "ambiente": "production",
+            },
+            "endpoints_validacion": {
+                "telefono": "/api/v1/validadores/validar-campo",
+                "cedula": "/api/v1/validadores/validar-campo",
+                "email": "/api/v1/validadores/validar-campo",
+                "fecha": "/api/v1/validadores/validar-campo",
             },
         }
 
