@@ -87,20 +87,16 @@ def create_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
     # Crear usuario
-    # Asignar rol basado en is_admin
-    # El ENUM en la BD solo acepta 'ADMIN' o 'ADMINISTRADOR_GENERAL'
-    if user_data.is_admin:
-        rol = "ADMIN"
-    else:
-        rol = "ADMINISTRADOR_GENERAL"  # Usuario regular con permisos limitados
-
+    # El ENUM en la BD solo acepta 'ADMIN'
+    # El control de acceso real se hace con is_admin=True/False
+    
     new_user = User(
         email=user_data.email,
         nombre=user_data.nombre,
         apellido=user_data.apellido,
-        rol=rol,
+        rol="ADMIN",  # Valor único aceptado por el ENUM
         cargo=user_data.cargo,
-        is_admin=user_data.is_admin,
+        is_admin=user_data.is_admin,  # Control real de permisos
         hashed_password=get_password_hash(user_data.password),
         is_active=user_data.is_active,
     )
