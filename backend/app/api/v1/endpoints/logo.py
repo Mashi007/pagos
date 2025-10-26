@@ -2,6 +2,7 @@
 Endpoints para manejo de logo de la empresa
 Almacena el logo en PostgreSQL como BYTEA
 """
+
 import logging
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile

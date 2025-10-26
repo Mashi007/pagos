@@ -1,6 +1,7 @@
 """
 Modelo para almacenar logos de la empresa en PostgreSQL
 """
+
 from datetime import datetime
 
 from sqlalchemy import Column, DateTime, Integer, LargeBinary, String
@@ -31,6 +32,8 @@ class Logo(Base):
             "id": self.id,
             "nombre": self.nombre,
             "tipo_mime": self.tipo_mime,
-            "fecha_upload": self.fecha_upload.isoformat() if self.fecha_upload else None,
+            "fecha_upload": (
+                self.fecha_upload.isoformat() if self.fecha_upload else None
+            ),
             "subido_por": self.subido_por,
         }
