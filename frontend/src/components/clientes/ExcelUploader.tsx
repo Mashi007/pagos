@@ -744,13 +744,6 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         if (nombresWords.length > 2) return { isValid: false, message: 'Máximo 2 palabras permitidas' }
         return { isValid: true }
 
-      case 'apellidos':
-        if (!value.trim()) return { isValid: false, message: 'Apellidos requeridos' }
-        const apellidosWords = value.trim().split(/\s+/).filter(word => word.length > 0)
-        if (apellidosWords.length < 2) return { isValid: false, message: 'Mínimo 2 palabras requeridas' }
-        if (apellidosWords.length > 2) return { isValid: false, message: 'Máximo 2 palabras permitidas' }
-        return { isValid: true }
-
       case 'telefono':
         if (!value || !value.trim()) return { isValid: false, message: 'Teléfono requerido' }
         
