@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -268,6 +268,104 @@ def eliminar_configuracion(
     except Exception as e:
         db.rollback()
         logger.error(f"Error eliminando configuración: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
+
+
+# ============================================
+# CONFIGURACIÓN GENERAL (FRONTEND)
+# ============================================
+
+
+@router.get("/general")
+def obtener_configuracion_general(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    """Obtener configuración general del sistema"""
+    try:
+        # Obtener configuraciones específicas
+        config_nombre = (
+            db.query(ConfiguracionSistema).filter(ConfiguracionSistema.clave == "nombre_empresa").first()
+        )
+        config_version = (
+            db.query(ConfiguracionSistema).filter(ConfiguracionSistema.clave == "version_sistema").first()
+        )
+        config_idioma = (
+            db.query(ConfiguracionSistema).filter(ConfiguracionSistema.clave == "idioma").first()
+        )
+        config_zona = (
+            db.query(ConfiguracionSistema).filter(ConfiguracionSistema.clave == "zona_horaria").first()
+        )
+        config_moneda = (
+            db.query(ConfiguracionSistema).filter(ConfiguracionSistema.clave == "moneda").first()
+        )
+
+        return {
+            "nombre_empresa": config_nombre.valor if config_nombre else "RAPICREDIT",
+            "version_sistema": config_version.valor if config_version else "1.0.0",
+            "idioma": config_idioma.valor if config_idioma else "ES",
+            "zona_horaria": config_zona.valor if config_zona else "America/Caracas",
+            "moneda": config_moneda.valor if config_moneda else "VES",
+            "formato_fecha": "DD/MM/YYYY",
+            "ruc": "",
+            "direccion": "",
+            "telefono": "",
+            "email": "",
+            "horario_atencion": "08:00-18:00",
+        }
+
+    except Exception as e:
+        logger.error(f"Error obteniendo configuración general: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
+
+
+@router.put("/general")
+def actualizar_configuracion_general(
+    update_data: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Actualizar configuración general del sistema"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden actualizar configuración general",
+        )
+
+    try:
+        for clave, valor in update_data.items():
+            config = (
+                db.query(ConfiguracionSistema).filter(ConfiguracionSistema.clave == clave).first()
+            )
+
+            if not config:
+                # Crear nueva configuración
+                config = ConfiguracionSistema(
+                    clave=clave,
+                    valor=str(valor),
+                    descripcion=f"Configuración de {clave}",
+                    actualizado_por=current_user.id,
+                )
+                db.add(config)
+            else:
+                # Actualizar configuración existente
+                config.valor = str(valor)
+                config.actualizado_por = int(current_user.id)
+                config.fecha_actualizacion = datetime.now()
+
+        db.commit()
+
+        return {
+            "message": "Configuración general actualizada exitosamente",
+            "configuracion": update_data,
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error actualizando configuración general: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
