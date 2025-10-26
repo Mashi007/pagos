@@ -89,7 +89,7 @@ def create_user(
     # Crear usuario
     # El ENUM en la BD solo acepta 'ADMIN'
     # El control de acceso real se hace con is_admin=True/False
-    
+
     new_user = User(
         email=user_data.email,
         nombre=user_data.nombre,
