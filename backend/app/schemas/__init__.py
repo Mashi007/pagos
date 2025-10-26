@@ -94,4 +94,6 @@ __all__ = [
 # INFORMACIÓN DEL MÓDULO
 # ============================================
 __version__ = "1.0.0"
-__description__ = "Schemas Pydantic v2 para validación de API - SIMPLIFICADO (sin UserRole)"
+__description__ = (
+    "Schemas Pydantic v2 para validación de API - SIMPLIFICADO (sin UserRole)"
+)

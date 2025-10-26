@@ -168,7 +168,9 @@ app.include_router(
     configuracion.router, prefix="/api/v1/configuracion", tags=["configuracion"]
 )
 app.include_router(analistas.router, prefix="/api/v1/analistas", tags=["analistas"])
-app.include_router(validadores.router, prefix="/api/v1/validadores", tags=["validadores"])
+app.include_router(
+    validadores.router, prefix="/api/v1/validadores", tags=["validadores"]
+)
 
 logger.info("Todos los routers registrados correctamente")
 

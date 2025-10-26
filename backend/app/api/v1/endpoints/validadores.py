@@ -1,6 +1,7 @@
 """
 Endpoints para validadores del sistema
 """
+
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -22,8 +23,10 @@ def obtener_configuracion_validadores(
     Obtener configuración de validadores disponibles
     """
     try:
-        logger.info(f"Obteniendo configuración de validadores - Usuario: {current_user.email}")
-        
+        logger.info(
+            f"Obteniendo configuración de validadores - Usuario: {current_user.email}"
+        )
+
         # Configuración de validadores disponibles
         validadores = {
             "cedula": {
@@ -53,18 +56,18 @@ def obtener_configuracion_validadores(
                 "activo": True,
             },
         }
-        
+
         return {
             "total_validadores": len(validadores),
             "validadores": validadores,
             "paises_soportados": ["VE"],
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo configuración de validadores: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error interno del servidor: {str(e)}"
+            detail=f"Error interno del servidor: {str(e)}",
         )
 
 
@@ -80,15 +83,15 @@ def probar_validador(
     """
     try:
         logger.info(f"Probando validador {tipo} - Usuario: {current_user.email}")
-        
+
         # Importar validador correspondiente
         from app.services.validators_service import (
             ValidadorCedula,
             ValidadorTelefono,
         )
-        
+
         resultado = {}
-        
+
         if tipo == "cedula":
             resultado = ValidadorCedula.validar_y_formatear_cedula(valor)
         elif tipo == "telefono":
@@ -96,7 +99,8 @@ def probar_validador(
         elif tipo == "email":
             # Validación simple de email
             import re
-            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+            email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
             es_valido = re.match(email_pattern, valor)
             resultado = {
                 "valido": es_valido is not None,
@@ -109,7 +113,8 @@ def probar_validador(
             # Validación simple de fecha
             try:
                 from datetime import datetime
-                fecha = datetime.strptime(valor, "%d/%m/%Y")
+
+                datetime.strptime(valor, "%d/%m/%Y")  # Solo validar, no asignar
                 resultado = {
                     "valido": True,
                     "error": "",
@@ -128,21 +133,20 @@ def probar_validador(
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Tipo de validador desconocido: {tipo}"
+                detail=f"Tipo de validador desconocido: {tipo}",
             )
-        
+
         return {
             "tipo": tipo,
             "valor_original": valor,
             "resultado": resultado,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error probando validador {tipo}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error interno del servidor: {str(e)}"
+            detail=f"Error interno del servidor: {str(e)}",
         )
-

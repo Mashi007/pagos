@@ -166,7 +166,9 @@ class ValidadorTelefono:
             # 4. Determinar formato y procesar
             numero_formateado = None
 
-            if config and telefono_limpio.startswith(config["codigo_pais"].replace("+", "")):
+            if config and telefono_limpio.startswith(
+                config["codigo_pais"].replace("+", "")
+            ):
                 # Ya tiene código de país: "584241234567"
                 numero_formateado = ValidadorTelefono._formatear_telefono_con_codigo(
                     telefono_limpio, config
@@ -379,10 +381,7 @@ class ValidadorMonto:
 
 
 def _validar_campo_cliente(
-    campo: str, 
-    valor: Any, 
-    validador_func, 
-    resultados: Dict[str, Any]
+    campo: str, valor: Any, validador_func, resultados: Dict[str, Any]
 ) -> None:
     """Validar un campo específico del cliente"""
     resultado = validador_func(valor)
@@ -415,19 +414,19 @@ def validar_datos_cliente(cliente_data: Dict[str, Any]) -> Dict[str, Any]:
     # Validar teléfono
     if "telefono" in cliente_data:
         _validar_campo_cliente(
-            "telefono", 
-            cliente_data["telefono"], 
+            "telefono",
+            cliente_data["telefono"],
             ValidadorTelefono.validar_y_formatear_telefono,
-            resultados
+            resultados,
         )
 
     # Validar cédula
     if "cedula" in cliente_data:
         _validar_campo_cliente(
-            "cedula", 
-            cliente_data["cedula"], 
+            "cedula",
+            cliente_data["cedula"],
             ValidadorCedula.validar_y_formatear_cedula,
-            resultados
+            resultados,
         )
 
     # Validar montos
@@ -435,10 +434,10 @@ def validar_datos_cliente(cliente_data: Dict[str, Any]) -> Dict[str, Any]:
     for campo in campos_monto:
         if campo in cliente_data:
             _validar_campo_cliente(
-                campo, 
-                cliente_data[campo], 
+                campo,
+                cliente_data[campo],
                 ValidadorMonto.validar_y_formatear_monto,
-                resultados
+                resultados,
             )
 
     return resultados

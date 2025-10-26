@@ -111,7 +111,9 @@ def _validar_columnas_conciliacion(df: pd.DataFrame) -> None:
         )
 
 
-def _procesar_fila_conciliacion(row: pd.Series, index: int, db: Session, current_user: User) -> tuple[bool, str]:
+def _procesar_fila_conciliacion(
+    row: pd.Series, index: int, db: Session, current_user: User
+) -> tuple[bool, str]:
     """Procesar una fila individual de conciliación"""
     try:
         if row["CONCILIAR"].upper() != "SI":
@@ -139,7 +141,10 @@ def _procesar_fila_conciliacion(row: pd.Series, index: int, db: Session, current
             pago.usuario_conciliacion = int(current_user.id)
             return True, ""
         else:
-            return False, f"Fila {index + 2}: No se encontró pago para fecha {fecha} y monto {monto}"
+            return (
+                False,
+                f"Fila {index + 2}: No se encontró pago para fecha {fecha} y monto {monto}",
+            )
 
     except Exception as e:
         return False, f"Fila {index + 2}: Error procesando - {str(e)}"

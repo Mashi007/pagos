@@ -103,9 +103,8 @@ def actualizar_aprobacion(
         raise HTTPException(status_code=404, detail="Aprobación no encontrada")
 
     # Solo el solicitante puede actualizar si está pendiente
-    if (
-        aprobacion.estado != "PENDIENTE"
-        and aprobacion.solicitado_por != int(current_user.id)
+    if aprobacion.estado != "PENDIENTE" and aprobacion.solicitado_por != int(
+        current_user.id
     ):
         raise HTTPException(
             status_code=403, detail="No puedes actualizar esta aprobación"
