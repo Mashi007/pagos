@@ -60,15 +60,10 @@ def listar_modelos_vehiculos(
 
 @router.get("/activos", response_model=List[ModeloVehiculoResponse])
 def listar_modelos_activos(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """Listar solo modelos activos (para formularios)."""
-    modelos = (
-        db.query(ModeloVehiculo)
-        .filter(ModeloVehiculo.activo.is_(True))
-        .all()
-    )
+    modelos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo.is_(True)).all()
     return modelos
 
 

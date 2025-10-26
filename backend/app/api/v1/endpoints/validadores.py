@@ -133,10 +133,7 @@ def probar_validador(
         logger.info(f"Probando validador {tipo} - Usuario: {current_user.email}")
 
         # Importar validador correspondiente
-        from app.services.validators_service import (
-            ValidadorCedula,
-            ValidadorTelefono,
-        )
+        from app.services.validators_service import ValidadorCedula, ValidadorTelefono
 
         resultado = {}
 
