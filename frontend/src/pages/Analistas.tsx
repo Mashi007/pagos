@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Analista, AnalistaUpdate, AnalistaCreate } from '@/services/analistaService'
-import { useAnalistas, useDeleteAnalista, useUpdateAnalista, useCreateAnalista } from '@/hooks/useAnalistas'
+import { useAnalistasActivos, useDeleteAnalista, useUpdateAnalista, useCreateAnalista } from '@/hooks/useAnalistas'
 import toast from 'react-hot-toast'
 
 export function Analistas() {
@@ -32,17 +32,15 @@ export function Analistas() {
 
   // Usar hooks de React Query
   const { 
-    data: analistasData, 
+    data: analistas, 
     isLoading: loading, 
     error,
     refetch
-  } = useAnalistas({ limit: 100 })
+  } = useAnalistasActivos()
   
   const deleteAnalistaMutation = useDeleteAnalista()
   const updateAnalistaMutation = useUpdateAnalista()
   const createAnalistaMutation = useCreateAnalista()
-
-  const analistas = analistasData?.items || []
 
   const handleEliminar = async (id: number) => {
     try {
@@ -108,7 +106,7 @@ export function Analistas() {
   }
 
   // Filtrar analistas por término de búsqueda
-  const filteredAnalistas = analistas.filter(analista =>
+  const filteredAnalistas = (analistas || []).filter(analista =>
     analista.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
@@ -171,7 +169,7 @@ export function Analistas() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{analistas.length}</div>
+            <div className="text-2xl font-bold">{analistas?.length || 0}</div>
           </CardContent>
         </Card>
         <Card>
@@ -181,7 +179,7 @@ export function Analistas() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {analistas.filter(a => a.activo).length}
+              {(analistas || []).filter(a => a.activo).length}
             </div>
           </CardContent>
         </Card>
@@ -192,7 +190,7 @@ export function Analistas() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              {analistas.filter(a => !a.activo).length}
+              {(analistas || []).filter(a => !a.activo).length}
             </div>
           </CardContent>
         </Card>
