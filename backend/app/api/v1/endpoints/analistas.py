@@ -13,35 +13,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/test-no-auth")
-def test_analistas_no_auth(db: Session = Depends(get_db)):
-    # Test endpoint sin autenticación para verificar analistas
-    try:
-        total_analistas = db.query(Analista).count()
-        analistas = db.query(Analista).limit(5).all()
-        analistas_data = []
-
-        for analista in analistas:
-            analistas_data.append(
-                {
-                    "id": analista.id,
-                    "nombre": analista.nombre,
-                    "email": analista.email,
-                    "activo": analista.activo,
-                }
-            )
-
-        return {
-            "message": "Test exitoso - Analistas",
-            "total_analistas": total_analistas,
-            "analistas_muestra": analistas_data,
-        }
-
-    except Exception as e:
-        logger.error(f"Error en test_analistas_no_auth: {e}")
-        return {"error": "Error interno"}
-
-
 @router.get("/", response_model=List[AnalistaResponse])
 def listar_analistas(
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
