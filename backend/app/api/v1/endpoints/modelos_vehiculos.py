@@ -129,7 +129,7 @@ def actualizar_modelo_vehiculo(
     # Actualizar campos
     for field, value in modelo_data.dict(exclude_unset=True).items():
         setattr(modelo, field, value)
-    
+
     # Actualizar timestamp manualmente
     modelo.updated_at = datetime.utcnow()
 
