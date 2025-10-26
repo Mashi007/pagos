@@ -182,6 +182,59 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     cargarDatosConfiguracion()
   }, [])
 
+  // ✅ Validaciones personalizadas para nombres y ocupacion
+  const validateNombres = (nombres: string): ValidationResult => {
+    if (!nombres || nombres.trim() === '') {
+      return { field: 'nombres', isValid: false, message: 'Nombres y apellidos requeridos' }
+    }
+    
+    const words = nombres.trim().split(/\s+/).filter(w => w.length > 0)
+    
+    if (words.length < 2) {
+      return { field: 'nombres', isValid: false, message: 'Mínimo 2 palabras requeridas (nombre + apellido)' }
+    }
+    
+    if (words.length > 4) {
+      return { field: 'nombres', isValid: false, message: 'Máximo 4 palabras permitidas' }
+    }
+    
+    // Validar que cada palabra tenga mínimo 2 caracteres
+    const invalidWords = words.filter(w => w.length < 2)
+    if (invalidWords.length > 0) {
+      return { field: 'nombres', isValid: false, message: 'Cada palabra debe tener mínimo 2 caracteres' }
+    }
+    
+    return { field: 'nombres', isValid: true, message: 'Nombres válidos' }
+  }
+  
+  const validateOcupacion = (ocupacion: string): ValidationResult => {
+    if (!ocupacion || ocupacion.trim() === '') {
+      return { field: 'ocupacion', isValid: false, message: 'Ocupación requerida' }
+    }
+    
+    const words = ocupacion.trim().split(/\s+/).filter(w => w.length > 0)
+    
+    if (words.length > 2) {
+      return { field: 'ocupacion', isValid: false, message: 'Máximo 2 palabras permitidas en ocupación' }
+    }
+    
+    return { field: 'ocupacion', isValid: true, message: 'Ocupación válida' }
+  }
+  
+  const formatNombres = (text: string): string => {
+    return text
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ')
+  }
+  
+  const formatOcupacion = (text: string): string => {
+    return text
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ')
+  }
+  
   // Validaciones usando el servicio de validadores del backend
   const validateField = async (field: string, value: string): Promise<ValidationResult> => {
     // Mapeo de campos del formulario a tipos de validadores del backend
@@ -235,10 +288,28 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   }
 
   const handleInputChange = async (field: keyof FormData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+    let formattedValue = value
     
-    // Validar campo en tiempo real usando el servicio del backend
-    const validation = await validateField(field, value)
+    // ✅ Aplicar autoformato a nombres y ocupacion
+    if (field === 'nombres') {
+      formattedValue = formatNombres(value)
+    } else if (field === 'ocupacion') {
+      formattedValue = formatOcupacion(value)
+    }
+    
+    setFormData(prev => ({ ...prev, [field]: formattedValue }))
+    
+    // ✅ Validar con funciones personalizadas o backend según el campo
+    let validation: ValidationResult
+    
+    if (field === 'nombres') {
+      validation = validateNombres(formattedValue)
+    } else if (field === 'ocupacion') {
+      validation = validateOcupacion(formattedValue)
+    } else {
+      validation = await validateField(field, formattedValue)
+    }
+    
     setValidations(prev => {
       const filtered = prev.filter(v => v.field !== field)
       return [...filtered, validation]
@@ -252,7 +323,37 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       'concesionario', 'analista'
     ]
     
+    // ✅ Validar nombres y ocupacion con funciones personalizadas
+    const nombresValidation = validateNombres(formData.nombres)
+    const ocupacionValidation = validateOcupacion(formData.ocupacion)
+    
+    // Agregar validaciones personalizadas al estado
+    const nombresValidationResult = validations.find(v => v.field === 'nombres')
+    const ocupacionValidationResult = validations.find(v => v.field === 'ocupacion')
+    
+    if (!nombresValidationResult || nombresValidationResult.isValid !== nombresValidation.isValid) {
+      setValidations(prev => {
+        const filtered = prev.filter(v => v.field !== 'nombres')
+        return [...filtered, nombresValidation]
+      })
+    }
+    
+    if (!ocupacionValidationResult || ocupacionValidationResult.isValid !== ocupacionValidation.isValid) {
+      setValidations(prev => {
+        const filtered = prev.filter(v => v.field !== 'ocupacion')
+        return [...filtered, ocupacionValidation]
+      })
+    }
+    
     return requiredFields.every(field => {
+      // Usar validaciones personalizadas para nombres y ocupacion
+      if (field === 'nombres') {
+        return nombresValidation.isValid && formData[field]
+      }
+      if (field === 'ocupacion') {
+        return ocupacionValidation.isValid && formData[field]
+      }
+      
       const validation = validations.find(v => v.field === field)
       return validation?.isValid && formData[field]
     })
@@ -626,7 +727,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
               <div className="space-y-2 min-h-[80px]"> {/* ✅ Estabilizar altura del campo */}
                 <label className="text-sm font-medium text-gray-700">
-                  Ocupación <span className="text-red-500">*</span>
+                  Ocupación <span className="text-red-500">*</span> <span className="text-gray-500 text-xs">(máximo 2 palabras)</span>
                 </label>
                 <div className="relative">
                   <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -635,7 +736,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     value={formData.ocupacion}
                     onChange={(e) => handleInputChange('ocupacion', e.target.value)}
                     className={`pl-10 w-full ${getFieldValidation('ocupacion')?.isValid === false ? 'border-red-500' : ''}`}
-                    placeholder="Ingeniero"
+                    placeholder="Ejemplo: Ingeniero, Gerente General"
                   />
                 </div>
                 {getFieldValidation('ocupacion') && (
