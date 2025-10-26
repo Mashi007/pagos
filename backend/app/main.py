@@ -76,7 +76,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # XSS Protection
         response.headers["X-XSS-Protection"] = "1; mode=block"
 
-        # CSP más permisivo para desarrollo
+        # CSP más permisivo para desarrollo - permite blob URLs
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
