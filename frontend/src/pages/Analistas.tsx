@@ -26,7 +26,8 @@ export function Analistas() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingAnalista, setEditingAnalista] = useState<Analista | null>(null)
   const [formData, setFormData] = useState<AnalistaCreate>({
-    nombre: ''
+    nombre: '',
+    activo: true
   })
 
   // Usar hooks de React Query
@@ -64,7 +65,8 @@ export function Analistas() {
   const handleEdit = (analista: Analista) => {
     setEditingAnalista(analista)
     setFormData({
-      nombre: analista.nombre
+      nombre: analista.nombre,
+      activo: analista.activo
     })
     setShowCreateForm(true)
   }
@@ -80,11 +82,8 @@ export function Analistas() {
         })
         toast.success('✅ Analista actualizado exitosamente')
       } else {
-        // Al crear, usar activo: true por defecto
-        await createAnalistaMutation.mutateAsync({
-          ...formData,
-          activo: true
-        })
+        // Al crear, ya tiene activo: true por defecto
+        await createAnalistaMutation.mutateAsync(formData)
         toast.success('✅ Analista creado exitosamente')
       }
       resetForm()
@@ -97,7 +96,8 @@ export function Analistas() {
 
   const resetForm = () => {
     setFormData({
-      nombre: ''
+      nombre: '',
+      activo: true
     })
     setEditingAnalista(null)
     setShowCreateForm(false)
@@ -154,7 +154,7 @@ export function Analistas() {
           </Button>
           <Button onClick={() => {
             setEditingAnalista(null)
-            setFormData({ nombre: '' })
+            setFormData({ nombre: '', activo: true })
             setShowCreateForm(true)
           }}>
             <Plus className="h-4 w-4 mr-2" />
@@ -331,6 +331,23 @@ export function Analistas() {
                       </p>
                     )}
                   </div>
+
+                  {editingAnalista && (
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Estado *
+                      </label>
+                      <select
+                        value={formData.activo ? 'ACTIVO' : 'INACTIVO'}
+                        onChange={(e) => setFormData({ ...formData, activo: e.target.value === 'ACTIVO' })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      >
+                        <option value="ACTIVO">Activo</option>
+                        <option value="INACTIVO">Inactivo</option>
+                      </select>
+                    </div>
+                  )}
 
                   <div className="flex items-center space-x-2 pt-4">
                     <Button 
