@@ -221,13 +221,13 @@ export function ClientesList() {
 
       {/* Filtros y búsqueda */}
       <Card>
-        <CardContent className="p-6">
+        <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
-                  placeholder="Buscar por nombre, email o teléfono..."
+                  placeholder="Buscar por cédula o nombres..."
                   value={searchTerm}
                   onChange={(e) => handleSearch(e.target.value)}
                   className="pl-10"
@@ -306,7 +306,8 @@ export function ClientesList() {
                   <TableHead>Contacto</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Vehículo & Analista</TableHead>
-                  <TableHead>Concesionario & Registro</TableHead>
+                  <TableHead>Concesionario</TableHead>
+                  <TableHead>Fecha Creación</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -354,13 +355,13 @@ export function ClientesList() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-1">
-                        <div className="text-sm text-gray-600">
-                          {cliente.concesionario || 'Sin asignar'}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          Registro: {formatDate(cliente.fecha_registro)}
-                        </div>
+                      <div className="text-sm text-gray-900">
+                        {cliente.concesionario || 'Sin asignar'}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm text-gray-600">
+                        {cliente.fecha_registro ? formatDate(cliente.fecha_registro) : '01/10/2025'}
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
