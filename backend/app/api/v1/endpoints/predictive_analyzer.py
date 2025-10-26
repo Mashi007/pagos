@@ -5,7 +5,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user
 from app.models.user import User
 
 logger = logging.getLogger(__name__)

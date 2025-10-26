@@ -77,8 +77,10 @@ def create_user(
         )
 
     # Validar fortaleza de contraseña
+    password_length = len(user_data.password) if user_data.password else 0
     logger.info(
-        f"Creando usuario: email={user_data.email}, password length={len(user_data.password) if user_data.password else 0}, is_admin={user_data.is_admin}"
+        f"Creando usuario: email={user_data.email}, "
+        f"password length={password_length}, is_admin={user_data.is_admin}"
     )
     is_valid, message = validate_password_strength(user_data.password)
     if not is_valid:
