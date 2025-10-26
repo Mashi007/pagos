@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -44,9 +44,18 @@ type LoginFormData = z.infer<typeof loginSchema>
 
 export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
+  const [logo, setLogo] = useState<string | null>(null)
   const { login, isLoading, error, clearError } = useSimpleAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  
+  // Cargar logo desde localStorage
+  useEffect(() => {
+    const logoGuardado = localStorage.getItem('logoEmpresa')
+    if (logoGuardado) {
+      setLogo(logoGuardado)
+    }
+  }, [])
 
   const from = location.state?.from?.pathname || '/dashboard'
 
@@ -128,11 +137,19 @@ export function LoginForm() {
         >
           {/* Logo de Rapicredit */}
           <div className={`w-${LOGO_SIZE_LARGE} h-${LOGO_SIZE_LARGE} mx-auto mb-${SPACING_SMALL} bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-2xl`}>
-            <img 
-              src="/logo-compact.svg" 
-              alt="RAPICREDIT Logo" 
-              className={`w-${LOGO_SIZE_SMALL} h-${LOGO_SIZE_SMALL}`}
-            />
+            {logo ? (
+              <img 
+                src={logo} 
+                alt="Logo" 
+                className={`w-${LOGO_SIZE_SMALL} h-${LOGO_SIZE_SMALL} object-contain`}
+              />
+            ) : (
+              <img 
+                src="/logo-compact.svg" 
+                alt="RAPICREDIT Logo" 
+                className={`w-${LOGO_SIZE_SMALL} h-${LOGO_SIZE_SMALL}`}
+              />
+            )}
           </div>
         </motion.div>
             

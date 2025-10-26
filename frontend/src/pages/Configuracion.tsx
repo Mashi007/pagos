@@ -46,7 +46,6 @@ const mockConfiguracion = {
     idioma: 'ES',
     zonaHoraria: 'America/Caracas',
     moneda: 'VES',
-    formatoFecha: 'DD/MM/YYYY',
     ultimaActualizacion: '2024-07-20T10:00:00Z',
   },
   notificaciones: {
@@ -117,10 +116,16 @@ export function Configuracion() {
   const [mostrarPassword, setMostrarPassword] = useState(false)
   const [cambiosPendientes, setCambiosPendientes] = useState(false)
   const [submenuAbierto, setSubmenuAbierto] = useState(false)
+  const [logo, setLogo] = useState<string | null>(null)
 
   // Cargar configuración general al montar el componente
   useEffect(() => {
     cargarConfiguracionGeneral()
+    // Cargar logo si existe
+    const logoGuardado = localStorage.getItem('logoEmpresa')
+    if (logoGuardado) {
+      setLogo(logoGuardado)
+    }
   }, [])
 
   const cargarConfiguracionGeneral = async () => {
@@ -143,8 +148,7 @@ export function Configuracion() {
           version: config.version_sistema,
           idioma: config.idioma,
           zonaHoraria: config.zona_horaria,
-          moneda: config.moneda,
-          formatoFecha: config.formato_fecha
+          moneda: config.moneda
         }
       }))
     } catch (err) {
@@ -174,7 +178,7 @@ export function Configuracion() {
         ...prev,
         general: {
           ...prev.general,
-          [campo === 'formato_fecha' ? 'formatoFecha' : campo]: valor
+          [campo]: valor
         }
       }))
       
@@ -297,17 +301,46 @@ export function Configuracion() {
           </Select>
         </div>
         <div>
-          <label className="text-sm font-medium">Formato de Fecha</label>
-          <Select value={configuracion.general.formatoFecha} onValueChange={(value: string) => handleCambio('general', 'formatoFecha', value)}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="DD/MM/YYYY">DD/MM/YYYY</SelectItem>
-              <SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem>
-              <SelectItem value="YYYY-MM-DD">YYYY-MM-DD</SelectItem>
-            </SelectContent>
-          </Select>
+          <label className="text-sm font-medium">Logo de la Empresa</label>
+          <div className="space-y-4">
+            {logo ? (
+              <div className="flex items-center space-x-4">
+                <img src={logo} alt="Logo" className="w-16 h-16 object-contain border rounded-lg p-2" />
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    setLogo(null)
+                    localStorage.removeItem('logoEmpresa')
+                  }}
+                >
+                  Eliminar
+                </Button>
+              </div>
+            ) : (
+              <div>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      const reader = new FileReader()
+                      reader.onload = (e) => {
+                        const result = e.target?.result as string
+                        setLogo(result)
+                        localStorage.setItem('logoEmpresa', result)
+                        toast.success('Logo cargado exitosamente')
+                      }
+                      reader.readAsDataURL(file)
+                    }
+                  }}
+                  className="cursor-pointer"
+                />
+                <p className="text-xs text-gray-500 mt-1">Formatos permitidos: PNG, JPG, SVG</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

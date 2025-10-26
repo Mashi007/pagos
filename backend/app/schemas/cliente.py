@@ -220,7 +220,7 @@ class ClienteCreateWithLoan(ClienteBase):
 
     total_financiamiento: Decimal = Field(..., description="Total del financiamiento")
     cuota_inicial: Decimal = Field(default=Decimal("0.00"), ge=0)
-    fecha_entrega: date = Field(..., description="Fecha de entrega del vehículo")
+@    fecha_entrega: date = Field(..., description="Fecha de entrega del vehículo")
     numero_amortizaciones: int = Field(
         ..., ge=1, le=MAX_AMORTIZACIONES, description="Número de amortizaciones"
     )

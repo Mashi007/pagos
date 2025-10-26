@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Bell, Search, Menu, LogOut, Settings, User, ChevronDown } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
@@ -22,7 +22,16 @@ interface HeaderProps {
 export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [logo, setLogo] = useState<string | null>(null)
   const { logout, user, refreshUser } = useSimpleAuth()
+  
+  // Cargar logo desde localStorage
+  useEffect(() => {
+    const logoGuardado = localStorage.getItem('logoEmpresa')
+    if (logoGuardado) {
+      setLogo(logoGuardado)
+    }
+  }, [])
 
   // Variables derivadas del usuario
   const userInitials = user ? `${user.nombre?.charAt(0) || ''}${user.apellido?.charAt(0) || ''}`.toUpperCase() : 'U'
@@ -81,11 +90,19 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
 
           <div className="hidden lg:block">
         <div className="flex items-center space-x-3">
-          <img 
-            src="/logo-compact.svg" 
-            alt="RAPICREDIT Logo" 
-            className="w-8 h-8"
-          />
+          {logo ? (
+            <img 
+              src={logo} 
+              alt="Logo" 
+              className="w-8 h-8 object-contain"
+            />
+          ) : (
+            <img 
+              src="/logo-compact.svg" 
+              alt="RAPICREDIT Logo" 
+              className="w-8 h-8"
+            />
+          )}
           <h1 className="text-xl font-semibold text-gray-900">
             RAPICREDIT
           </h1>

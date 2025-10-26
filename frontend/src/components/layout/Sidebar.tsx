@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -49,7 +49,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation()
   const { user } = useSimpleAuth()
   const userRole = user?.is_admin ? 'ADMIN' : 'USER'  // Cambio clave: rol → is_admin
-  const [openSubmenus, setOpenSubmenus] = useState<string[]>(['Herramientas'])
+  const [openSubmenus, setOpenSubmenus] = useState<string[]>([])
+  const [logo, setLogo] = useState<string | null>(null)
 
   const toggleSubmenu = (title: string) => {
     setOpenSubmenus(prev =>
@@ -58,6 +59,26 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         : [...prev, title]
     )
   }
+
+  // Cargar logo desde localStorage
+  useEffect(() => {
+    const logoGuardado = localStorage.getItem('logoEmpresa')
+    if (logoGuardado) {
+      setLogo(logoGuardado)
+    }
+    
+    // Escuchar cambios en localStorage
+    const handleStorageChange = () => {
+      const logoGuardado = localStorage.getItem('logoEmpresa')
+      setLogo(logoGuardado)
+    }
+    
+    window.addEventListener('storage', handleStorageChange)
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+    }
+  }, [])
 
   const menuItems: MenuItem[] = [
     {
@@ -195,11 +216,19 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200">
             <div className="flex items-center space-x-3">
-              <img 
-                src="/logo-compact.svg" 
-                alt="RAPICREDIT Logo" 
-                className="w-10 h-10"
-              />
+              {logo ? (
+                <img 
+                  src={logo} 
+                  alt="Logo" 
+                  className="w-10 h-10 object-contain"
+                />
+              ) : (
+                <img 
+                  src="/logo-compact.svg" 
+                  alt="RAPICREDIT Logo" 
+                  className="w-10 h-10"
+                />
+              )}
               <div>
                 <h2 className="font-bold text-gray-900 text-sm">RAPICREDIT</h2>
                 <p className="text-xs text-gray-500">Sistema v1.0</p>
