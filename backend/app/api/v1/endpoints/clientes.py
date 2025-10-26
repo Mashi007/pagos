@@ -19,7 +19,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("", response_model=dict)
 @router.get("/", response_model=dict)
 def listar_clientes(
     page: int = Query(1, ge=1, description="Numero de pagina"),
