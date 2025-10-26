@@ -78,7 +78,7 @@ class ValidadorTelefono:
         # Eliminar el + y el código de país (58)
         # telefono_limpio = "+581234567890"
         # Quitar "+58" (3 caracteres, no 4!)
-        numero_sin_codigo = telefono_limpio[len(config["codigo_pais"]):]
+        numero_sin_codigo = telefono_limpio[len(config["codigo_pais"]):]  # noqa: E203
         # numero_sin_codigo = "1234567890"
 
         # Retornar con formato: +58 + 10 dígitos
@@ -322,13 +322,13 @@ class ValidadorCedula:
                         ),
                     }
                 else:
-                    return {
-                        "valido": False,
-                        "error": f"Formato inválido para {config['descripcion']}",
-                        "valor_original": cedula,
-                        "valor_formateado": None,
-                        "formato_esperado": config["formato_display"],
-                    }
+                return {
+                    "valido": False,
+                    "error": f"Formato inválido para {config['descripcion']}",
+                    "valor_original": cedula,
+                    "valor_formateado": None,
+                    "formato_esperado": config["formato_display"],
+                }
 
             # Formatear según país
             if pais.upper() == "VENEZUELA":
@@ -383,7 +383,7 @@ class ValidadorFecha:
                 "valor_original": fecha,
                 "valor_formateado": None,
                 "formato_esperado": "DD/MM/YYYY",
-                "sugerencia": f"Los meses van del 01 al 12. Ejemplos: 15/01/2025, 20/12/2025",
+                "sugerencia": "Los meses van del 01 al 12. Ejemplos: 15/01/2025, 20/12/2025",
             }
         if dia < 1 or dia > 31:
             return {
@@ -392,7 +392,7 @@ class ValidadorFecha:
                 "valor_original": fecha,
                 "valor_formateado": None,
                 "formato_esperado": "DD/MM/YYYY",
-                "sugerencia": f"Los días van del 01 al 31. Ejemplos: 01/05/2025, 31/12/2025",
+                "sugerencia": "Los días van del 01 al 31. Ejemplos: 01/05/2025, 31/12/2025",
             }
         return None
 
