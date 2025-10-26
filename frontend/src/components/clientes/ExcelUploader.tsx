@@ -127,8 +127,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     // Crear hash de los datos de la fila para detectar cambios
     const rowDataHash = JSON.stringify({
       cedula: rowData.cedula,
-      nombres: rowData.nombres,
-      apellidos: rowData.apellidos,
+      nombres: rowData.nombres,  // ✅ nombres unificados
       telefono: rowData.telefono,
       email: rowData.email,
       direccion: rowData.direccion,
@@ -494,8 +493,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
               cedula: error.response?.data?.detail?.cedula || row.cedula
             },
             nuevo: {
-              nombres: row.nombres,
-              apellidos: row.apellidos,
+              nombres: row.nombres,  // ✅ nombres unificados
               cedula: row.cedula,
               telefono: row.telefono,
               email: row.email
@@ -513,8 +511,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
               cedula: error.response?.data?.detail?.cedula || row.cedula
             },
             nuevo: {
-              nombres: row.nombres,
-              apellidos: row.apellidos,
+              nombres: row.nombres,  // ✅ nombres unificados
               cedula: row.cedula,
               telefono: row.telefono,
               email: row.email
@@ -706,11 +703,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           return `Ejemplo: "Juan Carlos" en lugar de "${value}"`
         }
         break
-      case 'apellidos':
-        if (value.trim().split(/\s+/).length < 2) {
-          return `Ejemplo: "García López" en lugar de "${value}"`
-        }
-        break
+      // case 'apellidos' eliminado - nombres ahora unifica ambos
       case 'cedula':
         return `Ejemplo: "V12345678" o "E87654321"`
       case 'telefono':
@@ -1170,8 +1163,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         try {
           const clienteData = {
             cedula: row.cedula,
-            nombres: row.nombres,
-            apellidos: row.apellidos,
+            nombres: row.nombres,  // ✅ nombres unificados
             telefono: row.telefono,
             email: row.email,
             direccion: row.direccion,
