@@ -288,8 +288,8 @@ class ValidadorCedula:
                     "error": "Cédula requerida",
                     "valor_original": cedula,
                     "valor_formateado": None,
-                "formato_esperado": "V, E o J + 7-10 dígitos",
-                "sugerencia": "Ingrese una cédula. Ejemplo: 'V12345678'",
+                    "formato_esperado": "V, E o J + 7-10 dígitos",
+                    "sugerencia": "Ingrese una cédula. Ejemplo: 'V12345678'",
                 }
 
             # Limpiar entrada
@@ -630,12 +630,12 @@ class ValidadorNombre:
             # Validar que no esté vacío después de limpiar
             if not texto_limpio:
                 return {
-                "valido": False,
-                "error": "Nombre no puede estar vacío",
-                "valor_original": texto,
-                "valor_formateado": None,
-                "formato_esperado": "Juan Carlos o Maria",
-                "sugerencia": "El nombre no puede estar vacío. Ejemplo: 'Juan'",
+                    "valido": False,
+                    "error": "Nombre no puede estar vacío",
+                    "valor_original": texto,
+                    "valor_formateado": None,
+                    "formato_esperado": "Juan Carlos o Maria",
+                    "sugerencia": "El nombre no puede estar vacío. Ejemplo: 'Juan'",
                 }
 
             # Validar que solo contenga letras, espacios y algunos caracteres especiales permitidos
