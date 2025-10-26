@@ -22,7 +22,7 @@ class Analista(Base):
         String(255), nullable=False, index=True
     )  # Nombre completo (incluye apellido)
     activo = Column(Boolean, default=True, nullable=False)
-    
+
     # Timestamps
     created_at = Column(
         DateTime(timezone=True), default=datetime.utcnow, nullable=True
