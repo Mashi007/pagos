@@ -21,6 +21,7 @@ from app.api.v1.endpoints import (
     concesionarios,
     configuracion,
     dashboard,
+    health,
     notificaciones,
     pagos,
     prestamos,
@@ -171,11 +172,13 @@ app.include_router(analistas.router, prefix="/api/v1/analistas", tags=["analista
 app.include_router(
     validadores.router, prefix="/api/v1/validadores", tags=["validadores"]
 )
+app.include_router(health.router, prefix="/api/v1", tags=["health"])
 
 logger.info("✅ Todos los routers registrados correctamente")
 
 
 @app.get("/", include_in_schema=False)
+@app.head("/", include_in_schema=False)
 async def root():
     """Endpoint raíz de la aplicación"""
     return {
@@ -187,6 +190,7 @@ async def root():
 
 
 @app.get("/health", include_in_schema=False)
+@app.head("/health", include_in_schema=False)
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "message": "API funcionando correctamente"}
