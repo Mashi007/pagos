@@ -1,7 +1,6 @@
 """Endpoints para validadores del sistema."""
 
 import logging
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
