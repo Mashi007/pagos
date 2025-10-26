@@ -172,7 +172,7 @@ app.include_router(
     validadores.router, prefix="/api/v1/validadores", tags=["validadores"]
 )
 
-logger.info("Todos los routers registrados correctamente")
+logger.info("✅ Todos los routers registrados correctamente")
 
 
 @app.get("/", include_in_schema=False)
