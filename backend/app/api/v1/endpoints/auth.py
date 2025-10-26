@@ -13,7 +13,7 @@ from app.api.deps import get_current_user, get_db
 from app.core.config import settings
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models.user import User
-from app.schemas.auth import ChangePasswordRequest, LoginRequest, TokenResponse
+from app.schemas.auth import ChangePasswordRequest, LoginRequest, LoginResponse, TokenResponse
 from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
 from app.utils.validators import validate_password_strength
@@ -43,7 +43,7 @@ def add_cors_headers(request: Request, response: Response):
     response.headers["Access-Control-Allow-Credentials"] = "true"
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=LoginResponse)
 async def login(
     login_data: LoginRequest,
     request: Request,
@@ -84,14 +84,22 @@ async def login(
 
         logger.info(f"Login exitoso para: {login_data.email}")
 
-        # Calcular tiempo de expiración en segundos (30 minutos por defecto)
-        expires_in = 30 * 60  # 1800 segundos
+        # Preparar información del usuario para la respuesta
+        user_info = {
+            "id": user.id,
+            "email": user.email,
+            "nombre": user.nombre,
+            "apellido": user.apellido,
+            "rol": user.rol,
+            "is_admin": user.is_admin,
+            "is_active": user.is_active,
+        }
 
-        return TokenResponse(
+        return LoginResponse(
             access_token=access_token,
             refresh_token=refresh_token,
             token_type="bearer",
-            expires_in=expires_in,
+            user=user_info,
         )
 
     except HTTPException:
