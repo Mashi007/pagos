@@ -87,12 +87,17 @@ def obtener_configuracion_validadores(
                 "requisitos": {
                     "formato": "Sistema europeo estricto: coma (,) para decimales, punto (.) para miles",
                     "separador_decimal": "Coma (,) OBLIGATORIA para decimales",
-                    "separador_miles": "Punto (.) OBLIGATORIO si el número es mayor a 999 (cada 3 dígitos desde derecha)",
+                    "separador_miles": (
+                        "Punto (.) OBLIGATORIO si el número es mayor a 999 "
+                        "(cada 3 dígitos desde derecha)"
+                    ),
                     "reglas": {
                         "formato_valido": "1.000,12 o 10.500,25",
                         "formato_invalido": (
-                            "1.500.50 (punto decimal), 1,500.50 (coma miles), "
-                            "1500,50 (sin miles cuando > 999), 20000 (sin miles)"
+                            "1.500.50 (punto decimal), "
+                            "1,500.50 (coma miles), "
+                            "1500,50 (sin miles cuando > 999), "
+                            "20000 (sin miles)"
                         )
                     },
                     "ejemplos": {

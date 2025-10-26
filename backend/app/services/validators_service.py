@@ -322,13 +322,13 @@ class ValidadorCedula:
                         ),
                     }
                 else:
-                    return {
-                        "valido": False,
-                        "error": f"Formato inválido para {config['descripcion']}",
-                        "valor_original": cedula,
-                        "valor_formateado": None,
-                        "formato_esperado": config["formato_display"],
-                    }
+                return {
+                    "valido": False,
+                    "error": f"Formato inválido para {config['descripcion']}",
+                    "valor_original": cedula,
+                    "valor_formateado": None,
+                    "formato_esperado": config["formato_display"],
+                }
 
             # Formatear según país
             if pais.upper() == "VENEZUELA":
@@ -781,17 +781,17 @@ class ValidadorMonto:
                         # Ambos presentes: verificar formato correcto
                         # El separador de miles debe estar cada 3 dígitos
                         # El último separador indica decimales
-                        
+
                         # Encontrar posición del último separador
                         ultimo_coma = monto_limpio.rindex(",")
                         ultimo_punto = monto_limpio.rindex(".")
-                        
+
                         if ultimo_coma > ultimo_punto:
                             # Formato europeo: "1.234,56"
                             # Validar que antes de la coma solo haya un punto cada 3 dígitos
                             antes_coma = monto_limpio[:ultimo_coma]
                             despues_coma = monto_limpio[ultimo_coma+1:]
-                            
+
                             # Después de coma debe haber 1-2 dígitos
                             if not (1 <= len(despues_coma) <= 2):
                                 return {
@@ -805,7 +805,7 @@ class ValidadorMonto:
                                         "Ejemplo: '10.500,50' o '10500,50'"
                                     ),
                                 }
-                            
+
                             # Validar miles con punto cada 3 dígitos
                             antes_coma_sin_puntos = antes_coma.replace(".", "")
                             if not antes_coma_sin_puntos.isdigit():
@@ -820,7 +820,7 @@ class ValidadorMonto:
                                         "o '10500,50'"
                                     ),
                                 }
-                            
+
                             # Validar que los puntos estén cada 3 dígitos (de derecha a izquierda)
                             # En formato europeo, los últimos 3 dígitos NO tienen punto
                             # Ejemplos válidos: "1.500,50" (4 dígitos antes de coma)
@@ -858,7 +858,7 @@ class ValidadorMonto:
                                                 "NO '10.50,50' (grupo '50' tiene solo 2 dígitos)"
                                             ),
                                         }
-                            
+
                             monto_limpio = antes_coma_sin_puntos + "." + despues_coma
                         else:
                             # FORMATO AMERICANO NO SOPORTADO
@@ -890,10 +890,10 @@ class ValidadorMonto:
                                     "Ejemplo: '1500,50'"
                                 ),
                             }
-                        
+
                         antes_coma = partes_coma[0]
                         despues_coma = partes_coma[1]
-                        
+
                         # Después de coma debe haber 1-2 dígitos
                         if not (1 <= len(despues_coma) <= 2):
                             return {
@@ -907,7 +907,7 @@ class ValidadorMonto:
                                     "Ejemplo: '1500,50'"
                                 ),
                             }
-                        
+
                         # Antes de coma debe ser número válido
                         if not antes_coma.isdigit():
                             return {
@@ -932,7 +932,7 @@ class ValidadorMonto:
                                     "Ejemplo: '1.500,50' en lugar de '1500,50'"
                                 ),
                             }
-                        
+
                         monto_limpio = antes_coma + "." + despues_coma
                     elif "." in monto_limpio:
                         # Solo punto: NO se acepta formato americano, rechazar
