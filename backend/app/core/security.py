@@ -13,8 +13,8 @@ from passlib.context import CryptContext
 # Configuración de seguridad - leemos de variables de entorno
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 240  # 4 horas
-REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 días
+ACCESS_TOKEN_EXPIRE_MINUTES = 240  # 4 horas (Access Token)
+REFRESH_TOKEN_EXPIRE_DAYS = 7  # 7 días (Refresh Token)
 
 # Contexto para hashing de contraseñas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -88,7 +88,7 @@ def create_refresh_token(subject: Union[str, int]) -> str:
     Returns:
         Token de refresh JWT codificado
     """
-    expire = datetime.utcnow() + timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt

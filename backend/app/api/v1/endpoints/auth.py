@@ -82,9 +82,10 @@ async def login(
         # Generar tokens
         access_token = create_access_token(subject=str(user.id))
 
-        # Generar refresh token nuevo
+        # Generar refresh token nuevo (7 días)
         refresh_token = create_access_token(
-            subject=str(user.id), expires_delta=timedelta(minutes=1440)
+            subject=str(user.id), 
+            expires_delta=timedelta(days=7)
         )
 
         logger.info(f"Login exitoso para: {login_data.email}")
@@ -101,7 +102,7 @@ async def login(
         }
 
         # Calcular tiempo de expiración en segundos (4 horas = 240 minutos)
-        expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # 14400 segundos
+        expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # 14400 segundos (4 horas)
 
         return LoginResponse(
             access_token=access_token,
@@ -160,14 +161,16 @@ async def refresh_token(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado"
             )
 
-        # Generar nuevo access token
+        # Generar nuevo access token (4 horas)
         new_access_token = create_access_token(subject=str(user.id))
+        # Generar nuevo refresh token (7 días)
         new_refresh_token = create_access_token(
-            subject=str(user.id), expires_delta=timedelta(minutes=1440)
+            subject=str(user.id), 
+            expires_delta=timedelta(days=7)
         )
 
-        # Calcular tiempo de expiración en segundos (30 minutos por defecto)
-        expires_in = 30 * 60  # 1800 segundos
+        # Calcular tiempo de expiración en segundos (4 horas = 240 minutos)
+        expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # 14400 segundos
 
         return TokenResponse(
             access_token=new_access_token,
