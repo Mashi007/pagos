@@ -73,10 +73,13 @@ interface CrearClienteFormProps {
 }
 
 export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated }: CrearClienteFormProps) {
-  // ✅ Función para obtener fecha de hoy en formato YYYY-MM-DD
+  // ✅ Función para obtener fecha de hoy en formato DD/MM/YYYY
   const getTodayDate = () => {
     const today = new Date()
-    return today.toISOString().split('T')[0]
+    const day = String(today.getDate()).padStart(2, '0')
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    const year = today.getFullYear()
+    return `${day}/${month}/${year}`
   }
 
   const [formData, setFormData] = useState<FormData>({
@@ -672,14 +675,15 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
-                  Fecha de Nacimiento <span className="text-red-500">*</span>
+                  Fecha de Nacimiento <span className="text-red-500">*</span> <span className="text-gray-500 text-xs">(DD/MM/YYYY)</span>
                 </label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
-                    type="date"
+                    type="text"
                     value={formData.fechaNacimiento}
                     onChange={(e) => handleInputChange('fechaNacimiento', e.target.value)}
+                    placeholder="DD/MM/YYYY"
                     className={`pl-10 ${getFieldValidation('fechaNacimiento')?.isValid === false ? 'border-red-500' : ''}`}
                   />
                 </div>
