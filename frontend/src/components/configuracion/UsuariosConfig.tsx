@@ -58,9 +58,14 @@ export default function UsuariosConfig() {
             formattedValue: result.validacion.valor_formateado 
           }
         } else {
+          // Mostrar error y sugerencia si está disponible
+          const errorMsg = result.validacion?.error || 'Formato de email inválido'
+          const sugerencia = result.validacion?.sugerencia || ''
+          const mensajeCompleto = sugerencia ? `${errorMsg}. ${sugerencia}` : errorMsg
+          
           return { 
             isValid: false, 
-            message: result.validacion?.mensaje || 'Formato de email inválido' 
+            message: mensajeCompleto
           }
         }
       }
