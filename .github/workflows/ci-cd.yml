@@ -22,7 +22,9 @@ jobs:
   code-quality:
     name: 🔍 Análisis de Calidad de Código
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: write
+      
     steps:
       - name: 📥 Checkout código
         uses: actions/checkout@v4
@@ -51,9 +53,20 @@ jobs:
         run: |
           cd ${{ env.BACKEND_DIR }}
           black app/ || true
-          # Verificar si hubo cambios
-          if ! git diff --quiet; then
-            echo "⚠️ Black hizo cambios. Si estás en main, estos cambios se aplicarán."
+      
+      - name: 🔧 Aplicar correcciones de Black automáticamente
+        run: |
+          cd ${{ env.BACKEND_DIR }}
+          # Solo aplicar si el último commit no fue de Black
+          if ! git log -1 --pretty=%B | grep -q "\[skip ci\]"; then
+            black app/
+            if ! git diff --quiet; then
+              git config user.name "GitHub Actions"
+              git config user.email "actions@github.com"
+              git add app/
+              git commit -m "style: Aplicar correcciones automáticas de Black [skip ci]"
+              git push
+            fi
           fi
       
       - name: 📝 Ordenamiento de imports con isort
