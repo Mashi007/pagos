@@ -10,11 +10,14 @@ from typing import Any, Dict, Optional, Union
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-# Configuración de seguridad
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 240  # 4 horas (consistente con config.py)
-REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 días (consistente con config.py)
+# Importar settings para usar la misma configuración
+from app.core.config import settings
+
+# Configuración de seguridad (ahora usa settings de config.py)
+SECRET_KEY = settings.SECRET_KEY
+ALGORITHM = settings.ALGORITHM
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+REFRESH_TOKEN_EXPIRE_MINUTES = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60  # Convertir días a minutos
 
 # Contexto para hashing de contraseñas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
