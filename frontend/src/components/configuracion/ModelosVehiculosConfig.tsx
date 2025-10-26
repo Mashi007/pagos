@@ -485,5 +485,3 @@ export function ModelosVehiculosConfig() {
     </div>
   )
 }
-
-}
