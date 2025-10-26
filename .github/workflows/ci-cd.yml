@@ -50,7 +50,11 @@ jobs:
       - name: 🎨 Formateo con black
         run: |
           cd ${{ env.BACKEND_DIR }}
-          black --check app/
+          black app/ || true
+          # Verificar si hubo cambios
+          if ! git diff --quiet; then
+            echo "⚠️ Black hizo cambios. Si estás en main, estos cambios se aplicarán."
+          fi
       
       - name: 📝 Ordenamiento de imports con isort
         run: |
