@@ -1,9 +1,7 @@
-# Archivo corregido - Contenido básico funcional
-
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Dict, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 

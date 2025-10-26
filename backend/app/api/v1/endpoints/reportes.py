@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 
 # Imports para Excel
 from pydantic import BaseModel
-from reportlab.lib.pagesizes import A4, letter
+from reportlab.lib.pagesizes import A4
 
 # Imports para reportes PDF
 from reportlab.pdfgen import canvas

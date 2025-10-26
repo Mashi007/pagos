@@ -9,7 +9,7 @@ import time
 from typing import Any, Dict
 
 import psutil
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Response, status
 from sqlalchemy import text
 
 from app.core.config import settings

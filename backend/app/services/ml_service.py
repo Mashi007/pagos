@@ -5,7 +5,7 @@ Servicio de Machine Learning
 import logging
 import pickle
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import numpy as np
 

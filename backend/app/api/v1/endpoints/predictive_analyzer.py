@@ -1,9 +1,9 @@
 import logging
 from collections import deque
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
