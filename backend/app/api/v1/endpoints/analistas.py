@@ -7,13 +7,18 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.analista import Analista
 from app.models.user import User
-from app.schemas.analista import AnalistaCreate, AnalistaResponse, AnalistaUpdate
+from app.schemas.analista import (
+    AnalistaCreate,
+    AnalistaListResponse,
+    AnalistaResponse,
+    AnalistaUpdate,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/", response_model=List[AnalistaResponse])
+@router.get("/", response_model=AnalistaListResponse)
 def listar_analistas(
     limit: int = Query(100, ge=1, le=1000, description="Límite de resultados"),
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
@@ -27,8 +32,22 @@ def listar_analistas(
         if activo is not None:
             query = query.filter(Analista.activo == activo)
 
+        # Contar total
+        total = query.count()
+        
+        # Paginar
         analistas = query.limit(limit).all()
-        return analistas
+        
+        # Calcular páginas
+        pages = (total + limit - 1) // limit if limit > 0 else 0
+        
+        return AnalistaListResponse(
+            items=analistas,
+            total=total,
+            page=1,
+            size=limit,
+            pages=pages,
+        )
 
     except Exception as e:
         logger.error(f"Error listando analistas: {e}")
