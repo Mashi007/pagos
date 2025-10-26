@@ -207,9 +207,19 @@ export function Validadores() {
                             <p className="font-medium">
                               {resultadoTest.validacion?.valido ? '✅ Válido' : '❌ Inválido'}
                             </p>
-                            {resultadoTest.validacion?.mensaje && (
-                              <p className="text-sm text-gray-600 mt-1">
-                                {resultadoTest.validacion.mensaje}
+                            {resultadoTest.validacion?.error && (
+                              <p className="text-sm text-red-700 font-medium mt-1">
+                                <strong>Error:</strong> {resultadoTest.validacion.error}
+                              </p>
+                            )}
+                            {resultadoTest.validacion?.formato_esperado && (
+                              <p className="text-sm text-gray-700 mt-2">
+                                <strong>Formato esperado:</strong> {resultadoTest.validacion.formato_esperado}
+                              </p>
+                            )}
+                            {resultadoTest.validacion?.sugerencia && (
+                              <p className="text-sm text-blue-700 mt-2 font-medium">
+                                <strong>💡 Sugerencia:</strong> {resultadoTest.validacion.sugerencia}
                               </p>
                             )}
                             {resultadoTest.validacion?.valor_formateado && (
