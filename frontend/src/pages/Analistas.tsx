@@ -152,7 +152,11 @@ export function Analistas() {
             <RefreshCw className="h-4 w-4 mr-2" />
             Actualizar
           </Button>
-          <Button onClick={() => setShowCreateForm(true)}>
+          <Button onClick={() => {
+            setEditingAnalista(null)
+            setFormData({ nombre: '' })
+            setShowCreateForm(true)
+          }}>
             <Plus className="h-4 w-4 mr-2" />
             Nuevo Analista
           </Button>
@@ -294,8 +298,14 @@ export function Analistas() {
 
       {/* Create/Edit Form Modal */}
       {showCreateForm && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+        <div 
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={resetForm}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
             <Card>
               <CardHeader>
                 <CardTitle>
