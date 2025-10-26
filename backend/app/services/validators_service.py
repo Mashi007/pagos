@@ -103,6 +103,20 @@ class ValidadorTelefono:
                 "sugerencia": "Use un número que empiece por 1-9. Ejemplo: '4121234567'",
             }
 
+        # Validar longitud exacta (10 dígitos)
+        if len(telefono_limpio) != config["longitud_sin_codigo"]:
+            return {
+                "valido": False,
+                "error": f"El número debe tener exactamente {config['longitud_sin_codigo']} dígitos",
+                "valor_original": telefono_original,
+                "valor_formateado": None,
+                "formato_esperado": f"{config['longitud_sin_codigo']} dígitos",
+                "sugerencia": (
+                    f"El número debe tener exactamente {config['longitud_sin_codigo']} dígitos. "
+                    f"Usted ingresó {len(telefono_limpio)}. Ejemplo: '1234567890'"
+                ),
+            }
+
         # Formatear: +58 + 10 dígitos
         numero_formateado = f"{config['codigo_pais']} {telefono_limpio}"
         return {
