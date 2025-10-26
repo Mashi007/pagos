@@ -77,8 +77,8 @@ class ValidadorTelefono:
         """Formatear teléfono que ya tiene + y código (ejemplo: +581234567890)"""
         # Eliminar el + y el código de país (58)
         # telefono_limpio = "+581234567890"
-        # Quitar "+58" (4 caracteres)
-        numero_sin_codigo = telefono_limpio[len(config["codigo_pais"]) + 1 :]
+        # Quitar "+58" (3 caracteres, no 4!)
+        numero_sin_codigo = telefono_limpio[len(config["codigo_pais"]) :]
         # numero_sin_codigo = "1234567890"
 
         # Retornar con formato: +58 + 10 dígitos
