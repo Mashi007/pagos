@@ -1,62 +1,51 @@
+// frontend/src/pages/ModelosVehiculos.tsx
 import { useState, useEffect } from 'react'
-import { Car, Plus, Search, Edit, Trash2, CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import { motion } from 'framer-motion'
+import {
+  Car,
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  UserCheck,
+  UserX,
+  Loader2,
+  RefreshCw
+} from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { modeloVehiculoService, ModeloVehiculo } from '@/services/modeloVehiculoService'
-import { toast } from 'sonner'
+import { ModeloVehiculo, ModeloVehiculoUpdate, ModeloVehiculoCreate } from '@/services/modeloVehiculoService'
+import { useModelosVehiculos, useDeleteModeloVehiculo, useUpdateModeloVehiculo, useCreateModeloVehiculo } from '@/hooks/useModelosVehiculos'
+import toast from 'react-hot-toast'
 
 export function ModelosVehiculos() {
-  const [modelos, setModelos] = useState<ModeloVehiculo[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingModelo, setEditingModelo] = useState<ModeloVehiculo | null>(null)
+  const [formData, setFormData] = useState<ModeloVehiculoCreate>({
+    modelo: '',
+    activo: true
+  })
+  const [validationError, setValidationError] = useState<string>('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
-  // Cargar modelos al montar el componente
-  useEffect(() => {
-    console.log('🔄 Cargando modelos de vehículos desde API...')
-    cargarModelos()
-  }, [])
-
-  const cargarModelos = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      console.log('📡 Llamando a API: /api/v1/modelos-vehiculos')
-      
-      // CONECTAR CON DATOS REALES DE LA BASE DE DATOS
-      const response = await modeloVehiculoService.listarModelos({ limit: 100 })
-      console.log('✅ Respuesta API:', response)
-      setModelos(response.items)
-      
-      // TEMPORAL: Si falla la API, usar datos mock
-      // const mockData = {
-      //   items: [
-      //     { id: 1, modelo: "Toyota Corolla", activo: true, created_at: "2025-01-01T00:00:00Z" },
-      //     { id: 2, modelo: "Nissan Versa", activo: true, created_at: "2025-01-01T00:00:00Z" },
-      //     { id: 3, modelo: "Hyundai Tucson", activo: true, created_at: "2025-01-01T00:00:00Z" },
-      //     { id: 4, modelo: "Ford F-150", activo: true, created_at: "2025-01-01T00:00:00Z" },
-      //     { id: 5, modelo: "Chevrolet Spark", activo: false, created_at: "2025-01-01T00:00:00Z" }
-      //   ],
-      //   total: 5,
-      //   page: 1,
-      //   page_size: 100,
-      //   total_pages: 1
-      // }
-      // console.log('✅ Usando datos mock temporalmente:', mockData)
-      // setModelos(mockData.items)
-    } catch (err) {
-      console.error('❌ Error API:', err)
-      setError('Error al cargar modelos de vehículos')
-      toast.error('Error al cargar modelos de vehículos')
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Usar hooks de React Query
+  const { 
+    data: modelosData, 
+    isLoading: loading, 
+    error,
+    refetch
+  } = useModelosVehiculos({ limit: 1000 })
+  
+  const deleteModeloMutation = useDeleteModeloVehiculo()
+  const updateModeloMutation = useUpdateModeloVehiculo()
+  const createModeloMutation = useCreateModeloVehiculo()
+  
+  const modelos = modelosData?.items || []
 
   const handleEliminar = async (id: number) => {
     try {
@@ -70,130 +59,227 @@ export function ModelosVehiculos() {
         return
       }
       
-      await modeloVehiculoService.eliminarModelo(id)
-      toast.success('✅ Modelo eliminado PERMANENTEMENTE de la base de datos')
-      cargarModelos() // Recargar lista
+      await deleteModeloMutation.mutateAsync(id)
     } catch (err) {
-      toast.error('❌ Error al eliminar modelo permanentemente')
       console.error('Error:', err)
     }
   }
 
-  const handleToggleActivo = async (modelo: ModeloVehiculo) => {
-    try {
-      await modeloVehiculoService.actualizarModelo(modelo.id, {
-        activo: !modelo.activo
-      })
-      toast.success(`Modelo ${modelo.activo ? 'desactivado' : 'activado'} exitosamente`)
-      cargarModelos() // Recargar lista
-    } catch (err) {
-      toast.error('Error al cambiar estado del modelo')
-      console.error('Error:', err)
+  const validateModelo = (modelo: string): string => {
+    if (!modelo.trim()) {
+      return 'El modelo es requerido'
     }
+    
+    // Limpiar espacios extras
+    const modeloLimpio = modelo.trim().replace(/\s+/g, ' ')
+    
+    // Verificar cantidad de palabras (mínimo 2, máximo 4)
+    const palabras = modeloLimpio.split(' ')
+    
+    if (palabras.length < 2) {
+      return 'Debe ingresar al menos 2 palabras'
+    }
+    
+    if (palabras.length > 4) {
+      return 'Debe ingresar máximo 4 palabras'
+    }
+    
+    // Verificar que cada palabra tenga al menos 2 caracteres
+    for (const palabra of palabras) {
+      if (palabra.length < 2) {
+        return 'Cada palabra debe tener al menos 2 caracteres'
+      }
+    }
+    
+    return ''
+  }
+
+  const formatModelo = (modelo: string): string => {
+    // Limpiar espacios extras
+    const modeloLimpio = modelo.trim().replace(/\s+/g, ' ')
+    
+    // Capitalizar primera letra de cada palabra
+    return modeloLimpio.split(' ').map(word => {
+      if (word.length === 0) return word
+      return word[0].toUpperCase() + word.slice(1).toLowerCase()
+    }).join(' ')
+  }
+
+  const handleEdit = (modelo: ModeloVehiculo) => {
+    setEditingModelo(modelo)
+    setFormData({
+      modelo: modelo.modelo,
+      activo: modelo.activo
+    })
+    setValidationError('')
+    setShowCreateForm(true)
+  }
+
+  const handleCreateOrUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    // Validar modelo
+    const error = validateModelo(formData.modelo)
+    if (error) {
+      setValidationError(error)
+      return
+    }
+    
+    setValidationError('')
+    
+    try {
+      // Formatear modelo (capitalizar primera letra de cada palabra)
+      const modeloFormateado = formatModelo(formData.modelo)
+      
+      if (editingModelo) {
+        // Al editar, mantener el estado actual
+        await updateModeloMutation.mutateAsync({
+          id: editingModelo.id,
+          data: { ...formData, modelo: modeloFormateado }
+        })
+        toast.success('✅ Modelo actualizado exitosamente')
+      } else {
+        // Al crear, ya tiene activo: true por defecto
+        await createModeloMutation.mutateAsync({ ...formData, modelo: modeloFormateado })
+        toast.success('✅ Modelo creado exitosamente')
+      }
+      resetForm()
+      refetch()
+    } catch (err) {
+      console.error('Error:', err)
+      toast.error('❌ Error al guardar modelo')
+    }
+  }
+
+  const resetForm = () => {
+    setFormData({
+      modelo: '',
+      activo: true
+    })
+    setValidationError('')
+    setEditingModelo(null)
+    setShowCreateForm(false)
+  }
+
+  const handleRefresh = () => {
+    refetch()
   }
 
   // Filtrar modelos por término de búsqueda
-  const modelosFiltrados = modelos.filter(modelo =>
-    modelo.modelo.toLowerCase().includes(searchTerm.toLowerCase())  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
+  const filteredModelos = (modelos || []).filter(modelo =>
+    modelo.modelo.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+  // Paginación
+  const totalPages = Math.ceil(filteredModelos.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedModelos = filteredModelos.slice(startIndex, endIndex)
+
+  // Resetear a página 1 cuando cambia el filtro de búsqueda
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Cargando modelos de vehículos...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">Error al cargar modelos de vehículos</p>
+          <Button onClick={handleRefresh} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Reintentar
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Modelos de Vehículos</h1>
-          <p className="text-gray-500 mt-1">
-            Catálogo de modelos disponibles para financiamiento
+          <h1 className="text-3xl font-bold tracking-tight">Modelos de Vehículos</h1>
+          <p className="text-muted-foreground">
+            Gestiona los modelos de vehículos del sistema
           </p>
         </div>
-        <Button onClick={() => setShowCreateForm(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Agregar Modelo
-        </Button>
+        <div className="flex items-center space-x-2">
+          <Button onClick={() => {
+            setEditingModelo(null)
+            setFormData({ modelo: '', activo: true })
+            setValidationError('')
+            setShowCreateForm(true)
+          }}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nuevo Modelo
+          </Button>
+        </div>
       </div>
 
-      {/* Stats Dashboard */}
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Total Modelos</p>
-                <p className="text-2xl font-bold">{modelos.length}</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {modelos.length > 0 ? `${((modelos.filter(m => m.activo).length / modelos.length) * 100).toFixed(1)}% activos` : 'Sin datos'}
-                </p>
-              </div>
-              <Car className="w-8 h-8 text-blue-600" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Modelos</CardTitle>
+            <Car className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{modelos?.length || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Activos</CardTitle>
+            <UserCheck className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              {(modelos || []).filter(m => m.activo === true || m.activo === 1).length}
             </div>
           </CardContent>
         </Card>
-        
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Activos</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {modelos.filter(m => m.activo).length}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  Disponibles para financiamiento
-                </p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Inactivos</CardTitle>
+            <UserX className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {(modelos || []).filter(m => m.activo === false || m.activo === 2 || m.activo === 0).length}
             </div>
           </CardContent>
         </Card>
-        
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Inactivos</p>
-                <p className="text-2xl font-bold text-red-600">
-                  {modelos.filter(m => !m.activo).length}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  No disponibles temporalmente
-                </p>
-              </div>
-              <XCircle className="w-8 h-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Último Mes</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {modelos.filter(m => {
-                    const fechaCreacion = new Date(m.created_at)
-                    const haceUnMes = new Date()
-                    haceUnMes.setMonth(haceUnMes.getMonth() - 1)
-                    return fechaCreacion >= haceUnMes
-                  }).length}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  Modelos agregados
-                </p>
-              </div>
-              <Plus className="w-8 h-8 text-blue-600" />
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Mostrados</CardTitle>
+            <Search className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{filteredModelos.length}</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Búsqueda */}
+      {/* Search */}
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="p-6">
           <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
-              placeholder="Buscar modelo de vehículo..."
+              placeholder="Buscar por modelo..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -202,59 +288,31 @@ export function ModelosVehiculos() {
         </CardContent>
       </Card>
 
-      {/* Tabla */}
+      {/* Modelos Table */}
       <Card>
-        <CardContent className="pt-6">
+        <CardHeader>
+          <CardTitle>Lista de Modelos de Vehículos</CardTitle>
+        </CardHeader>
+        <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Modelo de Vehículo</TableHead>
+                <TableHead>ID</TableHead>
+                <TableHead>Modelo</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Fecha Creación</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
-                    <p className="text-gray-500">Cargando modelos de vehículos...</p>
-                  </TableCell>
-                </TableRow>
-              ) : error ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8">
-                    <p className="text-red-500">{error}</p>
-                    <Button onClick={cargarModelos} className="mt-2">
-                      Reintentar
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ) : modelosFiltrados.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8">
-                    <p className="text-gray-500">No se encontraron modelos de vehículos</p>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                modelosFiltrados.map((modelo) => (
+              {paginatedModelos.map((modelo) => (
                 <TableRow key={modelo.id}>
+                  <TableCell className="font-medium">{modelo.id}</TableCell>
+                  <TableCell>{modelo.modelo}</TableCell>
                   <TableCell>
-                    <div className="flex items-center space-x-3">
-                      <Car className="w-5 h-5 text-gray-400" />
-                      <div>
-                        <p className="font-medium">{modelo.modelo}</p>  {/* ✅ CORREGIDO: campo 'modelo', no 'nombre' */}
-                        <p className="text-xs text-gray-500">ID: {modelo.id}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {modelo.activo ? (
-                      <Badge className="bg-green-600">Activo</Badge>
-                    ) : (
-                      <Badge variant="outline">Inactivo</Badge>
-                    )}
+                    <Badge variant={(modelo.activo === true || modelo.activo === 1) ? "default" : "secondary"}>
+                      {(modelo.activo === true || modelo.activo === 1) ? "Activo" : "Inactivo"}
+                    </Badge>
                   </TableCell>
                   <TableCell>
                     {modelo.created_at 
@@ -272,148 +330,168 @@ export function ModelosVehiculos() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end space-x-2">
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="outline"
                         size="sm"
-                        onClick={() => setEditingModelo(modelo)}
+                        onClick={() => handleEdit(modelo)}
                         title="Editar modelo"
                       >
-                        <Edit className="w-4 h-4" />
+                        <Edit className="h-4 w-4" />
                       </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => handleToggleActivo(modelo)}
-                        title={modelo.activo ? "Desactivar" : "Activar"}
-                      >
-                        {modelo.activo ? (
-                          <XCircle className="w-4 h-4 text-red-600" />
-                        ) : (
-                          <CheckCircle className="w-4 h-4 text-green-600" />
-                        )}
-                      </Button>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="outline"
                         size="sm"
                         onClick={() => handleEliminar(modelo.id)}
-                        title="Eliminar modelo"
                         className="text-red-600 hover:text-red-700"
+                        title="Eliminar modelo"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
-              )}
+              ))}
             </TableBody>
           </Table>
+          
+          {filteredModelos.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              {searchTerm ? 'No se encontraron modelos con ese nombre' : 'No hay modelos disponibles'}
+            </div>
+          )}
+
+          {/* Paginación */}
+          {filteredModelos.length > itemsPerPage && (
+            <div className="flex items-center justify-between px-2 py-4 border-t">
+              <div className="text-sm text-gray-500">
+                Mostrando {startIndex + 1} a {Math.min(endIndex, filteredModelos.length)} de {filteredModelos.length} modelos
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <div className="flex items-center space-x-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(page)}
+                      className={currentPage === page ? 'bg-blue-600 text-white' : ''}
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Formulario de Crear/Editar Modelo */}
-      {(showCreateForm || editingModelo) && (
-        <CrearEditarModeloForm
-          modelo={editingModelo}
-          onClose={() => {
-            setShowCreateForm(false)
-            setEditingModelo(null)
-          }}
-          onSuccess={() => {
-            cargarModelos()
-            setShowCreateForm(false)
-            setEditingModelo(null)
-          }}
-        />
+      {/* Create/Edit Form Modal */}
+      {showCreateForm && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={resetForm}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {editingModelo ? 'Editar Modelo de Vehículo' : 'Nuevo Modelo de Vehículo'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleCreateOrUpdate} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Nombre del Modelo *
+                    </label>
+                    <Input
+                      value={formData.modelo}
+                      onChange={(e) => {
+                        setFormData({ ...formData, modelo: e.target.value })
+                        setValidationError('') // Limpiar error al escribir
+                      }}
+                      placeholder="Ingrese nombre del modelo (2-4 palabras)"
+                      required
+                      autoFocus
+                      className={validationError ? 'border-red-500' : ''}
+                    />
+                    {validationError && (
+                      <p className="text-xs text-red-500 mt-1">
+                        {validationError}
+                      </p>
+                    )}
+                    {!editingModelo && !validationError && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Ejemplo: Toyota Corolla (mínimo 2, máximo 4 palabras)
+                      </p>
+                    )}
+                  </div>
+
+                  {editingModelo && (
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Estado *
+                      </label>
+                      <select
+                        value={formData.activo ? 'ACTIVO' : 'INACTIVO'}
+                        onChange={(e) => setFormData({ ...formData, activo: e.target.value === 'ACTIVO' })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      >
+                        <option value="ACTIVO">Activo</option>
+                        <option value="INACTIVO">Inactivo</option>
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="flex items-center space-x-2 pt-4">
+                    <Button 
+                      type="submit" 
+                      disabled={createModeloMutation.isPending || updateModeloMutation.isPending}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      {createModeloMutation.isPending || updateModeloMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Guardando...
+                        </>
+                      ) : (
+                        <>
+                          <Edit className="h-4 w-4 mr-2" />
+                          {editingModelo ? 'Actualizar' : 'Crear'} Modelo
+                        </>
+                      )}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={resetForm}>
+                      Cancelar
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       )}
     </div>
   )
 }
-
-// Componente para crear/editar modelo
-interface CrearEditarModeloFormProps {
-  modelo?: ModeloVehiculo | null
-  onClose: () => void
-  onSuccess: () => void
-}
-
-function CrearEditarModeloForm({ modelo, onClose, onSuccess }: CrearEditarModeloFormProps) {
-  const [formData, setFormData] = useState({
-    modelo: modelo?.modelo || ''  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
-  })
-  const [loading, setLoading] = useState(false)
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!formData.modelo.trim()) {  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
-      toast.error('El modelo es obligatorio')
-      return
-    }
-
-    try {
-      setLoading(true)
-      
-      const data = {
-        modelo: formData.modelo.trim()  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
-      }
-
-      if (modelo) {
-        await modeloVehiculoService.actualizarModelo(modelo.id, data)
-        toast.success('Modelo actualizado exitosamente')
-      } else {
-        await modeloVehiculoService.crearModelo(data)
-        toast.success('Modelo creado exitosamente')
-      }
-      
-      onSuccess()
-    } catch (err) {
-      toast.error(modelo ? 'Error al actualizar modelo' : 'Error al crear modelo')
-      console.error('Error:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <Card className="w-full max-w-md mx-4">
-        <CardHeader>
-          <CardTitle>
-            {modelo ? 'Editar Modelo' : 'Nuevo Modelo'}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Modelo *</label>
-              <Input
-                value={formData.modelo}  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
-                onChange={(e) => setFormData({ ...formData, modelo: e.target.value })}  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
-                placeholder="Nombre del modelo de vehículo"
-                required
-              />
-            </div>
-            
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    {modelo ? 'Actualizando...' : 'Creando...'}
-                  </>
-                ) : (
-                  modelo ? 'Actualizar' : 'Crear'
-                )}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-

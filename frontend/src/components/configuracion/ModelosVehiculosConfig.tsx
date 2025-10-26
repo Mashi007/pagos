@@ -1,94 +1,107 @@
+// frontend/src/components/configuracion/ModelosVehiculosConfig.tsx
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
 import {
   Car,
   Plus,
+  Search,
   Edit,
   Trash2,
-  Search,
-  Save,
-  X,
-  RefreshCw,
+  UserCheck,
+  UserX,
   Loader2,
+  RefreshCw
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { LoadingSpinner } from '@/components/ui/loading-spinner'
-import { modeloVehiculoService, type ModeloVehiculo, type ModeloVehiculoCreate } from '@/services/modeloVehiculoService'
-import { toast } from 'sonner'
+import { ModeloVehiculo, ModeloVehiculoUpdate, ModeloVehiculoCreate } from '@/services/modeloVehiculoService'
+import { useModelosVehiculos, useDeleteModeloVehiculo, useUpdateModeloVehiculo, useCreateModeloVehiculo } from '@/hooks/useModelosVehiculos'
+import toast from 'react-hot-toast'
 
 export function ModelosVehiculosConfig() {
-  const [modelos, setModelos] = useState<ModeloVehiculo[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [showForm, setShowForm] = useState(false)
+  const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingModelo, setEditingModelo] = useState<ModeloVehiculo | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  // Form state
   const [formData, setFormData] = useState<ModeloVehiculoCreate>({
     modelo: '',
     activo: true
   })
+  const [validationError, setValidationError] = useState<string>('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
-  // Función para obtener fecha de hoy
-  const getTodayDate = () => {
-    const today = new Date()
-    return today.toISOString().split('T')[0]
-  }
+  // Usar hooks de React Query
+  const { 
+    data: modelosData, 
+    isLoading: loading, 
+    error,
+    refetch
+  } = useModelosVehiculos({ limit: 1000 })
+  
+  const deleteModeloMutation = useDeleteModeloVehiculo()
+  const updateModeloMutation = useUpdateModeloVehiculo()
+  const createModeloMutation = useCreateModeloVehiculo()
+  
+  const modelos = modelosData?.items || []
 
-  useEffect(() => {
-    loadModelos()
-  }, [])
-
-  const loadModelos = async () => {
+  const handleEliminar = async (id: number) => {
     try {
-      setLoading(true)
-      setError(null)
-      const data = await modeloVehiculoService.listarModelosActivos()
-      setModelos(data)
-    } catch (err: any) {
-      console.error('Error al cargar modelos:', err)
-      if (err.response?.status === 503) {
-        setError('Servicio temporalmente no disponible. Intenta nuevamente.')
-      } else if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
-        setError('Error de conexión. Verifica que el servidor esté funcionando.')
-      } else {
-        setError('No se pudieron cargar los modelos de vehículos.')
-      }
-      toast.error('Error al cargar modelos de vehículos')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-    try {
-      setError(null)
+      // Confirmar eliminación permanente
+      const confirmar = window.confirm(
+        '⚠️ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este modelo?\n\n' +
+        'Esta acción NO se puede deshacer y el modelo será borrado completamente de la base de datos.'
+      )
       
-      if (editingModelo) {
-        await modeloVehiculoService.actualizarModelo(editingModelo.id, formData)
-        toast.success('✅ Modelo actualizado exitosamente')
-      } else {
-        await modeloVehiculoService.crearModelo(formData)
-        toast.success('✅ Modelo creado exitosamente')
+      if (!confirmar) {
+        return
       }
       
-      await loadModelos()
-      resetForm()
+      await deleteModeloMutation.mutateAsync(id)
     } catch (err) {
-      console.error('Error al guardar modelo:', err)
-      setError('Error al guardar el modelo de vehículo.')
-      toast.error('❌ Error al guardar modelo')
-    } finally {
-      setIsSubmitting(false)
+      console.error('Error:', err)
     }
+  }
+
+  const validateModelo = (modelo: string): string => {
+    if (!modelo.trim()) {
+      return 'El modelo es requerido'
+    }
+    
+    // Limpiar espacios extras
+    const modeloLimpio = modelo.trim().replace(/\s+/g, ' ')
+    
+    // Verificar cantidad de palabras (mínimo 2, máximo 4)
+    const palabras = modeloLimpio.split(' ')
+    
+    if (palabras.length < 2) {
+      return 'Debe ingresar al menos 2 palabras'
+    }
+    
+    if (palabras.length > 4) {
+      return 'Debe ingresar máximo 4 palabras'
+    }
+    
+    // Verificar que cada palabra tenga al menos 2 caracteres
+    for (const palabra of palabras) {
+      if (palabra.length < 2) {
+        return 'Cada palabra debe tener al menos 2 caracteres'
+      }
+    }
+    
+    return ''
+  }
+
+  const formatModelo = (modelo: string): string => {
+    // Limpiar espacios extras
+    const modeloLimpio = modelo.trim().replace(/\s+/g, ' ')
+    
+    // Capitalizar primera letra de cada palabra
+    return modeloLimpio.split(' ').map(word => {
+      if (word.length === 0) return word
+      return word[0].toUpperCase() + word.slice(1).toLowerCase()
+    }).join(' ')
   }
 
   const handleEdit = (modelo: ModeloVehiculo) => {
@@ -97,22 +110,43 @@ export function ModelosVehiculosConfig() {
       modelo: modelo.modelo,
       activo: modelo.activo
     })
-    setShowForm(true)
+    setValidationError('')
+    setShowCreateForm(true)
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('⚠️ ¿Estás seguro de que deseas eliminar este modelo de vehículo?\n\nEsta acción NO se puede deshacer.')) {
+  const handleCreateOrUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    // Validar modelo
+    const error = validateModelo(formData.modelo)
+    if (error) {
+      setValidationError(error)
       return
     }
     
+    setValidationError('')
+    
     try {
-      await modeloVehiculoService.eliminarModelo(id)
-      await loadModelos()
-      toast.success('✅ Modelo eliminado exitosamente')
+      // Formatear modelo (capitalizar primera letra de cada palabra)
+      const modeloFormateado = formatModelo(formData.modelo)
+      
+      if (editingModelo) {
+        // Al editar, mantener el estado actual
+        await updateModeloMutation.mutateAsync({
+          id: editingModelo.id,
+          data: { ...formData, modelo: modeloFormateado }
+        })
+        toast.success('✅ Modelo actualizado exitosamente')
+      } else {
+        // Al crear, ya tiene activo: true por defecto
+        await createModeloMutation.mutateAsync({ ...formData, modelo: modeloFormateado })
+        toast.success('✅ Modelo creado exitosamente')
+      }
+      resetForm()
+      refetch()
     } catch (err) {
-      console.error('Error al eliminar modelo:', err)
-      setError('Error al eliminar el modelo de vehículo.')
-      toast.error('❌ Error al eliminar modelo')
+      console.error('Error:', err)
+      toast.error('❌ Error al guardar modelo')
     }
   }
 
@@ -121,41 +155,58 @@ export function ModelosVehiculosConfig() {
       modelo: '',
       activo: true
     })
+    setValidationError('')
     setEditingModelo(null)
-    setShowForm(false)
+    setShowCreateForm(false)
   }
 
   const handleRefresh = () => {
-    loadModelos()
+    refetch()
   }
 
-  const filteredModelos = modelos.filter(modelo =>
+  // Filtrar modelos por término de búsqueda
+  const filteredModelos = (modelos || []).filter(modelo =>
     modelo.modelo.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  // Calcular KPIs
-  const totalModelos = modelos.length
-  const activosModelos = modelos.filter(m => m.activo).length
-  const inactivosModelos = modelos.filter(m => !m.activo).length
+  // Paginación
+  const totalPages = Math.ceil(filteredModelos.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedModelos = filteredModelos.slice(startIndex, endIndex)
+
+  // Resetear a página 1 cuando cambia el filtro de búsqueda
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm])
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="flex items-center space-x-2">
           <Loader2 className="h-6 w-6 animate-spin" />
-          <span>Cargando modelos...</span>
+          <span>Cargando modelos de vehículos...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">Error al cargar modelos de vehículos</p>
+          <Button onClick={handleRefresh} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Reintentar
+          </Button>
         </div>
       </div>
     )
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="space-y-6"
-    >
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -169,7 +220,12 @@ export function ModelosVehiculosConfig() {
             <RefreshCw className="h-4 w-4 mr-2" />
             Actualizar
           </Button>
-          <Button onClick={() => setShowForm(true)}>
+          <Button onClick={() => {
+            setEditingModelo(null)
+            setFormData({ modelo: '', activo: true })
+            setValidationError('')
+            setShowCreateForm(true)
+          }}>
             <Plus className="h-4 w-4 mr-2" />
             Nuevo Modelo
           </Button>
@@ -184,25 +240,29 @@ export function ModelosVehiculosConfig() {
             <Car className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalModelos}</div>
+            <div className="text-2xl font-bold">{modelos?.length || 0}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Activos</CardTitle>
-            <Car className="h-4 w-4 text-green-600" />
+            <UserCheck className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{activosModelos}</div>
+            <div className="text-2xl font-bold text-green-600">
+              {(modelos || []).filter(m => m.activo === true || m.activo === 1).length}
+            </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Inactivos</CardTitle>
-            <Car className="h-4 w-4 text-red-600" />
+            <UserX className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{inactivosModelos}</div>
+            <div className="text-2xl font-bold text-red-600">
+              {(modelos || []).filter(m => m.activo === false || m.activo === 2 || m.activo === 0).length}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -211,119 +271,52 @@ export function ModelosVehiculosConfig() {
       <Card>
         <CardContent>
           <Input
-            placeholder="Buscar modelo de vehículo..."
+            placeholder="Buscar modelo..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </CardContent>
       </Card>
 
-      {/* Form */}
-      {showForm && (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {editingModelo ? 'Editar Modelo' : 'Nuevo Modelo'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Modelo del Vehículo *
-                </label>
-                <Input
-                  value={formData.modelo}
-                  onChange={(e) => setFormData({ ...formData, modelo: e.target.value })}
-                  placeholder="Ingrese el nombre del modelo"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Estado *
-                </label>
-                <select
-                  value={formData.activo ? 'ACTIVO' : 'INACTIVO'}
-                  onChange={(e) => setFormData({ ...formData, activo: e.target.value === 'ACTIVO' })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="ACTIVO">Activo</option>
-                  <option value="INACTIVO">Inactivo</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Fecha de Registro
-                </label>
-                <Input
-                  type="date"
-                  value={getTodayDate()}
-                  disabled
-                  className="bg-gray-100 text-gray-600"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  La fecha se establece automáticamente al día de hoy
-                </p>
-              </div>
-              
-              <div className="flex items-center space-x-2 pt-4">
-                <Button 
-                  type="submit" 
-                  disabled={isSubmitting}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Guardando...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      {editingModelo ? 'Actualizar' : 'Crear'} Modelo
-                    </>
-                  )}
-                </Button>
-                <Button type="button" variant="outline" onClick={resetForm}>
-                  Cancelar
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Modelos Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Modelos de Vehículos ({totalModelos})</CardTitle>
+          <CardTitle>Lista de Modelos ({modelos?.length || 0})</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Modelo de Vehículo</TableHead>
+                <TableHead>ID</TableHead>
+                <TableHead>Modelo</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead>Fecha Creación</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredModelos.map((modelo) => (
+              {paginatedModelos.map((modelo) => (
                 <TableRow key={modelo.id}>
+                  <TableCell className="font-medium">{modelo.id}</TableCell>
+                  <TableCell>{modelo.modelo}</TableCell>
                   <TableCell>
-                    <div>
-                      <div className="font-semibold">{modelo.modelo}</div>
-                      <div className="text-sm text-gray-500">ID: {modelo.id}</div>
-                    </div>
+                    <Badge variant={(modelo.activo === true || modelo.activo === 1) ? "default" : "secondary"}>
+                      {(modelo.activo === true || modelo.activo === 1) ? "Activo" : "Inactivo"}
+                    </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="default" className="bg-blue-600 text-white">
-                      {modelo.activo ? "Activo" : "Inactivo"}
-                    </Badge>
+                    {modelo.created_at 
+                      ? (() => {
+                          const date = new Date(modelo.created_at)
+                          return isNaN(date.getTime()) 
+                            ? '01/10/2025' 
+                            : date.toLocaleDateString('es-VE', { 
+                                year: 'numeric', 
+                                month: '2-digit', 
+                                day: '2-digit' 
+                              })
+                        })()
+                      : '01/10/2025'}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end space-x-2">
@@ -338,7 +331,7 @@ export function ModelosVehiculosConfig() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleDelete(modelo.id)}
+                        onClick={() => handleEliminar(modelo.id)}
                         className="text-red-600 hover:text-red-700"
                         title="Eliminar modelo"
                       >
@@ -353,28 +346,144 @@ export function ModelosVehiculosConfig() {
           
           {filteredModelos.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
-              {searchTerm ? 'No se encontraron modelos con ese criterio' : 'No hay modelos disponibles'}
+              {searchTerm ? 'No se encontraron modelos con ese nombre' : 'No hay modelos disponibles'}
+            </div>
+          )}
+
+          {/* Paginación */}
+          {filteredModelos.length > itemsPerPage && (
+            <div className="flex items-center justify-between px-2 py-4 border-t">
+              <div className="text-sm text-gray-500">
+                Mostrando {startIndex + 1} a {Math.min(endIndex, filteredModelos.length)} de {filteredModelos.length} modelos
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <div className="flex items-center space-x-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(page)}
+                      className={currentPage === page ? 'bg-blue-600 text-white' : ''}
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Siguiente
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          <div className="flex items-center justify-between">
-            <span>{error}</span>
-            <Button 
-              onClick={handleRefresh}
-              variant="outline" 
-              size="sm"
-              className="ml-4"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Reintentar
-            </Button>
+      {/* Create/Edit Form Modal */}
+      {showCreateForm && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={resetForm}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {editingModelo ? 'Editar Modelo de Vehículo' : 'Nuevo Modelo de Vehículo'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleCreateOrUpdate} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Nombre del Modelo *
+                    </label>
+                    <Input
+                      value={formData.modelo}
+                      onChange={(e) => {
+                        setFormData({ ...formData, modelo: e.target.value })
+                        setValidationError('') // Limpiar error al escribir
+                      }}
+                      placeholder="Ingrese nombre del modelo (2-4 palabras)"
+                      required
+                      autoFocus
+                      className={validationError ? 'border-red-500' : ''}
+                    />
+                    {validationError && (
+                      <p className="text-xs text-red-500 mt-1">
+                        {validationError}
+                      </p>
+                    )}
+                    {!editingModelo && !validationError && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Ejemplo: Toyota Corolla (mínimo 2, máximo 4 palabras)
+                      </p>
+                    )}
+                  </div>
+
+                  {editingModelo && (
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Estado *
+                      </label>
+                      <select
+                        value={formData.activo ? 'ACTIVO' : 'INACTIVO'}
+                        onChange={(e) => setFormData({ ...formData, activo: e.target.value === 'ACTIVO' })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      >
+                        <option value="ACTIVO">Activo</option>
+                        <option value="INACTIVO">Inactivo</option>
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="flex items-center space-x-2 pt-4">
+                    <Button 
+                      type="submit" 
+                      disabled={createModeloMutation.isPending || updateModeloMutation.isPending}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      {createModeloMutation.isPending || updateModeloMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Guardando...
+                        </>
+                      ) : (
+                        <>
+                          <Edit className="h-4 w-4 mr-2" />
+                          {editingModelo ? 'Actualizar' : 'Crear'} Modelo
+                        </>
+                      )}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={resetForm}>
+                      Cancelar
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
           </div>
         </div>
       )}
-    </motion.div>
+    </div>
   )
+}
+
 }
