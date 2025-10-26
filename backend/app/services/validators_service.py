@@ -756,6 +756,43 @@ class ValidadorMonto:
     }
 
     @staticmethod
+    def _crear_respuesta_error(monto: Any, error: str, formato_esperado: str, sugerencia: str) -> Dict[str, Any]:
+        """Crear respuesta de error estandarizada"""
+        return {
+            "valido": False,
+            "error": error,
+            "valor_original": monto,
+            "valor_formateado": None,
+            "formato_esperado": formato_esperado,
+            "sugerencia": sugerencia,
+        }
+
+    @staticmethod
+    def _validar_monto_nulo(monto: Any) -> Optional[Dict[str, Any]]:
+        """Validar si el monto es None"""
+        if monto is None:
+            return ValidadorMonto._crear_respuesta_error(
+                monto=monto,
+                error="Monto requerido",
+                formato_esperado="Número decimal (1-20000)",
+                sugerencia="Ingrese un monto. Ejemplo: '1500.50'",
+            )
+        return None
+
+    @staticmethod
+    def _validar_moneda(moneda: str, monto: Any) -> Optional[Dict[str, Any]]:
+        """Validar y obtener configuración de moneda"""
+        config_moneda = ValidadorMonto.MONEDAS_CONFIG.get(moneda.upper())
+        if not config_moneda:
+            return ValidadorMonto._crear_respuesta_error(
+                monto=monto,
+                error=f"Moneda '{moneda}' no soportada. Use USD o VES",
+                formato_esperado="USD o VES",
+                sugerencia="Use moneda USD (dólares) o VES (bolívares). Ejemplo: '1500.50'",
+            )
+        return config_moneda
+
+    @staticmethod
     def _procesar_formato_europeo_con_separadores(
         monto_limpio: str, monto: Any
     ) -> Dict[str, Any]:
@@ -848,6 +885,109 @@ class ValidadorMonto:
             }
 
     @staticmethod
+    def _procesar_string_monto(monto_limpio: str, monto: Any) -> Dict[str, Any]:
+        """Procesar string de monto según su formato"""
+        if "," in monto_limpio and "." in monto_limpio:
+            # Formato europeo completo
+            resultado = ValidadorMonto._procesar_formato_europeo_con_separadores(
+                monto_limpio, monto
+            )
+            if not resultado["valido"]:
+                return resultado
+            return {"valido": True, "monto_limpio": resultado["monto_limpio"]}
+        elif "," in monto_limpio:
+            # Solo coma
+            resultado = ValidadorMonto._procesar_formato_solo_coma(
+                monto_limpio, monto
+            )
+            if not resultado["valido"]:
+                return resultado
+            return {"valido": True, "monto_limpio": resultado["monto_limpio"]}
+        elif "." in monto_limpio:
+            # Solo punto: NO se acepta formato americano
+            return ValidadorMonto._crear_respuesta_error(
+                monto=monto,
+                error="Solo se acepta formato europeo",
+                formato_esperado="Número decimal (1-20000)",
+                sugerencia=(
+                    "Use formato europeo con coma para decimales. "
+                    "Ejemplos: '1500,50' o '1.500,50'. NO use punto para decimales"
+                ),
+            )
+        else:
+            # Sin separador
+            if not monto_limpio.isdigit():
+                return ValidadorMonto._crear_respuesta_error(
+                    monto=monto,
+                    error="Formato de monto inválido",
+                    formato_esperado="Número decimal (1-20000)",
+                    sugerencia="Use solo dígitos. Ejemplo: '1500'",
+                )
+            # REGLA ESTRICTA: Si el número tiene más de 3 dígitos, DEBE tener separador de miles
+            if len(monto_limpio) > 3:
+                return ValidadorMonto._crear_respuesta_error(
+                    monto=monto,
+                    error="Formato de miles inválido (obligatorio para números > 999)",
+                    formato_esperado="Punto cada 3 dígitos para miles",
+                    sugerencia=(
+                        "Para números mayores a 999, use punto como separador de miles. "
+                        "Ejemplo: '10.500,00' o '1.500,00' en lugar de '1500'"
+                    ),
+                )
+            return {"valido": True, "monto_limpio": monto_limpio}
+
+    @staticmethod
+    def _validar_rangos(monto_decimal: Decimal, config_moneda: Dict[str, Any], monto: Any) -> Optional[Dict[str, Any]]:
+        """Validar rango mínimo y máximo"""
+        # Validar rango mínimo (1.00)
+        if monto_decimal < config_moneda["minimo"]:
+            return ValidadorMonto._crear_respuesta_error(
+                monto=monto,
+                error=f"El monto mínimo es {config_moneda['simbolo']}1.00",
+                formato_esperado=(
+                    f"Rango: {config_moneda['simbolo']}1.00 - "
+                    f"{config_moneda['simbolo']}20,000.00"
+                ),
+                sugerencia=(
+                    f"Use un monto mínimo de {config_moneda['simbolo']}1.00. "
+                    f"Ejemplo: '{config_moneda['simbolo']}1.00' o "
+                    f"'{config_moneda['simbolo']}100.00'"
+                ),
+            )
+        # Validar rango máximo (20000.00)
+        if monto_decimal > config_moneda["maximo"]:
+            return ValidadorMonto._crear_respuesta_error(
+                monto=monto,
+                error=f"El monto máximo es {config_moneda['simbolo']}20,000.00",
+                formato_esperado=(
+                    f"Rango: {config_moneda['simbolo']}1.00 - "
+                    f"{config_moneda['simbolo']}20,000.00"
+                ),
+                sugerencia=(
+                    f"Use un monto máximo de {config_moneda['simbolo']}20,000.00. "
+                    f"Ejemplo: '{config_moneda['simbolo']}20000' o "
+                    f"'{config_moneda['simbolo']}15000.50'"
+                ),
+            )
+        return None
+
+    @staticmethod
+    def _crear_respuesta_exitosa(
+        monto: Any, monto_decimal: Decimal, moneda: str, config_moneda: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Crear respuesta exitosa"""
+        monto_formateado = monto_decimal.quantize(Decimal("0.01"))
+        return {
+            "valido": True,
+            "valor_original": monto,
+            "valor_formateado": float(monto_formateado),
+            "valor_decimal": monto_formateado,
+            "moneda": moneda.upper(),
+            "simbolo_moneda": config_moneda["simbolo"],
+            "cambio_realizado": str(monto) != str(monto_formateado),
+        }
+
+    @staticmethod
     def _procesar_formato_solo_coma(monto_limpio: str, monto: Any) -> Dict[str, Any]:
         """Procesar formato solo con coma (ej: 1500,50)"""
         partes_coma = monto_limpio.split(",")
@@ -917,155 +1057,44 @@ class ValidadorMonto:
             Dict con resultado de validación y formateo
         """
         try:
-            if monto is None:
-                return {
-                    "valido": False,
-                    "error": "Monto requerido",
-                    "valor_original": monto,
-                    "valor_formateado": None,
-                    "formato_esperado": "Número decimal (1-20000)",
-                    "sugerencia": "Ingrese un monto. Ejemplo: '1500.50'",
-                }
+            # Validar monto nulo
+            error = ValidadorMonto._validar_monto_nulo(monto)
+            if error:
+                return error
 
             # Validar moneda
-            config_moneda = ValidadorMonto.MONEDAS_CONFIG.get(moneda.upper())
-            if not config_moneda:
-                return {
-                    "valido": False,
-                    "error": f"Moneda '{moneda}' no soportada. Use USD o VES",
-                    "valor_original": monto,
-                    "valor_formateado": None,
-                    "formato_esperado": "USD o VES",
-                    "sugerencia": "Use moneda USD (dólares) o VES (bolívares). Ejemplo: '1500.50'",
-                }
+            config_moneda = ValidadorMonto._validar_moneda(moneda, monto)
+            if not isinstance(config_moneda, dict):
+                return config_moneda
 
             # Convertir a Decimal
             try:
                 if isinstance(monto, str):
-                    # Limpiar string: mantener solo dígitos, puntos y comas
                     monto_limpio = re.sub(r"[^\d.,]", "", monto)
-
-                    if "," in monto_limpio and "." in monto_limpio:
-                        # Usar función auxiliar para procesar formato europeo completo
-                        resultado = (
-                            ValidadorMonto._procesar_formato_europeo_con_separadores(
-                                monto_limpio, monto
-                            )
-                        )
-                        if not resultado["valido"]:
-                            return resultado
-                        monto_limpio = resultado["monto_limpio"]
-                    elif "," in monto_limpio:
-                        # Usar función auxiliar para procesar formato solo con coma
-                        resultado = ValidadorMonto._procesar_formato_solo_coma(
-                            monto_limpio, monto
-                        )
-                        if not resultado["valido"]:
-                            return resultado
-                        monto_limpio = resultado["monto_limpio"]
-                    elif "." in monto_limpio:
-                        # Solo punto: NO se acepta formato americano, rechazar
-                        return {
-                            "valido": False,
-                            "error": "Solo se acepta formato europeo",
-                            "valor_original": monto,
-                            "valor_formateado": None,
-                            "formato_esperado": "Número decimal (1-20000)",
-                            "sugerencia": (
-                                "Use formato europeo con coma para decimales. "
-                                "Ejemplos: '1500,50' o '1.500,50'. NO use punto para decimales"
-                            ),
-                        }
-                    else:
-                        # Sin separador: debe ser solo dígitos
-                        if not monto_limpio.isdigit():
-                            return {
-                                "valido": False,
-                                "error": "Formato de monto inválido",
-                                "valor_original": monto,
-                                "valor_formateado": None,
-                                "formato_esperado": "Número decimal (1-20000)",
-                                "sugerencia": "Use solo dígitos. Ejemplo: '1500'",
-                            }
-
-                        # REGLA ESTRICTA: Si el número tiene más de 3 dígitos, DEBE tener separador de miles
-                        if len(monto_limpio) > 3:
-                            return {
-                                "valido": False,
-                                "error": "Formato de miles inválido (obligatorio para números > 999)",
-                                "valor_original": monto,
-                                "valor_formateado": None,
-                                "formato_esperado": "Punto cada 3 dígitos para miles",
-                                "sugerencia": (
-                                    "Para números mayores a 999, use punto como separador de miles. "
-                                    "Ejemplo: '10.500,00' o '1.500,00' en lugar de '1500'"
-                                ),
-                            }
-
-                    monto_decimal = Decimal(monto_limpio)
+                    resultado = ValidadorMonto._procesar_string_monto(monto_limpio, monto)
+                    if not resultado["valido"]:
+                        return resultado
+                    monto_decimal = Decimal(resultado["monto_limpio"])
                 else:
                     monto_decimal = Decimal(str(monto))
             except (InvalidOperation, ValueError):
-                return {
-                    "valido": False,
-                    "error": "Formato de monto inválido",
-                    "valor_original": monto,
-                    "valor_formateado": None,
-                    "formato_esperado": "Número decimal formato europeo (1-20000)",
-                    "sugerencia": (
+                return ValidadorMonto._crear_respuesta_error(
+                    monto=monto,
+                    error="Formato de monto inválido",
+                    formato_esperado="Número decimal formato europeo (1-20000)",
+                    sugerencia=(
                         "Use formato europeo. Ejemplos: '1500,50', '1.500,50', "
                         "'20000'. Use coma (,) para decimales y punto (.) para miles"
                     ),
-                }
+                )
 
-            # Validar rango mínimo (1.00)
-            if monto_decimal < config_moneda["minimo"]:
-                return {
-                    "valido": False,
-                    "error": f"El monto mínimo es {config_moneda['simbolo']}1.00",
-                    "valor_original": monto,
-                    "valor_formateado": None,
-                    "formato_esperado": (
-                        f"Rango: {config_moneda['simbolo']}1.00 - "
-                        f"{config_moneda['simbolo']}20,000.00"
-                    ),
-                    "sugerencia": (
-                        f"Use un monto mínimo de {config_moneda['simbolo']}1.00. "
-                        f"Ejemplo: '{config_moneda['simbolo']}1.00' o "
-                        f"'{config_moneda['simbolo']}100.00'"
-                    ),
-                }
+            # Validar rangos
+            error = ValidadorMonto._validar_rangos(monto_decimal, config_moneda, monto)
+            if error:
+                return error
 
-            # Validar rango máximo (20000.00)
-            if monto_decimal > config_moneda["maximo"]:
-                return {
-                    "valido": False,
-                    "error": f"El monto máximo es {config_moneda['simbolo']}20,000.00",
-                    "valor_original": monto,
-                    "valor_formateado": None,
-                    "formato_esperado": (
-                        f"Rango: {config_moneda['simbolo']}1.00 - "
-                        f"{config_moneda['simbolo']}20,000.00"
-                    ),
-                    "sugerencia": (
-                        f"Use un monto máximo de {config_moneda['simbolo']}20,000.00. "
-                        f"Ejemplo: '{config_moneda['simbolo']}20000' o "
-                        f"'{config_moneda['simbolo']}15000.50'"
-                    ),
-                }
-
-            # Formatear con 2 decimales
-            monto_formateado = monto_decimal.quantize(Decimal("0.01"))
-
-            return {
-                "valido": True,
-                "valor_original": monto,
-                "valor_formateado": float(monto_formateado),
-                "valor_decimal": monto_formateado,
-                "moneda": moneda.upper(),
-                "simbolo_moneda": config_moneda["simbolo"],
-                "cambio_realizado": str(monto) != str(monto_formateado),
-            }
+            # Crear respuesta exitosa
+            return ValidadorMonto._crear_respuesta_exitosa(monto, monto_decimal, moneda, config_moneda)
 
         except Exception as e:
             logger.error(f"Error validando monto: {e}")
