@@ -32,6 +32,9 @@ def listar_analistas(
         if activo is not None:
             query = query.filter(Analista.activo == activo)
 
+        # Ordenar por ID
+        query = query.order_by(Analista.id)
+
         # Contar total
         total = query.count()
 
