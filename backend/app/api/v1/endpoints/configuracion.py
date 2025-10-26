@@ -279,9 +279,7 @@ def eliminar_configuracion(
 
 
 @router.get("/general")
-def obtener_configuracion_general(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def obtener_configuracion_general(db: Session = Depends(get_db)):
     """Obtener configuración general del sistema"""
     try:
         # Obtener configuraciones específicas
