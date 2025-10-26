@@ -29,6 +29,7 @@ export function Analistas() {
     nombre: '',
     activo: true
   })
+  const [validationError, setValidationError] = useState<string>('')
 
   // Usar hooks de React Query
   const { 
@@ -60,28 +61,76 @@ export function Analistas() {
     }
   }
 
+  const validateNombre = (nombre: string): string => {
+    if (!nombre.trim()) {
+      return 'El nombre es requerido'
+    }
+    
+    // Limpiar espacios extras
+    const nombreLimpio = nombre.trim().replace(/\s+/g, ' ')
+    
+    // Verificar que tenga exactamente 2 palabras
+    const palabras = nombreLimpio.split(' ')
+    
+    if (palabras.length !== 2) {
+      return 'Debe ingresar exactamente 2 palabras (Nombre y Apellido)'
+    }
+    
+    // Verificar que cada palabra tenga al menos 2 caracteres
+    if (palabras[0].length < 2 || palabras[1].length < 2) {
+      return 'Cada palabra debe tener al menos 2 caracteres'
+    }
+    
+    return ''
+  }
+
+  const formatNombre = (nombre: string): string => {
+    // Limpiar espacios extras
+    const nombreLimpio = nombre.trim().replace(/\s+/g, ' ')
+    
+    // Capitalizar primera letra de cada palabra
+    return nombreLimpio.split(' ').map(word => {
+      if (word.length === 0) return word
+      return word[0].toUpperCase() + word.slice(1).toLowerCase()
+    }).join(' ')
+  }
+
   const handleEdit = (analista: Analista) => {
     setEditingAnalista(analista)
     setFormData({
       nombre: analista.nombre,
       activo: analista.activo
     })
+    setValidationError('')
     setShowCreateForm(true)
   }
 
   const handleCreateOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Validar nombre
+    const error = validateNombre(formData.nombre)
+    if (error) {
+      setValidationError(error)
+      return
+    }
+    
+    setValidationError('')
+    
     try {
+      // Formatear nombre (capitalizar primera letra de cada palabra)
+      const nombreFormateado = formatNombre(formData.nombre)
+      
       if (editingAnalista) {
         // Al editar, mantener el estado actual
         await updateAnalistaMutation.mutateAsync({
           id: editingAnalista.id,
-          data: formData
+          data: { ...formData, nombre: nombreFormateado }
         })
         toast.success('✅ Analista actualizado exitosamente')
       } else {
         // Al crear, ya tiene activo: true por defecto
-        await createAnalistaMutation.mutateAsync(formData)
+        await createAnalistaMutation.mutateAsync({ ...formData, nombre: nombreFormateado })
         toast.success('✅ Analista creado exitosamente')
       }
       resetForm()
@@ -97,6 +146,7 @@ export function Analistas() {
       nombre: '',
       activo: true
     })
+    setValidationError('')
     setEditingAnalista(null)
     setShowCreateForm(false)
   }
@@ -153,6 +203,7 @@ export function Analistas() {
           <Button onClick={() => {
             setEditingAnalista(null)
             setFormData({ nombre: '', activo: true })
+            setValidationError('')
             setShowCreateForm(true)
           }}>
             <Plus className="h-4 w-4 mr-2" />
@@ -318,14 +369,23 @@ export function Analistas() {
                     </label>
                     <Input
                       value={formData.nombre}
-                      onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                      placeholder="Ingrese el nombre del analista"
+                      onChange={(e) => {
+                        setFormData({ ...formData, nombre: e.target.value })
+                        setValidationError('') // Limpiar error al escribir
+                      }}
+                      placeholder="Ingrese nombre y apellido (2 palabras)"
                       required
                       autoFocus
+                      className={validationError ? 'border-red-500' : ''}
                     />
-                    {!editingAnalista && (
+                    {validationError && (
+                      <p className="text-xs text-red-500 mt-1">
+                        {validationError}
+                      </p>
+                    )}
+                    {!editingAnalista && !validationError && (
                       <p className="text-xs text-gray-500 mt-1">
-                        El analista se creará como "Activo" por defecto
+                        Ejemplo: Juan Pérez (2 palabras, primera letra mayúscula)
                       </p>
                     )}
                   </div>
