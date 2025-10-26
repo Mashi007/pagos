@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.permissions_simple import Permission, has_permission
 from app.core.security import get_password_hash
 from app.models.user import User
 from app.schemas.user import UserCreate, UserListResponse, UserResponse, UserUpdate
@@ -55,10 +56,10 @@ def create_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Crear un nuevo usuario (solo ADMIN)
-    if not current_user.is_admin:
+    # Crear un nuevo usuario (verificar permiso)
+    if not has_permission(current_user.is_admin, Permission.USER_CREATE):
         raise HTTPException(
-            status_code=403, detail="Solo administradores pueden crear usuarios"
+            status_code=403, detail="No tienes permisos para crear usuarios"
         )
     # - email: Email único del usuario
     # - nombre: Nombre del usuario
@@ -117,10 +118,10 @@ def list_users(
 ):
     # Listar usuarios con paginación
     try:
-        # Solo admins pueden ver todos los usuarios
-        if not current_user.is_admin:
+        # Verificar permiso para listar usuarios
+        if not has_permission(current_user.is_admin, Permission.USER_READ):
             raise HTTPException(
-                status_code=403, detail="Solo administradores pueden listar usuarios"
+                status_code=403, detail="No tienes permisos para ver usuarios"
             )
 
         users = db.query(User).offset(skip).limit(limit).all()
@@ -150,11 +151,13 @@ def get_user(
         if not user:
             raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-        # Solo admins pueden ver otros usuarios, o el usuario puede verse a sí mismo
-        if not current_user.is_admin and current_user.id != user_id:
-            raise HTTPException(
-                status_code=403, detail="No tienes permisos para ver este usuario"
-            )
+        # Verificar permiso para ver usuarios
+        if not has_permission(current_user.is_admin, Permission.USER_READ):
+            # Si no tiene permiso general, solo puede verse a sí mismo
+            if current_user.id != user_id:
+                raise HTTPException(
+                    status_code=403, detail="No tienes permisos para ver este usuario"
+                )
 
         return user
 

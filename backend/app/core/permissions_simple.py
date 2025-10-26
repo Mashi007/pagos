@@ -129,6 +129,7 @@ USER_PERMISSIONS: List[Permission] = [
     # operaciones básicas
     Permission.CLIENTE_CREATE,  # ✅ Crear clientes
     Permission.CLIENTE_UPDATE,  # ✅ Actualizar clientes
+    Permission.USER_READ,  # ✅ Ver usuarios (agregado)
 ]
 
 

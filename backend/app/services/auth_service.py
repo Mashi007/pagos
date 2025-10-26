@@ -72,7 +72,7 @@ class AuthService:
         user = AuthService.authenticate_user(db, login_data.email, login_data.password)
 
         if not user:
-            raise ValueError("Credenciales inválidas")
+            raise ValueError("Usuario o clave incorrecto")
 
         # Crear tokens
         access_token = create_access_token(subject=str(user.id))

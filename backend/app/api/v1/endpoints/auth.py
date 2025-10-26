@@ -76,7 +76,7 @@ async def login(
             logger.warning(f"Login fallido para: {login_data.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Credenciales inválidas",
+                detail="Usuario o clave incorrecto",
             )
 
         # Generar tokens
