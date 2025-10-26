@@ -98,23 +98,23 @@ export function Validadores() {
     {
       nombre: 'Monto',
       campo: 'monto',
-      formato: '1-20000 (Acepta 1500.50 o 1.500,50)',
-      ejemplo: '1500.50 o 1.500,50',
-      descripcion: 'Valida montos rango 1-20000, acepta punto o coma como decimal'
+      formato: 'Formato europeo: coma decimal, punto miles',
+      ejemplo: '1.500,50 o 1500,50 o 10000',
+      descripcion: 'Solo formato europeo: coma (,) para decimales, punto (.) para miles. Rango: 1-20000.'
     },
     {
       nombre: 'Nombre',
       campo: 'nombre',
-      formato: '1-2 palabras, primera letra mayúscula',
-      ejemplo: 'Juan Carlos',
-      descripcion: 'Valida nombres con formato correcto'
+      formato: '1-2 palabras, auto-capitaliza primera letra',
+      ejemplo: 'juan pedro → Juan Pedro',
+      descripcion: 'Acepta minúsculas y auto-convierte a formato correcto. Primera letra de cada palabra en mayúscula, resto en minúscula.'
     },
     {
       nombre: 'Apellido',
       campo: 'apellido',
-      formato: '1-2 palabras, primera letra mayúscula',
-      ejemplo: 'Pérez González',
-      descripcion: 'Valida apellidos con formato correcto'
+      formato: '1-2 palabras, auto-capitaliza primera letra',
+      ejemplo: 'perez gonzalez → Perez Gonzalez',
+      descripcion: 'Acepta minúsculas y auto-convierte a formato correcto. Primera letra de cada palabra en mayúscula, resto en minúscula.'
     }
   ]
 
