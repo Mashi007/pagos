@@ -21,6 +21,7 @@ from app.api.v1.endpoints import (
     concesionarios,
     configuracion,
     dashboard,
+    logo,
     notificaciones,
     pagos,
     prestamos,
@@ -171,6 +172,7 @@ app.include_router(analistas.router, prefix="/api/v1/analistas", tags=["analista
 app.include_router(
     validadores.router, prefix="/api/v1/validadores", tags=["validadores"]
 )
+app.include_router(logo.router, prefix="/api/v1", tags=["logo"])
 
 logger.info("Todos los routers registrados correctamente")
 
