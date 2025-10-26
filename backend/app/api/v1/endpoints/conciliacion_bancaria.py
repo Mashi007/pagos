@@ -147,8 +147,8 @@ async def procesar_conciliacion(
 
                     if pago:
                         pago.conciliado = True
-                        pago.fecha_conciliacion = date.today()
-                        pago.usuario_conciliacion = current_user.id
+                        pago.fecha_conciliacion = datetime.now()
+                        pago.usuario_conciliacion = int(current_user.id)
                         conciliaciones_procesadas += 1
                     else:
                         errores.append(

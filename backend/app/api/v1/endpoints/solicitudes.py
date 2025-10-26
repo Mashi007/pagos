@@ -228,7 +228,7 @@ def aprobar_solicitud(
 
         # Actualizar estado
         solicitud.estado = "APROBADA"
-        solicitud.revisor_id = current_user.id
+        solicitud.revisor_id = int(current_user.id)
         solicitud.comentarios_revisor = comentarios
 
         db.commit()
@@ -264,7 +264,7 @@ def rechazar_solicitud(
 
         # Actualizar estado
         solicitud.estado = "RECHAZADA"
-        solicitud.revisor_id = current_user.id
+        solicitud.revisor_id = int(current_user.id)
         solicitud.comentarios_revisor = comentarios
 
         db.commit()

@@ -145,8 +145,8 @@ def aprobar_solicitud(
         raise HTTPException(status_code=400, detail="Esta solicitud ya fue procesada")
 
     aprobacion.estado = "APROBADA"
-    aprobacion.aprobado_por = current_user.id
-    aprobacion.fecha_aprobacion = date.today()
+    aprobacion.aprobado_por = int(current_user.id)
+    aprobacion.fecha_aprobacion = datetime.now()
     aprobacion.observaciones_aprobacion = observaciones
 
     db.commit()
@@ -178,8 +178,8 @@ def rechazar_solicitud(
         raise HTTPException(status_code=400, detail="Esta solicitud ya fue procesada")
 
     aprobacion.estado = "RECHAZADA"
-    aprobacion.aprobado_por = current_user.id
-    aprobacion.fecha_aprobacion = date.today()
+    aprobacion.aprobado_por = int(current_user.id)
+    aprobacion.fecha_aprobacion = datetime.now()
     aprobacion.observaciones_aprobacion = observaciones
 
     db.commit()

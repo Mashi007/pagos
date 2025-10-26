@@ -120,7 +120,12 @@ def list_users(
         users = db.query(User).offset(skip).limit(limit).all()
         total = db.query(User).count()
 
-        return UserListResponse(users=users, total=total, skip=skip, limit=limit)
+        return UserListResponse(
+            items=users, 
+            total=total, 
+            page=skip // limit + 1, 
+            page_size=limit
+        )
 
     except HTTPException:
         raise

@@ -123,7 +123,7 @@ def list_concesionarios(
         pages = (total + limit - 1) // limit
 
         return ConcesionarioListResponse(
-            concesionarios=[c.to_dict() for c in concesionarios],
+            items=[c.to_dict() for c in concesionarios],
             total=total,
             page=1,
             size=limit,

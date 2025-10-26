@@ -215,7 +215,7 @@ def actualizar_configuracion(
             # Actualizar configuración existente
             config.valor = config_data.valor
             config.descripcion = config_data.descripcion
-            config.actualizado_por = current_user.id
+            config.actualizado_por = int(current_user.id)
             config.fecha_actualizacion = datetime.now()
 
         db.commit()
