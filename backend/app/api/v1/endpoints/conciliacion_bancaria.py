@@ -1,6 +1,6 @@
 import io
 import logging
-from datetime import date
+from datetime import date, datetime
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
