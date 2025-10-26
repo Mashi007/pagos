@@ -64,7 +64,7 @@ def listar_modelos_activos(
     current_user: User = Depends(get_current_user),
 ):
     """Listar solo modelos activos (para formularios)"""
-    modelos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo == True).all()
+    modelos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo.is_(True)).all()
     return modelos
 
 
