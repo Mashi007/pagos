@@ -218,7 +218,7 @@ export function Validadores() {
                               </p>
                             )}
                             {resultadoTest.validacion?.sugerencia && (
-                              <p className="text-sm text-blue-700 mt-2 font-medium">
+                              <p className="text-sm text-blue-700 mt-2 font-medium bg-blue-50 p-2 rounded">
                                 <strong>💡 Sugerencia:</strong> {resultadoTest.validacion.sugerencia}
                               </p>
                             )}
