@@ -143,7 +143,7 @@ def actualizar_analista(
         # Actualizar campos
         for field, value in analista_data.model_dump(exclude_unset=True).items():
             setattr(analista, field, value)
-        
+
         # Actualizar timestamp manually
         analista.updated_at = datetime.utcnow()
 
