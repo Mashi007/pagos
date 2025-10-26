@@ -144,28 +144,16 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/v1/usuarios", tags=["usuarios"])
 app.include_router(clientes.router, prefix="/api/v1/clientes", tags=["clientes"])
-app.include_router(
-    concesionarios.router, prefix="/api/v1/concesionarios", tags=["concesionarios"]
-)
+app.include_router(concesionarios.router, prefix="/api/v1/concesionarios", tags=["concesionarios"])
 app.include_router(prestamos.router, prefix="/api/v1/prestamos", tags=["prestamos"])
 app.include_router(pagos.router, prefix="/api/v1/pagos", tags=["pagos"])
-app.include_router(
-    amortizacion.router, prefix="/api/v1/amortizacion", tags=["amortizacion"]
-)
-app.include_router(
-    solicitudes.router, prefix="/api/v1/solicitudes", tags=["solicitudes"]
-)
-app.include_router(
-    aprobaciones.router, prefix="/api/v1/aprobaciones", tags=["aprobaciones"]
-)
-app.include_router(
-    notificaciones.router, prefix="/api/v1/notificaciones", tags=["notificaciones"]
-)
+app.include_router(amortizacion.router, prefix="/api/v1/amortizacion", tags=["amortizacion"])
+app.include_router(solicitudes.router, prefix="/api/v1/solicitudes", tags=["solicitudes"])
+app.include_router(aprobaciones.router, prefix="/api/v1/aprobaciones", tags=["aprobaciones"])
+app.include_router(notificaciones.router, prefix="/api/v1/notificaciones", tags=["notificaciones"])
 app.include_router(reportes.router, prefix="/api/v1/reportes", tags=["reportes"])
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])
-app.include_router(
-    configuracion.router, prefix="/api/v1/configuracion", tags=["configuracion"]
-)
+app.include_router(configuracion.router, prefix="/api/v1/configuracion", tags=["configuracion"])
 app.include_router(analistas.router, prefix="/api/v1/analistas", tags=["analistas"])
 
 logger.info("Todos los routers registrados correctamente")

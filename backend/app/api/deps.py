@@ -72,15 +72,11 @@ def get_current_user(
     user = db.query(User).filter(User.id == int(user_id)).first()
     if user is None:
         logger.error(f"Usuario no encontrado en BD - ID: {user_id}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado")
 
     if not user.is_active:
         logger.warning(f"Usuario inactivo - Email: {user.email}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario inactivo"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario inactivo")
 
     return user
 
@@ -101,9 +97,7 @@ def get_current_active_user(
         HTTPException: Si el usuario está inactivo
     """
     if not current_user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario inactivo"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario inactivo")
     return current_user
 
 
@@ -152,9 +146,7 @@ def require_permission(permission: Permission):
 
 def get_optional_current_user(
     db: Session = Depends(get_db),
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(
-        HTTPBearer(auto_error=False)
-    ),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
 ):
     """
     Obtiene el usuario actual si está autenticado, sino retorna None

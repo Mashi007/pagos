@@ -37,11 +37,7 @@ class AuthService:
 
         logger.info(f"Intentando autenticar usuario: {email_normalized}")
 
-        user = (
-            db.query(User)
-            .filter(func.lower(User.email) == email_normalized, User.is_active)
-            .first()
-        )
+        user = db.query(User).filter(func.lower(User.email) == email_normalized, User.is_active).first()
 
         if not user:
             logger.warning(f"Usuario no encontrado o inactivo: {email_normalized}")
@@ -119,9 +115,7 @@ class AuthService:
                 raise ValueError("Token inválido: no se puede obtener el usuario")
 
             # Verificar que el usuario existe y está activo
-            user = (
-                db.query(User).filter(User.id == int(user_id), User.is_active).first()
-            )
+            user = db.query(User).filter(User.id == int(user_id), User.is_active).first()
 
             if not user:
                 raise ValueError("Usuario no encontrado o inactivo")
@@ -145,9 +139,7 @@ class AuthService:
             raise ValueError("Token de refresh inválido")
 
     @staticmethod
-    def change_password(
-        db: Session, user_id: int, current_password: str, new_password: str
-    ) -> bool:
+    def change_password(db: Session, user_id: int, current_password: str, new_password: str) -> bool:
         """
         Cambia la contraseña de un usuario
 
@@ -207,8 +199,4 @@ class AuthService:
             User: Usuario encontrado o None
         """
         email_normalized = email.lower().strip()
-        return (
-            db.query(User)
-            .filter(func.lower(User.email) == email_normalized, User.is_active)
-            .first()
-        )
+        return db.query(User).filter(func.lower(User.email) == email_normalized, User.is_active).first()

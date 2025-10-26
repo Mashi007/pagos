@@ -1,21 +1,15 @@
 # Archivo corregido - Contenido básico funcional
 
 import logging
-from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.models.analista import Analista
 from app.models.auditoria import Auditoria, TipoAccion
 from app.models.cliente import Cliente
-from app.models.concesionario import Concesionario
-from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.pago import Pago
 from app.models.user import User
 
@@ -64,9 +58,7 @@ async def subir_archivo(
     try:
         # Validar tipo de archivo
         if not archivo.filename.endswith((".xlsx", ".xls")):
-            raise HTTPException(
-                status_code=400, detail="Solo se permiten archivos Excel (.xlsx, .xls)"
-            )
+            raise HTTPException(status_code=400, detail="Solo se permiten archivos Excel (.xlsx, .xls)")
 
         # Leer contenido del archivo
         contenido = await archivo.read()
@@ -85,9 +77,7 @@ async def subir_archivo(
 
     except Exception as e:
         logger.error(f"Error procesando archivo: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error procesando archivo: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error procesando archivo: {str(e)}")
 
 
 # ============================================
@@ -115,6 +105,4 @@ async def dashboard_carga_masiva(
 
     except Exception as e:
         logger.error(f"Error obteniendo dashboard: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error obteniendo dashboard: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error obteniendo dashboard: {str(e)}")

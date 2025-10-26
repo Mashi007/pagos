@@ -19,9 +19,7 @@ router = APIRouter()
 
 @router.get("/dashboard")
 def dashboard_kpis_principales(
-    fecha_corte: Optional[str] = Query(
-        None, description="Fecha de corte (default: hoy)"
-    ),
+    fecha_corte: Optional[str] = Query(None, description="Fecha de corte (default: hoy)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -37,15 +35,11 @@ def dashboard_kpis_principales(
     ).scalar() or Decimal("0")
 
     # Clientes al día
-    clientes_al_dia = (
-        db.query(func.count(Cliente.id)).filter(Cliente.estado == "ACTIVO").scalar()
-        or 0
-    )
+    clientes_al_dia = db.query(func.count(Cliente.id)).filter(Cliente.estado == "ACTIVO").scalar() or 0
 
     # Pagos del mes
     pagos_mes = db.query(func.sum(Pago.monto)).filter(
-        func.date_trunc("month", Pago.fecha_pago)
-        == func.date_trunc("month", fecha_corte)
+        func.date_trunc("month", Pago.fecha_pago) == func.date_trunc("month", fecha_corte)
     ).scalar() or Decimal("0")
 
     # Cuotas vencidas
@@ -85,8 +79,7 @@ def kpis_analistas(
 
     return {
         "analistas_clientes": [
-            {"nombre": analista.nombre, "total_clientes": analista.total_clientes}
-            for analista in analistas_clientes
+            {"nombre": analista.nombre, "total_clientes": analista.total_clientes} for analista in analistas_clientes
         ]
     }
 
@@ -100,14 +93,7 @@ def kpis_cartera(
 
     # Cartera por estado
     cartera_estado = (
-        db.query(Cliente.estado, func.sum(Cliente.total_financiamiento).label("total"))
-        .group_by(Cliente.estado)
-        .all()
+        db.query(Cliente.estado, func.sum(Cliente.total_financiamiento).label("total")).group_by(Cliente.estado).all()
     )
 
-    return {
-        "cartera_por_estado": [
-            {"estado": estado, "total": float(total)}
-            for estado, total in cartera_estado
-        ]
-    }
+    return {"cartera_por_estado": [{"estado": estado, "total": float(total)} for estado, total in cartera_estado]}

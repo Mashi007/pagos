@@ -2,11 +2,9 @@
 Configuración de la aplicación
 """
 
-import os
 from typing import List, Optional
 
-from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, Field as SettingsField
 
 
 class Settings(BaseSettings):
@@ -20,22 +18,18 @@ class Settings(BaseSettings):
     APP_NAME: str = "RapiCredit API"
     APP_VERSION: str = "1.0.0"
     DESCRIPTION: str = "API para sistema de préstamos RapiCredit"
-    ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")
-    DEBUG: bool = Field(default=True, env="DEBUG")
+    ENVIRONMENT: str = SettingsField(default="development", env="ENVIRONMENT")
+    DEBUG: bool = SettingsField(default=True, env="DEBUG")
 
     # ============================================
     # BASE DE DATOS
     # ============================================
-    DATABASE_URL: str = Field(
-        default="postgresql://user:password@localhost/pagos_db", env="DATABASE_URL"
-    )
+    DATABASE_URL: str = SettingsField(default="postgresql://user:password@localhost/pagos_db", env="DATABASE_URL")
 
     # ============================================
     # SEGURIDAD
     # ============================================
-    SECRET_KEY: str = Field(
-        default="your-secret-key-here-change-in-production", env="SECRET_KEY"
-    )
+    SECRET_KEY: str = SettingsField(default="your-secret-key-here-change-in-production", env="SECRET_KEY")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -43,7 +37,7 @@ class Settings(BaseSettings):
     # ============================================
     # CORS
     # ============================================
-    CORS_ORIGINS: List[str] = Field(
+    CORS_ORIGINS: List[str] = SettingsField(
         default=[
             "http://localhost:3000",
             "http://localhost:5173",
@@ -59,7 +53,7 @@ class Settings(BaseSettings):
     # USUARIO ADMINISTRADOR INICIAL
     # ============================================
     ADMIN_EMAIL: str = "itmaster@rapicreditca.com"
-    ADMIN_PASSWORD: str = Field(default="R@pi_2025**", env="ADMIN_PASSWORD")
+    ADMIN_PASSWORD: str = SettingsField(default="R@pi_2025**", env="ADMIN_PASSWORD")
 
     # ============================================
     # AMORTIZACIÓN Y REGLAS DE NEGOCIO
@@ -143,17 +137,13 @@ class Settings(BaseSettings):
         """Valida que CORS no esté abierto en producción"""
         if self.ENVIRONMENT == "production" and "*" in self.CORS_ORIGINS:
             raise ValueError(
-                "CRÍTICO: CORS con wildcard (*) detectado en producción. "
-                "CORS_ORIGINS debe especificar dominios específicos"
+                "CRÍTICO: CORS con wildcard (*) detectado en producción. " "CORS_ORIGINS debe especificar dominios específicos"
             )
         return True
 
     def validate_database_url(self) -> bool:
         """Valida que la URL de base de datos sea válida"""
-        if (
-            not self.DATABASE_URL
-            or self.DATABASE_URL == "postgresql://user:password@localhost/pagos_db"
-        ):
+        if not self.DATABASE_URL or self.DATABASE_URL == "postgresql://user:password@localhost/pagos_db":
             if self.ENVIRONMENT == "production":
                 raise ValueError("DATABASE_URL debe estar configurada en producción")
         return True

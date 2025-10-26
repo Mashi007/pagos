@@ -47,18 +47,10 @@ class QualityStandards:
                 content = f.read()
 
             # Validaciones de estructura
-            results["validations"]["has_docstring"] = (
-                QualityStandards._has_module_docstring(content)
-            )
-            results["validations"]["proper_imports"] = (
-                QualityStandards._validate_imports(content)
-            )
-            results["validations"]["class_structure"] = (
-                QualityStandards._validate_class_structure(content)
-            )
-            results["validations"]["function_length"] = (
-                QualityStandards._validate_function_length(content)
-            )
+            results["validations"]["has_docstring"] = QualityStandards._has_module_docstring(content)
+            results["validations"]["proper_imports"] = QualityStandards._validate_imports(content)
+            results["validations"]["class_structure"] = QualityStandards._validate_class_structure(content)
+            results["validations"]["function_length"] = QualityStandards._validate_function_length(content)
 
             # Calcular score
             score = sum(results["validations"].values()) * 25
@@ -124,11 +116,7 @@ class QualityStandards:
             for node in ast.walk(tree):
                 if isinstance(node, ast.ClassDef):
                     # Verificar que la clase tenga docstring
-                    if not (
-                        node.body
-                        and isinstance(node.body[0], ast.Expr)
-                        and isinstance(node.body[0].value, ast.Constant)
-                    ):
+                    if not (node.body and isinstance(node.body[0], ast.Expr) and isinstance(node.body[0].value, ast.Constant)):
                         return False
             return True
         except Exception:
@@ -192,14 +180,10 @@ class QualityStandards:
 
         if report["overall_score"] < 70:
             recommendations.append("Revisar longitud de funciones (máximo 50 líneas)")
-            recommendations.append(
-                "Refactorizar código con alta complejidad ciclomática"
-            )
+            recommendations.append("Refactorizar código con alta complejidad ciclomática")
 
         if report["overall_score"] < 60:
-            recommendations.append(
-                "Revisar arquitectura y separación de responsabilidades"
-            )
+            recommendations.append("Revisar arquitectura y separación de responsabilidades")
 
         return recommendations
 
@@ -226,16 +210,12 @@ class ServiceMetrics:
                     metrics["total_functions"] += 1
                     function_length = len(node.body)
                     function_lengths.append(function_length)
-                    metrics["max_function_length"] = max(
-                        metrics["max_function_length"], function_length
-                    )
+                    metrics["max_function_length"] = max(metrics["max_function_length"], function_length)
 
                     # Calcular complejidad ciclomática básica
                     complexity = 1  # Base complexity
                     for item in ast.walk(node):
-                        if isinstance(
-                            item, (ast.If, ast.While, ast.For, ast.ExceptHandler)
-                        ):
+                        if isinstance(item, (ast.If, ast.While, ast.For, ast.ExceptHandler)):
                             complexity += 1
                     metrics["cyclomatic_complexity"] += complexity
 
@@ -254,9 +234,7 @@ class ServiceMetrics:
         recommendations = []
 
         if metrics.get("cyclomatic_complexity", 0) > 20:
-            recommendations.append(
-                "Reducir complejidad ciclomática usando patrones de diseño"
-            )
+            recommendations.append("Reducir complejidad ciclomática usando patrones de diseño")
 
         if metrics.get("max_function_length", 0) > 50:
             recommendations.append("Dividir función más larga para mejorar legibilidad")
@@ -277,9 +255,7 @@ def apply_quality_standards(services_dir: str) -> Dict[str, Any]:
             with open(service["file_path"], "r", encoding="utf-8") as f:
                 content = f.read()
             service["metrics"] = ServiceMetrics.calculate_complexity_metrics(content)
-            service["performance_recommendations"] = (
-                ServiceMetrics.generate_performance_recommendations(service["metrics"])
-            )
+            service["performance_recommendations"] = ServiceMetrics.generate_performance_recommendations(service["metrics"])
         except Exception as e:
             service["metrics"] = {"error": str(e)}
 

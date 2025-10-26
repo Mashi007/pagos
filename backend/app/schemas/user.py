@@ -1,5 +1,3 @@
-from datetime import date
-
 # backend/app/schemas/user.py
 """
 Schemas de usuario simplificado.

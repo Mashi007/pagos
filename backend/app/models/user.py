@@ -28,24 +28,16 @@ class User(Base):
     apellido = Column(String(NAME_LENGTH), nullable=False)
     hashed_password = Column(String(PASSWORD_LENGTH), nullable=False)
     rol = Column(String(50), default="USER", nullable=False)  # Campo rol requerido
-    is_admin = Column(
-        Boolean, default=False, nullable=False
-    )  # Cambio clave: rol → is_admin
-    cargo = Column(
-        String(NAME_LENGTH), nullable=True
-    )  # Campo separado para cargo en la empresa
+    is_admin = Column(Boolean, default=False, nullable=False)  # Cambio clave: rol → is_admin
+    cargo = Column(String(NAME_LENGTH), nullable=True)  # Campo separado para cargo en la empresa
     is_active = Column(Boolean, default=True, nullable=False)
 
     # Timestamps
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
     # Relaciones
-    aprobaciones_solicitadas = relationship(
-        "Aprobacion", foreign_keys="Aprobacion.solicitante_id"
-    )
-    aprobaciones_revisadas = relationship(
-        "Aprobacion", foreign_keys="Aprobacion.revisor_id"
-    )
+    aprobaciones_solicitadas = relationship("Aprobacion", foreign_keys="Aprobacion.solicitante_id")
+    aprobaciones_revisadas = relationship("Aprobacion", foreign_keys="Aprobacion.revisor_id")
 
     auditorias = relationship("Auditoria", back_populates="usuario")
     notificaciones = relationship("Notificacion", back_populates="user")

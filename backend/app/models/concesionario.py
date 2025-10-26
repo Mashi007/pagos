@@ -1,7 +1,6 @@
 from datetime import datetime
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String
-from sqlalchemy.sql import func
 
 from app.db.session import Base
 
@@ -19,9 +18,7 @@ class Concesionario(Base):
     activo = Column(Boolean, default=True, nullable=False)
 
     # Timestamps
-    updated_at = Column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):
         return f"<Concesionario(id={self.id}, nombre='{self.nombre}', activo={self.activo})>"

@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -58,9 +57,7 @@ def renovar_token(
     # Renovar token de acceso
     try:
         # Generar nuevo token
-        new_token = create_access_token(
-            subject=str(current_user.id), additional_claims={"type": "access"}
-        )
+        new_token = create_access_token(subject=str(current_user.id), additional_claims={"type": "access"})
 
         return {
             "access_token": new_token,
@@ -75,9 +72,7 @@ def renovar_token(
 
     except Exception as e:
         logger.error(f"Error renovando token: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/token-info")
@@ -99,9 +94,7 @@ def obtener_info_token(
 
     except Exception as e:
         logger.error(f"Error obteniendo info del token: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.post("/generar-token-prueba")
@@ -114,9 +107,7 @@ async def generar_token_prueba(db: Session = Depends(get_db)):
             return {"error": "No se encontró usuario administrador"}
 
         # Generar token
-        test_token = create_access_token(
-            subject=str(admin_user.id), additional_claims={"type": "access"}
-        )
+        test_token = create_access_token(subject=str(admin_user.id), additional_claims={"type": "access"})
 
         return {
             "token": test_token,
@@ -131,6 +122,4 @@ async def generar_token_prueba(db: Session = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"Error generando token de prueba: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")

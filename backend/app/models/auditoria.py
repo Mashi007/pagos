@@ -3,7 +3,6 @@ Modelo de Auditoría
 Registra todas las acciones importantes del sistema para trazabilidad
 """
 
-from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
@@ -42,9 +41,7 @@ class Auditoria(Base):
     usuario_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
     # Detalles de la acción
-    accion = Column(
-        String(50), nullable=False, index=True
-    )  # CREATE, UPDATE, DELETE, etc.
+    accion = Column(String(50), nullable=False, index=True)  # CREATE, UPDATE, DELETE, etc.
     entidad = Column(String(50), nullable=False, index=True)  # Cliente, Prestamo, etc.
     entidad_id = Column(Integer, nullable=True, index=True)  # ID del registro afectado
 
@@ -58,9 +55,7 @@ class Auditoria(Base):
     mensaje_error = Column(Text, nullable=True)  # Mensaje de error si falló
 
     # Timestamps
-    fecha = Column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
-    )
+    fecha = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
     # Relaciones
     usuario = relationship("User", back_populates="auditorias")

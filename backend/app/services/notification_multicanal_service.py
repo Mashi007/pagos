@@ -1,5 +1,3 @@
-from datetime import date
-
 # backend/app/services/notification_multicanal_service.py"""Servicio de Notificaciones MulticanalSistema 100% automático de"""
 # sqlalchemy.orm import Sessionfrom app.models.amortizacion import Cuotafrom app.models.cliente import Clientefrom
 # app.models.notificacion import Notificacionfrom app.models.prestamo import Prestamofrom app.models.user import Userfrom

@@ -21,9 +21,7 @@ def migracion_emergencia(
 ):
     # Migración de emergencia para agregar columnas faltantes
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Solo administradores pueden ejecutar migraciones"
-        )
+        raise HTTPException(status_code=403, detail="Solo administradores pueden ejecutar migraciones")
 
     try:
         # Verificar si las columnas ya existen

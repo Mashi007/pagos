@@ -3,6 +3,5 @@
 
 Base declarativa de SQLAlchemy.
 """
-from app.db.session import Base
 
 __all__ = ["Base"]

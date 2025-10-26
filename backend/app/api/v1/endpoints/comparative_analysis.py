@@ -31,9 +31,7 @@ def get_comparative_analysis(
 
     except Exception as e:
         logger.error(f"Error obteniendo análisis comparativo: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.post("/comparative-analysis/log-case")
@@ -48,6 +46,4 @@ def log_case(
 
     except Exception as e:
         logger.error(f"Error registrando caso: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")

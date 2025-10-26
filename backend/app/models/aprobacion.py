@@ -62,9 +62,7 @@ class Aprobacion(Base):
     revisor_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
     # Detalles de la solicitud
-    tipo_solicitud = Column(
-        String(50), nullable=False, index=True
-    )  # PRESTAMO, MODIFICACION_MONTO, ANULACION, etc.
+    tipo_solicitud = Column(String(50), nullable=False, index=True)  # PRESTAMO, MODIFICACION_MONTO, ANULACION, etc.
     entidad = Column(String(50), nullable=False)  # Cliente, Prestamo, Pago, etc.
     entidad_id = Column(Integer, nullable=False, index=True)
 
@@ -89,24 +87,18 @@ class Aprobacion(Base):
 
     # Notificaciones
     notificado_admin = Column(Boolean, default=False)  # Si ya se notificó al admin
-    notificado_solicitante = Column(
-        Boolean, default=False
-    )  # Si ya se notificó resultado
+    notificado_solicitante = Column(Boolean, default=False)  # Si ya se notificó resultado
     visto_por_admin = Column(Boolean, default=False)
 
     # Control de bloqueo
-    bloqueado_temporalmente = Column(
-        Boolean, default=False
-    )  # Si está bloqueado el registro
+    bloqueado_temporalmente = Column(Boolean, default=False)  # Si está bloqueado el registro
 
     # Métricas
     tiempo_respuesta_horas = Column(Integer, nullable=True)  # Tiempo que tomó responder
 
     # Auditoría
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
-    )
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     def __repr__(self):
         return f"<Aprobacion(id={self.id}, tipo={self.tipo_solicitud}, estado={self.estado})>"
@@ -164,16 +156,10 @@ class Aprobacion(Base):
             "justificacion": self.justificacion,
             "estado": self.estado,
             "resultado": self.resultado,
-            "fecha_solicitud": (
-                self.fecha_solicitud.isoformat() if self.fecha_solicitud else None
-            ),
-            "fecha_aprobacion": (
-                self.fecha_aprobacion.isoformat() if self.fecha_aprobacion else None
-            ),
+            "fecha_solicitud": (self.fecha_solicitud.isoformat() if self.fecha_solicitud else None),
+            "fecha_aprobacion": (self.fecha_aprobacion.isoformat() if self.fecha_aprobacion else None),
             "prioridad": self.prioridad,
-            "fecha_limite": (
-                self.fecha_limite.isoformat() if self.fecha_limite else None
-            ),
+            "fecha_limite": (self.fecha_limite.isoformat() if self.fecha_limite else None),
             "dias_pendiente": self.dias_pendiente,
             "esta_vencida": self.esta_vencida,
             "tiempo_respuesta_horas": self.tiempo_respuesta_horas,

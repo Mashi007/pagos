@@ -73,9 +73,7 @@ schema_analyzer = DatabaseSchemaAnalyzer()
 
 
 @router.get("/schema-analysis")
-async def get_schema_analysis(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
+async def get_schema_analysis(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Obtener análisis de esquema de base de datos"""
     try:
         analysis = schema_analyzer.analyze_schema_inconsistencies(db)
@@ -86,9 +84,7 @@ async def get_schema_analysis(
         }
     except Exception as e:
         logger.error(f"Error en análisis de esquema: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error analizando esquema: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error analizando esquema: {str(e)}")
 
 
 @router.get("/schema-analysis/health")

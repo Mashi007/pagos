@@ -25,9 +25,7 @@ def listar_clientes(
     page: int = Query(1, ge=1, description="Numero de pagina"),
     per_page: int = Query(20, ge=1, le=1000, description="Tamano de pagina"),
     # Busqueda de texto
-    search: Optional[str] = Query(
-        None, description="Buscar por nombre, cedula o telefono"
-    ),
+    search: Optional[str] = Query(None, description="Buscar por nombre, cedula o telefono"),
     estado: Optional[str] = Query(None, description="Filtrar por estado"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

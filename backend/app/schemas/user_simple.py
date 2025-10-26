@@ -1,5 +1,3 @@
-from datetime import date
-
 # backend/app/schemas/user_simple.py"""Schemas de usuario simplificado.Solo 2 roles: ADMIN (acceso completo) y USER
 # email: EmailStr nombre: str = Field(..., min_length=1, max_length=100) apellido: str = Field
 # max_length=100) cargo: Optional[str] = Field(None, max_length=100) is_admin: bool = Field(default=False) # Cambio clave:
@@ -16,5 +14,4 @@ from datetime import date
 # "bearer" user: UserResponseclass TokenPayload(BaseModel): """Schema del payload del token JWT.""" sub: str # email del
 # usuario is_admin: bool # Cambio clave: rol → is_admin exp: int iat: int
 
-"""
-"""
+""" """

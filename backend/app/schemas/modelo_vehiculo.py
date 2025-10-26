@@ -1,5 +1,3 @@
-from datetime import date
-
 # backend/app/schemas/modelo_vehiculo.py
 """Schemas para ModeloVehiculo"""
 

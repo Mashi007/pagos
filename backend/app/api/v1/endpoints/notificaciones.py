@@ -59,9 +59,7 @@ async def enviar_notificacion(
     """Enviar notificación individual."""
     try:
         # Obtener cliente
-        cliente = (
-            db.query(Cliente).filter(Cliente.id == notificacion.cliente_id).first()
-        )
+        cliente = db.query(Cliente).filter(Cliente.id == notificacion.cliente_id).first()
 
         if not cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
@@ -105,9 +103,7 @@ async def enviar_notificacion(
     except Exception as e:
         db.rollback()
         logger.error(f"Error enviando notificación: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.post("/envio-masivo")
@@ -177,9 +173,7 @@ async def envio_masivo(
     except Exception as e:
         db.rollback()
         logger.error(f"Error en envío masivo: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/", response_model=list[NotificacionResponse])
@@ -202,9 +196,7 @@ def listar_notificaciones(
 
     except Exception as e:
         logger.error(f"Error listando notificaciones: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/{notificacion_id}", response_model=NotificacionResponse)
@@ -215,9 +207,7 @@ def obtener_notificacion(
 ):
     """Obtener notificación específica."""
     try:
-        notificacion = (
-            db.query(Notificacion).filter(Notificacion.id == notificacion_id).first()
-        )
+        notificacion = db.query(Notificacion).filter(Notificacion.id == notificacion_id).first()
 
         if not notificacion:
             raise HTTPException(status_code=404, detail="Notificación no encontrada")
@@ -228,9 +218,7 @@ def obtener_notificacion(
         raise
     except Exception as e:
         logger.error(f"Error obteniendo notificación: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/estadisticas/resumen")
@@ -241,15 +229,9 @@ def obtener_estadisticas_notificaciones(
     """Obtener estadísticas de notificaciones."""
     try:
         total = db.query(Notificacion).count()
-        enviadas = (
-            db.query(Notificacion).filter(Notificacion.estado == "ENVIADA").count()
-        )
-        pendientes = (
-            db.query(Notificacion).filter(Notificacion.estado == "PENDIENTE").count()
-        )
-        fallidas = (
-            db.query(Notificacion).filter(Notificacion.estado == "FALLIDA").count()
-        )
+        enviadas = db.query(Notificacion).filter(Notificacion.estado == "ENVIADA").count()
+        pendientes = db.query(Notificacion).filter(Notificacion.estado == "PENDIENTE").count()
+        fallidas = db.query(Notificacion).filter(Notificacion.estado == "FALLIDA").count()
 
         return {
             "total": total,
@@ -261,6 +243,4 @@ def obtener_estadisticas_notificaciones(
 
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")

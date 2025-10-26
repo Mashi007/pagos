@@ -87,9 +87,7 @@ class Notificacion(Base):
     @property
     def puede_reintentar(self) -> bool:
         """Verifica si se puede reintentar el envío"""
-        return (
-            str(self.estado) == EstadoNotificacion.FALLIDA.value and self.intentos < 3
-        )
+        return str(self.estado) == EstadoNotificacion.FALLIDA.value and self.intentos < 3
 
     def marcar_enviada(self, respuesta: str = None):
         """Marca la notificación como enviada"""
@@ -144,9 +142,7 @@ class Notificacion(Base):
             "tipo": self.tipo,
             "mensaje": self.mensaje,
             "estado": self.estado,
-            "programada_para": (
-                self.programada_para.isoformat() if self.programada_para else None
-            ),
+            "programada_para": (self.programada_para.isoformat() if self.programada_para else None),
             "enviada_en": self.enviada_en.isoformat() if self.enviada_en else None,
             "leida": self.leida,
             "intentos": self.intentos,

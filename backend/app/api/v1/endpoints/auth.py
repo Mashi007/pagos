@@ -39,9 +39,7 @@ def add_cors_headers(request: Request, response: Response):
         # En caso de origin no permitido, usar el primer origin válido
         if settings.CORS_ORIGINS:
             response.headers["Access-Control-Allow-Origin"] = settings.CORS_ORIGINS[0]
-            logger.info(
-                f"CORS Debug - Usando origin por defecto: {settings.CORS_ORIGINS[0]}"
-            )
+            logger.info(f"CORS Debug - Usando origin por defecto: {settings.CORS_ORIGINS[0]}")
 
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
@@ -83,9 +81,7 @@ async def login(
         access_token = create_access_token(subject=str(user.id))
 
         # Generar refresh token nuevo
-        refresh_token = create_access_token(
-            subject=str(user.id), expires_delta=timedelta(minutes=1440)
-        )
+        refresh_token = create_access_token(subject=str(user.id), expires_delta=timedelta(minutes=1440))
 
         logger.info(f"Login exitoso para: {login_data.email}")
 
@@ -152,15 +148,11 @@ async def refresh_token(
         user = db.query(User).filter(User.id == user_id).first()
 
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado"
-            )
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado")
 
         # Generar nuevo access token
         new_access_token = create_access_token(subject=str(user.id))
-        new_refresh_token = create_access_token(
-            subject=str(user.id), expires_delta=timedelta(minutes=1440)
-        )
+        new_refresh_token = create_access_token(subject=str(user.id), expires_delta=timedelta(minutes=1440))
 
         # Calcular tiempo de expiración en segundos (30 minutos por defecto)
         expires_in = 30 * 60  # 1800 segundos
@@ -203,9 +195,7 @@ async def change_password(
     """
     try:
         # Validar contraseña actual
-        if not verify_password(
-            password_data.current_password, current_user.password_hash
-        ):
+        if not verify_password(password_data.current_password, current_user.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Contraseña actual incorrecta",

@@ -3,7 +3,6 @@ Modelo de Configuración del Sistema
 Configuración centralizada del sistema
 """
 
-from datetime import datetime
 from typing import Any, Dict, Optional
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text
@@ -20,22 +19,14 @@ class ConfiguracionSistema(Base):
     __tablename__ = "configuracion_sistema"
 
     id = Column(Integer, primary_key=True, index=True)
-    categoria = Column(
-        String(50), nullable=False, index=True
-    )  # AI, EMAIL, WHATSAPP, etc.
-    subcategoria = Column(
-        String(50), nullable=True, index=True
-    )  # OPENAI, GMAIL, TWILIO, etc.
-    clave = Column(
-        String(100), nullable=False, index=True
-    )  # Nombre de la configuración
+    categoria = Column(String(50), nullable=False, index=True)  # AI, EMAIL, WHATSAPP, etc.
+    subcategoria = Column(String(50), nullable=True, index=True)  # OPENAI, GMAIL, TWILIO, etc.
+    clave = Column(String(100), nullable=False, index=True)  # Nombre de la configuración
     valor = Column(Text, nullable=True)  # Valor de la configuración
     valor_json = Column(JSON, nullable=True)  # Para configuraciones complejas
 
     descripcion = Column(Text, nullable=True)
-    tipo_dato = Column(
-        String(20), default="STRING"
-    )  # STRING, INTEGER, BOOLEAN, JSON, PASSWORD
+    tipo_dato = Column(String(20), default="STRING")  # STRING, INTEGER, BOOLEAN, JSON, PASSWORD
     requerido = Column(Boolean, default=False)
     visible_frontend = Column(Boolean, default=True)
     solo_lectura = Column(Boolean, default=False)
@@ -91,9 +82,7 @@ class ConfiguracionSistema(Base):
             self.actualizado_por = usuario
 
     @staticmethod
-    def obtener_por_clave(
-        db, categoria: str, clave: str
-    ) -> Optional["ConfiguracionSistema"]:
+    def obtener_por_clave(db, categoria: str, clave: str) -> Optional["ConfiguracionSistema"]:
         """Obtener configuración por categoría y clave"""
         return (
             db.query(ConfiguracionSistema)
@@ -107,11 +96,7 @@ class ConfiguracionSistema(Base):
     @staticmethod
     def obtener_categoria(db, categoria: str) -> Dict[str, Any]:
         """Obtener todas las configuraciones de una categoría"""
-        configs = (
-            db.query(ConfiguracionSistema)
-            .filter(ConfiguracionSistema.categoria == categoria)
-            .all()
-        )
+        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == categoria).all()
         resultado = {}
         for config in configs:
             resultado[config.clave] = config.obtener_valor_tipado()
@@ -136,9 +121,7 @@ class ConfiguracionSistema(Base):
             "opciones_validas": self.opciones_validas,
             "patron_validacion": self.patron_validacion,
             "creado_en": self.creado_en.isoformat() if self.creado_en else None,
-            "actualizado_en": (
-                self.actualizado_en.isoformat() if self.actualizado_en else None
-            ),
+            "actualizado_en": (self.actualizado_en.isoformat() if self.actualizado_en else None),
             "creado_por": self.creado_por,
             "actualizado_por": self.actualizado_por,
         }

@@ -1,5 +1,3 @@
-from datetime import date
-
 # backend/app/api/v1/endpoints/notificaciones_multicanal.py"""Endpoints de Notificaciones MulticanalSistema 100% automático"""
 # \nimport Dict, List, Optional\nfrom fastapi \nimport APIRouter, BackgroundTasks, Depends, HTTPException, Query\nfrom
 # pydantic \nimport BaseModel, Field\nfrom sqlalchemy \nimport desc, func\nfrom sqlalchemy.orm \nimport Session\nfrom

@@ -26,9 +26,7 @@ async def generar_template_conciliacion(
 ):
     # Generar template Excel para conciliación bancaria
     try:
-        logger.info(
-            f"Generando template de conciliación - Usuario: {current_user.email}"
-        )
+        logger.info(f"Generando template de conciliación - Usuario: {current_user.email}")
 
         # Crear workbook
         from openpyxl import Workbook
@@ -79,9 +77,7 @@ async def generar_template_conciliacion(
         return Response(
             content=output.getvalue(),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={
-                "Content-Disposition": "attachment; filename=template_conciliacion.xlsx"
-            },
+            headers={"Content-Disposition": "attachment; filename=template_conciliacion.xlsx"},
         )
 
     except Exception as e:
@@ -151,9 +147,7 @@ async def procesar_conciliacion(
                         pago.usuario_conciliacion = int(current_user.id)
                         conciliaciones_procesadas += 1
                     else:
-                        errores.append(
-                            f"Fila {index + 2}: No se encontró pago para fecha {fecha} y monto {monto}"
-                        )
+                        errores.append(f"Fila {index + 2}: No se encontró pago para fecha {fecha} y monto {monto}")
 
             except Exception as e:
                 errores.append(f"Fila {index + 2}: Error procesando - {str(e)}")
@@ -236,14 +230,10 @@ async def obtener_estado_conciliacion(
     try:
         # Estadísticas generales
         total_pagos = db.query(Pago).filter(Pago.activo).count()
-        pagos_conciliados = (
-            db.query(Pago).filter(and_(Pago.activo, Pago.conciliado)).count()
-        )
+        pagos_conciliados = db.query(Pago).filter(and_(Pago.activo, Pago.conciliado)).count()
 
         # Porcentaje de conciliación
-        porcentaje_conciliacion = (
-            (pagos_conciliados / total_pagos * 100) if total_pagos > 0 else 0
-        )
+        porcentaje_conciliacion = (pagos_conciliados / total_pagos * 100) if total_pagos > 0 else 0
 
         return {
             "total_pagos": total_pagos,

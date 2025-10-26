@@ -9,8 +9,6 @@ import re
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, Optional
 
-from app.models.cliente import Cliente
-from app.models.pago import Pago
 
 logger = logging.getLogger(__name__)
 
@@ -61,33 +59,15 @@ class ValidadorTelefono:
         return config
 
     @staticmethod
-    def _formatear_telefono_con_codigo(
-        telefono_limpio: str, config: Dict[str, Any]
-    ) -> str:
+    def _formatear_telefono_con_codigo(telefono_limpio: str, config: Dict[str, Any]) -> str:
         """Formatear teléfono que ya tiene código de país"""
-        return (
-            config["codigo_pais"]
-            + " "
-            + telefono_limpio[3:6]
-            + " "
-            + telefono_limpio[6:]
-        )
+        return config["codigo_pais"] + " " + telefono_limpio[3:6] + " " + telefono_limpio[6:]
 
     @staticmethod
-    def _formatear_telefono_con_plus(
-        telefono_limpio: str, config: Dict[str, Any]
-    ) -> str:
+    def _formatear_telefono_con_plus(telefono_limpio: str, config: Dict[str, Any]) -> str:
         """Formatear teléfono que ya tiene + y código"""
         numero_sin_plus = telefono_limpio[1:]
-        return (
-            config["codigo_pais"]
-            + " "
-            + numero_sin_plus[:2]
-            + " "
-            + numero_sin_plus[2:5]
-            + " "
-            + numero_sin_plus[5:]
-        )
+        return config["codigo_pais"] + " " + numero_sin_plus[:2] + " " + numero_sin_plus[2:5] + " " + numero_sin_plus[5:]
 
     @staticmethod
     def _formatear_telefono_local(
@@ -100,9 +80,7 @@ class ValidadorTelefono:
         operadora = telefono_limpio[:3]
 
         if operadora in config["operadoras"]:
-            numero_formateado = (
-                f"{config['codigo_pais']} {operadora} {telefono_limpio[3:]}"
-            )
+            numero_formateado = f"{config['codigo_pais']} {operadora} {telefono_limpio[3:]}"
             return {
                 "valido": True,
                 "numero_formateado": numero_formateado,
@@ -110,19 +88,14 @@ class ValidadorTelefono:
         else:
             return {
                 "valido": False,
-                "error": (
-                    f"Operadora '{operadora}' no válida "
-                    f"para {pais}. Válidas: {', '.join(config['operadoras'])}"
-                ),
+                "error": (f"Operadora '{operadora}' no válida " f"para {pais}. Válidas: {', '.join(config['operadoras'])}"),
                 "valor_original": telefono_original,
                 "valor_formateado": None,
                 "sugerencia": f"Debe comenzar con: {', '.join(config['operadoras'])}",
             }
 
     @staticmethod
-    def _validar_formato_final(
-        numero_formateado: str, config: Dict[str, Any], telefono_original: str
-    ) -> Dict[str, Any]:
+    def _validar_formato_final(numero_formateado: str, config: Dict[str, Any], telefono_original: str) -> Dict[str, Any]:
         """Validar formato final del teléfono"""
         if re.match(config["patron_completo"], numero_formateado):
             return {
@@ -141,9 +114,7 @@ class ValidadorTelefono:
             }
 
     @staticmethod
-    def validar_y_formatear_telefono(
-        telefono: str, pais: str = "VENEZUELA"
-    ) -> Dict[str, Any]:
+    def validar_y_formatear_telefono(telefono: str, pais: str = "VENEZUELA") -> Dict[str, Any]:
         """
         Validar y formatear teléfono según país
 
@@ -171,29 +142,20 @@ class ValidadorTelefono:
 
             if telefono_limpio.startswith(config["codigo_pais"].replace("+", "")):
                 # Ya tiene código de país: "584241234567"
-                numero_formateado = ValidadorTelefono._formatear_telefono_con_codigo(
-                    telefono_limpio, config
-                )
+                numero_formateado = ValidadorTelefono._formatear_telefono_con_codigo(telefono_limpio, config)
             elif telefono_limpio.startswith(config["codigo_pais"]):
                 # Ya tiene + y código: "+584241234567"
-                numero_formateado = ValidadorTelefono._formatear_telefono_con_plus(
-                    telefono_limpio, config
-                )
+                numero_formateado = ValidadorTelefono._formatear_telefono_con_plus(telefono_limpio, config)
             elif len(telefono_limpio) == config["longitud_sin_codigo"]:
                 # Solo número local: "4241234567"
-                resultado_local = ValidadorTelefono._formatear_telefono_local(
-                    telefono_limpio, config, pais, telefono
-                )
+                resultado_local = ValidadorTelefono._formatear_telefono_local(telefono_limpio, config, pais, telefono)
                 if resultado_local["error"]:
                     return resultado_local["error"]
                 numero_formateado = resultado_local["numero_formateado"]
             else:
                 return {
                     "valido": False,
-                    "error": (
-                        f"Longitud incorrecta. Formato esperado: "
-                        f"{config['formato_display']}"
-                    ),
+                    "error": (f"Longitud incorrecta. Formato esperado: " f"{config['formato_display']}"),
                     "valor_original": telefono,
                     "valor_formateado": None,
                     "longitud_actual": len(telefono_limpio),
@@ -201,9 +163,7 @@ class ValidadorTelefono:
                 }
 
             # 6. Validar formato final
-            return ValidadorTelefono._validar_formato_final(
-                numero_formateado, config, telefono
-            )
+            return ValidadorTelefono._validar_formato_final(numero_formateado, config, telefono)
 
         except Exception as e:
             logger.error(f"Error validando teléfono: {e}")
@@ -234,9 +194,7 @@ class ValidadorCedula:
     }
 
     @staticmethod
-    def validar_y_formatear_cedula(
-        cedula: str, pais: str = "VENEZUELA"
-    ) -> Dict[str, Any]:
+    def validar_y_formatear_cedula(cedula: str, pais: str = "VENEZUELA") -> Dict[str, Any]:
         """
         Validar y formatear cédula según país
 
@@ -400,13 +358,9 @@ def validar_datos_cliente(cliente_data: Dict[str, Any]) -> Dict[str, Any]:
 
     # Validar teléfono
     if "telefono" in cliente_data:
-        resultado_telefono = ValidadorTelefono.validar_y_formatear_telefono(
-            cliente_data["telefono"]
-        )
+        resultado_telefono = ValidadorTelefono.validar_y_formatear_telefono(cliente_data["telefono"])
         if resultado_telefono["valido"]:
-            resultados["datos_formateados"]["telefono"] = resultado_telefono[
-                "valor_formateado"
-            ]
+            resultados["datos_formateados"]["telefono"] = resultado_telefono["valor_formateado"]
             if resultado_telefono["cambio_realizado"]:
                 resultados["cambios_realizados"].append("telefono")
         else:
@@ -415,13 +369,9 @@ def validar_datos_cliente(cliente_data: Dict[str, Any]) -> Dict[str, Any]:
 
     # Validar cédula
     if "cedula" in cliente_data:
-        resultado_cedula = ValidadorCedula.validar_y_formatear_cedula(
-            cliente_data["cedula"]
-        )
+        resultado_cedula = ValidadorCedula.validar_y_formatear_cedula(cliente_data["cedula"])
         if resultado_cedula["valido"]:
-            resultados["datos_formateados"]["cedula"] = resultado_cedula[
-                "valor_formateado"
-            ]
+            resultados["datos_formateados"]["cedula"] = resultado_cedula["valor_formateado"]
             if resultado_cedula["cambio_realizado"]:
                 resultados["cambios_realizados"].append("cedula")
         else:
@@ -432,13 +382,9 @@ def validar_datos_cliente(cliente_data: Dict[str, Any]) -> Dict[str, Any]:
     campos_monto = ["ingreso_mensual", "total_financiamiento"]
     for campo in campos_monto:
         if campo in cliente_data:
-            resultado_monto = ValidadorMonto.validar_y_formatear_monto(
-                cliente_data[campo]
-            )
+            resultado_monto = ValidadorMonto.validar_y_formatear_monto(cliente_data[campo])
             if resultado_monto["valido"]:
-                resultados["datos_formateados"][campo] = resultado_monto[
-                    "valor_formateado"
-                ]
+                resultados["datos_formateados"][campo] = resultado_monto["valor_formateado"]
                 if resultado_monto["cambio_realizado"]:
                     resultados["cambios_realizados"].append(campo)
             else:

@@ -1,5 +1,3 @@
-from datetime import date
-
 # \nimport Any, Dict, List, Optional\nfrom fastapi \nimport APIRouter, BackgroundTasks, Depends, HTTPException, Query\nfrom
 # pydantic \nimport BaseModel, Field\nfrom sqlalchemy.orm \nimport Session\nfrom app.api.deps \nimport get_current_user,
 # get_db\nfrom app.models.auditoria \nimport Auditoria, TipoAccion\nfrom app.models.cliente \nimport Cliente\nfrom

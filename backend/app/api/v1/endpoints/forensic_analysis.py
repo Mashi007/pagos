@@ -31,6 +31,4 @@ def get_forensic_analysis(
 
     except Exception as e:
         logger.error(f"Error obteniendo análisis forense: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")

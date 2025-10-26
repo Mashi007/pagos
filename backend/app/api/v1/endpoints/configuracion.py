@@ -69,9 +69,7 @@ def obtener_estado_monitoreo(current_user: User = Depends(get_current_user)):
 def habilitar_monitoreo_basico(current_user: User = Depends(get_current_user)):
     """Habilitar monitoreo básico sin dependencias externas"""
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Solo administradores pueden configurar monitoreo"
-        )
+        raise HTTPException(status_code=403, detail="Solo administradores pueden configurar monitoreo")
 
     try:
         # Configurar logging estructurado básico
@@ -102,9 +100,7 @@ def habilitar_monitoreo_basico(current_user: User = Depends(get_current_user)):
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error configurando monitoreo: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error configurando monitoreo: {str(e)}")
 
 
 # ============================================
@@ -113,9 +109,7 @@ def habilitar_monitoreo_basico(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/sistema/completa")
-def obtener_configuracion_completa(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def obtener_configuracion_completa(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Obtener toda la configuración del sistema"""
     if not current_user.is_admin:
         raise HTTPException(
@@ -141,9 +135,7 @@ def obtener_configuracion_completa(
 
     except Exception as e:
         logger.error(f"Error obteniendo configuración: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/sistema/{clave}")
@@ -154,21 +146,13 @@ def obtener_configuracion_por_clave(
 ):
     """Obtener configuración específica por clave"""
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Solo administradores pueden ver configuración"
-        )
+        raise HTTPException(status_code=403, detail="Solo administradores pueden ver configuración")
 
     try:
-        config = (
-            db.query(ConfiguracionSistema)
-            .filter(ConfiguracionSistema.clave == clave)
-            .first()
-        )
+        config = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.clave == clave).first()
 
         if not config:
-            raise HTTPException(
-                status_code=404, detail=f"Configuración '{clave}' no encontrada"
-            )
+            raise HTTPException(status_code=404, detail=f"Configuración '{clave}' no encontrada")
 
         return config
 
@@ -176,9 +160,7 @@ def obtener_configuracion_por_clave(
         raise
     except Exception as e:
         logger.error(f"Error obteniendo configuración: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.put("/sistema/{clave}")
@@ -196,11 +178,7 @@ def actualizar_configuracion(
         )
 
     try:
-        config = (
-            db.query(ConfiguracionSistema)
-            .filter(ConfiguracionSistema.clave == clave)
-            .first()
-        )
+        config = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.clave == clave).first()
 
         if not config:
             # Crear nueva configuración
@@ -229,9 +207,7 @@ def actualizar_configuracion(
     except Exception as e:
         db.rollback()
         logger.error(f"Error actualizando configuración: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.delete("/sistema/{clave}")
@@ -242,21 +218,13 @@ def eliminar_configuracion(
 ):
     """Eliminar configuración específica"""
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Solo administradores pueden eliminar configuración"
-        )
+        raise HTTPException(status_code=403, detail="Solo administradores pueden eliminar configuración")
 
     try:
-        config = (
-            db.query(ConfiguracionSistema)
-            .filter(ConfiguracionSistema.clave == clave)
-            .first()
-        )
+        config = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.clave == clave).first()
 
         if not config:
-            raise HTTPException(
-                status_code=404, detail=f"Configuración '{clave}' no encontrada"
-            )
+            raise HTTPException(status_code=404, detail=f"Configuración '{clave}' no encontrada")
 
         db.delete(config)
         db.commit()
@@ -268,9 +236,7 @@ def eliminar_configuracion(
     except Exception as e:
         db.rollback()
         logger.error(f"Error eliminando configuración: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 # ============================================
@@ -279,17 +245,11 @@ def eliminar_configuracion(
 
 
 @router.get("/prestamos/parametros")
-def obtener_parametros_prestamos(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def obtener_parametros_prestamos(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Obtener parámetros de configuración para préstamos"""
     try:
         # Obtener configuraciones relacionadas con préstamos
-        configs = (
-            db.query(ConfiguracionSistema)
-            .filter(ConfiguracionSistema.clave.like("PRESTAMO_%"))
-            .all()
-        )
+        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.clave.like("PRESTAMO_%")).all()
 
         parametros = {}
         for config in configs:
@@ -302,15 +262,11 @@ def obtener_parametros_prestamos(
 
     except Exception as e:
         logger.error(f"Error obteniendo parámetros: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/sistema/estadisticas")
-def obtener_estadisticas_sistema(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def obtener_estadisticas_sistema(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Obtener estadísticas del sistema"""
     if not current_user.is_admin:
         raise HTTPException(
@@ -340,15 +296,10 @@ def obtener_estadisticas_sistema(
                 "total_usuarios": total_usuarios,
                 "total_prestamos": total_prestamos,
             },
-            "configuraciones_por_categoria": [
-                {"categoria": item[0], "cantidad": item[1]}
-                for item in configs_por_categoria
-            ],
+            "configuraciones_por_categoria": [{"categoria": item[0], "cantidad": item[1]} for item in configs_por_categoria],
             "fecha_consulta": datetime.now(),
         }
 
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")

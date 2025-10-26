@@ -2,7 +2,6 @@ from datetime import date, datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -21,9 +20,7 @@ from app.schemas.aprobacion import (
 router = APIRouter()
 
 
-@router.post(
-    "/", response_model=AprobacionResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/", response_model=AprobacionResponse, status_code=status.HTTP_201_CREATED)
 def crear_aprobacion(
     aprobacion_data: AprobacionCreate,
     db: Session = Depends(get_db),
@@ -42,9 +39,7 @@ def crear_aprobacion(
 
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Error creando aprobación: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error creando aprobación: {str(e)}")
 
 
 @router.get("/", response_model=List[AprobacionResponse])
@@ -83,9 +78,7 @@ def obtener_aprobacion(
 
     # Verificar permisos
     if not current_user.is_admin and aprobacion.solicitado_por != current_user.id:
-        raise HTTPException(
-            status_code=403, detail="No tienes permisos para ver esta aprobación"
-        )
+        raise HTTPException(status_code=403, detail="No tienes permisos para ver esta aprobación")
 
     return aprobacion
 
@@ -104,13 +97,8 @@ def actualizar_aprobacion(
         raise HTTPException(status_code=404, detail="Aprobación no encontrada")
 
     # Solo el solicitante puede actualizar si está pendiente
-    if (
-        aprobacion.estado != "PENDIENTE"
-        and aprobacion.solicitado_por != current_user.id
-    ):
-        raise HTTPException(
-            status_code=403, detail="No puedes actualizar esta aprobación"
-        )
+    if aprobacion.estado != "PENDIENTE" and aprobacion.solicitado_por != current_user.id:
+        raise HTTPException(status_code=403, detail="No puedes actualizar esta aprobación")
 
     # Actualizar campos
     for field, value in aprobacion_data.model_dump(exclude_unset=True).items():
@@ -202,9 +190,7 @@ def eliminar_aprobacion(
 
     # Solo el solicitante puede eliminar si está pendiente
     if aprobacion.estado != "PENDIENTE" or aprobacion.solicitado_por != current_user.id:
-        raise HTTPException(
-            status_code=403, detail="No puedes eliminar esta aprobación"
-        )
+        raise HTTPException(status_code=403, detail="No puedes eliminar esta aprobación")
 
     db.delete(aprobacion)
     db.commit()

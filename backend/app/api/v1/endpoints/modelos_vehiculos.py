@@ -83,16 +83,10 @@ def crear_modelo_vehiculo(
     """Crear un nuevo modelo de vehículo"""
 
     # Verificar si ya existe
-    existing = (
-        db.query(ModeloVehiculo)
-        .filter(ModeloVehiculo.modelo == modelo_data.modelo)
-        .first()
-    )
+    existing = db.query(ModeloVehiculo).filter(ModeloVehiculo.modelo == modelo_data.modelo).first()
 
     if existing:
-        raise HTTPException(
-            status_code=400, detail="Ya existe un modelo con ese nombre"
-        )
+        raise HTTPException(status_code=400, detail="Ya existe un modelo con ese nombre")
 
     modelo = ModeloVehiculo(**modelo_data.dict())
     db.add(modelo)

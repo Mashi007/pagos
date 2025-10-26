@@ -1,5 +1,4 @@
 import logging
-from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -38,9 +37,7 @@ def crear_prestamo(
     except Exception as e:
         db.rollback()
         logger.error(f"Error creando préstamo: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/", response_model=List[PrestamoResponse])
@@ -57,9 +54,7 @@ def listar_prestamos(
 
     except Exception as e:
         logger.error(f"Error listando préstamos: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/{prestamo_id}", response_model=PrestamoResponse)
@@ -81,9 +76,7 @@ def obtener_prestamo(
         raise
     except Exception as e:
         logger.error(f"Error obteniendo préstamo: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.put("/{prestamo_id}", response_model=PrestamoResponse)
@@ -114,9 +107,7 @@ def actualizar_prestamo(
     except Exception as e:
         db.rollback()
         logger.error(f"Error actualizando préstamo: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.delete("/{prestamo_id}")
@@ -142,6 +133,4 @@ def eliminar_prestamo(
     except Exception as e:
         db.rollback()
         logger.error(f"Error eliminando préstamo: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")

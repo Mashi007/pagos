@@ -29,9 +29,7 @@ def dashboard_administrador(
     # - Gráfico de mora vs al día
     # - Estadísticas globales
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Acceso denegado. Solo administradores."
-        )
+        raise HTTPException(status_code=403, detail="Acceso denegado. Solo administradores.")
 
     hoy = date.today()
 
@@ -40,18 +38,12 @@ def dashboard_administrador(
         Cliente.activo, Cliente.total_financiamiento.isnot(None)
     ).scalar() or Decimal("0")
 
-    clientes_al_dia = (
-        db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora == 0).count()
-    )
+    clientes_al_dia = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora == 0).count()
 
-    clientes_en_mora = (
-        db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).count()
-    )
+    clientes_en_mora = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).count()
 
     porcentaje_mora = (
-        (clientes_en_mora / (clientes_al_dia + clientes_en_mora) * 100)
-        if (clientes_al_dia + clientes_en_mora) > 0
-        else 0
+        (clientes_en_mora / (clientes_al_dia + clientes_en_mora) * 100) if (clientes_al_dia + clientes_en_mora) > 0 else 0
     )
 
     # Evolución de cartera (últimos 6 meses)
@@ -66,13 +58,7 @@ def dashboard_administrador(
         )
 
     # Top 5 clientes con mayor financiamiento
-    top_clientes = (
-        db.query(Cliente)
-        .filter(Cliente.activo)
-        .order_by(Cliente.total_financiamiento.desc())
-        .limit(5)
-        .all()
-    )
+    top_clientes = db.query(Cliente).filter(Cliente.activo).order_by(Cliente.total_financiamiento.desc()).limit(5).all()
 
     top_clientes_data = []
     for cliente in top_clientes:
@@ -122,11 +108,7 @@ def dashboard_analista(
     hoy = date.today()
 
     # KPIs para clientes asignados al analista
-    clientes_asignados = (
-        db.query(Cliente)
-        .filter(Cliente.activo, Cliente.analista_id == current_user.id)
-        .all()
-    )
+    clientes_asignados = db.query(Cliente).filter(Cliente.activo, Cliente.analista_id == current_user.id).all()
 
     if not clientes_asignados:
         return {
@@ -141,16 +123,12 @@ def dashboard_analista(
             "fecha_consulta": hoy.isoformat(),
         }
 
-    cartera_total = sum(
-        float(cliente.total_financiamiento or 0) for cliente in clientes_asignados
-    )
+    cartera_total = sum(float(cliente.total_financiamiento or 0) for cliente in clientes_asignados)
 
     clientes_al_dia = len([c for c in clientes_asignados if (c.dias_mora or 0) == 0])
     clientes_en_mora = len([c for c in clientes_asignados if (c.dias_mora or 0) > 0])
 
-    porcentaje_mora = (
-        (clientes_en_mora / len(clientes_asignados) * 100) if clientes_asignados else 0
-    )
+    porcentaje_mora = (clientes_en_mora / len(clientes_asignados) * 100) if clientes_asignados else 0
 
     # Top 5 clientes con mayor financiamiento (del analista)
     top_clientes = sorted(
@@ -200,9 +178,7 @@ def resumen_general(
         ).scalar() or Decimal("0")
 
         # Clientes en mora
-        clientes_mora = (
-            db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).count()
-        )
+        clientes_mora = db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).count()
 
         return {
             "total_clientes": total_clientes,
@@ -214,6 +190,4 @@ def resumen_general(
 
     except Exception as e:
         logger.error(f"Error obteniendo resumen: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
