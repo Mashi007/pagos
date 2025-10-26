@@ -298,11 +298,16 @@ export function ConcesionariosConfig() {
                   </TableCell>
                   <TableCell>
                     {concesionario.created_at 
-                      ? new Date(concesionario.created_at).toLocaleDateString('es-VE', { 
-                          year: 'numeric', 
-                          month: '2-digit', 
-                          day: '2-digit' 
-                        })
+                      ? (() => {
+                          const date = new Date(concesionario.created_at)
+                          return isNaN(date.getTime()) 
+                            ? '01/10/2025' 
+                            : date.toLocaleDateString('es-VE', { 
+                                year: 'numeric', 
+                                month: '2-digit', 
+                                day: '2-digit' 
+                              })
+                        })()
                       : '01/10/2025'}
                   </TableCell>
                   <TableCell className="text-right">
