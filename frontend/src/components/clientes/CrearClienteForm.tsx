@@ -620,13 +620,13 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                   </label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input
-                    type="tel"
-                    value={formData.telefono}
-                    onChange={(e) => handleInputChange('telefono', e.target.value)}
-                    className={`pl-10 ${getFieldValidation('telefono')?.isValid === false ? 'border-red-500' : ''}`}
-                    placeholder="0987654321"
-                  />
+                            <Input
+                              type="tel"
+                              value={formData.telefono}
+                              onChange={(e) => handleInputChange('telefono', e.target.value)}
+                              className={`pl-10 ${getFieldValidation('telefono')?.isValid === false ? 'border-red-500' : ''}`}
+                              placeholder="+58 1234567890"
+                            />
                 </div>
                 {getFieldValidation('telefono') && (
                   <div className={`text-xs flex items-center gap-1 ${
