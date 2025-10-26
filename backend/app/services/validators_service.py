@@ -723,6 +723,153 @@ class ValidadorMonto:
     }
 
     @staticmethod
+    def _procesar_formato_europeo_con_separadores(
+        monto_limpio: str, monto: Any
+    ) -> Dict[str, Any]:
+        """Procesar formato europeo con punto y coma (ej: 1.500,50)"""
+        ultimo_coma = monto_limpio.rindex(",")
+        ultimo_punto = monto_limpio.rindex(".")
+
+        if ultimo_coma > ultimo_punto:
+            # Formato europeo: "1.234,56"
+            antes_coma = monto_limpio[:ultimo_coma]
+            despues_coma = monto_limpio[ultimo_coma + 1 :]
+
+            # Validar decimales
+            if not (1 <= len(despues_coma) <= 2):
+                return {
+                    "valido": False,
+                    "error": "Formato de monto inválido (decimales)",
+                    "valor_original": monto,
+                    "valor_formateado": None,
+                    "formato_esperado": "Número decimal (1-20000)",
+                    "sugerencia": (
+                        "Los decimales deben ser 1-2 dígitos. "
+                        "Ejemplo: '10.500,50' o '10500,50'"
+                    ),
+                    "monto_limpio": None,
+                }
+
+            # Validar miles
+            antes_coma_sin_puntos = antes_coma.replace(".", "")
+            if not antes_coma_sin_puntos.isdigit():
+                return {
+                    "valido": False,
+                    "error": "Formato de monto inválido",
+                    "valor_original": monto,
+                    "valor_formateado": None,
+                    "formato_esperado": "Número decimal (1-20000)",
+                    "sugerencia": ("Use formato válido. Ejemplo: '10.500,50' " "o '10500,50'"),
+                    "monto_limpio": None,
+                }
+
+            # Validar formato de miles
+            partes_miles = antes_coma.split(".")
+            for i, parte in enumerate(partes_miles):
+                if i == 0:
+                    if len(parte) > 3 or len(parte) == 0:
+                        return {
+                            "valido": False,
+                            "error": "Formato de miles inválido (primera parte)",
+                            "valor_original": monto,
+                            "valor_formateado": None,
+                            "formato_esperado": "Punto cada 3 dígitos desde la derecha",
+                            "sugerencia": (
+                                "El primer grupo puede tener 1-3 dígitos. "
+                                "Ejemplos: '1.500' (1 dígito), '12.500' (2 dígitos), "
+                                "'123.456' (3 dígitos)"
+                            ),
+                            "monto_limpio": None,
+                        }
+                else:
+                    if len(parte) != 3:
+                        return {
+                            "valido": False,
+                            "error": "Formato de miles inválido (grupo intermedio)",
+                            "valor_original": monto,
+                            "valor_formateado": None,
+                            "formato_esperado": "Punto cada 3 dígitos desde la derecha",
+                            "sugerencia": (
+                                "Cada grupo después del primer punto debe tener 3 dígitos"
+                            ),
+                            "monto_limpio": None,
+                        }
+
+            monto_limpio = antes_coma_sin_puntos + "." + despues_coma
+            return {"valido": True, "monto_limpio": monto_limpio}
+        else:
+            # Formato americano rechazado
+            return {
+                "valido": False,
+                "error": "Solo se acepta formato europeo",
+                "valor_original": monto,
+                "valor_formateado": None,
+                "formato_esperado": "Número decimal (1-20000)",
+                "sugerencia": (
+                    "Use formato europeo. Ejemplos: '1500,50' o '1.500,50'. "
+                    "NO use coma para miles"
+                ),
+                "monto_limpio": None,
+            }
+
+    @staticmethod
+    def _procesar_formato_solo_coma(monto_limpio: str, monto: Any) -> Dict[str, Any]:
+        """Procesar formato solo con coma (ej: 1500,50)"""
+        partes_coma = monto_limpio.split(",")
+        if len(partes_coma) != 2:
+            return {
+                "valido": False,
+                "error": "Formato de monto inválido (múltiples comas)",
+                "valor_original": monto,
+                "valor_formateado": None,
+                "formato_esperado": "Número decimal (1-20000)",
+                "sugerencia": "Use una sola coma para decimales. Ejemplo: '1500,50'",
+                "monto_limpio": None,
+            }
+
+        antes_coma = partes_coma[0]
+        despues_coma = partes_coma[1]
+
+        if not (1 <= len(despues_coma) <= 2):
+            return {
+                "valido": False,
+                "error": "Formato de monto inválido (decimales)",
+                "valor_original": monto,
+                "valor_formateado": None,
+                "formato_esperado": "Número decimal (1-20000)",
+                "sugerencia": "Los decimales deben ser 1-2 dígitos. Ejemplo: '1500,50'",
+                "monto_limpio": None,
+            }
+
+        if not antes_coma.isdigit():
+            return {
+                "valido": False,
+                "error": "Formato de monto inválido",
+                "valor_original": monto,
+                "valor_formateado": None,
+                "formato_esperado": "Número decimal (1-20000)",
+                "sugerencia": "Use formato válido. Ejemplo: '1.500,50'",
+                "monto_limpio": None,
+            }
+
+        if len(antes_coma) > 3:
+            return {
+                "valido": False,
+                "error": "Formato de miles inválido (obligatorio para números > 999)",
+                "valor_original": monto,
+                "valor_formateado": None,
+                "formato_esperado": "Punto cada 3 dígitos para miles",
+                "sugerencia": (
+                    "Para números mayores a 999, use punto como separador de miles. "
+                    "Ejemplo: '1.500,50' en lugar de '1500,50'"
+                ),
+                "monto_limpio": None,
+            }
+
+        monto_limpio = antes_coma + "." + despues_coma
+        return {"valido": True, "monto_limpio": monto_limpio}
+
+    @staticmethod
     def validar_y_formatear_monto(
         monto: Any, moneda: str = "USD"
     ) -> Dict[str, Any]:
@@ -765,169 +912,20 @@ class ValidadorMonto:
                     # Limpiar string: mantener solo dígitos, puntos y comas
                     monto_limpio = re.sub(r"[^\d.,]", "", monto)
 
-                    # SISTEMA EUROPEO ÚNICAMENTE
-                    # Formatos válidos:
-                    # 1. Entero: "10000" o "10"
-                    # 2. Decimal con coma: "10000,50" o "10,5"
-                    # 3. Miles con punto y decimal con coma: "1.500,50"
-
                     if "," in monto_limpio and "." in monto_limpio:
-                        # Ambos presentes: verificar formato correcto
-                        # El separador de miles debe estar cada 3 dígitos
-                        # El último separador indica decimales
-
-                        # Encontrar posición del último separador
-                        ultimo_coma = monto_limpio.rindex(",")
-                        ultimo_punto = monto_limpio.rindex(".")
-
-                        if ultimo_coma > ultimo_punto:
-                            # Formato europeo: "1.234,56"
-                            # Validar que antes de la coma solo haya un punto cada 3 dígitos
-                            antes_coma = monto_limpio[:ultimo_coma]
-                            despues_coma = monto_limpio[ultimo_coma+1:]
-
-                            # Después de coma debe haber 1-2 dígitos
-                            if not (1 <= len(despues_coma) <= 2):
-                                return {
-                                    "valido": False,
-                                    "error": "Formato de monto inválido (decimales)",
-                                    "valor_original": monto,
-                                    "valor_formateado": None,
-                                    "formato_esperado": "Número decimal (1-20000)",
-                                    "sugerencia": (
-                                        "Los decimales deben ser 1-2 dígitos. "
-                                        "Ejemplo: '10.500,50' o '10500,50'"
-                                    ),
-                                }
-
-                            # Validar miles con punto cada 3 dígitos
-                            antes_coma_sin_puntos = antes_coma.replace(".", "")
-                            if not antes_coma_sin_puntos.isdigit():
-                                return {
-                                    "valido": False,
-                                    "error": "Formato de monto inválido",
-                                    "valor_original": monto,
-                                    "valor_formateado": None,
-                                    "formato_esperado": "Número decimal (1-20000)",
-                                    "sugerencia": (
-                                        "Use formato válido. Ejemplo: '10.500,50' "
-                                        "o '10500,50'"
-                                    ),
-                                }
-
-                            # Validar que los puntos estén cada 3 dígitos (de derecha a izquierda)
-                            # En formato europeo, los últimos 3 dígitos NO tienen punto
-                            # Ejemplos válidos: "1.500,50" (4 dígitos antes de coma)
-                            #                "10.500,50" (5 dígitos antes de coma)
-                            #                "100.500,50" (6 dígitos antes de coma)
-                            partes_miles = antes_coma.split(".")
-                            for i, parte in enumerate(partes_miles):
-                                if i == 0:
-                                    # Primera parte (izquierda) puede tener 1-3 dígitos
-                                    if len(parte) > 3 or len(parte) == 0:
-                                        return {
-                                            "valido": False,
-                                            "error": "Formato de miles inválido (primera parte)",
-                                            "valor_original": monto,
-                                            "valor_formateado": None,
-                                            "formato_esperado": "Punto cada 3 dígitos desde la derecha",
-                                            "sugerencia": (
-                                                "El primer grupo puede tener 1-3 dígitos. "
-                                                "Ejemplos: '1.500' (1 dígito al inicio), '12.500' (2 dígitos), "
-                                                "'123.456' (3 dígitos). NO '1234.56' (primera parte > 3 dígitos)"
-                                            ),
-                                        }
-                                else:
-                                    # Las siguientes partes deben tener exactamente 3 dígitos
-                                    if len(parte) != 3:
-                                        return {
-                                            "valido": False,
-                                            "error": "Formato de miles inválido (grupo intermedio)",
-                                            "valor_original": monto,
-                                            "valor_formateado": None,
-                                            "formato_esperado": "Punto cada 3 dígitos desde la derecha",
-                                            "sugerencia": (
-                                                "Cada grupo después del primer punto debe tener exactamente 3 dígitos. "
-                                                "Ejemplo: '10.500,50' (grupo '500' tiene 3 dígitos) "
-                                                "NO '10.50,50' (grupo '50' tiene solo 2 dígitos)"
-                                            ),
-                                        }
-
-                            monto_limpio = antes_coma_sin_puntos + "." + despues_coma
-                        else:
-                            # FORMATO AMERICANO NO SOPORTADO
-                            # Si el punto está después de la coma, es formato americano (rechazar)
-                            return {
-                                "valido": False,
-                                "error": "Solo se acepta formato europeo",
-                                "valor_original": monto,
-                                "valor_formateado": None,
-                                "formato_esperado": "Número decimal (1-20000)",
-                                "sugerencia": (
-                                    "Use formato europeo. Ejemplos: '1500,50' o '1.500,50'. "
-                                    "NO use coma para miles (p.ej: 1,500.50)"
-                                ),
-                            }
+                        # Usar función auxiliar para procesar formato europeo completo
+                        resultado = ValidadorMonto._procesar_formato_europeo_con_separadores(
+                            monto_limpio, monto
+                        )
+                        if not resultado["valido"]:
+                            return resultado
+                        monto_limpio = resultado["monto_limpio"]
                     elif "," in monto_limpio:
-                        # Solo coma: debe ser un número con coma decimal
-                        # Validar que después de coma haya 1-2 dígitos
-                        partes_coma = monto_limpio.split(",")
-                        if len(partes_coma) != 2:
-                            return {
-                                "valido": False,
-                                "error": "Formato de monto inválido (múltiples comas)",
-                                "valor_original": monto,
-                                "valor_formateado": None,
-                                "formato_esperado": "Número decimal (1-20000)",
-                                "sugerencia": (
-                                    "Use una sola coma para decimales. "
-                                    "Ejemplo: '1500,50'"
-                                ),
-                            }
-
-                        antes_coma = partes_coma[0]
-                        despues_coma = partes_coma[1]
-
-                        # Después de coma debe haber 1-2 dígitos
-                        if not (1 <= len(despues_coma) <= 2):
-                            return {
-                                "valido": False,
-                                "error": "Formato de monto inválido (decimales)",
-                                "valor_original": monto,
-                                "valor_formateado": None,
-                                "formato_esperado": "Número decimal (1-20000)",
-                                "sugerencia": (
-                                    "Los decimales deben ser 1-2 dígitos. "
-                                    "Ejemplo: '1500,50'"
-                                ),
-                            }
-
-                        # Antes de coma debe ser número válido
-                        if not antes_coma.isdigit():
-                            return {
-                                "valido": False,
-                                "error": "Formato de monto inválido",
-                                "valor_original": monto,
-                                "valor_formateado": None,
-                                "formato_esperado": "Número decimal (1-20000)",
-                                "sugerencia": "Use formato válido. Ejemplo: '1.500,50'",
-                            }
-
-                        # REGLA ESTRICTA: Si la parte entera tiene más de 3 dígitos, DEBE tener separador de miles
-                        if len(antes_coma) > 3:
-                            return {
-                                "valido": False,
-                                "error": "Formato de miles inválido (obligatorio para números > 999)",
-                                "valor_original": monto,
-                                "valor_formateado": None,
-                                "formato_esperado": "Punto cada 3 dígitos para miles",
-                                "sugerencia": (
-                                    "Para números mayores a 999, use punto como separador de miles. "
-                                    "Ejemplo: '1.500,50' en lugar de '1500,50'"
-                                ),
-                            }
-
-                        monto_limpio = antes_coma + "." + despues_coma
+                        # Usar función auxiliar para procesar formato solo con coma
+                        resultado = ValidadorMonto._procesar_formato_solo_coma(monto_limpio, monto)
+                        if not resultado["valido"]:
+                            return resultado
+                        monto_limpio = resultado["monto_limpio"]
                     elif "." in monto_limpio:
                         # Solo punto: NO se acepta formato americano, rechazar
                         return {
