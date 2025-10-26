@@ -4,8 +4,7 @@ import {
   CheckCircle,
   XCircle,
   PlayCircle,
-  RefreshCw,
-  Download
+  RefreshCw
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -97,10 +96,6 @@ export function Validadores() {
             Configuración y prueba de validadores del sistema
           </p>
         </div>
-        <Button variant="outline">
-          <Download className="w-4 h-4 mr-2" />
-          Exportar Configuración
-        </Button>
       </div>
 
       {/* Sección: Probar Validadores */}
