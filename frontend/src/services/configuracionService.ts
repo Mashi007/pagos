@@ -103,7 +103,7 @@ class ConfiguracionService {
 
   // Obtener configuración de validadores
   async obtenerValidadores(): Promise<ValidadoresConfig> {
-    const response = await apiClient.get('/api/v1/validadores/configuracion')
+    const response = await apiClient.get('/api/v1/validadores/configuracion-validadores')
     return response as ValidadoresConfig
   }
 
