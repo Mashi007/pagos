@@ -303,7 +303,13 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   const handleInputChange = async (field: keyof FormData, value: string) => {
     let formattedValue = value
     
-    // ✅ Aplicar autoformato a nombres y ocupacion
+    // ✅ En modo edición, permitir reescribir sin validar
+    if (cliente) {
+      setFormData(prev => ({ ...prev, [field]: formattedValue }))
+      return
+    }
+    
+    // ✅ Solo en modo creación: aplicar autoformato y validar
     if (field === 'nombres') {
       formattedValue = formatNombres(value)
     } else if (field === 'ocupacion') {
@@ -330,13 +336,18 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   }
 
   const isFormValid = () => {
+    // ✅ En modo edición, permitir guardar sin validar campos
+    if (cliente) {
+      return true
+    }
+    
     const requiredFields: (keyof FormData)[] = [
       'cedula', 'nombres', 'telefono', 'email', 
       'direccion', 'fechaNacimiento', 'ocupacion', 'modeloVehiculo', 
       'concesionario', 'analista'
     ]
     
-    // ✅ Validar nombres y ocupacion con funciones personalizadas
+    // ✅ Solo en modo creación: validar nombres y ocupacion con funciones personalizadas
     const nombresValidation = validateNombres(formData.nombres)
     const ocupacionValidation = validateOcupacion(formData.ocupacion)
     
@@ -500,6 +511,10 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   }
 
   const getFieldValidation = (field: string) => {
+    // ✅ En modo edición, no mostrar mensajes de validación
+    if (cliente) {
+      return null
+    }
     return validations.find(v => v.field === field)
   }
 
