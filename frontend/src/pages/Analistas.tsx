@@ -73,16 +73,22 @@ export function Analistas() {
     // Limpiar espacios extras
     const nombreLimpio = nombre.trim().replace(/\s+/g, ' ')
     
-    // Verificar que tenga exactamente 2 palabras
+    // Verificar cantidad de palabras (mínimo 2, máximo 4)
     const palabras = nombreLimpio.split(' ')
     
-    if (palabras.length !== 2) {
-      return 'Debe ingresar exactamente 2 palabras (Nombre y Apellido)'
+    if (palabras.length < 2) {
+      return 'Debe ingresar al menos 2 palabras (Nombre y Apellido)'
+    }
+    
+    if (palabras.length > 4) {
+      return 'Debe ingresar máximo 4 palabras'
     }
     
     // Verificar que cada palabra tenga al menos 2 caracteres
-    if (palabras[0].length < 2 || palabras[1].length < 2) {
-      return 'Cada palabra debe tener al menos 2 caracteres'
+    for (const palabra of palabras) {
+      if (palabra.length < 2) {
+        return 'Cada palabra debe tener al menos 2 caracteres'
+      }
     }
     
     return ''
@@ -428,7 +434,7 @@ export function Analistas() {
                         setFormData({ ...formData, nombre: e.target.value })
                         setValidationError('') // Limpiar error al escribir
                       }}
-                      placeholder="Ingrese nombre y apellido (2 palabras)"
+                      placeholder="Ingrese nombre completo (2-4 palabras)"
                       required
                       autoFocus
                       className={validationError ? 'border-red-500' : ''}
@@ -440,7 +446,7 @@ export function Analistas() {
                     )}
                     {!editingAnalista && !validationError && (
                       <p className="text-xs text-gray-500 mt-1">
-                        Ejemplo: Juan Pérez (2 palabras, primera letra mayúscula)
+                        Ejemplo: Juan Pérez (mínimo 2, máximo 4 palabras)
                       </p>
                     )}
                   </div>
