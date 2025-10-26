@@ -173,19 +173,16 @@ export function Analistas() {
         </Card>
       </div>
 
-      {/* Search and Filters */}
+      {/* Search */}
       <Card>
-        <CardHeader>
-          <CardTitle>Buscar Analistas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center space-x-2">
-            <Search className="h-4 w-4 text-muted-foreground" />
+        <CardContent className="p-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
               placeholder="Buscar por nombre..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
+              className="pl-10"
             />
           </div>
         </CardContent>
