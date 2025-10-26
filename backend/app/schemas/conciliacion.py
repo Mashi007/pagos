@@ -121,7 +121,11 @@ class ResultadoConciliacion(BaseModel):
     def calcular_porcentaje(cls, v, info):
         if info.data.get("total_movimientos", 0) > 0:
             return round(
-                (info.data.get("movimientos_conciliados", 0) / info.data.get("total_movimientos", 1)) * 100,
+                (
+                    info.data.get("movimientos_conciliados", 0)
+                    / info.data.get("total_movimientos", 1)
+                )
+                * 100,
                 2,
             )
         return 0.0
@@ -303,8 +307,12 @@ class ValidacionArchivoBancario(BaseModel):
 
 class ConciliacionMasiva(BaseModel):
     # Schema para conciliación masiva
-    aplicar_exactas: bool = Field(default=True, description="Aplicar coincidencias exactas automáticamente")
-    aplicar_parciales: bool = Field(default=False, description="Aplicar coincidencias parciales automáticamente")
+    aplicar_exactas: bool = Field(
+        default=True, description="Aplicar coincidencias exactas automáticamente"
+    )
+    aplicar_parciales: bool = Field(
+        default=False, description="Aplicar coincidencias parciales automáticamente"
+    )
     observaciones: Optional[str] = None
 
 

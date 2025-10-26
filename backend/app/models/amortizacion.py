@@ -7,14 +7,14 @@ from decimal import Decimal
 from sqlalchemy import (
     Boolean,
     Column,
+    Date,
+    DateTime,
     ForeignKey,
     Integer,
     Numeric,
     String,
     Table,
     Text,
-    DateTime,
-    Date,
 )
 from sqlalchemy.orm import relationship
 
@@ -31,7 +31,9 @@ class Cuota(Base):
 
     # Claves primarias y foráneas
     id = Column(Integer, primary_key=True, index=True)
-    prestamo_id = Column(Integer, ForeignKey("prestamos.id"), nullable=False, index=True)
+    prestamo_id = Column(
+        Integer, ForeignKey("prestamos.id"), nullable=False, index=True
+    )
     numero_cuota = Column(Integer, nullable=False)  # 1, 2, 3, etc.
 
     # Fechas
@@ -44,8 +46,12 @@ class Cuota(Base):
     monto_interes = Column(Numeric(12, 2), nullable=False)
 
     # Saldos
-    saldo_capital_inicial = Column(Numeric(12, 2), nullable=False)  # Saldo al inicio del período
-    saldo_capital_final = Column(Numeric(12, 2), nullable=False)  # Saldo al fin del período
+    saldo_capital_inicial = Column(
+        Numeric(12, 2), nullable=False
+    )  # Saldo al inicio del período
+    saldo_capital_final = Column(
+        Numeric(12, 2), nullable=False
+    )  # Saldo al fin del período
 
     # Montos pagados
     capital_pagado = Column(Numeric(12, 2), default=Decimal("0.00"))
@@ -54,23 +60,33 @@ class Cuota(Base):
     total_pagado = Column(Numeric(12, 2), default=Decimal("0.00"))
 
     # Montos pendientes
-    capital_pendiente = Column(Numeric(12, 2), nullable=False)  # Capital que falta pagar de esta cuota
-    interes_pendiente = Column(Numeric(12, 2), nullable=False)  # Interés que falta pagar de esta cuota
+    capital_pendiente = Column(
+        Numeric(12, 2), nullable=False
+    )  # Capital que falta pagar de esta cuota
+    interes_pendiente = Column(
+        Numeric(12, 2), nullable=False
+    )  # Interés que falta pagar de esta cuota
 
     # Mora
     dias_mora = Column(Integer, default=0)
     monto_mora = Column(Numeric(12, 2), default=Decimal("0.00"))
-    tasa_mora = Column(Numeric(5, 2), default=Decimal("0.00"))  # Tasa de mora aplicada (%)
+    tasa_mora = Column(
+        Numeric(5, 2), default=Decimal("0.00")
+    )  # Tasa de mora aplicada (%)
 
     # Estado
-    estado = Column(String(20), nullable=False, default="PENDIENTE", index=True)  # PENDIENTE, PAGADA, VENCIDA, PARCIAL
+    estado = Column(
+        String(20), nullable=False, default="PENDIENTE", index=True
+    )  # PENDIENTE, PAGADA, VENCIDA, PARCIAL
 
     # Información adicional
     observaciones = Column(String(500), nullable=True)
     es_cuota_especial = Column(Boolean, default=False)
 
     def __repr__(self):
-        return f"<Cuota {self.numero_cuota} - Préstamo {self.prestamo_id} - {self.estado}>"
+        return (
+            f"<Cuota {self.numero_cuota} - Préstamo {self.prestamo_id} - {self.estado}>"
+        )
 
     @property
     def total_pendiente(self) -> Decimal:

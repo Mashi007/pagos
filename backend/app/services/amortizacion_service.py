@@ -42,7 +42,9 @@ class AmortizacionService:
         elif request.tipo_amortizacion == "AMERICANA":
             return AmortizacionService._generar_americano(request)
         else:
-            raise ValueError(f"Sistema de amortización no soportado: {request.tipo_amortizacion}")
+            raise ValueError(
+                f"Sistema de amortización no soportado: {request.tipo_amortizacion}"
+            )
 
     @staticmethod
     def _generar_frances(
@@ -61,7 +63,9 @@ class AmortizacionService:
 
         # Calcular cuota fija (si tasa > 0)
         if tasa_periodo > 0:
-            factor = (tasa_periodo * (1 + tasa_periodo) ** n_cuotas) / ((1 + tasa_periodo) ** n_cuotas - 1)
+            factor = (tasa_periodo * (1 + tasa_periodo) ** n_cuotas) / (
+                (1 + tasa_periodo) ** n_cuotas - 1
+            )
             cuota_fija = monto * factor
         else:
             # Sin interés, solo dividir el monto
@@ -80,7 +84,9 @@ class AmortizacionService:
 
         for i in range(n_cuotas):
             # Calcular interés del período
-            interes = (saldo * tasa_periodo).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            interes = (saldo * tasa_periodo).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
 
             # Calcular capital (cuota - interés)
             capital = cuota_fija - interes
@@ -157,7 +163,9 @@ class AmortizacionService:
         tasa_periodo = tasa_anual / Decimal("12")
 
         # Capital fijo por cuota
-        capital_fijo = (monto / Decimal(n_cuotas)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        capital_fijo = (monto / Decimal(n_cuotas)).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
 
         # Generar fechas
         fechas = calculate_payment_dates(request.fecha_inicio, n_cuotas, "MENSUAL")
@@ -170,7 +178,9 @@ class AmortizacionService:
 
         for i in range(n_cuotas):
             # Interés sobre saldo
-            interes = (saldo * tasa_periodo).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            interes = (saldo * tasa_periodo).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
 
             # Capital fijo (ajuste en última cuota)
             if i == n_cuotas - 1:
@@ -242,7 +252,9 @@ class AmortizacionService:
         tasa_periodo = tasa_anual / Decimal("12")
 
         # Interés fijo por período
-        interes_fijo = (monto * tasa_periodo).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        interes_fijo = (monto * tasa_periodo).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
 
         # Generar fechas
         fechas = calculate_payment_dates(request.fecha_inicio, n_cuotas, "MENSUAL")
@@ -309,7 +321,9 @@ class AmortizacionService:
         )
 
     @staticmethod
-    def crear_cuotas_prestamo(db: Session, prestamo_id: int, tabla: TablaAmortizacionResponse) -> List[Cuota]:
+    def crear_cuotas_prestamo(
+        db: Session, prestamo_id: int, tabla: TablaAmortizacionResponse
+    ) -> List[Cuota]:
         """
         Crea las cuotas en la BD para un préstamo
 
@@ -344,7 +358,9 @@ class AmortizacionService:
         return cuotas_creadas
 
     @staticmethod
-    def obtener_cuotas_prestamo(db: Session, prestamo_id: int, estado: Optional[str] = None) -> List[Cuota]:
+    def obtener_cuotas_prestamo(
+        db: Session, prestamo_id: int, estado: Optional[str] = None
+    ) -> List[Cuota]:
         """Obtiene las cuotas de un préstamo"""
         query = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id)
 
@@ -397,9 +413,12 @@ class AmortizacionService:
 
             # Calcular nueva mora
             dias_mora = (fecha_calculo - cuota.fecha_vencimiento).days
-            nueva_mora = (cuota.monto_cuota * tasa_mora_diaria * Decimal(dias_mora) / Decimal("100")).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
+            nueva_mora = (
+                cuota.monto_cuota
+                * tasa_mora_diaria
+                * Decimal(dias_mora)
+                / Decimal("100")
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
             # Actualizar
             cuota.monto_mora = nueva_mora

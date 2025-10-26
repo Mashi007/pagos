@@ -33,7 +33,9 @@ def get_alerts(
 
     except Exception as e:
         logger.error(f"Error obteniendo alertas: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.post("/alerts/acknowledge/{alert_id}")
@@ -48,4 +50,6 @@ def acknowledge_alert(
 
     except Exception as e:
         logger.error(f"Error reconociendo alerta: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )

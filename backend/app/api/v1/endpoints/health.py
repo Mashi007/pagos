@@ -147,7 +147,8 @@ async def detailed_health_check(response: Response):
                 {
                     "type": "cpu_high",
                     "message": (
-                        f"CPU usage {system_metrics['cpu_percent']:.1f}% " f"exceeds threshold {CPU_THRESHOLD_PERCENT}%"
+                        f"CPU usage {system_metrics['cpu_percent']:.1f}% "
+                        f"exceeds threshold {CPU_THRESHOLD_PERCENT}%"
                     ),
                     "severity": "WARNING",
                 }
@@ -170,7 +171,8 @@ async def detailed_health_check(response: Response):
                 {
                     "type": "disk_high",
                     "message": (
-                        f"Disk usage {system_metrics['disk_percent']:.1f}% " f"exceeds threshold {DISK_THRESHOLD_PERCENT}%"
+                        f"Disk usage {system_metrics['disk_percent']:.1f}% "
+                        f"exceeds threshold {DISK_THRESHOLD_PERCENT}%"
                     ),
                     "severity": "CRITICAL",
                 }

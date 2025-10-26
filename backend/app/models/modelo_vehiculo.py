@@ -18,7 +18,9 @@ class ModeloVehiculo(Base):
     activo = Column(Boolean, nullable=False, default=True, index=True)
 
     # Timestamps
-    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     def __repr__(self):
         return f"<ModeloVehiculo(id={self.id}, modelo='{self.modelo}', activo={self.activo})>"

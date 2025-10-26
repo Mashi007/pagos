@@ -12,8 +12,12 @@ class CuotaBase(BaseModel):
     monto_cuota: Decimal = Field(..., gt=0, description="Monto total de la cuota")
     monto_capital: Decimal = Field(..., ge=0, description="Monto de capital")
     monto_interes: Decimal = Field(..., ge=0, description="Monto de interés")
-    saldo_capital_inicial: Decimal = Field(..., ge=0, description="Saldo inicial de capital")
-    saldo_capital_final: Decimal = Field(..., ge=0, description="Saldo final de capital")
+    saldo_capital_inicial: Decimal = Field(
+        ..., ge=0, description="Saldo inicial de capital"
+    )
+    saldo_capital_final: Decimal = Field(
+        ..., ge=0, description="Saldo final de capital"
+    )
 
     @field_validator(
         "monto_cuota",
@@ -81,7 +85,9 @@ class TablaAmortizacionRequest(BaseModel):
     tasa_interes: Decimal = Field(..., ge=0, description="Tasa de interés anual")
     numero_cuotas: int = Field(..., gt=0, description="Número de cuotas")
     fecha_inicio: date = Field(..., description="Fecha de inicio del préstamo")
-    tipo_amortizacion: str = Field(default="FRANCESA", description="Tipo de amortización")
+    tipo_amortizacion: str = Field(
+        default="FRANCESA", description="Tipo de amortización"
+    )
     tasa_mora: Optional[Decimal] = Field(None, ge=0, description="Tasa de mora diaria")
 
     @field_validator("monto_financiado", "tasa_interes", "tasa_mora", mode="before")
@@ -100,7 +106,9 @@ class TablaAmortizacionResponse(BaseModel):
 
 class RecalcularMoraRequest(BaseModel):
     # Schema para recalcular mora
-    tasa_mora_diaria: Optional[Decimal] = Field(None, ge=0, description="Tasa de mora diaria")
+    tasa_mora_diaria: Optional[Decimal] = Field(
+        None, ge=0, description="Tasa de mora diaria"
+    )
     fecha_calculo: Optional[date] = Field(None, description="Fecha de cálculo")
 
     @field_validator("tasa_mora_diaria", mode="before")

@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, fecha_desde, fecha_hasta):
+def _aplicar_filtros_auditoria(
+    query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
+):
     # Aplicar filtros a la query de auditoría
     if usuario_email:
         query = query.filter(Auditoria.usuario_email.ilike(f"%{usuario_email}%"))
@@ -57,7 +59,9 @@ def _calcular_paginacion_auditoria(total, limit, skip):
 
 @router.get("/auditoria")
 def listar_auditoria(
-    usuario_email: Optional[str] = Query(None, description="Filtrar por email de usuario"),
+    usuario_email: Optional[str] = Query(
+        None, description="Filtrar por email de usuario"
+    ),
     modulo: Optional[str] = Query(None, description="Filtrar por módulo"),
     accion: Optional[str] = Query(None, description="Filtrar por acción"),
     ordenar_por: str = Query("fecha", description="Campo para ordenar"),
@@ -71,7 +75,9 @@ def listar_auditoria(
         query = db.query(Auditoria)
 
         # Aplicar filtros
-        query = _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, None, None)
+        query = _aplicar_filtros_auditoria(
+            query, usuario_email, modulo, accion, None, None
+        )
 
         # Aplicar ordenamiento
         query = _aplicar_ordenamiento_auditoria(query, ordenar_por, orden)
@@ -105,7 +111,9 @@ def listar_auditoria(
 
     except Exception as e:
         logger.error(f"Error listando auditoría: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.get("/auditoria/exportar")
@@ -122,7 +130,9 @@ def exportar_auditoria(
     try:
         # Construir query
         query = db.query(Auditoria)
-        query = _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, fecha_desde, fecha_hasta)
+        query = _aplicar_filtros_auditoria(
+            query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
+        )
         query = query.order_by(desc(Auditoria.fecha))
 
         # Obtener datos
@@ -139,7 +149,9 @@ def exportar_auditoria(
 
     except Exception as e:
         logger.error(f"Error exportando auditoría: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 def _crear_excel_auditoria(registros):

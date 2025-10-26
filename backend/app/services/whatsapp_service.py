@@ -26,7 +26,9 @@ class WhatsAppService:
         if not self.access_token or not self.phone_number_id:
             logger.warning("Credenciales de Meta Developers no configuradas")
 
-    async def send_message(self, to_number: str, message: str, template_name: Optional[str] = None) -> Dict[str, Any]:
+    async def send_message(
+        self, to_number: str, message: str, template_name: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Enviar mensaje WhatsApp usando Meta Developers API
 
@@ -148,7 +150,9 @@ Equipo de {settings.APP_NAME}
 
         return await self.send_message(phone_number, message)
 
-    async def send_welcome_message(self, phone_number: str, client_name: str) -> Dict[str, Any]:
+    async def send_welcome_message(
+        self, phone_number: str, client_name: str
+    ) -> Dict[str, Any]:
         """
         Enviar mensaje de bienvenida por WhatsApp
 

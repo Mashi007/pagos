@@ -58,7 +58,9 @@ def create_user(
 ):
     # Crear un nuevo usuario (solo ADMIN)
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Solo administradores pueden crear usuarios")
+        raise HTTPException(
+            status_code=403, detail="Solo administradores pueden crear usuarios"
+        )
     # - email: Email único del usuario
     # - nombre: Nombre del usuario
     # - apellido: Apellido del usuario
@@ -110,12 +112,16 @@ def list_users(
     try:
         # Solo admins pueden ver todos los usuarios
         if not current_user.is_admin:
-            raise HTTPException(status_code=403, detail="Solo administradores pueden listar usuarios")
+            raise HTTPException(
+                status_code=403, detail="Solo administradores pueden listar usuarios"
+            )
 
         users = db.query(User).offset(skip).limit(limit).all()
         total = db.query(User).count()
 
-        return UserListResponse(items=users, total=total, page=skip // limit + 1, page_size=limit)
+        return UserListResponse(
+            items=users, total=total, page=skip // limit + 1, page_size=limit
+        )
 
     except HTTPException:
         raise
@@ -139,7 +145,9 @@ def get_user(
 
         # Solo admins pueden ver otros usuarios, o el usuario puede verse a sí mismo
         if not current_user.is_admin and current_user.id != user_id:
-            raise HTTPException(status_code=403, detail="No tienes permisos para ver este usuario")
+            raise HTTPException(
+                status_code=403, detail="No tienes permisos para ver este usuario"
+            )
 
         return user
 
@@ -177,7 +185,9 @@ def update_user(
                 # Validar contraseña si se está cambiando
                 is_valid, message = validate_password_strength(value)
                 if not is_valid:
-                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST, detail=message
+                    )
                 setattr(user, "hashed_password", get_password_hash(value))
             elif field == "is_admin":
                 # Actualizar tanto is_admin como rol
@@ -207,7 +217,9 @@ def delete_user(
 ):
     # Eliminar usuario (solo ADMIN)
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Solo administradores pueden eliminar usuarios")
+        raise HTTPException(
+            status_code=403, detail="Solo administradores pueden eliminar usuarios"
+        )
     try:
         user = db.query(User).filter(User.id == user_id).first()
 

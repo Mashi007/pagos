@@ -4,7 +4,8 @@ Configuración de la aplicación
 
 from typing import List, Optional
 
-from pydantic_settings import BaseSettings, Field as SettingsField
+from pydantic_settings import BaseSettings
+from pydantic_settings import Field as SettingsField
 
 
 class Settings(BaseSettings):
@@ -24,12 +25,16 @@ class Settings(BaseSettings):
     # ============================================
     # BASE DE DATOS
     # ============================================
-    DATABASE_URL: str = SettingsField(default="postgresql://user:password@localhost/pagos_db", env="DATABASE_URL")
+    DATABASE_URL: str = SettingsField(
+        default="postgresql://user:password@localhost/pagos_db", env="DATABASE_URL"
+    )
 
     # ============================================
     # SEGURIDAD
     # ============================================
-    SECRET_KEY: str = SettingsField(default="your-secret-key-here-change-in-production", env="SECRET_KEY")
+    SECRET_KEY: str = SettingsField(
+        default="your-secret-key-here-change-in-production", env="SECRET_KEY"
+    )
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -137,13 +142,17 @@ class Settings(BaseSettings):
         """Valida que CORS no esté abierto en producción"""
         if self.ENVIRONMENT == "production" and "*" in self.CORS_ORIGINS:
             raise ValueError(
-                "CRÍTICO: CORS con wildcard (*) detectado en producción. " "CORS_ORIGINS debe especificar dominios específicos"
+                "CRÍTICO: CORS con wildcard (*) detectado en producción. "
+                "CORS_ORIGINS debe especificar dominios específicos"
             )
         return True
 
     def validate_database_url(self) -> bool:
         """Valida que la URL de base de datos sea válida"""
-        if not self.DATABASE_URL or self.DATABASE_URL == "postgresql://user:password@localhost/pagos_db":
+        if (
+            not self.DATABASE_URL
+            or self.DATABASE_URL == "postgresql://user:password@localhost/pagos_db"
+        ):
             if self.ENVIRONMENT == "production":
                 raise ValueError("DATABASE_URL debe estar configurada en producción")
         return True

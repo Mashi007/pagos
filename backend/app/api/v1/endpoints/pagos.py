@@ -64,7 +64,9 @@ def listar_pagos(
 
     except Exception as e:
         logger.error(f"Error listando pagos: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.get("/{pago_id}", response_model=PagoResponse)
@@ -86,7 +88,9 @@ def obtener_pago(
         raise
     except Exception as e:
         logger.error(f"Error obteniendo pago: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.put("/{pago_id}", response_model=PagoResponse)
@@ -117,7 +121,9 @@ def actualizar_pago(
     except Exception as e:
         db.rollback()
         logger.error(f"Error actualizando pago: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.delete("/{pago_id}")
@@ -143,7 +149,9 @@ def eliminar_pago(
     except Exception as e:
         db.rollback()
         logger.error(f"Error eliminando pago: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.post("/subir-documento")

@@ -31,4 +31,6 @@ def get_architectural_analysis(
 
     except Exception as e:
         logger.error(f"Error obteniendo análisis arquitectural: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )

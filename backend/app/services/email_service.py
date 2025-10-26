@@ -25,7 +25,9 @@ class EmailService:
         self.from_email = settings.FROM_EMAIL
         self.from_name = settings.FROM_NAME
 
-    def send_email(self, to_emails: List[str], subject: str, body: str, is_html: bool = False) -> Dict[str, Any]:
+    def send_email(
+        self, to_emails: List[str], subject: str, body: str, is_html: bool = False
+    ) -> Dict[str, Any]:
         """
         Enviar email
 
@@ -104,7 +106,9 @@ class EmailService:
 
         return self.send_email([email], subject, body, is_html=True)
 
-    def send_password_reset_email(self, email: str, reset_token: str, name: str) -> Dict[str, Any]:
+    def send_password_reset_email(
+        self, email: str, reset_token: str, name: str
+    ) -> Dict[str, Any]:
         """
         Enviar email de reset de contraseña
 
@@ -135,7 +139,9 @@ class EmailService:
 
         return self.send_email([email], subject, body, is_html=True)
 
-    def send_payment_reminder_email(self, email: str, name: str, loan_amount: float, due_date: str) -> Dict[str, Any]:
+    def send_payment_reminder_email(
+        self, email: str, name: str, loan_amount: float, due_date: str
+    ) -> Dict[str, Any]:
         """
         Enviar email de recordatorio de pago
 

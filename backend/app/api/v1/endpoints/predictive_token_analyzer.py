@@ -32,7 +32,9 @@ def analyze_tokens(
 
     except Exception as e:
         logger.error(f"Error analizando tokens: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.post("/token-analysis/cleanup")
@@ -46,4 +48,6 @@ def cleanup_tokens(
 
     except Exception as e:
         logger.error(f"Error limpiando tokens: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )

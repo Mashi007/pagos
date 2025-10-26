@@ -27,9 +27,13 @@ class SolicitudAprobacionCompleta(BaseModel):
     )
     entidad_tipo: str = Field(..., description="cliente, pago, prestamo")
     entidad_id: int = Field(..., description="ID de la entidad a modificar")
-    justificacion: str = Field(..., min_length=10, max_length=1000, description="Justificación detallada")
+    justificacion: str = Field(
+        ..., min_length=10, max_length=1000, description="Justificación detallada"
+    )
     prioridad: str = Field(default="NORMAL", description="BAJA, NORMAL, ALTA, URGENTE")
-    fecha_limite: Optional[date] = Field(None, description="Fecha límite para respuesta")
+    fecha_limite: Optional[date] = Field(
+        None, description="Fecha límite para respuesta"
+    )
 
     class Config:
         json_schema_extra = {
@@ -48,9 +52,13 @@ class FormularioModificarPago(BaseModel):
     """Formulario específico para modificar pago"""
 
     pago_id: int = Field(..., description="ID del pago a modificar")
-    motivo_modificacion: str = Field(..., description="ERROR_REGISTRO, CAMBIO_CLIENTE, AJUSTE_MONTO, OTRO")
+    motivo_modificacion: str = Field(
+        ..., description="ERROR_REGISTRO, CAMBIO_CLIENTE, AJUSTE_MONTO, OTRO"
+    )
     nuevo_monto: Optional[float] = Field(None, gt=0, description="Nuevo monto del pago")
-    nuevo_metodo_pago: Optional[str] = Field(None, description="EFECTIVO, TRANSFERENCIA, TARJETA, CHEQUE")
+    nuevo_metodo_pago: Optional[str] = Field(
+        None, description="EFECTIVO, TRANSFERENCIA, TARJETA, CHEQUE"
+    )
     nueva_fecha_pago: Optional[date] = Field(None, description="Nueva fecha del pago")
 
 
@@ -58,24 +66,36 @@ class FormularioAnularPago(BaseModel):
     """Formulario específico para anular pago"""
 
     pago_id: int = Field(..., description="ID del pago a anular")
-    motivo_anulacion: str = Field(..., description="ERROR_REGISTRO, DUPLICADO, FRAUDE, OTRO")
-    devolver_dinero: bool = Field(default=True, description="Si se debe devolver el dinero")
+    motivo_anulacion: str = Field(
+        ..., description="ERROR_REGISTRO, DUPLICADO, FRAUDE, OTRO"
+    )
+    devolver_dinero: bool = Field(
+        default=True, description="Si se debe devolver el dinero"
+    )
 
 
 class FormularioEditarCliente(BaseModel):
     """Formulario específico para editar cliente"""
 
     cliente_id: int = Field(..., description="ID del cliente a editar")
-    campos_modificar: Dict[str, Any] = Field(..., description="Campos específicos a modificar")
-    motivo_edicion: str = Field(..., description="ACTUALIZACION_DATOS, CORRECCION_ERROR, OTRO")
+    campos_modificar: Dict[str, Any] = Field(
+        ..., description="Campos específicos a modificar"
+    )
+    motivo_edicion: str = Field(
+        ..., description="ACTUALIZACION_DATOS, CORRECCION_ERROR, OTRO"
+    )
 
 
 class FormularioModificarAmortizacion(BaseModel):
     """Formulario específico para modificar amortización"""
 
     prestamo_id: int = Field(..., description="ID del préstamo")
-    tipo_modificacion: str = Field(..., description="CAMBIO_PLAZO, AJUSTE_TASA, REESTRUCTURACION")
-    nuevos_parametros: Dict[str, Any] = Field(..., description="Nuevos parámetros de la amortización")
+    tipo_modificacion: str = Field(
+        ..., description="CAMBIO_PLAZO, AJUSTE_TASA, REESTRUCTURACION"
+    )
+    nuevos_parametros: Dict[str, Any] = Field(
+        ..., description="Nuevos parámetros de la amortización"
+    )
 
 
 class SolicitudResponse(BaseModel):
@@ -135,7 +155,9 @@ async def crear_solicitud(
     except Exception as e:
         db.rollback()
         logger.error(f"Error creando solicitud: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.get("/", response_model=List[SolicitudResponse])
@@ -158,7 +180,9 @@ def listar_solicitudes(
 
     except Exception as e:
         logger.error(f"Error listando solicitudes: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.get("/{solicitud_id}", response_model=SolicitudResponse)
@@ -180,7 +204,9 @@ def obtener_solicitud(
         raise
     except Exception as e:
         logger.error(f"Error obteniendo solicitud: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.put("/{solicitud_id}/aprobar")
@@ -214,7 +240,9 @@ def aprobar_solicitud(
     except Exception as e:
         db.rollback()
         logger.error(f"Error aprobando solicitud: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.put("/{solicitud_id}/rechazar")
@@ -248,7 +276,9 @@ def rechazar_solicitud(
     except Exception as e:
         db.rollback()
         logger.error(f"Error rechazando solicitud: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.get("/pendientes/count")
@@ -263,4 +293,6 @@ def contar_solicitudes_pendientes(
 
     except Exception as e:
         logger.error(f"Error contando solicitudes: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )

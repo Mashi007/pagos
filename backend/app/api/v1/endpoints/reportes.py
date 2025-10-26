@@ -82,9 +82,13 @@ def reporte_cartera(
         ).scalar() or Decimal("0")
 
         # Cantidad de préstamos
-        cantidad_prestamos_activos = db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.ACTIVO).count()
+        cantidad_prestamos_activos = (
+            db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.ACTIVO).count()
+        )
 
-        cantidad_prestamos_mora = db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.EN_MORA).count()
+        cantidad_prestamos_mora = (
+            db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.EN_MORA).count()
+        )
 
         # Distribución por monto
         distribucion_por_monto = (
@@ -92,7 +96,9 @@ def reporte_cartera(
                 func.count(Prestamo.id).label("cantidad"),
                 func.sum(Prestamo.monto_total).label("monto"),
             )
-            .filter(Prestamo.estado.in_([EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA]))
+            .filter(
+                Prestamo.estado.in_([EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA])
+            )
             .group_by(
                 func.case(
                     (Prestamo.monto_total <= 1000, "Hasta $1,000"),
@@ -147,14 +153,17 @@ def reporte_cartera(
             cantidad_prestamos_activos=cantidad_prestamos_activos,
             cantidad_prestamos_mora=cantidad_prestamos_mora,
             distribucion_por_monto=[
-                {"rango": item[0], "cantidad": item[1], "monto": item[2]} for item in distribucion_por_monto
+                {"rango": item[0], "cantidad": item[1], "monto": item[2]}
+                for item in distribucion_por_monto
             ],
             distribucion_por_mora=distribucion_por_mora,
         )
 
     except Exception as e:
         logger.error(f"Error generando reporte de cartera: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.get("/pagos", response_model=ReportePagos)
@@ -216,13 +225,21 @@ def reporte_pagos(
             fecha_fin=fecha_fin,
             total_pagos=total_pagos,
             cantidad_pagos=cantidad_pagos,
-            pagos_por_metodo=[{"metodo": item[0], "cantidad": item[1], "monto": item[2]} for item in pagos_por_metodo],
-            pagos_por_dia=[{"fecha": item[0], "cantidad": item[1], "monto": item[2]} for item in pagos_por_dia],
+            pagos_por_metodo=[
+                {"metodo": item[0], "cantidad": item[1], "monto": item[2]}
+                for item in pagos_por_metodo
+            ],
+            pagos_por_dia=[
+                {"fecha": item[0], "cantidad": item[1], "monto": item[2]}
+                for item in pagos_por_dia
+            ],
         )
 
     except Exception as e:
         logger.error(f"Error generando reporte de pagos: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.get("/exportar/cartera")
@@ -272,7 +289,9 @@ def exportar_reporte_cartera(
             return StreamingResponse(
                 output,
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                headers={"Content-Disposition": f"attachment; filename=reporte_cartera_{reporte.fecha_corte}.xlsx"},
+                headers={
+                    "Content-Disposition": f"attachment; filename=reporte_cartera_{reporte.fecha_corte}.xlsx"
+                },
             )
 
         elif formato.lower() == "pdf":
@@ -293,9 +312,13 @@ def exportar_reporte_cartera(
             y = 680
             c.drawString(100, y, f"Cartera Total: ${reporte.cartera_total:,.2f}")
             y -= 20
-            c.drawString(100, y, f"Capital Pendiente: ${reporte.capital_pendiente:,.2f}")
+            c.drawString(
+                100, y, f"Capital Pendiente: ${reporte.capital_pendiente:,.2f}"
+            )
             y -= 20
-            c.drawString(100, y, f"Intereses Pendientes: ${reporte.intereses_pendientes:,.2f}")
+            c.drawString(
+                100, y, f"Intereses Pendientes: ${reporte.intereses_pendientes:,.2f}"
+            )
             y -= 20
             c.drawString(100, y, f"Mora Total: ${reporte.mora_total:,.2f}")
 
@@ -305,15 +328,21 @@ def exportar_reporte_cartera(
             return StreamingResponse(
                 output,
                 media_type="application/pdf",
-                headers={"Content-Disposition": f"attachment; filename=reporte_cartera_{reporte.fecha_corte}.pdf"},
+                headers={
+                    "Content-Disposition": f"attachment; filename=reporte_cartera_{reporte.fecha_corte}.pdf"
+                },
             )
 
         else:
-            raise HTTPException(status_code=400, detail="Formato no soportado. Use 'excel' o 'pdf'")
+            raise HTTPException(
+                status_code=400, detail="Formato no soportado. Use 'excel' o 'pdf'"
+            )
 
     except Exception as e:
         logger.error(f"Error exportando reporte: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.get("/dashboard/resumen")
@@ -334,11 +363,15 @@ def resumen_dashboard(
         ).scalar() or Decimal("0")
 
         # Mora
-        prestamos_mora = db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.EN_MORA).count()
+        prestamos_mora = (
+            db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.EN_MORA).count()
+        )
 
         # Pagos del mes
         fecha_inicio_mes = date.today().replace(day=1)
-        pagos_mes = db.query(func.sum(Pago.monto)).filter(Pago.fecha_pago >= fecha_inicio_mes).scalar() or Decimal("0")
+        pagos_mes = db.query(func.sum(Pago.monto)).filter(
+            Pago.fecha_pago >= fecha_inicio_mes
+        ).scalar() or Decimal("0")
 
         return {
             "total_clientes": total_clientes,
@@ -352,4 +385,6 @@ def resumen_dashboard(
 
     except Exception as e:
         logger.error(f"Error obteniendo resumen: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )

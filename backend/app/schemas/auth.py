@@ -60,7 +60,11 @@ class LoginRequest(BaseModel):
     email: EmailStr = Field(..., description="Email del usuario")
     password: str = Field(..., min_length=6, description="Contraseña del usuario")
 
-    model_config = ConfigDict(json_schema_extra={"example": {"email": "usuario@ejemplo.com", "password": "contraseña123"}})
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {"email": "usuario@ejemplo.com", "password": "contraseña123"}
+        }
+    )
 
 
 class RefreshTokenRequest(BaseModel):

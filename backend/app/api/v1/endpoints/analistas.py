@@ -60,7 +60,9 @@ def listar_analistas(
 
     except Exception as e:
         logger.error(f"Error listando analistas: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.get("/{analista_id}", response_model=AnalistaResponse)
@@ -82,7 +84,9 @@ def obtener_analista(
         raise
     except Exception as e:
         logger.error(f"Error obteniendo analista: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.post("/", response_model=AnalistaResponse, status_code=status.HTTP_201_CREATED)
@@ -94,10 +98,14 @@ def crear_analista(
     # Crear nuevo analista
     try:
         # Verificar que no exista un analista con el mismo email
-        analista_existente = db.query(Analista).filter(Analista.email == analista_data.email).first()
+        analista_existente = (
+            db.query(Analista).filter(Analista.email == analista_data.email).first()
+        )
 
         if analista_existente:
-            raise HTTPException(status_code=400, detail="Ya existe un analista con este email")
+            raise HTTPException(
+                status_code=400, detail="Ya existe un analista con este email"
+            )
 
         nuevo_analista = Analista(**analista_data.model_dump())
 
@@ -112,7 +120,9 @@ def crear_analista(
     except Exception as e:
         db.rollback()
         logger.error(f"Error creando analista: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.put("/{analista_id}", response_model=AnalistaResponse)
@@ -132,11 +142,17 @@ def actualizar_analista(
         # Verificar email único si se está cambiando
         if analista_data.email and analista_data.email != analista.email:
             analista_existente = (
-                db.query(Analista).filter(Analista.email == analista_data.email, Analista.id != analista_id).first()
+                db.query(Analista)
+                .filter(
+                    Analista.email == analista_data.email, Analista.id != analista_id
+                )
+                .first()
             )
 
             if analista_existente:
-                raise HTTPException(status_code=400, detail="Ya existe un analista con este email")
+                raise HTTPException(
+                    status_code=400, detail="Ya existe un analista con este email"
+                )
 
         # Actualizar campos
         for field, value in analista_data.model_dump(exclude_unset=True).items():
@@ -152,7 +168,9 @@ def actualizar_analista(
     except Exception as e:
         db.rollback()
         logger.error(f"Error actualizando analista: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.delete("/{analista_id}")
@@ -176,4 +194,6 @@ def eliminar_analista(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error al eliminar analista: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error al eliminar analista: {str(e)}"
+        )

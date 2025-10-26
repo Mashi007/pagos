@@ -51,13 +51,19 @@ class AuthFlowAnalyzer:
         cutoff = datetime.now() - self.analysis_window
 
         for user_email in list(failed_attempts.keys()):
-            failed_attempts[user_email] = [attempt for attempt in failed_attempts[user_email] if attempt["timestamp"] > cutoff]
+            failed_attempts[user_email] = [
+                attempt
+                for attempt in failed_attempts[user_email]
+                if attempt["timestamp"] > cutoff
+            ]
             if not failed_attempts[user_email]:
                 del failed_attempts[user_email]
 
         for user_email in list(successful_logins.keys()):
             successful_logins[user_email] = [
-                attempt for attempt in successful_logins[user_email] if attempt["timestamp"] > cutoff
+                attempt
+                for attempt in successful_logins[user_email]
+                if attempt["timestamp"] > cutoff
             ]
             if not successful_logins[user_email]:
                 del successful_logins[user_email]
@@ -75,15 +81,25 @@ class AuthFlowAnalyzer:
             "user_email": user_email,
             "total_failed_attempts": len(failed),
             "total_successful_logins": len(successful),
-            "success_rate": (len(successful) / (len(failed) + len(successful)) * 100 if (failed or successful) else 0),
-            "last_failed_attempt": (failed[-1]["timestamp"].isoformat() if failed else None),
-            "last_successful_login": (successful[-1]["timestamp"].isoformat() if successful else None),
+            "success_rate": (
+                len(successful) / (len(failed) + len(successful)) * 100
+                if (failed or successful)
+                else 0
+            ),
+            "last_failed_attempt": (
+                failed[-1]["timestamp"].isoformat() if failed else None
+            ),
+            "last_successful_login": (
+                successful[-1]["timestamp"].isoformat() if successful else None
+            ),
         }
 
         # Detectar patrones sospechosos
         if len(failed) > 5:
             analysis["risk_level"] = "HIGH"
-            analysis["recommendation"] = "Considerar bloqueo temporal o verificación adicional"
+            analysis["recommendation"] = (
+                "Considerar bloqueo temporal o verificación adicional"
+            )
         elif len(failed) > 2:
             analysis["risk_level"] = "MEDIUM"
             analysis["recommendation"] = "Monitorear actividad"
@@ -136,7 +152,9 @@ def get_auth_overview(
 
     except Exception as e:
         logger.error(f"Error obteniendo resumen de autenticación: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.get("/auth-analysis/user/{user_email}")
@@ -157,7 +175,9 @@ def analyze_user_auth_patterns(
 
     except Exception as e:
         logger.error(f"Error analizando patrones de usuario {user_email}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.post("/auth-analysis/log-attempt")
@@ -169,7 +189,9 @@ def log_auth_attempt(
 ):
     # Registrar intento de autenticación para análisis
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Solo administradores pueden registrar intentos")
+        raise HTTPException(
+            status_code=403, detail="Solo administradores pueden registrar intentos"
+        )
 
     try:
         analyzer.log_auth_attempt(user_email, success, details)
@@ -177,7 +199,9 @@ def log_auth_attempt(
 
     except Exception as e:
         logger.error(f"Error registrando intento: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.get("/auth-analysis/risky-users")
@@ -206,4 +230,6 @@ def get_risky_users(
 
     except Exception as e:
         logger.error(f"Error obteniendo usuarios de riesgo: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )

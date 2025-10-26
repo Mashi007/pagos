@@ -26,7 +26,9 @@ def cache_result(ttl_seconds: int = 300):
             # Verificar si existe en cache y no ha expirado
             if cache_key in _cache:
                 timestamp = _cache_timestamps.get(cache_key)
-                if timestamp and datetime.now() - timestamp < timedelta(seconds=ttl_seconds):
+                if timestamp and datetime.now() - timestamp < timedelta(
+                    seconds=ttl_seconds
+                ):
                     logger.debug(f"Cache hit para {cache_key}")
                     return _cache[cache_key]
 
