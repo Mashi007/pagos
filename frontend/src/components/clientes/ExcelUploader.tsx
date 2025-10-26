@@ -27,7 +27,7 @@ import { useQueryClient } from '@tanstack/react-query'
 
 interface ExcelData {
   cedula: string
-  nombres: string  // ✅ Unifica nombres + apellidos (2-4 palabras)
+  nombres: string  // ✅ CARGA MASIVA: Solo 2 palabras exactamente (nombre + apellido)
   telefono: string
   email: string
   direccion: string
@@ -740,8 +740,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       case 'nombres':
         if (!value.trim()) return { isValid: false, message: 'Nombres requeridos' }
         const nombresWords = value.trim().split(/\s+/).filter(word => word.length > 0)
-        if (nombresWords.length < 2) return { isValid: false, message: 'Mínimo 2 palabras requeridas' }
-        if (nombresWords.length > 2) return { isValid: false, message: 'Máximo 2 palabras permitidas' }
+        // ✅ CARGA MASIVA: SOLO 2 PALABRAS EXACTAMENTE
+        if (nombresWords.length !== 2) {
+          return { isValid: false, message: 'DEBE tener exactamente 2 palabras (nombre + apellido)' }
+        }
         return { isValid: true }
 
       case 'telefono':
