@@ -766,7 +766,7 @@ class ValidadorMonto:
         if ultimo_coma > ultimo_punto:
             # Formato europeo: "1.234,56"
             antes_coma = monto_limpio[:ultimo_coma]
-            despues_coma = monto_limpio[ultimo_coma + 1 :]
+            despues_coma = monto_limpio[ultimo_coma + 1:]
 
             # Validar decimales
             if not (1 <= len(despues_coma) <= 2):
