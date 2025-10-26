@@ -217,10 +217,6 @@ export function Analistas() {
           </p>
         </div>
         <div className="flex items-center space-x-2">
-          <Button onClick={handleRefresh} variant="outline" size="sm">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Actualizar
-          </Button>
           <Button onClick={() => {
             setEditingAnalista(null)
             setFormData({ nombre: '', activo: true })
