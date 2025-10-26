@@ -322,13 +322,13 @@ class ValidadorCedula:
                         ),
                     }
                 else:
-                return {
-                    "valido": False,
-                    "error": f"Formato inválido para {config['descripcion']}",
-                    "valor_original": cedula,
-                    "valor_formateado": None,
-                    "formato_esperado": config["formato_display"],
-                }
+                    return {
+                        "valido": False,
+                        "error": f"Formato inválido para {config['descripcion']}",
+                        "valor_original": cedula,
+                        "valor_formateado": None,
+                        "formato_esperado": config["formato_display"],
+                    }
 
             # Formatear según país
             if pais.upper() == "VENEZUELA":
