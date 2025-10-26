@@ -33,6 +33,7 @@ import { concesionarioService, type Concesionario } from '@/services/concesionar
 import { analistaService, type Analista } from '@/services/analistaService'
 import { modeloVehiculoService, type ModeloVehiculo } from '@/services/modeloVehiculoService'
 import { clienteService } from '@/services/clienteService'
+import { validadoresService } from '@/services/validadoresService'
 import { ExcelUploader } from './ExcelUploader'
 import { ConfirmacionDuplicadoModal } from './ConfirmacionDuplicadoModal'
 
@@ -181,103 +182,59 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     cargarDatosConfiguracion()
   }, [])
 
-  // Validaciones en tiempo real
-  const validateField = (field: string, value: string): ValidationResult => {
-    switch (field) {
-      case 'cedula':
-        if (!value) return { field, isValid: false, message: 'Cédula es obligatoria' }
-        if (value.length < 8 || value.length > 20) {
-          return { field, isValid: false, message: 'Cédula debe tener entre 8 y 20 caracteres' }
-        }
-        return { field, isValid: true, message: 'Cédula válida' }
-      
-      case 'nombres':
-        if (!value) return { field, isValid: false, message: 'Nombres son obligatorios' }
-        const nombresWords = value.trim().split(' ').filter(word => word.length > 0)
-        if (nombresWords.length < 2) {
-          return { field, isValid: false, message: 'Mínimo 2 palabras: nombre y apellido' }
-        }
-        if (nombresWords.length > 2) {
-          return { field, isValid: false, message: 'Máximo 2 palabras en nombres' }
-        }
-        return { field, isValid: true, message: 'Nombres válidos' }
-      
-      case 'apellidos':
-        if (!value) return { field, isValid: false, message: 'Apellidos son obligatorios' }
-        const apellidosWords = value.trim().split(' ').filter(word => word.length > 0)
-        if (apellidosWords.length < 2) {
-          return { field, isValid: false, message: 'Mínimo 2 palabras: apellido paterno y materno' }
-        }
-        if (apellidosWords.length > 2) {
-          return { field, isValid: false, message: 'Máximo 2 palabras en apellidos' }
-        }
-        return { field, isValid: true, message: 'Apellidos válidos' }
-      
-      case 'telefono':
-        if (!value) return { field, isValid: false, message: 'Teléfono es obligatorio' }
-        // Validar formato venezolano: +58 XXXXXXXXXX (10 dígitos, primer dígito no puede ser 0)
-        const telefonoLimpio = value.replace(/\s+/g, '').replace(/\+58/g, '')
-        if (telefonoLimpio.length !== 10) {
-          return { field, isValid: false, message: 'Formato: +58 XXXXXXXXXX (10 dígitos, primer dígito no puede ser 0)' }
-        }
-        if (telefonoLimpio[0] === '0') {
-          return { field, isValid: false, message: 'Primer dígito no puede ser 0' }
-        }
-        if (!/^\d{10}$/.test(telefonoLimpio)) {
-          return { field, isValid: false, message: 'Solo se permiten números' }
-        }
-        return { field, isValid: true, message: 'Teléfono válido' }
-      
-      case 'email':
-        if (!value) return { field, isValid: false, message: 'Email es obligatorio' }
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        if (!emailRegex.test(value)) {
-          return { field, isValid: false, message: 'Email inválido' }
-        }
-        return { field, isValid: true, message: 'Email válido' }
-      
-      case 'direccion':
-        if (!value) return { field, isValid: false, message: 'Dirección es obligatoria' }
-        if (value.length < 5) {
-          return { field, isValid: false, message: 'Dirección debe tener al menos 5 caracteres' }
-        }
-        return { field, isValid: true, message: 'Dirección válida' }
-      
-      case 'fechaNacimiento':
-        if (!value) return { field, isValid: false, message: 'Fecha de nacimiento es obligatoria' }
-        const fecha = new Date(value)
-        const hoy = new Date()
-        if (fecha > hoy) {
-          return { field, isValid: false, message: 'Fecha de nacimiento no puede ser futura' }
-        }
-        return { field, isValid: true, message: 'Fecha válida' }
-      
-      case 'ocupacion':
-        if (!value) return { field, isValid: false, message: 'Ocupación es obligatoria' }
-        return { field, isValid: true, message: 'Ocupación válida' }
-      
-      case 'modeloVehiculo':
-        if (!value) return { field, isValid: false, message: 'Modelo de vehículo es obligatorio' }
-        return { field, isValid: true, message: 'Modelo válido' }
+  // Validaciones usando el servicio de validadores del backend
+  const validateField = async (field: string, value: string): Promise<ValidationResult> => {
+    // Mapeo de campos del formulario a tipos de validadores del backend
+    const campoMapper: Record<string, string> = {
+      'cedula': 'cedula_venezuela',
+      'nombres': 'nombre',
+      'apellidos': 'apellido',
+      'telefono': 'telefono_venezuela',
+      'email': 'email',
+      'fechaNacimiento': 'fecha',
+    }
 
-      case 'concesionario':
-        if (!value) return { field, isValid: false, message: 'Concesionario es obligatorio' }
-        return { field, isValid: true, message: 'Concesionario válido' }
-      
-      case 'analista':
-        if (!value) return { field, isValid: false, message: 'Analista es obligatorio' }
-        return { field, isValid: true, message: 'Analista válido' }
+    const tipoValidador = campoMapper[field]
+    
+    // Si no hay validador del backend para este campo, usar validación local simple
+    if (!tipoValidador) {
+      if (!value) {
+        return { field, isValid: false, message: `${field} es obligatorio` }
+      }
+      return { field, isValid: true, message: '' }
+    }
 
-      default:
-        return { field, isValid: true, message: '' }
+    // Validar con el backend
+    try {
+      const resultado = await validadoresService.validarCampo(tipoValidador, value, 'VENEZUELA')
+      
+      if (resultado.validacion.valido) {
+        return { 
+          field, 
+          isValid: true, 
+          message: resultado.validacion.mensaje || 'Campo válido' 
+        }
+      } else {
+        return { 
+          field, 
+          isValid: false, 
+          message: resultado.validacion.error || 'Campo inválido' 
+        }
+      }
+    } catch (error) {
+      // Si el servicio falla, usar validación básica como fallback
+      if (!value) {
+        return { field, isValid: false, message: `${field} es obligatorio` }
+      }
+      return { field, isValid: true, message: '' }
     }
   }
 
-  const handleInputChange = (field: keyof FormData, value: string) => {
+  const handleInputChange = async (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
     
-    // Validar campo en tiempo real
-    const validation = validateField(field, value)
+    // Validar campo en tiempo real usando el servicio del backend
+    const validation = await validateField(field, value)
     setValidations(prev => {
       const filtered = prev.filter(v => v.field !== field)
       return [...filtered, validation]
