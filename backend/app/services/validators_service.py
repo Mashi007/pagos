@@ -150,6 +150,56 @@ class ValidadorTelefono:
             }
 
     @staticmethod
+    def _determinar_formato_telefono(
+        telefono_limpio: str, config: Dict[str, Any], telefono: str
+    ) -> Dict[str, Any]:
+        """Determinar y procesar formato del teléfono"""
+        codigo_sin_plus = config["codigo_pais"].replace("+", "")
+
+        # Tiene código de país sin +
+        if telefono_limpio.startswith(codigo_sin_plus):
+            if not telefono_limpio.startswith("+"):
+                telefono_limpio = "+" + telefono_limpio
+            numero_formateado = ValidadorTelefono._formatear_telefono_con_plus(
+                telefono_limpio, config
+            )
+            return {"numero_formateado": numero_formateado, "error": None}
+
+        # Ya tiene + y código
+        if telefono_limpio.startswith(config["codigo_pais"]):
+            numero_formateado = ValidadorTelefono._formatear_telefono_con_plus(
+                telefono_limpio, config
+            )
+            return {"numero_formateado": numero_formateado, "error": None}
+
+        # Solo número local
+        if len(telefono_limpio) == config["longitud_sin_codigo"]:
+            resultado_local = ValidadorTelefono._formatear_telefono_local(
+                telefono_limpio, config, "VENEZUELA", telefono
+            )
+            if "error" in resultado_local:
+                return {"numero_formateado": None, "error": resultado_local["error"]}
+            return {
+                "numero_formateado": resultado_local["numero_formateado"],
+                "error": None,
+            }
+
+        # Formato inválido
+        return {
+            "numero_formateado": None,
+            "error": {
+                "valido": False,
+                "error": f"Formato inválido. Longitud: {len(telefono_limpio)}",
+                "valor_original": telefono,
+                "valor_formateado": None,
+                "formato_esperado": config["formato_display"] if config else "N/A",
+                "sugerencia": f"Ingrese 10 dígitos. Ejemplo: '{config['formato_display']}'",
+                "longitud_actual": len(telefono_limpio),
+                "longitud_esperada": config["longitud_sin_codigo"] if config else 0,
+            },
+            }
+
+    @staticmethod
     def validar_y_formatear_telefono(
         telefono: str, pais: str = "VENEZUELA"
     ) -> Dict[str, Any]:
@@ -171,16 +221,15 @@ class ValidadorTelefono:
             telefono_limpio = re.sub(r"[^\d+]", "", telefono.strip())
 
             # 3. Validar que NO empiece por 0
-            # Extraer solo dígitos para validar
             solo_digitos = re.sub(r"[^\d]", "", telefono_limpio)
             if solo_digitos and solo_digitos[0] == "0":
                 return {
                     "valido": False,
-                    "error": "El número de teléfono NO puede empezar por 0",
+                    "error": "El número NO puede empezar por 0",
                     "valor_original": telefono,
                     "valor_formateado": None,
                     "formato_esperado": "10 dígitos (1-9 al inicio)",
-                    "sugerencia": "Use un número que empiece por 1-9. Ejemplo: '1234567890'",
+                    "sugerencia": "Use un número que empiece por 1-9",
                 }
 
             # 4. Validar país soportado
@@ -188,54 +237,23 @@ class ValidadorTelefono:
             if isinstance(config, dict) and "valido" in config:
                 return config
 
-            # 5. Agregar +58 automáticamente si no tiene
+            # 5. Agregar código de país si no tiene
+            codigo_sin_plus = config["codigo_pais"].replace("+", "")
             if not telefono_limpio.startswith("+") and not telefono_limpio.startswith(
-                config["codigo_pais"].replace("+", "")
+                codigo_sin_plus
             ):
-                # No tiene +58 ni 58, agregar +58
-                telefono_limpio = config["codigo_pais"].replace("+", "") + telefono_limpio
+                telefono_limpio = codigo_sin_plus + telefono_limpio
 
             # 6. Determinar formato y procesar
-            numero_formateado = None
+            resultado = ValidadorTelefono._determinar_formato_telefono(
+                telefono_limpio, config, telefono
+            )
+            if resultado["error"]:
+                return resultado["error"]
 
-            if config and telefono_limpio.startswith(
-                config["codigo_pais"].replace("+", "")
-            ):
-                # Ya tiene código de país: "584241234567"
-                # Agregar + al inicio si no lo tiene
-                if not telefono_limpio.startswith("+"):
-                    telefono_limpio = "+" + telefono_limpio
-                numero_formateado = ValidadorTelefono._formatear_telefono_con_plus(
-                    telefono_limpio, config
-                )
-            elif config and telefono_limpio.startswith(config["codigo_pais"]):
-                # Ya tiene + y código: "+584241234567"
-                numero_formateado = ValidadorTelefono._formatear_telefono_con_plus(
-                    telefono_limpio, config
-                )
-            elif config and len(telefono_limpio) == config["longitud_sin_codigo"]:
-                # Solo número local: "4241234567"
-                resultado_local = ValidadorTelefono._formatear_telefono_local(
-                    telefono_limpio, config, pais, telefono
-                )
-                if resultado_local["error"]:
-                    return resultado_local["error"]
-                numero_formateado = resultado_local["numero_formateado"]
-            else:
-                return {
-                    "valido": False,
-                    "error": f"Formato inválido. Longitud: {len(telefono_limpio)}",
-                    "valor_original": telefono,
-                    "valor_formateado": None,
-                    "formato_esperado": config["formato_display"] if config else "N/A",
-                    "sugerencia": f"Ingrese 10 dígitos (sin espacios). Ejemplo: '4241234567' o '{config['formato_display']}'",
-                    "longitud_actual": len(telefono_limpio),
-                    "longitud_esperada": config["longitud_sin_codigo"] if config else 0,
-                }
-
-            # 6. Validar formato final
+            # 7. Validar formato final
             return ValidadorTelefono._validar_formato_final(
-                numero_formateado, config, telefono
+                resultado["numero_formateado"], config, telefono
             )
 
         except Exception as e:
@@ -246,7 +264,7 @@ class ValidadorTelefono:
                 "valor_original": telefono,
                 "valor_formateado": None,
                 "formato_esperado": "+58 XXXXXXXXXX (10 dígitos)",
-                "sugerencia": "Verifique que el número tenga formato válido. Ejemplo: '+58 1234567890'",
+                "sugerencia": "Verifique el formato. Ejemplo: '+58 1234567890'",
             }
 
 class ValidadorCedula:
