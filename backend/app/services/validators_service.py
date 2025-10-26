@@ -284,13 +284,26 @@ class ValidadorCedula:
 
             # Validar formato
             if not re.match(config["patron"], cedula_limpia):
-                return {
-                    "valido": False,
-                    "error": f"Formato inválido para {config['descripcion']}",
-                    "valor_original": cedula,
-                    "valor_formateado": None,
-                    "formato_esperado": config["formato_display"],
-                }
+                if pais.upper() == "VENEZUELA":
+                    return {
+                        "valido": False,
+                        "error": f"Formato inválido para {config['descripcion']}",
+                        "valor_original": cedula,
+                        "valor_formateado": None,
+                        "formato_esperado": "V, E o J + 7-10 dígitos",
+                        "sugerencia": (
+                            "Use prefijo V (venezolano), E (extranjero) o J (jurídico) "
+                            "seguido de 7-10 dígitos. Ejemplos: 'V12345678', 'E87654321', 'J9876543'"
+                        ),
+                    }
+                else:
+                    return {
+                        "valido": False,
+                        "error": f"Formato inválido para {config['descripcion']}",
+                        "valor_original": cedula,
+                        "valor_formateado": None,
+                        "formato_esperado": config["formato_display"],
+                    }
 
             # Formatear según país
             if pais.upper() == "VENEZUELA":
