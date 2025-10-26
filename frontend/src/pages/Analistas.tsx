@@ -1,5 +1,5 @@
 // frontend/src/pages/Analistas.tsx
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
   Users,
@@ -30,6 +30,8 @@ export function Analistas() {
     activo: true
   })
   const [validationError, setValidationError] = useState<string>('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   // Usar hooks de React Query
   const { 
@@ -160,6 +162,17 @@ export function Analistas() {
     analista.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
+  // Paginación
+  const totalPages = Math.ceil(filteredAnalistas.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedAnalistas = filteredAnalistas.slice(startIndex, endIndex)
+
+  // Resetear a página 1 cuando cambia el filtro de búsqueda
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -288,7 +301,7 @@ export function Analistas() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredAnalistas.map((analista) => (
+              {paginatedAnalistas.map((analista) => (
                 <TableRow key={analista.id}>
                   <TableCell className="font-medium">{analista.id}</TableCell>
                   <TableCell>{analista.nombre}</TableCell>
@@ -340,6 +353,46 @@ export function Analistas() {
           {filteredAnalistas.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               {searchTerm ? 'No se encontraron analistas con ese nombre' : 'No hay analistas disponibles'}
+            </div>
+          )}
+
+          {/* Paginación */}
+          {filteredAnalistas.length > itemsPerPage && (
+            <div className="flex items-center justify-between px-2 py-4 border-t">
+              <div className="text-sm text-gray-500">
+                Mostrando {startIndex + 1} a {Math.min(endIndex, filteredAnalistas.length)} de {filteredAnalistas.length} analistas
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <div className="flex items-center space-x-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(page)}
+                      className={currentPage === page ? 'bg-blue-600 text-white' : ''}
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Siguiente
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
