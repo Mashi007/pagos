@@ -129,6 +129,11 @@ class ValidadorTelefono:
                 "error": "Formato final inválido",
                 "valor_original": telefono_original,
                 "valor_formateado": numero_formateado,
+                "formato_esperado": "+58 XXXXXXXXXX (10 dígitos)",
+                "sugerencia": (
+                    "El número debe tener exactamente 10 dígitos después de +58. "
+                    "Ejemplos: '+58 1234567890', '+58 9876543210'"
+                ),
             }
 
     @staticmethod
@@ -227,6 +232,8 @@ class ValidadorTelefono:
                 "error": f"Error de validación: {str(e)}",
                 "valor_original": telefono,
                 "valor_formateado": None,
+                "formato_esperado": "+58 XXXXXXXXXX (10 dígitos)",
+                "sugerencia": "Verifique que el número tenga formato válido. Ejemplo: '+58 1234567890'",
             }
 
 
@@ -263,11 +270,13 @@ class ValidadorCedula:
         try:
             if not cedula:
                 return {
-                    "valido": False,
-                    "error": "Cédula requerida",
-                    "valor_original": cedula,
-                    "valor_formateado": None,
-                }
+                "valido": False,
+                "error": "Cédula requerida",
+                "valor_original": cedula,
+                "valor_formateado": None,
+                "formato_esperado": "V, E o J + 7-10 dígitos",
+                "sugerencia": "Ingrese una cédula. Ejemplo: 'V12345678'",
+            }
 
             # Limpiar entrada
             cedula_limpia = cedula.strip().upper()
@@ -280,6 +289,8 @@ class ValidadorCedula:
                     "error": f"País '{pais}' no soportado",
                     "valor_original": cedula,
                     "valor_formateado": None,
+                    "formato_esperado": "V, E o J + 7-10 dígitos (Venezuela)",
+                    "sugerencia": "País no soportado. Use 'Venezuela'. Ejemplo: 'V12345678'",
                 }
 
             # Validar formato
@@ -331,6 +342,8 @@ class ValidadorCedula:
                 "error": f"Error de validación: {str(e)}",
                 "valor_original": cedula,
                 "valor_formateado": None,
+                "formato_esperado": "V, E o J + 7-10 dígitos",
+                "sugerencia": "Verifique el formato de la cédula. Ejemplo: 'V12345678'",
             }
 
 
@@ -404,6 +417,8 @@ class ValidadorFecha:
                     "error": "Fecha requerida",
                     "valor_original": fecha,
                     "valor_formateado": None,
+                    "formato_esperado": "DD/MM/YYYY",
+                    "sugerencia": "Ingrese una fecha. Ejemplo: '01/12/2025'",
                 }
 
             fecha_original = fecha.strip()
@@ -478,6 +493,8 @@ class ValidadorFecha:
                 "error": f"Error de validación: {str(e)}",
                 "valor_original": fecha,
                 "valor_formateado": None,
+                "formato_esperado": "DD/MM/YYYY",
+                "sugerencia": "Verifique el formato de la fecha. Ejemplo: '01/12/2025'",
             }
 
 
@@ -502,6 +519,8 @@ class ValidadorEmail:
                     "error": "Email requerido",
                     "valor_original": email,
                     "valor_formateado": None,
+                    "formato_esperado": "usuario@dominio.com",
+                    "sugerencia": "Ingrese un email. Ejemplo: 'usuario@ejemplo.com'",
                 }
 
             email_original = email.strip()
@@ -561,6 +580,8 @@ class ValidadorEmail:
                 "error": f"Error de validación: {str(e)}",
                 "valor_original": email,
                 "valor_formateado": None,
+                "formato_esperado": "usuario@dominio.com",
+                "sugerencia": "Verifique el formato del email. Ejemplo: 'usuario@ejemplo.com'",
             }
 
 
@@ -585,6 +606,8 @@ class ValidadorNombre:
                     "error": "Nombre requerido",
                     "valor_original": texto,
                     "valor_formateado": None,
+                    "formato_esperado": "Juan Carlos o Maria",
+                    "sugerencia": "Ingrese un nombre. Ejemplo: 'Juan' o 'Maria Elena'",
                 }
 
             # Limpiar espacios extra
@@ -593,10 +616,12 @@ class ValidadorNombre:
             # Validar que no esté vacío después de limpiar
             if not texto_limpio:
                 return {
-                    "valido": False,
-                    "error": "Nombre no puede estar vacío",
-                    "valor_original": texto,
-                    "valor_formateado": None,
+                "valido": False,
+                "error": "Nombre no puede estar vacío",
+                "valor_original": texto,
+                "valor_formateado": None,
+                "formato_esperado": "Juan Carlos o Maria",
+                "sugerencia": "El nombre no puede estar vacío. Ejemplo: 'Juan'",
                 }
 
             # Validar que solo contenga letras, espacios y algunos caracteres especiales permitidos
@@ -669,6 +694,8 @@ class ValidadorNombre:
                 "error": f"Error de validación: {str(e)}",
                 "valor_original": texto,
                 "valor_formateado": None,
+                "formato_esperado": "Juan Carlos o Maria",
+                "sugerencia": "Verifique el formato del nombre. Ejemplo: 'Juan' o 'Maria Elena'",
             }
 
 
@@ -711,6 +738,8 @@ class ValidadorMonto:
                     "error": "Monto requerido",
                     "valor_original": monto,
                     "valor_formateado": None,
+                    "formato_esperado": "Número decimal (1-20000)",
+                    "sugerencia": "Ingrese un monto. Ejemplo: '1500.50'",
                 }
 
             # Validar moneda
@@ -721,6 +750,8 @@ class ValidadorMonto:
                     "error": f"Moneda '{moneda}' no soportada. Use USD o VES",
                     "valor_original": monto,
                     "valor_formateado": None,
+                    "formato_esperado": "USD o VES",
+                    "sugerencia": "Use moneda USD (dólares) o VES (bolívares). Ejemplo: '1500.50'",
                 }
 
             # Convertir a Decimal
@@ -819,6 +850,8 @@ class ValidadorMonto:
                 "error": f"Error de validación: {str(e)}",
                 "valor_original": monto,
                 "valor_formateado": None,
+                "formato_esperado": "Número decimal (1-20000)",
+                "sugerencia": "Verifique el formato del monto. Ejemplo: '1500.50'",
             }
 
 
