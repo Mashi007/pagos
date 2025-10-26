@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Analista, AnalistaUpdate, AnalistaCreate } from '@/services/analistaService'
-import { useAnalistasActivos, useDeleteAnalista, useUpdateAnalista, useCreateAnalista } from '@/hooks/useAnalistas'
+import { useAnalistas, useDeleteAnalista, useUpdateAnalista, useCreateAnalista } from '@/hooks/useAnalistas'
 import toast from 'react-hot-toast'
 
 export function Analistas() {
@@ -35,15 +35,17 @@ export function Analistas() {
 
   // Usar hooks de React Query
   const { 
-    data: analistas, 
+    data: analistasData, 
     isLoading: loading, 
     error,
     refetch
-  } = useAnalistasActivos()
+  } = useAnalistas({ limit: 1000 })
   
   const deleteAnalistaMutation = useDeleteAnalista()
   const updateAnalistaMutation = useUpdateAnalista()
   const createAnalistaMutation = useCreateAnalista()
+  
+  const analistas = analistasData?.items || []
 
   const handleEliminar = async (id: number) => {
     try {
