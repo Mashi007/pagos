@@ -83,19 +83,19 @@ def obtener_configuracion_validadores(
                 "patron_regex": r"^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/\d{4}$",
             },
             "monto": {
-                "descripcion": "Validación de montos (rango 1-20000) con soporte USD y VES - Formato europeo",
+                "descripcion": "Validación de montos (rango 1-20000) con soporte USD y VES - Formato europeo estricto",
                 "requisitos": {
-                    "formato": "Sistema europeo: coma (,) para decimales, punto (.) para miles",
+                    "formato": "Sistema europeo estricto: coma (,) para decimales, punto (.) para miles",
                     "separador_decimal": "Coma (,) OBLIGATORIA para decimales",
-                    "separador_miles": "Punto (.) opcional para miles (cada 3 dígitos desde derecha)",
+                    "separador_miles": "Punto (.) OBLIGATORIO si el número es mayor a 999 (cada 3 dígitos desde derecha)",
                     "reglas": {
                         "sin_ceros_nulos": "NO se permiten grupos de solo ceros (ej: 1.000 debe ser 1500)",
-                        "formato_valido": "1.500,50 o 10.500,50 o 1500,50",
-                        "formato_invalido": "1.500.50 (punto para decimales - americano), 1,500.50 (coma para miles - americano)"
+                        "formato_valido": "1.500,50 o 10.500,25",
+                        "formato_invalido": "1.500.50 (punto decimal), 1,500.50 (coma miles), 1500,50 (sin miles cuando > 999), 20000 (sin miles)"
                     },
                     "ejemplos": {
-                        "validos": "1500,50 (sin miles), 1.500,50 (con miles), 10.500,25 (miles grandes)",
-                        "invalidos": "1.000,50 (grupo 000), 1500.50 (punto decimal), 1,500.50 (coma miles)"
+                        "validos": "1.500,50 (con miles y decimales), 10.500,25 (grandes con miles)",
+                        "invalidos": "1.000,50 (grupo 000), 1500.50 (punto decimal), 1,500.50 (coma miles), 1500,50 (sin miles > 999), 20000 (sin miles > 999)"
                     },
                     "rango_minimo": "USD$1,00 o VES Bs.1,00",
                     "rango_maximo": "USD$20.000,00 o VES Bs.20.000,00",

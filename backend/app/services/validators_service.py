@@ -942,7 +942,21 @@ class ValidadorMonto:
                                 "valor_original": monto,
                                 "valor_formateado": None,
                                 "formato_esperado": "Número decimal (1-20000)",
-                                "sugerencia": "Use formato válido. Ejemplo: '1500,50'",
+                                "sugerencia": "Use formato válido. Ejemplo: '1.500,50'",
+                            }
+
+                        # REGLA ESTRICTA: Si la parte entera tiene más de 3 dígitos, DEBE tener separador de miles
+                        if len(antes_coma) > 3:
+                            return {
+                                "valido": False,
+                                "error": "Formato de miles inválido (obligatorio para números > 999)",
+                                "valor_original": monto,
+                                "valor_formateado": None,
+                                "formato_esperado": "Punto cada 3 dígitos para miles",
+                                "sugerencia": (
+                                    "Para números mayores a 999, use punto como separador de miles. "
+                                    "Ejemplo: '1.500,50' en lugar de '1500,50'"
+                                ),
                             }
                         
                         monto_limpio = antes_coma + "." + despues_coma
@@ -969,6 +983,20 @@ class ValidadorMonto:
                                 "valor_formateado": None,
                                 "formato_esperado": "Número decimal (1-20000)",
                                 "sugerencia": "Use solo dígitos. Ejemplo: '1500'",
+                            }
+
+                        # REGLA ESTRICTA: Si el número tiene más de 3 dígitos, DEBE tener separador de miles
+                        if len(monto_limpio) > 3:
+                            return {
+                                "valido": False,
+                                "error": "Formato de miles inválido (obligatorio para números > 999)",
+                                "valor_original": monto,
+                                "valor_formateado": None,
+                                "formato_esperado": "Punto cada 3 dígitos para miles",
+                                "sugerencia": (
+                                    "Para números mayores a 999, use punto como separador de miles. "
+                                    "Ejemplo: '10.500,00' o '1.500,00' en lugar de '1500'"
+                                ),
                             }
 
                     monto_decimal = Decimal(monto_limpio)
