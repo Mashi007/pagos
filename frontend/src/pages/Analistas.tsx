@@ -245,7 +245,7 @@ export function Analistas() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {(analistas || []).filter(a => a.activo).length}
+              {(analistas || []).filter(a => a.activo === true || a.activo === 1).length}
             </div>
           </CardContent>
         </Card>
@@ -256,7 +256,7 @@ export function Analistas() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              {(analistas || []).filter(a => !a.activo).length}
+              {(analistas || []).filter(a => a.activo === false || a.activo === 2 || a.activo === 0).length}
             </div>
           </CardContent>
         </Card>
@@ -308,8 +308,8 @@ export function Analistas() {
                   <TableCell className="font-medium">{analista.id}</TableCell>
                   <TableCell>{analista.nombre}</TableCell>
                   <TableCell>
-                    <Badge variant={analista.activo ? "default" : "secondary"}>
-                      {analista.activo ? "Activo" : "Inactivo"}
+                    <Badge variant={(analista.activo === true || analista.activo === 1) ? "default" : "secondary"}>
+                      {(analista.activo === true || analista.activo === 1) ? "Activo" : "Inactivo"}
                     </Badge>
                   </TableCell>
                   <TableCell>
