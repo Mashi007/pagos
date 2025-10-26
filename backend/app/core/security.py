@@ -3,7 +3,6 @@ Módulo de seguridad para autenticación JWT
 Maneja creación, validación y decodificación de tokens
 """
 
-import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, Union
 
