@@ -76,12 +76,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # XSS Protection
         response.headers["X-XSS-Protection"] = "1; mode=block"
 
-        # CSP permisivo: permite blob URLs para previews de imágenes
+        # CSP: permite blob: para previsualizaciones de imágenes
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
             "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: https: blob:; "
+            "img-src 'self' data: https: blob:; "  # blob: para preview
             "font-src 'self' data:; "
             "connect-src 'self'"
         )
