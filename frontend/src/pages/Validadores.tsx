@@ -35,6 +35,12 @@ export function Validadores() {
     cargarConfiguracion()
   }, [])
 
+  // Limpiar valor y resultado cuando cambia el campo a validar
+  useEffect(() => {
+    setValorTest('')
+    setResultadoTest(null)
+  }, [campoTest])
+
   const handleTestValidacion = async () => {
     setIsLoading(true)
     try {
@@ -137,7 +143,11 @@ export function Validadores() {
                   <select
                     className="w-full px-3 py-2 border rounded-lg"
                     value={campoTest}
-                    onChange={(e) => setCampoTest(e.target.value)}
+                    onChange={(e) => {
+                      setCampoTest(e.target.value)
+                      setValorTest('')
+                      setResultadoTest(null)
+                    }}
                   >
                     <option value="">Seleccionar campo...</option>
                     {validadoresDisponibles.map((v) => (
@@ -228,7 +238,11 @@ export function Validadores() {
                       key={validador.campo}
                       whileHover={{ scale: 1.02 }}
                       className="p-3 border rounded-lg hover:border-primary cursor-pointer transition-colors"
-                      onClick={() => setCampoTest(validador.campo)}
+                      onClick={() => {
+                        setCampoTest(validador.campo)
+                        setValorTest('')
+                        setResultadoTest(null)
+                      }}
                     >
                       <div className="flex items-start justify-between">
                         <div>
