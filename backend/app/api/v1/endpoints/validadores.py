@@ -24,106 +24,59 @@ def obtener_configuracion_validadores(
             f"Obteniendo configuración de validadores - Usuario: {current_user.email}"
         )
 
-        # Estructura completa que espera el frontend
+        # Estructura que espera el frontend
         return {
-            "titulo": "Configuración de Validadores",
-            "consultado_por": current_user.email,
-            "fecha_consulta": datetime.now().isoformat(),
-            "validadores_disponibles": {
-                "telefono": {
-                    "descripcion": "Validación y formateo de números telefónicos",
-                    "auto_formateo": True,
-                    "validacion_tiempo_real": True,
-                    "paises_soportados": {
-                        "venezuela": {
-                            "codigo": "+58",
-                            "formato": "+58 XXX XXX XXXX",
-                            "requisitos": {
-                                "debe_empezar_por": "4 o 2",
-                                "longitud_total": "10 dígitos",
-                                "primer_digito": "4 o 2",
-                                "digitos_validos": "0-9",
-                            },
-                            "ejemplos_validos": [
-                                "+58 412 1234567",
-                                "+58 212 7654321",
-                            ],
-                            "ejemplos_invalidos": ["412 1234567", "1234567"],
-                        },
-                    },
+            "cedula_venezuela": {
+                "descripcion": "Validación de cédulas venezolanas con prefijos V, E o J",
+                "requisitos": {
+                    "debe_empezar_por": "V, E o J (prefijo)",
+                    "longitud_digitos": "7 a 10 dígitos después del prefijo",
+                    "sin_caracteres_especiales": "Solo letras y números",
                 },
-                "cedula": {
-                    "descripcion": "Validación de cédulas por país",
-                    "auto_formateo": True,
-                    "validacion_tiempo_real": True,
-                    "paises_soportados": {
-                        "venezuela": {
-                            "prefijos_validos": ["V", "E", "J"],
-                            "longitud": "7-10 dígitos",
-                            "requisitos": {
-                                "prefijos": "V, E o J",
-                                "dígitos": "7-10",
-                                "longitud": "7 a 10 dígitos",
-                            },
-                            "ejemplos_validos": [
-                                "V12345678",
-                                "E87654321",
-                                "J1234567",
-                            ],
-                            "ejemplos_invalidos": ["12345678", "A1234567", "V123"],
-                        },
-                    },
-                },
-                "fecha": {
-                    "descripcion": "Validación estricta de fechas",
-                    "formato_requerido": "DD/MM/YYYY",
-                    "auto_formateo": False,
-                    "validacion_tiempo_real": True,
-                    "requisitos": {
-                        "dia": "01-31",
-                        "mes": "01-12",
-                        "año": "YYYY",
-                        "separador": "/",
-                    },
-                    "ejemplos_validos": [
-                        "15/03/2024",
-                        "01/01/2024",
-                        "31/12/2023",
-                    ],
-                    "ejemplos_invalidos": ["32/01/2024", "15/13/2024", "15-03-2024"],
-                    "requiere_calendario": True,
-                },
-                "email": {
-                    "descripcion": "Validación y normalización de emails",
-                    "auto_formateo": True,
-                    "validacion_tiempo_real": True,
-                    "caracteristicas": {
-                        "normalizacion": "Minúsculas",
-                        "limpieza": "Espacios y caracteres especiales",
-                        "validacion": "RFC 5322",
-                        "dominios_bloqueados": ["temp.com", "test.com", "example.com"],
-                    },
-                    "ejemplos_validos": [
-                        "usuario@dominio.com",
-                        "nombre.apellido@empresa.com",
-                    ],
-                    "ejemplos_invalidos": ["usuario@", "@dominio.com", "sinarroba"],
+                "patron_regex": "^(V|E|J)[0-9]{7,10}$",
+                "formato_display": "V12345678, E87654321, J1234567",
+                "tipos": {
+                    "V": "Venezolano",
+                    "E": "Extranjero",
+                    "J": "Jurídico",
                 },
             },
-            "reglas_negocio": {
-                "validacion_obligatoria": "Todos los campos deben validarse antes de guardar",
-                "formateo_automatico": "Los datos se formatean automáticamente según reglas",
-                "validacion_tiempo_real": "La validación ocurre mientras el usuario escribe",
+            "telefono_venezuela": {
+                "descripcion": "Validación y formateo de teléfonos venezolanos con código +58",
+                "requisitos": {
+                    "debe_empezar_por": "4 o 2",
+                    "longitud_total": 10,
+                    "primer_digito": "4 o 2",
+                },
+                "patron_regex": r"^\+58\s?[4-9]\d{2}\s?\d{7}$",
+                "formato_display": "+58 XXX XXX XXXX",
             },
-            "configuracion_frontend": {
-                "version": "1.0",
-                "ambiente": "production",
+            "email": {
+                "descripcion": "Validación de emails según RFC 5322 con normalización",
+                "requisitos": {
+                    "formato": "usuario@dominio.com",
+                    "normalizacion": "Minúsculas automáticas",
+                },
+                "patron_regex": r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
             },
-            "endpoints_validacion": {
-                "telefono": "/api/v1/validadores/validar-campo",
-                "cedula": "/api/v1/validadores/validar-campo",
-                "email": "/api/v1/validadores/validar-campo",
-                "fecha": "/api/v1/validadores/validar-campo",
+            "fecha": {
+                "descripcion": "Validación de fechas en formato DD/MM/YYYY",
+                "requisitos": {
+                    "formato": "DD/MM/YYYY",
+                    "dia": "01-31",
+                    "mes": "01-12",
+                    "año": "YYYY",
+                },
+                "patron_regex": r"^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/\d{4}$",
+            },
+            "monto": {
+                "descripcion": "Validación de montos con decimales y formato monetario",
+                "requisitos": {
+                    "formato": "Decimal con 2 posiciones",
+                    "decimales": "Siempre mostrar .00",
+                    "separador_miles": "Coma (,)",
+                    "simbolo_moneda": "Bs.",
+                },
             },
         }
 
