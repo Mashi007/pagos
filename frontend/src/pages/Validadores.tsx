@@ -105,16 +105,16 @@ export function Validadores() {
     {
       nombre: 'Nombre',
       campo: 'nombre',
-      formato: '1-2 palabras, auto-capitaliza primera letra',
-      ejemplo: 'juan pedro → Juan Pedro',
-      descripcion: 'Acepta minúsculas y auto-convierte a formato correcto. Primera letra de cada palabra en mayúscula, resto en minúscula.'
+      formato: '1-2 palabras, solo primera letra mayúscula',
+      ejemplo: 'JUAN PEDRO → Juan pedro',
+      descripcion: 'Auto-convierte a formato correcto. Solo la primera letra del texto en mayúscula, resto en minúscula.'
     },
     {
       nombre: 'Apellido',
       campo: 'apellido',
-      formato: '1-2 palabras, auto-capitaliza primera letra',
-      ejemplo: 'perez gonzalez → Perez Gonzalez',
-      descripcion: 'Acepta minúsculas y auto-convierte a formato correcto. Primera letra de cada palabra en mayúscula, resto en minúscula.'
+      formato: '1-2 palabras, solo primera letra mayúscula',
+      ejemplo: 'PEREZ GONZALEZ → Perez gonzalez',
+      descripcion: 'Auto-convierte a formato correcto. Solo la primera letra del texto en mayúscula, resto en minúscula.'
     }
   ]
 

@@ -688,11 +688,8 @@ class ValidadorNombre:
                         ),
                     }
 
-            # Formatear: Primera letra de cada palabra en mayúscula, resto en minúscula
-            palabras_formateadas = [
-                palabra.capitalize() for palabra in palabras
-            ]
-            texto_formateado = " ".join(palabras_formateadas)
+            # Formatear: Solo la primera letra del texto en mayúscula, resto en minúscula
+            texto_formateado = texto_limpio.lower().capitalize()
 
             return {
                 "valido": True,
