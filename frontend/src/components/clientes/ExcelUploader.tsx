@@ -306,8 +306,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       const row = excelData[currentRowIndex]
       const clienteData = {
         cedula: row.cedula,
-        nombres: row.nombres,
-        apellidos: row.apellidos,
+        nombres: row.nombres,  // ✅ Ya unificados (nombres + apellidos)
         telefono: row.telefono,
         email: row.email,
         direccion: row.direccion,
@@ -334,7 +333,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       // Refrescar Dashboard de Clientes
       refreshDashboardClients()
       
-      addToast('success', `Cliente ${row.nombres} ${row.apellidos} creado con confirmación exitosamente`)
+      addToast('success', `Cliente ${row.nombres} creado con confirmación exitosamente`)
       
       // Eliminar la fila de la lista después de guardar exitosamente
       setExcelData(prev => prev.filter(r => r._rowIndex !== currentRowIndex))
@@ -453,8 +452,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       
       const clienteData = {
         cedula: row.cedula,
-        nombres: row.nombres,
-        apellidos: row.apellidos,
+        nombres: row.nombres,  // ✅ Ya unificados (nombres + apellidos)
         telefono: row.telefono,
         email: row.email,
         direccion: row.direccion,
@@ -563,7 +561,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       // Refrescar Dashboard de Clientes
       refreshDashboardClients()
       
-      addToast('success', `Cliente ${row.nombres} ${row.apellidos} guardado exitosamente`)
+      addToast('success', `Cliente ${row.nombres} guardado exitosamente`)
       
       // Eliminar la fila de la lista después de guardar exitosamente
       setExcelData(prev => prev.filter(r => r._rowIndex !== row._rowIndex))
@@ -977,8 +975,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           _validation: {},
           _hasErrors: false,
           cedula: row[0]?.toString() || '',
-          nombres: row[1]?.toString() || '',
-          apellidos: row[2]?.toString() || '',
+          nombres: `${row[1]?.toString() || ''} ${row[2]?.toString() || ''}`.trim(),  // ✅ Unificar nombres + apellidos
           telefono: row[3]?.toString() || '',
           email: row[4]?.toString() || '',
           direccion: row[5]?.toString() || '',
@@ -998,7 +995,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         }
         
         // Validar campos requeridos
-        const requiredFields = ['cedula', 'nombres', 'apellidos', 'telefono', 'email', 
+        const requiredFields = ['cedula', 'nombres', 'telefono', 'email', 
                               'direccion', 'fecha_nacimiento', 'ocupacion', 'modelo_vehiculo', 
                               'concesionario', 'analista', 'estado', 'activo']
         
@@ -1192,7 +1189,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           
           const clienteCreado = await clienteService.createCliente(clienteData)
           resultados.push({ success: true, cliente: clienteCreado, fila: row._rowIndex })
-          console.log(`✅ Cliente creado exitosamente: ${clienteData.nombres} ${clienteData.apellidos}`)
+          console.log(`✅ Cliente creado exitosamente: ${clienteData.nombres}`)
           
         } catch (error: any) {
           console.error(`❌ Error creando cliente en fila ${row._rowIndex}:`, error)
@@ -1487,7 +1484,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                             <div key={index} className="border border-red-200 rounded-lg p-4 bg-red-50">
                               <div className="flex items-center justify-between mb-3">
                                 <h3 className="font-semibold text-red-800">
-                                  Fila {row._rowIndex}: {row.nombres} {row.apellidos}
+                                  Fila {row._rowIndex}: {row.nombres}
                                 </h3>
                                 <Badge variant="outline" className="text-red-600 border-red-300">
                                   {Object.keys(row._validation).filter(field => !row._validation[field]?.isValid).length + 
@@ -1600,8 +1597,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                         <tr className="bg-gray-50">
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-16">Fila</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">Cédula</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-32">Nombres</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-32">Apellidos</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-48">Nombres y Apellidos</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-28">Teléfono</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-40">Email</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-48">Dirección</th>
@@ -1633,26 +1629,14 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                               />
                             </td>
                             
-                            {/* Nombres */}
+                            {/* Nombres y Apellidos (unificados) */}
                             <td className="border p-2">
                               <input
                                 type="text"
                                 value={row.nombres}
                                 onChange={(e) => updateCellValue(index, 'nombres', e.target.value)}
-                                className={`w-full text-sm p-2 border rounded min-w-[80px] ${
+                                className={`w-full text-sm p-2 border rounded min-w-[120px] ${
                                   row._validation.nombres?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
-                                }`}
-                              />
-                            </td>
-                            
-                            {/* Apellidos */}
-                            <td className="border p-2">
-                              <input
-                                type="text"
-                                value={row.apellidos}
-                                onChange={(e) => updateCellValue(index, 'apellidos', e.target.value)}
-                                className={`w-full text-sm p-2 border rounded min-w-[80px] ${
-                                  row._validation.apellidos?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
                             </td>
