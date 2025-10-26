@@ -212,6 +212,7 @@ export function Concesionarios() {
                 <TableRow>
                   <TableHead>Concesionario</TableHead>
                   <TableHead>Estado</TableHead>
+                  <TableHead>Fecha Creación</TableHead>
                   <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -228,6 +229,20 @@ export function Concesionarios() {
                       <Badge variant={concesionario.activo ? "default" : "secondary"}>
                         {concesionario.activo ? "Activo" : "Inactivo"}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {concesionario.created_at 
+                        ? (() => {
+                            const date = new Date(concesionario.created_at)
+                            return isNaN(date.getTime()) 
+                              ? '01/10/2025' 
+                              : date.toLocaleDateString('es-VE', { 
+                                  year: 'numeric', 
+                                  month: '2-digit', 
+                                  day: '2-digit' 
+                                })
+                          })()
+                        : '01/10/2025'}
                     </TableCell>
                     <TableCell>
                       <div className="flex space-x-2">
