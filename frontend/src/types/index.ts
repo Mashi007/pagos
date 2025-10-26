@@ -76,8 +76,7 @@ export interface LoginForm {
 export interface ClienteForm {
   // Datos personales (coincide con backend)
   cedula: string
-  nombres: string
-  apellidos: string
+  nombres: string  // ✅ Unifica nombres + apellidos
   telefono?: string
   email?: string
   direccion?: string

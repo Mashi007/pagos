@@ -5,8 +5,7 @@ import { AlertTriangle, User, Calendar, Phone, Mail } from 'lucide-react'
 
 interface ClienteExistente {
   id: number
-  nombres: string
-  apellidos: string
+  nombres: string  // ✅ nombres unificados (nombres + apellidos)
   cedula: string
   telefono: string
   email: string
@@ -19,8 +18,7 @@ interface ConfirmacionDuplicadoModalProps {
   onConfirm: (comentarios: string) => void
   clienteExistente: ClienteExistente
   clienteNuevo: {
-    nombres: string
-    apellidos: string
+    nombres: string  // ✅ nombres unificados (nombres + apellidos)
     cedula: string
     telefono: string
     email: string
@@ -114,7 +112,7 @@ export function ConfirmacionDuplicadoModal({
                 </h4>
                 <div className="space-y-2 text-sm">
                   <div>
-                    <span className="font-medium">Nombre:</span> {clienteExistente.nombres} {clienteExistente.apellidos}
+                    <span className="font-medium">Nombre:</span> {clienteExistente.nombres}
                   </div>
                   <div>
                     <span className="font-medium">Cédula:</span> {clienteExistente.cedula}
@@ -142,7 +140,7 @@ export function ConfirmacionDuplicadoModal({
                 </h4>
                 <div className="space-y-2 text-sm">
                   <div>
-                    <span className="font-medium">Nombre:</span> {clienteNuevo.nombres} {clienteNuevo.apellidos}
+                    <span className="font-medium">Nombre:</span> {clienteNuevo.nombres}
                   </div>
                   <div>
                     <span className="font-medium">Cédula:</span> {clienteNuevo.cedula}

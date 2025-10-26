@@ -928,16 +928,14 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
             onConfirm={handleConfirmDuplicate}
             clienteExistente={{
               id: clienteExistente.id,
-              nombres: clienteExistente.nombres,
-              apellidos: clienteExistente.apellidos,
+              nombres: clienteExistente.nombres,  // ✅ nombres unificados
               cedula: duplicateCedula,
               telefono: clienteExistente.telefono,
               email: clienteExistente.email,
               fecha_registro: new Date().toISOString() // Usar fecha actual como fallback
             }}
             clienteNuevo={{
-              nombres: formData.nombres,
-              apellidos: formData.apellidos,
+              nombres: formData.nombres,  // ✅ nombres unificados
               cedula: formData.cedula,
               telefono: formData.telefono,
               email: formData.email
