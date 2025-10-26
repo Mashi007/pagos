@@ -91,6 +91,60 @@ async def generar_template_conciliacion(
         )
 
 
+def _validar_archivo_conciliacion(file: UploadFile) -> None:
+    """Validar que el archivo sea Excel"""
+    if not file.filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(
+            status_code=400,
+            detail="Archivo debe ser Excel (.xlsx o .xls)",
+        )
+
+
+def _validar_columnas_conciliacion(df: pd.DataFrame) -> None:
+    """Validar que el DataFrame tenga las columnas requeridas"""
+    required_columns = ["FECHA", "MONTO", "CONCILIAR"]
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Faltan columnas requeridas: {', '.join(missing_columns)}",
+        )
+
+
+def _procesar_fila_conciliacion(row: pd.Series, index: int, db: Session, current_user: User) -> tuple[bool, str]:
+    """Procesar una fila individual de conciliación"""
+    try:
+        if row["CONCILIAR"].upper() != "SI":
+            return False, ""
+
+        # Buscar pago por fecha y monto
+        fecha = pd.to_datetime(row["FECHA"]).date()
+        monto = float(row["MONTO"])
+
+        pago = (
+            db.query(Pago)
+            .filter(
+                and_(
+                    Pago.fecha_pago == fecha,
+                    Pago.monto == monto,
+                    ~Pago.conciliado,
+                )
+            )
+            .first()
+        )
+
+        if pago:
+            pago.conciliado = True
+            pago.fecha_conciliacion = datetime.now()
+            pago.usuario_conciliacion = int(current_user.id)
+            return True, ""
+        else:
+            return False, f"Fila {index + 2}: No se encontró pago para fecha {fecha} y monto {monto}"
+
+    except Exception as e:
+        return False, f"Fila {index + 2}: Error procesando - {str(e)}"
+
+
 @router.post("/procesar-conciliacion")
 async def procesar_conciliacion(
     file: UploadFile = File(...),
@@ -101,61 +155,26 @@ async def procesar_conciliacion(
     try:
         logger.info(f"Procesando conciliación - Usuario: {current_user.email}")
 
-        # Validar tipo de archivo
-        if not file.filename.endswith((".xlsx", ".xls")):
-            raise HTTPException(
-                status_code=400,
-                detail="Archivo debe ser Excel (.xlsx o .xls)",
-            )
+        # Validar archivo
+        _validar_archivo_conciliacion(file)
 
         # Leer archivo Excel
         file_content = await file.read()
         df = pd.read_excel(io.BytesIO(file_content), sheet_name=1)  # Segunda hoja
 
-        # Validar columnas requeridas
-        required_columns = ["FECHA", "MONTO", "CONCILIAR"]
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Faltan columnas requeridas: {', '.join(missing_columns)}",
-            )
+        # Validar columnas
+        _validar_columnas_conciliacion(df)
 
         # Procesar conciliaciones
         conciliaciones_procesadas = 0
         errores = []
 
         for index, row in df.iterrows():
-            try:
-                if row["CONCILIAR"].upper() == "SI":
-                    # Buscar pago por fecha y monto
-                    fecha = pd.to_datetime(row["FECHA"]).date()
-                    monto = float(row["MONTO"])
-
-                    pago = (
-                        db.query(Pago)
-                        .filter(
-                            and_(
-                                Pago.fecha_pago == fecha,
-                                Pago.monto == monto,
-                                ~Pago.conciliado,
-                            )
-                        )
-                        .first()
-                    )
-
-                    if pago:
-                        pago.conciliado = True
-                        pago.fecha_conciliacion = datetime.now()
-                        pago.usuario_conciliacion = int(current_user.id)
-                        conciliaciones_procesadas += 1
-                    else:
-                        errores.append(
-                            f"Fila {index + 2}: No se encontró pago para fecha {fecha} y monto {monto}"
-                        )
-
-            except Exception as e:
-                errores.append(f"Fila {index + 2}: Error procesando - {str(e)}")
+            procesado, error = _procesar_fila_conciliacion(row, index, db, current_user)
+            if procesado:
+                conciliaciones_procesadas += 1
+            elif error:
+                errores.append(error)
 
         db.commit()
 

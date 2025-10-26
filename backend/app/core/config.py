@@ -5,7 +5,7 @@ Configuración de la aplicación
 from typing import List, Optional
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -164,10 +164,10 @@ class Settings(BaseSettings):
         self.validate_database_url()
         return True
 
-    model_config = {
-        "env_file": ".env",
-        "case_sensitive": True,
-    }
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+    )
 
 
 # Instancia global de configuración

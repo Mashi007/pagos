@@ -31,7 +31,7 @@ def crear_aprobacion(
     # Crear nueva solicitud de aprobación
     try:
         nueva_aprobacion = Aprobacion(**aprobacion_data.model_dump())
-        nueva_aprobacion.solicitado_por = current_user.id
+        nueva_aprobacion.solicitado_por = int(current_user.id)
 
         db.add(nueva_aprobacion)
         db.commit()
@@ -62,7 +62,7 @@ def listar_aprobaciones(
         query = query.filter(Aprobacion.tipo == tipo)
 
     # Si no es admin, solo ver las propias
-    if not current_user.is_admin:
+    if not bool(current_user.is_admin):
         query = query.filter(Aprobacion.solicitado_por == current_user.id)
 
     return query.all()
@@ -81,7 +81,7 @@ def obtener_aprobacion(
         raise HTTPException(status_code=404, detail="Aprobación no encontrada")
 
     # Verificar permisos
-    if not current_user.is_admin and aprobacion.solicitado_por != current_user.id:
+    if not bool(current_user.is_admin) and aprobacion.solicitado_por != current_user.id:
         raise HTTPException(
             status_code=403, detail="No tienes permisos para ver esta aprobación"
         )
@@ -105,7 +105,7 @@ def actualizar_aprobacion(
     # Solo el solicitante puede actualizar si está pendiente
     if (
         aprobacion.estado != "PENDIENTE"
-        and aprobacion.solicitado_por != current_user.id
+        and aprobacion.solicitado_por != int(current_user.id)
     ):
         raise HTTPException(
             status_code=403, detail="No puedes actualizar esta aprobación"
@@ -129,7 +129,7 @@ def aprobar_solicitud(
     current_user: User = Depends(get_current_user),
 ):
     # Aprobar solicitud (solo admins)
-    if not current_user.is_admin:
+    if not bool(current_user.is_admin):
         raise HTTPException(
             status_code=403,
             detail="Solo los administradores pueden aprobar solicitudes",
@@ -162,7 +162,7 @@ def rechazar_solicitud(
     current_user: User = Depends(get_current_user),
 ):
     # Rechazar solicitud (solo admins)
-    if not current_user.is_admin:
+    if not bool(current_user.is_admin):
         raise HTTPException(
             status_code=403,
             detail="Solo los administradores pueden rechazar solicitudes",

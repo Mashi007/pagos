@@ -166,17 +166,17 @@ class ValidadorTelefono:
             # 4. Determinar formato y procesar
             numero_formateado = None
 
-            if telefono_limpio.startswith(config["codigo_pais"].replace("+", "")):
+            if config and telefono_limpio.startswith(config["codigo_pais"].replace("+", "")):
                 # Ya tiene código de país: "584241234567"
                 numero_formateado = ValidadorTelefono._formatear_telefono_con_codigo(
                     telefono_limpio, config
                 )
-            elif telefono_limpio.startswith(config["codigo_pais"]):
+            elif config and telefono_limpio.startswith(config["codigo_pais"]):
                 # Ya tiene + y código: "+584241234567"
                 numero_formateado = ValidadorTelefono._formatear_telefono_con_plus(
                     telefono_limpio, config
                 )
-            elif len(telefono_limpio) == config["longitud_sin_codigo"]:
+            elif config and len(telefono_limpio) == config["longitud_sin_codigo"]:
                 # Solo número local: "4241234567"
                 resultado_local = ValidadorTelefono._formatear_telefono_local(
                     telefono_limpio, config, pais, telefono
@@ -189,12 +189,12 @@ class ValidadorTelefono:
                     "valido": False,
                     "error": (
                         f"Longitud incorrecta. Formato esperado: "
-                        f"{config['formato_display']}"
+                        f"{config['formato_display'] if config else 'N/A'}"
                     ),
                     "valor_original": telefono,
                     "valor_formateado": None,
                     "longitud_actual": len(telefono_limpio),
-                    "longitud_esperada": config["longitud_sin_codigo"],
+                    "longitud_esperada": config["longitud_sin_codigo"] if config else 0,
                 }
 
             # 6. Validar formato final
@@ -378,6 +378,23 @@ class ValidadorMonto:
             }
 
 
+def _validar_campo_cliente(
+    campo: str, 
+    valor: Any, 
+    validador_func, 
+    resultados: Dict[str, Any]
+) -> None:
+    """Validar un campo específico del cliente"""
+    resultado = validador_func(valor)
+    if resultado["valido"]:
+        resultados["datos_formateados"][campo] = resultado["valor_formateado"]
+        if resultado["cambio_realizado"]:
+            resultados["cambios_realizados"].append(campo)
+    else:
+        resultados["valido"] = False
+        resultados["errores"].append(f"{campo.title()}: {resultado['error']}")
+
+
 def validar_datos_cliente(cliente_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Validar y formatear datos completos de cliente
@@ -397,49 +414,31 @@ def validar_datos_cliente(cliente_data: Dict[str, Any]) -> Dict[str, Any]:
 
     # Validar teléfono
     if "telefono" in cliente_data:
-        resultado_telefono = ValidadorTelefono.validar_y_formatear_telefono(
-            cliente_data["telefono"]
+        _validar_campo_cliente(
+            "telefono", 
+            cliente_data["telefono"], 
+            ValidadorTelefono.validar_y_formatear_telefono,
+            resultados
         )
-        if resultado_telefono["valido"]:
-            resultados["datos_formateados"]["telefono"] = resultado_telefono[
-                "valor_formateado"
-            ]
-            if resultado_telefono["cambio_realizado"]:
-                resultados["cambios_realizados"].append("telefono")
-        else:
-            resultados["valido"] = False
-            resultados["errores"].append(f"Teléfono: {resultado_telefono['error']}")
 
     # Validar cédula
     if "cedula" in cliente_data:
-        resultado_cedula = ValidadorCedula.validar_y_formatear_cedula(
-            cliente_data["cedula"]
+        _validar_campo_cliente(
+            "cedula", 
+            cliente_data["cedula"], 
+            ValidadorCedula.validar_y_formatear_cedula,
+            resultados
         )
-        if resultado_cedula["valido"]:
-            resultados["datos_formateados"]["cedula"] = resultado_cedula[
-                "valor_formateado"
-            ]
-            if resultado_cedula["cambio_realizado"]:
-                resultados["cambios_realizados"].append("cedula")
-        else:
-            resultados["valido"] = False
-            resultados["errores"].append(f"Cédula: {resultado_cedula['error']}")
 
     # Validar montos
     campos_monto = ["ingreso_mensual", "total_financiamiento"]
     for campo in campos_monto:
         if campo in cliente_data:
-            resultado_monto = ValidadorMonto.validar_y_formatear_monto(
-                cliente_data[campo]
+            _validar_campo_cliente(
+                campo, 
+                cliente_data[campo], 
+                ValidadorMonto.validar_y_formatear_monto,
+                resultados
             )
-            if resultado_monto["valido"]:
-                resultados["datos_formateados"][campo] = resultado_monto[
-                    "valor_formateado"
-                ]
-                if resultado_monto["cambio_realizado"]:
-                    resultados["cambios_realizados"].append(campo)
-            else:
-                resultados["valido"] = False
-                resultados["errores"].append(f"{campo}: {resultado_monto['error']}")
 
     return resultados

@@ -57,7 +57,7 @@ def create_user(
     current_user: User = Depends(get_current_user),
 ):
     # Crear un nuevo usuario (verificar permiso)
-    if not has_permission(current_user.is_admin, Permission.USER_CREATE):
+    if not has_permission(bool(current_user.is_admin), Permission.USER_CREATE):
         raise HTTPException(
             status_code=403, detail="No tienes permisos para crear usuarios"
         )
@@ -119,7 +119,7 @@ def list_users(
     # Listar usuarios con paginación
     try:
         # Verificar permiso para listar usuarios
-        if not has_permission(current_user.is_admin, Permission.USER_READ):
+        if not has_permission(bool(current_user.is_admin), Permission.USER_READ):
             raise HTTPException(
                 status_code=403, detail="No tienes permisos para ver usuarios"
             )
@@ -152,7 +152,7 @@ def get_user(
             raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
         # Verificar permiso para ver usuarios
-        if not has_permission(current_user.is_admin, Permission.USER_READ):
+        if not has_permission(bool(current_user.is_admin), Permission.USER_READ):
             # Si no tiene permiso general, solo puede verse a sí mismo
             if current_user.id != user_id:
                 raise HTTPException(
