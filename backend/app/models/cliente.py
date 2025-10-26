@@ -82,4 +82,8 @@ class Cliente(Base):
     #                          cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<Cliente(id={self.id}, cedula='{self.cedula}', nombres='{self.nombres}', estado='{self.estado}', activo={self.activo})>"
+        return (
+            f"<Cliente(id={self.id}, cedula='{self.cedula}', "
+            f"nombres='{self.nombres}', estado='{self.estado}', "
+            f"activo={self.activo})>"
+        )
