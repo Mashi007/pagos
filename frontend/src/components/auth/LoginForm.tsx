@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { AlertWithIcon } from '@/components/ui/alert'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { LoginForm as LoginFormType } from '@/types'
+import { logoService } from '@/services/logoService'
 
 // Constantes de configuración
 const MIN_PASSWORD_LENGTH = 6
@@ -49,12 +50,20 @@ export function LoginForm() {
   const navigate = useNavigate()
   const location = useLocation()
   
-  // Cargar logo desde localStorage
+  // Cargar logo desde backend
   useEffect(() => {
-    const logoGuardado = localStorage.getItem('logoEmpresa')
-    if (logoGuardado) {
-      setLogo(logoGuardado)
+    const cargarLogo = async () => {
+      try {
+        const logoUrl = await logoService.obtenerLogo()
+        if (logoUrl) {
+          setLogo(logoUrl)
+        }
+      } catch (error) {
+        console.error('Error cargando logo en LoginForm:', error)
+      }
     }
+    
+    cargarLogo()
   }, [])
 
   const from = location.state?.from?.pathname || '/dashboard'
