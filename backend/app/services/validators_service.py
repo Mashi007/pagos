@@ -219,8 +219,8 @@ class ValidadorCedula:
 
     PAISES_CEDULA = {
         "VENEZUELA": {
-            "longitud": [7, 8],
-            "patron": r"^[Vv]?\d{7,8}$",
+            "longitud": [7, 8, 9, 10],
+            "patron": r"^[VvEeJj]?\d{7,10}$",
             "formato_display": "V12345678",
             "descripcion": "Cédula venezolana",
         },
@@ -278,9 +278,11 @@ class ValidadorCedula:
 
             # Formatear según país
             if pais.upper() == "VENEZUELA":
-                if cedula_limpia.startswith("V"):
+                # Detectar prefijo V, E o J
+                if cedula_limpia.startswith(("V", "E", "J")):
                     cedula_formateada = cedula_limpia
                 else:
+                    # Por defecto usar V
                     cedula_formateada = f"V{cedula_limpia}"
             else:
                 cedula_formateada = cedula_limpia
