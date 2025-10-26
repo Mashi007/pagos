@@ -1212,6 +1212,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         // Notificar éxito y cerrar
         onDataProcessed?.(validData)
         onSuccess?.()
+        // ✅ Cerrar automáticamente al guardar exitosamente
         onClose()
       } else {
         alert('No se pudo guardar ningún cliente. Revisa los errores.')
