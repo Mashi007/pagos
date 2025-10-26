@@ -3,10 +3,6 @@ import { motion } from 'framer-motion'
 import {
   CheckCircle,
   XCircle,
-  AlertTriangle,
-  Search,
-  FileText,
-  Settings,
   PlayCircle,
   RefreshCw,
   Download
@@ -299,7 +295,6 @@ export function Validadores() {
                     </div>
                   ) : (
                     <div className="text-center py-4">
-                      <AlertTriangle className="w-6 h-6 text-yellow-500 mx-auto mb-2" />
                       <p className="text-sm text-gray-500">Error cargando configuración</p>
                     </div>
                   )}
@@ -336,114 +331,6 @@ export function Validadores() {
           </Card>
       </div>
 
-      {/* Sección: Ejemplos */}
-      <div>
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Teléfono mal formateado</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div>
-                    <Badge variant="destructive">Incorrecto</Badge>
-                    <p className="text-sm mt-1">4241234567</p>
-                    <p className="text-xs text-gray-500">Sin código de país (+58)</p>
-                  </div>
-                  <div>
-                    <Badge className="bg-green-600">Correcto</Badge>
-                    <p className="text-sm mt-1">+58 424 1234567</p>
-                    <p className="text-xs text-gray-500">Sistema auto-formatea al guardar</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Cédula sin letra</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div>
-                    <Badge variant="destructive">Incorrecto</Badge>
-                    <p className="text-sm mt-1">12345678</p>
-                    <p className="text-xs text-gray-500">Sin prefijo V/E</p>
-                  </div>
-                  <div>
-                    <Badge className="bg-green-600">Correcto</Badge>
-                    <p className="text-sm mt-1">V12345678</p>
-                    <p className="text-xs text-gray-500">Admin edita y sistema valida</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Email mal formateado</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div>
-                    <Badge variant="destructive">Incorrecto</Badge>
-                    <p className="text-sm mt-1">USUARIO@GMAIL.COM</p>
-                    <p className="text-xs text-gray-500">Mayúsculas y formato incorrecto</p>
-                  </div>
-                  <div>
-                    <Badge className="bg-green-600">Correcto</Badge>
-                    <p className="text-sm mt-1">usuario@gmail.com</p>
-                    <p className="text-xs text-gray-500">Normalizado automáticamente</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Fecha en formato incorrecto</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div>
-                    <Badge variant="destructive">Incorrecto</Badge>
-                    <p className="text-sm mt-1">ERROR</p>
-                    <p className="text-xs text-gray-500">Valor inválido</p>
-                  </div>
-                  <div>
-                    <Badge className="bg-green-600">Correcto</Badge>
-                    <p className="text-sm mt-1">15/03/2024</p>
-                    <p className="text-xs text-gray-500">Admin selecciona en calendario</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-      </div>
-
-      {/* Sección: Diagnóstico */}
-      <div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Diagnóstico de Datos</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-12">
-                <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  Diagnóstico Masivo
-                </h3>
-                <p className="text-gray-500 mb-6">
-                  Detecta y corrige datos incorrectos en toda la base de datos
-                </p>
-                <Button size="lg">
-                  <Search className="w-4 h-4 mr-2" />
-                  Iniciar Diagnóstico
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-      </div>
     </div>
   )
 }
