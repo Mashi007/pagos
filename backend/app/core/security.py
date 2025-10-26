@@ -13,8 +13,8 @@ from passlib.context import CryptContext
 # Configuración de seguridad
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
+ACCESS_TOKEN_EXPIRE_MINUTES = 240  # 4 horas (consistente con config.py)
+REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 días (consistente con config.py)
 
 # Contexto para hashing de contraseñas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
