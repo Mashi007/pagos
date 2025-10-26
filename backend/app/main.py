@@ -27,6 +27,7 @@ from app.api.v1.endpoints import (
     reportes,
     solicitudes,
     users,
+    validadores,
 )
 from app.core.config import settings
 from app.db.init_db import init_db_shutdown, init_db_startup
@@ -167,6 +168,7 @@ app.include_router(
     configuracion.router, prefix="/api/v1/configuracion", tags=["configuracion"]
 )
 app.include_router(analistas.router, prefix="/api/v1/analistas", tags=["analistas"])
+app.include_router(validadores.router, prefix="/api/v1/validadores", tags=["validadores"])
 
 logger.info("Todos los routers registrados correctamente")
 

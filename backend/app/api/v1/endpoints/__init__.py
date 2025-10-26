@@ -38,6 +38,7 @@ from . import (
     temporal_analysis,
     token_verification,
     users,
+    validadores,
 )
 
 __all__ = [
@@ -76,4 +77,5 @@ __all__ = [
     "schema_analyzer",
     "critical_error_monitor",
     "strategic_measurements",
+    "validadores",
 ]
