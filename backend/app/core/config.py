@@ -58,8 +58,8 @@ class Settings(BaseSettings):
     # ============================================
     # USUARIO ADMINISTRADOR INICIAL
     # ============================================
-    ADMIN_EMAIL: str = "admin@rapicredit.com"
-    ADMIN_PASSWORD: str = Field(default="admin123", env="ADMIN_PASSWORD")
+    ADMIN_EMAIL: str = "itmaster@rapicreditca.com"
+    ADMIN_PASSWORD: str = Field(default="R@pi_2025**", env="ADMIN_PASSWORD")
 
     # ============================================
     # AMORTIZACIÓN Y REGLAS DE NEGOCIO
