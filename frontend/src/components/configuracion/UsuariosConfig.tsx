@@ -481,7 +481,7 @@ export default function UsuariosConfig() {
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
                 {/* Email */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -493,6 +493,7 @@ export default function UsuariosConfig() {
                     onChange={(e) => setFormData({ ...formData, email: e.target.value.toLowerCase() })}
                     required
                     placeholder="usuario@ejemplo.com"
+                    autoComplete="off"
                   />
                 </div>
 
@@ -507,6 +508,7 @@ export default function UsuariosConfig() {
                       onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
                       required
                       placeholder="Nombre"
+                      autoComplete="off"
                     />
                   </div>
                   <div>
@@ -518,6 +520,7 @@ export default function UsuariosConfig() {
                       onChange={(e) => setFormData({ ...formData, apellido: e.target.value })}
                       required
                       placeholder="Apellido"
+                      autoComplete="off"
                     />
                   </div>
                 </div>

@@ -60,6 +60,7 @@ export const PasswordField = ({
             minLength={minLength}
             disabled={disabled}
             className="pr-10"
+            autoComplete="new-password"
           />
           {showVisibilityToggle && (
             <Button
