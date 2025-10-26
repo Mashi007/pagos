@@ -234,18 +234,13 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     return { field: 'ocupacion', isValid: true, message: 'Ocupación válida' }
   }
   
+  // ✅ Formato automático deshabilitado - respetar formato original del usuario
   const formatNombres = (text: string): string => {
-    return text
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ')
+    return text // Mantener formato original
   }
   
   const formatOcupacion = (text: string): string => {
-    return text
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ')
+    return text // Mantener formato original
   }
   
   // Validaciones usando el servicio de validadores del backend
