@@ -8,6 +8,8 @@ interface ValidacionResponse {
     valor_formateado?: string
     error?: string
     mensaje?: string
+    formato_esperado?: string
+    sugerencia?: string
   }
 }
 
