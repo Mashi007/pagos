@@ -1,9 +1,10 @@
-# backend/app/schemas/__init__.py
+"""
+backend/app/schemas/__init__.py
 
-
-# - Cliente: Gestión de clientes
-# - Conciliación: Conciliación bancaria
-# - KPIs: Métricas e indicadores
+Módulo de schemas Pydantic para validación de API:
+- Cliente: Gestión de clientes
+- Conciliación: Conciliación bancaria
+- KPIs: Métricas e indicadores
 """
 
 # ============================================
@@ -19,23 +20,23 @@ from app.schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
 # ============================================
 # SCHEMAS DE CONCILIACIÓN BANCARIA
 # ============================================
-from app.schemas.conciliacion import
+# from app.schemas.conciliacion import
 
 # ============================================
 # SCHEMAS DE KPIs
 # ============================================
 # ACTUALIZADO: Importaciones corregidas para coincidir con kpis.py
-from app.schemas.kpis import
+# from app.schemas.kpis import
 
 # ============================================
 # SCHEMAS DE PAGO
 # ============================================
-from app.schemas.pago import
+# from app.schemas.pago import
 
 # ============================================
 # SCHEMAS DE PRÉSTAMO
 # ============================================
-from app.schemas.prestamo import
+# from app.schemas.prestamo import
 
 # ============================================
 # EXPORTS PÚBLICOS
@@ -92,7 +93,4 @@ __all__ = [
 # INFORMACIÓN DEL MÓDULO
 # ============================================
 __version__ = "1.0.0"
-__description__ =
-    "Schemas Pydantic v2 para validación de API - SIMPLIFICADO (sin UserRole)"
-
-"""
+__description__ = "Schemas Pydantic v2 para validación de API - SIMPLIFICADO (sin UserRole)"

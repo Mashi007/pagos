@@ -312,6 +312,8 @@ export function Configuracion() {
                   onClick={() => {
                     setLogo(null)
                     localStorage.removeItem('logoEmpresa')
+                    // Activar botón "Guardar"
+                    setCambiosPendientes(true)
                   }}
                 >
                   Eliminar
@@ -331,6 +333,8 @@ export function Configuracion() {
                         setLogo(result)
                         localStorage.setItem('logoEmpresa', result)
                         toast.success('Logo cargado exitosamente')
+                        // Activar botón "Guardar"
+                        setCambiosPendientes(true)
                       }
                       reader.readAsDataURL(file)
                     }
