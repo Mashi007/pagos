@@ -1,5 +1,6 @@
 import logging
 import traceback
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
@@ -73,6 +74,9 @@ def list_concesionarios_no_auth(
         if search:
             query = query.filter(Concesionario.nombre.ilike(f"%{search}%"))
 
+        # Ordenar por ID
+        query = query.order_by(Concesionario.id)
+
         # Obtener total
         total = query.count()
 
@@ -108,6 +112,9 @@ def list_concesionarios(
             query = query.filter(Concesionario.activo == activo)
         if search:
             query = query.filter(Concesionario.nombre.ilike(f"%{search}%"))
+
+        # Ordenar por ID
+        query = query.order_by(Concesionario.id)
 
         # Obtener total
         total = query.count()
@@ -231,6 +238,9 @@ def actualizar_concesionario(
         update_data = concesionario_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(concesionario, field, value)
+        
+        # Actualizar timestamp manually
+        concesionario.updated_at = datetime.utcnow()
 
         db.commit()
         db.refresh(concesionario)
