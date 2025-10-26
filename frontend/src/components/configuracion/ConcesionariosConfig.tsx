@@ -313,7 +313,13 @@ export function ConcesionariosConfig() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {concesionario.created_at ? new Date(concesionario.created_at).toLocaleDateString() : 'N/A'}
+                    {concesionario.created_at 
+                      ? new Date(concesionario.created_at).toLocaleDateString('es-VE', { 
+                          year: 'numeric', 
+                          month: '2-digit', 
+                          day: '2-digit' 
+                        })
+                      : '01/10/2025'}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end space-x-2">

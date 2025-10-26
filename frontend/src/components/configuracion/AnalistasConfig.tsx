@@ -319,24 +319,33 @@ export function AnalistasConfig() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>ID</TableHead>
                 <TableHead>Analista</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead>Fecha Creación</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredAnalistas.map((analista: Analista) => (
                 <TableRow key={analista.id}>
+                  <TableCell className="font-medium">{analista.id}</TableCell>
                   <TableCell>
-                    <div>
-                      <div className="font-semibold">{analista.nombre}</div>
-                      <div className="text-sm text-gray-500">ID: {analista.id}</div>
-                    </div>
+                    <div className="font-semibold">{analista.nombre}</div>
                   </TableCell>
                   <TableCell>
                     <Badge variant="default" className="bg-blue-600 text-white">
                       {analista.activo ? "Activo" : "Inactivo"}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {analista.created_at 
+                      ? new Date(analista.created_at).toLocaleDateString('es-VE', { 
+                          year: 'numeric', 
+                          month: '2-digit', 
+                          day: '2-digit' 
+                        })
+                      : '01/10/2025'}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end space-x-2">
