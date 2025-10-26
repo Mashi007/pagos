@@ -65,7 +65,8 @@ def get_current_user(
         logger.info(f"Buscando usuario con ID: {user_id}")
 
     except JWTError as e:
-        logger.error(f"Error decodificando JWT: {e}")
+        logger.warning(f"Error decodificando JWT: {str(e)}")
+        # Si el token expiró, retornar 401, no 500
         raise credentials_exception
 
     # Buscar usuario en BD
