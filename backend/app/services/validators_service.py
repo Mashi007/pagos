@@ -425,6 +425,17 @@ class ValidadorFecha:
 
                 dia_str, mes_str, año_str = partes
 
+                # Validar formato estricto DD/MM/YYYY (día y mes con 2 dígitos)
+                if len(dia_str) != 2 or len(mes_str) != 2:
+                    return {
+                        "valido": False,
+                        "error": "Día y mes deben tener 2 dígitos",
+                        "valor_original": fecha,
+                        "valor_formateado": None,
+                        "formato_esperado": "DD/MM/YYYY",
+                        "sugerencia": "Use 2 dígitos para día y mes. Ejemplo: '01/12/2025' en lugar de '1/12/2025'",
+                    }
+
                 # Convertir a enteros para validar
                 dia = int(dia_str)
                 mes = int(mes_str)
