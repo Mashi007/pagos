@@ -35,6 +35,7 @@ import { ValidadoresConfig } from '@/components/configuracion/ValidadoresConfig'
 import { ConcesionariosConfig } from '@/components/configuracion/ConcesionariosConfig'
 import { AnalistasConfig } from '@/components/configuracion/AnalistasConfig'
 import { configuracionGeneralService, ConfiguracionGeneral } from '@/services/configuracionGeneralService'
+import { logoService } from '@/services/logoService'
 import { toast } from 'sonner'
 import UsuariosConfig from '@/components/configuracion/UsuariosConfig'
 
@@ -121,12 +122,19 @@ export function Configuracion() {
   // Cargar configuración general al montar el componente
   useEffect(() => {
     cargarConfiguracionGeneral()
-    // Cargar logo si existe
-    const logoGuardado = localStorage.getItem('logoEmpresa')
-    if (logoGuardado) {
-      setLogo(logoGuardado)
-    }
+    cargarLogo()
   }, [])
+
+  const cargarLogo = async () => {
+    try {
+      const logoUrl = await logoService.obtenerLogo()
+      if (logoUrl) {
+        setLogo(logoUrl)
+      }
+    } catch (error) {
+      console.error('Error cargando logo:', error)
+    }
+  }
 
   const cargarConfiguracionGeneral = async () => {
     try {
@@ -309,11 +317,15 @@ export function Configuracion() {
                 <Button
                   variant="destructive"
                   size="sm"
-                  onClick={() => {
-                    setLogo(null)
-                    localStorage.removeItem('logoEmpresa')
-                    // Activar botón "Guardar"
-                    setCambiosPendientes(true)
+                  onClick={async () => {
+                    try {
+                      await logoService.eliminarLogo()
+                      setLogo(null)
+                      toast.success('Logo eliminado exitosamente')
+                    } catch (error) {
+                      console.error('Error eliminando logo:', error)
+                      toast.error('Error al eliminar logo')
+                    }
                   }}
                 >
                   Eliminar
@@ -324,19 +336,20 @@ export function Configuracion() {
                 <Input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => {
+                  onChange={async (e) => {
                     const file = e.target.files?.[0]
                     if (file) {
-                      const reader = new FileReader()
-                      reader.onload = (e) => {
-                        const result = e.target?.result as string
-                        setLogo(result)
-                        localStorage.setItem('logoEmpresa', result)
+                      try {
+                        await logoService.subirLogo(file)
+                        const logoUrl = await logoService.obtenerLogo()
+                        if (logoUrl) {
+                          setLogo(logoUrl)
+                        }
                         toast.success('Logo cargado exitosamente')
-                        // Activar botón "Guardar"
-                        setCambiosPendientes(true)
+                      } catch (error) {
+                        console.error('Error subiendo logo:', error)
+                        toast.error('Error al cargar logo')
                       }
-                      reader.readAsDataURL(file)
                     }
                   }}
                   className="cursor-pointer"

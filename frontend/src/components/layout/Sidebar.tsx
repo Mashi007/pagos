@@ -30,6 +30,7 @@ import { cn } from '@/utils'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { logoService } from '@/services/logoService'
 
 interface SidebarProps {
   isOpen: boolean
@@ -60,24 +61,25 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     )
   }
 
-  // Cargar logo desde localStorage
+  // Cargar logo desde backend
   useEffect(() => {
-    const logoGuardado = localStorage.getItem('logoEmpresa')
-    if (logoGuardado) {
-      setLogo(logoGuardado)
+    const cargarLogo = async () => {
+      try {
+        const logoUrl = await logoService.obtenerLogo()
+        if (logoUrl) {
+          setLogo(logoUrl)
+        }
+      } catch (error) {
+        console.error('Error cargando logo en Sidebar:', error)
+      }
     }
     
-    // Escuchar cambios en localStorage
-    const handleStorageChange = () => {
-      const logoGuardado = localStorage.getItem('logoEmpresa')
-      setLogo(logoGuardado)
-    }
+    cargarLogo()
     
-    window.addEventListener('storage', handleStorageChange)
+    // Recargar logo cada 30 segundos (por si cambia en otro dispositivo)
+    const interval = setInterval(cargarLogo, 30000)
     
-    return () => {
-      window.removeEventListener('storage', handleStorageChange)
-    }
+    return () => clearInterval(interval)
   }, [])
 
   const menuItems: MenuItem[] = [
