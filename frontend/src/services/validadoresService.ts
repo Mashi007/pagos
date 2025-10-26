@@ -18,7 +18,6 @@ interface ConfiguracionValidadores {
       debe_empezar_por: string
       longitud_digitos: string
       sin_caracteres_especiales: string
-      ejemplos_validos: string[]
     }
     patron_regex: string
     formato_display: string
@@ -34,7 +33,6 @@ interface ConfiguracionValidadores {
       debe_empezar_por: string
       longitud_total: number
       primer_digito: string
-      digitos_validos: string
     }
     patron_regex: string
     formato_display: string
@@ -44,7 +42,6 @@ interface ConfiguracionValidadores {
     requisitos: {
       formato: string
       normalizacion: string
-      dominios_bloqueados: string[]
     }
     patron_regex: string
   }
@@ -62,10 +59,33 @@ interface ConfiguracionValidadores {
     descripcion: string
     requisitos: {
       formato: string
-      decimales: string
-      separador_miles: string
-      simbolo_moneda: string
+      rango_minimo: string
+      rango_maximo: string
+      monedas_soportadas: {
+        USD: string
+        VES: string
+      }
     }
+  }
+  nombre: {
+    descripcion: string
+    requisitos: {
+      palabras: string
+      longitud_minima: string
+      longitud_maxima: string
+      formato: string
+    }
+    patron_regex: string
+  }
+  apellido: {
+    descripcion: string
+    requisitos: {
+      palabras: string
+      longitud_minima: string
+      longitud_maxima: string
+      formato: string
+    }
+    patron_regex: string
   }
 }
 
@@ -73,21 +93,35 @@ class ValidadoresService {
   private baseUrl = '/api/v1/validadores'
 
   // Validar campo individual
-  async validarCampo(campo: string, valor: string, pais: string = 'VENEZUELA'): Promise<ValidacionResponse> {
-    return await apiClient.post<ValidacionResponse>(`${this.baseUrl}/validar-campo`, {
+  async validarCampo(campo: string, valor: string, pais: string = 'VENEZUELA', moneda?: string): Promise<ValidacionResponse> {
+    const body: any = {
       campo,
       valor,
       pais
-    })
+    }
+    
+    // Agregar moneda solo para campos de monto
+    if ((campo === 'monto' || campo === 'ingreso_mensual' || campo === 'total_financiamiento') && moneda) {
+      body.moneda = moneda
+    }
+    
+    return await apiClient.post<ValidacionResponse>(`${this.baseUrl}/validar-campo`, body)
   }
 
   // Formatear campo en tiempo real
-  async formatearTiempoReal(campo: string, valor: string, pais: string = 'VENEZUELA'): Promise<any> {
-    return await apiClient.post(`${this.baseUrl}/formatear-tiempo-real`, {
+  async formatearTiempoReal(campo: string, valor: string, pais: string = 'VENEZUELA', moneda?: string): Promise<any> {
+    const body: any = {
       campo,
       valor,
       pais
-    })
+    }
+    
+    // Agregar moneda solo para campos de monto
+    if ((campo === 'monto' || campo === 'ingreso_mensual' || campo === 'total_financiamiento') && moneda) {
+      body.moneda = moneda
+    }
+    
+    return await apiClient.post(`${this.baseUrl}/formatear-tiempo-real`, body)
   }
 
   // Obtener configuración de validadores

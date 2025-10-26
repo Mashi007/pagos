@@ -69,13 +69,36 @@ def obtener_configuracion_validadores(
                 "patron_regex": r"^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/\d{4}$",
             },
             "monto": {
-                "descripcion": "Validación de montos con decimales y formato monetario",
+                "descripcion": "Validación de montos (rango 1-20000) con soporte USD y VES",
                 "requisitos": {
                     "formato": "Decimal con 2 posiciones",
-                    "decimales": "Siempre mostrar .00",
-                    "separador_miles": "Coma (,)",
-                    "simbolo_moneda": "Bs.",
+                    "rango_minimo": "1.00",
+                    "rango_maximo": "20,000.00",
+                    "monedas_soportadas": {
+                        "USD": "Dólares Americanos ($)",
+                        "VES": "Bolívares Venezolanos (Bs.)",
+                    },
                 },
+            },
+            "nombre": {
+                "descripcion": "Validación de nombres (1-2 palabras) con primera letra mayúscula",
+                "requisitos": {
+                    "palabras": "Máximo 2 palabras",
+                    "longitud_minima": "2 caracteres por palabra",
+                    "longitud_maxima": "40 caracteres por palabra",
+                    "formato": "Solo letras, espacios y caracteres especiales permitidos",
+                },
+                "patron_regex": r"^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s\-']{2,}$",
+            },
+            "apellido": {
+                "descripcion": "Validación de apellidos (1-2 palabras) con primera letra mayúscula",
+                "requisitos": {
+                    "palabras": "Máximo 2 palabras",
+                    "longitud_minima": "2 caracteres por palabra",
+                    "longitud_maxima": "40 caracteres por palabra",
+                    "formato": "Solo letras, espacios y caracteres especiales permitidos",
+                },
+                "patron_regex": r"^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s\-']{2,}$",
             },
         }
 
@@ -99,7 +122,11 @@ def probar_validador(
         logger.info(f"Probando validador {tipo} - Usuario: {current_user.email}")
 
         # Importar validador correspondiente
-        from app.services.validators_service import ValidadorCedula, ValidadorTelefono
+        from app.services.validators_service import (
+            ValidadorCedula,
+            ValidadorNombre,
+            ValidadorTelefono,
+        )
 
         resultado = {}
 
@@ -107,6 +134,8 @@ def probar_validador(
             resultado = ValidadorCedula.validar_y_formatear_cedula(valor)
         elif tipo == "telefono":
             resultado = ValidadorTelefono.validar_y_formatear_telefono(valor, "VE")
+        elif tipo == "nombre" or tipo == "apellido":
+            resultado = ValidadorNombre.validar_y_formatear_nombre(valor)
         elif tipo == "email":
             # Validación simple de email
             import re

@@ -303,16 +303,128 @@ class ValidadorCedula:
             }
 
 
+class ValidadorNombre:
+    """Validador y formateador de nombres y apellidos"""
+
+    @staticmethod
+    def validar_y_formatear_nombre(texto: Any) -> Dict[str, Any]:
+        """
+        Validar y formatear nombre/apellido con primera letra en mayúscula
+
+        Args:
+            texto: Nombre o apellido a validar (acepta 1-2 palabras)
+
+        Returns:
+            Dict con resultado de validación y formateo
+        """
+        try:
+            if not texto or not isinstance(texto, str):
+                return {
+                    "valido": False,
+                    "error": "Nombre requerido",
+                    "valor_original": texto,
+                    "valor_formateado": None,
+                }
+
+            # Limpiar espacios extra
+            texto_limpio = " ".join(texto.split())
+
+            # Validar que no esté vacío después de limpiar
+            if not texto_limpio:
+                return {
+                    "valido": False,
+                    "error": "Nombre no puede estar vacío",
+                    "valor_original": texto,
+                    "valor_formateado": None,
+                }
+
+            # Validar que solo contenga letras, espacios y algunos caracteres especiales permitidos
+            patron_nombre = r"^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s\-']+$"
+            if not re.match(patron_nombre, texto_limpio):
+                return {
+                    "valido": False,
+                    "error": "Nombre solo puede contener letras y espacios",
+                    "valor_original": texto,
+                    "valor_formateado": None,
+                }
+
+            # Validar longitud de palabras (1-2 palabras, cada una de 2-40 caracteres)
+            palabras = texto_limpio.split()
+            if len(palabras) > 2:
+                return {
+                    "valido": False,
+                    "error": "Nombre debe tener máximo 2 palabras",
+                    "valor_original": texto,
+                    "valor_formateado": None,
+                }
+
+            for palabra in palabras:
+                if len(palabra) < 2:
+                    return {
+                        "valido": False,
+                        "error": "Cada palabra debe tener al menos 2 caracteres",
+                        "valor_original": texto,
+                        "valor_formateado": None,
+                    }
+                if len(palabra) > 40:
+                    return {
+                        "valido": False,
+                        "error": "Cada palabra no debe exceder 40 caracteres",
+                        "valor_original": texto,
+                        "valor_formateado": None,
+                    }
+
+            # Formatear: Primera letra de cada palabra en mayúscula, resto en minúscula
+            palabras_formateadas = [
+                palabra.capitalize() for palabra in palabras
+            ]
+            texto_formateado = " ".join(palabras_formateadas)
+
+            return {
+                "valido": True,
+                "valor_original": texto,
+                "valor_formateado": texto_formateado,
+                "cambio_realizado": texto_limpio != texto_formateado,
+            }
+
+        except Exception as e:
+            logger.error(f"Error validando nombre: {e}")
+            return {
+                "valido": False,
+                "error": f"Error de validación: {str(e)}",
+                "valor_original": texto,
+                "valor_formateado": None,
+            }
+
+
 class ValidadorMonto:
     """Validador y formateador de montos"""
 
+    MONEDAS_CONFIG = {
+        "USD": {
+            "simbolo": "$",
+            "descripcion": "Dólares Americanos",
+            "minimo": Decimal("1.00"),
+            "maximo": Decimal("20000.00"),
+        },
+        "VES": {
+            "simbolo": "Bs.",
+            "descripcion": "Bolívares Venezolanos",
+            "minimo": Decimal("1.00"),
+            "maximo": Decimal("20000.00"),
+        },
+    }
+
     @staticmethod
-    def validar_y_formatear_monto(monto: Any) -> Dict[str, Any]:
+    def validar_y_formatear_monto(
+        monto: Any, moneda: str = "USD"
+    ) -> Dict[str, Any]:
         """
-        Validar y formatear monto monetario
+        Validar y formatear monto monetario (rango 1-20000)
 
         Args:
             monto: Monto a validar (str, int, float, Decimal)
+            moneda: Tipo de moneda (USD o VES), por defecto USD
 
         Returns:
             Dict con resultado de validación y formateo
@@ -322,6 +434,16 @@ class ValidadorMonto:
                 return {
                     "valido": False,
                     "error": "Monto requerido",
+                    "valor_original": monto,
+                    "valor_formateado": None,
+                }
+
+            # Validar moneda
+            config_moneda = ValidadorMonto.MONEDAS_CONFIG.get(moneda.upper())
+            if not config_moneda:
+                return {
+                    "valido": False,
+                    "error": f"Moneda '{moneda}' no soportada. Use USD o VES",
                     "valor_original": monto,
                     "valor_formateado": None,
                 }
@@ -342,19 +464,20 @@ class ValidadorMonto:
                     "valor_formateado": None,
                 }
 
-            # Validar rango
-            if monto_decimal < 0:
+            # Validar rango mínimo (1.00)
+            if monto_decimal < config_moneda["minimo"]:
                 return {
                     "valido": False,
-                    "error": "El monto no puede ser negativo",
+                    "error": f"El monto mínimo es {config_moneda['simbolo']}1.00",
                     "valor_original": monto,
                     "valor_formateado": None,
                 }
 
-            if monto_decimal > Decimal("999999999.99"):
+            # Validar rango máximo (20000.00)
+            if monto_decimal > config_moneda["maximo"]:
                 return {
                     "valido": False,
-                    "error": "Monto excede el límite máximo",
+                    "error": f"El monto máximo es {config_moneda['simbolo']}20,000.00",
                     "valor_original": monto,
                     "valor_formateado": None,
                 }
@@ -367,6 +490,8 @@ class ValidadorMonto:
                 "valor_original": monto,
                 "valor_formateado": float(monto_formateado),
                 "valor_decimal": monto_formateado,
+                "moneda": moneda.upper(),
+                "simbolo_moneda": config_moneda["simbolo"],
                 "cambio_realizado": str(monto) != str(monto_formateado),
             }
 
@@ -426,6 +551,23 @@ def validar_datos_cliente(cliente_data: Dict[str, Any]) -> Dict[str, Any]:
             "cedula",
             cliente_data["cedula"],
             ValidadorCedula.validar_y_formatear_cedula,
+            resultados,
+        )
+
+    # Validar nombres
+    if "nombre" in cliente_data:
+        _validar_campo_cliente(
+            "nombre",
+            cliente_data["nombre"],
+            ValidadorNombre.validar_y_formatear_nombre,
+            resultados,
+        )
+
+    if "apellido" in cliente_data:
+        _validar_campo_cliente(
+            "apellido",
+            cliente_data["apellido"],
+            ValidadorNombre.validar_y_formatear_nombre,
             resultados,
         )
 
