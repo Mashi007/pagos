@@ -20,8 +20,8 @@ class ValidadorTelefono:
             "codigo_pais": "+58",
             "operadoras": ["412", "414", "416", "424", "426"],
             "longitud_sin_codigo": 10,  # 809 1234567
-            "patron_completo": r"^\+58\s?[0-9]{3}\s?[0-9]{7}$",
-            "formato_display": "+58 XXX XXXXXXX",
+            "patron_completo": r"^\+58\s?[1-9][0-9]{9}$",
+            "formato_display": "+58 XXXXXXXXXX (10 dígitos, no empieza por 0)",
         },
         "COLOMBIA": {
             "codigo_pais": "+57",
@@ -74,19 +74,15 @@ class ValidadorTelefono:
     def _formatear_telefono_con_plus(
         telefono_limpio: str, config: Dict[str, Any]
     ) -> str:
-        """Formatear teléfono que ya tiene + y código (ejemplo: +584241234567)"""
+        """Formatear teléfono que ya tiene + y código (ejemplo: +581234567890)"""
         # Eliminar el + y el código de país (58)
-        # telefono_limpio = "+584241234567"
+        # telefono_limpio = "+581234567890"
         # Quitar "+58" (4 caracteres)
         numero_sin_codigo = telefono_limpio[len(config["codigo_pais"]) + 1 :]
-        # numero_sin_codigo = "4241234567"
+        # numero_sin_codigo = "1234567890"
 
-        # Extraer operadora (primeros 3 dígitos)
-        operadora = numero_sin_codigo[:3]
-        # Resto del número (7 dígitos)
-        resto = numero_sin_codigo[3:]
-
-        return f"{config['codigo_pais']} {operadora} {resto}"
+        # Retornar con formato: +58 + 10 dígitos
+        return f"{config['codigo_pais']} {numero_sin_codigo}"
 
     @staticmethod
     def _formatear_telefono_local(
@@ -96,27 +92,23 @@ class ValidadorTelefono:
         telefono_original: str,
     ) -> Dict[str, Any]:
         """Formatear teléfono local sin código de país"""
-        operadora = telefono_limpio[:3]
-
-        if operadora in config["operadoras"]:
-            numero_formateado = (
-                f"{config['codigo_pais']} {operadora} {telefono_limpio[3:]}"
-            )
-            return {
-                "valido": True,
-                "numero_formateado": numero_formateado,
-            }
-        else:
+        # Validar que no empiece por 0
+        if telefono_limpio.startswith("0"):
             return {
                 "valido": False,
-                "error": (
-                    f"Operadora '{operadora}' no válida "
-                    f"para {pais}. Válidas: {', '.join(config['operadoras'])}"
-                ),
+                "error": "El número NO puede empezar por 0",
                 "valor_original": telefono_original,
                 "valor_formateado": None,
-                "sugerencia": f"Debe comenzar con: {', '.join(config['operadoras'])}",
+                "formato_esperado": "10 dígitos (1-9 al inicio)",
+                "sugerencia": "Use un número que empiece por 1-9. Ejemplo: '4121234567'",
             }
+
+        # Formatear: +58 + 10 dígitos
+        numero_formateado = f"{config['codigo_pais']} {telefono_limpio}"
+        return {
+            "valido": True,
+            "numero_formateado": numero_formateado,
+        }
 
     @staticmethod
     def _validar_formato_final(
@@ -161,14 +153,16 @@ class ValidadorTelefono:
             telefono_limpio = re.sub(r"[^\d+]", "", telefono.strip())
 
             # 3. Validar que NO empiece por 0
-            if telefono_limpio.startswith("0"):
+            # Extraer solo dígitos para validar
+            solo_digitos = re.sub(r"[^\d]", "", telefono_limpio)
+            if solo_digitos and solo_digitos[0] == "0":
                 return {
                     "valido": False,
                     "error": "El número de teléfono NO puede empezar por 0",
                     "valor_original": telefono,
                     "valor_formateado": None,
-                    "formato_esperado": "+58 424 1234567",
-                    "sugerencia": "El número debe empezar por operadora válida: 412, 414, 416, 424, 426",
+                    "formato_esperado": "10 dígitos (1-9 al inicio)",
+                    "sugerencia": "Use un número que empiece por 1-9. Ejemplo: '1234567890'",
                 }
 
             # 4. Validar país soportado

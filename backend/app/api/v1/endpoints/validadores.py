@@ -56,13 +56,13 @@ def obtener_configuracion_validadores(
                 "requisitos": {
                     "debe_empezar_por": "Debe tener prefijo +58 (se agrega automáticamente si falta)",
                     "longitud_total": "12 dígitos (código país + 10 dígitos locales)",
-                    "operadoras_validas": "412, 414, 416, 424, 426",
+                    "formato": "Cualquier orden de 10 dígitos válidos",
                     "no_puede_empezar_por": "0 - NO se aceptan números que empiecen por 0",
-                    "digitos_validos": "10 dígitos (0-9, excepto 0 al inicio)",
+                    "digitos_validos": "10 dígitos (1-9 al inicio, cualquier orden)",
                 },
-                "patron_regex": r"^\+58\s?[4-9]\d{2}\s?\d{7}$",
-                "formato_display": "+58 XXX XXX XXXX",
-                "ejemplos": "+58 424 1234567, 584241234567, 4241234567",
+                "patron_regex": r"^\+58\s?[1-9][0-9]{9}$",
+                "formato_display": "+58 XXXXXXXXXX (10 dígitos, no empieza por 0)",
+                "ejemplos": "+58 1234567890, +58 9876543210, 1234567890",
             },
             "email": {
                 "descripcion": "Validación de emails según RFC 5322 con normalización",
