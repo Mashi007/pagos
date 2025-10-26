@@ -27,8 +27,7 @@ import { useQueryClient } from '@tanstack/react-query'
 
 interface ExcelData {
   cedula: string
-  nombres: string
-  apellidos: string
+  nombres: string  // ✅ Unifica nombres + apellidos (2-4 palabras)
   telefono: string
   email: string
   direccion: string

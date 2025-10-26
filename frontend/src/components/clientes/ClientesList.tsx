@@ -316,7 +316,7 @@ export function ClientesList() {
                     <TableCell>
                       <div>
                         <div className="font-medium text-gray-900">
-                          {cliente.nombres} {cliente.apellidos}
+                          {cliente.nombres}  {/* ✅ nombres unificados */}
                         </div>
                         <div className="text-sm text-gray-500">
                           Cédula: {cliente.cedula} | ID: {cliente.id}
@@ -493,7 +493,7 @@ export function ClientesList() {
                 <p className="text-gray-700">
                   ¿Estás seguro de que quieres <span className="font-semibold text-red-600">ELIMINAR PERMANENTEMENTE</span> al cliente{' '}
                   <span className="font-semibold">
-                    {clienteSeleccionado.nombres} {clienteSeleccionado.apellidos}
+                    {clienteSeleccionado.nombres}
                   </span>?
                 </p>
                 <p className="text-sm text-red-600 mt-2 font-medium">
