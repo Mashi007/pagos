@@ -286,19 +286,29 @@ def obtener_configuracion_general(
     try:
         # Obtener configuraciones específicas
         config_nombre = (
-            db.query(ConfiguracionSistema).filter(ConfiguracionSistema.clave == "nombre_empresa").first()
+            db.query(ConfiguracionSistema)
+            .filter(ConfiguracionSistema.clave == "nombre_empresa")
+            .first()
         )
         config_version = (
-            db.query(ConfiguracionSistema).filter(ConfiguracionSistema.clave == "version_sistema").first()
+            db.query(ConfiguracionSistema)
+            .filter(ConfiguracionSistema.clave == "version_sistema")
+            .first()
         )
         config_idioma = (
-            db.query(ConfiguracionSistema).filter(ConfiguracionSistema.clave == "idioma").first()
+            db.query(ConfiguracionSistema)
+            .filter(ConfiguracionSistema.clave == "idioma")
+            .first()
         )
         config_zona = (
-            db.query(ConfiguracionSistema).filter(ConfiguracionSistema.clave == "zona_horaria").first()
+            db.query(ConfiguracionSistema)
+            .filter(ConfiguracionSistema.clave == "zona_horaria")
+            .first()
         )
         config_moneda = (
-            db.query(ConfiguracionSistema).filter(ConfiguracionSistema.clave == "moneda").first()
+            db.query(ConfiguracionSistema)
+            .filter(ConfiguracionSistema.clave == "moneda")
+            .first()
         )
 
         return {
@@ -338,7 +348,9 @@ def actualizar_configuracion_general(
     try:
         for clave, valor in update_data.items():
             config = (
-                db.query(ConfiguracionSistema).filter(ConfiguracionSistema.clave == clave).first()
+                db.query(ConfiguracionSistema)
+                .filter(ConfiguracionSistema.clave == clave)
+                .first()
             )
 
             if not config:
