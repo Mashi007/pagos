@@ -756,7 +756,9 @@ class ValidadorMonto:
     }
 
     @staticmethod
-    def _crear_respuesta_error(monto: Any, error: str, formato_esperado: str, sugerencia: str) -> Dict[str, Any]:
+    def _crear_respuesta_error(
+        monto: Any, error: str, formato_esperado: str, sugerencia: str
+    ) -> Dict[str, Any]:
         """Crear respuesta de error estandarizada"""
         return {
             "valido": False,
@@ -897,9 +899,7 @@ class ValidadorMonto:
             return {"valido": True, "monto_limpio": resultado["monto_limpio"]}
         elif "," in monto_limpio:
             # Solo coma
-            resultado = ValidadorMonto._procesar_formato_solo_coma(
-                monto_limpio, monto
-            )
+            resultado = ValidadorMonto._procesar_formato_solo_coma(monto_limpio, monto)
             if not resultado["valido"]:
                 return resultado
             return {"valido": True, "monto_limpio": resultado["monto_limpio"]}
@@ -937,7 +937,9 @@ class ValidadorMonto:
             return {"valido": True, "monto_limpio": monto_limpio}
 
     @staticmethod
-    def _validar_rangos(monto_decimal: Decimal, config_moneda: Dict[str, Any], monto: Any) -> Optional[Dict[str, Any]]:
+    def _validar_rangos(
+        monto_decimal: Decimal, config_moneda: Dict[str, Any], monto: Any
+    ) -> Optional[Dict[str, Any]]:
         """Validar rango mínimo y máximo"""
         # Validar rango mínimo (1.00)
         if monto_decimal < config_moneda["minimo"]:
@@ -1071,7 +1073,9 @@ class ValidadorMonto:
             try:
                 if isinstance(monto, str):
                     monto_limpio = re.sub(r"[^\d.,]", "", monto)
-                    resultado = ValidadorMonto._procesar_string_monto(monto_limpio, monto)
+                    resultado = ValidadorMonto._procesar_string_monto(
+                        monto_limpio, monto
+                    )
                     if not resultado["valido"]:
                         return resultado
                     monto_decimal = Decimal(resultado["monto_limpio"])
@@ -1094,7 +1098,9 @@ class ValidadorMonto:
                 return error
 
             # Crear respuesta exitosa
-            return ValidadorMonto._crear_respuesta_exitosa(monto, monto_decimal, moneda, config_moneda)
+            return ValidadorMonto._crear_respuesta_exitosa(
+                monto, monto_decimal, moneda, config_moneda
+            )
 
         except Exception as e:
             logger.error(f"Error validando monto: {e}")
