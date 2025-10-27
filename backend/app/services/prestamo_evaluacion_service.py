@@ -16,9 +16,10 @@ logger = logging.getLogger(__name__)
 
 # ============================================
 # TABLA 1: CRITERIOS Y PESOS DE EVALUACIÓN (100 Puntos Totales)
+# ACTUALIZADO: Criterio 1 reducido de 33 a 29 pts, Criterio 3 aumentado de 5 a 9 pts
 # ============================================
-CRITERIOS_PESOS = {
-    "capacidad_pago": 33,  # Criterio 1 (17 + 16)
+       CRITERIOS_PESOS = {
+           "capacidad_pago": 29,  # Criterio 1 (14 + 15)
     "estabilidad_laboral": 23,  # Criterio 2 (9 + 8 + 6)
     "referencias": 5,  # Criterio 3
     "arraigo_geografico": 12,  # Criterio 4 (5 + 4 + 3)
@@ -37,7 +38,7 @@ def calcular_ratio_endeudamiento(
     otras_deudas: Decimal,
 ) -> Decimal:
     """
-    CRITERIO 1.A: RATIO DE ENDEUDAMIENTO (17 puntos - 17%)
+           CRITERIO 1.A: RATIO DE ENDEUDAMIENTO (14 puntos - 14%)
 
     Formula: (Otras Deudas / Ingresos) × 100
     IMPORTANTE: NO incluir la cuota del préstamo propuesto, solo deudas actuales
@@ -82,7 +83,7 @@ def calcular_ratio_cobertura(
     cuota: Decimal,
 ) -> Decimal:
     """
-    CRITERIO 1.B: RATIO DE COBERTURA (16 puntos - 16%)
+           CRITERIO 1.B: RATIO DE COBERTURA (15 puntos - 15%)
 
     Formula: Disponible = Ingresos - Gastos Fijos - Otras Deudas
     Formula: Ratio = Disponible / Cuota
@@ -203,7 +204,7 @@ def evaluar_sector_economico(sector: str) -> Decimal:
 
 
 # ============================================
-# CRITERIO 3: REFERENCIAS PERSONALES (5 puntos)
+# CRITERIO 3: REFERENCIAS PERSONALES (9 puntos)
 # ============================================
 
 
