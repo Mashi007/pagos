@@ -504,13 +504,13 @@ def evaluar_riesgo_prestamo(
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    
+
     # Agregar prestamo_id a datos
     datos_evaluacion["prestamo_id"] = prestamo_id
-    
+
     try:
         evaluacion = crear_evaluacion_prestamo(datos_evaluacion, db)
-        
+
         return {
             "prestamo_id": prestamo_id,
             "puntuacion_total": float(evaluacion.puntuacion_total),

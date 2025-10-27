@@ -2,6 +2,7 @@
 Servicio para evaluación de riesgo de préstamos
 Implementa los 6 criterios de evaluación según TABLA 1 compartida
 """
+
 import logging
 from decimal import Decimal
 from typing import Dict
@@ -16,12 +17,12 @@ logger = logging.getLogger(__name__)
 # TABLA 1: CRITERIOS Y PESOS DE EVALUACIÓN
 # ============================================
 CRITERIOS_PESOS = {
-    "ratio_endeudamiento": 25,      # 25%
-    "ratio_cobertura": 20,          # 20%
-    "historial_crediticio": 20,     # 20%
-    "estabilidad_laboral": 15,      # 15%
-    "tipo_empleo": 10,              # 10%
-    "enganche_garantias": 10,      # 10%
+    "ratio_endeudamiento": 25,  # 25%
+    "ratio_cobertura": 20,  # 20%
+    "historial_crediticio": 20,  # 20%
+    "estabilidad_laboral": 15,  # 15%
+    "tipo_empleo": 10,  # 10%
+    "enganche_garantias": 10,  # 10%
 }
 
 
@@ -32,15 +33,15 @@ def calcular_ratio_endeudamiento(
 ) -> Decimal:
     """
     TABLA 2: RATIO DE ENDEUDAMIENTO
-    
+
     Formula: (Gastos Fijos + Cuota Mensual) / Ingresos Mensuales
-    
+
     Retorna:
         - Decimal con el valor del ratio (ej: 0.45 = 45%)
     """
     if ingresos_mensuales <= 0:
         return Decimal("999.99")  # Indicador de error
-    
+
     ratio = (gastos_fijos_mensuales + cuota_mensual) / ingresos_mensuales
     return ratio
 
@@ -49,7 +50,7 @@ def evaluar_ratio_endeudamiento_puntos(ratio: Decimal) -> Decimal:
     """
     Evalúa puntos según ratio de endeudamiento.
     Rango óptimo: 0% - 30%
-    
+
     Returns:
         Puntos de 0 a 25
     """
@@ -71,18 +72,18 @@ def calcular_ratio_cobertura(
 ) -> Decimal:
     """
     TABLA 3: RATIO DE COBERTURA
-    
+
     Formula: Ingresos Mensuales / Gastos Fijos Mensuales
-    
+
     Mide cuántas veces los ingresos cubren los gastos.
     Ratio > 1.5 es saludable.
-    
+
     Returns:
         Decimal con el ratio
     """
     if gastos_fijos_mensuales <= 0:
         return Decimal("999.99")
-    
+
     ratio = ingresos_mensuales / gastos_fijos_mensuales
     return ratio
 
@@ -90,7 +91,7 @@ def calcular_ratio_cobertura(
 def evaluar_ratio_cobertura_puntos(ratio: Decimal) -> Decimal:
     """
     Evalúa puntos según ratio de cobertura.
-    
+
     Returns:
         Puntos de 0 a 20
     """
@@ -109,10 +110,10 @@ def evaluar_ratio_cobertura_puntos(ratio: Decimal) -> Decimal:
 def evaluar_historial_crediticio(calificacion: str) -> Dict[str, Decimal]:
     """
     Evalúa historial crediticio basado en calificación.
-    
+
     Args:
         calificacion: "EXCELENTE", "BUENO", "REGULAR", "MALO"
-    
+
     Returns:
         Dict con puntos y descripción
     """
@@ -122,14 +123,16 @@ def evaluar_historial_crediticio(calificacion: str) -> Dict[str, Decimal]:
         "REGULAR": {"puntos": Decimal(8), "descripcion": "Atrasos significativos"},
         "MALO": {"puntos": Decimal(2), "descripcion": "Múltiples incumplimientos"},
     }
-    
-    return evaluaciones.get(calificacion.upper(), {"puntos": Decimal(0), "descripcion": "Desconocido"})
+
+    return evaluaciones.get(
+        calificacion.upper(), {"puntos": Decimal(0), "descripcion": "Desconocido"}
+    )
 
 
 def evaluar_estabilidad_laboral(anos_empleo: Decimal) -> Decimal:
     """
     Evalúa estabilidad laboral según años en el trabajo.
-    
+
     Returns:
         Puntos de 0 a 15
     """
@@ -148,21 +151,32 @@ def evaluar_estabilidad_laboral(anos_empleo: Decimal) -> Decimal:
 def evaluar_tipo_empleo(tipo: str) -> Dict[str, Decimal]:
     """
     Evalúa tipo de empleo.
-    
+
     Args:
         tipo: "FORMAL", "INDEPENDIENTE", "CONTRATADO", "TEMPORAL"
-    
+
     Returns:
         Dict con puntos y descripción
     """
     evaluaciones = {
-        "FORMAL": {"puntos": Decimal(10), "descripcion": "Empleo formal con beneficios"},
-        "INDEPENDIENTE": {"puntos": Decimal(7), "descripcion": "Trabajador independiente estable"},
-        "CONTRATADO": {"puntos": Decimal(6), "descripcion": "Contratado por tiempo determinado"},
+        "FORMAL": {
+            "puntos": Decimal(10),
+            "descripcion": "Empleo formal con beneficios",
+        },
+        "INDEPENDIENTE": {
+            "puntos": Decimal(7),
+            "descripcion": "Trabajador independiente estable",
+        },
+        "CONTRATADO": {
+            "puntos": Decimal(6),
+            "descripcion": "Contratado por tiempo determinado",
+        },
         "TEMPORAL": {"puntos": Decimal(3), "descripcion": "Empleo temporal o eventual"},
     }
-    
-    return evaluaciones.get(tipo.upper(), {"puntos": Decimal(0), "descripcion": "Desconocido"})
+
+    return evaluaciones.get(
+        tipo.upper(), {"puntos": Decimal(0), "descripcion": "Desconocido"}
+    )
 
 
 def calcular_ltv(
@@ -171,17 +185,17 @@ def calcular_ltv(
 ) -> Decimal:
     """
     TABLA 7: ENGANCHE Y GARANTÍAS (LTV - Loan to Value)
-    
+
     Formula: (Enganche Pagado / Monto Financiado) * 100
-    
+
     Mide el porcentaje de enganche sobre el financiamiento.
-    
+
     Returns:
         Porcentaje LTV
     """
     if monto_financiado <= 0:
         return Decimal("0.00")
-    
+
     ltv = (enganche_pagado / monto_financiado) * Decimal(100)
     return ltv
 
@@ -189,7 +203,7 @@ def calcular_ltv(
 def evaluar_enganche_garantias(ltv: Decimal) -> Decimal:
     """
     Evalúa enganche y garantías según LTV.
-    
+
     Returns:
         Puntos de 0 a 10
     """
@@ -210,7 +224,7 @@ def evaluar_enganche_garantias(ltv: Decimal) -> Decimal:
 def clasificar_riesgo_total(puntuacion_total: Decimal) -> str:
     """
     TABLA 8: CLASIFICACIÓN FINAL DE RIESGO
-    
+
     Returns:
         "BAJO", "MODERADO", "ALTO", "CRÍTICO"
     """
@@ -224,20 +238,22 @@ def clasificar_riesgo_total(puntuacion_total: Decimal) -> str:
         return "CRÍTICO"
 
 
-def determinar_decision_final(puntuacion_total: Decimal, tiene_red_flags: bool = False) -> str:
+def determinar_decision_final(
+    puntuacion_total: Decimal, tiene_red_flags: bool = False
+) -> str:
     """
     TABLA 8: Determina la decisión final del préstamo.
-    
+
     Args:
         puntuacion_total: Puntuación total de 0-100
         tiene_red_flags: Si tiene señales de alerta
-    
+
     Returns:
         "APROBADO", "CONDICIONAL", "REQUIERE_MITIGACION", "RECHAZADO"
     """
     if tiene_red_flags:
         return "RECHAZADO"
-    
+
     if puntuacion_total >= Decimal(70):
         return "APROBADO"
     elif puntuacion_total >= Decimal(50):
@@ -254,7 +270,7 @@ def aplicar_condiciones_segun_riesgo(
 ) -> Dict[str, any]:
     """
     TABLA 9: CONDICIONES SEGÚN NIVEL DE RIESGO
-    
+
     Returns:
         Dict con tasa_interes_aplicada, plazo_maximo, enganche_minimo, requisitos_adicionales
     """
@@ -284,17 +300,17 @@ def aplicar_condiciones_segun_riesgo(
             "requisitos_adicionales": "Garante y colateral",
         },
     }
-    
+
     return condiciones.get(clasificacion_riesgo, condiciones["CRÍTICO"])
 
 
 def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
     """
     Calcula la evaluación completa de un préstamo usando los 6 criterios.
-    
+
     Args:
         datos_evaluacion: Dict con datos financieros del cliente
-        
+
     Returns:
         PrestamoEvaluacion con la evaluación completa
     """
@@ -307,44 +323,49 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
     tipo_trabajo = datos_evaluacion.get("tipo_empleo", "DESCONOCIDO")
     enganche = Decimal(str(datos_evaluacion.get("enganche_pagado", 0)))
     monto_financiado = Decimal(str(datos_evaluacion.get("monto_financiado", 0)))
-    
+
     # Criterio 1: Ratio de Endeudamiento
     ratio_end = calcular_ratio_endeudamiento(ingresos, gastos, cuota)
     puntos_end = evaluar_ratio_endeudamiento_puntos(ratio_end)
-    
+
     # Criterio 2: Ratio de Cobertura
     ratio_cob = calcular_ratio_cobertura(ingresos, gastos)
     puntos_cob = evaluar_ratio_cobertura_puntos(ratio_cob)
-    
+
     # Criterio 3: Historial Crediticio
     eval_hist = evaluar_historial_crediticio(historial)
     puntos_hist = eval_hist["puntos"]
     desc_hist = eval_hist["descripcion"]
-    
+
     # Criterio 4: Estabilidad Laboral
     puntos_est = evaluar_estabilidad_laboral(anos_trabajo)
-    
+
     # Criterio 5: Tipo de Empleo
     eval_tipo = evaluar_tipo_empleo(tipo_trabajo)
     puntos_tipo = eval_tipo["puntos"]
     desc_tipo = eval_tipo["descripcion"]
-    
+
     # Criterio 6: Enganche y Garantías
     ltv = calcular_ltv(enganche, monto_financiado)
     puntos_enganche = evaluar_enganche_garantias(ltv)
-    
+
     # Puntuación total
     puntuacion_total = (
-        puntos_end + puntos_cob + puntos_hist + puntos_est + puntos_tipo + puntos_enganche
+        puntos_end
+        + puntos_cob
+        + puntos_hist
+        + puntos_est
+        + puntos_tipo
+        + puntos_enganche
     )
-    
+
     # Clasificación y decisión
     clasificacion = clasificar_riesgo_total(puntuacion_total)
     decision = determinar_decision_final(puntuacion_total)
-    
+
     # Condiciones según riesgo
     condiciones = aplicar_condiciones_segun_riesgo(clasificacion, puntuacion_total)
-    
+
     # Crear registro de evaluación
     evaluacion = PrestamoEvaluacion(
         prestamo_id=datos_evaluacion.get("prestamo_id"),
@@ -368,7 +389,7 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
         enganche_minimo=condiciones["enganche_minimo"],
         requisitos_adicionales=condiciones["requisitos_adicionales"],
     )
-    
+
     return evaluacion
 
 
@@ -378,26 +399,26 @@ def crear_evaluacion_prestamo(
 ) -> PrestamoEvaluacion:
     """
     Crea o actualiza la evaluación de un préstamo en la base de datos.
-    
+
     Args:
         datos_evaluacion: Dict con datos financieros
         db: Sesión de base de datos
-    
+
     Returns:
         PrestamoEvaluacion creado/actualizado
     """
     prestamo_id = datos_evaluacion.get("prestamo_id")
-    
+
     # Buscar evaluación existente
     evaluacion_existente = (
         db.query(PrestamoEvaluacion)
         .filter(PrestamoEvaluacion.prestamo_id == prestamo_id)
         .first()
     )
-    
+
     # Calcular evaluación
     nueva_evaluacion = calcular_evaluacion_completa(datos_evaluacion)
-    
+
     if evaluacion_existente:
         # Actualizar evaluación existente
         for key, value in nueva_evaluacion.__dict__.items():
@@ -408,7 +429,7 @@ def crear_evaluacion_prestamo(
         # Crear nueva evaluación
         evaluacion = nueva_evaluacion
         db.add(evaluacion)
-    
+
     try:
         db.commit()
         db.refresh(evaluacion)
@@ -417,6 +438,5 @@ def crear_evaluacion_prestamo(
         db.rollback()
         logger.error(f"Error guardando evaluación: {str(e)}")
         raise
-    
-    return evaluacion
 
+    return evaluacion
