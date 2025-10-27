@@ -8,7 +8,7 @@ import {
   Info,
   TrendingUp,
   TrendingDown,
-  Home,
+  House,
   Users,
   Calendar,
   DollarSign
@@ -483,7 +483,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
             <Card className="border-green-200">
               <CardHeader className="bg-green-50">
                 <CardTitle className="flex items-center gap-2 text-green-700">
-                  <Home className="h-5 w-5" />
+                  <House className="h-5 w-5" />
                   CRITERIO 4: ARRAIGO GEOGRÁFICO (12 puntos)
                 </CardTitle>
               </CardHeader>
