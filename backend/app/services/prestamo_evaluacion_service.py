@@ -110,18 +110,26 @@ def evaluar_ratio_cobertura_puntos(ratio: Decimal) -> Decimal:
 def evaluar_historial_crediticio(calificacion: str) -> Dict[str, Decimal]:
     """
     Evalúa historial crediticio basado en calificación.
+    
+    Nueva escala:
+    - Categoría A (20 puntos): Persona que mantiene todos sus pagos al día
+    - Categoría B (15 puntos): Persona con atrasos menores o debilidades en su capacidad de pago
+    - Categoría C (8 puntos): Persona con atrasos moderados que comprometen el pago normal
+    - Categoría D (2 puntos): Persona con mora significativa (difícil cobro)
+    - Categoría E (0 puntos): Persona con créditos prácticamente irrecuperables
 
     Args:
-        calificacion: "EXCELENTE", "BUENO", "REGULAR", "MALO"
+        calificacion: "A", "B", "C", "D", "E"
 
     Returns:
         Dict con puntos y descripción
     """
     evaluaciones = {
-        "EXCELENTE": {"puntos": Decimal(20), "descripcion": "Sin atrasos en 2+ años"},
-        "BUENO": {"puntos": Decimal(15), "descripcion": "Algunos atrasos menores"},
-        "REGULAR": {"puntos": Decimal(8), "descripcion": "Atrasos significativos"},
-        "MALO": {"puntos": Decimal(2), "descripcion": "Múltiples incumplimientos"},
+        "A": {"puntos": Decimal(20), "descripcion": "Todos los pagos al día"},
+        "B": {"puntos": Decimal(15), "descripcion": "Atrasos menores o debilidades en capacidad de pago"},
+        "C": {"puntos": Decimal(8), "descripcion": "Atrasos moderados que comprometen el pago normal"},
+        "D": {"puntos": Decimal(2), "descripcion": "Mora significativa (difícil cobro)"},
+        "E": {"puntos": Decimal(0), "descripcion": "Créditos prácticamente irrecuperables"},
     }
 
     return evaluaciones.get(
