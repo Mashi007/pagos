@@ -115,6 +115,25 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // ✅ CONFIRMACIÓN OBLIGATORIA: El usuario debe aceptar que la información refleja los documentos
+    const confirmacion = window.confirm(
+      '⚠️ CONFIRMACIÓN IMPORTANTE\n\n' +
+      '¿Confirma que la información ingresada refleja FIELMENTE los documentos presentados por el cliente?\n\n' +
+      'Al confirmar, usted certifica que:\n' +
+      '✓ Los ingresos declarados coinciden con documentos\n' +
+      '✓ Los gastos reportados son verificables\n' +
+      '✓ El historial crediticio está validado\n' +
+      '✓ La información de empleo es correcta\n' +
+      '✓ Los valores de enganche y garantía son reales\n\n' +
+      '¿Desea proceder con la evaluación?'
+    )
+    
+    if (!confirmacion) {
+      toast.info('Evaluación cancelada. Verifique los documentos antes de continuar.')
+      return
+    }
+    
     setIsLoading(true)
 
     try {
@@ -127,12 +146,13 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
         tipo_empleo_descripcion: formData.tipo_empleo,
         enganche_garantias_calculo: ratios.ltv,
         red_flags: redFlags,
+        verificado_usuario: true,  // ✅ Usuario confirmó verificación
       }
 
       const response = await prestamoService.evaluarRiesgo(prestamo.id, datosEvaluacion)
       
       setResultado(response)
-      toast.success('Evaluación completada exitosamente')
+      toast.success('✅ Evaluación guardada exitosamente. La información ha sido verificada y confirmada.')
       
       // Auto-cerrar después de 2 segundos
       setTimeout(() => {
