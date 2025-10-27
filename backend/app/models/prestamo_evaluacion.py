@@ -5,84 +5,110 @@ from app.db.session import Base
 
 class PrestamoEvaluacion(Base):
     """
-    Tabla 1 compartida: Criterios y Pesos de Evaluación.
-    Cada préstamo tiene una evaluación basada en 6 criterios.
+    Sistema de Scoring Crediticio - 100 Puntos Totales
+    Evaluación completa del cliente para préstamos de motos en Venezuela
     """
 
     __tablename__ = "prestamos_evaluacion"
 
     id = Column(Integer, primary_key=True, index=True)
-
-    # Referencia al préstamo
     prestamo_id = Column(Integer, nullable=False, index=True)
 
     # ============================================
-    # CRITERIO 1: RATIO DE ENDEUDAMIENTO (25%)
+    # CRITERIO 1: CAPACIDAD DE PAGO (33 puntos)
     # ============================================
+    # 1.A - Ratio de Endeudamiento (17 puntos)
     ratio_endeudamiento_puntos = Column(Numeric(5, 2), nullable=False, default=0)
     ratio_endeudamiento_calculo = Column(Numeric(10, 4), nullable=False, default=0)
-
-    # ============================================
-    # CRITERIO 2: RATIO DE COBERTURA (20%)
-    # ============================================
+    
+    # 1.B - Ratio de Cobertura (16 puntos)
     ratio_cobertura_puntos = Column(Numeric(5, 2), nullable=False, default=0)
     ratio_cobertura_calculo = Column(Numeric(10, 4), nullable=False, default=0)
 
     # ============================================
-    # CRITERIO 3: HISTORIAL CREDITICIO (20%)
+    # CRITERIO 2: ESTABILIDAD LABORAL (23 puntos)
     # ============================================
-    historial_crediticio_puntos = Column(Numeric(5, 2), nullable=False, default=0)
-    historial_crediticio_descripcion = Column(
-        String(50), nullable=True
-    )  # Excelente, Bueno, Regular, Malo
-
-    # ============================================
-    # CRITERIO 4: ESTABILIDAD LABORAL (15%)
-    # ============================================
-    estabilidad_laboral_puntos = Column(Numeric(5, 2), nullable=False, default=0)
-    anos_empleo = Column(Numeric(4, 2), nullable=True)  # Años en el trabajo actual
-
-    # ============================================
-    # CRITERIO 5: TIPO DE EMPLEO (10%)
-    # ============================================
+    # 2.A - Antigüedad en Trabajo (9 puntos)
+    antiguedad_trabajo_puntos = Column(Numeric(5, 2), nullable=False, default=0)
+    meses_trabajo = Column(Numeric(6, 2), nullable=True)
+    
+    # 2.B - Tipo y Calidad de Empleo (8 puntos)
     tipo_empleo_puntos = Column(Numeric(5, 2), nullable=False, default=0)
-    tipo_empleo_descripcion = Column(
-        String(50), nullable=True
-    )  # Formal, Independiente, Contratado
+    tipo_empleo_descripcion = Column(String(50), nullable=True)
+    
+    # 2.C - Sector Económico (6 puntos)
+    sector_economico_puntos = Column(Numeric(5, 2), nullable=False, default=0)
+    sector_economico_descripcion = Column(String(50), nullable=True)
 
     # ============================================
-    # CRITERIO 6: ENGANCHE Y GARANTÍAS (10%)
+    # CRITERIO 3: REFERENCIAS PERSONALES (5 puntos)
+    # ============================================
+    referencias_puntos = Column(Numeric(5, 2), nullable=False, default=0)
+    referencias_descripcion = Column(String(50), nullable=True)
+    num_referencias_verificadas = Column(Integer, nullable=True)
+
+    # ============================================
+    # CRITERIO 4: ARRAIGO GEOGRÁFICO (12 puntos)
+    # ============================================
+    # 4.A - Tiempo en Domicilio (5 puntos)
+    arraigo_vivienda_puntos = Column(Numeric(5, 2), nullable=False, default=0)
+    
+    # 4.B - Arraigo Familiar (4 puntos)
+    arraigo_familiar_puntos = Column(Numeric(5, 2), nullable=False, default=0)
+    
+    # 4.C - Arraigo Laboral (3 puntos)
+    arraigo_laboral_puntos = Column(Numeric(5, 2), nullable=False, default=0)
+
+    # ============================================
+    # CRITERIO 5: PERFIL SOCIODEMOGRÁFICO (17 puntos)
+    # ============================================
+    # 5.A - Situación de Vivienda (6 puntos)
+    vivienda_puntos = Column(Numeric(5, 2), nullable=False, default=0)
+    vivienda_descripcion = Column(String(50), nullable=True)
+    
+    # 5.B - Estado Civil y Pareja (6 puntos)
+    estado_civil_puntos = Column(Numeric(5, 2), nullable=False, default=0)
+    estado_civil_descripcion = Column(String(50), nullable=True)
+    
+    # 5.C - Número y Edad de Hijos (5 puntos)
+    hijos_puntos = Column(Numeric(5, 2), nullable=False, default=0)
+    hijos_descripcion = Column(String(50), nullable=True)
+
+    # ============================================
+    # CRITERIO 6: EDAD DEL CLIENTE (5 puntos)
+    # ============================================
+    edad_puntos = Column(Numeric(5, 2), nullable=False, default=0)
+    edad_cliente = Column(Integer, nullable=True)
+
+    # ============================================
+    # CRITERIO 7: ENGANCHE PAGADO (5 puntos)
     # ============================================
     enganche_garantias_puntos = Column(Numeric(5, 2), nullable=False, default=0)
-    enganche_garantias_calculo = Column(
-        Numeric(10, 4), nullable=False, default=0
-    )  # LTV
+    enganche_garantias_calculo = Column(Numeric(10, 4), nullable=False, default=0)
 
     # ============================================
     # PUNTUACIÓN TOTAL Y CLASIFICACIÓN
     # ============================================
-    puntuacion_total = Column(
-        Numeric(5, 2), nullable=False, default=0
-    )  # Suma de los 6 criterios (máx 100)
+    puntuacion_total = Column(Numeric(5, 2), nullable=False, default=0)
     clasificacion_riesgo = Column(String(20), nullable=False, default="PENDIENTE")
-    # BAJO, MODERADO, ALTO, CRÍTICO
+    # A, B, C, D, E
 
     decision_final = Column(String(20), nullable=False, default="PENDIENTE")
-    # APROBADO, CONDICIONAL, REQUIERE_MITIGACION, RECHAZADO
+    # APROBADO_AUTOMATICO, APROBADO_ESTANDAR, APROBADO_CONDICIONAL, 
+    # REQUIERE_MITIGACION, RECHAZADO
 
     # ============================================
     # CONDICIONES SEGÚN RIESGO
     # ============================================
-    tasa_interes_aplicada = Column(
-        Numeric(5, 2), nullable=True
-    )  # Tasa según nivel de riesgo
-    plazo_maximo = Column(Integer, nullable=True)  # Plazo máximo según riesgo
-    enganche_minimo = Column(
-        Numeric(5, 2), nullable=True
-    )  # Enganche mínimo según riesgo
-    requisitos_adicionales = Column(
-        String(200), nullable=True
-    )  # Requisitos adicionales
+    tasa_interes_aplicada = Column(Numeric(5, 2), nullable=True)
+    plazo_maximo = Column(Integer, nullable=True)
+    enganche_minimo = Column(Numeric(5, 2), nullable=True)
+    requisitos_adicionales = Column(String(500), nullable=True)
+    
+    # Datos de historial crediticio (mantener para compatibilidad)
+    historial_crediticio_puntos = Column(Numeric(5, 2), nullable=False, default=0)
+    historial_crediticio_descripcion = Column(String(50), nullable=True)
+    anos_empleo = Column(Numeric(4, 2), nullable=True)
 
     def __repr__(self):
         return (
