@@ -83,8 +83,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     historial_crediticio: 'Regular',
     anos_empleo: 0,
     tipo_empleo: 'Otro',
-    enganche_pagado: 0,
-    valor_garantia: 0,
+    enganche_pagado: prestamo.total_financiamiento || 0,  // Pre-llenar con el total del préstamo
+    valor_garantia: prestamo.total_financiamiento || 0,   // Pre-llenar con el total del préstamo
   })
 
   const [redFlags, setRedFlags] = useState({
