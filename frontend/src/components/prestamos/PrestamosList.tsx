@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar } from 'lucide-react'
+import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { usePrestamos, useDeletePrestamo } from '@/hooks/usePrestamos'
+import { usePermissions } from '@/hooks/usePermissions'
 import { CrearPrestamoForm } from './CrearPrestamoForm'
 import { PrestamosKPIs } from './PrestamosKPIs'
 import { formatDate } from '@/utils'
@@ -21,6 +22,7 @@ export function PrestamosList() {
 
   const { data, isLoading, error } = usePrestamos({ search, estado }, page)
   const deletePrestamo = useDeletePrestamo()
+  const { canEditPrestamo, canDeletePrestamo, canApprovePrestamo } = usePermissions()
 
   const getEstadoBadge = (estado: string) => {
     const badges = {
@@ -170,21 +172,40 @@ export function PrestamosList() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit(prestamo)}
-                              disabled={prestamo.estado === 'APROBADO' || prestamo.estado === 'RECHAZADO'}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(prestamo.id)}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-600" />
-                            </Button>
+                            {/* Botón Editar - Solo si tiene permisos */}
+                            {canEditPrestamo(prestamo.estado) ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEdit(prestamo)}
+                                title="Editar préstamo"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled
+                                title={prestamo.estado === 'APROBADO' || prestamo.estado === 'RECHAZADO' 
+                                  ? 'Solo administradores pueden editar préstamos aprobados/rechazados'
+                                  : 'No tiene permisos para editar'}
+                              >
+                                <Lock className="h-4 w-4 text-gray-400" />
+                              </Button>
+                            )}
+                            
+                            {/* Botón Eliminar - Solo Admin */}
+                            {canDeletePrestamo() ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(prestamo.id)}
+                                title="Eliminar préstamo"
+                              >
+                                <Trash2 className="h-4 w-4 text-red-600" />
+                              </Button>
+                            ) : null}
                           </div>
                         </TableCell>
                       </TableRow>

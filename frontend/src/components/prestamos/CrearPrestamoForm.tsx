@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { clienteService } from '@/services/clienteService'
 import { useCreatePrestamo, useUpdatePrestamo } from '@/hooks/usePrestamos'
 import { useSearchClientes } from '@/hooks/useClientes'
+import { usePermissions } from '@/hooks/usePermissions'
 import { Prestamo, PrestamoForm } from '@/types'
 
 interface CrearPrestamoFormProps {
@@ -31,6 +32,7 @@ interface CrearPrestamoFormProps {
 export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestamoFormProps) {
   const createPrestamo = useCreatePrestamo()
   const updatePrestamo = useUpdatePrestamo()
+  const { canEditPrestamo, canApprovePrestamo } = usePermissions()
   
   const [formData, setFormData] = useState<Partial<PrestamoForm>>({
     cedula: prestamo?.cedula || '',
@@ -105,7 +107,9 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     onClose()
   }
 
-  const isReadOnly = prestamo?.estado === 'APROBADO' || prestamo?.estado === 'RECHAZADO'
+  // Verificar permisos de edición
+  const isReadOnly = prestamo ? !canEditPrestamo(prestamo.estado) : false
+  const canApprove = prestamo ? canApprovePrestamo() : false
 
   return (
     <AnimatePresence>
@@ -359,15 +363,55 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
               </CardContent>
             </Card>
 
+            {/* Botones de Aprobación (Solo ADMIN) */}
+            {prestamo && canApprove && prestamo.estado === 'EN_REVISION' && (
+              <Card className="border-yellow-200 bg-yellow-50">
+                <CardContent className="pt-4">
+                  <div className="flex gap-3">
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        // TODO: Implementar aprobación
+                        console.log('Aprobar préstamo')
+                      }}
+                      className="flex-1 bg-green-600 hover:bg-green-700"
+                    >
+                      <AlertCircle className="h-4 w-4 mr-2" />
+                      Aprobar
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        // TODO: Implementar rechazo
+                        console.log('Rechazar préstamo')
+                      }}
+                      variant="destructive"
+                      className="flex-1"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Rechazar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Botones */}
             <div className="flex justify-end gap-3">
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isReadOnly}>
-                <Save className="h-4 w-4 mr-2" />
-                {prestamo ? 'Actualizar' : 'Crear'} Préstamo
-              </Button>
+              {!isReadOnly && (
+                <Button type="submit">
+                  <Save className="h-4 w-4 mr-2" />
+                  {prestamo ? 'Actualizar' : 'Crear'} Préstamo
+                </Button>
+              )}
+              {isReadOnly && (
+                <Button disabled>
+                  Modo Solo Lectura
+                </Button>
+              )}
             </div>
           </form>
         </motion.div>
