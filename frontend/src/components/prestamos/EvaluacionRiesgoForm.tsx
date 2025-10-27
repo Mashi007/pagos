@@ -8,7 +8,7 @@ import {
   Info,
   TrendingUp,
   TrendingDown,
-  Home,
+  MapPin,
   Users,
   Calendar,
   DollarSign
@@ -366,7 +366,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   <p className="text-xs text-blue-700">
                     <strong>Nota:</strong> La cuota del préstamo se toma automáticamente de la base de datos: ${prestamo.cuota_periodo || 0} USD
                   </p>
-                </div>
+              </div>
             </CardContent>
           </Card>
           )}
@@ -581,7 +581,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
             <Card className="border-green-200">
               <CardHeader className="bg-green-50">
                 <CardTitle className="flex items-center gap-2 text-green-700">
-                  <Home className="h-5 w-5" />
+                  <MapPin className="h-5 w-5" />
                   CRITERIO 4: ARRAIGO GEOGRÁFICO (12 puntos)
                 </CardTitle>
               </CardHeader>
