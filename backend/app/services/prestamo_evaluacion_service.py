@@ -4,9 +4,9 @@ Implementa los 7 criterios de evaluación según nueva especificación
 """
 
 import logging
+from datetime import date
 from decimal import Decimal
 from typing import Dict, Tuple
-from datetime import date
 
 from sqlalchemy.orm import Session
 
@@ -18,15 +18,15 @@ logger = logging.getLogger(__name__)
 # TABLA 1: CRITERIOS Y PESOS DE EVALUACIÓN (100 Puntos Totales)
 # ACTUALIZADO: Criterio 1 reducido de 33 a 29 pts, Criterio 3 aumentado de 5 a 9 pts
 # ============================================
-       CRITERIOS_PESOS = {
-           "capacidad_pago": 29,  # Criterio 1 (14 + 15)
-           "estabilidad_laboral": 23,  # Criterio 2 (9 + 8 + 6)
-           "referencias": 9,  # Criterio 3 (3 referencias × 3 pts c/u)
-           "arraigo_geografico": 12,  # Criterio 4 (5 + 4 + 3)
-           "perfil_sociodemografico": 17,  # Criterio 5 (6 + 6 + 5)
-           "edad": 5,  # Criterio 6
-           "enganche": 5,  # Criterio 7
-       }
+CRITERIOS_PESOS = {
+    "capacidad_pago": 29,  # Criterio 1 (14 + 15)
+    "estabilidad_laboral": 23,  # Criterio 2 (9 + 8 + 6)
+    "referencias": 9,  # Criterio 3 (3 referencias × 3 pts c/u)
+    "arraigo_geografico": 12,  # Criterio 4 (5 + 4 + 3)
+    "perfil_sociodemografico": 17,  # Criterio 5 (6 + 6 + 5)
+    "edad": 5,  # Criterio 6
+    "enganche": 5,  # Criterio 7
+}
 
 # ============================================
 # CRITERIO 1: CAPACIDAD DE PAGO (29 puntos)
@@ -437,8 +437,6 @@ def evaluar_edad_cliente(edad: int) -> Tuple[Decimal, str, bool]:
     Returns:
         Tuple: (puntos, categoria, rechazo)
     """
-    rechazo = False
-
     if edad >= 25 and edad <= 50:
         return Decimal(5), "Óptimo", False
     elif (edad >= 22 and edad <= 24) or (edad >= 51 and edad <= 55):
