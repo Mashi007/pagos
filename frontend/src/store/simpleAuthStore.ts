@@ -42,7 +42,24 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
         ? safeGetItem('user', null) 
         : safeGetSessionItem('user', null)
       
-      if (user) {
+      // Verificar que también existe un token de acceso
+      const token = rememberMe 
+        ? safeGetItem('access_token', null)
+        : safeGetSessionItem('access_token', null)
+      
+      // Si hay usuario pero no hay token, limpiar todo
+      if (user && !token) {
+        set({
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+          error: null,
+        })
+        clearAuthStorage()
+        return
+      }
+      
+      if (user && token) {
         // CRÍTICO: Siempre verificar con el backend al inicializar
         try {
           const freshUser = await authService.getCurrentUser()
@@ -58,14 +75,23 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
             throw new Error('Usuario no encontrado en backend')
           }
         } catch (error) {
-          // Si hay error, usar datos cacheados pero marcar como posiblemente obsoletos
+          // Si hay error, limpiar todo el almacenamiento y marcar como no autenticado
+          clearAuthStorage()
           set({
-            user,
-            isAuthenticated: true,
+            user: null,
+            isAuthenticated: false,
             isLoading: false,
-            error: 'Datos posiblemente obsoletos - verificar conexión',
+            error: null,
           })
         }
+      } else if (!user) {
+        // No hay usuario almacenado
+        set({
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+          error: null,
+        })
       }
     } catch (error) {
       set({

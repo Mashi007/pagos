@@ -7,7 +7,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, Union
 
-from jose import JWTError, jwt
+import jwt
 from passlib.context import CryptContext
 
 # Configuración de seguridad - leemos de variables de entorno
@@ -105,15 +105,20 @@ def decode_token(token: str) -> Dict[str, Any]:
         Payload del token decodificado
 
     Raises:
-        JWTError: Si el token es inválido o expiró
+        Exception: Si el token es inválido o expiró
     """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
-    except JWTError as e:
-        # Re-lanza JWTError para que el manejador de excepciones de FastAPI
-        # lo capture
-        raise JWTError(f"Error decodificando token: {str(e)}")
+    except jwt.ExpiredSignatureError as e:
+        # Token expirado
+        raise Exception(f"Token expirado: {str(e)}")
+    except jwt.InvalidTokenError as e:
+        # Token inválido (firma incorrecta, formato incorrecto, etc.)
+        raise Exception(f"Token inválido: {str(e)}")
+    except Exception as e:
+        # Cualquier otro error
+        raise Exception(f"Error decodificando token: {str(e)}")
 
 
 def verify_token_type(token: str, expected_type: str) -> bool:
@@ -130,7 +135,7 @@ def verify_token_type(token: str, expected_type: str) -> bool:
     try:
         payload = decode_token(token)
         return payload.get("type") == expected_type
-    except JWTError:
+    except Exception:
         return False
 
 
@@ -147,7 +152,7 @@ def get_token_subject(token: str) -> Optional[str]:
     try:
         payload = decode_token(token)
         return payload.get("sub")
-    except JWTError:
+    except Exception:
         return None
 
 
@@ -167,7 +172,7 @@ def is_token_expired(token: str) -> bool:
         if exp:
             return datetime.utcnow() > datetime.fromtimestamp(exp)
         return True
-    except JWTError:
+    except Exception:
         return True
 
 

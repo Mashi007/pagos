@@ -87,6 +87,16 @@ class ApiClient {
           originalRequest._retry = true
 
           try {
+            // No intentar refresh en endpoints de autenticación
+            const authEndpoints = ['/api/v1/auth/login', '/api/v1/auth/refresh']
+            const isAuthEndpoint = authEndpoints.some(endpoint => originalRequest.url?.includes(endpoint))
+            
+            if (isAuthEndpoint) {
+              // En endpoints de auth, simplemente propagar el error sin intentar refresh
+              this.handleError(error)
+              return Promise.reject(error)
+            }
+
             const rememberMe = safeGetItem('remember_me', false)
             const refreshToken = rememberMe 
               ? safeGetItem('refresh_token', '') 
@@ -117,7 +127,17 @@ class ApiClient {
           } catch (refreshError) {
             // Si no se puede renovar el token, limpiar datos y redirigir al login
             clearAuthStorage()
-            window.location.href = '/login'
+            
+            // Evitar mostrar toasts durante el redirect
+            const isAlreadyRedirecting = window.location.pathname === '/login'
+            
+            if (!isAlreadyRedirecting) {
+              // Pequeño delay para asegurar que el storage se limpie
+              setTimeout(() => {
+                window.location.href = '/login'
+              }, 100)
+            }
+            
             return Promise.reject(refreshError)
           }
         }
@@ -134,12 +154,18 @@ class ApiClient {
       // Error del servidor
       const { status, data } = error.response
       
+      // Evitar mostrar toast de 401 cuando está siendo manejado por el interceptor
+      const isBeingHandledByInterceptor = error.config?._retry !== undefined
+      
       switch (status) {
         case 400:
           toast.error(data.message || 'Datos inválidos')
           break
         case 401:
-          toast.error('No autorizado')
+          // No mostrar toast si está siendo manejado por el interceptor de refresh
+          if (!isBeingHandledByInterceptor) {
+            toast.error('Sesión expirada. Redirigiendo al inicio de sesión...')
+          }
           break
         case 403:
           toast.error('Sin permisos para esta acción')

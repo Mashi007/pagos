@@ -8,7 +8,6 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jwt import PyJWTError as JWTError
 from sqlalchemy.orm import Session
 
 from app.core.permissions_simple import Permission, get_user_permissions
@@ -64,12 +63,16 @@ def get_current_user(
 
         logger.info(f"Buscando usuario con ID: {user_id}")
 
-    except JWTError as e:
-        logger.error(f"Error de base de datos: {e}")
+    except HTTPException:
+        # Re-propagar HTTPException sin modificar
+        raise
+        
+    except Exception as e:
+        logger.error(f"Error al validar token: {e}")
         error_msg = str(e)
 
         # Si el token expiró, retornar 401 específico
-        if "expired" in error_msg.lower() or "expired" in str(type(e)).lower():
+        if "expired" in error_msg.lower() or "expirado" in error_msg.lower():
             logger.warning("Token expirado - usuario debe hacer login nuevamente")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -77,7 +80,8 @@ def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        # Para otros errores de JWT, también retornar 401
+        # Para otros errores de validación de token, retornar 401
+        logger.warning(f"Error de validación de token: {error_msg}")
         raise credentials_exception
 
     # Buscar usuario en BD
