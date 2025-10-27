@@ -1,64 +1,202 @@
 import logging
-from typing import List
+from decimal import Decimal
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
+from app.models.prestamo_auditoria import PrestamoAuditoria
 from app.models.user import User
-from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate
-
-logger = logging.getLogger(__name__)
-router = APIRouter()
-
-
-@router.post(
-    "/",
-    response_model=PrestamoResponse,
-    status_code=status.HTTP_201_CREATED,
+from app.schemas.prestamo import (
+    PrestamoCreate,
+    PrestamoResponse,
+    PrestamoUpdate,
 )
+
+router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+# ============================================
+# FUNCIONES AUXILIARES
+# ============================================
+def calcular_cuotas(total: Decimal, modalidad: str) -> tuple[int, Decimal]:
+    """
+    Calcula automáticamente el número de cuotas según la modalidad de pago.
+    
+    TABLA 12: AJUSTE DE FRECUENCIA DE PAGO
+    - MENSUAL: 36 cuotas
+    - QUINCENAL: 72 cuotas (36 * 2)
+    - SEMANAL: 144 cuotas (36 * 4)
+    """
+    if modalidad == "MENSUAL":
+        cuotas = 36
+    elif modalidad == "QUINCENAL":
+        cuotas = 72
+    elif modalidad == "SEMANAL":
+        cuotas = 144
+    else:
+        cuotas = 36  # Default
+    
+    cuota_periodo = total / Decimal(cuotas)
+    return cuotas, cuota_periodo
+
+
+def obtener_datos_cliente(cedula: str, db: Session) -> Optional[Cliente]:
+    """Obtiene los datos del cliente por cédula"""
+    return db.query(Cliente).filter(Cliente.cedula == cedula).first()
+
+
+def crear_registro_auditoria(
+    prestamo_id: int,
+    cedula: str,
+    usuario: str,
+    campo_modificado: str,
+    valor_anterior: str,
+    valor_nuevo: str,
+    accion: str,
+    estado_anterior: Optional[str] = None,
+    estado_nuevo: Optional[str] = None,
+    observaciones: Optional[str] = None,
+    db: Session = None,
+):
+    """Crea un registro de auditoría para trazabilidad"""
+    auditoria = PrestamoAuditoria(
+        prestamo_id=prestamo_id,
+        cedula=cedula,
+        usuario=usuario,
+        campo_modificado=campo_modificado,
+        valor_anterior=valor_anterior,
+        valor_nuevo=valor_nuevo,
+        accion=accion,
+        estado_anterior=estado_anterior,
+        estado_nuevo=estado_nuevo,
+        observaciones=observaciones,
+    )
+    db.add(auditoria)
+    db.commit()
+    db.refresh(auditoria)
+    return auditoria
+
+
+# ============================================
+# ENDPOINTS
+# ============================================
+@router.get("", response_model=dict)
+def listar_prestamos(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=1000),
+    search: Optional[str] = Query(None),
+    estado: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Listar préstamos con paginación y filtros"""
+    try:
+        logger.info(f"Listar préstamos - Usuario: {current_user.email}")
+        
+        query = db.query(Prestamo)
+        
+        if search:
+            search_pattern = f"%{search}%"
+            query = query.filter(
+                or_(
+                    Prestamo.nombres.ilike(search_pattern),
+                    Prestamo.cedula.ilike(search_pattern),
+                )
+            )
+        
+        if estado:
+            query = query.filter(Prestamo.estado == estado)
+        
+        # Paginación
+        total = query.count()
+        skip = (page - 1) * per_page
+        prestamos = query.order_by(Prestamo.fecha_registro.desc()).offset(skip).limit(per_page).all()
+        
+        return {
+            "data": prestamos,
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": (total + per_page - 1) // per_page if total > 0 else 0,
+        }
+    except Exception as e:
+        logger.error(f"Error en listar_prestamos: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.post("", response_model=PrestamoResponse)
 def crear_prestamo(
     prestamo_data: PrestamoCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Crear nuevo préstamo
+    """Crear un nuevo préstamo"""
     try:
-        nuevo_prestamo = Prestamo(**prestamo_data.model_dump())
-        nuevo_prestamo.creado_por = current_user.id
-
-        db.add(nuevo_prestamo)
+        logger.info(f"Crear préstamo - Usuario: {current_user.email}")
+        
+        # 1. Verificar que el cliente existe
+        cliente = obtener_datos_cliente(prestamo_data.cedula, db)
+        if not cliente:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Cliente con cédula {prestamo_data.cedula} no encontrado"
+            )
+        
+        # 2. Calcular número de cuotas automáticamente
+        numero_cuotas, cuota_periodo = calcular_cuotas(
+            prestamo_data.total_financiamiento,
+            prestamo_data.modalidad_pago
+        )
+        
+        # 3. Crear el préstamo
+        prestamo = Prestamo(
+            cliente_id=cliente.id,
+            cedula=prestamo_data.cedula,
+            nombres=cliente.nombres,
+            total_financiamiento=prestamo_data.total_financiamiento,
+            fecha_requerimiento=prestamo_data.fecha_requerimiento,
+            modalidad_pago=prestamo_data.modalidad_pago,
+            numero_cuotas=numero_cuotas,
+            cuota_periodo=cuota_periodo,
+            tasa_interes=Decimal(0.00),  # 0% por defecto
+            producto=prestamo_data.producto,
+            producto_financiero=prestamo_data.producto_financiero,
+            estado="DRAFT",
+            usuario_proponente=current_user.email,
+        )
+        
+        db.add(prestamo)
         db.commit()
-        db.refresh(nuevo_prestamo)
-
-        return nuevo_prestamo
-
+        db.refresh(prestamo)
+        
+        # 4. Registrar en auditoría
+        crear_registro_auditoria(
+            prestamo_id=prestamo.id,
+            cedula=prestamo.cedula,
+            usuario=current_user.email,
+            campo_modificado="PRESTAMO_CREADO",
+            valor_anterior="",
+            valor_nuevo=f"Préstamo creado para {prestamo.nombres}",
+            accion="CREAR",
+            estado_anterior=None,
+            estado_nuevo="DRAFT",
+            db=db,
+        )
+        
+        return prestamo
+    
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Error en crear_prestamo: {str(e)}")
         db.rollback()
-        logger.error(f"Error creando préstamo: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
-
-
-@router.get("/", response_model=List[PrestamoResponse])
-def listar_prestamos(
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    # Listar préstamos con paginación
-    try:
-        prestamos = db.query(Prestamo).offset(skip).limit(limit).all()
-        return prestamos
-
-    except Exception as e:
-        logger.error(f"Error listando préstamos: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
 @router.get("/{prestamo_id}", response_model=PrestamoResponse)
@@ -67,22 +205,13 @@ def obtener_prestamo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Obtener préstamo específico
-    try:
-        prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
-
-        if not prestamo:
-            raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-
-        return prestamo
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error obteniendo préstamo: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+    """Obtener un préstamo por ID"""
+    prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+    
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    
+    return prestamo
 
 
 @router.put("/{prestamo_id}", response_model=PrestamoResponse)
@@ -92,30 +221,97 @@ def actualizar_prestamo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Actualizar préstamo
+    """Actualizar un préstamo"""
     try:
         prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
-
+        
         if not prestamo:
             raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-
+        
+        # Verificar estado: si está APROBADO/RECHAZADO, solo Admin puede editar
+        if prestamo.estado in ["APROBADO", "RECHAZADO"]:
+            if not current_user.is_superuser:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Solo administradores pueden editar préstamos aprobados/rechazados"
+                )
+        
+        # Guardar valores antiguos para auditoría
+        valores_viejos = {
+            "total_financiamiento": str(prestamo.total_financiamiento),
+            "modalidad_pago": prestamo.modalidad_pago,
+            "estado": prestamo.estado,
+        }
+        
         # Actualizar campos
-        for field, value in prestamo_data.model_dump(exclude_unset=True).items():
-            setattr(prestamo, field, value)
-
+        if prestamo_data.total_financiamiento is not None:
+            prestamo.total_financiamiento = prestamo_data.total_financiamiento
+            # Recalcular cuotas
+            prestamo.numero_cuotas, prestamo.cuota_periodo = calcular_cuotas(
+                prestamo.total_financiamiento,
+                prestamo.modalidad_pago
+            )
+        
+        if prestamo_data.modalidad_pago is not None:
+            prestamo.modalidad_pago = prestamo_data.modalidad_pago
+            # Recalcular cuotas
+            prestamo.numero_cuotas, prestamo.cuota_periodo = calcular_cuotas(
+                prestamo.total_financiamiento,
+                prestamo.modalidad_pago
+            )
+        
+        if prestamo_data.estado is not None:
+            # Solo cambiar estado si es Admin o si va de DRAFT a EN_REVISION
+            if current_user.is_superuser or (prestamo.estado == "DRAFT" and prestamo_data.estado == "EN_REVISION"):
+                estado_anterior = prestamo.estado
+                prestamo.estado = prestamo_data.estado
+                
+                # Si se aprueba, registrar aprobador
+                if prestamo_data.estado == "APROBADO":
+                    prestamo.usuario_aprobador = current_user.email
+                    from datetime import datetime
+                    prestamo.fecha_aprobacion = datetime.now()
+                
+                # Registrar cambio de estado en auditoría
+                crear_registro_auditoria(
+                    prestamo_id=prestamo.id,
+                    cedula=prestamo.cedula,
+                    usuario=current_user.email,
+                    campo_modificado="estado",
+                    valor_anterior=estado_anterior,
+                    valor_nuevo=prestamo_data.estado,
+                    accion="CAMBIO_ESTADO",
+                    estado_anterior=estado_anterior,
+                    estado_nuevo=prestamo_data.estado,
+                    db=db,
+                )
+        
+        if prestamo_data.observaciones is not None:
+            prestamo.observaciones = prestamo_data.observaciones
+        
         db.commit()
         db.refresh(prestamo)
-
+        
+        # Registrar en auditoría (simplificado)
+        crear_registro_auditoria(
+            prestamo_id=prestamo.id,
+            cedula=prestamo.cedula,
+            usuario=current_user.email,
+            campo_modificado="ACTUALIZACION_GENERAL",
+            valor_anterior=str(valores_viejos),
+            valor_nuevo="Préstamo actualizado",
+            accion="EDITAR",
+            db=db,
+        )
+        
         return prestamo
-
+    
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error en actualizar_prestamo: {str(e)}")
         db.rollback()
-        logger.error(f"Error actualizando préstamo: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
 @router.delete("/{prestamo_id}")
@@ -124,23 +320,61 @@ def eliminar_prestamo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Eliminar préstamo
-    try:
-        prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+    """Eliminar un préstamo (solo Admin)"""
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Solo administradores")
+    
+    prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+    
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    
+    # Eliminar registros de auditoría asociados
+    db.query(PrestamoAuditoria).filter(PrestamoAuditoria.prestamo_id == prestamo_id).delete()
+    
+    db.delete(prestamo)
+    db.commit()
+    
+    return {"message": "Préstamo eliminado exitosamente"}
 
-        if not prestamo:
-            raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
-        db.delete(prestamo)
-        db.commit()
+@router.get("/cedula/{cedula}", response_model=list[PrestamoResponse])
+def buscar_prestamos_por_cedula(
+    cedula: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Buscar préstamos por cédula del cliente"""
+    prestamos = db.query(Prestamo).filter(Prestamo.cedula == cedula).all()
+    return prestamos
 
-        return {"message": "Préstamo eliminado exitosamente"}
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error eliminando préstamo: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+@router.get("/auditoria/{prestamo_id}", response_model=list[dict])
+def obtener_auditoria_prestamo(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener historial de auditoría de un préstamo"""
+    auditorias = (
+        db.query(PrestamoAuditoria)
+        .filter(PrestamoAuditoria.prestamo_id == prestamo_id)
+        .order_by(PrestamoAuditoria.fecha_cambio.desc())
+        .all()
+    )
+    
+    return [
+        {
+            "id": a.id,
+            "usuario": a.usuario,
+            "campo_modificado": a.campo_modificado,
+            "valor_anterior": a.valor_anterior,
+            "valor_nuevo": a.valor_nuevo,
+            "accion": a.accion,
+            "estado_anterior": a.estado_anterior,
+            "estado_nuevo": a.estado_nuevo,
+            "observaciones": a.observaciones,
+            "fecha_cambio": a.fecha_cambio.isoformat(),
+        }
+        for a in auditorias
+    ]

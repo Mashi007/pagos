@@ -1,134 +1,77 @@
-import { apiClient } from './api'
+import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
+import { Prestamo, PrestamoForm } from '@/types'
+import { logger } from '@/utils/logger'
 
-export interface Prestamo {
-  id: number
-  cliente_id: number
-  codigo_prestamo: string
-  monto_total: number
-  monto_financiado: number
-  monto_inicial: number
-  tasa_interes: number
-  numero_cuotas: number
-  monto_cuota: number
-  cuotas_pagadas: number
-  cuotas_pendientes: number
-  fecha_aprobacion: string
-  fecha_desembolso?: string
-  fecha_primer_vencimiento: string
-  fecha_ultimo_vencimiento?: string
-  saldo_pendiente: number
-  saldo_capital: number
-  saldo_interes: number
-  total_pagado: number
-  estado: string
-  categoria: string
-  modalidad: string
-  destino_credito?: string
-  observaciones?: string
-  creado_en: string
-  actualizado_en: string
-}
-
-export interface PrestamoCreate {
-  cliente_id: number
-  monto_total: number
-  monto_financiado: number
-  monto_inicial?: number
-  tasa_interes?: number
-  numero_cuotas: number
-  monto_cuota: number
-  fecha_aprobacion: string
-  fecha_desembolso?: string
-  fecha_primer_vencimiento: string
-  fecha_ultimo_vencimiento?: string
-  modalidad?: string
-  destino_credito?: string
-  observaciones?: string
-}
-
-export interface PrestamoUpdate {
-  monto_total?: number
-  monto_financiado?: number
-  monto_inicial?: number
-  tasa_interes?: number
-  numero_cuotas?: number
-  monto_cuota?: number
-  fecha_aprobacion?: string
-  fecha_desembolso?: string
-  fecha_primer_vencimiento?: string
-  fecha_ultimo_vencimiento?: string
-  estado?: string
-  modalidad?: string
-  destino_credito?: string
-  observaciones?: string
-}
-
-export interface PrestamoListResponse {
-  items: Prestamo[]
-  total: number
-  page: number
-  size: number
-  pages: number
-}
-
-export interface PrestamosStats {
-  total_prestamos: number
-  prestamos_activos: number
-  prestamos_pendientes: number
-  prestamos_completados: number
-  prestamos_en_mora: number
-  monto_total_prestado: number
-  monto_total_pendiente: number
-}
+// Constantes de configuración
+const DEFAULT_PER_PAGE = 20
 
 class PrestamoService {
   private baseUrl = '/api/v1/prestamos'
 
-  // ============================================
-  // CRUD PRÉSTAMOS
-  // ============================================
+  // Obtener lista de préstamos con filtros y paginación
+  async getPrestamos(
+    filters?: { search?: string; estado?: string },
+    page: number = 1,
+    perPage: number = DEFAULT_PER_PAGE
+  ): Promise<PaginatedResponse<Prestamo>> {
+    const params = { ...filters, page, per_page: perPage }
+    const url = buildUrl(this.baseUrl, params)
+    
+    const response = await apiClient.get<any>(url)
+    
+    // Adaptar respuesta del backend al formato esperado
+    return {
+      data: response.data || [],
+      total: response.total || 0,
+      page: response.page || page,
+      per_page: response.per_page || perPage,
+      total_pages: response.total_pages || Math.ceil((response.total || 0) / perPage)
+    }
+  }
 
-  async crearPrestamo(prestamo: PrestamoCreate): Promise<Prestamo> {
-    const response = await apiClient.post<Prestamo>(this.baseUrl, prestamo)
+  // Obtener préstamo por ID
+  async getPrestamo(id: number): Promise<Prestamo> {
+    const response = await apiClient.get<ApiResponse<Prestamo>>(`${this.baseUrl}/${id}`)
+    return response.data
+  }
+
+  // Crear nuevo préstamo
+  async createPrestamo(data: PrestamoForm): Promise<Prestamo> {
+    const response = await apiClient.post<ApiResponse<Prestamo>>(this.baseUrl, data)
+    return response.data
+  }
+
+  // Actualizar préstamo
+  async updatePrestamo(id: number, data: Partial<PrestamoForm>): Promise<Prestamo> {
+    const response = await apiClient.put<ApiResponse<Prestamo>>(`${this.baseUrl}/${id}`, data)
+    return response.data
+  }
+
+  // Buscar préstamos por cédula
+  async getPrestamosByCedula(cedula: string): Promise<Prestamo[]> {
+    const response = await apiClient.get<ApiResponse<Prestamo[]>>(`${this.baseUrl}/cedula/${cedula}`)
+    return response.data
+  }
+
+  // Obtener historial de auditoría de un préstamo
+  async getAuditoria(prestamoId: number): Promise<any[]> {
+    const response = await apiClient.get<any[]>(`${this.baseUrl}/auditoria/${prestamoId}`)
     return response
   }
 
-  async listarPrestamos(params?: {
-    skip?: number
-    limit?: number
-    cliente_id?: number
-    estado?: string
-  }): Promise<PrestamoListResponse> {
-    return await apiClient.get<PrestamoListResponse>(this.baseUrl, { params })
+  // Eliminar préstamo (solo Admin)
+  async deletePrestamo(id: number): Promise<void> {
+    await apiClient.delete(`${this.baseUrl}/${id}`)
   }
 
-  async obtenerPrestamo(id: number): Promise<Prestamo> {
-    return await apiClient.get<Prestamo>(`${this.baseUrl}/${id}`)
-  }
-
-  async actualizarPrestamo(id: number, prestamo: PrestamoUpdate): Promise<Prestamo> {
-    return await apiClient.put<Prestamo>(`${this.baseUrl}/${id}`, prestamo)
-  }
-
-  async eliminarPrestamo(id: number): Promise<{ message: string }> {
-    return await apiClient.delete<{ message: string }>(`${this.baseUrl}/${id}`)
-  }
-
-  // ============================================
-  // ESTADÍSTICAS
-  // ============================================
-
-  async obtenerEstadisticas(): Promise<PrestamosStats> {
-    return await apiClient.get<PrestamosStats>(`${this.baseUrl}/stats`)
-  }
-
-  // ============================================
-  // BÚSQUEDA DE CLIENTE POR CÉDULA
-  // ============================================
-
-  async buscarClientePorCedula(cedula: string): Promise<any> {
-    return await apiClient.get(`/api/v1/clientes/buscar-cedula/${cedula}`)
+  // Búsqueda general
+  async searchPrestamos(query: string): Promise<Prestamo[]> {
+    const response = await apiClient.get<Prestamo[]>(
+      buildUrl(this.baseUrl, { search: query })
+    )
+    return response
   }
 }
 
 export const prestamoService = new PrestamoService()
+logger.info('Servicio de préstamos inicializado')

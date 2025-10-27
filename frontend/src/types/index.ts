@@ -109,6 +109,42 @@ export interface ClienteForm {
   notas?: string
 }
 
+// Tipos de Préstamo
+export interface Prestamo {
+  id: number
+  cliente_id: number
+  cedula: string
+  nombres: string
+  total_financiamiento: number
+  fecha_requerimiento: string
+  modalidad_pago: 'MENSUAL' | 'QUINCENAL' | 'SEMANAL'
+  numero_cuotas: number
+  cuota_periodo: number
+  tasa_interes: number
+  fecha_base_calculo?: string
+  producto: string
+  producto_financiero: string
+  estado: 'DRAFT' | 'EN_REVISION' | 'APROBADO' | 'RECHAZADO'
+  usuario_proponente: string
+  usuario_aprobador?: string
+  observaciones?: string
+  fecha_registro: string
+  fecha_aprobacion?: string
+  fecha_actualizacion: string
+}
+
+export interface PrestamoForm {
+  cedula: string
+  total_financiamiento: number
+  modalidad_pago: 'MENSUAL' | 'QUINCENAL' | 'SEMANAL'
+  fecha_requerimiento: string
+  producto: string
+  producto_financiero: string
+  tasa_interes?: number
+  fecha_base_calculo?: string
+  observaciones?: string
+}
+
 // Tipos para respuestas de API
 export interface ApiResponse<T> {
   data: T

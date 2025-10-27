@@ -12,6 +12,8 @@ from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.notificacion import Notificacion
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
+from app.models.prestamo_auditoria import PrestamoAuditoria
+from app.models.prestamo_evaluacion import PrestamoEvaluacion
 from app.models.user import User
 
 __all__ = [
@@ -19,6 +21,8 @@ __all__ = [
     "User",
     "Cliente",
     "Prestamo",
+    "PrestamoAuditoria",
+    "PrestamoEvaluacion",
     "Pago",
     "Cuota",
     "Aprobacion",

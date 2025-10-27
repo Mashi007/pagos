@@ -36,7 +36,14 @@ from app.schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
 # ============================================
 # SCHEMAS DE PRÉSTAMO
 # ============================================
-# from app.schemas.prestamo import
+from app.schemas.prestamo import (
+    PrestamoCreate,
+    PrestamoResponse,
+    PrestamoUpdate,
+    PrestamoEvaluacionCreate,
+    PrestamoEvaluacionResponse,
+    PrestamoAuditoriaResponse,
+)
 
 # ============================================
 # EXPORTS PÚBLICOS
@@ -50,6 +57,9 @@ __all__ = [
     "PrestamoCreate",
     "PrestamoUpdate",
     "PrestamoResponse",
+    "PrestamoEvaluacionCreate",
+    "PrestamoEvaluacionResponse",
+    "PrestamoAuditoriaResponse",
     # ========== PAGO ==========
     "PagoCreate",
     "PagoUpdate",

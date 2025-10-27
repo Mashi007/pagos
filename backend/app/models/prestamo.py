@@ -1,192 +1,64 @@
-"""
-Modelo de Préstamo
-Define la estructura básica de un préstamo.
-Sincronizado con el endpoint de aprobaciones.
-"""
-
-from enum import Enum
-
-from sqlalchemy import (
-    Column,
-    Date,
-    DateTime,
-    ForeignKey,
-    Integer,
-    Numeric,
-    String,
-    Text,
-)
+from sqlalchemy import TIMESTAMP, Column, Integer, String, Text, Boolean, Date, Numeric
 from sqlalchemy.sql import func
 
 from app.db.session import Base
 
 
-class EstadoPrestamo(str, Enum):
-    """Estados posibles de un préstamo"""
-
-    PENDIENTE = "PENDIENTE"
-    APROBADO = "APROBADO"
-    RECHAZADO = "RECHAZADO"
-    DESEMBOLSADO = "DESEMBOLSADO"
-    EN_PAGO = "EN_PAGO"
-    PAGADO = "PAGADO"
-    VENCIDO = "VENCIDO"
-    CANCELADO = "CANCELADO"
-
-
-class ModalidadPago(str, Enum):
-    """Modalidades de pago disponibles"""
-
-    TRADICIONAL = "TRADICIONAL"
-    BALLOON = "BALLOON"
-    INTERES_FIJO = "INTERES_FIJO"
-
-
 class Prestamo(Base):
-    """
-    Modelo para préstamos
-    Representa los préstamos otorgados a los clientes
-    """
-
     __tablename__ = "prestamos"
-
-    # Constantes
-    CODIGO_LENGTH = 20
-    NUMERIC_PRECISION = 12
-    NUMERIC_SCALE = 2
-    TASA_PRECISION = 5
-    TASA_SCALE = 2
-    ESTADO_LENGTH = 20
 
     id = Column(Integer, primary_key=True, index=True)
 
-    # Cliente
-    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False)
-    codigo_prestamo = Column(String(CODIGO_LENGTH), unique=True, index=True)
+    # ============================================
+    # DATOS DEL CLIENTE (vinculado por cédula)
+    # ============================================
+    cliente_id = Column(Integer, nullable=False, index=True)  # FK a clientes.id
+    cedula = Column(String(20), nullable=False, index=True)  # Cédula del cliente
+    nombres = Column(String(100), nullable=False)  # Nombre del cliente
 
-    # Montos
-    monto_solicitado = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
-    monto_aprobado = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
-    monto_inicial = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), default=0.00)
-    tasa_interes_anual = Column(Numeric(TASA_PRECISION, TASA_SCALE), default=0.00)
-
-    # Cuotas
-    numero_cuotas = Column(Integer, nullable=False)
-    monto_cuota = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
-    cuotas_pagadas = Column(Integer, default=0)
-    cuotas_pendientes = Column(Integer)
-
-    # Fechas
-    fecha_solicitud = Column(DateTime, default=func.now(), nullable=False)
-    fecha_aprobacion = Column(DateTime, nullable=True)
-    fecha_desembolso = Column(Date, nullable=True)
-    fecha_primer_vencimiento = Column(Date, nullable=False)
-    fecha_ultimo_vencimiento = Column(Date, nullable=True)
-
-    # Estado financiero
-    saldo_pendiente = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
-    saldo_capital = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
-    saldo_interes = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), default=0.00)
-    total_pagado = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), default=0.00)
-
-    # Estado
-    estado = Column(String(ESTADO_LENGTH), default=EstadoPrestamo.PENDIENTE.value)
-    categoria = Column(String(ESTADO_LENGTH), default="NORMAL")
-    modalidad = Column(String(ESTADO_LENGTH), default=ModalidadPago.TRADICIONAL.value)
-
-    # Información adicional
-    destino_credito = Column(Text, nullable=True)
-    observaciones = Column(Text, nullable=True)
-
+    # ============================================
+    # DATOS DEL PRÉSTAMO
+    # ============================================
+    total_financiamiento = Column(Numeric(15, 2), nullable=False)  # Monto total
+    fecha_requerimiento = Column(Date, nullable=False)  # Fecha que necesita el préstamo
+    modalidad_pago = Column(String(20), nullable=False)  # MENSUAL, QUINCENAL, SEMANAL
+    numero_cuotas = Column(Integer, nullable=False)  # Calculado automáticamente
+    cuota_periodo = Column(Numeric(15, 2), nullable=False)  # Cuota por período según modalidad
+    
+    # Tasa de interés (0% por defecto hasta que Admin la asigne)
+    tasa_interes = Column(Numeric(5, 2), nullable=False, default=0.00)
+    fecha_base_calculo = Column(Date, nullable=True)  # Fecha desde la cual se genera tabla de amortizaciones
+    
+    # Producto financiero
+    producto = Column(String(100), nullable=False)  # Modelo de vehículo
+    producto_financiero = Column(String(100), nullable=False)  # Analista asignado
+    
+    # ============================================
+    # ESTADO Y APROBACIÓN
+    # ============================================
+    estado = Column(String(20), nullable=False, default="DRAFT", index=True)  
+    # DRAFT → EN_REVISION → APROBADO/RECHAZADO
+    
+    # Usuarios del proceso
+    usuario_proponente = Column(String(100), nullable=False)  # Email del analista
+    usuario_aprobador = Column(String(100), nullable=True)  # Email del admin (se llena al aprobar)
+    observaciones = Column(Text, nullable=True)  # Observaciones de aprobación/rechazo
+    
+    # Fechas de aprobación
+    fecha_registro = Column(TIMESTAMP, nullable=False, default=func.now())
+    fecha_aprobacion = Column(TIMESTAMP, nullable=True)
+    
+    # ============================================
+    # INFORMACIÓN COMPLEMENTARIA
+    # ============================================
+    informacion_desplegable = Column(Boolean, nullable=False, default=False)  # Si ha desplegado info adicional
+    
     # Auditoría
-    creado_en = Column(DateTime, server_default=func.now())
-    actualizado_en = Column(DateTime, server_default=func.now(), onupdate=func.now())
-
+    fecha_actualizacion = Column(TIMESTAMP, nullable=False, default=func.now(), onupdate=func.now())
+    
     def __repr__(self):
-        return f"<Prestamo(id={self.id}, cliente_id={self.cliente_id}, estado={self.estado})>"
-
-    @property
-    def esta_aprobado(self) -> bool:
-        """Verifica si el préstamo está aprobado"""
-        return str(self.estado) == EstadoPrestamo.APROBADO.value
-
-    @property
-    def esta_pagado(self) -> bool:
-        """Verifica si el préstamo está completamente pagado"""
-        return str(self.estado) == EstadoPrestamo.PAGADO.value
-
-    @property
-    def esta_vencido(self) -> bool:
-        """Verifica si el préstamo está vencido"""
-        return str(self.estado) == EstadoPrestamo.VENCIDO.value
-
-    def calcular_saldo_pendiente(self) -> float:
-        """Calcula el saldo pendiente del préstamo"""
-        if self.monto_aprobado and self.total_pagado:
-            return float(self.monto_aprobado - self.total_pagado)
-        return float(self.monto_aprobado) if self.monto_aprobado else 0.0
-
-    def actualizar_estado(self):
-        """Actualiza el estado del préstamo basado en el progreso de pago"""
-        if self.saldo_pendiente <= 0:
-            self.estado = EstadoPrestamo.PAGADO
-        elif self.cuotas_pagadas > 0:
-            self.estado = EstadoPrestamo.EN_PAGO
-        elif self.fecha_aprobacion:
-            self.estado = EstadoPrestamo.APROBADO
-
-    def to_dict(self):
-        """Convierte el préstamo a diccionario"""
-        return {
-            "id": self.id,
-            "cliente_id": self.cliente_id,
-            "codigo_prestamo": self.codigo_prestamo,
-            "monto_solicitado": (
-                float(self.monto_solicitado) if self.monto_solicitado else None
-            ),
-            "monto_aprobado": (
-                float(self.monto_aprobado) if self.monto_aprobado else None
-            ),
-            "monto_inicial": float(self.monto_inicial) if self.monto_inicial else None,
-            "tasa_interes_anual": (
-                float(self.tasa_interes_anual) if self.tasa_interes_anual else None
-            ),
-            "numero_cuotas": self.numero_cuotas,
-            "monto_cuota": float(self.monto_cuota) if self.monto_cuota else None,
-            "cuotas_pagadas": self.cuotas_pagadas,
-            "cuotas_pendientes": self.cuotas_pendientes,
-            "fecha_solicitud": (
-                self.fecha_solicitud.isoformat() if self.fecha_solicitud else None
-            ),
-            "fecha_aprobacion": (
-                self.fecha_aprobacion.isoformat() if self.fecha_aprobacion else None
-            ),
-            "fecha_desembolso": (
-                self.fecha_desembolso.isoformat() if self.fecha_desembolso else None
-            ),
-            "fecha_primer_vencimiento": (
-                self.fecha_primer_vencimiento.isoformat()
-                if self.fecha_primer_vencimiento
-                else None
-            ),
-            "fecha_ultimo_vencimiento": (
-                self.fecha_ultimo_vencimiento.isoformat()
-                if self.fecha_ultimo_vencimiento
-                else None
-            ),
-            "saldo_pendiente": (
-                float(self.saldo_pendiente) if self.saldo_pendiente else None
-            ),
-            "saldo_capital": float(self.saldo_capital) if self.saldo_capital else None,
-            "saldo_interes": float(self.saldo_interes) if self.saldo_interes else None,
-            "total_pagado": float(self.total_pagado) if self.total_pagado else None,
-            "estado": self.estado,
-            "categoria": self.categoria,
-            "modalidad": self.modalidad,
-            "destino_credito": self.destino_credito,
-            "observaciones": self.observaciones,
-            "creado_en": self.creado_en.isoformat() if self.creado_en else None,
-            "actualizado_en": (
-                self.actualizado_en.isoformat() if self.actualizado_en else None
-            ),
-        }
+        return (
+            f"<Prestamo(id={self.id}, cedula='{self.cedula}', "
+            f"nombres='{self.nombres}', estado='{self.estado}', "
+            f"total={self.total_financiamiento})>"
+        )

@@ -1,510 +1,358 @@
-// Build Fix: Eliminados imports de Label inexistente
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import { 
+  DollarSign, 
+  Calendar, 
+  CreditCard, 
+  Search,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Save,
+  AlertCircle
+} from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { 
-  User, 
-  DollarSign, 
-  Calendar, 
-  CreditCard,
-  Loader2,
-  CheckCircle,
-  AlertCircle,
-  X,
-  Search
-} from 'lucide-react'
-import { prestamoService, PrestamoCreate, PrestamoUpdate } from '@/services/prestamoService'
-import { useQueryClient } from '@tanstack/react-query'
-import toast from 'react-hot-toast'
-
-interface ClienteData {
-  id: number
-  cedula: string
-  nombres: string
-  apellidos: string
-  telefono: string
-  email: string
-  direccion: string
-}
+import { Textarea } from '@/components/ui/textarea'
+import { clienteService } from '@/services/clienteService'
+import { useCreatePrestamo, useUpdatePrestamo } from '@/hooks/usePrestamos'
+import { useClientesByCedula } from '@/hooks/useClientes'
+import { Prestamo, PrestamoForm } from '@/types'
 
 interface CrearPrestamoFormProps {
-  prestamo?: any // Prestamo para editar
-  onSuccess?: () => void
-  onCancel?: () => void
+  prestamo?: Prestamo // Préstamo existente para edición
+  onClose: () => void
+  onSuccess: () => void
 }
 
-export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPrestamoFormProps) {
-  const queryClient = useQueryClient()
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isSearchingClient, setIsSearchingClient] = useState(false)
-  const [clienteEncontrado, setClienteEncontrado] = useState<ClienteData | null>(null)
-  const [cedulaError, setCedulaError] = useState('')
-
-  // Form state
-  const [formData, setFormData] = useState<PrestamoCreate>({
-    cliente_id: 0,
-    monto_total: 0,
-    monto_financiado: 0,
-    monto_inicial: 0,
-    tasa_interes: 0,
-    numero_cuotas: 12,
-    monto_cuota: 0,
-    fecha_aprobacion: new Date().toISOString().split('T')[0],
-    fecha_desembolso: '',
-    fecha_primer_vencimiento: '',
-    modalidad: 'MENSUAL',
-    destino_credito: '',
-    observaciones: ''
+export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestamoFormProps) {
+  const createPrestamo = useCreatePrestamo()
+  const updatePrestamo = useUpdatePrestamo()
+  
+  const [formData, setFormData] = useState<Partial<PrestamoForm>>({
+    cedula: prestamo?.cedula || '',
+    total_financiamiento: prestamo?.total_financiamiento || 0,
+    modalidad_pago: prestamo?.modalidad_pago || 'MENSUAL',
+    fecha_requerimiento: prestamo?.fecha_requerimiento || '',
+    producto: prestamo?.producto || '',
+    producto_financiero: prestamo?.producto_financiero || '',
+    tasa_interes: prestamo?.tasa_interes || 0,
+    observaciones: prestamo?.observaciones || '',
   })
 
-  // Auto-rellenar si es edición
-  useEffect(() => {
-    if (prestamo) {
-      setFormData({
-        cliente_id: prestamo.cliente_id,
-        monto_total: prestamo.monto_total,
-        monto_financiado: prestamo.monto_financiado,
-        monto_inicial: prestamo.monto_inicial || 0,
-        tasa_interes: prestamo.tasa_interes || 0,
-        numero_cuotas: prestamo.numero_cuotas,
-        monto_cuota: prestamo.monto_cuota,
-        fecha_aprobacion: prestamo.fecha_aprobacion || new Date().toISOString().split('T')[0],
-        fecha_desembolso: prestamo.fecha_desembolso || '',
-        fecha_primer_vencimiento: prestamo.fecha_primer_vencimiento || '',
-        modalidad: prestamo.modalidad || 'MENSUAL',
-        destino_credito: prestamo.destino_credito || '',
-        observaciones: prestamo.observaciones || ''
-      })
-    }
-  }, [prestamo])
+  const [showAdditionalInfo, setShowAdditionalInfo] = useState(false)
+  const [clienteData, setClienteData] = useState<any>(null)
+  const [numeroCuotas, setNumeroCuotas] = useState<number>(0)
+  const [cuotaPeriodo, setCuotaPeriodo] = useState<number>(0)
 
-  // TEMPORALMENTE COMENTADO PARA EVITAR ERRORES 503
-  // Función para buscar cliente por cédula
-  // const buscarCliente = async (cedula: string) => {
-  //   if (!cedula || cedula.length < 8) {
-  //     setCedulaError('')
-  //     setClienteEncontrado(null)
-  //     return
-  //   }
+  // Buscar cliente por cédula
+  const { data: clienteInfo, isLoading: isLoadingCliente } = useClientesByCedula(formData.cedula || '')
 
-  //   setIsSearchingClient(true)
-  //   setCedulaError('')
-
-  //   try {
-  //     const cliente = await prestamoService.buscarClientePorCedula(cedula)
-  //     setClienteEncontrado(cliente)
-  //     setFormData(prev => ({
-  //       ...prev,
-  //       cliente_id: cliente.id
-  //     }))
-  //     toast.success(`✅ Cliente encontrado: ${cliente.nombres} ${cliente.apellidos}`)
-  //   } catch (error) {
-  //     setCedulaError('Cliente no encontrado')
-  //     setClienteEncontrado(null)
-  //     setFormData(prev => ({
-  //       ...prev,
-  //       cliente_id: 0
-  //     }))
-  //   } finally {
-  //     setIsSearchingClient(false)
-  //   }
-  // }
-
-  // FUNCIÓN TEMPORAL DESHABILITADA PARA EVITAR ERRORES 503
-  const buscarCliente = async (cedula: string) => {
-    // Funcionalidad temporalmente deshabilitada
-    console.log('Búsqueda de cliente deshabilitada temporalmente:', cedula)
-    setCedulaError('Funcionalidad temporalmente deshabilitada')
-    setClienteEncontrado(null)
-    setIsSearchingClient(false)
+  // Calcular cuotas automáticamente
+  const calcularCuotas = (total: number, modalidad: string) => {
+    let cuotas = 36 // Default MENSUAL
+    if (modalidad === 'QUINCENAL') cuotas = 72
+    if (modalidad === 'SEMANAL') cuotas = 144
+    
+    const cuota = total / cuotas
+    setNumeroCuotas(cuotas)
+    setCuotaPeriodo(cuota)
   }
 
-  // Calcular cuota automáticamente
+  // Cuando cambia el monto o modalidad, recalcular cuotas
   useEffect(() => {
-    if (formData.monto_financiado && formData.numero_cuotas) {
-      const cuota = formData.monto_financiado / formData.numero_cuotas
-      setFormData(prev => ({
-        ...prev,
-        monto_cuota: Math.round(cuota * 100) / 100
-      }))
+    if (formData.total_financiamiento && formData.modalidad_pago) {
+      calcularCuotas(formData.total_financiamiento, formData.modalidad_pago)
     }
-  }, [formData.monto_financiado, formData.numero_cuotas])
+  }, [formData.total_financiamiento, formData.modalidad_pago])
 
-  // Calcular fecha de primer vencimiento
+  // Cargar datos del cliente cuando se encuentra
   useEffect(() => {
-    if (formData.fecha_aprobacion && formData.modalidad) {
-      const fechaAprobacion = new Date(formData.fecha_aprobacion)
-      let diasSumar = 30 // MENSUAL por defecto
-      
-      switch (formData.modalidad) {
-        case 'SEMANAL':
-          diasSumar = 7
-          break
-        case 'QUINCENAL':
-          diasSumar = 15
-          break
-        case 'MENSUAL':
-          diasSumar = 30
-          break
-        case 'BIMESTRAL':
-          diasSumar = 60
-          break
-      }
-      
-      const fechaVencimiento = new Date(fechaAprobacion)
-      fechaVencimiento.setDate(fechaAprobacion.getDate() + diasSumar)
-      
+    if (clienteInfo && clienteInfo.length > 0) {
+      const cliente = clienteInfo[0]
+      setClienteData(cliente)
+      // Auto-llenar campos basados en cliente
       setFormData(prev => ({
         ...prev,
-        fecha_primer_vencimiento: fechaVencimiento.toISOString().split('T')[0]
+        producto: cliente.modelo_vehiculo || '',
+        producto_financiero: cliente.analista || '',
       }))
     }
-  }, [formData.fecha_aprobacion, formData.modalidad])
+  }, [clienteInfo])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!clienteEncontrado && !prestamo) {
-      toast.error('❌ Debe buscar un cliente válido')
+    if (!formData.cedula || !formData.total_financiamiento || !formData.modalidad_pago) {
       return
     }
 
-    setIsSubmitting(true)
-
-    try {
-      if (prestamo) {
-        // Actualizar préstamo existente
-        const updateData: PrestamoUpdate = {
-          monto_total: formData.monto_total,
-          monto_financiado: formData.monto_financiado,
-          monto_inicial: formData.monto_inicial,
-          tasa_interes: formData.tasa_interes,
-          numero_cuotas: formData.numero_cuotas,
-          monto_cuota: formData.monto_cuota,
-          fecha_aprobacion: formData.fecha_aprobacion,
-          fecha_desembolso: formData.fecha_desembolso || undefined,
-          fecha_primer_vencimiento: formData.fecha_primer_vencimiento,
-          modalidad: formData.modalidad,
-          destino_credito: formData.destino_credito || undefined,
-          observaciones: formData.observaciones || undefined
-        }
-        
-        await prestamoService.actualizarPrestamo(prestamo.id, updateData)
-        toast.success('✅ Préstamo actualizado exitosamente')
-      } else {
-        // Crear nuevo préstamo
-        await prestamoService.crearPrestamo(formData)
-        toast.success('✅ Préstamo creado exitosamente')
-      }
-
-      // Refrescar datos
-      queryClient.invalidateQueries({ queryKey: ['prestamos-list'] })
-      queryClient.invalidateQueries({ queryKey: ['prestamos-stats'] })
-      
-      // Cerrar formulario
-      onSuccess?.()
-      
-    } catch (error) {
-      console.error('Error al guardar préstamo:', error)
-      toast.error('❌ Error al guardar préstamo')
-    } finally {
-      setIsSubmitting(false)
+    if (prestamo) {
+      // Editar préstamo existente
+      await updatePrestamo.mutateAsync({
+        id: prestamo.id,
+        data: formData
+      })
+    } else {
+      // Crear nuevo préstamo
+      await createPrestamo.mutateAsync(formData as PrestamoForm)
     }
+    
+    onSuccess()
+    onClose()
   }
 
-  const resetForm = () => {
-    setFormData({
-      cliente_id: 0,
-      monto_total: 0,
-      monto_financiado: 0,
-      monto_inicial: 0,
-      tasa_interes: 0,
-      numero_cuotas: 12,
-      monto_cuota: 0,
-      fecha_aprobacion: new Date().toISOString().split('T')[0],
-      fecha_desembolso: '',
-      fecha_primer_vencimiento: '',
-      modalidad: 'MENSUAL',
-      destino_credito: '',
-      observaciones: ''
-    })
-    setClienteEncontrado(null)
-    setCedulaError('')
-  }
+  const isReadOnly = prestamo?.estado === 'APROBADO' || prestamo?.estado === 'RECHAZADO'
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-    >
+    <AnimatePresence>
       <motion.div
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        onClick={(e) => e.target === e.currentTarget && onClose()}
       >
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold flex items-center">
-              <CreditCard className="mr-2 h-6 w-6" />
+        <motion.div
+          initial={{ scale: 0.95, y: 20 }}
+          animate={{ scale: 1, y: 0 }}
+          exit={{ scale: 0.95, y: 20 }}
+          className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
+            <h2 className="text-xl font-bold">
               {prestamo ? 'Editar Préstamo' : 'Nuevo Préstamo'}
             </h2>
-            <Button variant="ghost" size="sm" onClick={onCancel}>
-              <X className="h-4 w-4" />
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="h-5 w-5" />
             </Button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="p-6 space-y-6">
             {/* Búsqueda de Cliente */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center">
-                  <User className="mr-2 h-5 w-5" />
-                  Datos del Cliente
+                <CardTitle className="flex items-center gap-2">
+                  <Search className="h-5 w-5" />
+                  Búsqueda de Cliente
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <label htmlFor="cedula" className="block text-sm font-medium text-gray-700 mb-1">
-                    Cédula del Cliente 
-                    <span className="text-orange-600 text-xs ml-2">(Temporalmente deshabilitado)</span>
+                  <label className="block text-sm font-medium mb-1">
+                    Cédula <span className="text-red-500">*</span>
                   </label>
-                  <div className="flex items-center space-x-2">
-                    <div className="flex-1 relative">
-                      <Input
-                        id="cedula"
-                        placeholder="Ej: V-12345678"
-                        onChange={(e) => buscarCliente(e.target.value)}
-                        className={`${cedulaError ? 'border-red-500' : ''} bg-gray-100`}
-                        disabled={true}
-                      />
-                      {isSearchingClient && (
-                        <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-blue-600" />
-                      )}
-                    </div>
-                  </div>
-                  {cedulaError && (
-                    <p className="text-sm text-orange-600 mt-1">{cedulaError}</p>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">
-                    ⚠️ La búsqueda automática de clientes está temporalmente deshabilitada
-                  </p>
+                  <Input
+                    placeholder="Buscar por cédula..."
+                    value={formData.cedula}
+                    onChange={(e) => setFormData({ ...formData, cedula: e.target.value })}
+                    disabled={isReadOnly || isLoadingCliente}
+                  />
                 </div>
 
-                {/* TEMPORALMENTE COMENTADO - Datos del Cliente Encontrado */}
-                {/* {clienteEncontrado && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="p-4 bg-green-50 border border-green-200 rounded-lg"
-                  >
-                    <div className="flex items-center mb-2">
-                      <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
-                      <span className="font-semibold text-green-800">Cliente Encontrado</span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="font-medium">Nombre:</span> {clienteEncontrado.nombres} {clienteEncontrado.apellidos}
-                      </div>
-                      <div>
-                        <span className="font-medium">Teléfono:</span> {clienteEncontrado.telefono}
-                      </div>
-                      <div>
-                        <span className="font-medium">Email:</span> {clienteEncontrado.email}
-                      </div>
-                      <div>
-                        <span className="font-medium">Dirección:</span> {clienteEncontrado.direccion}
-                      </div>
-                    </div>
-                  </motion.div>
-                )} */}
+                {clienteData && (
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="font-semibold text-green-800">{clienteData.nombres}</p>
+                    <p className="text-sm text-green-700">Cliente encontrado</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
+
+            {/* Información Adicional del Cliente (Colapsable) */}
+            {clienteData && (
+              <Card>
+                <CardHeader>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdditionalInfo(!showAdditionalInfo)}
+                    className="flex items-center justify-between w-full"
+                  >
+                    <CardTitle>Datos del Cliente</CardTitle>
+                    {showAdditionalInfo ? (
+                      <ChevronUp className="h-5 w-5" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5" />
+                    )}
+                  </button>
+                </CardHeader>
+                <AnimatePresence>
+                  {showAdditionalInfo && (
+                    <motion.div
+                      initial={{ height: 0 }}
+                      animate={{ height: 'auto' }}
+                      exit={{ height: 0 }}
+                    >
+                      <CardContent className="space-y-3">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-sm text-gray-600">Teléfono</label>
+                            <p className="font-medium">{clienteData.telefono}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm text-gray-600">Email</label>
+                            <p className="font-medium">{clienteData.email}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm text-gray-600">Dirección</label>
+                            <p className="font-medium">{clienteData.direccion}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm text-gray-600">Estado</label>
+                            <Badge>{clienteData.estado}</Badge>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </Card>
+            )}
 
             {/* Datos del Préstamo */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center">
-                  <DollarSign className="mr-2 h-5 w-5" />
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5" />
                   Datos del Préstamo
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="monto_total" className="block text-sm font-medium text-gray-700 mb-1">Monto Total</label>
+                    <label className="block text-sm font-medium mb-1">
+                      Total de Financiamiento (USD) <span className="text-red-500">*</span>
+                    </label>
                     <Input
-                      id="monto_total"
                       type="number"
                       step="0.01"
-                      min="0"
-                      value={formData.monto_total}
-                      onChange={(e) => setFormData(prev => ({
-                        ...prev,
-                        monto_total: parseFloat(e.target.value) || 0
-                      }))}
-                      required
+                      value={formData.total_financiamiento}
+                      onChange={(e) => setFormData({ 
+                        ...formData, 
+                        total_financiamiento: parseFloat(e.target.value) || 0 
+                      })}
+                      disabled={isReadOnly}
                     />
                   </div>
-                  <div>
-                    <label htmlFor="monto_financiado" className="block text-sm font-medium text-gray-700 mb-1">Monto Financiado</label>
-                    <Input
-                      id="monto_financiado"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.monto_financiado}
-                      onChange={(e) => setFormData(prev => ({
-                        ...prev,
-                        monto_financiado: parseFloat(e.target.value) || 0
-                      }))}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="monto_inicial" className="block text-sm font-medium text-gray-700 mb-1">Cuota Inicial</label>
-                    <Input
-                      id="monto_inicial"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.monto_inicial}
-                      onChange={(e) => setFormData(prev => ({
-                        ...prev,
-                        monto_inicial: parseFloat(e.target.value) || 0
-                      }))}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="tasa_interes" className="block text-sm font-medium text-gray-700 mb-1">Tasa de Interés (%)</label>
-                    <Input
-                      id="tasa_interes"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="100"
-                      value={formData.tasa_interes}
-                      onChange={(e) => setFormData(prev => ({
-                        ...prev,
-                        tasa_interes: parseFloat(e.target.value) || 0
-                      }))}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="numero_cuotas" className="block text-sm font-medium text-gray-700 mb-1">Número de Cuotas</label>
-                    <Input
-                      id="numero_cuotas"
-                      type="number"
-                      min="1"
-                      value={formData.numero_cuotas}
-                      onChange={(e) => setFormData(prev => ({
-                        ...prev,
-                        numero_cuotas: parseInt(e.target.value) || 1
-                      }))}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="monto_cuota" className="block text-sm font-medium text-gray-700 mb-1">Monto por Cuota</label>
-                    <Input
-                      id="monto_cuota"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.monto_cuota}
-                      onChange={(e) => setFormData(prev => ({
-                        ...prev,
-                        monto_cuota: parseFloat(e.target.value) || 0
-                      }))}
-                      required
-                    />
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="fecha_aprobacion" className="block text-sm font-medium text-gray-700 mb-1">Fecha de Aprobación</label>
-                    <Input
-                      id="fecha_aprobacion"
-                      type="date"
-                      value={formData.fecha_aprobacion}
-                      onChange={(e) => setFormData(prev => ({
-                        ...prev,
-                        fecha_aprobacion: e.target.value
-                      }))}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="fecha_desembolso" className="block text-sm font-medium text-gray-700 mb-1">Fecha de Desembolso</label>
-                    <Input
-                      id="fecha_desembolso"
-                      type="date"
-                      value={formData.fecha_desembolso}
-                      onChange={(e) => setFormData(prev => ({
-                        ...prev,
-                        fecha_desembolso: e.target.value
-                      }))}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="fecha_primer_vencimiento" className="block text-sm font-medium text-gray-700 mb-1">Primer Vencimiento</label>
-                    <Input
-                      id="fecha_primer_vencimiento"
-                      type="date"
-                      value={formData.fecha_primer_vencimiento}
-                      onChange={(e) => setFormData(prev => ({
-                        ...prev,
-                        fecha_primer_vencimiento: e.target.value
-                      }))}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="modalidad" className="block text-sm font-medium text-gray-700 mb-1">Modalidad de Pago</label>
-                    <Select value={formData.modalidad} onValueChange={(value) => setFormData(prev => ({ ...prev, modalidad: value }))}>
+                    <label className="block text-sm font-medium mb-1">
+                      Modalidad de Pago <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      value={formData.modalidad_pago}
+                      onValueChange={(value: any) => setFormData({ 
+                        ...formData, 
+                        modalidad_pago: value 
+                      })}
+                      disabled={isReadOnly}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="SEMANAL">Semanal</SelectItem>
-                        <SelectItem value="QUINCENAL">Quincenal</SelectItem>
                         <SelectItem value="MENSUAL">Mensual</SelectItem>
-                        <SelectItem value="BIMESTRAL">Bimestral</SelectItem>
+                        <SelectItem value="QUINCENAL">Quincenal</SelectItem>
+                        <SelectItem value="SEMANAL">Semanal</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
 
-                <div>
-                  <label htmlFor="destino_credito" className="block text-sm font-medium text-gray-700 mb-1">Destino del Crédito</label>
-                  <Input
-                    id="destino_credito"
-                    value={formData.destino_credito}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      destino_credito: e.target.value
-                    }))}
-                    placeholder="Ej: Compra de vehículo"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Número de Cuotas</label>
+                    <Input
+                      value={numeroCuotas}
+                      disabled
+                      className="bg-gray-50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Cuota por Período (USD)</label>
+                    <Input
+                      value={cuotaPeriodo.toFixed(2)}
+                      disabled
+                      className="bg-gray-50"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Fecha de Requerimiento <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="date"
+                      value={formData.fecha_requerimiento}
+                      onChange={(e) => setFormData({ 
+                        ...formData, 
+                        fecha_requerimiento: e.target.value 
+                      })}
+                      disabled={isReadOnly}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Tasa de Interés (%)
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={formData.tasa_interes}
+                      onChange={(e) => setFormData({ 
+                        ...formData, 
+                        tasa_interes: parseFloat(e.target.value) || 0 
+                      })}
+                      disabled={isReadOnly}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Producto</label>
+                    <Input
+                      value={formData.producto}
+                      onChange={(e) => setFormData({ 
+                        ...formData, 
+                        producto: e.target.value 
+                      })}
+                      disabled={isReadOnly || !!clienteData}
+                      placeholder="Modelo de vehículo"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Analista Asignado</label>
+                    <Input
+                      value={formData.producto_financiero}
+                      onChange={(e) => setFormData({ 
+                        ...formData, 
+                        producto_financiero: e.target.value 
+                      })}
+                      disabled={isReadOnly || !!clienteData}
+                      placeholder="Nombre del analista"
+                    />
+                  </div>
                 </div>
 
                 <div>
-                  <label htmlFor="observaciones" className="block text-sm font-medium text-gray-700 mb-1">Observaciones</label>
+                  <label className="block text-sm font-medium mb-1">Observaciones</label>
                   <Textarea
-                    id="observaciones"
-                    value={formData.observaciones}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      observaciones: e.target.value
-                    }))}
-                    placeholder="Observaciones adicionales..."
+                    value={formData.observaciones || ''}
+                    onChange={(e) => setFormData({ 
+                      ...formData, 
+                      observaciones: e.target.value 
+                    })}
+                    disabled={isReadOnly}
                     rows={3}
                   />
                 </div>
@@ -512,30 +360,18 @@ export function CrearPrestamoForm({ prestamo, onSuccess, onCancel }: CrearPresta
             </Card>
 
             {/* Botones */}
-            <div className="flex justify-end space-x-3">
-              <Button type="button" variant="outline" onClick={onCancel}>
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={onClose}>
                 Cancelar
               </Button>
-              <Button type="button" variant="outline" onClick={resetForm}>
-                Limpiar
-              </Button>
-              <Button type="submit" disabled={isSubmitting || (!clienteEncontrado && !prestamo)}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Guardando...
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    {prestamo ? 'Actualizar' : 'Crear'} Préstamo
-                  </>
-                )}
+              <Button type="submit" disabled={isReadOnly}>
+                <Save className="h-4 w-4 mr-2" />
+                {prestamo ? 'Actualizar' : 'Crear'} Préstamo
               </Button>
             </div>
           </form>
-        </div>
+        </motion.div>
       </motion.div>
-    </motion.div>
+    </AnimatePresence>
   )
 }
