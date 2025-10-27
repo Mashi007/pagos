@@ -75,12 +75,14 @@ def procesar_cambio_estado(
     if nuevo_estado == "APROBADO":
         prestamo.usuario_aprobador = current_user.email
         prestamo.fecha_aprobacion = datetime.now()
-        
+
         # Si se aprueba y tiene fecha_base_calculo, generar tabla de amortización
         if prestamo.fecha_base_calculo:
             try:
                 generar_amortizacion(prestamo, prestamo.fecha_base_calculo, db)
-                logger.info(f"Tabla de amortización generada para préstamo {prestamo.id}")
+                logger.info(
+                    f"Tabla de amortización generada para préstamo {prestamo.id}"
+                )
             except Exception as e:
                 logger.error(f"Error generando amortización: {str(e)}")
                 # No fallar el préstamo si falla la generación de cuotas
@@ -416,28 +418,37 @@ def generar_amortizacion_prestamo(
     """Generar tabla de amortización para un préstamo aprobado (solo Admin)"""
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Solo administradores")
-    
+
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    
+
     if prestamo.estado != "APROBADO":
-        raise HTTPException(status_code=400, detail="Solo se pueden generar cuotas para préstamos aprobados")
-    
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se pueden generar cuotas para préstamos aprobados",
+        )
+
     if not prestamo.fecha_base_calculo:
-        raise HTTPException(status_code=400, detail="El préstamo no tiene fecha base de cálculo")
-    
+        raise HTTPException(
+            status_code=400, detail="El préstamo no tiene fecha base de cálculo"
+        )
+
     try:
-        cuotas_generadas = generar_amortizacion(prestamo, prestamo.fecha_base_calculo, db)
-        
+        cuotas_generadas = generar_amortizacion(
+            prestamo, prestamo.fecha_base_calculo, db
+        )
+
         return {
             "message": "Tabla de amortización generada exitosamente",
             "cuotas_generadas": len(cuotas_generadas),
-            "prestamo_id": prestamo_id
+            "prestamo_id": prestamo_id,
         }
     except Exception as e:
         logger.error(f"Error generando amortización: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error generando tabla de amortización: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error generando tabla de amortización: {str(e)}"
+        )
 
 
 @router.get("/{prestamo_id}/cuotas", response_model=list[dict])
@@ -450,10 +461,11 @@ def obtener_cuotas_prestamo(
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    
+
     from app.services.prestamo_amortizacion_service import obtener_cuotas_prestamo
+
     cuotas = obtener_cuotas_prestamo(prestamo_id, db)
-    
+
     return [
         {
             "id": c.id,
