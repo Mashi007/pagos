@@ -66,7 +66,7 @@ def get_current_user(
     except HTTPException:
         # Re-propagar HTTPException sin modificar
         raise
-        
+
     except Exception as e:
         logger.error(f"Error al validar token: {e}")
         error_msg = str(e)
