@@ -171,7 +171,9 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                     <div>
                       <label className="text-sm text-gray-600">Total de Financiamiento</label>
                       <p className="text-2xl font-bold text-green-600">
-                        ${prestamoData.total_financiamiento.toFixed(2)}
+                        ${typeof prestamoData.total_financiamiento === 'number' 
+                          ? prestamoData.total_financiamiento.toFixed(2) 
+                          : '0.00'}
                       </p>
                     </div>
                     <div>
@@ -189,11 +191,19 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                     </div>
                     <div>
                       <label className="text-sm text-gray-600">Cuota por Período</label>
-                      <p className="text-xl font-semibold">${prestamoData.cuota_periodo.toFixed(2)}</p>
+                      <p className="text-xl font-semibold">
+                        ${typeof prestamoData.cuota_periodo === 'number' 
+                          ? prestamoData.cuota_periodo.toFixed(2) 
+                          : '0.00'}
+                      </p>
                     </div>
                     <div>
                       <label className="text-sm text-gray-600">Tasa de Interés</label>
-                      <p className="font-medium">{(prestamoData.tasa_interes * 100).toFixed(2)}%</p>
+                      <p className="font-medium">
+                        {typeof prestamoData.tasa_interes === 'number' 
+                          ? (prestamoData.tasa_interes * 100).toFixed(2) + '%' 
+                          : '0.00%'}
+                      </p>
                     </div>
                     <div>
                       <label className="text-sm text-gray-600">Fecha de Requerimiento</label>

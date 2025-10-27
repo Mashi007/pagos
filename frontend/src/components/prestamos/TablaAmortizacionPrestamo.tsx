@@ -222,7 +222,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
               <CardContent className="pt-4">
                 <p className="text-sm text-green-600">Total Capital</p>
                 <p className="text-2xl font-bold text-green-700">
-                  ${cuotas.reduce((acc, c) => acc + c.monto_capital, 0).toFixed(2)}
+                  ${cuotas.reduce((acc, c) => acc + (typeof c.monto_capital === 'number' ? c.monto_capital : 0), 0).toFixed(2)}
                 </p>
               </CardContent>
             </Card>
@@ -230,7 +230,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
               <CardContent className="pt-4">
                 <p className="text-sm text-blue-600">Total Intereses</p>
                 <p className="text-2xl font-bold text-blue-700">
-                  ${cuotas.reduce((acc, c) => acc + c.monto_interes, 0).toFixed(2)}
+                  ${cuotas.reduce((acc, c) => acc + (typeof c.monto_interes === 'number' ? c.monto_interes : 0), 0).toFixed(2)}
                 </p>
               </CardContent>
             </Card>
@@ -238,7 +238,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
               <CardContent className="pt-4">
                 <p className="text-sm text-purple-600">Monto Total</p>
                 <p className="text-2xl font-bold text-purple-700">
-                  ${cuotas.reduce((acc, c) => acc + c.monto_cuota, 0).toFixed(2)}
+                  ${cuotas.reduce((acc, c) => acc + (typeof c.monto_cuota === 'number' ? c.monto_cuota : 0), 0).toFixed(2)}
                 </p>
               </CardContent>
             </Card>

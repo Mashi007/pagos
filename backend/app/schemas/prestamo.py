@@ -105,6 +105,18 @@ class PrestamoResponse(PrestamoBase):
             return value.isoformat()
         return value
 
+    @field_serializer("total_financiamiento")
+    def serialize_total_financiamiento(self, value: Decimal) -> float:
+        return float(value)
+
+    @field_serializer("cuota_periodo")
+    def serialize_cuota_periodo(self, value: Decimal) -> float:
+        return float(value)
+
+    @field_serializer("tasa_interes")
+    def serialize_tasa_interes(self, value: Decimal) -> float:
+        return float(value)
+
     class Config:
         from_attributes = True
 
@@ -182,6 +194,64 @@ class PrestamoEvaluacionResponse(PrestamoEvaluacionBase):
     plazo_maximo: Optional[int]
     enganche_minimo: Optional[Decimal]
     requisitos_adicionales: Optional[str]
+
+    @field_serializer("puntuacion_total")
+    def serialize_puntuacion_total(self, value: Decimal) -> float:
+        return float(value)
+
+    @field_serializer("ratio_endeudamiento_puntos")
+    def serialize_ratio_endeudamiento_puntos(self, value: Decimal) -> float:
+        return float(value)
+
+    @field_serializer("ratio_endeudamiento_calculo")
+    def serialize_ratio_endeudamiento_calculo(self, value: Decimal) -> float:
+        return float(value)
+
+    @field_serializer("ratio_cobertura_puntos")
+    def serialize_ratio_cobertura_puntos(self, value: Decimal) -> float:
+        return float(value)
+
+    @field_serializer("ratio_cobertura_calculo")
+    def serialize_ratio_cobertura_calculo(self, value: Decimal) -> float:
+        return float(value)
+
+    @field_serializer("historial_crediticio_puntos")
+    def serialize_historial_crediticio_puntos(self, value: Decimal) -> float:
+        return float(value)
+
+    @field_serializer("estabilidad_laboral_puntos")
+    def serialize_estabilidad_laboral_puntos(self, value: Decimal) -> float:
+        return float(value)
+
+    @field_serializer("anos_empleo")
+    def serialize_anos_empleo(self, value: Optional[Decimal]) -> Optional[float]:
+        if value is not None:
+            return float(value)
+        return value
+
+    @field_serializer("tipo_empleo_puntos")
+    def serialize_tipo_empleo_puntos(self, value: Decimal) -> float:
+        return float(value)
+
+    @field_serializer("enganche_garantias_puntos")
+    def serialize_enganche_garantias_puntos(self, value: Decimal) -> float:
+        return float(value)
+
+    @field_serializer("enganche_garantias_calculo")
+    def serialize_enganche_garantias_calculo(self, value: Decimal) -> float:
+        return float(value)
+
+    @field_serializer("tasa_interes_aplicada")
+    def serialize_tasa_interes_aplicada(self, value: Optional[Decimal]) -> Optional[float]:
+        if value is not None:
+            return float(value)
+        return value
+
+    @field_serializer("enganche_minimo")
+    def serialize_enganche_minimo(self, value: Optional[Decimal]) -> Optional[float]:
+        if value is not None:
+            return float(value)
+        return value
 
     class Config:
         from_attributes = True

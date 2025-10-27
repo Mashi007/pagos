@@ -435,7 +435,9 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   <div>
                     <label className="text-sm text-gray-600">Tasa de Interés</label>
                     <p className="text-lg font-semibold">
-                      {(resultado.tasa_interes_aplicada * 100).toFixed(2)}%
+                      {typeof resultado.tasa_interes_aplicada === 'number' 
+                        ? (resultado.tasa_interes_aplicada * 100).toFixed(2) + '%' 
+                        : '0.00%'}
                     </p>
                   </div>
                 </div>

@@ -208,7 +208,11 @@ export function PrestamosList() {
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <DollarSign className="h-4 w-4 text-green-600" />
-                            <span className="font-semibold">{prestamo.total_financiamiento.toFixed(2)}</span>
+                            <span className="font-semibold">
+                              {typeof prestamo.total_financiamiento === 'number' 
+                                ? prestamo.total_financiamiento.toFixed(2) 
+                                : '0.00'}
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell>
