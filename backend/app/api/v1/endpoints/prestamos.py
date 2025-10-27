@@ -658,9 +658,18 @@ def evaluar_riesgo_prestamo(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Evaluar riesgo de un préstamo usando los 6 criterios de evaluación.
+    Evaluar riesgo de un préstamo usando los 7 criterios de evaluación (100 puntos).
     Requiere datos del cliente y del préstamo.
 
+    Sistema de 100 puntos:
+    - Criterio 1: Capacidad de Pago (33 pts)
+    - Criterio 2: Estabilidad Laboral (23 pts)
+    - Criterio 3: Referencias Personales (5 pts)
+    - Criterio 4: Arraigo Geográfico (12 pts)
+    - Criterio 5: Perfil Sociodemográfico (17 pts)
+    - Criterio 6: Edad (5 pts)
+    - Criterio 7: Enganche (5 pts)
+    
     FASE 2: Después de la evaluación, se determina el plazo máximo
     que se usará para recalcular las cuotas.
     """
@@ -694,6 +703,7 @@ def evaluar_riesgo_prestamo(
             "enganche_minimo": float(evaluacion.enganche_minimo),
             "requisitos_adicionales": evaluacion.requisitos_adicionales,
             "detalle_criterios": {
+                # Criterio 1: Capacidad de Pago (33 puntos)
                 "ratio_endeudamiento": {
                     "puntos": float(evaluacion.ratio_endeudamiento_puntos),
                     "calculo": float(evaluacion.ratio_endeudamiento_calculo),
@@ -702,19 +712,49 @@ def evaluar_riesgo_prestamo(
                     "puntos": float(evaluacion.ratio_cobertura_puntos),
                     "calculo": float(evaluacion.ratio_cobertura_calculo),
                 },
-                "historial_crediticio": {
-                    "puntos": float(evaluacion.historial_crediticio_puntos),
-                    "descripcion": evaluacion.historial_crediticio_descripcion,
-                },
-                "estabilidad_laboral": {
-                    "puntos": float(evaluacion.estabilidad_laboral_puntos),
-                    "anos_empleo": float(evaluacion.anos_empleo),
+                # Criterio 2: Estabilidad Laboral (23 puntos)
+                "antiguedad_trabajo": {
+                    "puntos": float(evaluacion.antiguedad_trabajo_puntos),
+                    "meses": float(evaluacion.meses_trabajo) if evaluacion.meses_trabajo else 0,
                 },
                 "tipo_empleo": {
                     "puntos": float(evaluacion.tipo_empleo_puntos),
                     "descripcion": evaluacion.tipo_empleo_descripcion,
                 },
-                "enganche_garantias": {
+                "sector_economico": {
+                    "puntos": float(evaluacion.sector_economico_puntos),
+                    "descripcion": evaluacion.sector_economico_descripcion,
+                },
+                # Criterio 3: Referencias (5 puntos)
+                "referencias": {
+                    "puntos": float(evaluacion.referencias_puntos),
+                    "descripcion": evaluacion.referencias_descripcion,
+                    "num_verificadas": evaluacion.num_referencias_verificadas,
+                },
+                # Criterio 4: Arraigo Geográfico (12 puntos)
+                "arraigo_vivienda": float(evaluacion.arraigo_vivienda_puntos),
+                "arraigo_familiar": float(evaluacion.arraigo_familiar_puntos),
+                "arraigo_laboral": float(evaluacion.arraigo_laboral_puntos),
+                # Criterio 5: Perfil Sociodemográfico (17 puntos)
+                "vivienda": {
+                    "puntos": float(evaluacion.vivienda_puntos),
+                    "descripcion": evaluacion.vivienda_descripcion,
+                },
+                "estado_civil": {
+                    "puntos": float(evaluacion.estado_civil_puntos),
+                    "descripcion": evaluacion.estado_civil_descripcion,
+                },
+                "hijos": {
+                    "puntos": float(evaluacion.hijos_puntos),
+                    "descripcion": evaluacion.hijos_descripcion,
+                },
+                # Criterio 6: Edad (5 puntos)
+                "edad": {
+                    "puntos": float(evaluacion.edad_puntos),
+                    "cliente": evaluacion.edad_cliente,
+                },
+                # Criterio 7: Enganche (5 puntos)
+                "enganche": {
                     "puntos": float(evaluacion.enganche_garantias_puntos),
                     "calculo": float(evaluacion.enganche_garantias_calculo),
                 },
