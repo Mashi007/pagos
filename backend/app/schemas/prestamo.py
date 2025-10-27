@@ -242,7 +242,9 @@ class PrestamoEvaluacionResponse(PrestamoEvaluacionBase):
         return float(value)
 
     @field_serializer("tasa_interes_aplicada")
-    def serialize_tasa_interes_aplicada(self, value: Optional[Decimal]) -> Optional[float]:
+    def serialize_tasa_interes_aplicada(
+        self, value: Optional[Decimal]
+    ) -> Optional[float]:
         if value is not None:
             return float(value)
         return value
