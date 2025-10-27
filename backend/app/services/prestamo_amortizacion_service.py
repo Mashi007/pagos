@@ -82,7 +82,7 @@ def generar_tabla_amortizacion(
         cuota = Cuota(
             prestamo_id=prestamo.id,
             numero_cuota=numero_cuota,
-            fecha_vencimiento=fecha_vencimiento.isoformat(),
+            fecha_vencimiento=fecha_vencimiento,
             monto_cuota=monto_cuota,
             monto_capital=monto_capital,
             monto_interes=monto_interes,
