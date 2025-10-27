@@ -37,12 +37,12 @@ from app.schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
 # SCHEMAS DE PRÉSTAMO
 # ============================================
 from app.schemas.prestamo import (
+    PrestamoAuditoriaResponse,
     PrestamoCreate,
-    PrestamoResponse,
-    PrestamoUpdate,
     PrestamoEvaluacionCreate,
     PrestamoEvaluacionResponse,
-    PrestamoAuditoriaResponse,
+    PrestamoResponse,
+    PrestamoUpdate,
 )
 
 # ============================================
