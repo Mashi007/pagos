@@ -359,17 +359,24 @@ def crear_prestamo(
         # 2. Determinar número de cuotas y cuota por período
         # Si el frontend envía numero_cuotas y cuota_periodo, usarlos
         # Si no, calcularlos automáticamente según modalidad
-        if prestamo_data.numero_cuotas is not None and prestamo_data.cuota_periodo is not None:
+        if (
+            prestamo_data.numero_cuotas is not None
+            and prestamo_data.cuota_periodo is not None
+        ):
             # Usar los valores enviados desde el frontend
             numero_cuotas = prestamo_data.numero_cuotas
             cuota_periodo = prestamo_data.cuota_periodo
-            logger.info(f"Usando valores enviados: {numero_cuotas} cuotas, ${cuota_periodo} por período")
+            logger.info(
+                f"Usando valores enviados: {numero_cuotas} cuotas, ${cuota_periodo} por período"
+            )
         else:
             # Calcular automáticamente según modalidad
             numero_cuotas, cuota_periodo = calcular_cuotas(
                 prestamo_data.total_financiamiento, prestamo_data.modalidad_pago
             )
-            logger.info(f"Calculados automáticamente: {numero_cuotas} cuotas, ${cuota_periodo} por período")
+            logger.info(
+                f"Calculados automáticamente: {numero_cuotas} cuotas, ${cuota_periodo} por período"
+            )
 
         # 3. Crear el préstamo
         prestamo = Prestamo(

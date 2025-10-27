@@ -32,8 +32,12 @@ class PrestamoCreate(PrestamoBase):
     fecha_requerimiento: date
     producto: str = Field(..., max_length=100)
     producto_financiero: str = Field(..., max_length=100)
-    numero_cuotas: Optional[int] = None  # Si se envía, se usa; si no, se calcula automáticamente
-    cuota_periodo: Optional[Decimal] = None  # Si se envía, se usa; si no, se calcula automáticamente
+    numero_cuotas: Optional[int] = (
+        None  # Si se envía, se usa; si no, se calcula automáticamente
+    )
+    cuota_periodo: Optional[Decimal] = (
+        None  # Si se envía, se usa; si no, se calcula automáticamente
+    )
 
 
 class PrestamoUpdate(BaseModel):
