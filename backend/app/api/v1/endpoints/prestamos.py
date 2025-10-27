@@ -705,27 +705,51 @@ def evaluar_riesgo_prestamo(
             float(prestamo.cuota_periodo) if prestamo.cuota_periodo else 0
         )
 
-    # AGREGAR: Obtener edad del cliente desde la base de datos
+    # AGREGAR: Obtener edad del cliente desde la base de datos en años y meses
     if "edad" not in datos_evaluacion or not datos_evaluacion["edad"]:
         # Buscar cliente por cédula
         cliente = db.query(Cliente).filter(Cliente.cedula == prestamo.cedula).first()
         if cliente and cliente.fecha_nacimiento:
-            # Calcular edad desde fecha de nacimiento
-            from datetime import date
-
+            # Calcular edad exacta en años con meses desde fecha de nacimiento
             hoy = date.today()
             nacimiento = cliente.fecha_nacimiento
-            edad_calculada = (
-                hoy.year
-                - nacimiento.year
-                - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
-            )
-            datos_evaluacion["edad"] = edad_calculada
+            
+            # Calcular años
+            años = hoy.year - nacimiento.year
+            
+            # Calcular meses
+            if hoy.month < nacimiento.month or (hoy.month == nacimiento.month and hoy.day < nacimiento.day):
+                años -= 1
+            
+            # Calcular meses adicionales
+            if hoy.month >= nacimiento.month:
+                meses = hoy.month - nacimiento.month
+                if hoy.day < nacimiento.day:
+                    meses -= 1
+            else:
+                meses = (12 - nacimiento.month) + hoy.month
+                if hoy.day < nacimiento.day:
+                    meses -= 1
+            
+            # Normalizar meses (si >= 12, agregar al año)
+            if meses >= 12:
+                años += meses // 12
+                meses = meses % 12
+            
+            # Edad total en años decimales para el cálculo
+            edad_total = años + (meses / 12)
+            datos_evaluacion["edad"] = edad_total
+            datos_evaluacion["edad_años"] = años
+            datos_evaluacion["edad_meses"] = meses
+            
             logger.info(
-                f"Edad calculada desde BD: {edad_calculada} años (fecha_nacimiento: {cliente.fecha_nacimiento})"
+                f"Edad calculada desde BD: {años} años y {meses} meses "
+                f"(fecha_nacimiento: {cliente.fecha_nacimiento})"
             )
         else:
-            datos_evaluacion["edad"] = 25  # Valor por defecto si no se encuentra
+            datos_evaluacion["edad"] = 25.0  # Valor por defecto si no se encuentra
+            datos_evaluacion["edad_años"] = 25
+            datos_evaluacion["edad_meses"] = 0
             logger.warning(
                 f"No se encontró fecha de nacimiento para cédula {prestamo.cedula}, usando valor por defecto"
             )

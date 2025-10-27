@@ -885,19 +885,26 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
               <CardContent className="pt-4 space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    Edad del Cliente (años) *
+                    Edad del Cliente (años y meses) *
                   </label>
                   <Input
-                    type="number"
-                    min="0"
-                    value={formData.edad || ''}
-                    onChange={(e) => setFormData({ ...formData, edad: parseInt(e.target.value) || 0 })}
+                    type="text"
+                    value={(() => {
+                      const edad = formData.edad || 0;
+                      // Calcula años y meses desde la edad en años (decimal)
+                      const años = Math.floor(edad);
+                      const meses = Math.round((edad - años) * 12);
+                      // Si los meses son negativos (error de cálculo), ajustar
+                      const meses_final = meses < 0 ? 0 : meses;
+                      return meses_final > 0 ? `${años} años y ${meses_final} meses` : `${años} años`;
+                    })()}
                     disabled={true}
                     required
-                    className="bg-gray-100 cursor-not-allowed"
+                    className="bg-gray-100 cursor-not-allowed font-semibold text-gray-700"
+                    readOnly
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    ℹ️ La edad se calcula automáticamente desde la fecha de nacimiento del cliente en la base de datos
+                    ℹ️ La edad se calcula automáticamente desde la fecha de nacimiento del cliente en la base de datos (no editable)
                   </p>
                   <div className="bg-pink-50 p-3 rounded border border-pink-200 mt-3">
                     <p className="text-xs text-pink-700">
