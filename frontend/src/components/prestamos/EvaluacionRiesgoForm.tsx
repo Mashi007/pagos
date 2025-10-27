@@ -51,7 +51,7 @@ interface EvaluacionForm {
   // Tipo de Empleo (Criterio 5)
   tipo_empleo: 'Público' | 'Privado' | 'Independiente' | 'Otro'
   
-  // Enganche y Garantías (Criterio 6)
+  // Anticipo y Valor del Activo (Criterio 6)
   enganche_pagado: number
   valor_garantia: number
   
