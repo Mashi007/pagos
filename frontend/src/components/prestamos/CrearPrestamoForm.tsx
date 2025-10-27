@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { toast } from 'sonner'
 import { 
   DollarSign, 
   Calendar, 
@@ -117,23 +118,77 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!formData.cedula || !formData.total_financiamiento || !formData.modalidad_pago) {
+    // Validaciones requeridas
+    const errors: string[] = []
+    
+    // Validar cédula
+    if (!formData.cedula || formData.cedula.trim() === '') {
+      errors.push('La cédula es requerida')
+    }
+    
+    // Validar que el cliente exista (solo para nuevos préstamos)
+    if (!prestamo && !clienteData) {
+      errors.push('Debe buscar y seleccionar un cliente válido')
+    }
+    
+    // Validar Valor Activo (solo para nuevos préstamos)
+    if (!prestamo && valorActivo <= 0) {
+      errors.push('El Valor Activo debe ser mayor a 0')
+    }
+    
+    // Validar Anticipo
+    if (anticipo < 0) {
+      errors.push('El Anticipo no puede ser negativo')
+    }
+    
+    // Validar Total de Financiamiento
+    // Para nuevos préstamos, requerir > 0
+    // Para edición, solo validar si está usando los nuevos campos (valorActivo y anticipo)
+    if (!prestamo && (!formData.total_financiamiento || formData.total_financiamiento <= 0)) {
+      errors.push('El Total de Financiamiento debe ser mayor a 0')
+    } else if (prestamo && valorActivo > 0 && (!formData.total_financiamiento || formData.total_financiamiento <= 0)) {
+      // Si está editando y usó los nuevos campos, validar
+      errors.push('El Total de Financiamiento debe ser mayor a 0')
+    }
+    
+    // Validar Modalidad de Pago
+    if (!formData.modalidad_pago) {
+      errors.push('La modalidad de pago es requerida')
+    }
+    
+    // Validar Fecha de Requerimiento
+    if (!formData.fecha_requerimiento || formData.fecha_requerimiento.trim() === '') {
+      errors.push('La fecha de requerimiento es requerida')
+    }
+    
+    // Si hay errores, mostrar mensajes
+    if (errors.length > 0) {
+      errors.forEach(error => {
+        toast.error(error)
+      })
       return
     }
 
-    if (prestamo) {
-      // Editar préstamo existente
-      await updatePrestamo.mutateAsync({
-        id: prestamo.id,
-        data: formData
-      })
-    } else {
-      // Crear nuevo préstamo
-      await createPrestamo.mutateAsync(formData as PrestamoForm)
+    try {
+      if (prestamo) {
+        // Editar préstamo existente
+        await updatePrestamo.mutateAsync({
+          id: prestamo.id,
+          data: formData
+        })
+        toast.success('Préstamo actualizado exitosamente')
+      } else {
+        // Crear nuevo préstamo
+        await createPrestamo.mutateAsync(formData as PrestamoForm)
+        toast.success('Préstamo creado exitosamente')
+      }
+      
+      onSuccess()
+      onClose()
+    } catch (error) {
+      toast.error('Error al guardar el préstamo')
+      console.error('Error saving loan:', error)
     }
-    
-    onSuccess()
-    onClose()
   }
 
   // Verificar permisos de edición
