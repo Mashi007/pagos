@@ -222,9 +222,9 @@ def evaluar_referencias(
     Returns:
         Tuple: (puntos, descripcion)
     """
-           if num_referencias >= 3 and anos_conoce >= 2:
-               return Decimal(5), "Excelente"
-           elif num_referencias >= 2 and anos_conoce >= 1:
+    if num_referencias >= 3 and anos_conoce >= 2:
+        return Decimal(5), "Excelente"
+    elif num_referencias >= 2 and anos_conoce >= 1:
         return Decimal(4), "Buena"
     elif num_referencias >= 1:
         return Decimal(2), "Regular"
