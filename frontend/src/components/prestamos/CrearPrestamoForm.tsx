@@ -133,8 +133,8 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       errors.push('Debe buscar y seleccionar un cliente válido')
     }
     
-    // Validar Valor Activo (solo para nuevos préstamos)
-    if (!prestamo && valorActivo <= 0) {
+    // Validar Valor Activo
+    if (valorActivo <= 0) {
       errors.push('El Valor Activo debe ser mayor a 0')
     }
     
@@ -149,12 +149,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     }
     
     // Validar Total de Financiamiento
-    // Para nuevos préstamos, requerir > 0
-    // Para edición, solo validar si está usando los nuevos campos (valorActivo y anticipo)
-    if (!prestamo && (!formData.total_financiamiento || formData.total_financiamiento <= 0)) {
-      errors.push('El Total de Financiamiento debe ser mayor a 0')
-    } else if (prestamo && valorActivo > 0 && (!formData.total_financiamiento || formData.total_financiamiento <= 0)) {
-      // Si está editando y usó los nuevos campos, validar
+    if (!formData.total_financiamiento || formData.total_financiamiento <= 0) {
       errors.push('El Total de Financiamiento debe ser mayor a 0')
     }
     
@@ -345,7 +340,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">
-                      Valor Activo (USD) <span className="text-green-600">(Automático)</span>
+                      Valor Activo (USD) <span className="text-blue-600">(Manual)</span>
                     </label>
                     <Input
                       type="number"
@@ -356,7 +351,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                         const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
                         setValorActivo(value)
                       }}
-                      placeholder="Se llena automáticamente"
+                      placeholder="Ingrese el valor del activo"
                       disabled={isReadOnly}
                     />
                   </div>
