@@ -1,8 +1,8 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_serializer
 
 
 # ============================================
@@ -71,9 +71,24 @@ class PrestamoResponse(PrestamoBase):
     usuario_proponente: str
     usuario_aprobador: Optional[str] = None
     observaciones: Optional[str] = None
-    fecha_registro: str
-    fecha_aprobacion: Optional[str] = None
-    fecha_actualizacion: str
+    fecha_registro: datetime
+    fecha_aprobacion: Optional[datetime] = None
+    fecha_actualizacion: datetime
+
+    @model_serializer
+    def serialize_model(self):
+        """Serializa las fechas datetime a string"""
+        data = {
+            **self.__dict__,
+            'fecha_registro': self.fecha_registro.isoformat() if isinstance(self.fecha_registro, datetime) else self.fecha_registro,
+            'fecha_aprobacion': self.fecha_aprobacion.isoformat() if self.fecha_aprobacion and isinstance(self.fecha_aprobacion, datetime) else self.fecha_aprobacion,
+            'fecha_actualizacion': self.fecha_actualizacion.isoformat() if isinstance(self.fecha_actualizacion, datetime) else self.fecha_actualizacion,
+        }
+        # Asegurar que la fecha_base_calculo también sea string si es date
+        if hasattr(self, 'fecha_base_calculo') and self.fecha_base_calculo:
+            if isinstance(self.fecha_base_calculo, date):
+                data['fecha_base_calculo'] = self.fecha_base_calculo.isoformat()
+        return data
 
     class Config:
         from_attributes = True
