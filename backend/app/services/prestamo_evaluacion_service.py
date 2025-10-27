@@ -763,11 +763,11 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
     # Puntuación total
     puntuacion_total = (
         puntos_1a
-        + puntos_1b  # Criterio 1 (33 puntos)
+        + puntos_1b  # Criterio 1 (29 puntos)
         + puntos_2a
         + puntos_2b
         + puntos_2c  # Criterio 2 (23 puntos)
-        + puntos_3  # Criterio 3 (5 puntos)
+        + puntos_3  # Criterio 3 (9 puntos)
         + puntos_4a
         + puntos_4b
         + puntos_4c  # Criterio 4 (12 puntos)
@@ -800,10 +800,16 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
         tipo_empleo_descripcion=tipo_empleo,
         sector_economico_puntos=puntos_2c,
         sector_economico_descripcion=sector,
-        # Criterio 3
+        # Criterio 3 - Referencias individuales
+        referencia1_calificacion=referencia1_cal,
+        referencia1_observaciones=datos_evaluacion.get("referencia1_observaciones", ""),
+        referencia2_calificacion=referencia2_cal,
+        referencia2_observaciones=datos_evaluacion.get("referencia2_observaciones", ""),
+        referencia3_calificacion=referencia3_cal,
+        referencia3_observaciones=datos_evaluacion.get("referencia3_observaciones", ""),
         referencias_puntos=puntos_3,
         referencias_descripcion=desc_referencias,
-        num_referencias_verificadas=num_referencias,
+        num_referencias_verificadas=0,  # Compatibilidad
         # Criterio 4
         arraigo_vivienda_puntos=puntos_4a,
         arraigo_familiar_puntos=puntos_4b,

@@ -41,10 +41,21 @@ class PrestamoEvaluacion(Base):
     sector_economico_descripcion = Column(String(50), nullable=True)
 
     # ============================================
-    # CRITERIO 3: REFERENCIAS PERSONALES (5 puntos)
+    # CRITERIO 3: REFERENCIAS PERSONALES (9 puntos)
     # ============================================
+    # 3 referencias individuales
+    referencia1_calificacion = Column(Integer, nullable=True, default=0)  # 0-3
+    referencia1_observaciones = Column(String(200), nullable=True)
+    referencia2_calificacion = Column(Integer, nullable=True, default=0)  # 0-3
+    referencia2_observaciones = Column(String(200), nullable=True)
+    referencia3_calificacion = Column(Integer, nullable=True, default=0)  # 0-3
+    referencia3_observaciones = Column(String(200), nullable=True)
+    
+    # Total de puntos (suma de las 3 referencias)
     referencias_puntos = Column(Numeric(5, 2), nullable=False, default=0)
     referencias_descripcion = Column(String(50), nullable=True)
+    
+    # Mantener para compatibilidad
     num_referencias_verificadas = Column(Integer, nullable=True)
 
     # ============================================
