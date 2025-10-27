@@ -80,7 +80,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
   const [formData, setFormData] = useState<EvaluacionForm>({
     ingresos_mensuales: 0,
     gastos_fijos_mensuales: 0,
-    historial_crediticio: 'Regular',
+    historial_crediticio: 'C',
     anos_empleo: 0,
     tipo_empleo: 'Otro',
     enganche_pagado: prestamo.total_financiamiento || 0,  // Pre-llenar con el total del préstamo
@@ -340,19 +340,20 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   </PopoverTrigger>
                   <PopoverContent className="w-96">
                     <div className="space-y-2">
-                      <h4 className="font-semibold">Historial Crediticio</h4>
-                      <p className="text-sm text-gray-600">
-                        Evalúa tu comportamiento de pago en préstamos anteriores.
-                      </p>
-                      <div className="text-sm">
-                        <p className="font-semibold mb-1">Escala de Puntos:</p>
-                        <ul className="list-disc list-inside space-y-1 text-gray-700">
-                          <li>Excelente → 20 puntos (Sin atrasos 2+ años)</li>
-                          <li>Bueno → 15 puntos</li>
-                          <li>Regular → 8 puntos</li>
-                          <li>Malo → 2 puntos</li>
-                        </ul>
-                      </div>
+                        <h4 className="font-semibold">Historial Crediticio</h4>
+                        <p className="text-sm text-gray-600">
+                          Evalúa el comportamiento de pago del cliente basado en su historial crediticio.
+                        </p>
+                        <div className="text-sm">
+                          <p className="font-semibold mb-1">Escala de Puntos:</p>
+                          <ul className="list-disc list-inside space-y-1 text-gray-700">
+                            <li>Categoría A → 20 puntos: Todos los pagos al día</li>
+                            <li>Categoría B → 15 puntos: Atrasos menores</li>
+                            <li>Categoría C → 8 puntos: Atrasos moderados</li>
+                            <li>Categoría D → 2 puntos: Mora significativa</li>
+                            <li>Categoría E → 0 puntos: Créditos irrecuperables</li>
+                          </ul>
+                        </div>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -368,10 +369,11 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Excelente">Excelente</SelectItem>
-                  <SelectItem value="Bueno">Bueno</SelectItem>
-                  <SelectItem value="Regular">Regular</SelectItem>
-                  <SelectItem value="Malo">Malo</SelectItem>
+                  <SelectItem value="A">A - Todos los pagos al día (20 pts)</SelectItem>
+                  <SelectItem value="B">B - Atrasos menores (15 pts)</SelectItem>
+                  <SelectItem value="C">C - Atrasos moderados (8 pts)</SelectItem>
+                  <SelectItem value="D">D - Mora significativa (2 pts)</SelectItem>
+                  <SelectItem value="E">E - Créditos irrecuperables (0 pts)</SelectItem>
                 </SelectContent>
               </Select>
             </CardContent>

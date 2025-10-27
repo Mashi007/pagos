@@ -61,12 +61,13 @@
 
 **Escala:** Calificación cualitativa
 
-| Calificación | Puntos | Descripción |
+| Categoría | Puntos | Descripción |
 |---|---|---|
-| Excelente | **20** | Sin atrasos en 2+ años |
-| Bueno | **15** | Algunos atrasos menores |
-| Regular | **8** | Atrasos significativos |
-| Malo | **2** | Múltiples incumplimientos |
+| A | **20** | Todos los pagos al día |
+| B | **15** | Atrasos menores o debilidades en capacidad de pago |
+| C | **8** | Atrasos moderados que comprometen el pago normal |
+| D | **2** | Mora significativa (difícil cobro) |
+| E | **0** | Créditos prácticamente irrecuperables |
 
 ---
 
