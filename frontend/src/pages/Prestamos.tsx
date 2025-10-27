@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { PrestamosList } from '@/components/prestamos/PrestamosList'
 import { DollarSign } from 'lucide-react'
 
