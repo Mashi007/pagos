@@ -208,7 +208,7 @@ def evaluar_sector_economico(sector: str) -> Decimal:
 
 
 def evaluar_referencias(
-    num_referencias: int, años_conoce: float
+    num_referencias: int, anos_conoce: float
 ) -> Tuple[Decimal, str]:
     """
     CRITERIO 3: Referencias Personales (5 puntos - 5%)
@@ -222,9 +222,9 @@ def evaluar_referencias(
     Returns:
         Tuple: (puntos, descripcion)
     """
-    if num_referencias >= 3 and años_conoce >= 2:
-        return Decimal(5), "Excelente"
-    elif num_referencias >= 2 and años_conoce >= 1:
+           if num_referencias >= 3 and anos_conoce >= 2:
+               return Decimal(5), "Excelente"
+           elif num_referencias >= 2 and anos_conoce >= 1:
         return Decimal(4), "Buena"
     elif num_referencias >= 1:
         return Decimal(2), "Regular"
@@ -669,8 +669,8 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
 
     # Criterio 3: Referencias (5 puntos)
     num_referencias = datos_evaluacion.get("num_referencias_verificadas", 0)
-    años_conoce = datos_evaluacion.get("años_conoce", 0)
-    puntos_3, desc_referencias = evaluar_referencias(num_referencias, años_conoce)
+    anos_conoce = datos_evaluacion.get("anos_conoce", 0)
+    puntos_3, desc_referencias = evaluar_referencias(num_referencias, anos_conoce)
 
     # Criterio 4: Arraigo Geográfico (12 puntos)
     tipo_vivienda = datos_evaluacion.get("tipo_vivienda", "sin_vivienda")

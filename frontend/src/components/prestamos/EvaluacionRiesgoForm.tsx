@@ -47,7 +47,7 @@ interface EvaluacionFormData {
   
   // Criterio 3: Referencias
   num_referencias_verificadas: number
-  años_conoce: number
+  anos_conoce: number
   
   // Criterio 4: Arraigo Geográfico
   tipo_vivienda: string
@@ -104,7 +104,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     
     // Criterio 3: Referencias Personales (5 puntos)
     num_referencias_verificadas: 0,
-    años_conoce: 0,
+    anos_conoce: 0,
     
     // Criterio 4: Arraigo Geográfico (12 puntos)
     tipo_vivienda: 'alquiler_1_2',
@@ -172,7 +172,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
         
         // Criterio 3
         num_referencias_verificadas: formData.num_referencias_verificadas,
-        años_conoce: formData.años_conoce,
+        anos_conoce: formData.anos_conoce,
         
         // Criterio 4
         tipo_vivienda: formData.tipo_vivienda,
@@ -457,14 +457,14 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">
-                      Años de Conocer (promedio) *
+                      Anos de Conocer (promedio) *
                     </label>
                     <Input
                       type="number"
                       step="0.1"
                       min="0"
-                      value={formData.años_conoce || ''}
-                      onChange={(e) => setFormData({ ...formData, años_conoce: parseFloat(e.target.value) || 0 })}
+                      value={formData.anos_conoce || ''}
+                      onChange={(e) => setFormData({ ...formData, anos_conoce: parseFloat(e.target.value) || 0 })}
                       required
                     />
                   </div>
