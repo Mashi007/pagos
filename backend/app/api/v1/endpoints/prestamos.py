@@ -1,13 +1,16 @@
 import logging
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
+from dateutil import parser as date_parser
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.amortizacion import Cuota
+from app.models.aprobacion import Aprobacion
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.prestamo_auditoria import PrestamoAuditoria
@@ -19,6 +22,7 @@ from app.schemas.prestamo import (
 )
 from app.services.prestamo_amortizacion_service import (
     generar_tabla_amortizacion as generar_amortizacion,
+    obtener_cuotas_prestamo,
 )
 from app.services.prestamo_evaluacion_service import crear_evaluacion_prestamo
 
@@ -130,8 +134,6 @@ def procesar_cambio_estado(
     fecha_base_calculo: Optional = None,
 ):
     """Procesa el cambio de estado del préstamo"""
-    from datetime import datetime
-
     estado_anterior = prestamo.estado
     prestamo.estado = nuevo_estado
 
@@ -169,8 +171,6 @@ def procesar_cambio_estado(
 
         # Crear registro automático en Aprobaciones (conectado por cédula)
         try:
-            from app.models.aprobacion import Aprobacion
-
             aprobacion = Aprobacion(
                 solicitante_id=current_user.id,
                 revisor_id=current_user.id,
@@ -587,8 +587,6 @@ def obtener_cuotas_prestamo(
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
-    from app.services.prestamo_amortizacion_service import obtener_cuotas_prestamo
-
     cuotas = obtener_cuotas_prestamo(prestamo_id, db)
 
     return [
@@ -744,9 +742,6 @@ def aplicar_condiciones_aprobacion(
         )
 
     try:
-        from datetime import datetime
-        from dateutil import parser as date_parser
-
         # Guardar valores anteriores para auditoría
         valores_anterior = {
             "numero_cuotas": prestamo.numero_cuotas,
