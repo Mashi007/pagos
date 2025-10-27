@@ -19,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { usePermissions } from '@/hooks/usePermissions'
 import { Prestamo } from '@/types'
 import { prestamoService } from '@/services/prestamoService'
+import { useAplicarCondicionesAprobacion } from '@/hooks/usePrestamos'
 import toast from 'react-hot-toast'
 
 interface EvaluacionRiesgoFormProps {
@@ -60,13 +61,13 @@ interface EvaluacionForm {
 
 export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: EvaluacionRiesgoFormProps) {
   const { isAdmin } = usePermissions()
+  const aplicarCondiciones = useAplicarCondicionesAprobacion()
   
   if (!isAdmin) {
     return null
   }
   
   const [isLoading, setIsLoading] = useState(false)
-  const [isApplyingConditions, setIsApplyingConditions] = useState(false)
   const [resultado, setResultado] = useState<any>(null)
   
   const [formData, setFormData] = useState<EvaluacionForm>({
@@ -480,25 +481,24 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   variant="destructive"
                   className="flex-1"
                   onClick={async () => {
-                    setIsApplyingConditions(true)
                     try {
-                      await prestamoService.aplicarCondicionesAprobacion(prestamo.id, {
-                        estado: 'RECHAZADO',
-                        observaciones: resultado.requisitos_adicionales || 'Rechazado por evaluación de riesgo'
+                      await aplicarCondiciones.mutateAsync({
+                        prestamoId: prestamo.id,
+                        condiciones: {
+                          estado: 'RECHAZADO',
+                          observaciones: resultado.requisitos_adicionales || 'Rechazado por evaluación de riesgo'
+                        }
                       })
-                      toast.success('❌ Préstamo rechazado exitosamente')
                       onSuccess()
                       onClose()
                     } catch (error: any) {
-                      toast.error(error.message || 'Error al rechazar préstamo')
-                    } finally {
-                      setIsApplyingConditions(false)
+                      // El error ya se maneja en el hook
                     }
                   }}
-                  disabled={isApplyingConditions}
+                  disabled={aplicarCondiciones.isPending}
                 >
                   <XCircle className="h-4 w-4 mr-2" />
-                  {isApplyingConditions ? 'Rechazando...' : 'Rechazar Préstamo'}
+                  {aplicarCondiciones.isPending ? 'Rechazando...' : 'Rechazar Préstamo'}
                 </Button>
                 
                 {resultado.decision_final === 'APROBADO' && (
@@ -506,28 +506,27 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     type="button"
                     className="flex-1 bg-green-600 hover:bg-green-700"
                     onClick={async () => {
-                      setIsApplyingConditions(true)
                       try {
-                        const response = await prestamoService.aplicarCondicionesAprobacion(prestamo.id, {
-                          plazo_maximo: resultado.plazo_maximo,
-                          tasa_interes: resultado.tasa_interes_aplicada,
-                          fecha_base_calculo: new Date().toISOString().split('T')[0],
-                          estado: 'APROBADO',
-                          observaciones: resultado.requisitos_adicionales || 'Aprobado por evaluación de riesgo'
+                        await aplicarCondiciones.mutateAsync({
+                          prestamoId: prestamo.id,
+                          condiciones: {
+                            plazo_maximo: resultado.plazo_maximo,
+                            tasa_interes: resultado.tasa_interes_aplicada,
+                            fecha_base_calculo: new Date().toISOString().split('T')[0],
+                            estado: 'APROBADO',
+                            observaciones: resultado.requisitos_adicionales || 'Aprobado por evaluación de riesgo'
+                          }
                         })
-                        toast.success('✅ Préstamo aprobado exitosamente')
                         onSuccess()
                         onClose()
                       } catch (error: any) {
-                        toast.error(error.message || 'Error al aprobar préstamo')
-                      } finally {
-                        setIsApplyingConditions(false)
+                        // El error ya se maneja en el hook
                       }
                     }}
-                    disabled={isApplyingConditions}
+                    disabled={aplicarCondiciones.isPending}
                   >
                     <CheckCircle className="h-4 w-4 mr-2" />
-                    {isApplyingConditions ? 'Aprobando...' : 'Aprobar Préstamo'}
+                    {aplicarCondiciones.isPending ? 'Aprobando...' : 'Aprobar Préstamo'}
                   </Button>
                 )}
               </div>
