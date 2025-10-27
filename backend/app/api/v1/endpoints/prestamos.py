@@ -668,8 +668,15 @@ def evaluar_riesgo_prestamo(
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
-    # Agregar prestamo_id a datos
+    # Agregar prestamo_id y cuota_mensual del préstamo desde BD
     datos_evaluacion["prestamo_id"] = prestamo_id
+    
+    # IMPORTANTE: Tomar la cuota del préstamo desde la base de datos
+    if "cuota_mensual" not in datos_evaluacion or not datos_evaluacion["cuota_mensual"]:
+        datos_evaluacion["cuota_mensual"] = float(prestamo.cuota_periodo) if prestamo.cuota_periodo else 0
+    
+    # Log para debugging
+    logger.info(f"Evaluando préstamo {prestamo_id} con cuota: {datos_evaluacion['cuota_mensual']} USD (del préstamo en BD)")
 
     try:
         evaluacion = crear_evaluacion_prestamo(datos_evaluacion, db)
