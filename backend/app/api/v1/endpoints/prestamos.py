@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 def calcular_cuotas(total: Decimal, modalidad: str) -> tuple[int, Decimal]:
     """
     Calcula automáticamente el número de cuotas según la modalidad de pago.
-    
+
     TABLA 12: AJUSTE DE FRECUENCIA DE PAGO
     - MENSUAL: 36 cuotas
     - QUINCENAL: 72 cuotas (36 * 2)
@@ -41,7 +41,7 @@ def calcular_cuotas(total: Decimal, modalidad: str) -> tuple[int, Decimal]:
         cuotas = 144
     else:
         cuotas = 36  # Default
-    
+
     cuota_periodo = total / Decimal(cuotas)
     return cuotas, cuota_periodo
 
@@ -98,9 +98,9 @@ def listar_prestamos(
     """Listar préstamos con paginación y filtros"""
     try:
         logger.info(f"Listar préstamos - Usuario: {current_user.email}")
-        
+
         query = db.query(Prestamo)
-        
+
         if search:
             search_pattern = f"%{search}%"
             query = query.filter(
@@ -109,15 +109,20 @@ def listar_prestamos(
                     Prestamo.cedula.ilike(search_pattern),
                 )
             )
-        
+
         if estado:
             query = query.filter(Prestamo.estado == estado)
-        
+
         # Paginación
         total = query.count()
         skip = (page - 1) * per_page
-        prestamos = query.order_by(Prestamo.fecha_registro.desc()).offset(skip).limit(per_page).all()
-        
+        prestamos = (
+            query.order_by(Prestamo.fecha_registro.desc())
+            .offset(skip)
+            .limit(per_page)
+            .all()
+        )
+
         return {
             "data": prestamos,
             "total": total,
@@ -139,21 +144,20 @@ def crear_prestamo(
     """Crear un nuevo préstamo"""
     try:
         logger.info(f"Crear préstamo - Usuario: {current_user.email}")
-        
+
         # 1. Verificar que el cliente existe
         cliente = obtener_datos_cliente(prestamo_data.cedula, db)
         if not cliente:
             raise HTTPException(
                 status_code=404,
-                detail=f"Cliente con cédula {prestamo_data.cedula} no encontrado"
+                detail=f"Cliente con cédula {prestamo_data.cedula} no encontrado",
             )
-        
+
         # 2. Calcular número de cuotas automáticamente
         numero_cuotas, cuota_periodo = calcular_cuotas(
-            prestamo_data.total_financiamiento,
-            prestamo_data.modalidad_pago
+            prestamo_data.total_financiamiento, prestamo_data.modalidad_pago
         )
-        
+
         # 3. Crear el préstamo
         prestamo = Prestamo(
             cliente_id=cliente.id,
@@ -170,11 +174,11 @@ def crear_prestamo(
             estado="DRAFT",
             usuario_proponente=current_user.email,
         )
-        
+
         db.add(prestamo)
         db.commit()
         db.refresh(prestamo)
-        
+
         # 4. Registrar en auditoría
         crear_registro_auditoria(
             prestamo_id=prestamo.id,
@@ -188,9 +192,9 @@ def crear_prestamo(
             estado_nuevo="DRAFT",
             db=db,
         )
-        
+
         return prestamo
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -207,10 +211,10 @@ def obtener_prestamo(
 ):
     """Obtener un préstamo por ID"""
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
-    
+
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    
+
     return prestamo
 
 
@@ -224,54 +228,55 @@ def actualizar_prestamo(
     """Actualizar un préstamo"""
     try:
         prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
-        
+
         if not prestamo:
             raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-        
+
         # Verificar estado: si está APROBADO/RECHAZADO, solo Admin puede editar
         if prestamo.estado in ["APROBADO", "RECHAZADO"]:
             if not current_user.is_superuser:
                 raise HTTPException(
                     status_code=403,
-                    detail="Solo administradores pueden editar préstamos aprobados/rechazados"
+                    detail="Solo administradores pueden editar préstamos aprobados/rechazados",
                 )
-        
+
         # Guardar valores antiguos para auditoría
         valores_viejos = {
             "total_financiamiento": str(prestamo.total_financiamiento),
             "modalidad_pago": prestamo.modalidad_pago,
             "estado": prestamo.estado,
         }
-        
+
         # Actualizar campos
         if prestamo_data.total_financiamiento is not None:
             prestamo.total_financiamiento = prestamo_data.total_financiamiento
             # Recalcular cuotas
             prestamo.numero_cuotas, prestamo.cuota_periodo = calcular_cuotas(
-                prestamo.total_financiamiento,
-                prestamo.modalidad_pago
+                prestamo.total_financiamiento, prestamo.modalidad_pago
             )
-        
+
         if prestamo_data.modalidad_pago is not None:
             prestamo.modalidad_pago = prestamo_data.modalidad_pago
             # Recalcular cuotas
             prestamo.numero_cuotas, prestamo.cuota_periodo = calcular_cuotas(
-                prestamo.total_financiamiento,
-                prestamo.modalidad_pago
+                prestamo.total_financiamiento, prestamo.modalidad_pago
             )
-        
+
         if prestamo_data.estado is not None:
             # Solo cambiar estado si es Admin o si va de DRAFT a EN_REVISION
-            if current_user.is_superuser or (prestamo.estado == "DRAFT" and prestamo_data.estado == "EN_REVISION"):
+            if current_user.is_superuser or (
+                prestamo.estado == "DRAFT" and prestamo_data.estado == "EN_REVISION"
+            ):
                 estado_anterior = prestamo.estado
                 prestamo.estado = prestamo_data.estado
-                
+
                 # Si se aprueba, registrar aprobador
                 if prestamo_data.estado == "APROBADO":
                     prestamo.usuario_aprobador = current_user.email
                     from datetime import datetime
+
                     prestamo.fecha_aprobacion = datetime.now()
-                
+
                 # Registrar cambio de estado en auditoría
                 crear_registro_auditoria(
                     prestamo_id=prestamo.id,
@@ -285,13 +290,13 @@ def actualizar_prestamo(
                     estado_nuevo=prestamo_data.estado,
                     db=db,
                 )
-        
+
         if prestamo_data.observaciones is not None:
             prestamo.observaciones = prestamo_data.observaciones
-        
+
         db.commit()
         db.refresh(prestamo)
-        
+
         # Registrar en auditoría (simplificado)
         crear_registro_auditoria(
             prestamo_id=prestamo.id,
@@ -303,9 +308,9 @@ def actualizar_prestamo(
             accion="EDITAR",
             db=db,
         )
-        
+
         return prestamo
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -323,18 +328,20 @@ def eliminar_prestamo(
     """Eliminar un préstamo (solo Admin)"""
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Solo administradores")
-    
+
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
-    
+
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    
+
     # Eliminar registros de auditoría asociados
-    db.query(PrestamoAuditoria).filter(PrestamoAuditoria.prestamo_id == prestamo_id).delete()
-    
+    db.query(PrestamoAuditoria).filter(
+        PrestamoAuditoria.prestamo_id == prestamo_id
+    ).delete()
+
     db.delete(prestamo)
     db.commit()
-    
+
     return {"message": "Préstamo eliminado exitosamente"}
 
 
@@ -362,7 +369,7 @@ def obtener_auditoria_prestamo(
         .order_by(PrestamoAuditoria.fecha_cambio.desc())
         .all()
     )
-    
+
     return [
         {
             "id": a.id,

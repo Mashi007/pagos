@@ -10,9 +10,13 @@ from pydantic import BaseModel, Field, field_validator
 # ============================================
 class PrestamoBase(BaseModel):
     cedula: str = Field(..., max_length=20, description="Cédula del cliente")
-    total_financiamiento: Decimal = Field(..., gt=0, description="Monto total del préstamo")
-    modalidad_pago: str = Field(..., max_length=20, description="MENSUAL, QUINCENAL, SEMANAL")
-    
+    total_financiamiento: Decimal = Field(
+        ..., gt=0, description="Monto total del préstamo"
+    )
+    modalidad_pago: str = Field(
+        ..., max_length=20, description="MENSUAL, QUINCENAL, SEMANAL"
+    )
+
     @field_validator("modalidad_pago")
     @classmethod
     def validate_modalidad(cls, v: str) -> str:
@@ -24,6 +28,7 @@ class PrestamoBase(BaseModel):
 
 class PrestamoCreate(PrestamoBase):
     """Schema para crear un préstamo"""
+
     fecha_requerimiento: date
     producto: str = Field(..., max_length=100)
     producto_financiero: str = Field(..., max_length=100)
@@ -31,6 +36,7 @@ class PrestamoCreate(PrestamoBase):
 
 class PrestamoUpdate(BaseModel):
     """Schema para actualizar un préstamo"""
+
     total_financiamiento: Optional[Decimal] = None
     modalidad_pago: Optional[str] = None
     fecha_requerimiento: Optional[date] = None
@@ -47,6 +53,7 @@ class PrestamoUpdate(BaseModel):
 # ============================================
 class PrestamoResponse(PrestamoBase):
     """Schema para respuesta de préstamo"""
+
     id: int
     cliente_id: int
     nombres: str
@@ -77,41 +84,43 @@ class PrestamoResponse(PrestamoBase):
 # ============================================
 class PrestamoEvaluacionBase(BaseModel):
     """Schema base para evaluación de préstamo"""
+
     pass
 
 
 class PrestamoEvaluacionCreate(PrestamoEvaluacionBase):
     """Schema para crear evaluación"""
+
     prestamo_id: int
     # Criterio 1: Ratio de Endeudamiento (25%)
     ratio_endeudamiento_puntos: Decimal = Field(default=0, ge=0, le=25)
     ratio_endeudamiento_calculo: Decimal = Field(default=0)
-    
+
     # Criterio 2: Ratio de Cobertura (20%)
     ratio_cobertura_puntos: Decimal = Field(default=0, ge=0, le=20)
     ratio_cobertura_calculo: Decimal = Field(default=0)
-    
+
     # Criterio 3: Historial Crediticio (20%)
     historial_crediticio_puntos: Decimal = Field(default=0, ge=0, le=20)
     historial_crediticio_descripcion: Optional[str] = None
-    
+
     # Criterio 4: Estabilidad Laboral (15%)
     estabilidad_laboral_puntos: Decimal = Field(default=0, ge=0, le=15)
     anos_empleo: Optional[Decimal] = None
-    
+
     # Criterio 5: Tipo de Empleo (10%)
     tipo_empleo_puntos: Decimal = Field(default=0, ge=0, le=10)
     tipo_empleo_descripcion: Optional[str] = None
-    
+
     # Criterio 6: Enganche y Garantías (10%)
     enganche_garantias_puntos: Decimal = Field(default=0, ge=0, le=10)
     enganche_garantias_calculo: Decimal = Field(default=0)
-    
+
     # Puntuación total y clasificación
     puntuacion_total: Decimal = Field(default=0, ge=0, le=100)
     clasificacion_riesgo: str = Field(default="PENDIENTE")
     decision_final: str = Field(default="PENDIENTE")
-    
+
     # Condiciones
     tasa_interes_aplicada: Optional[Decimal] = None
     plazo_maximo: Optional[int] = None
@@ -121,6 +130,7 @@ class PrestamoEvaluacionCreate(PrestamoEvaluacionBase):
 
 class PrestamoEvaluacionResponse(PrestamoEvaluacionBase):
     """Schema para respuesta de evaluación"""
+
     id: int
     prestamo_id: int
     ratio_endeudamiento_puntos: Decimal
@@ -152,6 +162,7 @@ class PrestamoEvaluacionResponse(PrestamoEvaluacionBase):
 # ============================================
 class PrestamoAuditoriaResponse(BaseModel):
     """Schema para respuesta de auditoría"""
+
     id: int
     prestamo_id: int
     cedula: str
