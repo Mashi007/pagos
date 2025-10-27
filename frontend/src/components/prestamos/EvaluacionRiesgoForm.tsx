@@ -130,7 +130,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     )
     
     if (!confirmacion) {
-      toast.info('Evaluación cancelada. Verifique los documentos antes de continuar.')
+      toast('Evaluación cancelada. Verifique los documentos antes de continuar.')
       return
     }
     
