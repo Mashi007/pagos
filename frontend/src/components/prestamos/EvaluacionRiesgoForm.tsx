@@ -43,7 +43,7 @@ interface EvaluacionForm {
   // Calculado automáticamente
   
   // Historial Crediticio (Criterio 3)
-  historial_crediticio: 'Excelente' | 'Bueno' | 'Regular' | 'Malo'
+  historial_crediticio: 'A' | 'B' | 'C' | 'D' | 'E'
   
   // Estabilidad Laboral (Criterio 4)
   anos_empleo: number
@@ -80,7 +80,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
   const [formData, setFormData] = useState<EvaluacionForm>({
     ingresos_mensuales: 0,
     gastos_fijos_mensuales: 0,
-    historial_crediticio: 'C',
+    historial_crediticio: 'C',  // Por defecto categoría C
     anos_empleo: 0,
     tipo_empleo: 'Otro',
     enganche_pagado: 0,  // Dejar vacío para llenar manualmente
