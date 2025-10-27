@@ -162,7 +162,14 @@ def procesar_cambio_estado(
         # Si se aprueba y tiene fecha_base_calculo, generar tabla de amortización
         if prestamo.fecha_base_calculo:
             try:
-                generar_amortizacion(prestamo, prestamo.fecha_base_calculo, db)
+                # Convertir a date si es necesario
+                if isinstance(prestamo.fecha_base_calculo, str):
+                    from dateutil import parser as date_parser
+                    fecha = date_parser.parse(prestamo.fecha_base_calculo).date()
+                else:
+                    fecha = prestamo.fecha_base_calculo
+                
+                generar_amortizacion(prestamo, fecha, db)
                 logger.info(
                     f"Tabla de amortización generada para préstamo {prestamo.id}"
                 )
@@ -172,6 +179,8 @@ def procesar_cambio_estado(
 
         # Crear registro automático en Aprobaciones (conectado por cédula)
         try:
+            # Verificar que el modelo tenga la columna resultado
+            from app.models.aprobacion import Aprobacion
             aprobacion = Aprobacion(
                 solicitante_id=current_user.id,
                 revisor_id=current_user.id,
@@ -185,9 +194,11 @@ def procesar_cambio_estado(
                 prioridad="NORMAL",
             )
             db.add(aprobacion)
+            db.commit()
             logger.info(f"Registro de aprobación creado para préstamo {prestamo.id}")
         except Exception as e:
             logger.error(f"Error creando registro de aprobación: {str(e)}")
+            db.rollback()
             # No fallar el préstamo si falla la creación de aprobación
 
     crear_registro_auditoria(
