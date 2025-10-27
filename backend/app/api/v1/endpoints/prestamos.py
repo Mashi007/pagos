@@ -238,6 +238,34 @@ def crear_registro_auditoria(
 # ============================================
 # ENDPOINTS
 # ============================================
+@router.get("/stats")
+def obtener_estadisticas_prestamos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener estadísticas de préstamos"""
+    try:
+        total_prestamos = db.query(Prestamo).count()
+        prestamos_por_estado = (
+            db.query(Prestamo.estado, db.func.count(Prestamo.id))
+            .group_by(Prestamo.estado)
+            .all()
+        )
+        
+        total_financiado = db.query(
+            db.func.sum(Prestamo.total_financiamiento)
+        ).scalar() or Decimal("0.00")
+        
+        return {
+            "total_prestamos": total_prestamos,
+            "prestamos_por_estado": {estado: count for estado, count in prestamos_por_estado},
+            "total_financiado": float(total_financiado),
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo estadísticas: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
 @router.get("", response_model=dict)
 def listar_prestamos(
     page: int = Query(1, ge=1),
