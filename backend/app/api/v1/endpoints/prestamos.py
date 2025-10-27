@@ -713,14 +713,16 @@ def evaluar_riesgo_prestamo(
             # Calcular edad exacta en años con meses desde fecha de nacimiento
             hoy = date.today()
             nacimiento = cliente.fecha_nacimiento
-            
+
             # Calcular años
             años = hoy.year - nacimiento.year
-            
+
             # Calcular meses
-            if hoy.month < nacimiento.month or (hoy.month == nacimiento.month and hoy.day < nacimiento.day):
+            if hoy.month < nacimiento.month or (
+                hoy.month == nacimiento.month and hoy.day < nacimiento.day
+            ):
                 años -= 1
-            
+
             # Calcular meses adicionales
             if hoy.month >= nacimiento.month:
                 meses = hoy.month - nacimiento.month
@@ -730,18 +732,18 @@ def evaluar_riesgo_prestamo(
                 meses = (12 - nacimiento.month) + hoy.month
                 if hoy.day < nacimiento.day:
                     meses -= 1
-            
+
             # Normalizar meses (si >= 12, agregar al año)
             if meses >= 12:
                 años += meses // 12
                 meses = meses % 12
-            
+
             # Edad total en años decimales para el cálculo
             edad_total = años + (meses / 12)
             datos_evaluacion["edad"] = edad_total
             datos_evaluacion["edad_años"] = años
             datos_evaluacion["edad_meses"] = meses
-            
+
             logger.info(
                 f"Edad calculada desde BD: {años} años y {meses} meses "
                 f"(fecha_nacimiento: {cliente.fecha_nacimiento})"
