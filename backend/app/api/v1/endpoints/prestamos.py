@@ -30,13 +30,11 @@ logger = logging.getLogger(__name__)
 # FUNCIONES AUXILIARES
 # ============================================
 def calcular_cuotas(
-    total: Decimal, 
-    modalidad: str, 
-    plazo_maximo_meses: Optional[int] = None
+    total: Decimal, modalidad: str, plazo_maximo_meses: Optional[int] = None
 ) -> tuple[int, Decimal]:
     """
     Calcula el número de cuotas según la modalidad de pago.
-    
+
     Si hay plazo_maximo (después de evaluación de riesgo), lo utiliza.
     Si no hay plazo_maximo (DRAFT), usa valores por defecto.
 
@@ -44,7 +42,7 @@ def calcular_cuotas(
     - MENSUAL: 36 cuotas por defecto
     - QUINCENAL: 72 cuotas por defecto (36 * 2)
     - SEMANAL: 144 cuotas por defecto (36 * 4)
-    
+
     Si hay plazo_maximo_meses (después de evaluación):
     - MENSUAL: plazo_maximo_meses cuotas
     - QUINCENAL: plazo_maximo_meses * 2 cuotas
@@ -123,13 +121,13 @@ def actualizar_monto_y_cuotas(prestamo: Prestamo, monto: Decimal):
 
 
 def procesar_cambio_estado(
-    prestamo: Prestamo, 
-    nuevo_estado: str, 
-    current_user: User, 
+    prestamo: Prestamo,
+    nuevo_estado: str,
+    current_user: User,
     db: Session,
     plazo_maximo_meses: Optional[int] = None,
     tasa_interes: Optional[Decimal] = None,
-    fecha_base_calculo: Optional = None
+    fecha_base_calculo: Optional = None,
 ):
     """Procesa el cambio de estado del préstamo"""
     from datetime import datetime
@@ -140,18 +138,20 @@ def procesar_cambio_estado(
     if nuevo_estado == "APROBADO":
         prestamo.usuario_aprobador = current_user.email
         prestamo.fecha_aprobacion = datetime.now()
-        
+
         # Aplicar condiciones desde evaluación de riesgo (FASE 2)
         if plazo_maximo_meses:
             numero_cuotas, cuota_periodo = actualizar_cuotas_segun_plazo_maximo(
                 prestamo, plazo_maximo_meses, db
             )
-            logger.info(f"Cuotas ajustadas según análisis de riesgo: {numero_cuotas} cuotas")
-        
+            logger.info(
+                f"Cuotas ajustadas según análisis de riesgo: {numero_cuotas} cuotas"
+            )
+
         # Aplicar tasa de interés desde evaluación
         if tasa_interes:
             prestamo.tasa_interes = tasa_interes
-            
+
         # Aplicar fecha base de cálculo
         if fecha_base_calculo:
             prestamo.fecha_base_calculo = fecha_base_calculo
@@ -379,12 +379,7 @@ def actualizar_prestamo(
         if prestamo_data.estado is not None and puede_cambiar_estado(
             prestamo, prestamo_data.estado, current_user
         ):
-            procesar_cambio_estado(
-                prestamo, 
-                prestamo_data.estado, 
-                current_user, 
-                db
-            )
+            procesar_cambio_estado(prestamo, prestamo_data.estado, current_user, db)
 
         # 6. Guardar cambios
         db.commit()
@@ -568,21 +563,19 @@ def actualizar_cuotas_segun_plazo_maximo(
     """
     # Recalcular cuotas con plazo máximo
     numero_cuotas, cuota_periodo = calcular_cuotas(
-        prestamo.total_financiamiento,
-        prestamo.modalidad_pago,
-        plazo_maximo_meses
+        prestamo.total_financiamiento, prestamo.modalidad_pago, plazo_maximo_meses
     )
-    
+
     # Actualizar préstamo
     prestamo.numero_cuotas = numero_cuotas
     prestamo.cuota_periodo = cuota_periodo
-    
+
     logger.info(
         f"Cuotas recalculadas para préstamo {prestamo.id}: "
         f"{numero_cuotas} cuotas de ${cuota_periodo} "
         f"(plazo_maximo={plazo_maximo_meses} meses)"
     )
-    
+
     return numero_cuotas, cuota_periodo
 
 
@@ -596,7 +589,7 @@ def evaluar_riesgo_prestamo(
     """
     Evaluar riesgo de un préstamo usando los 6 criterios de evaluación.
     Requiere datos del cliente y del préstamo.
-    
+
     FASE 2: Después de la evaluación, se determina el plazo máximo
     que se usará para recalcular las cuotas.
     """
@@ -609,7 +602,7 @@ def evaluar_riesgo_prestamo(
 
     try:
         evaluacion = crear_evaluacion_prestamo(datos_evaluacion, db)
-        
+
         # IMPORTANTE: No actualizar cuotas aquí, solo evaluar.
         # La actualización se hace al aprobar el préstamo.
 
@@ -663,10 +656,10 @@ def aplicar_condiciones_aprobacion(
 ):
     """
     Aplica las condiciones determinadas por la evaluación de riesgo.
-    
+
     FASE 2: Después de evaluar el riesgo, el admin puede aprobar el préstamo
     y aplicar las condiciones (plazo máximo recalcula cuotas, tasa de interés, etc.).
-    
+
     Ejemplo de uso:
     POST /api/v1/prestamos/123/aplicar-condiciones-aprobacion
     {
@@ -680,18 +673,18 @@ def aplicar_condiciones_aprobacion(
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    
+
     # Solo admin puede aplicar condiciones
     if not current_user.is_admin:
         raise HTTPException(
-            status_code=403, 
-            detail="Solo administradores pueden aprobar con condiciones"
+            status_code=403,
+            detail="Solo administradores pueden aprobar con condiciones",
         )
-    
+
     try:
         from datetime import datetime
         from dateutil import parser as date_parser
-        
+
         # Guardar valores anteriores para auditoría
         valores_anterior = {
             "numero_cuotas": prestamo.numero_cuotas,
@@ -699,28 +692,26 @@ def aplicar_condiciones_aprobacion(
             "tasa_interes": str(prestamo.tasa_interes),
             "estado": prestamo.estado,
         }
-        
+
         # Aplicar plazo máximo y recalcular cuotas (SI VIENE)
         if "plazo_maximo" in condiciones:
             actualizar_cuotas_segun_plazo_maximo(
-                prestamo, 
-                condiciones["plazo_maximo"], 
-                db
+                prestamo, condiciones["plazo_maximo"], db
             )
-        
+
         # Aplicar tasa de interés (SI VIENE)
         if "tasa_interes" in condiciones:
             prestamo.tasa_interes = Decimal(str(condiciones["tasa_interes"]))
-        
+
         # Aplicar fecha base de cálculo (SI VIENE)
         if "fecha_base_calculo" in condiciones:
             fecha_str = condiciones["fecha_base_calculo"]
             prestamo.fecha_base_calculo = date_parser.parse(fecha_str).date()
-        
+
         # Aplicar observaciones
         if "observaciones" in condiciones:
             prestamo.observaciones = condiciones["observaciones"]
-        
+
         # Cambiar estado si se especifica
         nuevo_estado = condiciones.get("estado")
         if nuevo_estado:
@@ -730,13 +721,17 @@ def aplicar_condiciones_aprobacion(
                 current_user,
                 db,
                 plazo_maximo_meses=condiciones.get("plazo_maximo"),
-                tasa_interes=Decimal(str(condiciones.get("tasa_interes", 0))) if "tasa_interes" in condiciones else None,
+                tasa_interes=(
+                    Decimal(str(condiciones.get("tasa_interes", 0)))
+                    if "tasa_interes" in condiciones
+                    else None
+                ),
                 fecha_base_calculo=prestamo.fecha_base_calculo,
             )
-        
+
         db.commit()
         db.refresh(prestamo)
-        
+
         # Registrar en auditoría
         crear_registro_auditoria(
             prestamo_id=prestamo.id,
@@ -750,7 +745,7 @@ def aplicar_condiciones_aprobacion(
             estado_nuevo=nuevo_estado or prestamo.estado,
             db=db,
         )
-        
+
         return {
             "message": "Condiciones aplicadas exitosamente",
             "prestamo_id": prestamo_id,
@@ -759,11 +754,10 @@ def aplicar_condiciones_aprobacion(
             "tasa_interes": float(prestamo.tasa_interes),
             "estado": prestamo.estado,
         }
-        
+
     except Exception as e:
         logger.error(f"Error aplicando condiciones: {str(e)}")
         db.rollback()
         raise HTTPException(
-            status_code=500, 
-            detail=f"Error aplicando condiciones: {str(e)}"
+            status_code=500, detail=f"Error aplicando condiciones: {str(e)}"
         )
