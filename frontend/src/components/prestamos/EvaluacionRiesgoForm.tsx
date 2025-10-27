@@ -110,8 +110,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
       : 0
 
     // LTV (Loan to Value) - Porcentaje de anticipo sobre el valor del activo
-    const ltv = prestamo.total_financiamiento > 0
-      ? (formData.enganche_pagado / prestamo.total_financiamiento) * 100
+    const ltv = formData.valor_garantia > 0
+      ? (formData.enganche_pagado / formData.valor_garantia) * 100
       : 0
 
     return {
@@ -156,7 +156,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
         anos_empleo: formData.anos_empleo,
         tipo_empleo: formData.tipo_empleo,
         enganche_pagado: formData.enganche_pagado,
-        monto_financiado: prestamo.total_financiamiento,
+        monto_financiado: formData.valor_garantia || prestamo.total_financiamiento,  // Usar valor_garantia o total_financiamiento como fallback
         red_flags: redFlags,
         verificado_usuario: true,  // ✅ Usuario confirmó verificación
       }
