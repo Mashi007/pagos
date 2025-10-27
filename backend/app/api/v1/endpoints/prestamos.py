@@ -59,7 +59,7 @@ def obtener_datos_cliente(cedula: str, db: Session) -> Optional[Cliente]:
 def verificar_permisos_edicion(prestamo: Prestamo, current_user: User):
     """Verifica si el usuario tiene permisos para editar el préstamo"""
     if prestamo.estado in ["APROBADO", "RECHAZADO"]:
-        if not current_user.is_superuser:
+        if not current_user.is_admin:
             raise HTTPException(
                 status_code=403,
                 detail="Solo administradores pueden editar préstamos aprobados/rechazados",
@@ -70,7 +70,7 @@ def puede_cambiar_estado(
     prestamo: Prestamo, nuevo_estado: str, current_user: User
 ) -> bool:
     """Verifica si el usuario puede cambiar el estado del préstamo"""
-    return current_user.is_superuser or (
+    return current_user.is_admin or (
         prestamo.estado == "DRAFT" and nuevo_estado == "EN_REVISION"
     )
 
@@ -369,7 +369,7 @@ def eliminar_prestamo(
     current_user: User = Depends(get_current_user),
 ):
     """Eliminar un préstamo (solo Admin)"""
-    if not current_user.is_superuser:
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores")
 
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
@@ -437,7 +437,7 @@ def generar_amortizacion_prestamo(
     current_user: User = Depends(get_current_user),
 ):
     """Generar tabla de amortización para un préstamo aprobado (solo Admin)"""
-    if not current_user.is_superuser:
+    if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores")
 
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
