@@ -43,7 +43,7 @@ from app.schemas.prestamo import (
     PrestamoEvaluacionResponse,
     PrestamoResponse,
     PrestamoUpdate,
-)
+)  # noqa: I001
 
 # ============================================
 # EXPORTS PÚBLICOS
