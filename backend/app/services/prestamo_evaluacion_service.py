@@ -208,18 +208,16 @@ def evaluar_sector_economico(sector: str) -> Decimal:
 # ============================================
 
 
-def evaluar_referencias_individuales(
-    calificacion: int
-) -> Decimal:
+def evaluar_referencias_individuales(calificacion: int) -> Decimal:
     """
     CRITERIO 3: Referencias Personales (9 puntos - 3 referencias)
-    
+
     Calificaciones:
     - 3 = Recomendable -> 3 puntos
     - 2 = Dudosa -> 2 puntos
     - 1 = No recomendable -> 1 punto
     - 0 = No contestó -> 0 puntos
-    
+
     Returns:
         Puntos de 0 a 3 por referencia
     """
@@ -612,7 +610,7 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
     # Criterio 1.A: Ratio de Endeudamiento (14 puntos)
     ratio_end = calcular_ratio_endeudamiento(ingresos, otras_deudas)
     puntos_1a = evaluar_ratio_endeudamiento_puntos(ratio_end)
-    
+
     # Criterio 1.B: Ratio de Cobertura (15 puntos)
     ratio_cob = calcular_ratio_cobertura(ingresos, gastos_fijos, otras_deudas, cuota)
     puntos_1b, rechazo_automatico = evaluar_ratio_cobertura_puntos(ratio_cob)
@@ -669,8 +667,12 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
     referencia1_cal = int(datos_evaluacion.get("referencia1_calificacion", 0))
     referencia2_cal = int(datos_evaluacion.get("referencia2_calificacion", 0))
     referencia3_cal = int(datos_evaluacion.get("referencia3_calificacion", 0))
-    puntos_3 = Decimal(referencia1_cal) + Decimal(referencia2_cal) + Decimal(referencia3_cal)
-    desc_referencias = f"Ref1:{referencia1_cal} Ref2:{referencia2_cal} Ref3:{referencia3_cal}"
+    puntos_3 = (
+        Decimal(referencia1_cal) + Decimal(referencia2_cal) + Decimal(referencia3_cal)
+    )
+    desc_referencias = (
+        f"Ref1:{referencia1_cal} Ref2:{referencia2_cal} Ref3:{referencia3_cal}"
+    )
 
     # Criterio 4: Arraigo Geográfico (12 puntos)
     tipo_vivienda = datos_evaluacion.get("tipo_vivienda", "sin_vivienda")
@@ -728,11 +730,17 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
             tipo_empleo_puntos=puntos_2b,
             sector_economico_puntos=puntos_2c,
             referencia1_calificacion=referencia1_cal,
-            referencia1_observaciones=datos_evaluacion.get("referencia1_observaciones", ""),
+            referencia1_observaciones=datos_evaluacion.get(
+                "referencia1_observaciones", ""
+            ),
             referencia2_calificacion=referencia2_cal,
-            referencia2_observaciones=datos_evaluacion.get("referencia2_observaciones", ""),
+            referencia2_observaciones=datos_evaluacion.get(
+                "referencia2_observaciones", ""
+            ),
             referencia3_calificacion=referencia3_cal,
-            referencia3_observaciones=datos_evaluacion.get("referencia3_observaciones", ""),
+            referencia3_observaciones=datos_evaluacion.get(
+                "referencia3_observaciones", ""
+            ),
             referencias_puntos=puntos_3,
             arraigo_vivienda_puntos=puntos_4a,
             arraigo_familiar_puntos=puntos_4b,

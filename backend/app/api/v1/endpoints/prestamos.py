@@ -751,11 +751,11 @@ def evaluar_riesgo_prestamo(
                     "puntos": float(evaluacion.sector_economico_puntos),
                     "descripcion": evaluacion.sector_economico_descripcion,
                 },
-                       # Criterio 3: Referencias (9 puntos)
-                       "referencias": {
-                           "puntos": float(evaluacion.referencias_puntos),
-                           "descripcion": evaluacion.referencias_descripcion,
-                       },
+                # Criterio 3: Referencias (9 puntos)
+                "referencias": {
+                    "puntos": float(evaluacion.referencias_puntos),
+                    "descripcion": evaluacion.referencias_descripcion,
+                },
                 # Criterio 4: Arraigo Geográfico (12 puntos)
                 "arraigo_vivienda": float(evaluacion.arraigo_vivienda_puntos),
                 "arraigo_familiar": float(evaluacion.arraigo_familiar_puntos),
