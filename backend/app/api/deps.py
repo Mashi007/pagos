@@ -70,7 +70,7 @@ def get_current_user(
 
         # Si el token expiró, retornar 401 específico
         if "expired" in error_msg.lower() or "expired" in str(type(e)).lower():
-            logger.warning(f"Token expirado - usuario debe hacer login nuevamente")
+            logger.warning("Token expirado - usuario debe hacer login nuevamente")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token de acceso expirado. Por favor, inicia sesión nuevamente.",
