@@ -1,253 +1,224 @@
-import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { useState } from 'react'
+import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
-  Eye,
-  RefreshCw,
-  Loader2,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  DollarSign,
-  Calculator,
-  FileText
-} from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { prestamoService, Prestamo } from '@/services/prestamoService'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { LoadingSpinner } from '@/components/ui/loading-spinner'
-import toast from 'react-hot-toast'
+import { usePrestamos, useDeletePrestamo } from '@/hooks/usePrestamos'
+import { CrearPrestamoForm } from './CrearPrestamoForm'
+import { formatDate } from '@/utils'
 
-interface PrestamosListProps {
-  onShowAmortizacion?: () => void
-}
+export function PrestamosList() {
+  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState('')
+  const [estado, setEstado] = useState<string | undefined>(undefined)
+  const [showCrearPrestamo, setShowCrearPrestamo] = useState(false)
+  const [editingPrestamo, setEditingPrestamo] = useState<any>(null)
+  const [deletePrestamoId, setDeletePrestamoId] = useState<number | null>(null)
 
-export function PrestamosList({ onShowAmortizacion }: PrestamosListProps) {
-  const queryClient = useQueryClient()
-  const [searchTerm, setSearchTerm] = useState('')
-  const [estadoFilter, setEstadoFilter] = useState('')
-  const [showForm, setShowForm] = useState(false)
-  const [showAmortizacion, setShowAmortizacion] = useState(false)
-  const [editingPrestamo, setEditingPrestamo] = useState<Prestamo | null>(null)
+  const { data, isLoading, error } = usePrestamos({ search, estado }, page)
+  const deletePrestamo = useDeletePrestamo()
 
-  // Queries
-  const { data: prestamosData, isLoading, error } = useQuery({
-    queryKey: ['prestamos-list', searchTerm, estadoFilter],
-    queryFn: () => prestamoService.listarPrestamos({
-      limit: 100,
-      estado: estadoFilter || undefined
-    }),
-    refetchInterval: 30000
-  })
-
-  const prestamos = prestamosData?.items || []
-
-  // Handlers
-  const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['prestamos-list'] })
-    queryClient.invalidateQueries({ queryKey: ['prestamos-stats'] })
-    toast.success('🔄 Datos actualizados')
+  const getEstadoBadge = (estado: string) => {
+    const badges = {
+      DRAFT: 'bg-gray-100 text-gray-800 border-gray-300',
+      EN_REVISION: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+      APROBADO: 'bg-green-100 text-green-800 border-green-300',
+      RECHAZADO: 'bg-red-100 text-red-800 border-red-300',
+    }
+    return badges[estado as keyof typeof badges] || badges.DRAFT
   }
 
-  const handleEdit = (prestamo: Prestamo) => {
+  const handleEdit = (prestamo: any) => {
     setEditingPrestamo(prestamo)
-    setShowForm(true)
+    setShowCrearPrestamo(true)
   }
 
   const handleDelete = async (id: number) => {
-    if (confirm('¿Estás seguro de eliminar este préstamo?')) {
-      try {
-        await prestamoService.eliminarPrestamo(id)
-        toast.success('✅ Préstamo eliminado')
-        handleRefresh()
-      } catch (error) {
-        toast.error('❌ Error al eliminar préstamo')
-      }
+    if (window.confirm('¿Está seguro de eliminar este préstamo?')) {
+      await deletePrestamo.mutateAsync(id)
     }
   }
 
-  const getEstadoBadge = (estado: string) => {
-    const estados = {
-      'PENDIENTE': { color: 'bg-yellow-100 text-yellow-800', icon: Clock },
-      'APROBADO': { color: 'bg-green-100 text-green-800', icon: CheckCircle },
-      'ACTIVO': { color: 'bg-blue-100 text-blue-800', icon: CheckCircle },
-      'EN_MORA': { color: 'bg-red-100 text-red-800', icon: AlertCircle },
-      'COMPLETADO': { color: 'bg-gray-100 text-gray-800', icon: CheckCircle },
-      'RECHAZADO': { color: 'bg-red-100 text-red-800', icon: AlertCircle }
-    }
-    
-    const config = estados[estado as keyof typeof estados] || estados.PENDIENTE
-    const Icon = config.icon
-    
+  if (showCrearPrestamo) {
     return (
-      <Badge className={config.color}>
-        <Icon className="h-3 w-3 mr-1" />
-        {estado}
-      </Badge>
-    )
-  }
-
-  const prestamosFiltrados = prestamos.filter(prestamo =>
-    prestamo.codigo_prestamo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    prestamo.cliente_id.toString().includes(searchTerm)
-  )
-
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <LoadingSpinner />
-        </CardContent>
-      </Card>
-    )
-  }
-
-  if (error) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center text-red-600">
-            <AlertCircle className="h-8 w-8 mx-auto mb-2" />
-            <p>Error al cargar préstamos</p>
-          </div>
-        </CardContent>
-      </Card>
+      <CrearPrestamoForm
+        prestamo={editingPrestamo}
+        onClose={() => {
+          setShowCrearPrestamo(false)
+          setEditingPrestamo(null)
+        }}
+        onSuccess={() => {
+          setShowCrearPrestamo(false)
+          setEditingPrestamo(null)
+        }}
+      />
     )
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center">
-            <DollarSign className="mr-2 h-5 w-5" />
-            Lista de Préstamos ({prestamosFiltrados.length})
-          </CardTitle>
-          <div className="flex items-center space-x-2">
-            <Button onClick={handleRefresh} variant="outline" size="sm">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Actualizar
-            </Button>
-            <Button onClick={() => onShowAmortizacion?.()} variant="outline">
-              <Calculator className="h-4 w-4 mr-2" />
-              Tabla de Amortización
-            </Button>
-            <Button onClick={() => setShowForm(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Nuevo Préstamo
-            </Button>
-          </div>
+    <div className="space-y-6">
+      {/* Encabezado */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Préstamos</h1>
+          <p className="text-gray-600 mt-1">Gestión de préstamos y financiamiento</p>
         </div>
-      </CardHeader>
-      <CardContent>
-        {/* Filtros */}
-        <div className="flex items-center space-x-4 mb-6">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="Buscar por código o ID cliente..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+        <Button 
+          size="lg"
+          onClick={() => setShowCrearPrestamo(true)}
+          className="px-8 py-6 text-base font-semibold min-w-[200px]"
+        >
+          <Plus className="w-5 h-5 mr-2" />
+          Nuevo Préstamo
+        </Button>
+      </div>
+
+      {/* Filtros y búsqueda */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                <Input
+                  placeholder="Buscar por nombre, cédula..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
             </div>
+            <Select value={estado || 'ALL'} onValueChange={(value) => setEstado(value === 'ALL' ? undefined : value)}>
+              <SelectTrigger className="w-[200px]">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todos los estados</SelectItem>
+                <SelectItem value="DRAFT">Borrador</SelectItem>
+                <SelectItem value="EN_REVISION">En Revisión</SelectItem>
+                <SelectItem value="APROBADO">Aprobado</SelectItem>
+                <SelectItem value="RECHAZADO">Rechazado</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <Select value={estadoFilter} onValueChange={setEstadoFilter}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Filtrar por estado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">Todos los estados</SelectItem>
-              <SelectItem value="PENDIENTE">Pendiente</SelectItem>
-              <SelectItem value="APROBADO">Aprobado</SelectItem>
-              <SelectItem value="ACTIVO">Activo</SelectItem>
-              <SelectItem value="EN_MORA">En Mora</SelectItem>
-              <SelectItem value="COMPLETADO">Completado</SelectItem>
-              <SelectItem value="RECHAZADO">Rechazado</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Tabla */}
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Código</TableHead>
-                <TableHead>Cliente ID</TableHead>
-                <TableHead>Monto Total</TableHead>
-                <TableHead>Cuotas</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Fecha Aprobación</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {prestamosFiltrados.map((prestamo) => (
-                <TableRow key={prestamo.id}>
-                  <TableCell className="font-medium">
-                    {prestamo.codigo_prestamo}
-                  </TableCell>
-                  <TableCell>{prestamo.cliente_id}</TableCell>
-                  <TableCell>
-                    ${prestamo.monto_total.toLocaleString()}
-                  </TableCell>
-                  <TableCell>
-                    {prestamo.cuotas_pagadas}/{prestamo.numero_cuotas}
-                  </TableCell>
-                  <TableCell>
-                    {getEstadoBadge(prestamo.estado)}
-                  </TableCell>
-                  <TableCell>
-                    {prestamo.fecha_aprobacion ? 
-                      new Date(prestamo.fecha_aprobacion).toLocaleDateString() : 
-                      'N/A'
-                    }
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(prestamo)}
-                        title="Editar préstamo"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDelete(prestamo.id)}
-                        className="text-red-600 hover:text-red-700"
-                        title="Eliminar préstamo"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+      {/* Tabla de préstamos */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Lista de Préstamos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading && <div className="text-center py-8">Cargando...</div>}
+          
+          {error && (
+            <div className="text-center py-8 text-red-600">
+              Error al cargar préstamos
+            </div>
+          )}
 
-        {prestamosFiltrados.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>No se encontraron préstamos</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          {!isLoading && !error && data && (
+            <>
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Cédula</TableHead>
+                      <TableHead>Monto</TableHead>
+                      <TableHead>Modalidad</TableHead>
+                      <TableHead>Cuotas</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.data.map((prestamo: any) => (
+                      <TableRow key={prestamo.id}>
+                        <TableCell>
+                          <div className="font-medium">{prestamo.nombres}</div>
+                        </TableCell>
+                        <TableCell>{prestamo.cedula}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <DollarSign className="h-4 w-4 text-green-600" />
+                            <span className="font-semibold">{prestamo.total_financiamiento.toFixed(2)}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>{prestamo.modalidad_pago}</TableCell>
+                        <TableCell>{prestamo.numero_cuotas}</TableCell>
+                        <TableCell>
+                          <Badge className={getEstadoBadge(prestamo.estado)}>
+                            {prestamo.estado}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1 text-sm text-gray-600">
+                            <Calendar className="h-4 w-4" />
+                            {formatDate(prestamo.fecha_registro)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEdit(prestamo)}
+                              disabled={prestamo.estado === 'APROBADO' || prestamo.estado === 'RECHAZADO'}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(prestamo.id)}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-600" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Paginación */}
+              {data.total_pages > 1 && (
+                <div className="flex items-center justify-between mt-4">
+                  <div className="text-sm text-gray-600">
+                    Página {data.page} de {data.total_pages} ({data.total} total)
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(Math.max(1, page - 1))}
+                      disabled={page === 1}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(Math.min(data.total_pages, page + 1))}
+                      disabled={page === data.total_pages}
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }
