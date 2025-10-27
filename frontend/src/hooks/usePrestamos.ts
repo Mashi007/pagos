@@ -127,3 +127,50 @@ export function useDeletePrestamo() {
   })
 }
 
+// Hook para obtener cuotas de un préstamo (tabla de amortización)
+export function useCuotasPrestamo(prestamoId: number) {
+  return useQuery({
+    queryKey: [...prestamoKeys.detail(prestamoId), 'cuotas'],
+    queryFn: () => prestamoService.getCuotasPrestamo(prestamoId),
+    enabled: !!prestamoId,
+    staleTime: STALE_TIME_SHORT,
+  })
+}
+
+// Hook para generar tabla de amortización
+export function useGenerarAmortizacion() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (prestamoId: number) => prestamoService.generarAmortizacion(prestamoId),
+    onSuccess: (data, prestamoId) => {
+      queryClient.invalidateQueries({ queryKey: [...prestamoKeys.detail(prestamoId), 'cuotas'] })
+      queryClient.invalidateQueries({ queryKey: prestamoKeys.detail(prestamoId) })
+      toast.success('Tabla de amortización generada exitosamente')
+    },
+    onError: (error: any) => {
+      const errorMessage = error.response?.data?.detail || 'Error al generar tabla de amortización'
+      toast.error(errorMessage)
+    },
+  })
+}
+
+// Hook para aplicar condiciones de aprobación
+export function useAplicarCondicionesAprobacion() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ prestamoId, condiciones }: { prestamoId: number; condiciones: any }) =>
+      prestamoService.aplicarCondicionesAprobacion(prestamoId, condiciones),
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: prestamoKeys.detail(variables.prestamoId) })
+      queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+      toast.success('Condiciones aplicadas exitosamente')
+    },
+    onError: (error: any) => {
+      const errorMessage = error.response?.data?.detail || 'Error al aplicar condiciones'
+      toast.error(errorMessage)
+    },
+  })
+}
+

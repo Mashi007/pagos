@@ -80,6 +80,29 @@ class PrestamoService {
     )
     return response
   }
+
+  // Obtener cuotas (tabla de amortización) de un préstamo
+  async getCuotasPrestamo(prestamoId: number): Promise<any[]> {
+    const response = await apiClient.get<any[]>(`${this.baseUrl}/${prestamoId}/cuotas`)
+    return response
+  }
+
+  // Generar tabla de amortización
+  async generarAmortizacion(prestamoId: number): Promise<any> {
+    const response = await apiClient.post<any>(
+      `${this.baseUrl}/${prestamoId}/generar-amortizacion`
+    )
+    return response
+  }
+
+  // Aplicar condiciones de aprobación
+  async aplicarCondicionesAprobacion(prestamoId: number, condiciones: any): Promise<any> {
+    const response = await apiClient.post<any>(
+      `${this.baseUrl}/${prestamoId}/aplicar-condiciones-aprobacion`,
+      condiciones
+    )
+    return response
+  }
 }
 
 export const prestamoService = new PrestamoService()

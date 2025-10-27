@@ -11,6 +11,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { CrearPrestamoForm } from './CrearPrestamoForm'
 import { PrestamosKPIs } from './PrestamosKPIs'
 import { EvaluacionRiesgoForm } from './EvaluacionRiesgoForm'
+import { PrestamoDetalleModal } from './PrestamoDetalleModal'
 import { formatDate } from '@/utils'
 
 export function PrestamosList() {
@@ -19,8 +20,10 @@ export function PrestamosList() {
   const [estado, setEstado] = useState<string | undefined>(undefined)
   const [showCrearPrestamo, setShowCrearPrestamo] = useState(false)
   const [showEvaluacion, setShowEvaluacion] = useState(false)
+  const [showDetalle, setShowDetalle] = useState(false)
   const [editingPrestamo, setEditingPrestamo] = useState<any>(null)
   const [evaluacionPrestamo, setEvaluacionPrestamo] = useState<any>(null)
+  const [viewingPrestamo, setViewingPrestamo] = useState<any>(null)
   const [deletePrestamoId, setDeletePrestamoId] = useState<number | null>(null)
 
   const { data, isLoading, error } = usePrestamos({ search, estado }, page)
@@ -57,6 +60,11 @@ export function PrestamosList() {
     setShowEvaluacion(true)
   }
 
+  const handleView = (prestamo: any) => {
+    setViewingPrestamo(prestamo)
+    setShowDetalle(true)
+  }
+
   const handleDelete = async (id: number) => {
     if (window.confirm('¿Está seguro de eliminar este préstamo?')) {
       await deletePrestamo.mutateAsync(id)
@@ -90,6 +98,18 @@ export function PrestamosList() {
         onSuccess={() => {
           setShowEvaluacion(false)
           setEvaluacionPrestamo(null)
+        }}
+      />
+    )
+  }
+
+  if (showDetalle && viewingPrestamo) {
+    return (
+      <PrestamoDetalleModal
+        prestamo={viewingPrestamo}
+        onClose={() => {
+          setShowDetalle(false)
+          setViewingPrestamo(null)
         }}
       />
     )
@@ -209,19 +229,29 @@ export function PrestamosList() {
                             {formatDate(prestamo.fecha_registro)}
                           </div>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            {/* Botón Evaluar Riesgo - Solo Admin */}
-                            {canViewEvaluacionRiesgo() && prestamo.estado === 'EN_REVISION' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEvaluarRiesgo(prestamo)}
-                                title="Evaluar riesgo"
-                              >
-                                <Calculator className="h-4 w-4 text-blue-600" />
-                              </Button>
-                            )}
+                                    <TableCell className="text-right">
+                                      <div className="flex justify-end gap-2">
+                                        {/* Botón Ver Detalles */}
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleView(prestamo)}
+                                          title="Ver detalles"
+                                        >
+                                          <Eye className="h-4 w-4" />
+                                        </Button>
+
+                                        {/* Botón Evaluar Riesgo - Solo Admin */}
+                                        {canViewEvaluacionRiesgo() && prestamo.estado === 'EN_REVISION' && (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleEvaluarRiesgo(prestamo)}
+                                            title="Evaluar riesgo"
+                                          >
+                                            <Calculator className="h-4 w-4 text-blue-600" />
+                                          </Button>
+                                        )}
 
                             {/* Botón Editar - Solo si tiene permisos */}
                             {canEditPrestamo(prestamo.estado) ? (
