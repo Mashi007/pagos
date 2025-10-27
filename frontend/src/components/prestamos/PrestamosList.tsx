@@ -37,6 +37,16 @@ export function PrestamosList() {
     return badges[estado as keyof typeof badges] || badges.DRAFT
   }
 
+  const getEstadoLabel = (estado: string) => {
+    const labels: Record<string, string> = {
+      DRAFT: 'Borrador',
+      EN_REVISION: 'En Revisión',
+      APROBADO: 'Aprobado',
+      RECHAZADO: 'Rechazado',
+    }
+    return labels[estado] || estado
+  }
+
   const handleEdit = (prestamo: any) => {
     setEditingPrestamo(prestamo)
     setShowCrearPrestamo(true)
@@ -128,10 +138,10 @@ export function PrestamosList() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Todos los estados</SelectItem>
-                <SelectItem value="DRAFT">Borrador</SelectItem>
-                <SelectItem value="EN_REVISION">En Revisión</SelectItem>
-                <SelectItem value="APROBADO">Aprobado</SelectItem>
-                <SelectItem value="RECHAZADO">Rechazado</SelectItem>
+                <SelectItem value="DRAFT">🔵 Borrador</SelectItem>
+                <SelectItem value="EN_REVISION">🟡 En Revisión</SelectItem>
+                <SelectItem value="APROBADO">🟢 Aprobado</SelectItem>
+                <SelectItem value="RECHAZADO">🔴 Rechazado</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -181,11 +191,16 @@ export function PrestamosList() {
                             <span className="font-semibold">{prestamo.total_financiamiento.toFixed(2)}</span>
                           </div>
                         </TableCell>
-                        <TableCell>{prestamo.modalidad_pago}</TableCell>
+                        <TableCell>
+                          {prestamo.modalidad_pago === 'MENSUAL' ? 'Mensual' :
+                           prestamo.modalidad_pago === 'QUINCENAL' ? 'Quincenal' :
+                           prestamo.modalidad_pago === 'SEMANAL' ? 'Semanal' :
+                           prestamo.modalidad_pago}
+                        </TableCell>
                         <TableCell>{prestamo.numero_cuotas}</TableCell>
                         <TableCell>
                           <Badge className={getEstadoBadge(prestamo.estado)}>
-                            {prestamo.estado}
+                            {getEstadoLabel(prestamo.estado)}
                           </Badge>
                         </TableCell>
                         <TableCell>
