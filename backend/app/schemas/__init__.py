@@ -13,27 +13,6 @@ Módulo de schemas Pydantic para validación de API:
 from app.schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
 
 # ============================================
-# SCHEMAS DE USUARIO Y AUTENTICACIÓN
-# ============================================
-# NOTA: UserRole eliminado - ahora se usa is_admin boolean
-
-# ============================================
-# SCHEMAS DE CONCILIACIÓN BANCARIA
-# ============================================
-# from app.schemas.conciliacion import
-
-# ============================================
-# SCHEMAS DE KPIs
-# ============================================
-# ACTUALIZADO: Importaciones corregidas para coincidir con kpis.py
-# from app.schemas.kpis import
-
-# ============================================
-# SCHEMAS DE PAGO
-# ============================================
-# from app.schemas.pago import
-
-# ============================================
 # SCHEMAS DE PRÉSTAMO
 # ============================================
 from app.schemas.prestamo import (
@@ -43,7 +22,95 @@ from app.schemas.prestamo import (
     PrestamoEvaluacionResponse,
     PrestamoResponse,
     PrestamoUpdate,
-)  # noqa: I001
+)
+
+# ============================================
+# SCHEMAS DE PAGO
+# ============================================
+try:
+    from app.schemas.pago import (
+        PagoCreate,
+        PagoListResponse,
+        PagoResponse,
+        PagoUpdate,
+        ResumenCliente,
+    )
+except ImportError:
+    PagoCreate = None  # type: ignore
+    PagoUpdate = None  # type: ignore
+    PagoResponse = None  # type: ignore
+    PagoListResponse = None  # type: ignore
+    ResumenCliente = None  # type: ignore
+
+# ============================================
+# SCHEMAS DE CONCILIACIÓN BANCARIA
+# ============================================
+try:
+    from app.schemas.conciliacion import (
+        ConfirmacionConciliacion,
+        ConfirmacionResponse,
+        ConciliacionCreate,
+        ConciliacionMatch,
+        ConciliacionResponse,
+        EstadoConciliacion,
+        EstadisticasConciliacion,
+        ExtractoBancarioUpload,
+        FiltroConciliacion,
+        MovimientoBancario,
+        MovimientoBancarioResponse,
+        PagoPendienteConciliacion,
+        ReporteConciliacionMensual,
+        ResultadoConciliacion,
+        TipoMatch,
+        ValidacionExtracto,
+    )
+except ImportError:
+    EstadoConciliacion = None  # type: ignore
+    TipoMatch = None  # type: ignore
+    MovimientoBancario = None  # type: ignore
+    MovimientoBancarioResponse = None  # type: ignore
+    ConciliacionCreate = None  # type: ignore
+    ConciliacionMatch = None  # type: ignore
+    ResultadoConciliacion = None  # type: ignore
+    ConciliacionResponse = None  # type: ignore
+    ConfirmacionConciliacion = None  # type: ignore
+    ConfirmacionResponse = None  # type: ignore
+    ReporteConciliacionMensual = None  # type: ignore
+    FiltroConciliacion = None  # type: ignore
+    PagoPendienteConciliacion = None  # type: ignore
+    ExtractoBancarioUpload = None  # type: ignore
+    ValidacionExtracto = None  # type: ignore
+    EstadisticasConciliacion = None  # type: ignore
+
+# ============================================
+# SCHEMAS DE KPIs
+# ============================================
+try:
+    from app.schemas.kpis import (
+        DashboardKPIs,
+        KPIBase,
+        KPIConValores,
+        KPICreate,
+        KPIEstadisticas,
+        KPIResponse,
+        KPIUpdate,
+        KPIValorBase,
+        KPIValorCreate,
+        KPIValorResponse,
+        KPIValorUpdate,
+    )
+except ImportError:
+    KPIBase = None  # type: ignore
+    KPICreate = None  # type: ignore
+    KPIUpdate = None  # type: ignore
+    KPIResponse = None  # type: ignore
+    KPIValorBase = None  # type: ignore
+    KPIValorCreate = None  # type: ignore
+    KPIValorUpdate = None  # type: ignore
+    KPIValorResponse = None  # type: ignore
+    KPIConValores = None  # type: ignore
+    KPIEstadisticas = None  # type: ignore
+    DashboardKPIs = None  # type: ignore
 
 # ============================================
 # EXPORTS PÚBLICOS
