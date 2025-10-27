@@ -61,7 +61,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   const [anticipo, setAnticipo] = useState<number>(0)
   const [showAdditionalInfo, setShowAdditionalInfo] = useState(false)
   const [clienteData, setClienteData] = useState<any>(null)
-  const [numeroCuotas, setNumeroCuotas] = useState<number>(0)
+  const [numeroCuotas, setNumeroCuotas] = useState<number>(12) // Valor por defecto: 12 cuotas
   const [cuotaPeriodo, setCuotaPeriodo] = useState<number>(0)
 
   // Calcular anticipo como 30% del valor activo automáticamente
@@ -89,23 +89,15 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     debouncedCedula && debouncedCedula.length >= 2 ? debouncedCedula : ''
   )
 
-  // Calcular cuotas automáticamente
-  const calcularCuotas = (total: number, modalidad: string) => {
-    let cuotas = 36 // Default MENSUAL
-    if (modalidad === 'QUINCENAL') cuotas = 72
-    if (modalidad === 'SEMANAL') cuotas = 144
-    
-    const cuota = total / cuotas
-    setNumeroCuotas(cuotas)
-    setCuotaPeriodo(cuota)
-  }
-
-  // Cuando cambia el monto o modalidad, recalcular cuotas
+  // Calcular cuota por período basado en el número de cuotas manual
   useEffect(() => {
-    if (formData.total_financiamiento && formData.modalidad_pago) {
-      calcularCuotas(formData.total_financiamiento, formData.modalidad_pago)
+    if (formData.total_financiamiento && formData.total_financiamiento > 0 && numeroCuotas > 0) {
+      const cuota = formData.total_financiamiento / numeroCuotas
+      setCuotaPeriodo(cuota)
+    } else {
+      setCuotaPeriodo(0)
     }
-  }, [formData.total_financiamiento, formData.modalidad_pago])
+  }, [formData.total_financiamiento, numeroCuotas])
 
 
   // Cargar datos del cliente cuando se encuentra
@@ -149,6 +141,11 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     // Validar Anticipo
     if (anticipo < 0) {
       errors.push('El Anticipo no puede ser negativo')
+    }
+    
+    // Validar Número de Cuotas
+    if (numeroCuotas < 1 || numeroCuotas > 12) {
+      errors.push('El número de cuotas debe estar entre 1 y 12')
     }
     
     // Validar Total de Financiamiento
@@ -423,12 +420,21 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Número de Cuotas</label>
+                    <label className="block text-sm font-medium mb-1">Número de Cuotas <span className="text-red-500">*</span></label>
                     <Input
+                      type="number"
+                      min="1"
+                      max="12"
                       value={numeroCuotas}
-                      disabled
-                      className="bg-gray-50"
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value) || 12
+                        // Validar que esté entre 1 y 12
+                        const validValue = Math.max(1, Math.min(12, value))
+                        setNumeroCuotas(validValue)
+                      }}
+                      disabled={isReadOnly}
                     />
+                    <p className="text-xs text-gray-500 mt-1">Mínimo: 1, Máximo: 12</p>
                   </div>
 
                   <div>
