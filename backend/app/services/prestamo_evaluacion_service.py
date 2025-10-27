@@ -110,7 +110,7 @@ def evaluar_ratio_cobertura_puntos(ratio: Decimal) -> Decimal:
 def evaluar_historial_crediticio(calificacion: str) -> Dict[str, Decimal]:
     """
     Evalúa historial crediticio basado en calificación.
-    
+
     Nueva escala:
     - Categoría A (20 puntos): Persona que mantiene todos sus pagos al día
     - Categoría B (15 puntos): Persona con atrasos menores o debilidades en su capacidad de pago
@@ -126,10 +126,22 @@ def evaluar_historial_crediticio(calificacion: str) -> Dict[str, Decimal]:
     """
     evaluaciones = {
         "A": {"puntos": Decimal(20), "descripcion": "Todos los pagos al día"},
-        "B": {"puntos": Decimal(15), "descripcion": "Atrasos menores o debilidades en capacidad de pago"},
-        "C": {"puntos": Decimal(8), "descripcion": "Atrasos moderados que comprometen el pago normal"},
-        "D": {"puntos": Decimal(2), "descripcion": "Mora significativa (difícil cobro)"},
-        "E": {"puntos": Decimal(0), "descripcion": "Créditos prácticamente irrecuperables"},
+        "B": {
+            "puntos": Decimal(15),
+            "descripcion": "Atrasos menores o debilidades en capacidad de pago",
+        },
+        "C": {
+            "puntos": Decimal(8),
+            "descripcion": "Atrasos moderados que comprometen el pago normal",
+        },
+        "D": {
+            "puntos": Decimal(2),
+            "descripcion": "Mora significativa (difícil cobro)",
+        },
+        "E": {
+            "puntos": Decimal(0),
+            "descripcion": "Créditos prácticamente irrecuperables",
+        },
     }
 
     return evaluaciones.get(
