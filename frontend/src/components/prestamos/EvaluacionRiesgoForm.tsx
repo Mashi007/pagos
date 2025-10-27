@@ -8,8 +8,14 @@ import {
   X,
   Save,
   CheckCircle,
-  XCircle
+  XCircle,
+  Info
 } from 'lucide-react'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -62,6 +68,7 @@ interface EvaluacionForm {
 export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: EvaluacionRiesgoFormProps) {
   const { isAdmin } = usePermissions()
   const aplicarCondiciones = useAplicarCondicionesAprobacion()
+  const [showInfoPopover, setShowInfoPopover] = useState<string | null>(null)
   
   if (!isAdmin) {
     return null
@@ -194,10 +201,35 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
           <Card className="border-blue-200">
             <CardHeader className="bg-blue-50">
               <CardTitle className="flex items-center justify-between">
-                <span className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <TrendingDown className="h-5 w-5 text-blue-600" />
-                  Criterio 1: Ratio de Endeudamiento (25%)
-                </span>
+                  <span>Criterio 1: Ratio de Endeudamiento (25%)</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                        <Info className="h-4 w-4 text-blue-600" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-96">
+                      <div className="space-y-2">
+                        <h4 className="font-semibold">Ratio de Endeudamiento</h4>
+                        <p className="text-sm text-gray-600">
+                          Mide qué porcentaje de tus ingresos se destinan a pagar deudas.
+                        </p>
+                        <div className="text-sm">
+                          <p className="font-semibold mb-1">Escala de Puntos:</p>
+                          <ul className="list-disc list-inside space-y-1 text-gray-700">
+                            <li>≤ 30% → 25 puntos (Muy favorable)</li>
+                            <li>31-40% → 20 puntos</li>
+                            <li>41-50% → 15 puntos</li>
+                            <li>51-60% → 10 puntos</li>
+                            <li>&gt; 60% → 5 puntos</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
                 {ratios.ratioEndeudamiento > 0 && (
                   <Badge variant="outline">
                     {ratios.ratioEndeudamiento.toFixed(2)}%
@@ -249,10 +281,35 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
           <Card className="border-green-200">
             <CardHeader className="bg-green-50">
               <CardTitle className="flex items-center justify-between">
-                <span className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <TrendingUp className="h-5 w-5 text-green-600" />
-                  Criterio 2: Ratio de Cobertura (20%)
-                </span>
+                  <span>Criterio 2: Ratio de Cobertura (20%)</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                        <Info className="h-4 w-4 text-green-600" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-96">
+                      <div className="space-y-2">
+                        <h4 className="font-semibold">Ratio de Cobertura</h4>
+                        <p className="text-sm text-gray-600">
+                          Mide cuántas veces tus ingresos cubren tus gastos fijos.
+                        </p>
+                        <div className="text-sm">
+                          <p className="font-semibold mb-1">Escala de Puntos:</p>
+                          <ul className="list-disc list-inside space-y-1 text-gray-700">
+                            <li>≥ 2.0x → 20 puntos (Excelente)</li>
+                            <li>1.5-1.99x → 17 puntos</li>
+                            <li>1.2-1.49x → 12 puntos</li>
+                            <li>1.0-1.19x → 8 puntos</li>
+                            <li>&lt; 1.0x → 3 puntos</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
                 {ratios.ratioCobertura > 0 && (
                   <Badge variant="outline">
                     {ratios.ratioCobertura.toFixed(2)}x
@@ -272,7 +329,31 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
             <CardHeader className="bg-purple-50">
               <CardTitle className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-purple-600" />
-                Criterio 3: Historial Crediticio (20%)
+                <span>Criterio 3: Historial Crediticio (20%)</span>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                      <Info className="h-4 w-4 text-purple-600" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-96">
+                    <div className="space-y-2">
+                      <h4 className="font-semibold">Historial Crediticio</h4>
+                      <p className="text-sm text-gray-600">
+                        Evalúa tu comportamiento de pago en préstamos anteriores.
+                      </p>
+                      <div className="text-sm">
+                        <p className="font-semibold mb-1">Escala de Puntos:</p>
+                        <ul className="list-disc list-inside space-y-1 text-gray-700">
+                          <li>Excelente → 20 puntos (Sin atrasos 2+ años)</li>
+                          <li>Bueno → 15 puntos</li>
+                          <li>Regular → 8 puntos</li>
+                          <li>Malo → 2 puntos</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
@@ -299,7 +380,35 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
             <CardHeader className="bg-yellow-50">
               <CardTitle className="flex items-center gap-2">
                 <AlertCircle className="h-5 w-5 text-yellow-600" />
-                Criterio 4: Estabilidad Laboral (15%)
+                <span>Criterio 4: Estabilidad Laboral (15%)</span>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                      <Info className="h-4 w-4 text-yellow-600" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-96">
+                    <div className="space-y-2">
+                      <h4 className="font-semibold">Estabilidad Laboral</h4>
+                      <p className="text-sm text-gray-600">
+                        Años trabajando en el empleo actual.
+                      </p>
+                      <div className="text-sm">
+                        <p className="font-semibold mb-1">Escala de Puntos (Años):</p>
+                        <ul className="list-disc list-inside space-y-1 text-gray-700">
+                          <li>≥ 5 años → 15 puntos</li>
+                          <li>3-4.9 años → 12 puntos</li>
+                          <li>1-2.9 años → 8 puntos</li>
+                          <li>0.5-0.9 años → 5 puntos</li>
+                          <li>&lt; 0.5 años → 2 puntos</li>
+                        </ul>
+                        <p className="mt-2 text-xs text-gray-500">
+                          💡 Ejemplo: 0.5 años = 6 meses
+                        </p>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
@@ -323,7 +432,31 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
             <CardHeader className="bg-orange-50">
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-orange-600" />
-                Criterio 5: Tipo de Empleo (10%)
+                <span>Criterio 5: Tipo de Empleo (10%)</span>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                      <Info className="h-4 w-4 text-orange-600" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-96">
+                    <div className="space-y-2">
+                      <h4 className="font-semibold">Tipo de Empleo</h4>
+                      <p className="text-sm text-gray-600">
+                        Tipo de relación laboral actual.
+                      </p>
+                      <div className="text-sm">
+                        <p className="font-semibold mb-1">Escala de Puntos:</p>
+                        <ul className="list-disc list-inside space-y-1 text-gray-700">
+                          <li>Público → 10 puntos</li>
+                          <li>Privado → 7 puntos</li>
+                          <li>Independiente → 6 puntos</li>
+                          <li>Otro → 3 puntos</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
@@ -349,10 +482,36 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
           <Card className="border-red-200">
             <CardHeader className="bg-red-50">
               <CardTitle className="flex items-center justify-between">
-                <span className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <Calculator className="h-5 w-5 text-red-600" />
-                  Criterio 6: Enganche y Garantías (10%)
-                </span>
+                  <span>Criterio 6: Enganche y Garantías (10%)</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                        <Info className="h-4 w-4 text-red-600" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-96">
+                      <div className="space-y-2">
+                        <h4 className="font-semibold">Enganche y Garantías (LTV)</h4>
+                        <p className="text-sm text-gray-600">
+                          Porcentaje de enganche sobre el monto financiado.
+                        </p>
+                        <div className="text-sm">
+                          <p className="font-semibold mb-1">Escala de Puntos:</p>
+                          <ul className="list-disc list-inside space-y-1 text-gray-700">
+                            <li>≥ 30% → 10 puntos</li>
+                            <li>20-29% → 8 puntos</li>
+                            <li>15-19% → 6 puntos</li>
+                            <li>10-14% → 4 puntos</li>
+                            <li>5-9% → 2 puntos</li>
+                            <li>&lt; 5% → 0 puntos</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
                 {ratios.ltv > 0 && (
                   <Badge variant="outline">
                     LTV: {ratios.ltv.toFixed(2)}%
