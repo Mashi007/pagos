@@ -93,8 +93,10 @@ class PrestamoEvaluacion(Base):
     edad_cliente = Column(Integer, nullable=True)
 
     # ============================================
-    # CRITERIO 7: ENGANCHE PAGADO (5 puntos)
+    # CRITERIO 7: CAPACIDAD DE MANIOBRA (5 puntos)
     # ============================================
+    # Campos mantenidos por compatibilidad con BD existente
+    # Ahora almacenan: puntos de capacidad de maniobra y % residual
     enganche_garantias_puntos = Column(Numeric(5, 2), nullable=False, default=0)
     enganche_garantias_calculo = Column(Numeric(10, 4), nullable=False, default=0)
 

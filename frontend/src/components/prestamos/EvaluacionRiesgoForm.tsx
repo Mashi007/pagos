@@ -79,9 +79,7 @@ interface EvaluacionFormData {
   // Criterio 6: Edad
   edad: number
   
-  // Criterio 7: Enganche
-  enganche_pagado: number
-  valor_garantia: number
+  // Criterio 7: Capacidad de Maniobra (no requiere campos adicionales)
 }
 
 export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: EvaluacionRiesgoFormProps) {
@@ -139,9 +137,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     // Criterio 6: Edad del Cliente (10 puntos)
     edad: 0,
     
-    // Criterio 7: Enganche Pagado (5 puntos)
-    enganche_pagado: 0,
-    valor_garantia: 0,
+    // Criterio 7: Capacidad de Maniobra (5 puntos - NO requiere campos adicionales)
+    // Se calcula automáticamente: Saldo Residual = Ingresos - Gastos - Deudas - Cuota
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -210,9 +207,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
         // Criterio 6
         edad: formData.edad,
         
-        // Criterio 7
-        enganche_pagado: formData.enganche_pagado,
-        valor_garantia: formData.valor_garantia,
+        // Criterio 7: Capacidad de Maniobra
+        // Se calcula automáticamente con los datos del Criterio 1
       }
 
       const response = await prestamoService.evaluarRiesgo(prestamo.id, datosEvaluacion)
@@ -232,7 +228,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     { id: 'criterio4', label: 'Criterio 4: Arraigo Geográfico', puntos: '7' },
     { id: 'criterio5', label: 'Criterio 5: Perfil Sociodemográfico', puntos: '17' },
     { id: 'criterio6', label: 'Criterio 6: Edad', puntos: '10' },
-    { id: 'criterio7', label: 'Criterio 7: Enganche', puntos: '5' },
+    { id: 'criterio7', label: 'Criterio 7: Capacidad de Maniobra', puntos: '5' },
   ]
 
   return (
@@ -914,49 +910,44 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
             </Card>
           )}
 
-          {/* CRITERIO 7: ENGANCHE (5 puntos) */}
+          {/* CRITERIO 7: CAPACIDAD DE MANIOBRA (5 puntos) */}
           {showSection === 'criterio7' && (
             <Card className="border-red-200">
               <CardHeader className="bg-red-50">
                 <CardTitle className="flex items-center gap-2 text-red-700">
                   <DollarSign className="h-5 w-5" />
-                  CRITERIO 7: ENGANCHE PAGADO (5 puntos)
+                  CRITERIO 7: CAPACIDAD DE MANIOBRA (5 puntos)
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                      Enganche Pagado (USD) *
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.enganche_pagado || ''}
-                      onChange={(e) => setFormData({ ...formData, enganche_pagado: parseFloat(e.target.value) || 0 })}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                      Valor del Activo/Moto (USD) *
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.valor_garantia || ''}
-                      onChange={(e) => setFormData({ ...formData, valor_garantia: parseFloat(e.target.value) || 0 })}
-                    required
-                  />
-                </div>
-              </div>
-                <div className="bg-red-50 p-3 rounded border border-red-200">
-                  <p className="text-xs text-red-700">
-                    <strong>Escala:</strong> ≥30% → 5 pts | 25-29% → 4.5 pts | 20-24% → 4 pts | 15-19% → 3 pts | 10-14% → 2 pts | 5-9% → 1 pt | &lt;5% → 0.5 pts | 0% → 0 pts
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h4 className="font-semibold text-blue-900 mb-2">📊 ¿Qué es la Capacidad de Maniobra?</h4>
+                <p className="text-sm text-blue-800 mb-3">
+                  Es el saldo que le queda al cliente después de pagar todos sus gastos, deudas y la cuota del préstamo propuesto.
+                </p>
+                <div className="bg-white p-3 rounded border border-blue-100">
+                  <p className="text-xs font-mono text-gray-700">
+                    <strong>Fórmula:</strong><br />
+                    Saldo Residual = Ingresos - Gastos Fijos - Otras Deudas - Cuota Nueva
                   </p>
                 </div>
+              </div>
+              
+              <div className="bg-amber-50 p-3 rounded border border-amber-200">
+                <p className="text-xs text-amber-800 font-semibold mb-2">⚡ ESTE CRITERIO SE CALCULA AUTOMÁTICAMENTE</p>
+                <p className="text-xs text-amber-700">
+                  El sistema calculará la capacidad de maniobra usando los datos de ingresos, gastos y deudas que ya ingresaste en el Criterio 1.
+                </p>
+              </div>
+
+              <div className="bg-red-50 p-3 rounded border border-red-200">
+                <p className="text-xs text-red-700">
+                  <strong>Escala de Puntuación (3 bandas):</strong><br />
+                  ✅ ≥15% del ingreso → 5 pts (Holgado) - Margen suficiente para imprevistos<br />
+                  ⚠️ 5%-14.9% del ingreso → 3 pts (Ajustado) - Margen mínimo<br />
+                  ❌ &lt;5% o déficit → 0 pts (Insuficiente) - Sin margen, alto riesgo
+                </p>
+              </div>
             </CardContent>
           </Card>
           )}

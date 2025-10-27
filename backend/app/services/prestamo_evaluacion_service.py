@@ -25,7 +25,7 @@ CRITERIOS_PESOS = {
     "arraigo_geografico": 7,  # Criterio 4 (4 + 3) - SIN situación de vivienda
     "perfil_sociodemografico": 17,  # Criterio 5 (6 + 6 + 5)
     "edad": 10,  # Criterio 6 (incrementado de 5 a 10)
-    "enganche": 5,  # Criterio 7
+    "capacidad_maniobra": 5,  # Criterio 7 (reemplaza enganche)
 }
 
 # ============================================
@@ -451,50 +451,48 @@ def evaluar_edad_cliente(edad: int) -> Tuple[Decimal, str, bool]:
 
 
 # ============================================
-# CRITERIO 7: ENGANCHE PAGADO (5 puntos)
+# CRITERIO 7: CAPACIDAD DE MANIOBRA (5 puntos)
 # ============================================
 
 
-def calcular_enganche_porcentaje(enganche: Decimal, valor_moto: Decimal) -> Decimal:
+def calcular_capacidad_maniobra(
+    ingresos: Decimal,
+    gastos_fijos: Decimal,
+    otras_deudas: Decimal,
+    cuota_prestamo: Decimal,
+) -> Tuple[Decimal, Decimal]:
     """
-    CRITERIO 7: Enganche Pagado (5 puntos - 5%)
+    CRITERIO 7: Capacidad de Maniobra (5 puntos - 5%)
 
-    Formula: % Enganche = (Enganche / Valor Moto) × 100
+    Formula: Saldo Residual = Ingresos - Gastos Fijos - Otras Deudas - Cuota
+    Formula: % Residual = (Saldo Residual / Ingresos) × 100
+
+    Returns:
+        Tuple: (saldo_residual, porcentaje_residual)
     """
-    if valor_moto <= 0:
-        return Decimal("0")
+    saldo_residual = ingresos - gastos_fijos - otras_deudas - cuota_prestamo
+    
+    if ingresos <= 0:
+        porcentaje_residual = Decimal("0")
+    else:
+        porcentaje_residual = (saldo_residual / ingresos) * Decimal(100)
+    
+    return saldo_residual, porcentaje_residual
 
-    return (enganche / valor_moto) * Decimal(100)
 
-
-def evaluar_enganche_puntos(porcentaje_enganche: Decimal) -> Decimal:
+def evaluar_capacidad_maniobra_puntos(porcentaje_residual: Decimal) -> Decimal:
     """
-    CRITERIO 7: Enganche Pagado (5 puntos - 5%)
+    CRITERIO 7: Capacidad de Maniobra (5 puntos - 5%)
 
-    Rangos:
-    - ≥30%   -> 5.0 puntos
-    - 25-29.9% -> 4.5 puntos
-    - 20-24.9% -> 4.0 puntos
-    - 15-19.9% -> 3.0 puntos
-    - 10-14.9% -> 2.0 puntos
-    - 5-9.9% -> 1.0 punto
-    - <5%    -> 0.5 puntos
-    - 0%     -> 0 puntos
+    3 BANDAS:
+    - ≥15% del ingreso -> 5 puntos (Holgado) - Margen suficiente
+    - 5% - 14.9% del ingreso -> 3 puntos (Ajustado) - Margen mínimo
+    - <5% o déficit -> 0 puntos (Insuficiente) - Sin margen, alto riesgo
     """
-    if porcentaje_enganche >= 30:
+    if porcentaje_residual >= 15:
         return Decimal("5.0")
-    elif porcentaje_enganche >= 25:
-        return Decimal("4.5")
-    elif porcentaje_enganche >= 20:
-        return Decimal("4.0")
-    elif porcentaje_enganche >= 15:
+    elif porcentaje_residual >= 5:
         return Decimal("3.0")
-    elif porcentaje_enganche >= 10:
-        return Decimal("2.0")
-    elif porcentaje_enganche >= 5:
-        return Decimal("1.0")
-    elif porcentaje_enganche > 0:
-        return Decimal("0.5")
     else:
         return Decimal("0")
 
@@ -773,11 +771,12 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
         )
         return evaluacion
 
-    # Criterio 7: Enganche (5 puntos)
-    enganche = Decimal(str(datos_evaluacion.get("enganche_pagado", 0)))
-    valor_moto = Decimal(str(datos_evaluacion.get("valor_garantia", 0)))
-    porcentaje_enganche = calcular_enganche_porcentaje(enganche, valor_moto)
-    puntos_7 = evaluar_enganche_puntos(porcentaje_enganche)
+    # Criterio 7: Capacidad de Maniobra (5 puntos)
+    # Usa los mismos datos del Criterio 1: ingresos, gastos_fijos, otras_deudas, cuota
+    saldo_residual, porcentaje_residual = calcular_capacidad_maniobra(
+        ingresos, gastos_fijos, otras_deudas, cuota
+    )
+    puntos_7 = evaluar_capacidad_maniobra_puntos(porcentaje_residual)
 
     # Puntuación total
     puntuacion_total = (
@@ -794,7 +793,7 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
         + puntos_5b
         + puntos_5c  # Criterio 5 (17 puntos)
         + puntos_6  # Criterio 6 (10 puntos)
-        + puntos_7  # Criterio 7 (5 puntos)
+        + puntos_7  # Criterio 7 (5 puntos - Capacidad de Maniobra)
     )
 
     # Clasificación y decisión
@@ -842,9 +841,10 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
         # Criterio 6
         edad_puntos=puntos_6,
         edad_cliente=edad_cliente,
-        # Criterio 7
-        enganche_garantias_puntos=puntos_7,
-        enganche_garantias_calculo=porcentaje_enganche,
+        # Criterio 7: Capacidad de Maniobra
+        # Mantener campos de BD por compatibilidad, pero con nuevos valores
+        enganche_garantias_puntos=puntos_7,  # Ahora almacena capacidad de maniobra
+        enganche_garantias_calculo=porcentaje_residual,  # % residual
         # Totales y clasificación
         puntuacion_total=puntuacion_total,
         clasificacion_riesgo=clasificacion,
