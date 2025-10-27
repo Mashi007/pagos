@@ -179,8 +179,6 @@ def procesar_cambio_estado(
 
         # Crear registro automático en Aprobaciones (conectado por cédula)
         try:
-            # Verificar que el modelo tenga la columna resultado
-            from app.models.aprobacion import Aprobacion
             aprobacion = Aprobacion(
                 solicitante_id=current_user.id,
                 revisor_id=current_user.id,
