@@ -136,75 +136,75 @@ class PrestamoEvaluacionCreate(PrestamoEvaluacionBase):
     """Schema para crear evaluación con 7 criterios (100 puntos)"""
 
     prestamo_id: int
-    
+
     # ============================================
     # CRITERIO 1: CAPACIDAD DE PAGO (33 puntos)
     # ============================================
     # Criterio 1.A: Ratio de Endeudamiento (17%)
     ratio_endeudamiento_puntos: Decimal = Field(default=0, ge=0, le=17)
     ratio_endeudamiento_calculo: Decimal = Field(default=0)
-    
+
     # Criterio 1.B: Ratio de Cobertura (16%)
     ratio_cobertura_puntos: Decimal = Field(default=0, ge=0, le=16)
     ratio_cobertura_calculo: Decimal = Field(default=0)
-    
+
     # ============================================
     # CRITERIO 2: ESTABILIDAD LABORAL (23 puntos)
     # ============================================
     antiguedad_trabajo_puntos: Decimal = Field(default=0, ge=0, le=9)
     meses_trabajo: Optional[Decimal] = None
-    
+
     tipo_empleo_puntos: Decimal = Field(default=0, ge=0, le=8)
     tipo_empleo_descripcion: Optional[str] = None
-    
+
     sector_economico_puntos: Decimal = Field(default=0, ge=0, le=6)
     sector_economico_descripcion: Optional[str] = None
-    
+
     # ============================================
     # CRITERIO 3: REFERENCIAS PERSONALES (5 puntos)
     # ============================================
     referencias_puntos: Decimal = Field(default=0, ge=0, le=5)
     referencias_descripcion: Optional[str] = None
     num_referencias_verificadas: Optional[int] = None
-    
+
     # ============================================
     # CRITERIO 4: ARRAIGO GEOGRÁFICO (12 puntos)
     # ============================================
     arraigo_vivienda_puntos: Decimal = Field(default=0, ge=0, le=5)
     arraigo_familiar_puntos: Decimal = Field(default=0, ge=0, le=4)
     arraigo_laboral_puntos: Decimal = Field(default=0, ge=0, le=3)
-    
+
     # ============================================
     # CRITERIO 5: PERFIL SOCIODEMOGRÁFICO (17 puntos)
     # ============================================
     vivienda_puntos: Decimal = Field(default=0, ge=0, le=6)
     vivienda_descripcion: Optional[str] = None
-    
+
     estado_civil_puntos: Decimal = Field(default=0, ge=0, le=6)
     estado_civil_descripcion: Optional[str] = None
-    
+
     hijos_puntos: Decimal = Field(default=0, ge=0, le=5)
     hijos_descripcion: Optional[str] = None
-    
+
     # ============================================
     # CRITERIO 6: EDAD DEL CLIENTE (5 puntos)
     # ============================================
     edad_puntos: Decimal = Field(default=0, ge=0, le=5)
     edad_cliente: Optional[int] = None
-    
+
     # ============================================
     # CRITERIO 7: ENGANCHE PAGADO (5 puntos)
     # ============================================
     enganche_garantias_puntos: Decimal = Field(default=0, ge=0, le=5)
     enganche_garantias_calculo: Decimal = Field(default=0)
-    
+
     # ============================================
     # CLASIFICACIÓN Y DECISIÓN
     # ============================================
     puntuacion_total: Decimal = Field(default=0, ge=0, le=100)
     clasificacion_riesgo: str = Field(default="PENDIENTE")
     decision_final: str = Field(default="PENDIENTE")
-    
+
     # ============================================
     # CONDICIONES SEGÚN RIESGO
     # ============================================
@@ -212,7 +212,7 @@ class PrestamoEvaluacionCreate(PrestamoEvaluacionBase):
     plazo_maximo: Optional[int] = None
     enganche_minimo: Optional[Decimal] = None
     requisitos_adicionales: Optional[str] = None
-    
+
     # Campos de compatibilidad con sistema anterior
     historial_crediticio_puntos: Decimal = Field(default=0, ge=0, le=20)
     historial_crediticio_descripcion: Optional[str] = None
@@ -225,13 +225,13 @@ class PrestamoEvaluacionResponse(PrestamoEvaluacionBase):
 
     id: int
     prestamo_id: int
-    
+
     # Criterio 1: Capacidad de Pago
     ratio_endeudamiento_puntos: Decimal
     ratio_endeudamiento_calculo: Decimal
     ratio_cobertura_puntos: Decimal
     ratio_cobertura_calculo: Decimal
-    
+
     # Criterio 2: Estabilidad Laboral
     antiguedad_trabajo_puntos: Decimal
     meses_trabajo: Optional[Decimal]
@@ -239,17 +239,17 @@ class PrestamoEvaluacionResponse(PrestamoEvaluacionBase):
     tipo_empleo_descripcion: Optional[str]
     sector_economico_puntos: Decimal
     sector_economico_descripcion: Optional[str]
-    
+
     # Criterio 3: Referencias
     referencias_puntos: Decimal
     referencias_descripcion: Optional[str]
     num_referencias_verificadas: Optional[int]
-    
+
     # Criterio 4: Arraigo Geográfico
     arraigo_vivienda_puntos: Decimal
     arraigo_familiar_puntos: Decimal
     arraigo_laboral_puntos: Decimal
-    
+
     # Criterio 5: Perfil Sociodemográfico
     vivienda_puntos: Decimal
     vivienda_descripcion: Optional[str]
@@ -257,35 +257,35 @@ class PrestamoEvaluacionResponse(PrestamoEvaluacionBase):
     estado_civil_descripcion: Optional[str]
     hijos_puntos: Decimal
     hijos_descripcion: Optional[str]
-    
+
     # Criterio 6: Edad
     edad_puntos: Decimal
     edad_cliente: Optional[int]
-    
+
     # Criterio 7: Enganche
     enganche_garantias_puntos: Decimal
     enganche_garantias_calculo: Decimal
-    
+
     # Clasificación
     puntuacion_total: Decimal
     clasificacion_riesgo: str
     decision_final: str
-    
+
     # Condiciones
     tasa_interes_aplicada: Optional[Decimal]
     plazo_maximo: Optional[int]
     enganche_minimo: Optional[Decimal]
     requisitos_adicionales: Optional[str]
-    
+
     # Campos de compatibilidad
     historial_crediticio_puntos: Decimal
     historial_crediticio_descripcion: Optional[str]
     estabilidad_laboral_puntos: Decimal
     anos_empleo: Optional[Decimal]
-    
+
     # Pydantic v2 serializa automáticamente Decimal a float en JSON
     # No necesitamos serializers explícitos
-    
+
     class Config:
         from_attributes = True
 
