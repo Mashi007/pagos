@@ -319,16 +319,16 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       <PopoverContent className="w-80">
                         <p className="text-sm font-semibold mb-2">Ratio de Endeudamiento:</p>
                         <ul className="text-xs space-y-1">
-                          <li>• &lt; 25% → 17 puntos (Excelente)</li>
-                          <li>• 25-35% → 13 puntos (Bueno)</li>
-                          <li>• 35-50% → 7 puntos (Regular)</li>
+                          <li>• &lt; 25% → 14 puntos (Excelente)</li>
+                          <li>• 25-35% → 11 puntos (Bueno)</li>
+                          <li>• 35-50% → 6 puntos (Regular)</li>
                           <li>• &gt; 50% → 2 puntos (Malo)</li>
                         </ul>
                         <p className="text-sm font-semibold mb-2 mt-4">Ratio de Cobertura:</p>
                         <ul className="text-xs space-y-1">
-                          <li>• &gt; 2.5x → 16 puntos (Excelente)</li>
-                          <li>• 2.0-2.5x → 13 puntos (Bueno)</li>
-                          <li>• 1.5-2.0x → 7 puntos (Regular)</li>
+                          <li>• &gt; 2.5x → 15 puntos (Excelente)</li>
+                          <li>• 2.0-2.5x → 12 puntos (Bueno)</li>
+                          <li>• 1.5-2.0x → 6 puntos (Regular)</li>
                           <li>• &lt; 1.5x → 0 puntos (RECHAZO)</li>
                         </ul>
                       </PopoverContent>
