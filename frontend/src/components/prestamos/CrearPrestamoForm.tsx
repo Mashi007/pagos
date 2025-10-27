@@ -36,11 +36,20 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   const updatePrestamo = useUpdatePrestamo()
   const { canEditPrestamo, canApprovePrestamo } = usePermissions()
   
+  // Función para obtener la fecha actual en formato YYYY-MM-DD
+  const getCurrentDate = () => {
+    const today = new Date()
+    const year = today.getFullYear()
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    const day = String(today.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  
   const [formData, setFormData] = useState<Partial<PrestamoForm>>({
     cedula: prestamo?.cedula || '',
     total_financiamiento: prestamo?.total_financiamiento || 0,
     modalidad_pago: prestamo?.modalidad_pago || 'MENSUAL',
-    fecha_requerimiento: prestamo?.fecha_requerimiento || '',
+    fecha_requerimiento: prestamo?.fecha_requerimiento || getCurrentDate(), // Fecha actual por defecto para nuevos préstamos
     producto: prestamo?.producto || '',
     producto_financiero: prestamo?.producto_financiero || '',
     tasa_interes: prestamo?.tasa_interes || 0,
