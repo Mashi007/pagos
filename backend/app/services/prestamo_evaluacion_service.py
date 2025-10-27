@@ -22,9 +22,9 @@ CRITERIOS_PESOS = {
     "capacidad_pago": 29,  # Criterio 1 (14 + 15)
     "estabilidad_laboral": 23,  # Criterio 2 (9 + 8 + 6)
     "referencias": 9,  # Criterio 3 (3 referencias × 3 pts c/u)
-    "arraigo_geografico": 12,  # Criterio 4 (5 + 4 + 3)
+    "arraigo_geografico": 7,  # Criterio 4 (4 + 3) - SIN situación de vivienda
     "perfil_sociodemografico": 17,  # Criterio 5 (6 + 6 + 5)
-    "edad": 5,  # Criterio 6
+    "edad": 10,  # Criterio 6 (incrementado de 5 a 10)
     "enganche": 5,  # Criterio 7
 }
 
@@ -416,38 +416,38 @@ def evaluar_hijos(
 
 
 # ============================================
-# CRITERIO 6: EDAD DEL CLIENTE (5 puntos)
+# CRITERIO 6: EDAD DEL CLIENTE (10 puntos)
 # ============================================
 
 
 def evaluar_edad_cliente(edad: int) -> Tuple[Decimal, str, bool]:
     """
-    CRITERIO 6: Edad del Cliente (5 puntos - 5%)
+    CRITERIO 6: Edad del Cliente (10 puntos - 10%)
 
     Rangos:
-    - 25-50 años -> Óptimo      -> 5.0 puntos
-    - 22-24 / 51-55 -> Muy bueno/Bueno -> 4.0 puntos
-    - 18-21 / 56-60 -> Regular  -> 3.0 puntos
-    - 61-65 -> Bajo -> 1.5 puntos
+    - 25-50 años -> Óptimo      -> 10.0 puntos
+    - 22-24 / 51-55 -> Muy bueno/Bueno -> 8.0 puntos
+    - 18-21 / 56-60 -> Regular  -> 6.0 puntos
+    - 61-65 -> Bajo -> 3.0 puntos
     - < 18 años -> RECHAZO
-    - > 65 años -> Muy bajo -> 1.0 punto
+    - > 65 años -> Muy bajo -> 2.0 puntos
 
     Returns:
         Tuple: (puntos, categoria, rechazo)
     """
     if edad >= 25 and edad <= 50:
-        return Decimal(5), "Óptimo", False
+        return Decimal(10), "Óptimo", False
     elif (edad >= 22 and edad <= 24) or (edad >= 51 and edad <= 55):
         categoria = "Muy bueno" if edad <= 24 else "Bueno"
-        return Decimal(4), categoria, False
+        return Decimal(8), categoria, False
     elif (edad >= 18 and edad <= 21) or (edad >= 56 and edad <= 60):
-        return Decimal(3), "Regular", False
+        return Decimal(6), "Regular", False
     elif edad >= 61 and edad <= 65:
-        return Decimal("1.5"), "Bajo", False
+        return Decimal(3), "Bajo", False
     elif edad < 18:
         return Decimal(0), "Menor de edad - RECHAZO", True
     else:  # edad > 65
-        return Decimal("1.0"), "Muy bajo", False
+        return Decimal(2), "Muy bajo", False
 
 
 # ============================================
@@ -674,9 +674,8 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
         f"Ref1:{referencia1_cal} Ref2:{referencia2_cal} Ref3:{referencia3_cal}"
     )
 
-    # Criterio 4: Arraigo Geográfico (12 puntos)
-    tipo_vivienda = datos_evaluacion.get("tipo_vivienda", "sin_vivienda")
-    puntos_4a = evaluar_vivienda(tipo_vivienda)
+    # Criterio 4: Arraigo Geográfico (7 puntos - SIN situación de vivienda)
+    # puntos_4a ELIMINADO - solo familia y trabajo
 
     familia_cercana = datos_evaluacion.get("familia_cercana", False)
     familia_pais = datos_evaluacion.get("familia_pais", False)
@@ -684,6 +683,8 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
 
     minutos_trabajo = datos_evaluacion.get("minutos_trabajo", 999)
     puntos_4c = evaluar_arraigo_laboral(minutos_trabajo)
+    
+    puntos_4a = Decimal(0)  # Mantener para compatibilidad, siempre 0
 
     # Criterio 5: Perfil Sociodemográfico (17 puntos)
     tipo_vivienda_det = datos_evaluacion.get("tipo_vivienda_detallado", "sin_vivienda")
@@ -714,7 +715,7 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
         datos_evaluacion.get("embarazo_actual", False),
     )
 
-    # Criterio 6: Edad (5 puntos)
+    # Criterio 6: Edad (10 puntos)
     edad_cliente = int(datos_evaluacion.get("edad", 25))
     puntos_6, categoria_edad, rechazo_edad = evaluar_edad_cliente(edad_cliente)
 
@@ -786,13 +787,13 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
         + puntos_2b
         + puntos_2c  # Criterio 2 (23 puntos)
         + puntos_3  # Criterio 3 (9 puntos)
-        + puntos_4a
+        + puntos_4a  # Siempre 0 (eliminado situación vivienda)
         + puntos_4b
-        + puntos_4c  # Criterio 4 (12 puntos)
+        + puntos_4c  # Criterio 4 (7 puntos - solo arraigo familiar y laboral)
         + puntos_5a
         + puntos_5b
         + puntos_5c  # Criterio 5 (17 puntos)
-        + puntos_6  # Criterio 6 (5 puntos)
+        + puntos_6  # Criterio 6 (10 puntos)
         + puntos_7  # Criterio 7 (5 puntos)
     )
 

@@ -53,8 +53,7 @@ interface EvaluacionFormData {
   referencia3_observaciones: string
   referencia3_calificacion: number
   
-  // Criterio 4: Arraigo Geográfico
-  tipo_vivienda: string
+  // Criterio 4: Arraigo Geográfico (7 puntos - sin tipo_vivienda)
   familia_cercana: boolean
   familia_pais: boolean
   minutos_trabajo: number
@@ -114,8 +113,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     referencia3_observaciones: '',
     referencia3_calificacion: 0,
     
-    // Criterio 4: Arraigo Geográfico (12 puntos)
-    tipo_vivienda: 'alquiler_1_2',
+    // Criterio 4: Arraigo Geográfico (7 puntos - sin tipo_vivienda)
     familia_cercana: false,
     familia_pais: false,
     minutos_trabajo: 0,
@@ -138,7 +136,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     viven_con_ex: false,
     embarazo_actual: false,
     
-    // Criterio 6: Edad del Cliente (5 puntos)
+    // Criterio 6: Edad del Cliente (10 puntos)
     edad: 0,
     
     // Criterio 7: Enganche Pagado (5 puntos)
@@ -186,8 +184,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     referencia3_observaciones: formData.referencia3_observaciones,
     referencia3_calificacion: formData.referencia3_calificacion,
         
-        // Criterio 4
-        tipo_vivienda: formData.tipo_vivienda,
+        // Criterio 4 (sin tipo_vivienda)
         familia_cercana: formData.familia_cercana,
         familia_pais: formData.familia_pais,
         minutos_trabajo: formData.minutos_trabajo,
@@ -232,9 +229,9 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     { id: 'criterio1', label: 'Criterio 1: Capacidad de Pago', puntos: '29' },
     { id: 'criterio2', label: 'Criterio 2: Estabilidad Laboral', puntos: '23' },
     { id: 'criterio3', label: 'Criterio 3: Referencias', puntos: '9' },
-    { id: 'criterio4', label: 'Criterio 4: Arraigo Geográfico', puntos: '12' },
+    { id: 'criterio4', label: 'Criterio 4: Arraigo Geográfico', puntos: '7' },
     { id: 'criterio5', label: 'Criterio 5: Perfil Sociodemográfico', puntos: '17' },
-    { id: 'criterio6', label: 'Criterio 6: Edad', puntos: '5' },
+    { id: 'criterio6', label: 'Criterio 6: Edad', puntos: '10' },
     { id: 'criterio7', label: 'Criterio 7: Enganche', puntos: '5' },
   ]
 
@@ -576,38 +573,16 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
           </Card>
           )}
 
-          {/* CRITERIO 4: ARRAIGO GEOGRÁFICO (12 puntos) */}
+          {/* CRITERIO 4: ARRAIGO GEOGRÁFICO (7 puntos) */}
           {showSection === 'criterio4' && (
             <Card className="border-green-200">
               <CardHeader className="bg-green-50">
                 <CardTitle className="flex items-center gap-2 text-green-700">
                   <MapPin className="h-5 w-5" />
-                  CRITERIO 4: ARRAIGO GEOGRÁFICO (12 puntos)
+                  CRITERIO 4: ARRAIGO GEOGRÁFICO (7 puntos)
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Situación de Vivienda *
-                  </label>
-                  <Select
-                    value={formData.tipo_vivienda}
-                    onValueChange={(value) => setFormData({ ...formData, tipo_vivienda: value })}
-                    required
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="casa_propia">Casa Propia (5 pts)</SelectItem>
-                      <SelectItem value="alquiler_mas_2">Alquiler &gt;2 años (4 pts)</SelectItem>
-                      <SelectItem value="alquiler_1_2">Alquiler 1-2 años (3 pts)</SelectItem>
-                      <SelectItem value="alquiler_menos_1">Alquiler &lt;1 año (1 pt)</SelectItem>
-                      <SelectItem value="prestado">De Prestado (0.5 pts)</SelectItem>
-                      <SelectItem value="sin_vivienda">Sin Vivienda Fija (0 pts)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     Distancia al Trabajo (minutos) *
@@ -902,13 +877,13 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
           </Card>
           )}
 
-          {/* CRITERIO 6: EDAD (5 puntos) */}
+          {/* CRITERIO 6: EDAD (10 puntos) */}
           {showSection === 'criterio6' && (
             <Card className="border-pink-200">
               <CardHeader className="bg-pink-50">
                 <CardTitle className="flex items-center gap-2 text-pink-700">
                   <Calendar className="h-5 w-5" />
-                  CRITERIO 6: EDAD DEL CLIENTE (5 puntos)
+                  CRITERIO 6: EDAD DEL CLIENTE (10 puntos)
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4 space-y-4">
@@ -925,13 +900,13 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   />
                   <div className="bg-pink-50 p-3 rounded border border-pink-200 mt-3">
                     <p className="text-xs text-pink-700">
-                      <strong>Escala:</strong><br />
-                      25-50 años → 5.0 pts (Óptimo) |<br />
-                      22-24 / 51-55 años → 4.0 pts (Muy bueno/Bueno) |<br />
-                      18-21 / 56-60 años → 3.0 pts (Regular) |<br />
-                      61-65 años → 1.5 pts (Bajo) |<br />
+                      <strong>Escala (10 puntos máx):</strong><br />
+                      25-50 años → 10.0 pts (Óptimo) |<br />
+                      22-24 / 51-55 años → 8.0 pts (Muy bueno/Bueno) |<br />
+                      18-21 / 56-60 años → 6.0 pts (Regular) |<br />
+                      61-65 años → 3.0 pts (Bajo) |<br />
                       &lt; 18 años → RECHAZO AUTOMÁTICO |<br />
-                      &gt; 65 años → 1.0 pt (Muy bajo)
+                      &gt; 65 años → 2.0 pts (Muy bajo)
                     </p>
                         </div>
                       </div>

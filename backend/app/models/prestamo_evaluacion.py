@@ -59,9 +59,10 @@ class PrestamoEvaluacion(Base):
     num_referencias_verificadas = Column(Integer, nullable=True)
 
     # ============================================
-    # CRITERIO 4: ARRAIGO GEOGRÁFICO (12 puntos)
+    # CRITERIO 4: ARRAIGO GEOGRÁFICO (7 puntos)
     # ============================================
-    # 4.A - Tiempo en Domicilio (5 puntos)
+    # 4.A - Tiempo en Domicilio (ELIMINADO - 0 puntos)
+    # Campo mantenido en BD por compatibilidad, siempre será 0
     arraigo_vivienda_puntos = Column(Numeric(5, 2), nullable=False, default=0)
 
     # 4.B - Arraigo Familiar (4 puntos)
@@ -86,7 +87,7 @@ class PrestamoEvaluacion(Base):
     hijos_descripcion = Column(String(50), nullable=True)
 
     # ============================================
-    # CRITERIO 6: EDAD DEL CLIENTE (5 puntos)
+    # CRITERIO 6: EDAD DEL CLIENTE (10 puntos)
     # ============================================
     edad_puntos = Column(Numeric(5, 2), nullable=False, default=0)
     edad_cliente = Column(Integer, nullable=True)
