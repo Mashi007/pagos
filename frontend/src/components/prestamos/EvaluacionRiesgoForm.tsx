@@ -60,7 +60,13 @@ interface EvaluacionForm {
 
 export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: EvaluacionRiesgoFormProps) {
   const { isAdmin } = usePermissions()
+  
+  if (!isAdmin) {
+    return null
+  }
+  
   const [isLoading, setIsLoading] = useState(false)
+  const [isApplyingConditions, setIsApplyingConditions] = useState(false)
   const [resultado, setResultado] = useState<any>(null)
   
   const [formData, setFormData] = useState<EvaluacionForm>({
@@ -80,10 +86,6 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     litigio_legal: false,
     mas_de_un_prestamo_activo: false,
   })
-
-  if (!isAdmin) {
-    return null
-  }
 
   // Calcular ratios automáticamente
   const calcularRatios = () => {
@@ -153,12 +155,6 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
       
       setResultado(response)
       toast.success('✅ Evaluación guardada exitosamente. La información ha sido verificada y confirmada.')
-      
-      // Auto-cerrar después de 2 segundos
-      setTimeout(() => {
-        onSuccess()
-        onClose()
-      }, 2000)
     } catch (error: any) {
       toast.error(error.message || 'Error al evaluar riesgo')
     } finally {
@@ -431,54 +427,134 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
 
           {/* RESULTADO */}
           {resultado && (
-            <Card className="border-blue-300 bg-blue-50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-blue-700">
-                  <CheckCircle className="h-6 w-6" />
-                  Resultado de la Evaluación
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm text-gray-600">Puntuación Total</label>
-                    <p className="text-2xl font-bold">{resultado.puntuacion_total}</p>
+            <>
+              <Card className="border-blue-300 bg-blue-50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-blue-700">
+                    <CheckCircle className="h-6 w-6" />
+                    Resultado de la Evaluación
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm text-gray-600">Puntuación Total</label>
+                      <p className="text-2xl font-bold">{resultado.puntuacion_total} / 100</p>
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-600">Clasificación de Riesgo</label>
+                      <Badge className="text-lg">
+                        {resultado.clasificacion_riesgo}
+                      </Badge>
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-600">Decisión Final</label>
+                      <Badge variant={resultado.decision_final === 'APROBADO' ? 'default' : 'destructive'}>
+                        {resultado.decision_final}
+                      </Badge>
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-600">Tasa de Interés</label>
+                      <p className="text-lg font-semibold">
+                        {typeof resultado.tasa_interes_aplicada === 'number' 
+                          ? (resultado.tasa_interes_aplicada * 100).toFixed(2) + '%' 
+                          : '0.00%'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-600">Plazo Máximo</label>
+                      <p className="text-lg font-semibold">{resultado.plazo_maximo} meses</p>
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-600">Enganche Mínimo</label>
+                      <p className="text-lg font-semibold">{resultado.enganche_minimo}%</p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-sm text-gray-600">Clasificación</label>
-                    <Badge className="text-lg">
-                      {resultado.clasificacion_riesgo}
-                    </Badge>
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-600">Decisión Final</label>
-                    <Badge variant={resultado.decision_final === 'APROBADO' ? 'default' : 'destructive'}>
-                      {resultado.decision_final}
-                    </Badge>
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-600">Tasa de Interés</label>
-                    <p className="text-lg font-semibold">
-                      {typeof resultado.tasa_interes_aplicada === 'number' 
-                        ? (resultado.tasa_interes_aplicada * 100).toFixed(2) + '%' 
-                        : '0.00%'}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+
+              {/* Botones de Acción - Aprobar o Rechazar */}
+              <div className="flex gap-3 pt-4">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  className="flex-1"
+                  onClick={async () => {
+                    setIsApplyingConditions(true)
+                    try {
+                      await prestamoService.aplicarCondicionesAprobacion(prestamo.id, {
+                        estado: 'RECHAZADO',
+                        observaciones: resultado.requisitos_adicionales || 'Rechazado por evaluación de riesgo'
+                      })
+                      toast.success('❌ Préstamo rechazado exitosamente')
+                      onSuccess()
+                      onClose()
+                    } catch (error: any) {
+                      toast.error(error.message || 'Error al rechazar préstamo')
+                    } finally {
+                      setIsApplyingConditions(false)
+                    }
+                  }}
+                  disabled={isApplyingConditions}
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  {isApplyingConditions ? 'Rechazando...' : 'Rechazar Préstamo'}
+                </Button>
+                
+                {resultado.decision_final === 'APROBADO' && (
+                  <Button
+                    type="button"
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    onClick={async () => {
+                      setIsApplyingConditions(true)
+                      try {
+                        const response = await prestamoService.aplicarCondicionesAprobacion(prestamo.id, {
+                          plazo_maximo: resultado.plazo_maximo,
+                          tasa_interes: resultado.tasa_interes_aplicada,
+                          fecha_base_calculo: new Date().toISOString().split('T')[0],
+                          estado: 'APROBADO',
+                          observaciones: resultado.requisitos_adicionales || 'Aprobado por evaluación de riesgo'
+                        })
+                        toast.success('✅ Préstamo aprobado exitosamente')
+                        onSuccess()
+                        onClose()
+                      } catch (error: any) {
+                        toast.error(error.message || 'Error al aprobar préstamo')
+                      } finally {
+                        setIsApplyingConditions(false)
+                      }
+                    }}
+                    disabled={isApplyingConditions}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    {isApplyingConditions ? 'Aprobando...' : 'Aprobar Préstamo'}
+                  </Button>
+                )}
+              </div>
+            </>
           )}
 
-          {/* Botones */}
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={isLoading}>
-              <Calculator className="h-4 w-4 mr-2" />
-              {isLoading ? 'Evaluando...' : 'Evaluar Riesgo'}
-            </Button>
-          </div>
+          {/* Botones - Solo si NO hay resultado */}
+          {!resultado && (
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={isLoading}>
+                <Calculator className="h-4 w-4 mr-2" />
+                {isLoading ? 'Evaluando...' : 'Evaluar Riesgo'}
+              </Button>
+            </div>
+          )}
+
+          {/* Botón Cerrar si hay resultado */}
+          {resultado && (
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cerrar
+              </Button>
+            </div>
+          )}
         </form>
       </motion.div>
     </motion.div>
