@@ -51,6 +51,39 @@ def obtener_datos_cliente(cedula: str, db: Session) -> Optional[Cliente]:
     return db.query(Cliente).filter(Cliente.cedula == cedula).first()
 
 
+def actualizar_monto_y_cuotas(prestamo: Prestamo, monto: Decimal):
+    """Actualiza monto y recalcula cuotas"""
+    prestamo.total_financiamiento = monto
+    prestamo.numero_cuotas, prestamo.cuota_periodo = calcular_cuotas(
+        prestamo.total_financiamiento, prestamo.modalidad_pago
+    )
+
+
+def procesar_cambio_estado(prestamo: Prestamo, nuevo_estado: str, current_user: User, db: Session):
+    """Procesa el cambio de estado del préstamo"""
+    from datetime import datetime
+    
+    estado_anterior = prestamo.estado
+    prestamo.estado = nuevo_estado
+
+    if nuevo_estado == "APROBADO":
+        prestamo.usuario_aprobador = current_user.email
+        prestamo.fecha_aprobacion = datetime.now()
+
+    crear_registro_auditoria(
+        prestamo_id=prestamo.id,
+        cedula=prestamo.cedula,
+        usuario=current_user.email,
+        campo_modificado="estado",
+        valor_anterior=estado_anterior,
+        valor_nuevo=nuevo_estado,
+        accion="CAMBIO_ESTADO",
+        estado_anterior=estado_anterior,
+        estado_nuevo=nuevo_estado,
+        db=db,
+    )
+
+
 def crear_registro_auditoria(
     prestamo_id: int,
     cedula: str,
@@ -249,47 +282,19 @@ def actualizar_prestamo(
 
         # Actualizar campos
         if prestamo_data.total_financiamiento is not None:
-            prestamo.total_financiamiento = prestamo_data.total_financiamiento
-            # Recalcular cuotas
-            prestamo.numero_cuotas, prestamo.cuota_periodo = calcular_cuotas(
-                prestamo.total_financiamiento, prestamo.modalidad_pago
-            )
+            actualizar_monto_y_cuotas(prestamo, prestamo_data.total_financiamiento)
 
         if prestamo_data.modalidad_pago is not None:
             prestamo.modalidad_pago = prestamo_data.modalidad_pago
-            # Recalcular cuotas
             prestamo.numero_cuotas, prestamo.cuota_periodo = calcular_cuotas(
                 prestamo.total_financiamiento, prestamo.modalidad_pago
             )
 
         if prestamo_data.estado is not None:
-            # Solo cambiar estado si es Admin o si va de DRAFT a EN_REVISION
             if current_user.is_superuser or (
                 prestamo.estado == "DRAFT" and prestamo_data.estado == "EN_REVISION"
             ):
-                estado_anterior = prestamo.estado
-                prestamo.estado = prestamo_data.estado
-
-                # Si se aprueba, registrar aprobador
-                if prestamo_data.estado == "APROBADO":
-                    prestamo.usuario_aprobador = current_user.email
-                    from datetime import datetime
-
-                    prestamo.fecha_aprobacion = datetime.now()
-
-                # Registrar cambio de estado en auditoría
-                crear_registro_auditoria(
-                    prestamo_id=prestamo.id,
-                    cedula=prestamo.cedula,
-                    usuario=current_user.email,
-                    campo_modificado="estado",
-                    valor_anterior=estado_anterior,
-                    valor_nuevo=prestamo_data.estado,
-                    accion="CAMBIO_ESTADO",
-                    estado_anterior=estado_anterior,
-                    estado_nuevo=prestamo_data.estado,
-                    db=db,
-                )
+                procesar_cambio_estado(prestamo, prestamo_data.estado, current_user, db)
 
         if prestamo_data.observaciones is not None:
             prestamo.observaciones = prestamo_data.observaciones
