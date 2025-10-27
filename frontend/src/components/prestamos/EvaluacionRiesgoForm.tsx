@@ -109,7 +109,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
       ? formData.ingresos_mensuales / formData.gastos_fijos_mensuales
       : 0
 
-    // LTV (Loan to Value) - Porcentaje de enganche sobre el financiamiento
+    // LTV (Loan to Value) - Porcentaje de anticipo sobre el valor del activo
     const ltv = prestamo.total_financiamiento > 0
       ? (formData.enganche_pagado / prestamo.total_financiamiento) * 100
       : 0
@@ -135,7 +135,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
       '✓ Los gastos reportados son verificables\n' +
       '✓ El historial crediticio está validado\n' +
       '✓ La información de empleo es correcta\n' +
-      '✓ Los valores de enganche y garantía son reales\n\n' +
+      '✓ Los valores de anticipo y valor del activo son reales\n\n' +
       '¿Desea proceder con la evaluación?'
     )
     
@@ -486,7 +486,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
               <CardTitle className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Calculator className="h-5 w-5 text-red-600" />
-                  <span>Criterio 6: Enganche y Garantías (10%)</span>
+                  <span>Criterio 6: Anticipo y Valor del Activo (10%)</span>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
@@ -495,9 +495,9 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     </PopoverTrigger>
                     <PopoverContent className="w-96">
                       <div className="space-y-2">
-                        <h4 className="font-semibold">Enganche y Garantías (LTV)</h4>
+                        <h4 className="font-semibold">Anticipo y Valor del Activo (LTV)</h4>
                         <p className="text-sm text-gray-600">
-                          Porcentaje de enganche sobre el monto financiado.
+                          Porcentaje de anticipo sobre el valor del activo.
                         </p>
                         <div className="text-sm">
                           <p className="font-semibold mb-1">Escala de Puntos:</p>
@@ -525,7 +525,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    Enganche Pagado (USD)
+                    Anticipo Pagado (USD)
                   </label>
                   <Input
                     type="number"
@@ -542,7 +542,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    Valor de Garantía (USD)
+                    Valor del Activo (USD)
                   </label>
                   <Input
                     type="number"
@@ -628,7 +628,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       <p className="text-lg font-semibold">{resultado.plazo_maximo} meses</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-600">Enganche Mínimo</label>
+                      <label className="text-sm text-gray-600">Anticipo Mínimo</label>
                       <p className="text-lg font-semibold">{resultado.enganche_minimo}%</p>
                     </div>
                   </div>
