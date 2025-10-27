@@ -22,6 +22,7 @@ const SPINNER_SIZE = 12
 const BORDER_WIDTH = 2
 
 // Pages - Lazy loading para optimización
+const Welcome = lazy(() => import('@/pages/Welcome').then(module => ({ default: module.Welcome })))
 const Login = lazy(() => import('@/pages/Login').then(module => ({ default: module.Login })))
 const Dashboard = lazy(() => import('@/pages/Dashboard').then(module => ({ default: module.Dashboard })))
 const Clientes = lazy(() => import('@/pages/Clientes').then(module => ({ default: module.Clientes })))
@@ -91,6 +92,26 @@ function App() {
     <AnimatePresence mode="wait">
       <Suspense fallback={<PageLoader />}>
         <Routes>
+        {/* Ruta de bienvenida - página por defecto */}
+        <Route
+          path="/"
+          element={
+            isAuthenticated ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <motion.div
+                key="welcome"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: ANIMATION_DURATION }}
+              >
+                <Welcome />
+              </motion.div>
+            )
+          }
+        />
+
         {/* Ruta de login */}
         <Route
           path="/login"
@@ -277,17 +298,6 @@ function App() {
           <Route path="*" element={<NotFound />} />
         </Route>
 
-        {/* Redirect root to dashboard if authenticated, login if not */}
-        <Route
-          path="/"
-          element={
-            isAuthenticated ? (
-              <Navigate to="/dashboard" replace />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
       </Routes>
       </Suspense>
     </AnimatePresence>
