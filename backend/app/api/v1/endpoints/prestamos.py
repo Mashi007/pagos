@@ -393,6 +393,48 @@ def crear_prestamo(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
+@router.get("/cedula/{cedula}", response_model=list[PrestamoResponse])
+def buscar_prestamos_por_cedula(
+    cedula: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Buscar préstamos por cédula del cliente"""
+    prestamos = db.query(Prestamo).filter(Prestamo.cedula == cedula).all()
+    return prestamos
+
+
+@router.get("/auditoria/{prestamo_id}", response_model=list[dict])
+def obtener_auditoria_prestamo(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener historial de auditoría de un préstamo"""
+    auditorias = (
+        db.query(PrestamoAuditoria)
+        .filter(PrestamoAuditoria.prestamo_id == prestamo_id)
+        .order_by(PrestamoAuditoria.fecha_cambio.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": a.id,
+            "usuario": a.usuario,
+            "campo_modificado": a.campo_modificado,
+            "valor_anterior": a.valor_anterior,
+            "valor_nuevo": a.valor_nuevo,
+            "accion": a.accion,
+            "estado_anterior": a.estado_anterior,
+            "estado_nuevo": a.estado_nuevo,
+            "observaciones": a.observaciones,
+            "fecha_cambio": a.fecha_cambio.isoformat(),
+        }
+        for a in auditorias
+    ]
+
+
 @router.get("/{prestamo_id}", response_model=PrestamoResponse)
 def obtener_prestamo(
     prestamo_id: int,
@@ -491,48 +533,6 @@ def eliminar_prestamo(
     db.commit()
 
     return {"message": "Préstamo eliminado exitosamente"}
-
-
-@router.get("/cedula/{cedula}", response_model=list[PrestamoResponse])
-def buscar_prestamos_por_cedula(
-    cedula: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Buscar préstamos por cédula del cliente"""
-    prestamos = db.query(Prestamo).filter(Prestamo.cedula == cedula).all()
-    return prestamos
-
-
-@router.get("/auditoria/{prestamo_id}", response_model=list[dict])
-def obtener_auditoria_prestamo(
-    prestamo_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Obtener historial de auditoría de un préstamo"""
-    auditorias = (
-        db.query(PrestamoAuditoria)
-        .filter(PrestamoAuditoria.prestamo_id == prestamo_id)
-        .order_by(PrestamoAuditoria.fecha_cambio.desc())
-        .all()
-    )
-
-    return [
-        {
-            "id": a.id,
-            "usuario": a.usuario,
-            "campo_modificado": a.campo_modificado,
-            "valor_anterior": a.valor_anterior,
-            "valor_nuevo": a.valor_nuevo,
-            "accion": a.accion,
-            "estado_anterior": a.estado_anterior,
-            "estado_nuevo": a.estado_nuevo,
-            "observaciones": a.observaciones,
-            "fecha_cambio": a.fecha_cambio.isoformat(),
-        }
-        for a in auditorias
-    ]
 
 
 @router.post("/{prestamo_id}/generar-amortizacion")
