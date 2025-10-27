@@ -47,10 +47,21 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     observaciones: prestamo?.observaciones || '',
   })
 
+  const [valorActivo, setValorActivo] = useState<number>(0)
+  const [anticipo, setAnticipo] = useState<number>(0)
   const [showAdditionalInfo, setShowAdditionalInfo] = useState(false)
   const [clienteData, setClienteData] = useState<any>(null)
   const [numeroCuotas, setNumeroCuotas] = useState<number>(0)
   const [cuotaPeriodo, setCuotaPeriodo] = useState<number>(0)
+
+  // Calcular total_financiamiento automáticamente
+  useEffect(() => {
+    const total = valorActivo - anticipo
+    setFormData(prev => ({
+      ...prev,
+      total_financiamiento: Math.max(0, total)
+    }))
+  }, [valorActivo, anticipo])
 
   // Buscar cliente por cédula con debounce mejorado
   const debouncedCedula = useDebounce(formData.cedula || '', 500)
@@ -127,7 +138,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-        onClick={(e) => e.target === e.currentTarget && onClose()}
+        // Eliminado: onClick para evitar cierre por clic fuera
       >
         <motion.div
           initial={{ scale: 0.95, y: 20 }}
@@ -135,14 +146,19 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
           exit={{ scale: 0.95, y: 20 }}
           className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            // Prevenir cierre con Escape
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              e.stopPropagation()
+            }
+          }}
         >
           <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
             <h2 className="text-xl font-bold">
               {prestamo ? 'Editar Préstamo' : 'Nuevo Préstamo'}
             </h2>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="h-5 w-5" />
-            </Button>
+            {/* Botón X eliminado - solo se puede cerrar con Cancelar o Crear */}
           </div>
 
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
@@ -254,6 +270,45 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Nuevos campos: Valor Activo y Anticipo */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Valor Activo (USD) <span className="text-green-600">(Automático)</span>
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={valorActivo === 0 ? '' : valorActivo}
+                      onChange={(e) => {
+                        const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
+                        setValorActivo(value)
+                      }}
+                      placeholder="Se llena automáticamente"
+                      disabled={isReadOnly}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Anticipo (USD) <span className="text-blue-600">(Manual)</span>
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={anticipo === 0 ? '' : anticipo}
+                      onChange={(e) => {
+                        const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
+                        setAnticipo(value)
+                      }}
+                      placeholder="Ingrese el anticipo"
+                      disabled={isReadOnly}
+                    />
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">
@@ -264,24 +319,10 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       step="0.01"
                       min="0"
                       value={formData.total_financiamiento === 0 ? '' : formData.total_financiamiento}
-                      onChange={(e) => {
-                        const value = e.target.value
-                        // Eliminar ceros a la izquierda y manejar strings vacíos
-                        const numericValue = value === '' ? 0 : parseFloat(value.replace(/^0+/, '').replace(/^\./, '0.'))
-                        setFormData({ 
-                          ...formData, 
-                          total_financiamiento: isNaN(numericValue) ? 0 : numericValue
-                        })
-                      }}
-                      onBlur={(e) => {
-                        // Asegurar que el valor final no empiece con 0
-                        const value = parseFloat(e.target.value)
-                        if (value >= 0) {
-                          setFormData({ ...formData, total_financiamiento: value })
-                        }
-                      }}
-                      disabled={isReadOnly}
+                      readOnly
+                      className="bg-gray-100"
                     />
+                    <p className="text-xs text-gray-500 mt-1">Calculado automáticamente (Valor Activo - Anticipo)</p>
                   </div>
 
                   <div>
