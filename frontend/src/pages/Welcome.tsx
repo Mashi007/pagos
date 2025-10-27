@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { ArrowRight } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 
@@ -113,7 +113,7 @@ export function Welcome() {
               className="bg-gradient-to-r from-blue-600 to-purple-700 hover:from-blue-700 hover:to-purple-800 text-white px-8 py-6 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
             >
               Ingresar al Sistema
-              <ArrowRight className="ml-2 h-5 w-5" />
+              <ChevronRight className="ml-2 h-5 w-5" />
             </Button>
           </motion.div>
         </motion.div>
