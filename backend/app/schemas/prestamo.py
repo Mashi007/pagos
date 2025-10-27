@@ -134,12 +134,12 @@ class PrestamoEvaluacionCreate(PrestamoEvaluacionBase):
     """Schema para crear evaluación"""
 
     prestamo_id: int
-    # Criterio 1: Ratio de Endeudamiento (25%)
-    ratio_endeudamiento_puntos: Decimal = Field(default=0, ge=0, le=25)
+    # Criterio 1.A: Ratio de Endeudamiento (17%)
+    ratio_endeudamiento_puntos: Decimal = Field(default=0, ge=0, le=17)
     ratio_endeudamiento_calculo: Decimal = Field(default=0)
 
-    # Criterio 2: Ratio de Cobertura (20%)
-    ratio_cobertura_puntos: Decimal = Field(default=0, ge=0, le=20)
+    # Criterio 1.B: Ratio de Cobertura (16%)
+    ratio_cobertura_puntos: Decimal = Field(default=0, ge=0, le=16)
     ratio_cobertura_calculo: Decimal = Field(default=0)
 
     # Criterio 3: Historial Crediticio (20%)

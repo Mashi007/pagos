@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 # TABLA 1: CRITERIOS Y PESOS DE EVALUACIÓN
 # ============================================
 CRITERIOS_PESOS = {
-    "ratio_endeudamiento": 25,  # 25%
-    "ratio_cobertura": 20,  # 20%
+    "ratio_endeudamiento": 17,  # 17% (Criterio 1.A)
+    "ratio_cobertura": 16,  # 16% (Criterio 1.B)
     "historial_crediticio": 20,  # 20%
     "estabilidad_laboral": 15,  # 15%
     "tipo_empleo": 10,  # 10%
@@ -28,83 +28,92 @@ CRITERIOS_PESOS = {
 
 def calcular_ratio_endeudamiento(
     ingresos_mensuales: Decimal,
-    gastos_fijos_mensuales: Decimal,
-    cuota_mensual: Decimal,
+    otras_deudas: Decimal,
 ) -> Decimal:
     """
-    TABLA 2: RATIO DE ENDEUDAMIENTO
+    CRITERIO 1.A: RATIO DE ENDEUDAMIENTO (17 puntos - 17%)
+    
+    Formula: (Otras Deudas / Ingresos) × 100
+    IMPORTANTE: NO incluir la cuota del préstamo propuesto, solo deudas actuales
 
-    Formula: (Gastos Fijos + Cuota Mensual) / Ingresos Mensuales
-
-    Retorna:
-        - Decimal con el valor del ratio (ej: 0.45 = 45%)
+    Returns:
+        - Decimal con el valor del ratio como porcentaje (ej: 0.45 = 45%)
     """
     if ingresos_mensuales <= 0:
         return Decimal("999.99")  # Indicador de error
 
-    ratio = (gastos_fijos_mensuales + cuota_mensual) / ingresos_mensuales
+    ratio = (otras_deudas / ingresos_mensuales) * Decimal(100)
     return ratio
 
 
 def evaluar_ratio_endeudamiento_puntos(ratio: Decimal) -> Decimal:
     """
-    Evalúa puntos según ratio de endeudamiento.
-    Rango óptimo: 0% - 30%
+    CRITERIO 1.A: Evalúa puntos según ratio de endeudamiento.
+    
+    Rangos:
+    - < 25%  -> Excelente -> 17 puntos
+    - 25-35% -> Bueno     -> 13 puntos
+    - 35-50% -> Regular   -> 7 puntos
+    - > 50%  -> Malo      -> 2 puntos
 
     Returns:
-        Puntos de 0 a 25
+        Puntos de 0 a 17
     """
-    if ratio <= Decimal("0.30"):  # 30% o menos
-        return Decimal(25)
-    elif ratio <= Decimal("0.40"):  # 31-40%
-        return Decimal(20)
-    elif ratio <= Decimal("0.50"):  # 41-50%
-        return Decimal(15)
-    elif ratio <= Decimal("0.60"):  # 51-60%
-        return Decimal(10)
-    else:  # Más de 60%
-        return Decimal(5)
+    if ratio < Decimal("25"):  # Menos de 25%
+        return Decimal(17)
+    elif ratio < Decimal("35"):  # 25% - 34.99%
+        return Decimal(13)
+    elif ratio < Decimal("50"):  # 35% - 49.99%
+        return Decimal(7)
+    else:  # 50% o más
+        return Decimal(2)
 
 
 def calcular_ratio_cobertura(
     ingresos_mensuales: Decimal,
-    gastos_fijos_mensuales: Decimal,
+    gastos_fijos: Decimal,
+    otras_deudas: Decimal,
+    cuota: Decimal,
 ) -> Decimal:
     """
-    TABLA 3: RATIO DE COBERTURA
-
-    Formula: Ingresos Mensuales / Gastos Fijos Mensuales
-
-    Mide cuántas veces los ingresos cubren los gastos.
-    Ratio > 1.5 es saludable.
+    CRITERIO 1.B: RATIO DE COBERTURA (16 puntos - 16%)
+    
+    Formula: Disponible = Ingresos - Gastos Fijos - Otras Deudas
+    Formula: Ratio = Disponible / Cuota
 
     Returns:
-        Decimal con el ratio
+        Decimal con el ratio (cuántas veces cubre el disponible a la cuota)
     """
-    if gastos_fijos_mensuales <= 0:
-        return Decimal("999.99")
+    if cuota <= 0:
+        return Decimal("0")  # Sin cuota, ratio 0
 
-    ratio = ingresos_mensuales / gastos_fijos_mensuales
+    disponible = ingresos_mensuales - gastos_fijos - otras_deudas
+    ratio = disponible / cuota
     return ratio
 
 
-def evaluar_ratio_cobertura_puntos(ratio: Decimal) -> Decimal:
+def evaluar_ratio_cobertura_puntos(ratio: Decimal) -> tuple[Decimal, bool]:
     """
-    Evalúa puntos según ratio de cobertura.
+    CRITERIO 1.B: Evalúa puntos según ratio de cobertura.
+    
+    Rangos:
+    - > 2.5x     -> Excelente     -> 16 puntos
+    - 2.0x-2.5x  -> Bueno         -> 13 puntos
+    - 1.5x-2.0x  -> Regular       -> 7 puntos
+    - < 1.5x     -> Insuficiente  -> 0 puntos (RECHAZO)
 
     Returns:
-        Puntos de 0 a 20
+        Tuple: (puntos, rechazo_automatico)
+        Puntos de 0 a 16
     """
-    if ratio >= Decimal("2.0"):  # 2.0 o más
-        return Decimal(20)
-    elif ratio >= Decimal("1.5"):  # 1.5-1.99
-        return Decimal(17)
-    elif ratio >= Decimal("1.2"):  # 1.2-1.49
-        return Decimal(12)
-    elif ratio >= Decimal("1.0"):  # 1.0-1.19
-        return Decimal(8)
-    else:  # Menos de 1.0
-        return Decimal(3)
+    if ratio > Decimal("2.5"):  # Más de 2.5x
+        return Decimal(16), False
+    elif ratio >= Decimal("2.0"):  # 2.0x - 2.5x
+        return Decimal(13), False
+    elif ratio >= Decimal("1.5"):  # 1.5x - 1.99x
+        return Decimal(7), False
+    else:  # Menos de 1.5x - RECHAZO
+        return Decimal(0), True
 
 
 def evaluar_historial_crediticio(calificacion: str) -> Dict[str, Decimal]:
@@ -336,7 +345,8 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
     """
     # Extraer datos
     ingresos = Decimal(str(datos_evaluacion.get("ingresos_mensuales", 0)))
-    gastos = Decimal(str(datos_evaluacion.get("gastos_fijos_mensuales", 0)))
+    gastos_fijos = Decimal(str(datos_evaluacion.get("gastos_fijos_mensuales", 0)))
+    otras_deudas = Decimal(str(datos_evaluacion.get("otras_deudas", 0)))  # Deudas actuales del cliente
     cuota = Decimal(str(datos_evaluacion.get("cuota_mensual", 0)))
     historial = datos_evaluacion.get("historial_crediticio", "DESCONOCIDO")
     anos_trabajo = Decimal(str(datos_evaluacion.get("anos_empleo", 0)))
@@ -344,13 +354,41 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
     enganche = Decimal(str(datos_evaluacion.get("enganche_pagado", 0)))
     monto_financiado = Decimal(str(datos_evaluacion.get("monto_financiado", 0)))
 
-    # Criterio 1: Ratio de Endeudamiento
-    ratio_end = calcular_ratio_endeudamiento(ingresos, gastos, cuota)
+    # Criterio 1.A: Ratio de Endeudamiento (NO incluir cuota del préstamo propuesto)
+    ratio_end = calcular_ratio_endeudamiento(ingresos, otras_deudas)
     puntos_end = evaluar_ratio_endeudamiento_puntos(ratio_end)
 
-    # Criterio 2: Ratio de Cobertura
-    ratio_cob = calcular_ratio_cobertura(ingresos, gastos)
-    puntos_cob = evaluar_ratio_cobertura_puntos(ratio_cob)
+    # Criterio 1.B: Ratio de Cobertura
+    ratio_cob = calcular_ratio_cobertura(ingresos, gastos_fijos, otras_deudas, cuota)
+    puntos_cob, rechazo_automatico = evaluar_ratio_cobertura_puntos(ratio_cob)
+    
+    # Si ratio de cobertura < 1.5x, rechazo automático
+    if rechazo_automatico:
+        logger.warning("RECHAZO AUTOMÁTICO: Ratio de cobertura < 1.5x (insuficiente para cubrir cuota)")
+        # Retornar evaluación con rechazo inmediato
+        evaluacion = PrestamoEvaluacion(
+            prestamo_id=datos_evaluacion.get("prestamo_id"),
+            ratio_endeudamiento_puntos=puntos_end,
+            ratio_endeudamiento_calculo=ratio_end,
+            ratio_cobertura_puntos=Decimal(0),
+            ratio_cobertura_calculo=ratio_cob,
+            historial_crediticio_puntos=Decimal(0),
+            historial_crediticio_descripcion="RECHAZADO: Ratio de cobertura insuficiente",
+            estabilidad_laboral_puntos=Decimal(0),
+            anos_empleo=anos_trabajo,
+            tipo_empleo_puntos=Decimal(0),
+            tipo_empleo_descripcion="No evaluado",
+            enganche_garantias_puntos=Decimal(0),
+            enganche_garantias_calculo=Decimal(0),
+            puntuacion_total=puntos_end,  # Solo cuenta el ratio de endeudamiento
+            clasificacion_riesgo="CRÍTICO",
+            decision_final="RECHAZADO",
+            tasa_interes_aplicada=None,
+            plazo_maximo=0,
+            enganche_minimo=None,
+            requisitos_adicionales="RECHAZO: Ratio de cobertura insuficiente (< 1.5x). El disponible no alcanza para cubrir la cuota del préstamo.",
+        )
+        return evaluacion
 
     # Criterio 3: Historial Crediticio
     eval_hist = evaluar_historial_crediticio(historial)
