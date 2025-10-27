@@ -2,6 +2,7 @@
 Servicio para generar tablas de amortización de préstamos
 Calcula automáticamente cuotas con base en fecha_base_calculo
 """
+
 import logging
 from datetime import date, timedelta
 from decimal import Decimal
@@ -22,47 +23,47 @@ def generar_tabla_amortizacion(
 ) -> List[Cuota]:
     """
     Genera tabla de amortización para un préstamo aprobado.
-    
+
     Args:
         prestamo: Préstamo para el cual generar la tabla
         fecha_base: Fecha desde la cual se calculan las cuotas
         db: Sesión de base de datos
-    
+
     Returns:
         Lista de cuotas generadas
     """
-    
+
     # Eliminar cuotas existentes si las hay
     db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).delete()
-    
+
     cuotas_generadas = []
     saldo_capital = prestamo.total_financiamiento
-    
+
     # Calcular intervalo entre cuotas según modalidad
     intervalo_dias = _calcular_intervalo_dias(prestamo.modalidad_pago)
-    
+
     # Tasa de interés mensual (convertir anual a mensual)
     tasa_mensual = Decimal(prestamo.tasa_interes) / Decimal(100) / Decimal(12)
-    
+
     # Generar cada cuota
     for numero_cuota in range(1, prestamo.numero_cuotas + 1):
         # Fecha de vencimiento
         fecha_vencimiento = fecha_base + timedelta(days=intervalo_dias * numero_cuota)
-        
+
         # Método Francés (cuota fija)
         monto_cuota = prestamo.cuota_periodo
-        
+
         # Calcular interés sobre saldo pendiente
         monto_interes = saldo_capital * tasa_mensual
-        
+
         # Capital = Cuota - Interés
         monto_capital = monto_cuota - monto_interes
-        
+
         # Actualizar saldo
         saldo_capital_inicial = saldo_capital
         saldo_capital = saldo_capital - monto_capital
         saldo_capital_final = saldo_capital
-        
+
         # Crear cuota
         cuota = Cuota(
             prestamo_id=prestamo.id,
@@ -81,28 +82,30 @@ def generar_tabla_amortizacion(
             interes_pendiente=monto_interes,
             estado="PENDIENTE",
         )
-        
+
         cuotas_generadas.append(cuota)
         db.add(cuota)
-    
+
     try:
         db.commit()
-        logger.info(f"Tabla de amortización generada: {prestamo.numero_cuotas} cuotas para préstamo {prestamo.id}")
+        logger.info(
+            f"Tabla de amortización generada: {prestamo.numero_cuotas} cuotas para préstamo {prestamo.id}"
+        )
     except Exception as e:
         db.rollback()
         logger.error(f"Error generando tabla de amortización: {str(e)}")
         raise
-    
+
     return cuotas_generadas
 
 
 def _calcular_intervalo_dias(modalidad_pago: str) -> int:
     """
     Calcula días entre cuotas según modalidad.
-    
+
     Args:
         modalidad_pago: MENSUAL, QUINCENAL o SEMANAL
-    
+
     Returns:
         Número de días entre cada cuota
     """
@@ -111,7 +114,7 @@ def _calcular_intervalo_dias(modalidad_pago: str) -> int:
         "QUINCENAL": 15,
         "SEMANAL": 7,
     }
-    
+
     return intervalos.get(modalidad_pago, 30)  # Default mensual
 
 
@@ -121,11 +124,11 @@ def obtener_cuotas_prestamo(
 ) -> List[Cuota]:
     """
     Obtiene todas las cuotas de un préstamo.
-    
+
     Args:
         prestamo_id: ID del préstamo
         db: Sesión de base de datos
-    
+
     Returns:
         Lista de cuotas ordenadas por número
     """
@@ -143,11 +146,11 @@ def obtener_cuotas_pendientes(
 ) -> List[Cuota]:
     """
     Obtiene cuotas pendientes de un préstamo.
-    
+
     Args:
         prestamo_id: ID del préstamo
         db: Sesión de base de datos
-    
+
     Returns:
         Lista de cuotas pendientes
     """
@@ -168,18 +171,18 @@ def obtener_cuotas_vencidas(
 ) -> List[Cuota]:
     """
     Obtiene cuotas vencidas de un préstamo.
-    
+
     Args:
         prestamo_id: ID del préstamo
         db: Sesión de base de datos
-    
+
     Returns:
         Lista de cuotas vencidas
     """
     from datetime import date
-    
+
     fecha_hoy = date.today()
-    
+
     return (
         db.query(Cuota)
         .filter(
@@ -190,4 +193,3 @@ def obtener_cuotas_vencidas(
         .order_by(Cuota.numero_cuota)
         .all()
     )
-
