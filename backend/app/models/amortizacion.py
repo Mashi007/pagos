@@ -96,8 +96,7 @@ class Cuota(Base):
         from datetime import date
 
         if self.fecha_vencimiento:
-            fecha_venc = date.fromisoformat(self.fecha_vencimiento)
-            return fecha_venc < date.today() and self.estado != "PAGADA"
+            return self.fecha_vencimiento < date.today() and self.estado != "PAGADA"
         return False
 
     def calcular_mora(self, tasa_mora_diaria: Decimal) -> Decimal:
@@ -113,8 +112,7 @@ class Cuota(Base):
         if self.esta_vencida:
             from datetime import date
 
-            fecha_venc = date.fromisoformat(self.fecha_vencimiento)
-            dias_vencido = (date.today() - fecha_venc).days
+            dias_vencido = (date.today() - self.fecha_vencimiento).days
 
             # Calcular mora sobre el saldo pendiente
             saldo_mora = self.capital_pendiente + self.interes_pendiente
