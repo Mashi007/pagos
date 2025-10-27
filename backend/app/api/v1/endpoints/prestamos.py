@@ -703,10 +703,26 @@ def evaluar_riesgo_prestamo(
         datos_evaluacion["cuota_mensual"] = (
             float(prestamo.cuota_periodo) if prestamo.cuota_periodo else 0
         )
+    
+    # AGREGAR: Obtener edad del cliente desde la base de datos
+    if "edad" not in datos_evaluacion or not datos_evaluacion["edad"]:
+        # Buscar cliente por cédula
+        cliente = db.query(Cliente).filter(Cliente.cedula == prestamo.cedula).first()
+        if cliente and cliente.fecha_nacimiento:
+            # Calcular edad desde fecha de nacimiento
+            from datetime import date
+            hoy = date.today()
+            nacimiento = cliente.fecha_nacimiento
+            edad_calculada = hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
+            datos_evaluacion["edad"] = edad_calculada
+            logger.info(f"Edad calculada desde BD: {edad_calculada} años (fecha_nacimiento: {cliente.fecha_nacimiento})")
+        else:
+            datos_evaluacion["edad"] = 25  # Valor por defecto si no se encuentra
+            logger.warning(f"No se encontró fecha de nacimiento para cédula {prestamo.cedula}, usando valor por defecto")
 
     # Log para debugging
     logger.info(
-        f"Evaluando préstamo {prestamo_id} con cuota: {datos_evaluacion['cuota_mensual']} USD (del préstamo en BD)"
+        f"Evaluando préstamo {prestamo_id} con cuota: {datos_evaluacion['cuota_mensual']} USD, edad: {datos_evaluacion.get('edad', 'N/A')} años"
     )
 
     try:
