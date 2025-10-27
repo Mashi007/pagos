@@ -63,14 +63,14 @@ def evaluar_ratio_endeudamiento_puntos(ratio: Decimal) -> Decimal:
     - > 50%  -> Malo      -> 2 puntos
 
     Returns:
-        Puntos de 0 a 17
+        Puntos de 0 a 14
     """
     if ratio < Decimal("25"):  # Menos de 25%
-        return Decimal(17)
+        return Decimal(14)  # Reducido de 17 a 14
     elif ratio < Decimal("35"):  # 25% - 34.99%
-        return Decimal(13)
+        return Decimal(11)  # Reducido de 13 a 11
     elif ratio < Decimal("50"):  # 35% - 49.99%
-        return Decimal(7)
+        return Decimal(6)  # Reducido de 7 a 6
     else:  # 50% o más
         return Decimal(2)
 
@@ -110,14 +110,14 @@ def evaluar_ratio_cobertura_puntos(ratio: Decimal) -> Tuple[Decimal, bool]:
 
     Returns:
         Tuple: (puntos, rechazo_automatico)
-        Puntos de 0 a 16
+        Puntos de 0 a 15
     """
     if ratio > Decimal("2.5"):  # Más de 2.5x
-        return Decimal(16), False
+        return Decimal(15), False  # Reducido de 16 a 15
     elif ratio >= Decimal("2.0"):  # 2.0x - 2.5x
-        return Decimal(13), False
+        return Decimal(12), False  # Reducido de 13 a 12
     elif ratio >= Decimal("1.5"):  # 1.5x - 1.99x
-        return Decimal(7), False
+        return Decimal(6), False  # Reducido de 7 a 6
     else:  # Menos de 1.5x - RECHAZO
         return Decimal(0), True
 
@@ -610,11 +610,11 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
     otras_deudas = Decimal(str(datos_evaluacion.get("otras_deudas", 0)))
     cuota = Decimal(str(datos_evaluacion.get("cuota_mensual", 0)))
 
-    # Criterio 1.A: Ratio de Endeudamiento
+    # Criterio 1.A: Ratio de Endeudamiento (14 puntos)
     ratio_end = calcular_ratio_endeudamiento(ingresos, otras_deudas)
     puntos_1a = evaluar_ratio_endeudamiento_puntos(ratio_end)
-
-    # Criterio 1.B: Ratio de Cobertura
+    
+    # Criterio 1.B: Ratio de Cobertura (15 puntos)
     ratio_cob = calcular_ratio_cobertura(ingresos, gastos_fijos, otras_deudas, cuota)
     puntos_1b, rechazo_automatico = evaluar_ratio_cobertura_puntos(ratio_cob)
 
@@ -661,9 +661,9 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
     puntos_2c = evaluar_sector_economico(sector)
 
     # Criterio 3: Referencias (9 puntos - 3 referencias individuales)
-    referencia1_cal = datos_evaluacion.get("referencia1_calificacion", 0)
-    referencia2_cal = datos_evaluacion.get("referencia2_calificacion", 0)
-    referencia3_cal = datos_evaluacion.get("referencia3_calificacion", 0)
+    referencia1_cal = int(datos_evaluacion.get("referencia1_calificacion", 0))
+    referencia2_cal = int(datos_evaluacion.get("referencia2_calificacion", 0))
+    referencia3_cal = int(datos_evaluacion.get("referencia3_calificacion", 0))
     puntos_3 = Decimal(referencia1_cal) + Decimal(referencia2_cal) + Decimal(referencia3_cal)
     desc_referencias = f"Ref1:{referencia1_cal} Ref2:{referencia2_cal} Ref3:{referencia3_cal}"
 
