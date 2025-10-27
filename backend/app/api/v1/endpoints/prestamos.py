@@ -59,10 +59,12 @@ def actualizar_monto_y_cuotas(prestamo: Prestamo, monto: Decimal):
     )
 
 
-def procesar_cambio_estado(prestamo: Prestamo, nuevo_estado: str, current_user: User, db: Session):
+def procesar_cambio_estado(
+    prestamo: Prestamo, nuevo_estado: str, current_user: User, db: Session
+):
     """Procesa el cambio de estado del préstamo"""
     from datetime import datetime
-    
+
     estado_anterior = prestamo.estado
     prestamo.estado = nuevo_estado
 
