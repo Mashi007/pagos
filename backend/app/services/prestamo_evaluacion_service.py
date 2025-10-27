@@ -471,12 +471,12 @@ def calcular_capacidad_maniobra(
         Tuple: (saldo_residual, porcentaje_residual)
     """
     saldo_residual = ingresos - gastos_fijos - otras_deudas - cuota_prestamo
-    
+
     if ingresos <= 0:
         porcentaje_residual = Decimal("0")
     else:
         porcentaje_residual = (saldo_residual / ingresos) * Decimal(100)
-    
+
     return saldo_residual, porcentaje_residual
 
 
