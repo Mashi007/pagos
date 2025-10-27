@@ -873,18 +873,18 @@ def crear_evaluacion_prestamo(
     Incluye la cédula del cliente para facilitar consultas directas.
     """
     from app.models.prestamo import Prestamo
-    
+
     # Obtener la cédula del préstamo desde la BD
     prestamo_id = datos_evaluacion.get("prestamo_id")
     cedula_cliente = None
-    
+
     if prestamo_id:
         prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
         if prestamo:
             cedula_cliente = prestamo.cedula
             # Agregar cédula a los datos de evaluación
             datos_evaluacion["cedula"] = cedula_cliente
-    
+
     evaluacion = calcular_evaluacion_completa(datos_evaluacion)
 
     # Buscar evaluación existente
