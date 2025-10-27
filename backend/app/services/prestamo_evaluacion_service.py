@@ -31,13 +31,14 @@ CRITERIOS_PESOS = {
 # CRITERIO 1: CAPACIDAD DE PAGO (33 puntos)
 # ============================================
 
+
 def calcular_ratio_endeudamiento(
     ingresos_mensuales: Decimal,
     otras_deudas: Decimal,
 ) -> Decimal:
     """
     CRITERIO 1.A: RATIO DE ENDEUDAMIENTO (17 puntos - 17%)
-    
+
     Formula: (Otras Deudas / Ingresos) × 100
     IMPORTANTE: NO incluir la cuota del préstamo propuesto, solo deudas actuales
 
@@ -54,7 +55,7 @@ def calcular_ratio_endeudamiento(
 def evaluar_ratio_endeudamiento_puntos(ratio: Decimal) -> Decimal:
     """
     CRITERIO 1.A: Evalúa puntos según ratio de endeudamiento.
-    
+
     Rangos:
     - < 25%  -> Excelente -> 17 puntos
     - 25-35% -> Bueno     -> 13 puntos
@@ -82,7 +83,7 @@ def calcular_ratio_cobertura(
 ) -> Decimal:
     """
     CRITERIO 1.B: RATIO DE COBERTURA (16 puntos - 16%)
-    
+
     Formula: Disponible = Ingresos - Gastos Fijos - Otras Deudas
     Formula: Ratio = Disponible / Cuota
 
@@ -100,7 +101,7 @@ def calcular_ratio_cobertura(
 def evaluar_ratio_cobertura_puntos(ratio: Decimal) -> Tuple[Decimal, bool]:
     """
     CRITERIO 1.B: Evalúa puntos según ratio de cobertura.
-    
+
     Rangos:
     - > 2.5x     -> Excelente     -> 16 puntos
     - 2.0x-2.5x  -> Bueno         -> 13 puntos
@@ -120,14 +121,16 @@ def evaluar_ratio_cobertura_puntos(ratio: Decimal) -> Tuple[Decimal, bool]:
     else:  # Menos de 1.5x - RECHAZO
         return Decimal(0), True
 
+
 # ============================================
 # CRITERIO 2: ESTABILIDAD LABORAL (23 puntos)
 # ============================================
 
+
 def evaluar_antiguedad_trabajo(meses_trabajo: int) -> Decimal:
     """
     CRITERIO 2.A: Antigüedad en Trabajo (9 puntos - 9%)
-    
+
     Rangos:
     - > 24 meses  -> Muy estable -> 9 puntos
     - 12-24 meses -> Estable     -> 7 puntos
@@ -150,7 +153,7 @@ def evaluar_antiguedad_trabajo(meses_trabajo: int) -> Decimal:
 def evaluar_tipo_empleo(tipo_empleo: str) -> Decimal:
     """
     CRITERIO 2.B: Tipo y Calidad de Empleo (8 puntos - 8%)
-    
+
     Tipos y puntos:
     - empleado_formal        -> 8 puntos
     - informal_estable       -> 6 puntos
@@ -174,7 +177,7 @@ def evaluar_tipo_empleo(tipo_empleo: str) -> Decimal:
 def evaluar_sector_economico(sector: str) -> Decimal:
     """
     CRITERIO 2.C: Sector Económico (6 puntos - 6%)
-    
+
     Sectores y puntos:
     - gobierno_publico           -> 6 puntos
     - servicios_esenciales       -> 5 puntos
@@ -198,14 +201,18 @@ def evaluar_sector_economico(sector: str) -> Decimal:
     }
     return Decimal(sector_puntos.get(sector.lower(), 0))
 
+
 # ============================================
 # CRITERIO 3: REFERENCIAS PERSONALES (5 puntos)
 # ============================================
 
-def evaluar_referencias(num_referencias: int, años_conoce: float) -> Tuple[Decimal, str]:
+
+def evaluar_referencias(
+    num_referencias: int, años_conoce: float
+) -> Tuple[Decimal, str]:
     """
     CRITERIO 3: Referencias Personales (5 puntos - 5%)
-    
+
     Rangos:
     - 3+ verificadas, >2 años -> Excelente -> 5 puntos
     - 2-3 verificadas, >1 año -> Buena     -> 4 puntos
@@ -224,14 +231,16 @@ def evaluar_referencias(num_referencias: int, años_conoce: float) -> Tuple[Deci
     else:
         return Decimal(0), "Mala"
 
+
 # ============================================
 # CRITERIO 4: ARRAIGO GEOGRÁFICO (12 puntos)
 # ============================================
 
+
 def evaluar_vivienda(tipo_vivienda: str) -> Decimal:
     """
     CRITERIO 4.A: Tiempo en Domicilio (5 puntos - 5%)
-    
+
     Situación y puntos:
     - casa_propia      -> 5 puntos
     - alquiler_mas_2   -> 4 puntos
@@ -257,7 +266,7 @@ def evaluar_vivienda(tipo_vivienda: str) -> Decimal:
 def evaluar_arraigo_familiar(familia_cercana: bool, familia_pais: bool) -> Decimal:
     """
     CRITERIO 4.B: Arraigo Familiar (4 puntos - 4%)
-    
+
     Situación y puntos:
     - Familia cercana en ciudad -> 4 puntos
     - Familia en el país        -> 2 puntos
@@ -277,7 +286,7 @@ def evaluar_arraigo_familiar(familia_cercana: bool, familia_pais: bool) -> Decim
 def evaluar_arraigo_laboral(minutos_trabajo: int) -> Decimal:
     """
     CRITERIO 4.C: Arraigo Laboral (3 puntos - 3%)
-    
+
     Distancia y puntos:
     - < 30 min -> 3 puntos
     - 30-60 min -> 2 puntos
@@ -293,20 +302,22 @@ def evaluar_arraigo_laboral(minutos_trabajo: int) -> Decimal:
     else:
         return Decimal(0)
 
+
 # ============================================
 # CRITERIO 5: PERFIL SOCIODEMOGRÁFICO (17 puntos)
 # ============================================
+
 
 def evaluar_vivienda_detallada(
     tipo_vivienda: str,
     zona_urbana: bool = False,
     servicios_nombre: bool = False,
     zona_rural: bool = False,
-    personas_casa: int = 1
+    personas_casa: int = 1,
 ) -> Decimal:
     """
     CRITERIO 5.A: Situación de Vivienda (6 puntos - 6%)
-    
+
     Base + modificadores (MAX: 6 puntos)
     """
     vivienda_puntos = {
@@ -319,10 +330,10 @@ def evaluar_vivienda_detallada(
         "prestado": Decimal("0.5"),
         "sin_vivienda": 0,
     }
-    
+
     puntos_base = Decimal(vivienda_puntos.get(tipo_vivienda.lower(), 0))
     modificadores = Decimal("0")
-    
+
     if zona_urbana:
         modificadores += Decimal("0.5")
     if servicios_nombre:
@@ -331,7 +342,7 @@ def evaluar_vivienda_detallada(
         modificadores -= Decimal("0.5")
     if personas_casa > 5:
         modificadores -= Decimal("0.5")
-    
+
     return min(Decimal(6), puntos_base + modificadores)
 
 
@@ -340,11 +351,11 @@ def evaluar_estado_civil(
     pareja_trabaja: bool = False,
     pareja_aval: bool = False,
     pareja_desempleada: bool = False,
-    relacion_conflictiva: bool = False
+    relacion_conflictiva: bool = False,
 ) -> Decimal:
     """
     CRITERIO 5.B: Estado Civil y Pareja (6 puntos - 6%)
-    
+
     Base + modificadores (MAX: 6 puntos)
     """
     estado_puntos = {
@@ -356,10 +367,10 @@ def evaluar_estado_civil(
         "divorciado_sin_hijos": Decimal("1.0"),
         "separado_reciente": Decimal("0"),
     }
-    
+
     puntos_base = estado_puntos.get(estado_civil.lower(), Decimal("0"))
     modificadores = Decimal("0")
-    
+
     if pareja_trabaja:
         modificadores += Decimal("1.0")
     if pareja_aval:
@@ -368,7 +379,7 @@ def evaluar_estado_civil(
         modificadores -= Decimal("0.5")
     if relacion_conflictiva:
         modificadores -= Decimal("1.0")
-    
+
     return min(Decimal(6), puntos_base + modificadores)
 
 
@@ -378,11 +389,11 @@ def evaluar_hijos(
     viven_con_cliente: bool = False,
     necesidades_especiales: bool = False,
     viven_con_ex: bool = False,
-    embarazo_actual: bool = False
+    embarazo_actual: bool = False,
 ) -> Decimal:
     """
     CRITERIO 5.C: Número y Edad de Hijos (5 puntos - 5%)
-    
+
     Base + modificadores (MAX: 5 puntos)
     """
     hijos_puntos = {
@@ -394,10 +405,10 @@ def evaluar_hijos(
         "sin_hijos_no_planea": Decimal("2.0"),
         "hijos_independientes": Decimal("1.0"),
     }
-    
+
     puntos_base = hijos_puntos.get(situacion_hijos.lower(), Decimal("0"))
     modificadores = Decimal("0")
-    
+
     if todos_estudian:
         modificadores += Decimal("0.5")
     if viven_con_cliente:
@@ -408,17 +419,19 @@ def evaluar_hijos(
         modificadores -= Decimal("0.5")
     if embarazo_actual:
         modificadores -= Decimal("0.5")
-    
+
     return min(Decimal(5), puntos_base + modificadores)
+
 
 # ============================================
 # CRITERIO 6: EDAD DEL CLIENTE (5 puntos)
 # ============================================
 
+
 def evaluar_edad_cliente(edad: int) -> Tuple[Decimal, str, bool]:
     """
     CRITERIO 6: Edad del Cliente (5 puntos - 5%)
-    
+
     Rangos:
     - 25-50 años -> Óptimo      -> 5.0 puntos
     - 22-24 / 51-55 -> Muy bueno/Bueno -> 4.0 puntos
@@ -431,7 +444,7 @@ def evaluar_edad_cliente(edad: int) -> Tuple[Decimal, str, bool]:
         Tuple: (puntos, categoria, rechazo)
     """
     rechazo = False
-    
+
     if edad >= 25 and edad <= 50:
         return Decimal(5), "Óptimo", False
     elif (edad >= 22 and edad <= 24) or (edad >= 51 and edad <= 55):
@@ -446,26 +459,28 @@ def evaluar_edad_cliente(edad: int) -> Tuple[Decimal, str, bool]:
     else:  # edad > 65
         return Decimal("1.0"), "Muy bajo", False
 
+
 # ============================================
 # CRITERIO 7: ENGANCHE PAGADO (5 puntos)
 # ============================================
 
+
 def calcular_enganche_porcentaje(enganche: Decimal, valor_moto: Decimal) -> Decimal:
     """
     CRITERIO 7: Enganche Pagado (5 puntos - 5%)
-    
+
     Formula: % Enganche = (Enganche / Valor Moto) × 100
     """
     if valor_moto <= 0:
         return Decimal("0")
-    
+
     return (enganche / valor_moto) * Decimal(100)
 
 
 def evaluar_enganche_puntos(porcentaje_enganche: Decimal) -> Decimal:
     """
     CRITERIO 7: Enganche Pagado (5 puntos - 5%)
-    
+
     Rangos:
     - ≥30%   -> 5.0 puntos
     - 25-29.9% -> 4.5 puntos
@@ -493,14 +508,16 @@ def evaluar_enganche_puntos(porcentaje_enganche: Decimal) -> Decimal:
     else:
         return Decimal("0")
 
+
 # ============================================
 # CLASIFICACIÓN Y DECISIÓN
 # ============================================
 
+
 def clasificar_riesgo_total(puntuacion_total: Decimal) -> str:
     """
     CLASIFICACIÓN FINAL DE RIESGO
-    
+
     Returns:
         "A", "B", "C", "D", "E"
     """
@@ -519,7 +536,7 @@ def clasificar_riesgo_total(puntuacion_total: Decimal) -> str:
 def determinar_decision_final(puntuacion_total: Decimal) -> str:
     """
     DETERMINA LA DECISIÓN FINAL DEL PRÉSTAMO
-    
+
     Returns:
         "APROBADO_AUTOMATICO", "APROBADO_ESTANDAR", "APROBADO_CONDICIONAL",
         "REQUIERE_MITIGACION", "RECHAZADO"
@@ -575,13 +592,14 @@ def aplicar_condiciones_segun_riesgo(
             "requisitos_adicionales": "No aprobar",
         },
     }
-    
+
     return condiciones.get(clasificacion_riesgo, condiciones["E"])
 
 
 # ============================================
 # FUNCIÓN PRINCIPAL DE EVALUACIÓN
 # ============================================
+
 
 def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
     """
@@ -598,15 +616,15 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
     gastos_fijos = Decimal(str(datos_evaluacion.get("gastos_fijos_mensuales", 0)))
     otras_deudas = Decimal(str(datos_evaluacion.get("otras_deudas", 0)))
     cuota = Decimal(str(datos_evaluacion.get("cuota_mensual", 0)))
-    
+
     # Criterio 1.A: Ratio de Endeudamiento
     ratio_end = calcular_ratio_endeudamiento(ingresos, otras_deudas)
     puntos_1a = evaluar_ratio_endeudamiento_puntos(ratio_end)
-    
+
     # Criterio 1.B: Ratio de Cobertura
     ratio_cob = calcular_ratio_cobertura(ingresos, gastos_fijos, otras_deudas, cuota)
     puntos_1b, rechazo_automatico = evaluar_ratio_cobertura_puntos(ratio_cob)
-    
+
     # Rechazo automático por ratio de cobertura < 1.5x
     if rechazo_automatico:
         logger.warning("RECHAZO AUTOMÁTICO: Ratio de cobertura < 1.5x")
@@ -638,33 +656,33 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
             historial_crediticio_descripcion="RECHAZADO",
         )
         return evaluacion
-    
+
     # Criterio 2: Estabilidad Laboral (23 puntos)
     meses_trabajo = int(datos_evaluacion.get("meses_trabajo", 0))
     puntos_2a = evaluar_antiguedad_trabajo(meses_trabajo)
-    
+
     tipo_empleo = datos_evaluacion.get("tipo_empleo", "sin_empleo")
     puntos_2b = evaluar_tipo_empleo(tipo_empleo)
-    
+
     sector = datos_evaluacion.get("sector_economico", "agricultura_estacional")
     puntos_2c = evaluar_sector_economico(sector)
-    
+
     # Criterio 3: Referencias (5 puntos)
     num_referencias = datos_evaluacion.get("num_referencias_verificadas", 0)
     años_conoce = datos_evaluacion.get("años_conoce", 0)
     puntos_3, desc_referencias = evaluar_referencias(num_referencias, años_conoce)
-    
+
     # Criterio 4: Arraigo Geográfico (12 puntos)
     tipo_vivienda = datos_evaluacion.get("tipo_vivienda", "sin_vivienda")
     puntos_4a = evaluar_vivienda(tipo_vivienda)
-    
+
     familia_cercana = datos_evaluacion.get("familia_cercana", False)
     familia_pais = datos_evaluacion.get("familia_pais", False)
     puntos_4b = evaluar_arraigo_familiar(familia_cercana, familia_pais)
-    
+
     minutos_trabajo = datos_evaluacion.get("minutos_trabajo", 999)
     puntos_4c = evaluar_arraigo_laboral(minutos_trabajo)
-    
+
     # Criterio 5: Perfil Sociodemográfico (17 puntos)
     tipo_vivienda_det = datos_evaluacion.get("tipo_vivienda_detallado", "sin_vivienda")
     puntos_5a = evaluar_vivienda_detallada(
@@ -672,18 +690,18 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
         datos_evaluacion.get("zona_urbana", False),
         datos_evaluacion.get("servicios_nombre", False),
         datos_evaluacion.get("zona_rural", False),
-        datos_evaluacion.get("personas_casa", 1)
+        datos_evaluacion.get("personas_casa", 1),
     )
-    
+
     estado_civil = datos_evaluacion.get("estado_civil", "soltero_sin_pareja")
     puntos_5b = evaluar_estado_civil(
         estado_civil,
         datos_evaluacion.get("pareja_trabaja", False),
         datos_evaluacion.get("pareja_aval", False),
         datos_evaluacion.get("pareja_desempleada", False),
-        datos_evaluacion.get("relacion_conflictiva", False)
+        datos_evaluacion.get("relacion_conflictiva", False),
     )
-    
+
     situacion_hijos = datos_evaluacion.get("situacion_hijos", "sin_hijos_no_planea")
     puntos_5c = evaluar_hijos(
         situacion_hijos,
@@ -691,13 +709,13 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
         datos_evaluacion.get("viven_con_cliente", False),
         datos_evaluacion.get("necesidades_especiales", False),
         datos_evaluacion.get("viven_con_ex", False),
-        datos_evaluacion.get("embarazo_actual", False)
+        datos_evaluacion.get("embarazo_actual", False),
     )
-    
+
     # Criterio 6: Edad (5 puntos)
     edad_cliente = int(datos_evaluacion.get("edad", 25))
     puntos_6, categoria_edad, rechazo_edad = evaluar_edad_cliente(edad_cliente)
-    
+
     if rechazo_edad:
         logger.warning("RECHAZO AUTOMÁTICO: Cliente menor de 18 años")
         evaluacion = PrestamoEvaluacion(
@@ -720,8 +738,18 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
             edad_cliente=edad_cliente,
             enganche_garantias_puntos=Decimal(0),
             enganche_garantias_calculo=Decimal(0),
-            puntuacion_total=puntos_1a + puntos_1b + puntos_2a + puntos_2b + puntos_2c + puntos_3 +
-                            puntos_4a + puntos_4b + puntos_4c + puntos_5a + puntos_5b + puntos_5c,
+            puntuacion_total=puntos_1a
+            + puntos_1b
+            + puntos_2a
+            + puntos_2b
+            + puntos_2c
+            + puntos_3
+            + puntos_4a
+            + puntos_4b
+            + puntos_4c
+            + puntos_5a
+            + puntos_5b
+            + puntos_5c,
             clasificacion_riesgo="E",
             decision_final="RECHAZADO",
             requisitos_adicionales="RECHAZO: Cliente menor de 18 años",
@@ -729,31 +757,38 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
             historial_crediticio_descripcion="RECHAZADO",
         )
         return evaluacion
-    
+
     # Criterio 7: Enganche (5 puntos)
     enganche = Decimal(str(datos_evaluacion.get("enganche_pagado", 0)))
     valor_moto = Decimal(str(datos_evaluacion.get("valor_garantia", 0)))
     porcentaje_enganche = calcular_enganche_porcentaje(enganche, valor_moto)
     puntos_7 = evaluar_enganche_puntos(porcentaje_enganche)
-    
+
     # Puntuación total
     puntuacion_total = (
-        puntos_1a + puntos_1b +  # Criterio 1 (33 puntos)
-        puntos_2a + puntos_2b + puntos_2c +  # Criterio 2 (23 puntos)
-        puntos_3 +  # Criterio 3 (5 puntos)
-        puntos_4a + puntos_4b + puntos_4c +  # Criterio 4 (12 puntos)
-        puntos_5a + puntos_5b + puntos_5c +  # Criterio 5 (17 puntos)
-        puntos_6 +  # Criterio 6 (5 puntos)
-        puntos_7  # Criterio 7 (5 puntos)
+        puntos_1a
+        + puntos_1b  # Criterio 1 (33 puntos)
+        + puntos_2a
+        + puntos_2b
+        + puntos_2c  # Criterio 2 (23 puntos)
+        + puntos_3  # Criterio 3 (5 puntos)
+        + puntos_4a
+        + puntos_4b
+        + puntos_4c  # Criterio 4 (12 puntos)
+        + puntos_5a
+        + puntos_5b
+        + puntos_5c  # Criterio 5 (17 puntos)
+        + puntos_6  # Criterio 6 (5 puntos)
+        + puntos_7  # Criterio 7 (5 puntos)
     )
-    
+
     # Clasificación y decisión
     clasificacion = clasificar_riesgo_total(puntuacion_total)
     decision = determinar_decision_final(puntuacion_total)
-    
+
     # Condiciones según riesgo
     condiciones = aplicar_condiciones_segun_riesgo(clasificacion, puntuacion_total)
-    
+
     # Crear evaluación
     evaluacion = PrestamoEvaluacion(
         prestamo_id=datos_evaluacion.get("prestamo_id"),
@@ -801,7 +836,7 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
         historial_crediticio_puntos=Decimal(0),
         historial_crediticio_descripcion="No aplica",
     )
-    
+
     return evaluacion
 
 
@@ -813,12 +848,14 @@ def crear_evaluacion_prestamo(
     Crea o actualiza la evaluación de un préstamo en la base de datos.
     """
     evaluacion = calcular_evaluacion_completa(datos_evaluacion)
-    
+
     # Buscar evaluación existente
-    eval_existente = db.query(PrestamoEvaluacion).filter(
-        PrestamoEvaluacion.prestamo_id == evaluacion.prestamo_id
-    ).first()
-    
+    eval_existente = (
+        db.query(PrestamoEvaluacion)
+        .filter(PrestamoEvaluacion.prestamo_id == evaluacion.prestamo_id)
+        .first()
+    )
+
     if eval_existente:
         # Actualizar
         for key, value in evaluacion.__dict__.items():
@@ -833,4 +870,3 @@ def crear_evaluacion_prestamo(
         db.commit()
         db.refresh(evaluacion)
         return evaluacion
-

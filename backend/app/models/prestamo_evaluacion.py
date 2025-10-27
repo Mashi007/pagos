@@ -20,7 +20,7 @@ class PrestamoEvaluacion(Base):
     # 1.A - Ratio de Endeudamiento (17 puntos)
     ratio_endeudamiento_puntos = Column(Numeric(5, 2), nullable=False, default=0)
     ratio_endeudamiento_calculo = Column(Numeric(10, 4), nullable=False, default=0)
-    
+
     # 1.B - Ratio de Cobertura (16 puntos)
     ratio_cobertura_puntos = Column(Numeric(5, 2), nullable=False, default=0)
     ratio_cobertura_calculo = Column(Numeric(10, 4), nullable=False, default=0)
@@ -31,11 +31,11 @@ class PrestamoEvaluacion(Base):
     # 2.A - Antigüedad en Trabajo (9 puntos)
     antiguedad_trabajo_puntos = Column(Numeric(5, 2), nullable=False, default=0)
     meses_trabajo = Column(Numeric(6, 2), nullable=True)
-    
+
     # 2.B - Tipo y Calidad de Empleo (8 puntos)
     tipo_empleo_puntos = Column(Numeric(5, 2), nullable=False, default=0)
     tipo_empleo_descripcion = Column(String(50), nullable=True)
-    
+
     # 2.C - Sector Económico (6 puntos)
     sector_economico_puntos = Column(Numeric(5, 2), nullable=False, default=0)
     sector_economico_descripcion = Column(String(50), nullable=True)
@@ -52,10 +52,10 @@ class PrestamoEvaluacion(Base):
     # ============================================
     # 4.A - Tiempo en Domicilio (5 puntos)
     arraigo_vivienda_puntos = Column(Numeric(5, 2), nullable=False, default=0)
-    
+
     # 4.B - Arraigo Familiar (4 puntos)
     arraigo_familiar_puntos = Column(Numeric(5, 2), nullable=False, default=0)
-    
+
     # 4.C - Arraigo Laboral (3 puntos)
     arraigo_laboral_puntos = Column(Numeric(5, 2), nullable=False, default=0)
 
@@ -65,11 +65,11 @@ class PrestamoEvaluacion(Base):
     # 5.A - Situación de Vivienda (6 puntos)
     vivienda_puntos = Column(Numeric(5, 2), nullable=False, default=0)
     vivienda_descripcion = Column(String(50), nullable=True)
-    
+
     # 5.B - Estado Civil y Pareja (6 puntos)
     estado_civil_puntos = Column(Numeric(5, 2), nullable=False, default=0)
     estado_civil_descripcion = Column(String(50), nullable=True)
-    
+
     # 5.C - Número y Edad de Hijos (5 puntos)
     hijos_puntos = Column(Numeric(5, 2), nullable=False, default=0)
     hijos_descripcion = Column(String(50), nullable=True)
@@ -94,7 +94,7 @@ class PrestamoEvaluacion(Base):
     # A, B, C, D, E
 
     decision_final = Column(String(20), nullable=False, default="PENDIENTE")
-    # APROBADO_AUTOMATICO, APROBADO_ESTANDAR, APROBADO_CONDICIONAL, 
+    # APROBADO_AUTOMATICO, APROBADO_ESTANDAR, APROBADO_CONDICIONAL,
     # REQUIERE_MITIGACION, RECHAZADO
 
     # ============================================
@@ -104,7 +104,7 @@ class PrestamoEvaluacion(Base):
     plazo_maximo = Column(Integer, nullable=True)
     enganche_minimo = Column(Numeric(5, 2), nullable=True)
     requisitos_adicionales = Column(String(500), nullable=True)
-    
+
     # Datos de historial crediticio (mantener para compatibilidad)
     historial_crediticio_puntos = Column(Numeric(5, 2), nullable=False, default=0)
     historial_crediticio_descripcion = Column(String(50), nullable=True)

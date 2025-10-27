@@ -669,7 +669,7 @@ def evaluar_riesgo_prestamo(
     - Criterio 5: Perfil Sociodemográfico (17 pts)
     - Criterio 6: Edad (5 pts)
     - Criterio 7: Enganche (5 pts)
-    
+
     FASE 2: Después de la evaluación, se determina el plazo máximo
     que se usará para recalcular las cuotas.
     """
@@ -679,13 +679,17 @@ def evaluar_riesgo_prestamo(
 
     # Agregar prestamo_id y cuota_mensual del préstamo desde BD
     datos_evaluacion["prestamo_id"] = prestamo_id
-    
+
     # IMPORTANTE: Tomar la cuota del préstamo desde la base de datos
     if "cuota_mensual" not in datos_evaluacion or not datos_evaluacion["cuota_mensual"]:
-        datos_evaluacion["cuota_mensual"] = float(prestamo.cuota_periodo) if prestamo.cuota_periodo else 0
-    
+        datos_evaluacion["cuota_mensual"] = (
+            float(prestamo.cuota_periodo) if prestamo.cuota_periodo else 0
+        )
+
     # Log para debugging
-    logger.info(f"Evaluando préstamo {prestamo_id} con cuota: {datos_evaluacion['cuota_mensual']} USD (del préstamo en BD)")
+    logger.info(
+        f"Evaluando préstamo {prestamo_id} con cuota: {datos_evaluacion['cuota_mensual']} USD (del préstamo en BD)"
+    )
 
     try:
         evaluacion = crear_evaluacion_prestamo(datos_evaluacion, db)
@@ -715,7 +719,11 @@ def evaluar_riesgo_prestamo(
                 # Criterio 2: Estabilidad Laboral (23 puntos)
                 "antiguedad_trabajo": {
                     "puntos": float(evaluacion.antiguedad_trabajo_puntos),
-                    "meses": float(evaluacion.meses_trabajo) if evaluacion.meses_trabajo else 0,
+                    "meses": (
+                        float(evaluacion.meses_trabajo)
+                        if evaluacion.meses_trabajo
+                        else 0
+                    ),
                 },
                 "tipo_empleo": {
                     "puntos": float(evaluacion.tipo_empleo_puntos),
