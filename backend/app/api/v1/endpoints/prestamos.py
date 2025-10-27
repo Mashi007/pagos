@@ -66,7 +66,9 @@ def verificar_permisos_edicion(prestamo: Prestamo, current_user: User):
             )
 
 
-def puede_cambiar_estado(prestamo: Prestamo, nuevo_estado: str, current_user: User) -> bool:
+def puede_cambiar_estado(
+    prestamo: Prestamo, nuevo_estado: str, current_user: User
+) -> bool:
     """Verifica si el usuario puede cambiar el estado del préstamo"""
     return current_user.is_superuser or (
         prestamo.estado == "DRAFT" and nuevo_estado == "EN_REVISION"
@@ -329,7 +331,9 @@ def actualizar_prestamo(
         aplicar_cambios_prestamo(prestamo, prestamo_data)
 
         # 5. Procesar cambio de estado si aplica
-        if prestamo_data.estado is not None and puede_cambiar_estado(prestamo, prestamo_data.estado, current_user):
+        if prestamo_data.estado is not None and puede_cambiar_estado(
+            prestamo, prestamo_data.estado, current_user
+        ):
             procesar_cambio_estado(prestamo, prestamo_data.estado, current_user, db)
 
         # 6. Guardar cambios
