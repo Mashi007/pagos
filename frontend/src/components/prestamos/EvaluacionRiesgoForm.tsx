@@ -8,7 +8,7 @@ import {
   Info,
   TrendingUp,
   TrendingDown,
-  House,
+  Home,
   Users,
   Calendar,
   DollarSign
@@ -259,7 +259,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
             <div>
               <h2 className="text-xl font-bold">Evaluación de Riesgo</h2>
               <p className="text-sm opacity-90">Préstamo #{prestamo.id} - Sistema 100 Puntos</p>
-            </div>
+          </div>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose} className="text-white hover:bg-white/20">
             <X className="h-5 w-5" />
@@ -288,8 +288,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto max-h-[60vh]">
           {/* CRITERIO 1: CAPACIDAD DE PAGO (33 puntos) */}
           {showSection === 'criterio1' && (
-            <Card className="border-blue-200">
-              <CardHeader className="bg-blue-50">
+          <Card className="border-blue-200">
+            <CardHeader className="bg-blue-50">
                 <CardTitle className="flex items-center gap-2 text-blue-700">
                   <TrendingDown className="h-5 w-5" />
                   CRITERIO 1: CAPACIDAD DE PAGO (29 puntos)
@@ -309,13 +309,13 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       onChange={(e) => setFormData({ ...formData, ingresos_mensuales: parseFloat(e.target.value) || 0 })}
                       required
                     />
-                    <Popover>
-                      <PopoverTrigger asChild>
+                  <Popover>
+                    <PopoverTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-6 mt-1 p-0 text-xs text-blue-600">
                           <Info className="h-3 w-3 mr-1" />
                           Ver escala
-                        </Button>
-                      </PopoverTrigger>
+                      </Button>
+                    </PopoverTrigger>
                       <PopoverContent className="w-80">
                         <p className="text-sm font-semibold mb-2">Ratio de Endeudamiento:</p>
                         <ul className="text-xs space-y-1">
@@ -323,7 +323,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                           <li>• 25-35% → 11 puntos (Bueno)</li>
                           <li>• 35-50% → 6 puntos (Regular)</li>
                           <li>• &gt; 50% → 2 puntos (Malo)</li>
-                        </ul>
+                          </ul>
                         <p className="text-sm font-semibold mb-2 mt-4">Ratio de Cobertura:</p>
                         <ul className="text-xs space-y-1">
                           <li>• &gt; 2.5x → 15 puntos (Excelente)</li>
@@ -331,44 +331,44 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                           <li>• 1.5-2.0x → 6 puntos (Regular)</li>
                           <li>• &lt; 1.5x → 0 puntos (RECHAZO)</li>
                         </ul>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
                       Gastos Fijos (USD) *
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
                       value={formData.gastos_fijos_mensuales || ''}
                       onChange={(e) => setFormData({ ...formData, gastos_fijos_mensuales: parseFloat(e.target.value) || 0 })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
                       Otras Deudas (USD) *
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
                       value={formData.otras_deudas || ''}
                       onChange={(e) => setFormData({ ...formData, otras_deudas: parseFloat(e.target.value) || 0 })}
-                      required
-                    />
+                    required
+                  />
                     <p className="text-xs text-gray-500 mt-1">Sin incluir la cuota actual</p>
-                  </div>
                 </div>
+              </div>
                 <div className="bg-blue-50 p-3 rounded border border-blue-200">
                   <p className="text-xs text-blue-700">
                     <strong>Nota:</strong> La cuota del préstamo se toma automáticamente de la base de datos: ${prestamo.cuota_periodo || 0} USD
                   </p>
                 </div>
-              </CardContent>
-            </Card>
+            </CardContent>
+          </Card>
           )}
 
           {/* CRITERIO 2: ESTABILIDAD LABORAL (23 puntos) */}
@@ -395,7 +395,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   <p className="text-xs text-gray-500 mt-1">
                     Escala: &gt; 24 meses → 9 pts, 12-24 → 7 pts, 6-12 → 4 pts, &lt; 6 → 0 pts
                   </p>
-                </div>
+                        </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     Tipo de Empleo *
@@ -416,7 +416,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       <SelectItem value="sin_empleo">Sin Empleo Fijo (0 pts)</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
+                      </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     Sector Económico *
@@ -451,8 +451,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                 <CardTitle className="flex items-center gap-2 text-purple-700">
                   <CheckCircle className="h-5 w-5" />
                   CRITERIO 3: REFERENCIAS PERSONALES (9 puntos)
-                </CardTitle>
-              </CardHeader>
+              </CardTitle>
+            </CardHeader>
               <CardContent className="pt-4 space-y-4">
                 {/* Referencia 1 */}
                 <div className="border rounded-lg p-4 bg-purple-50">
@@ -572,8 +572,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     <strong>Total máximo:</strong> 9 puntos (3 referencias × 3 pts c/u)
                   </p>
                 </div>
-              </CardContent>
-            </Card>
+            </CardContent>
+          </Card>
           )}
 
           {/* CRITERIO 4: ARRAIGO GEOGRÁFICO (12 puntos) */}
@@ -581,7 +581,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
             <Card className="border-green-200">
               <CardHeader className="bg-green-50">
                 <CardTitle className="flex items-center gap-2 text-green-700">
-                  <House className="h-5 w-5" />
+                  <Home className="h-5 w-5" />
                   CRITERIO 4: ARRAIGO GEOGRÁFICO (12 puntos)
                 </CardTitle>
               </CardHeader>
@@ -621,7 +621,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   />
                   <p className="text-xs text-gray-500 mt-1">&lt; 30 min → 3 pts, 30-60 min → 2 pts, &gt; 60 min → 0 pts</p>
                 </div>
-                <div className="space-y-2">
+                    <div className="space-y-2">
                   <div className="flex items-center space-x-2">
                     <input
                       type="checkbox"
@@ -633,7 +633,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     <label htmlFor="familia_cercana" className="text-sm cursor-pointer">
                       Familia cercana en la ciudad (4 pts)
                     </label>
-                  </div>
+                        </div>
                   <div className="flex items-center space-x-2">
                     <input
                       type="checkbox"
@@ -645,7 +645,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     <label htmlFor="familia_pais" className="text-sm cursor-pointer">
                       Familia en el país (2 pts)
                     </label>
-                  </div>
+                    </div>
                 </div>
               </CardContent>
             </Card>
@@ -658,22 +658,22 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                 <CardTitle className="flex items-center gap-2 text-indigo-700">
                   <Users className="h-5 w-5" />
                   CRITERIO 5: PERFIL SOCIODEMOGRÁFICO (17 puntos)
-                </CardTitle>
-              </CardHeader>
+              </CardTitle>
+            </CardHeader>
               <CardContent className="pt-4 space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     Situación de Vivienda Detallada *
                   </label>
-                  <Select
+              <Select
                     value={formData.tipo_vivienda_detallado}
                     onValueChange={(value) => setFormData({ ...formData, tipo_vivienda_detallado: value })}
-                    required
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
                       <SelectItem value="casa_propia_pagada">Casa Propia Pagada (6 pts)</SelectItem>
                       <SelectItem value="casa_propia_hipoteca">Casa Propia con Hipoteca (5 pts)</SelectItem>
                       <SelectItem value="casa_familiar">Casa Familiar/Heredada (5 pts)</SelectItem>
@@ -682,8 +682,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       <SelectItem value="alquiler_menos_1">Alquiler &lt;1 año (1 pt)</SelectItem>
                       <SelectItem value="prestado">De Prestado (0.5 pts)</SelectItem>
                       <SelectItem value="sin_vivienda">Sin Vivienda (0 pts)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                </SelectContent>
+              </Select>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
@@ -698,7 +698,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     <label htmlFor="zona_urbana" className="text-sm cursor-pointer">
                       Zona urbana consolidada (+0.5 pts)
                     </label>
-                  </div>
+                      </div>
                   <div className="flex items-center space-x-2">
                     <input
                       type="checkbox"
@@ -710,7 +710,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     <label htmlFor="servicios_nombre" className="text-sm cursor-pointer">
                       Servicios a su nombre (+0.5 pts)
                     </label>
-                  </div>
+                    </div>
                   <div className="flex items-center space-x-2">
                     <input
                       type="checkbox"
@@ -727,8 +727,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     <label className="block text-sm font-medium mb-1">
                       Personas en Casa
                     </label>
-                    <Input
-                      type="number"
+              <Input
+                type="number"
                       min="1"
                       value={formData.personas_casa || 1}
                       onChange={(e) => setFormData({ ...formData, personas_casa: parseInt(e.target.value) || 1 })}
@@ -761,7 +761,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   </Select>
                 </div>
 
-                <div className="space-y-2">
+                    <div className="space-y-2">
                   <div className="flex items-center space-x-2">
                     <input
                       type="checkbox"
@@ -773,7 +773,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     <label htmlFor="pareja_trabaja" className="text-sm cursor-pointer">
                       Pareja trabaja (+1.0 pt)
                     </label>
-                  </div>
+                      </div>
                   <div className="flex items-center space-x-2">
                     <input
                       type="checkbox"
@@ -785,7 +785,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     <label htmlFor="pareja_aval" className="text-sm cursor-pointer">
                       Pareja es aval (+1.5 pts)
                     </label>
-                  </div>
+                    </div>
                   <div className="flex items-center space-x-2">
                     <input
                       type="checkbox"
@@ -816,15 +816,15 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   <label className="block text-sm font-medium mb-1">
                     Situación de Hijos *
                   </label>
-                  <Select
+              <Select
                     value={formData.situacion_hijos}
                     onValueChange={(value) => setFormData({ ...formData, situacion_hijos: value })}
-                    required
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
                       <SelectItem value="1_2_menores">1-2 hijos menores (0-12) (5.0 pts)</SelectItem>
                       <SelectItem value="1_2_mayores">1-2 hijos mayores (13+) (4.0 pts)</SelectItem>
                       <SelectItem value="3_4_mixtos">3-4 hijos mixtos (3.0 pts)</SelectItem>
@@ -832,8 +832,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       <SelectItem value="5_mas">5+ hijos (1.5 pts)</SelectItem>
                       <SelectItem value="sin_hijos_no_planea">Sin hijos, no planea (2.0 pts)</SelectItem>
                       <SelectItem value="hijos_independientes">Hijos independientes (1.0 pt)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                </SelectContent>
+              </Select>
                 </div>
 
                 <div className="space-y-2">
@@ -898,8 +898,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     </label>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+            </CardContent>
+          </Card>
           )}
 
           {/* CRITERIO 6: EDAD (5 puntos) */}
@@ -933,8 +933,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       &lt; 18 años → RECHAZO AUTOMÁTICO |<br />
                       &gt; 65 años → 1.0 pt (Muy bajo)
                     </p>
-                  </div>
-                </div>
+                        </div>
+                      </div>
               </CardContent>
             </Card>
           )}
@@ -946,81 +946,81 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                 <CardTitle className="flex items-center gap-2 text-red-700">
                   <DollarSign className="h-5 w-5" />
                   CRITERIO 7: ENGANCHE PAGADO (5 puntos)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
                       Enganche Pagado (USD) *
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.enganche_pagado || ''}
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.enganche_pagado || ''}
                       onChange={(e) => setFormData({ ...formData, enganche_pagado: parseFloat(e.target.value) || 0 })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Valor del Activo/Moto (USD) *
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.valor_garantia || ''}
-                      onChange={(e) => setFormData({ ...formData, valor_garantia: parseFloat(e.target.value) || 0 })}
-                      required
-                    />
-                  </div>
+                    required
+                  />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                      Valor del Activo/Moto (USD) *
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.valor_garantia || ''}
+                      onChange={(e) => setFormData({ ...formData, valor_garantia: parseFloat(e.target.value) || 0 })}
+                    required
+                  />
+                </div>
+              </div>
                 <div className="bg-red-50 p-3 rounded border border-red-200">
                   <p className="text-xs text-red-700">
                     <strong>Escala:</strong> ≥30% → 5 pts | 25-29% → 4.5 pts | 20-24% → 4 pts | 15-19% → 3 pts | 10-14% → 2 pts | 5-9% → 1 pt | &lt;5% → 0.5 pts | 0% → 0 pts
                   </p>
                 </div>
-              </CardContent>
-            </Card>
+            </CardContent>
+          </Card>
           )}
 
           {/* RESULTADO */}
           {resultado && (
             <Card className="border-green-300 bg-green-50 mt-4">
-              <CardHeader>
+                <CardHeader>
                 <CardTitle className="text-green-700">Resultado de la Evaluación</CardTitle>
-              </CardHeader>
+                </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-sm text-gray-600">Puntuación Total</label>
+                    <div>
+                      <label className="text-sm text-gray-600">Puntuación Total</label>
                     <p className="text-3xl font-bold text-green-700">
                       {resultado.puntuacion_total?.toFixed(2) || '0'} / 100
                     </p>
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-600">Clasificación de Riesgo</label>
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-600">Clasificación de Riesgo</label>
                     <Badge className="text-lg" variant={resultado.clasificacion_riesgo === 'A' ? 'default' : resultado.clasificacion_riesgo === 'B' ? 'default' : 'outline'}>
-                      {resultado.clasificacion_riesgo}
-                    </Badge>
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-600">Decisión Final</label>
+                        {resultado.clasificacion_riesgo}
+                      </Badge>
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-600">Decisión Final</label>
                     <Badge variant={resultado.decision_final?.includes('RECHAZADO') ? 'destructive' : 'default'} className="text-lg">
-                      {resultado.decision_final}
-                    </Badge>
-                  </div>
-                </div>
+                        {resultado.decision_final}
+                      </Badge>
+                    </div>
+                    </div>
                 {resultado.requisitos_adicionales && (
                   <div className="bg-white p-3 rounded border">
                     <p className="text-sm font-medium mb-2">Requisitos Adicionales:</p>
                     <p className="text-sm">{resultado.requisitos_adicionales}</p>
-                  </div>
+                    </div>
                 )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
           )}
 
           {/* Botones */}
