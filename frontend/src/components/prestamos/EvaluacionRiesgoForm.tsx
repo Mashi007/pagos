@@ -433,14 +433,14 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     </SelectContent>
                   </Select>
                 </div>
-              </CardContent>
-            </Card>
+            </CardContent>
+          </Card>
           )}
 
           {/* CRITERIO 3: REFERENCIAS (5 puntos) */}
           {showSection === 'criterio3' && (
-            <Card className="border-purple-200">
-              <CardHeader className="bg-purple-50">
+          <Card className="border-purple-200">
+            <CardHeader className="bg-purple-50">
                 <CardTitle className="flex items-center gap-2 text-purple-700">
                   <CheckCircle className="h-5 w-5" />
                   CRITERIO 3: REFERENCIAS PERSONALES (9 puntos)
@@ -466,20 +466,20 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       <label className="block text-sm font-medium mb-1">
                         Calificación *
                       </label>
-                      <Select
+              <Select
                         value={formData.referencia1_calificacion.toString()}
                         onValueChange={(value) => setFormData({ ...formData, referencia1_calificacion: parseInt(value) })}
-                      >
-                        <SelectTrigger>
+              >
+                <SelectTrigger>
                           <SelectValue placeholder="Seleccionar" />
-                        </SelectTrigger>
-                        <SelectContent>
+                </SelectTrigger>
+                <SelectContent>
                           <SelectItem value="3">3 - Recomendable</SelectItem>
                           <SelectItem value="2">2 - Dudosa</SelectItem>
                           <SelectItem value="1">1 - No recomendable</SelectItem>
                           <SelectItem value="0">0 - No contestó</SelectItem>
-                        </SelectContent>
-                      </Select>
+                </SelectContent>
+              </Select>
                     </div>
                   </div>
                 </div>
@@ -498,7 +498,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                         value={formData.referencia2_observaciones || ''}
                         onChange={(e) => setFormData({ ...formData, referencia2_observaciones: e.target.value })}
                       />
-                    </div>
+                      </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">
                         Calificación *
@@ -576,20 +576,20 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                 <CardTitle className="flex items-center gap-2 text-green-700">
                   <MapPin className="h-5 w-5" />
                   CRITERIO 4: ARRAIGO GEOGRÁFICO (7 puntos)
-                </CardTitle>
-              </CardHeader>
+              </CardTitle>
+            </CardHeader>
               <CardContent className="pt-4 space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     Distancia al Trabajo (minutos) *
                   </label>
-                  <Input
-                    type="number"
-                    min="0"
+              <Input
+                type="number"
+                min="0"
                     value={formData.minutos_trabajo || ''}
                     onChange={(e) => setFormData({ ...formData, minutos_trabajo: parseInt(e.target.value) || 0 })}
-                    required
-                  />
+                required
+              />
                   <p className="text-xs text-gray-500 mt-1">&lt; 30 min → 3 pts, 30-60 min → 2 pts, &gt; 60 min → 0 pts</p>
                 </div>
                     <div className="space-y-2">
@@ -604,7 +604,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     <label htmlFor="familia_cercana" className="text-sm cursor-pointer">
                       Familia cercana en la ciudad (4 pts)
                     </label>
-                        </div>
+                      </div>
                   <div className="flex items-center space-x-2">
                     <input
                       type="checkbox"
@@ -669,7 +669,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     <label htmlFor="zona_urbana" className="text-sm cursor-pointer">
                       Zona urbana consolidada (+0.5 pts)
                     </label>
-                      </div>
+                        </div>
                   <div className="flex items-center space-x-2">
                     <input
                       type="checkbox"
@@ -681,7 +681,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     <label htmlFor="servicios_nombre" className="text-sm cursor-pointer">
                       Servicios a su nombre (+0.5 pts)
                     </label>
-                    </div>
+                      </div>
                   <div className="flex items-center space-x-2">
                     <input
                       type="checkbox"
@@ -693,13 +693,13 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     <label htmlFor="zona_rural" className="text-sm cursor-pointer">
                       Zona rural/alejada (-0.5 pts)
                     </label>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
                       Personas en Casa
-                    </label>
-              <Input
-                type="number"
+                  </label>
+                  <Input
+                    type="number"
                       min="1"
                       value={formData.personas_casa || 1}
                       onChange={(e) => setFormData({ ...formData, personas_casa: parseInt(e.target.value) || 1 })}
@@ -744,7 +744,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     <label htmlFor="pareja_trabaja" className="text-sm cursor-pointer">
                       Pareja trabaja (+1.0 pt)
                     </label>
-                      </div>
+                </div>
                   <div className="flex items-center space-x-2">
                     <input
                       type="checkbox"
@@ -892,8 +892,13 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     min="0"
                     value={formData.edad || ''}
                     onChange={(e) => setFormData({ ...formData, edad: parseInt(e.target.value) || 0 })}
+                    disabled={true}
                     required
+                    className="bg-gray-100 cursor-not-allowed"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    ℹ️ La edad se calcula automáticamente desde la fecha de nacimiento del cliente en la base de datos
+                  </p>
                   <div className="bg-pink-50 p-3 rounded border border-pink-200 mt-3">
                     <p className="text-xs text-pink-700">
                       <strong>Escala (10 puntos máx):</strong><br />
@@ -904,17 +909,17 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       &lt; 18 años → RECHAZO AUTOMÁTICO |<br />
                       &gt; 65 años → 2.0 pts (Muy bajo)
                     </p>
-                        </div>
-                      </div>
-              </CardContent>
-            </Card>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
           )}
 
           {/* CRITERIO 7: CAPACIDAD DE MANIOBRA (5 puntos) */}
           {showSection === 'criterio7' && (
             <Card className="border-red-200">
               <CardHeader className="bg-red-50">
-                <CardTitle className="flex items-center gap-2 text-red-700">
+              <CardTitle className="flex items-center gap-2 text-red-700">
                   <DollarSign className="h-5 w-5" />
                   CRITERIO 7: CAPACIDAD DE MANIOBRA (5 puntos)
               </CardTitle>
@@ -933,10 +938,100 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                 </div>
               </div>
               
+              {/* PREVISUALIZACIÓN EN TIEMPO REAL */}
+              {(() => {
+                const ingresos = formData.ingresos_mensuales || 0
+                const gastosFijos = formData.gastos_fijos_mensuales || 0
+                const otrasDeudas = formData.otras_deudas || 0
+                const cuotaNueva = prestamo.cuota_periodo || 0
+                const saldoResidual = ingresos - gastosFijos - otrasDeudas - cuotaNueva
+                const porcentaje = ingresos > 0 ? (saldoResidual / ingresos) * 100 : 0
+                
+                let puntos = 0
+                let categoria = ''
+                let icono = ''
+                
+                if (porcentaje >= 15) {
+                  puntos = 5
+                  categoria = 'Holgado'
+                  icono = '✅'
+                } else if (porcentaje >= 5) {
+                  puntos = 3
+                  categoria = 'Ajustado'
+                  icono = '⚠️'
+                } else {
+                  puntos = 0
+                  categoria = 'Insuficiente'
+                  icono = '❌'
+                }
+                
+                return (
+                  <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                    <h4 className="font-semibold text-green-900 mb-3">📊 PREVISUALIZACIÓN - CÁLCULO EN TIEMPO REAL</h4>
+                    
+                    {/* Desglose del cálculo */}
+                    <div className="bg-white p-3 rounded border border-green-100 mb-3">
+                      <div className="grid grid-cols-2 gap-2 text-sm mb-2">
+                        <div className="text-gray-600">💰 Ingresos Mensuales:</div>
+                        <div className="font-semibold">${ingresos.toFixed(2)}</div>
+                        
+                        <div className="text-gray-600">- Gastos Fijos:</div>
+                        <div className="font-semibold">-${gastosFijos.toFixed(2)}</div>
+                        
+                        <div className="text-gray-600">- Otras Deudas:</div>
+                        <div className="font-semibold">-${otrasDeudas.toFixed(2)}</div>
+                        
+                        <div className="text-gray-600">- Cuota Préstamo:</div>
+                        <div className="font-semibold">-${cuotaNueva.toFixed(2)}</div>
+                        
+                        <div className="border-t pt-2 font-bold text-green-700">
+                          💵 Saldo Residual:
+                        </div>
+                        <div className="border-t pt-2 font-bold text-green-700">
+                          ${saldoResidual.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Porcentaje y categoría */}
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div className="bg-white p-3 rounded border">
+                        <div className="text-xs text-gray-600">% del Ingreso</div>
+                        <div className="text-2xl font-bold text-blue-600">
+                          {porcentaje.toFixed(2)}%
+                        </div>
+                      </div>
+                      <div className="bg-white p-3 rounded border">
+                        <div className="text-xs text-gray-600">Categoría</div>
+                        <div className="text-lg font-bold text-green-600">
+                          {icono} {categoria}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Puntos */}
+                    <div className="bg-white p-3 rounded border text-center">
+                      <div className="text-xs text-gray-600 mb-1">PUNTOS QUE OBTENDRÍA:</div>
+                      <div className="text-3xl font-bold text-purple-600">
+                        {puntos} / 5 pts
+                      </div>
+                    </div>
+                    
+                    {saldoResidual < 0 && (
+                      <div className="bg-red-100 p-2 rounded border border-red-300 mt-3">
+                        <p className="text-xs text-red-800 font-semibold">
+                          ⚠️ ALERTA: El cliente tendría un déficit de ${Math.abs(saldoResidual).toFixed(2)} USD mensual
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+              
               <div className="bg-amber-50 p-3 rounded border border-amber-200">
                 <p className="text-xs text-amber-800 font-semibold mb-2">⚡ ESTE CRITERIO SE CALCULA AUTOMÁTICAMENTE</p>
                 <p className="text-xs text-amber-700">
-                  El sistema calculará la capacidad de maniobra usando los datos de ingresos, gastos y deudas que ya ingresaste en el Criterio 1.
+                  La previsualización arriba usa los datos que ingresaste. Cuando hagas click en "Evaluar Riesgo", el sistema calculará la capacidad de maniobra usando estos valores.
                 </p>
               </div>
 
