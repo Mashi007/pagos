@@ -7,6 +7,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.prestamo_auditoria import PrestamoAuditoria
@@ -15,6 +16,9 @@ from app.schemas.prestamo import (
     PrestamoCreate,
     PrestamoResponse,
     PrestamoUpdate,
+)
+from app.services.prestamo_amortizacion_service import (
+    generar_tabla_amortizacion as generar_amortizacion,
 )
 
 router = APIRouter()
@@ -71,6 +75,15 @@ def procesar_cambio_estado(
     if nuevo_estado == "APROBADO":
         prestamo.usuario_aprobador = current_user.email
         prestamo.fecha_aprobacion = datetime.now()
+        
+        # Si se aprueba y tiene fecha_base_calculo, generar tabla de amortización
+        if prestamo.fecha_base_calculo:
+            try:
+                generar_amortizacion(prestamo, prestamo.fecha_base_calculo, db)
+                logger.info(f"Tabla de amortización generada para préstamo {prestamo.id}")
+            except Exception as e:
+                logger.error(f"Error generando amortización: {str(e)}")
+                # No fallar el préstamo si falla la generación de cuotas
 
     crear_registro_auditoria(
         prestamo_id=prestamo.id,
@@ -391,4 +404,74 @@ def obtener_auditoria_prestamo(
             "fecha_cambio": a.fecha_cambio.isoformat(),
         }
         for a in auditorias
+    ]
+
+
+@router.post("/{prestamo_id}/generar-amortizacion")
+def generar_amortizacion_prestamo(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generar tabla de amortización para un préstamo aprobado (solo Admin)"""
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Solo administradores")
+    
+    prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    
+    if prestamo.estado != "APROBADO":
+        raise HTTPException(status_code=400, detail="Solo se pueden generar cuotas para préstamos aprobados")
+    
+    if not prestamo.fecha_base_calculo:
+        raise HTTPException(status_code=400, detail="El préstamo no tiene fecha base de cálculo")
+    
+    try:
+        cuotas_generadas = generar_amortizacion(prestamo, prestamo.fecha_base_calculo, db)
+        
+        return {
+            "message": "Tabla de amortización generada exitosamente",
+            "cuotas_generadas": len(cuotas_generadas),
+            "prestamo_id": prestamo_id
+        }
+    except Exception as e:
+        logger.error(f"Error generando amortización: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generando tabla de amortización: {str(e)}")
+
+
+@router.get("/{prestamo_id}/cuotas", response_model=list[dict])
+def obtener_cuotas_prestamo(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener cuotas de un préstamo"""
+    prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    
+    from app.services.prestamo_amortizacion_service import obtener_cuotas_prestamo
+    cuotas = obtener_cuotas_prestamo(prestamo_id, db)
+    
+    return [
+        {
+            "id": c.id,
+            "numero_cuota": c.numero_cuota,
+            "fecha_vencimiento": c.fecha_vencimiento,
+            "monto_cuota": float(c.monto_cuota),
+            "monto_capital": float(c.monto_capital),
+            "monto_interes": float(c.monto_interes),
+            "saldo_capital_inicial": float(c.saldo_capital_inicial),
+            "saldo_capital_final": float(c.saldo_capital_final),
+            "capital_pagado": float(c.capital_pagado),
+            "interes_pagado": float(c.interes_pagado),
+            "total_pagado": float(c.total_pagado),
+            "capital_pendiente": float(c.capital_pendiente),
+            "interes_pendiente": float(c.interes_pendiente),
+            "estado": c.estado,
+            "dias_mora": c.dias_mora,
+            "monto_mora": float(c.monto_mora),
+        }
+        for c in cuotas
     ]
