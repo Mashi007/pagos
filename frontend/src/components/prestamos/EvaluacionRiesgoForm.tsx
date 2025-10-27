@@ -45,9 +45,13 @@ interface EvaluacionFormData {
   tipo_empleo: string
   sector_economico: string
   
-  // Criterio 3: Referencias
-  num_referencias_verificadas: number
-  anos_conoce: number
+  // Criterio 3: Referencias (3 referencias individuales)
+  referencia1_observaciones: string
+  referencia1_calificacion: number  // 3=Recomendable, 2=Dudosa, 1=No recomendable
+  referencia2_observaciones: string
+  referencia2_calificacion: number
+  referencia3_observaciones: string
+  referencia3_calificacion: number
   
   // Criterio 4: Arraigo Geográfico
   tipo_vivienda: string
@@ -102,9 +106,13 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     tipo_empleo: 'empleado_formal',
     sector_economico: 'servicios_esenciales',
     
-    // Criterio 3: Referencias Personales (5 puntos)
-    num_referencias_verificadas: 0,
-    anos_conoce: 0,
+    // Criterio 3: Referencias Personales (9 puntos)
+    referencia1_observaciones: '',
+    referencia1_calificacion: 0,
+    referencia2_observaciones: '',
+    referencia2_calificacion: 0,
+    referencia3_observaciones: '',
+    referencia3_calificacion: 0,
     
     // Criterio 4: Arraigo Geográfico (12 puntos)
     tipo_vivienda: 'alquiler_1_2',
@@ -170,9 +178,13 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
         tipo_empleo: formData.tipo_empleo,
         sector_economico: formData.sector_economico,
         
-        // Criterio 3
-        num_referencias_verificadas: formData.num_referencias_verificadas,
-        anos_conoce: formData.anos_conoce,
+    // Criterio 3: Referencias individuales
+    referencia1_observaciones: formData.referencia1_observaciones,
+    referencia1_calificacion: formData.referencia1_calificacion,
+    referencia2_observaciones: formData.referencia2_observaciones,
+    referencia2_calificacion: formData.referencia2_calificacion,
+    referencia3_observaciones: formData.referencia3_observaciones,
+    referencia3_calificacion: formData.referencia3_calificacion,
         
         // Criterio 4
         tipo_vivienda: formData.tipo_vivienda,
@@ -217,9 +229,9 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
   }
 
   const secciones = [
-    { id: 'criterio1', label: 'Criterio 1: Capacidad de Pago', puntos: '33' },
+    { id: 'criterio1', label: 'Criterio 1: Capacidad de Pago', puntos: '29' },
     { id: 'criterio2', label: 'Criterio 2: Estabilidad Laboral', puntos: '23' },
-    { id: 'criterio3', label: 'Criterio 3: Referencias', puntos: '5' },
+    { id: 'criterio3', label: 'Criterio 3: Referencias', puntos: '9' },
     { id: 'criterio4', label: 'Criterio 4: Arraigo Geográfico', puntos: '12' },
     { id: 'criterio5', label: 'Criterio 5: Perfil Sociodemográfico', puntos: '17' },
     { id: 'criterio6', label: 'Criterio 6: Edad', puntos: '5' },
@@ -280,7 +292,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
               <CardHeader className="bg-blue-50">
                 <CardTitle className="flex items-center gap-2 text-blue-700">
                   <TrendingDown className="h-5 w-5" />
-                  CRITERIO 1: CAPACIDAD DE PAGO (33 puntos)
+                  CRITERIO 1: CAPACIDAD DE PAGO (29 puntos)
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4 space-y-4">
@@ -438,40 +450,126 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
               <CardHeader className="bg-purple-50">
                 <CardTitle className="flex items-center gap-2 text-purple-700">
                   <CheckCircle className="h-5 w-5" />
-                  CRITERIO 3: REFERENCIAS PERSONALES (5 puntos)
+                  CRITERIO 3: REFERENCIAS PERSONALES (9 puntos)
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Referencias Verificadas *
-                    </label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={formData.num_referencias_verificadas || ''}
-                      onChange={(e) => setFormData({ ...formData, num_referencias_verificadas: parseInt(e.target.value) || 0 })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Anos de Conocer (promedio) *
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      value={formData.anos_conoce || ''}
-                      onChange={(e) => setFormData({ ...formData, anos_conoce: parseFloat(e.target.value) || 0 })}
-                      required
-                    />
+                {/* Referencia 1 */}
+                <div className="border rounded-lg p-4 bg-purple-50">
+                  <h4 className="font-medium text-sm mb-3">Referencia 1</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Observaciones
+                      </label>
+                      <Input
+                        type="text"
+                        placeholder="Nombre, relación, etc."
+                        value={formData.referencia1_observaciones || ''}
+                        onChange={(e) => setFormData({ ...formData, referencia1_observaciones: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Calificación *
+                      </label>
+                      <Select
+                        value={formData.referencia1_calificacion.toString()}
+                        onValueChange={(value) => setFormData({ ...formData, referencia1_calificacion: parseInt(value) })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="3">3 - Recomendable</SelectItem>
+                          <SelectItem value="2">2 - Dudosa</SelectItem>
+                          <SelectItem value="1">1 - No recomendable</SelectItem>
+                          <SelectItem value="0">0 - No contestó</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
+
+                {/* Referencia 2 */}
+                <div className="border rounded-lg p-4 bg-purple-50">
+                  <h4 className="font-medium text-sm mb-3">Referencia 2</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Observaciones
+                      </label>
+                      <Input
+                        type="text"
+                        placeholder="Nombre, relación, etc."
+                        value={formData.referencia2_observaciones || ''}
+                        onChange={(e) => setFormData({ ...formData, referencia2_observaciones: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Calificación *
+                      </label>
+                      <Select
+                        value={formData.referencia2_calificacion.toString()}
+                        onValueChange={(value) => setFormData({ ...formData, referencia2_calificacion: parseInt(value) })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="3">3 - Recomendable</SelectItem>
+                          <SelectItem value="2">2 - Dudosa</SelectItem>
+                          <SelectItem value="1">1 - No recomendable</SelectItem>
+                          <SelectItem value="0">0 - No contestó</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Referencia 3 */}
+                <div className="border rounded-lg p-4 bg-purple-50">
+                  <h4 className="font-medium text-sm mb-3">Referencia 3</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Observaciones
+                      </label>
+                      <Input
+                        type="text"
+                        placeholder="Nombre, relación, etc."
+                        value={formData.referencia3_observaciones || ''}
+                        onChange={(e) => setFormData({ ...formData, referencia3_observaciones: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Calificación *
+                      </label>
+                      <Select
+                        value={formData.referencia3_calificacion.toString()}
+                        onValueChange={(value) => setFormData({ ...formData, referencia3_calificacion: parseInt(value) })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="3">3 - Recomendable</SelectItem>
+                          <SelectItem value="2">2 - Dudosa</SelectItem>
+                          <SelectItem value="1">1 - No recomendable</SelectItem>
+                          <SelectItem value="0">0 - No contestó</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="bg-purple-50 p-3 rounded border border-purple-200">
                   <p className="text-xs text-purple-700">
-                    <strong>Escala:</strong> 3+ verificadas, &gt;2 años → 5 pts | 2-3 verificadas, &gt;1 año → 4 pts | 1-2 verificadas → 2 pts | Falsas → 0 pts
+                    <strong>Escala:</strong> Calificación 3 → Recomendable (3 pts) | Calificación 2 → Dudosa (2 pts) | Calificación 1 → No recomendable (1 pt) | No contestó (0 pts)
+                    <br />
+                    <strong>Total máximo:</strong> 9 puntos (3 referencias × 3 pts c/u)
                   </p>
                 </div>
               </CardContent>
