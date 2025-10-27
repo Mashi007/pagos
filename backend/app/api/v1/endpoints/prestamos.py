@@ -56,6 +56,38 @@ def obtener_datos_cliente(cedula: str, db: Session) -> Optional[Cliente]:
     return db.query(Cliente).filter(Cliente.cedula == cedula).first()
 
 
+def verificar_permisos_edicion(prestamo: Prestamo, current_user: User):
+    """Verifica si el usuario tiene permisos para editar el préstamo"""
+    if prestamo.estado in ["APROBADO", "RECHAZADO"]:
+        if not current_user.is_superuser:
+            raise HTTPException(
+                status_code=403,
+                detail="Solo administradores pueden editar préstamos aprobados/rechazados",
+            )
+
+
+def puede_cambiar_estado(prestamo: Prestamo, nuevo_estado: str, current_user: User) -> bool:
+    """Verifica si el usuario puede cambiar el estado del préstamo"""
+    return current_user.is_superuser or (
+        prestamo.estado == "DRAFT" and nuevo_estado == "EN_REVISION"
+    )
+
+
+def aplicar_cambios_prestamo(prestamo: Prestamo, prestamo_data: PrestamoUpdate):
+    """Aplica los cambios del prestamo_data al prestamo"""
+    if prestamo_data.total_financiamiento is not None:
+        actualizar_monto_y_cuotas(prestamo, prestamo_data.total_financiamiento)
+
+    if prestamo_data.modalidad_pago is not None:
+        prestamo.modalidad_pago = prestamo_data.modalidad_pago
+        prestamo.numero_cuotas, prestamo.cuota_periodo = calcular_cuotas(
+            prestamo.total_financiamiento, prestamo.modalidad_pago
+        )
+
+    if prestamo_data.observaciones is not None:
+        prestamo.observaciones = prestamo_data.observaciones
+
+
 def actualizar_monto_y_cuotas(prestamo: Prestamo, monto: Decimal):
     """Actualiza monto y recalcula cuotas"""
     prestamo.total_financiamiento = monto
