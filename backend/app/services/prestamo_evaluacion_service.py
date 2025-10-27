@@ -618,6 +618,7 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
         logger.warning("RECHAZO AUTOMÁTICO: Ratio de cobertura < 1.5x")
         evaluacion = PrestamoEvaluacion(
             prestamo_id=datos_evaluacion.get("prestamo_id"),
+            cedula=datos_evaluacion.get("cedula", ""),
             ratio_endeudamiento_puntos=puntos_1a,
             ratio_endeudamiento_calculo=ratio_end,
             ratio_cobertura_puntos=Decimal(0),
@@ -721,6 +722,7 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
         logger.warning("RECHAZO AUTOMÁTICO: Cliente menor de 18 años")
         evaluacion = PrestamoEvaluacion(
             prestamo_id=datos_evaluacion.get("prestamo_id"),
+            cedula=datos_evaluacion.get("cedula", ""),
             ratio_endeudamiento_puntos=puntos_1a,
             ratio_endeudamiento_calculo=ratio_end,
             ratio_cobertura_puntos=puntos_1b,
@@ -806,6 +808,7 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
     # Crear evaluación
     evaluacion = PrestamoEvaluacion(
         prestamo_id=datos_evaluacion.get("prestamo_id"),
+        cedula=datos_evaluacion.get("cedula", ""),
         # Criterio 1
         ratio_endeudamiento_puntos=puntos_1a,
         ratio_endeudamiento_calculo=ratio_end,
@@ -867,7 +870,21 @@ def crear_evaluacion_prestamo(
 ) -> PrestamoEvaluacion:
     """
     Crea o actualiza la evaluación de un préstamo en la base de datos.
+    Incluye la cédula del cliente para facilitar consultas directas.
     """
+    from app.models.prestamo import Prestamo
+    
+    # Obtener la cédula del préstamo desde la BD
+    prestamo_id = datos_evaluacion.get("prestamo_id")
+    cedula_cliente = None
+    
+    if prestamo_id:
+        prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+        if prestamo:
+            cedula_cliente = prestamo.cedula
+            # Agregar cédula a los datos de evaluación
+            datos_evaluacion["cedula"] = cedula_cliente
+    
     evaluacion = calcular_evaluacion_completa(datos_evaluacion)
 
     # Buscar evaluación existente
