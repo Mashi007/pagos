@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { usePrestamos, useDeletePrestamo } from '@/hooks/usePrestamos'
 import { CrearPrestamoForm } from './CrearPrestamoForm'
+import { PrestamosKPIs } from './PrestamosKPIs'
 import { formatDate } from '@/utils'
 
 export function PrestamosList() {
@@ -60,6 +61,9 @@ export function PrestamosList() {
 
   return (
     <div className="space-y-6">
+      {/* KPIs */}
+      {data && data.data && <PrestamosKPIs prestamos={data.data} />}
+
       {/* Encabezado */}
       <div className="flex justify-between items-center">
         <div>

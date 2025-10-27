@@ -133,7 +133,7 @@ function App() {
           {/* Préstamos */}
           <Route
             path="prestamos"
-            element={<PrestamosPage />}
+            element={<Prestamos />}
           />
 
           {/* Pagos */}
