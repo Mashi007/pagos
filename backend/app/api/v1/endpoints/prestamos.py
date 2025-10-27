@@ -251,14 +251,16 @@ def obtener_estadisticas_prestamos(
             .group_by(Prestamo.estado)
             .all()
         )
-        
+
         total_financiado = db.query(
             db.func.sum(Prestamo.total_financiamiento)
         ).scalar() or Decimal("0.00")
-        
+
         return {
             "total_prestamos": total_prestamos,
-            "prestamos_por_estado": {estado: count for estado, count in prestamos_por_estado},
+            "prestamos_por_estado": {
+                estado: count for estado, count in prestamos_por_estado
+            },
             "total_financiado": float(total_financiado),
         }
     except Exception as e:
