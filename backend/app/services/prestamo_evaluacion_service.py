@@ -20,16 +20,16 @@ logger = logging.getLogger(__name__)
 # ============================================
        CRITERIOS_PESOS = {
            "capacidad_pago": 29,  # Criterio 1 (14 + 15)
-    "estabilidad_laboral": 23,  # Criterio 2 (9 + 8 + 6)
-    "referencias": 5,  # Criterio 3
-    "arraigo_geografico": 12,  # Criterio 4 (5 + 4 + 3)
-    "perfil_sociodemografico": 17,  # Criterio 5 (6 + 6 + 5)
-    "edad": 5,  # Criterio 6
-    "enganche": 5,  # Criterio 7
-}
+           "estabilidad_laboral": 23,  # Criterio 2 (9 + 8 + 6)
+           "referencias": 9,  # Criterio 3 (3 referencias × 3 pts c/u)
+           "arraigo_geografico": 12,  # Criterio 4 (5 + 4 + 3)
+           "perfil_sociodemografico": 17,  # Criterio 5 (6 + 6 + 5)
+           "edad": 5,  # Criterio 6
+           "enganche": 5,  # Criterio 7
+       }
 
 # ============================================
-# CRITERIO 1: CAPACIDAD DE PAGO (33 puntos)
+# CRITERIO 1: CAPACIDAD DE PAGO (29 puntos)
 # ============================================
 
 
