@@ -217,8 +217,13 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   <Input
                     type="number"
                     step="0.01"
-                    value={formData.ingresos_mensuales}
-                    onChange={(e) => setFormData({ ...formData, ingresos_mensuales: parseFloat(e.target.value) || 0 })}
+                    min="0"
+                    value={formData.ingresos_mensuales || ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? 0 : Math.max(0, parseFloat(e.target.value) || 0)
+                      setFormData({ ...formData, ingresos_mensuales: value })
+                    }}
+                    placeholder="0.00"
                     required
                   />
                 </div>
@@ -229,8 +234,13 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   <Input
                     type="number"
                     step="0.01"
-                    value={formData.gastos_fijos_mensuales}
-                    onChange={(e) => setFormData({ ...formData, gastos_fijos_mensuales: parseFloat(e.target.value) || 0 })}
+                    min="0"
+                    value={formData.gastos_fijos_mensuales || ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? 0 : Math.max(0, parseFloat(e.target.value) || 0)
+                      setFormData({ ...formData, gastos_fijos_mensuales: value })
+                    }}
+                    placeholder="0.00"
                     required
                   />
                 </div>
@@ -299,9 +309,13 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
               <Input
                 type="number"
                 step="0.5"
-                value={formData.anos_empleo}
-                onChange={(e) => setFormData({ ...formData, anos_empleo: parseFloat(e.target.value) || 0 })}
-                placeholder="Años en el empleo actual"
+                min="0"
+                value={formData.anos_empleo || ''}
+                onChange={(e) => {
+                  const value = e.target.value === '' ? 0 : Math.max(0, parseFloat(e.target.value) || 0)
+                  setFormData({ ...formData, anos_empleo: value })
+                }}
+                placeholder="0"
                 required
               />
             </CardContent>
@@ -358,8 +372,13 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   <Input
                     type="number"
                     step="0.01"
-                    value={formData.enganche_pagado}
-                    onChange={(e) => setFormData({ ...formData, enganche_pagado: parseFloat(e.target.value) || 0 })}
+                    min="0"
+                    value={formData.enganche_pagado || ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? 0 : Math.max(0, parseFloat(e.target.value) || 0)
+                      setFormData({ ...formData, enganche_pagado: value })
+                    }}
+                    placeholder="0.00"
                     required
                   />
                 </div>
@@ -370,8 +389,13 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   <Input
                     type="number"
                     step="0.01"
-                    value={formData.valor_garantia}
-                    onChange={(e) => setFormData({ ...formData, valor_garantia: parseFloat(e.target.value) || 0 })}
+                    min="0"
+                    value={formData.valor_garantia || ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? 0 : Math.max(0, parseFloat(e.target.value) || 0)
+                      setFormData({ ...formData, valor_garantia: value })
+                    }}
+                    placeholder="0.00"
                     required
                   />
                 </div>
