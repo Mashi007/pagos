@@ -234,11 +234,24 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                     <Input
                       type="number"
                       step="0.01"
-                      value={formData.total_financiamiento}
-                      onChange={(e) => setFormData({ 
-                        ...formData, 
-                        total_financiamiento: parseFloat(e.target.value) || 0 
-                      })}
+                      min="0"
+                      value={formData.total_financiamiento === 0 ? '' : formData.total_financiamiento}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        // Eliminar ceros a la izquierda y manejar strings vacíos
+                        const numericValue = value === '' ? 0 : parseFloat(value.replace(/^0+/, '').replace(/^\./, '0.'))
+                        setFormData({ 
+                          ...formData, 
+                          total_financiamiento: isNaN(numericValue) ? 0 : numericValue
+                        })
+                      }}
+                      onBlur={(e) => {
+                        // Asegurar que el valor final no empiece con 0
+                        const value = parseFloat(e.target.value)
+                        if (value >= 0) {
+                          setFormData({ ...formData, total_financiamiento: value })
+                        }
+                      }}
                       disabled={isReadOnly}
                     />
                   </div>
@@ -310,11 +323,22 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                     <Input
                       type="number"
                       step="0.01"
-                      value={formData.tasa_interes}
-                      onChange={(e) => setFormData({ 
-                        ...formData, 
-                        tasa_interes: parseFloat(e.target.value) || 0 
-                      })}
+                      min="0"
+                      value={formData.tasa_interes === 0 ? '' : formData.tasa_interes}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        const numericValue = value === '' ? 0 : parseFloat(value.replace(/^0+/, '').replace(/^\./, '0.'))
+                        setFormData({ 
+                          ...formData, 
+                          tasa_interes: isNaN(numericValue) ? 0 : numericValue
+                        })
+                      }}
+                      onBlur={(e) => {
+                        const value = parseFloat(e.target.value)
+                        if (value >= 0) {
+                          setFormData({ ...formData, tasa_interes: value })
+                        }
+                      }}
                       disabled={isReadOnly}
                     />
                   </div>
