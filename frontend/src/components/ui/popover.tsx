@@ -1,7 +1,9 @@
 import * as React from "react"
 import * as PopoverPrimitive from "@radix-ui/react-popover"
 
-import { cn } from "@/lib/utils"
+function cn(...classes: (string | boolean | undefined)[]) {
+  return classes.filter(Boolean).join(' ')
+}
 
 // Re-export
 export type PopoverProps = React.ComponentProps<typeof PopoverPrimitive.Root>
