@@ -245,8 +245,8 @@ export function PrestamosList() {
                                           <Eye className="h-4 w-4" />
                                         </Button>
 
-                                        {/* Botón Evaluar Riesgo - Solo Admin */}
-                                        {canViewEvaluacionRiesgo() && prestamo.estado === 'EN_REVISION' && (
+                                        {/* Botón Evaluar Riesgo - Solo Admin (DRAFT o EN_REVISION) */}
+                                        {canViewEvaluacionRiesgo() && (prestamo.estado === 'DRAFT' || prestamo.estado === 'EN_REVISION') && (
                                           <Button
                                             variant="ghost"
                                             size="sm"
