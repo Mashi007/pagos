@@ -71,6 +71,15 @@ class PrestamoService {
     )
     return response
   }
+
+  // Evaluar riesgo de un préstamo
+  async evaluarRiesgo(prestamoId: number, datos: any): Promise<any> {
+    const response = await apiClient.post<any>(
+      `${this.baseUrl}/${prestamoId}/evaluar-riesgo`,
+      datos
+    )
+    return response
+  }
 }
 
 export const prestamoService = new PrestamoService()
