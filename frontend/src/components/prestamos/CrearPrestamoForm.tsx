@@ -88,7 +88,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
         producto: cliente.modelo_vehiculo || '',
         producto_financiero: cliente.analista || '',
       }))
-    } else if (formData.cedula.length >= 10 && clienteInfo && clienteInfo.length === 0) {
+    } else if (formData.cedula && formData.cedula.length >= 10 && clienteInfo && clienteInfo.length === 0) {
       // Cliente no encontrado
       setClienteData(null)
     }
@@ -167,7 +167,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                   />
                 </div>
 
-                            {isLoadingCliente && formData.cedula.length >= 10 && (
+                            {isLoadingCliente && formData.cedula && formData.cedula.length >= 10 && (
                               <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
                                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
                                 <p className="text-sm text-blue-800">Buscando cliente...</p>
@@ -184,7 +184,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                               </div>
                             )}
 
-                            {!clienteData && !isLoadingCliente && formData.cedula.length >= 10 && (
+                            {!clienteData && !isLoadingCliente && formData.cedula && formData.cedula.length >= 10 && (
                               <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                                 <div className="flex items-center gap-2">
                                   <AlertCircle className="h-5 w-5 text-red-600" />
