@@ -20,6 +20,7 @@ from app.schemas.prestamo import (
 from app.services.prestamo_amortizacion_service import (
     generar_tabla_amortizacion as generar_amortizacion,
 )
+from app.services.prestamo_evaluacion_service import crear_evaluacion_prestamo
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -475,3 +476,65 @@ def obtener_cuotas_prestamo(
         }
         for c in cuotas
     ]
+
+
+@router.post("/{prestamo_id}/evaluar-riesgo")
+def evaluar_riesgo_prestamo(
+    prestamo_id: int,
+    datos_evaluacion: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Evaluar riesgo de un préstamo usando los 6 criterios de evaluación.
+    Requiere datos del cliente y del préstamo.
+    """
+    prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    
+    # Agregar prestamo_id a datos
+    datos_evaluacion["prestamo_id"] = prestamo_id
+    
+    try:
+        evaluacion = crear_evaluacion_prestamo(datos_evaluacion, db)
+        
+        return {
+            "prestamo_id": prestamo_id,
+            "puntuacion_total": float(evaluacion.puntuacion_total),
+            "clasificacion_riesgo": evaluacion.clasificacion_riesgo,
+            "decision_final": evaluacion.decision_final,
+            "tasa_interes_aplicada": float(evaluacion.tasa_interes_aplicada),
+            "plazo_maximo": evaluacion.plazo_maximo,
+            "enganche_minimo": float(evaluacion.enganche_minimo),
+            "requisitos_adicionales": evaluacion.requisitos_adicionales,
+            "detalle_criterios": {
+                "ratio_endeudamiento": {
+                    "puntos": float(evaluacion.ratio_endeudamiento_puntos),
+                    "calculo": float(evaluacion.ratio_endeudamiento_calculo),
+                },
+                "ratio_cobertura": {
+                    "puntos": float(evaluacion.ratio_cobertura_puntos),
+                    "calculo": float(evaluacion.ratio_cobertura_calculo),
+                },
+                "historial_crediticio": {
+                    "puntos": float(evaluacion.historial_crediticio_puntos),
+                    "descripcion": evaluacion.historial_crediticio_descripcion,
+                },
+                "estabilidad_laboral": {
+                    "puntos": float(evaluacion.estabilidad_laboral_puntos),
+                    "anos_empleo": float(evaluacion.anos_empleo),
+                },
+                "tipo_empleo": {
+                    "puntos": float(evaluacion.tipo_empleo_puntos),
+                    "descripcion": evaluacion.tipo_empleo_descripcion,
+                },
+                "enganche_garantias": {
+                    "puntos": float(evaluacion.enganche_garantias_puntos),
+                    "calculo": float(evaluacion.enganche_garantias_calculo),
+                },
+            },
+        }
+    except Exception as e:
+        logger.error(f"Error evaluando riesgo: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error evaluando riesgo: {str(e)}")
