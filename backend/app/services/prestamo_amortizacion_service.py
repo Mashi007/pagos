@@ -102,18 +102,18 @@ def generar_tabla_amortizacion(
 
     try:
         db.commit()
-        
+
         # Validar consistencia de la tabla generada
         total_calculado = sum(c.monto_cuota for c in cuotas_generadas)
         diferencia = abs(total_calculado - prestamo.total_financiamiento)
-        
+
         if diferencia > Decimal("0.01"):  # Tolerancia de 1 centavo
             logger.warning(
                 f"Diferencia en total de cuotas: Calculado={total_calculado}, "
                 f"Esperado={prestamo.total_financiamiento}, "
                 f"Diferencia={diferencia}"
             )
-        
+
         logger.info(
             f"Tabla de amortización generada: {prestamo.numero_cuotas} cuotas para préstamo {prestamo.id}"
         )
