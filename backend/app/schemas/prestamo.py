@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator, model_serializer
+from pydantic import BaseModel, Field, field_validator, field_serializer
 
 
 # ============================================
@@ -75,20 +75,35 @@ class PrestamoResponse(PrestamoBase):
     fecha_aprobacion: Optional[datetime] = None
     fecha_actualizacion: datetime
 
-    @model_serializer
-    def serialize_model(self):
-        """Serializa las fechas datetime a string"""
-        data = {
-            **self.__dict__,
-            'fecha_registro': self.fecha_registro.isoformat() if isinstance(self.fecha_registro, datetime) else self.fecha_registro,
-            'fecha_aprobacion': self.fecha_aprobacion.isoformat() if self.fecha_aprobacion and isinstance(self.fecha_aprobacion, datetime) else self.fecha_aprobacion,
-            'fecha_actualizacion': self.fecha_actualizacion.isoformat() if isinstance(self.fecha_actualizacion, datetime) else self.fecha_actualizacion,
-        }
-        # Asegurar que la fecha_base_calculo también sea string si es date
-        if hasattr(self, 'fecha_base_calculo') and self.fecha_base_calculo:
-            if isinstance(self.fecha_base_calculo, date):
-                data['fecha_base_calculo'] = self.fecha_base_calculo.isoformat()
-        return data
+    @field_serializer('fecha_registro')
+    def serialize_fecha_registro(self, value: datetime) -> str:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+
+    @field_serializer('fecha_aprobacion')
+    def serialize_fecha_aprobacion(self, value: Optional[datetime]) -> Optional[str]:
+        if value and isinstance(value, datetime):
+            return value.isoformat()
+        return value
+
+    @field_serializer('fecha_actualizacion')
+    def serialize_fecha_actualizacion(self, value: datetime) -> str:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+
+    @field_serializer('fecha_requerimiento')
+    def serialize_fecha_requerimiento(self, value: date) -> str:
+        if isinstance(value, date):
+            return value.isoformat()
+        return value
+
+    @field_serializer('fecha_base_calculo')
+    def serialize_fecha_base_calculo(self, value: Optional[date]) -> Optional[str]:
+        if value and isinstance(value, date):
+            return value.isoformat()
+        return value
 
     class Config:
         from_attributes = True
