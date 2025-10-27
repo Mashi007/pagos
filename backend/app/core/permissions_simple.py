@@ -130,6 +130,8 @@ USER_PERMISSIONS: List[Permission] = [
     Permission.CLIENTE_CREATE,  # ✅ Crear clientes
     Permission.CLIENTE_UPDATE,  # ✅ Actualizar clientes
     Permission.USER_READ,  # ✅ Ver usuarios (agregado)
+    Permission.PRESTAMO_CREATE,  # ✅ Crear préstamos
+    Permission.PRESTAMO_UPDATE,  # ✅ Actualizar préstamos (si DRAFT)
 ]
 
 

@@ -436,10 +436,7 @@ def generar_amortizacion_prestamo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generar tabla de amortización para un préstamo aprobado (solo Admin)"""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Solo administradores")
-
+    """Generar tabla de amortización para un préstamo aprobado (Admin y Analistas)"""
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
