@@ -109,9 +109,9 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
       ? formData.ingresos_mensuales / formData.gastos_fijos_mensuales
       : 0
 
-    // LTV (Loan to Value)
+    // LTV (Loan to Value) - Porcentaje de enganche sobre el financiamiento
     const ltv = prestamo.total_financiamiento > 0
-      ? ((prestamo.total_financiamiento - formData.enganche_pagado) / formData.valor_garantia) * 100
+      ? (formData.enganche_pagado / prestamo.total_financiamiento) * 100
       : 0
 
     return {
@@ -147,14 +147,16 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     setIsLoading(true)
 
     try {
+      // Enviar datos ORIGINALES al backend para que calcule todo
       const datosEvaluacion = {
-        prestamo_id: prestamo.id,
-        ratio_endeudamiento_calculo: ratios.ratioEndeudamiento,
-        ratio_cobertura_calculo: ratios.ratioCobertura,
-        historial_crediticio_descripcion: formData.historial_crediticio,
+        ingresos_mensuales: formData.ingresos_mensuales,
+        gastos_fijos_mensuales: formData.gastos_fijos_mensuales,
+        cuota_mensual: prestamo.cuota_periodo || 0,
+        historial_crediticio: formData.historial_crediticio,
         anos_empleo: formData.anos_empleo,
-        tipo_empleo_descripcion: formData.tipo_empleo,
-        enganche_garantias_calculo: ratios.ltv,
+        tipo_empleo: formData.tipo_empleo,
+        enganche_pagado: formData.enganche_pagado,
+        monto_financiado: prestamo.total_financiamiento,
         red_flags: redFlags,
         verificado_usuario: true,  // ✅ Usuario confirmó verificación
       }
