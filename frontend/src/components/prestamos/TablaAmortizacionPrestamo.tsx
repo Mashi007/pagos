@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Download, Eye, Table as TableIcon, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { Download, Eye, List, CheckCircle, Clock, AlertCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -64,7 +64,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
   }
 
   const exportarExcel = () => {
-    toast.info('Función de exportación en desarrollo')
+    toast('Función de exportación en desarrollo')
     // TODO: Implementar exportación a Excel
   }
 
@@ -148,7 +148,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-3">
-          <TableIcon className="h-6 w-6 text-blue-600" />
+          <List className="h-6 w-6 text-blue-600" />
           <CardTitle>Tabla de Amortización</CardTitle>
           <Badge variant="secondary">{cuotas.length} cuotas</Badge>
         </div>
