@@ -9,7 +9,6 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.models.amortizacion import Cuota
 from app.models.aprobacion import Aprobacion
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
@@ -22,7 +21,7 @@ from app.schemas.prestamo import (
 )
 from app.services.prestamo_amortizacion_service import (
     generar_tabla_amortizacion as generar_amortizacion,
-    obtener_cuotas_prestamo,
+    obtener_cuotas_prestamo as obtener_cuotas_service,
 )
 from app.services.prestamo_evaluacion_service import crear_evaluacion_prestamo
 
@@ -587,7 +586,7 @@ def obtener_cuotas_prestamo(
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
-    cuotas = obtener_cuotas_prestamo(prestamo_id, db)
+    cuotas = obtener_cuotas_service(prestamo_id, db)
 
     return [
         {
