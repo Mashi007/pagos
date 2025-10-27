@@ -165,10 +165,11 @@ def procesar_cambio_estado(
                 # Convertir a date si es necesario
                 if isinstance(prestamo.fecha_base_calculo, str):
                     from dateutil import parser as date_parser
+
                     fecha = date_parser.parse(prestamo.fecha_base_calculo).date()
                 else:
                     fecha = prestamo.fecha_base_calculo
-                
+
                 generar_amortizacion(prestamo, fecha, db)
                 logger.info(
                     f"Tabla de amortización generada para préstamo {prestamo.id}"
