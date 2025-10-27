@@ -207,29 +207,22 @@ def evaluar_sector_economico(sector: str) -> Decimal:
 # ============================================
 
 
-def evaluar_referencias(
-    num_referencias: int, anos_conoce: float
-) -> Tuple[Decimal, str]:
+def evaluar_referencias_individuales(
+    calificacion: int
+) -> Decimal:
     """
-    CRITERIO 3: Referencias Personales (5 puntos - 5%)
-
-    Rangos:
-    - 3+ verificadas, >2 años -> Excelente -> 5 puntos
-    - 2-3 verificadas, >1 año -> Buena     -> 4 puntos
-    - 1-2 verificadas         -> Regular   -> 2 puntos
-    - Falsas o no contestan  -> Mala      -> 0 puntos
-
+    CRITERIO 3: Referencias Personales (9 puntos - 3 referencias)
+    
+    Calificaciones:
+    - 3 = Recomendable -> 3 puntos
+    - 2 = Dudosa -> 2 puntos
+    - 1 = No recomendable -> 1 punto
+    - 0 = No contestó -> 0 puntos
+    
     Returns:
-        Tuple: (puntos, descripcion)
+        Puntos de 0 a 3 por referencia
     """
-    if num_referencias >= 3 and anos_conoce >= 2:
-        return Decimal(5), "Excelente"
-    elif num_referencias >= 2 and anos_conoce >= 1:
-        return Decimal(4), "Buena"
-    elif num_referencias >= 1:
-        return Decimal(2), "Regular"
-    else:
-        return Decimal(0), "Mala"
+    return Decimal(calificacion)
 
 
 # ============================================
@@ -667,10 +660,12 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
     sector = datos_evaluacion.get("sector_economico", "agricultura_estacional")
     puntos_2c = evaluar_sector_economico(sector)
 
-    # Criterio 3: Referencias (5 puntos)
-    num_referencias = datos_evaluacion.get("num_referencias_verificadas", 0)
-    anos_conoce = datos_evaluacion.get("anos_conoce", 0)
-    puntos_3, desc_referencias = evaluar_referencias(num_referencias, anos_conoce)
+    # Criterio 3: Referencias (9 puntos - 3 referencias individuales)
+    referencia1_cal = datos_evaluacion.get("referencia1_calificacion", 0)
+    referencia2_cal = datos_evaluacion.get("referencia2_calificacion", 0)
+    referencia3_cal = datos_evaluacion.get("referencia3_calificacion", 0)
+    puntos_3 = Decimal(referencia1_cal) + Decimal(referencia2_cal) + Decimal(referencia3_cal)
+    desc_referencias = f"Ref1:{referencia1_cal} Ref2:{referencia2_cal} Ref3:{referencia3_cal}"
 
     # Criterio 4: Arraigo Geográfico (12 puntos)
     tipo_vivienda = datos_evaluacion.get("tipo_vivienda", "sin_vivienda")
@@ -869,4 +864,4 @@ def crear_evaluacion_prestamo(
         db.add(evaluacion)
         db.commit()
         db.refresh(evaluacion)
-        return evaluacion
+    return evaluacion
