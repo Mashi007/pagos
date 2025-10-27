@@ -67,7 +67,7 @@ def get_current_user(
     except JWTError as e:
         logger.error(f"Error de base de datos: {e}")
         error_msg = str(e)
-        
+
         # Si el token expiró, retornar 401 específico
         if "expired" in error_msg.lower() or "expired" in str(type(e)).lower():
             logger.warning(f"Token expirado - usuario debe hacer login nuevamente")
@@ -76,7 +76,7 @@ def get_current_user(
                 detail="Token de acceso expirado. Por favor, inicia sesión nuevamente.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        
+
         # Para otros errores de JWT, también retornar 401
         raise credentials_exception
 
