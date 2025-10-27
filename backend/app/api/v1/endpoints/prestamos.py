@@ -278,49 +278,33 @@ def actualizar_prestamo(
 ):
     """Actualizar un préstamo"""
     try:
+        # 1. Buscar préstamo
         prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
-
         if not prestamo:
             raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
-        # Verificar estado: si está APROBADO/RECHAZADO, solo Admin puede editar
-        if prestamo.estado in ["APROBADO", "RECHAZADO"]:
-            if not current_user.is_superuser:
-                raise HTTPException(
-                    status_code=403,
-                    detail="Solo administradores pueden editar préstamos aprobados/rechazados",
-                )
+        # 2. Verificar permisos
+        verificar_permisos_edicion(prestamo, current_user)
 
-        # Guardar valores antiguos para auditoría
+        # 3. Guardar valores antiguos para auditoría
         valores_viejos = {
             "total_financiamiento": str(prestamo.total_financiamiento),
             "modalidad_pago": prestamo.modalidad_pago,
             "estado": prestamo.estado,
         }
 
-        # Actualizar campos
-        if prestamo_data.total_financiamiento is not None:
-            actualizar_monto_y_cuotas(prestamo, prestamo_data.total_financiamiento)
+        # 4. Aplicar cambios simples
+        aplicar_cambios_prestamo(prestamo, prestamo_data)
 
-        if prestamo_data.modalidad_pago is not None:
-            prestamo.modalidad_pago = prestamo_data.modalidad_pago
-            prestamo.numero_cuotas, prestamo.cuota_periodo = calcular_cuotas(
-                prestamo.total_financiamiento, prestamo.modalidad_pago
-            )
+        # 5. Procesar cambio de estado si aplica
+        if prestamo_data.estado is not None and puede_cambiar_estado(prestamo, prestamo_data.estado, current_user):
+            procesar_cambio_estado(prestamo, prestamo_data.estado, current_user, db)
 
-        if prestamo_data.estado is not None:
-            if current_user.is_superuser or (
-                prestamo.estado == "DRAFT" and prestamo_data.estado == "EN_REVISION"
-            ):
-                procesar_cambio_estado(prestamo, prestamo_data.estado, current_user, db)
-
-        if prestamo_data.observaciones is not None:
-            prestamo.observaciones = prestamo_data.observaciones
-
+        # 6. Guardar cambios
         db.commit()
         db.refresh(prestamo)
 
-        # Registrar en auditoría (simplificado)
+        # 7. Registrar en auditoría
         crear_registro_auditoria(
             prestamo_id=prestamo.id,
             cedula=prestamo.cedula,
