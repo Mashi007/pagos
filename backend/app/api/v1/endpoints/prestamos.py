@@ -275,8 +275,18 @@ def listar_prestamos(
             .all()
         )
 
+        # Serializar préstamos usando PrestamoResponse
+        prestamos_serializados = []
+        for prestamo in prestamos:
+            try:
+                prestamo_dict = PrestamoResponse.model_validate(prestamo).model_dump()
+                prestamos_serializados.append(prestamo_dict)
+            except Exception as e:
+                logger.error(f"Error serializando préstamo {prestamo.id}: {str(e)}")
+                continue
+
         return {
-            "data": prestamos,
+            "data": prestamos_serializados,
             "total": total,
             "page": page,
             "per_page": per_page,
