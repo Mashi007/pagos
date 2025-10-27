@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { PrestamosList } from '@/components/prestamos/PrestamosList'
 import { DollarSign } from 'lucide-react'
 
-export default function Prestamos() {
+export function Prestamos() {
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center gap-3 mb-6">
@@ -14,3 +14,5 @@ export default function Prestamos() {
     </div>
   )
 }
+
+export default Prestamos

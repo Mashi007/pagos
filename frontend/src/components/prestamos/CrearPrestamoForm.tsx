@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { clienteService } from '@/services/clienteService'
 import { useCreatePrestamo, useUpdatePrestamo } from '@/hooks/usePrestamos'
-import { useClientesByCedula } from '@/hooks/useClientes'
+import { useSearchClientes } from '@/hooks/useClientes'
 import { Prestamo, PrestamoForm } from '@/types'
 
 interface CrearPrestamoFormProps {
@@ -49,7 +49,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   const [cuotaPeriodo, setCuotaPeriodo] = useState<number>(0)
 
   // Buscar cliente por cédula
-  const { data: clienteInfo, isLoading: isLoadingCliente } = useClientesByCedula(formData.cedula || '')
+  const { data: clienteInfo, isLoading: isLoadingCliente } = useSearchClientes(formData.cedula || '')
 
   // Calcular cuotas automáticamente
   const calcularCuotas = (total: number, modalidad: string) => {

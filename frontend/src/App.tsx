@@ -36,7 +36,6 @@ const Auditoria = lazy(() => import('@/pages/Auditoria').then(module => ({ defau
 const Notificaciones = lazy(() => import('@/pages/Notificaciones').then(module => ({ default: module.Notificaciones })))
 const Programador = lazy(() => import('@/pages/Programador').then(module => ({ default: module.Programador })))
 const Configuracion = lazy(() => import('@/pages/Configuracion').then(module => ({ default: module.Configuracion })))
-const PrestamosPage = lazy(() => import('@/pages/PrestamosPage').then(module => ({ default: module.PrestamosPage })))
 const Analistas = lazy(() => import('@/pages/Analistas').then(module => ({ default: module.Analistas })))
 const PagosPage = lazy(() => import('@/pages/PagosPage').then(module => ({ default: module.PagosPage })))
 const AmortizacionPage = lazy(() => import('@/pages/AmortizacionPage').then(module => ({ default: module.AmortizacionPage })))
