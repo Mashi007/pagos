@@ -80,14 +80,26 @@ class PrestamoResponse(PrestamoBase):
         """Serializa las fechas datetime a string"""
         data = {
             **self.__dict__,
-            'fecha_registro': self.fecha_registro.isoformat() if isinstance(self.fecha_registro, datetime) else self.fecha_registro,
-            'fecha_aprobacion': self.fecha_aprobacion.isoformat() if self.fecha_aprobacion and isinstance(self.fecha_aprobacion, datetime) else self.fecha_aprobacion,
-            'fecha_actualizacion': self.fecha_actualizacion.isoformat() if isinstance(self.fecha_actualizacion, datetime) else self.fecha_actualizacion,
+            "fecha_registro": (
+                self.fecha_registro.isoformat()
+                if isinstance(self.fecha_registro, datetime)
+                else self.fecha_registro
+            ),
+            "fecha_aprobacion": (
+                self.fecha_aprobacion.isoformat()
+                if self.fecha_aprobacion and isinstance(self.fecha_aprobacion, datetime)
+                else self.fecha_aprobacion
+            ),
+            "fecha_actualizacion": (
+                self.fecha_actualizacion.isoformat()
+                if isinstance(self.fecha_actualizacion, datetime)
+                else self.fecha_actualizacion
+            ),
         }
         # Asegurar que la fecha_base_calculo también sea string si es date
-        if hasattr(self, 'fecha_base_calculo') and self.fecha_base_calculo:
+        if hasattr(self, "fecha_base_calculo") and self.fecha_base_calculo:
             if isinstance(self.fecha_base_calculo, date):
-                data['fecha_base_calculo'] = self.fecha_base_calculo.isoformat()
+                data["fecha_base_calculo"] = self.fecha_base_calculo.isoformat()
         return data
 
     class Config:
