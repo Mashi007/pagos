@@ -36,6 +36,12 @@ def generar_tabla_amortizacion(
     # Eliminar cuotas existentes si las hay
     db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).delete()
 
+    # Validar datos del préstamo
+    if prestamo.total_financiamiento <= Decimal("0.00"):
+        raise ValueError("El monto del préstamo debe ser mayor a cero")
+    if prestamo.numero_cuotas <= 0:
+        raise ValueError("El número de cuotas debe ser mayor a cero")
+
     cuotas_generadas = []
     saldo_capital = prestamo.total_financiamiento
 
@@ -43,7 +49,11 @@ def generar_tabla_amortizacion(
     intervalo_dias = _calcular_intervalo_dias(prestamo.modalidad_pago)
 
     # Tasa de interés mensual (convertir anual a mensual)
-    tasa_mensual = Decimal(prestamo.tasa_interes) / Decimal(100) / Decimal(12)
+    # Manejar caso especial de tasa 0%
+    if prestamo.tasa_interes == Decimal("0.00"):
+        tasa_mensual = Decimal("0.00")
+    else:
+        tasa_mensual = Decimal(prestamo.tasa_interes) / Decimal(100) / Decimal(12)
 
     # Generar cada cuota
     for numero_cuota in range(1, prestamo.numero_cuotas + 1):
@@ -54,10 +64,14 @@ def generar_tabla_amortizacion(
         monto_cuota = prestamo.cuota_periodo
 
         # Calcular interés sobre saldo pendiente
-        monto_interes = saldo_capital * tasa_mensual
-
-        # Capital = Cuota - Interés
-        monto_capital = monto_cuota - monto_interes
+        # Si tasa es 0%, interés es 0
+        if tasa_mensual == Decimal("0.00"):
+            monto_interes = Decimal("0.00")
+            monto_capital = monto_cuota
+        else:
+            monto_interes = saldo_capital * tasa_mensual
+            # Capital = Cuota - Interés
+            monto_capital = monto_cuota - monto_interes
 
         # Actualizar saldo
         saldo_capital_inicial = saldo_capital
@@ -88,6 +102,18 @@ def generar_tabla_amortizacion(
 
     try:
         db.commit()
+        
+        # Validar consistencia de la tabla generada
+        total_calculado = sum(c.monto_cuota for c in cuotas_generadas)
+        diferencia = abs(total_calculado - prestamo.total_financiamiento)
+        
+        if diferencia > Decimal("0.01"):  # Tolerancia de 1 centavo
+            logger.warning(
+                f"Diferencia en total de cuotas: Calculado={total_calculado}, "
+                f"Esperado={prestamo.total_financiamiento}, "
+                f"Diferencia={diferencia}"
+            )
+        
         logger.info(
             f"Tabla de amortización generada: {prestamo.numero_cuotas} cuotas para préstamo {prestamo.id}"
         )
