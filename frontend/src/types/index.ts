@@ -140,6 +140,8 @@ export interface PrestamoForm {
   fecha_requerimiento: string
   producto: string
   producto_financiero: string
+  numero_cuotas?: number  // Número de cuotas manual del formulario
+  cuota_periodo?: number  // Cuota calculada
   tasa_interes?: number
   fecha_base_calculo?: string
   observaciones?: string

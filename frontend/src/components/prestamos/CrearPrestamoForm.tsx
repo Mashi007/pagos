@@ -172,16 +172,23 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     }
 
     try {
+      // Preparar datos con numero_cuotas y cuota_periodo
+      const prestamoData = {
+        ...formData,
+        numero_cuotas: numeroCuotas,
+        cuota_periodo: cuotaPeriodo,
+      }
+      
       if (prestamo) {
         // Editar préstamo existente
         await updatePrestamo.mutateAsync({
           id: prestamo.id,
-          data: formData
+          data: prestamoData
         })
         toast.success('Préstamo actualizado exitosamente')
       } else {
         // Crear nuevo préstamo
-        await createPrestamo.mutateAsync(formData as PrestamoForm)
+        await createPrestamo.mutateAsync(prestamoData as PrestamoForm)
         toast.success('Préstamo creado exitosamente')
       }
       
