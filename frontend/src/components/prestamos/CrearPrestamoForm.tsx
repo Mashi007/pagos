@@ -64,6 +64,16 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   const [numeroCuotas, setNumeroCuotas] = useState<number>(0)
   const [cuotaPeriodo, setCuotaPeriodo] = useState<number>(0)
 
+  // Calcular anticipo como 30% del valor activo automáticamente
+  useEffect(() => {
+    if (valorActivo > 0) {
+      const anticipoCalculado = valorActivo * 0.30
+      setAnticipo(anticipoCalculado)
+    } else {
+      setAnticipo(0)
+    }
+  }, [valorActivo])
+
   // Calcular total_financiamiento automáticamente
   useEffect(() => {
     const total = valorActivo - anticipo
@@ -356,20 +366,18 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
 
                   <div>
                     <label className="block text-sm font-medium mb-1">
-                      Anticipo (USD) <span className="text-blue-600">(Manual)</span>
+                      Anticipo (USD) <span className="text-green-600">(Automático - 30%)</span>
                     </label>
                     <Input
                       type="number"
                       step="0.01"
                       min="0"
-                      value={anticipo === 0 ? '' : anticipo}
-                      onChange={(e) => {
-                        const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
-                        setAnticipo(value)
-                      }}
-                      placeholder="Ingrese el anticipo"
-                      disabled={isReadOnly}
+                      value={anticipo === 0 ? '' : anticipo.toFixed(2)}
+                      readOnly
+                      className="bg-gray-100"
+                      placeholder="Calculado automáticamente"
                     />
+                    <p className="text-xs text-gray-500 mt-1">30% del Valor Activo</p>
                   </div>
                 </div>
 
