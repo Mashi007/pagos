@@ -681,7 +681,7 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
 
     minutos_trabajo = datos_evaluacion.get("minutos_trabajo", 999)
     puntos_4c = evaluar_arraigo_laboral(minutos_trabajo)
-    
+
     puntos_4a = Decimal(0)  # Mantener para compatibilidad, siempre 0
 
     # Criterio 5: Perfil Sociodemográfico (17 puntos)
