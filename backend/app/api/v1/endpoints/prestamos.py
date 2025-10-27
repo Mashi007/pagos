@@ -167,6 +167,28 @@ def procesar_cambio_estado(
                 logger.error(f"Error generando amortización: {str(e)}")
                 # No fallar el préstamo si falla la generación de cuotas
 
+        # Crear registro automático en Aprobaciones (conectado por cédula)
+        try:
+            from app.models.aprobacion import Aprobacion
+            
+            aprobacion = Aprobacion(
+                solicitante_id=current_user.id,
+                revisor_id=current_user.id,
+                tipo_solicitud="PRESTAMO",
+                entidad="Cliente",
+                entidad_id=prestamo.cliente_id,
+                justificacion=f"Préstamo aprobado para {prestamo.nombres} (Cédula: {prestamo.cedula}). Monto: ${prestamo.total_financiamiento}, Cuotas: {prestamo.numero_cuotas}",
+                estado="APROBADA",
+                resultado=f"Préstamo #{prestamo.id} aprobado por {current_user.email}",
+                fecha_aprobacion=datetime.now(),
+                prioridad="NORMAL",
+            )
+            db.add(aprobacion)
+            logger.info(f"Registro de aprobación creado para préstamo {prestamo.id}")
+        except Exception as e:
+            logger.error(f"Error creando registro de aprobación: {str(e)}")
+            # No fallar el préstamo si falla la creación de aprobación
+
     crear_registro_auditoria(
         prestamo_id=prestamo.id,
         cedula=prestamo.cedula,

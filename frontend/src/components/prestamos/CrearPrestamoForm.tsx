@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   DollarSign, 
@@ -9,8 +9,10 @@ import {
   ChevronDown,
   ChevronUp,
   Save,
-  AlertCircle
+  AlertCircle,
+  CheckCircle2
 } from 'lucide-react'
+import { useDebounce } from '@/hooks/useDebounce'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,8 +52,11 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   const [numeroCuotas, setNumeroCuotas] = useState<number>(0)
   const [cuotaPeriodo, setCuotaPeriodo] = useState<number>(0)
 
-  // Buscar cliente por cédula
-  const { data: clienteInfo, isLoading: isLoadingCliente } = useSearchClientes(formData.cedula || '')
+  // Buscar cliente por cédula con debounce mejorado
+  const debouncedCedula = useDebounce(formData.cedula || '', 500)
+  const { data: clienteInfo, isLoading: isLoadingCliente } = useSearchClientes(
+    debouncedCedula.length >= 10 ? debouncedCedula : ''
+  )
 
   // Calcular cuotas automáticamente
   const calcularCuotas = (total: number, modalidad: string) => {
@@ -71,6 +76,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     }
   }, [formData.total_financiamiento, formData.modalidad_pago])
 
+
   // Cargar datos del cliente cuando se encuentra
   useEffect(() => {
     if (clienteInfo && clienteInfo.length > 0) {
@@ -82,8 +88,11 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
         producto: cliente.modelo_vehiculo || '',
         producto_financiero: cliente.analista || '',
       }))
+    } else if (formData.cedula.length >= 10 && clienteInfo && clienteInfo.length === 0) {
+      // Cliente no encontrado
+      setClienteData(null)
     }
-  }, [clienteInfo])
+  }, [clienteInfo, formData.cedula])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -158,12 +167,31 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                   />
                 </div>
 
-                {clienteData && (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <p className="font-semibold text-green-800">{clienteData.nombres}</p>
-                    <p className="text-sm text-green-700">Cliente encontrado</p>
-                  </div>
-                )}
+                            {isLoadingCliente && formData.cedula.length >= 10 && (
+                              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
+                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                                <p className="text-sm text-blue-800">Buscando cliente...</p>
+                              </div>
+                            )}
+                            
+                            {clienteData && !isLoadingCliente && (
+                              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                  <p className="font-semibold text-green-800">{clienteData.nombres}</p>
+                                </div>
+                                <p className="text-sm text-green-700">Cliente encontrado y datos cargados automáticamente</p>
+                              </div>
+                            )}
+
+                            {!clienteData && !isLoadingCliente && formData.cedula.length >= 10 && (
+                              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                                <div className="flex items-center gap-2">
+                                  <AlertCircle className="h-5 w-5 text-red-600" />
+                                  <p className="text-sm text-red-800">Cliente no encontrado con esta cédula</p>
+                                </div>
+                              </div>
+                            )}
               </CardContent>
             </Card>
 
