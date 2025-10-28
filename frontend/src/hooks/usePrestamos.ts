@@ -99,8 +99,12 @@ export function useUpdatePrestamo() {
     mutationFn: ({ id, data }: { id: number; data: Partial<PrestamoForm> }) =>
       prestamoService.updatePrestamo(id, data),
     onSuccess: (data, variables) => {
+      // Invalidar queries específicas
       queryClient.invalidateQueries({ queryKey: prestamoKeys.detail(variables.id) })
+      queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
       queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+      // Refetch manual para asegurar actualización
+      queryClient.refetchQueries({ queryKey: prestamoKeys.all })
       toast.success('Préstamo actualizado exitosamente')
     },
     onError: (error: any) => {

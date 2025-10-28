@@ -185,11 +185,11 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
           id: prestamo.id,
           data: prestamoData
         })
-        toast.success('Préstamo actualizado exitosamente')
+        // El toast ya se muestra en el hook useUpdatePrestamo
       } else {
         // Crear nuevo préstamo
         await createPrestamo.mutateAsync(prestamoData as PrestamoForm)
-        toast.success('Préstamo creado exitosamente')
+        // El toast ya se muestra en el hook useCreatePrestamo
       }
       
       onSuccess()
