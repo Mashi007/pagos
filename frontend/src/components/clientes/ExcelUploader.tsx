@@ -726,6 +726,20 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     return ''
   }
 
+  // 🎨 FUNCIÓN PARA FORMATO DE NOMBRES (Primera letra mayúscula)
+  const formatNombres = (nombres: string): string => {
+    if (!nombres || !nombres.trim()) return nombres
+    
+    return nombres
+      .split(/\s+/)  // Separar por espacios
+      .filter(word => word.length > 0)  // Filtrar palabras vacías
+      .map(word => {
+        // Capitalizar primera letra, resto minúsculas
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      })
+      .join(' ')  // Unir con espacios
+  }
+
   // 🔍 VALIDAR CAMPO INDIVIDUAL
   const validateField = async (field: string, value: string): Promise<ValidationResult> => {
     switch (field) {
@@ -740,9 +754,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       case 'nombres':
         if (!value.trim()) return { isValid: false, message: 'Nombres requeridos' }
         const nombresWords = value.trim().split(/\s+/).filter(word => word.length > 0)
-        // ✅ CARGA MASIVA: SOLO 2 PALABRAS EXACTAMENTE
-        if (nombresWords.length !== 2) {
-          return { isValid: false, message: 'DEBE tener exactamente 2 palabras (nombre + apellido)' }
+        // ✅ CARGA MASIVA: ENTRE 2 Y 4 PALABRAS
+        if (nombresWords.length < 2 || nombresWords.length > 4) {
+          return { isValid: false, message: 'DEBE tener entre 2 y 4 palabras' }
         }
         return { isValid: true }
 
@@ -963,7 +977,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           _validation: {},
           _hasErrors: false,
           cedula: row[0]?.toString() || '',
-          nombres: `${row[1]?.toString() || ''} ${row[2]?.toString() || ''}`.trim(),  // ✅ Unificar nombres + apellidos
+          nombres: formatNombres(`${row[1]?.toString() || ''} ${row[2]?.toString() || ''}`.trim()),  // ✅ Unificar y formatear nombres + apellidos
           telefono: row[3]?.toString() || '',
           email: row[4]?.toString() || '',
           direccion: row[5]?.toString() || '',
@@ -1059,7 +1073,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     const row = newData[rowIndex]
     
     if (row) {
-      row[field as keyof ExcelData] = value || ''
+      // 🎨 APLICAR AUTO-FORMATO SI ES NOMBRES
+      const formattedValue = field === 'nombres' ? formatNombres(value || '') : (value || '')
+      
+      row[field as keyof ExcelData] = formattedValue
       
       // Para el campo notas, no hacer validación ni notificaciones
       if (field === 'notas') {
@@ -1070,7 +1087,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       }
       
       // Re-validar el campo (solo para campos que no son notas)
-      const validation = await validateField(field, value || '')
+      const validation = await validateField(field, formattedValue)
       row._validation[field] = validation
       
       // Recalcular si tiene errores (excluyendo notas que es opcional)
