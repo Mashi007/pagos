@@ -1189,28 +1189,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     </li>
                   </ul>
                 </div>
-                <div className="grid grid-cols-2 gap-4 bg-blue-50 p-3 rounded border border-blue-200">
-                    <div>
-                    <label className="text-sm text-gray-600">Tasa de Interés Aplicada</label>
-                    <p className="text-lg font-semibold text-blue-700">
-                      {resultado.tasa_interes_aplicada?.toFixed(2) || 'N/A'}%
-                      </p>
-                    </div>
-                    <div>
-                    <label className="text-sm text-gray-600">Plazo Máximo (meses)</label>
-                    <p className="text-lg font-semibold text-blue-700">
-                      {resultado.plazo_maximo || 'N/A'}
-                    </p>
-                    </div>
-                    <div>
-                    <label className="text-sm text-gray-600">Enganche Mínimo (%)</label>
-                    <p className="text-lg font-semibold text-blue-700">
-                      {resultado.enganche_minimo?.toFixed(2) || 'N/A'}%
-                    </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              </CardContent>
+            </Card>
           )}
 
           {/* Botones */}
