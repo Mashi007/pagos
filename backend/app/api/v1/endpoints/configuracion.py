@@ -298,9 +298,170 @@ def obtener_configuracion_general():
     }
 
 
+# ============================================
+# CONFIGURACIÓN DE EMAIL
+# ============================================
+
+
+@router.get("/email/configuracion")
+def obtener_configuracion_email(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    """Obtener configuración de email"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403, detail="Solo administradores pueden ver configuración de email"
+        )
+
+    try:
+        configs = (
+            db.query(ConfiguracionSistema)
+            .filter(ConfiguracionSistema.categoria == "EMAIL")
+            .all()
+        )
+
+        if not configs:
+            # Valores por defecto
+            return {
+                "smtp_host": "smtp.gmail.com",
+                "smtp_port": "587",
+                "smtp_user": "",
+                "smtp_password": "",
+                "from_email": "",
+                "from_name": "RapiCredit",
+                "smtp_use_tls": "true",
+            }
+
+        config_dict = {}
+        for config in configs:
+            config_dict[config.clave] = config.valor
+
+        return config_dict
+
+    except Exception as e:
+        logger.error(f"Error obteniendo configuración de email: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.put("/email/configuracion")
+def actualizar_configuracion_email(
+    config_data: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Actualizar configuración de email"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403, detail="Solo administradores pueden actualizar configuración"
+        )
+
+    try:
+        configuraciones = []
+        for clave, valor in config_data.items():
+            config = (
+                db.query(ConfiguracionSistema)
+                .filter(
+                    ConfiguracionSistema.categoria == "EMAIL",
+                    ConfiguracionSistema.clave == clave,
+                )
+                .first()
+            )
+
+            if config:
+                config.valor = str(valor)
+                config.actualizado_por = current_user.email
+                configuraciones.append(config)
+            else:
+                nueva_config = ConfiguracionSistema(
+                    categoria="EMAIL",
+                    clave=clave,
+                    valor=str(valor),
+                    tipo_dato="STRING",
+                    visible_frontend=True,
+                    creado_por=current_user.email,
+                    actualizado_por=current_user.email,
+                )
+                db.add(nueva_config)
+                configuraciones.append(nueva_config)
+
+        db.commit()
+
+        logger.info(f"Configuración de email actualizada por {current_user.email}")
+
+        return {
+            "mensaje": "Configuración de email actualizada exitosamente",
+            "configuraciones_actualizadas": len(configuraciones),
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error actualizando configuración de email: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.post("/email/probar")
+def probar_configuracion_email(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    """Probar configuración de email enviando un email de prueba"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403, detail="Solo administradores pueden probar configuración de email"
+        )
+
+    try:
+        # Obtener configuración
+        configs = (
+            db.query(ConfiguracionSistema)
+            .filter(ConfiguracionSistema.categoria == "EMAIL")
+            .all()
+        )
+
+        if not configs:
+            raise HTTPException(
+                status_code=400, detail="No hay configuración de email"
+            )
+
+        config_dict = {config.clave: config.valor for config in configs}
+
+        # Enviar email de prueba
+        from app.services.email_service import EmailService
+
+        # Actualizar configuración global temporalmente
+        email_service = EmailService()
+        result = email_service.send_email(
+            to_emails=[current_user.email],
+            subject="Prueba de configuración - RapiCredit",
+            body=f"""
+            <html>
+            <body>
+                <h2>Email de prueba</h2>
+                <p>Esta es una prueba de la configuración de email.</p>
+                <p>Si recibes este email, la configuración está correcta.</p>
+                <p><strong>Fecha:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            </body>
+            </html>
+            """,
+            is_html=True,
+        )
+
+        if result.get("success"):
+            return {"mensaje": "Email de prueba enviado exitosamente", "detalle": result}
+        else:
+            return {
+                "mensaje": "Error enviando email de prueba",
+                "error": result.get("message"),
+            }
+
+    except Exception as e:
+        logger.error(f"Error probando configuración de email: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
 @router.put("/general")
 def actualizar_configuracion_general(
     update_data: Dict[str, Any],
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Actualizar configuración general del sistema"""
