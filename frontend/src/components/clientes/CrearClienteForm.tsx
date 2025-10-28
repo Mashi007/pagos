@@ -148,7 +148,8 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   // Pre-cargar datos del cliente si se está editando
   useEffect(() => {
     if (cliente) {
-      // Debug logs removidos según normas
+      console.log('📝 MOD訂 EDITAR - Cargando datos del cliente:', cliente)
+      
       // Dividir nombres si vienen unificados de la BD
       let nombresValue = cliente.nombres || ''
       
@@ -169,7 +170,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         return fechaISO
       }
       
-      setFormData({
+      const newFormData = {
         cedula: cliente.cedula || '',
         nombres: nombresValue,  // ✅ nombres unificados
         telefono: cliente.telefono || '',
@@ -182,7 +183,11 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         analista: cliente.analista || '',
         estado: cliente.estado || 'ACTIVO',
         notas: cliente.notas || 'NA'
-      })
+      }
+      
+      console.log('📝 MOD訂 EDITAR - Datos formateados:', newFormData)
+      
+      setFormData(newFormData)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cliente])
@@ -336,11 +341,19 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   }
 
   const handleInputChange = async (field: keyof FormData, value: string) => {
+    console.log(`🔧 Cambio en campo: ${field}, nuevo valor: ${value}`)
+    console.log(`🔧 Modo edición: ${cliente ? 'SÍ' : 'NO'}`)
+    
     let formattedValue = value
     
     // ✅ En modo edición, permitir reescribir sin validar
     if (cliente) {
-      setFormData(prev => ({ ...prev, [field]: formattedValue }))
+      console.log('🔧 Modo edición - actualizando directamente sin validar')
+      setFormData(prev => {
+        const updated = { ...prev, [field]: formattedValue }
+        console.log(`🔧 Estado actualizado para ${field}:`, updated)
+        return updated
+      })
       return
     }
     
