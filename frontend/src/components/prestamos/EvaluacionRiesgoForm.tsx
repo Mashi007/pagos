@@ -95,10 +95,10 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     const calcularEdad = async () => {
       try {
         // Obtener información del cliente por su cédula usando el servicio
-        const clientes = await clienteService.getClientes({ cedula: prestamo.cedula })
+        const response = await clienteService.getClientes({ cedula: prestamo.cedula })
         
-        if (clientes && clientes.length > 0) {
-          const cliente = clientes[0]
+        if (response && response.data && response.data.length > 0) {
+          const cliente = response.data[0]
           if (cliente.fecha_nacimiento) {
             // Calcular edad desde fecha de nacimiento
             const hoy = new Date()

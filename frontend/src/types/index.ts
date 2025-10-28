@@ -172,6 +172,7 @@ export interface AuthTokens {
 // Tipos para filtros y búsquedas
 export interface ClienteFilters {
   search?: string
+  cedula?: string
   estado?: 'ACTIVO' | 'INACTIVO' | 'MORA' | 'FINALIZADO'
   estado_financiero?: string
   analista_config_id?: number
