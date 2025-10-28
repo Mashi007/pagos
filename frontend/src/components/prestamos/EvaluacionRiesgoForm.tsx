@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { 
   Calculator, 
@@ -87,6 +87,61 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
   const [isLoading, setIsLoading] = useState(false)
   const [resultado, setResultado] = useState<any>(null)
   const [showSection, setShowSection] = useState<string>('criterio1')
+  const [clienteEdad, setClienteEdad] = useState<number>(0)
+  
+  // Calcular edad automáticamente desde la cédula del préstamo
+  useEffect(() => {
+    const calcularEdad = async () => {
+      try {
+        // Obtener información del cliente por su cédula
+        const clienteResponse = await fetch(`/api/v1/clientes/?cedula=${prestamo.cedula}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        })
+        
+        if (clienteResponse.ok) {
+          const data = await clienteResponse.json()
+          if (data.data && data.data.length > 0) {
+            const cliente = data.data[0]
+            if (cliente.fecha_nacimiento) {
+              // Calcular edad desde fecha de nacimiento
+              const hoy = new Date()
+              const nacimiento = new Date(cliente.fecha_nacimiento)
+              let años = hoy.getFullYear() - nacimiento.getFullYear()
+              const diferenciaMeses = hoy.getMonth() - nacimiento.getMonth()
+              
+              if (diferenciaMeses < 0 || (diferenciaMeses === 0 && hoy.getDate() < nacimiento.getDate())) {
+                años -= 1
+              }
+              
+              // Calcular meses adicionales
+              let meses = 0
+              if (hoy.getMonth() >= nacimiento.getMonth()) {
+                meses = hoy.getMonth() - nacimiento.getMonth()
+                if (hoy.getDate() < nacimiento.getDate()) {
+                  meses -= 1
+                }
+              } else {
+                meses = (12 - nacimiento.getMonth()) + hoy.getMonth()
+                if (hoy.getDate() < nacimiento.getDate()) {
+                  meses -= 1
+                }
+              }
+              
+              // Edad en años decimales
+              const edadDecimal = años + (meses / 12)
+              setClienteEdad(edadDecimal)
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error calculando edad:', error)
+      }
+    }
+    
+    calcularEdad()
+  }, [prestamo.cedula])
   
   if (!isAdmin) {
     return null
@@ -204,8 +259,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
         viven_con_ex: formData.viven_con_ex,
         embarazo_actual: formData.embarazo_actual,
         
-        // Criterio 6
-        edad: formData.edad,
+        // Criterio 6: Edad calculada automáticamente
+        edad: clienteEdad || 0,
         
         // Criterio 7: Capacidad de Maniobra
         // Se calcula automáticamente con los datos del Criterio 1
@@ -893,7 +948,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   <Input
                     type="text"
                     value={(() => {
-                      const edad = formData.edad || 0;
+                      const edad = clienteEdad || 0;
                       // Calcula años y meses desde la edad en años (decimal)
                       const años = Math.floor(edad);
                       const meses = Math.round((edad - años) * 12);
