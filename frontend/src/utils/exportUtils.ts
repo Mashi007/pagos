@@ -27,7 +27,8 @@ export interface PrestamoInfo {
  */
 export const exportarAExcel = (cuotas: Cuota[], prestamo: PrestamoInfo) => {
   // Importar dinámicamente xlsx
-  import('xlsx').then((XLSX) => {
+  import('xlsx').then((XLSXModule) => {
+    const XLSX = XLSXModule.default
     // Crear datos para Excel
     const datos = cuotas.map(cuota => ({
       'Cuota': cuota.numero_cuota,
@@ -81,12 +82,12 @@ export const exportarAPDF = (cuotas: Cuota[], prestamo: PrestamoInfo) => {
     const doc = new jsPDF()
 
     // Colores empresariales
-    const primaryColor = [59, 130, 246] // Blue-500
-    const secondaryColor = [107, 114, 128] // Gray-500
+    const primaryColor = [59, 130, 246] as [number, number, number] // Blue-500
+    const secondaryColor = [107, 114, 128] as [number, number, number] // Gray-500
 
     // ENCABEZADO EMPRESARIAL
     // Rectángulo de fondo
-    doc.setFillColor(...primaryColor)
+    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
     doc.rect(0, 0, 210, 40, 'F')
 
     // Logo/Título
@@ -111,7 +112,7 @@ export const exportarAPDF = (cuotas: Cuota[], prestamo: PrestamoInfo) => {
 
     // INFORMACIÓN DEL CLIENTE
     doc.setFillColor(245, 245, 250)
-    doc.rect(10, 45, 190, 35, 'F')
+    doc.rect(10, 45, 190, 40, 'F')
     
     doc.setFontSize(14)
     doc.setFont('helvetica', 'bold')
@@ -149,7 +150,7 @@ export const exportarAPDF = (cuotas: Cuota[], prestamo: PrestamoInfo) => {
       body: datosTabla,
       theme: 'striped',
       headStyles: {
-        fillColor: primaryColor,
+        fillColor: [primaryColor[0], primaryColor[1], primaryColor[2]],
         textColor: 255,
         fontStyle: 'bold'
       },
@@ -172,10 +173,10 @@ export const exportarAPDF = (cuotas: Cuota[], prestamo: PrestamoInfo) => {
     })
 
     // RESUMEN
-    const finalY = (doc as any).lastAutoTable.finalY || 150
+    const finalY = (doc as any).lastAutoTable?.finalY || 150
     const resumenY = finalY + 10
 
-    doc.setFillColor(...primaryColor)
+    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
     doc.rect(10, resumenY, 190, 20, 'F')
     
     doc.setFontSize(11)
@@ -199,7 +200,7 @@ export const exportarAPDF = (cuotas: Cuota[], prestamo: PrestamoInfo) => {
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i)
       doc.setFontSize(8)
-      doc.setTextColor(...secondaryColor)
+      doc.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2])
       doc.text(
         `RapiCredit - Sistema de Préstamos - Página ${i} de ${pageCount}`,
         105,

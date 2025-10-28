@@ -1,7 +1,7 @@
 import { useAuditoriaPrestamo } from '@/hooks/useAuditoriaPrestamo'
 import { formatDate } from '@/utils'
 import { Card, CardContent } from '@/components/ui/card'
-import { History, User, Calendar, FileEdit } from 'lucide-react'
+import { Clock, User, Calendar, Edit } from 'lucide-react'
 
 interface AuditoriaPrestamoProps {
   prestamoId: number
@@ -43,9 +43,9 @@ export function AuditoriaPrestamo({ prestamoId }: AuditoriaPrestamoProps) {
 
   if (!auditoria || auditoria.length === 0) {
     return (
-      <Card>
+        <Card>
         <CardContent className="py-8 text-center">
-          <History className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+          <Clock className="mx-auto h-12 w-12 text-gray-400 mb-4" />
           <p className="text-gray-600">No hay historial de auditoría para este préstamo</p>
         </CardContent>
       </Card>
@@ -82,9 +82,9 @@ export function AuditoriaPrestamo({ prestamoId }: AuditoriaPrestamoProps) {
               </div>
 
               {entry.estado_anterior && entry.estado_nuevo && (
-                <div className="flex items-start space-x-2">
-                  <FileEdit className="h-4 w-4 text-gray-400 mt-0.5" />
-                  <div>
+              <div className="flex items-start space-x-2">
+                <Edit className="h-4 w-4 text-gray-400 mt-0.5" />
+                <div>
                     <span className="font-medium text-gray-600">Cambio de estado:</span>
                     <p className="text-gray-800">
                       <span className="line-through text-red-600">{entry.estado_anterior}</span>{' '}

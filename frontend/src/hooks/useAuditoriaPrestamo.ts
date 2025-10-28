@@ -15,9 +15,9 @@ export interface AuditoriaEntry {
 }
 
 export const useAuditoriaPrestamo = (prestamoId: number | null) => {
-  return useQuery<AuditoriaEntry[]>({
+  return useQuery({
     queryKey: ['auditoria-prestamo', prestamoId],
-    queryFn: async () => {
+    queryFn: async (): Promise<AuditoriaEntry[]> => {
       if (!prestamoId) return []
       return await apiClient.get<AuditoriaEntry[]>(`/api/v1/prestamos/auditoria/${prestamoId}`)
     },
