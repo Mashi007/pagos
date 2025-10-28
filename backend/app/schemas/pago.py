@@ -7,9 +7,6 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-from app.models.cuota import Cuota
-from app.models.pago import Pago
-
 
 class PagoBase(BaseModel):
     """Schema base para pagos"""
