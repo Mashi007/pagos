@@ -1073,8 +1073,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     const row = newData[rowIndex]
     
     if (row) {
-      // 🎨 APLICAR AUTO-FORMATO SI ES NOMBRES
-      const formattedValue = field === 'nombres' ? formatNombres(value || '') : (value || '')
+      // 🎨 NO APLICAR FORMATO MIENTRAS ESCRIBE (permitir espacios libres)
+      // El formato se aplicará al guardar
+      const formattedValue = value || ''
       
       row[field as keyof ExcelData] = formattedValue
       
@@ -1175,7 +1176,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         try {
           const clienteData = {
             cedula: row.cedula,
-            nombres: row.nombres,  // ✅ nombres unificados
+            nombres: formatNombres(row.nombres),  // ✅ Aplicar formato Title Case al guardar
             telefono: row.telefono,
             email: row.email,
             direccion: row.direccion,
