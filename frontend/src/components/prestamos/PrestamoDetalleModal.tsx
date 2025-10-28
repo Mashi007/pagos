@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Prestamo } from '@/types'
 import { formatDate } from '@/utils'
 import { TablaAmortizacionPrestamo } from './TablaAmortizacionPrestamo'
+import { AuditoriaPrestamo } from './AuditoriaPrestamo'
 import { usePrestamo } from '@/hooks/usePrestamos'
 
 interface PrestamoDetalleModalProps {
@@ -283,16 +284,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
             )}
 
             {activeTab === 'auditoria' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Historial de Auditoría</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-gray-600">
-                    Historial completo de cambios (implementar con useAuditoriaPrestamo)
-                  </p>
-                </CardContent>
-              </Card>
+              <AuditoriaPrestamo prestamoId={prestamoData.id} />
             )}
           </div>
 

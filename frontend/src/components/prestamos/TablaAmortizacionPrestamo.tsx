@@ -9,6 +9,7 @@ import { prestamoService } from '@/services/prestamoService'
 import { useQuery } from '@tanstack/react-query'
 import { formatDate } from '@/utils'
 import toast from 'react-hot-toast'
+import { exportarAExcel, exportarAPDF } from '@/utils/exportUtils'
 
 interface Cuota {
   id: number
@@ -64,8 +65,51 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
   }
 
   const exportarExcel = () => {
-    toast('Función de exportación en desarrollo')
-    // TODO: Implementar exportación a Excel
+    if (!cuotas) {
+      toast.error('No hay datos para exportar')
+      return
+    }
+    
+    const prestamoInfo = {
+      id: prestamo.id,
+      cedula: prestamo.cedula,
+      nombres: prestamo.nombres,
+      total_financiamiento: prestamo.total_financiamiento,
+      numero_cuotas: prestamo.numero_cuotas,
+      modalidad_pago: prestamo.modalidad_pago,
+      fecha_requerimiento: prestamo.fecha_requerimiento
+    }
+    
+    try {
+      exportarAExcel(cuotas, prestamoInfo)
+      toast.success('Exportando a Excel...')
+    } catch (error) {
+      toast.error('Error al exportar a Excel')
+    }
+  }
+
+  const exportarPDF = () => {
+    if (!cuotas) {
+      toast.error('No hay datos para exportar')
+      return
+    }
+    
+    const prestamoInfo = {
+      id: prestamo.id,
+      cedula: prestamo.cedula,
+      nombres: prestamo.nombres,
+      total_financiamiento: prestamo.total_financiamiento,
+      numero_cuotas: prestamo.numero_cuotas,
+      modalidad_pago: prestamo.modalidad_pago,
+      fecha_requerimiento: prestamo.fecha_requerimiento
+    }
+    
+    try {
+      exportarAPDF(cuotas, prestamoInfo)
+      toast.success('Exportando a PDF...')
+    } catch (error) {
+      toast.error('Error al exportar a PDF')
+    }
   }
 
   if (prestamo.estado !== 'APROBADO') {
@@ -156,6 +200,10 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
           <Button variant="outline" size="sm" onClick={exportarExcel}>
             <Download className="h-4 w-4 mr-2" />
             Exportar Excel
+          </Button>
+          <Button variant="outline" size="sm" onClick={exportarPDF}>
+            <Download className="h-4 w-4 mr-2" />
+            Exportar PDF
           </Button>
           {!showFullTable && cuotas.length > 5 && (
             <Button variant="outline" size="sm" onClick={() => setShowFullTable(true)}>
