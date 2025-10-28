@@ -507,3 +507,32 @@ async def enviar_notificacion_con_plantilla(
         raise HTTPException(
             status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
+
+
+# ============================================
+# NOTIFICACIONES AUTOMÁTICAS
+# ============================================
+
+
+@router.post("/automaticas/procesar")
+def procesar_notificaciones_automaticas(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    """
+    Procesar todas las notificaciones automáticas pendientes
+    Este endpoint debe ser llamado por un scheduler (cron job)
+    """
+    try:
+        service = NotificacionAutomaticaService(db)
+        stats = service.procesar_notificaciones_automaticas()
+
+        return {
+            "mensaje": "Procesamiento de notificaciones automáticas completado",
+            "estadisticas": stats,
+        }
+
+    except Exception as e:
+        logger.error(f"Error procesando notificaciones automáticas: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
