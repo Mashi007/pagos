@@ -18,7 +18,7 @@ from app.models.pago import Pago
 from app.models.pago_auditoria import PagoAuditoria
 from app.models.prestamo import Prestamo
 from app.models.user import User
-from app.schemas.pago import PagoCreate, PagoUpdate, PagoResponse
+from app.schemas.pago import PagoCreate, PagoResponse, PagoUpdate
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

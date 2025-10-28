@@ -3,18 +3,18 @@ Endpoint para carga masiva de pagos desde Excel
 """
 
 import logging
-from typing import List
 from datetime import datetime
 from decimal import Decimal
+from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy.orm import Session
 import pandas as pd
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from openpyxl import load_workbook
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.models.pago import Pago
 from app.models.cliente import Cliente
+from app.models.pago import Pago
 from app.models.user import User
 
 router = APIRouter()
@@ -81,7 +81,7 @@ async def upload_pagos_excel(
                 # Parsear fecha
                 try:
                     fecha_pago = pd.to_datetime(fecha_pago_str).to_pydatetime()
-                except:
+                except Exception:
                     errores.append(f"Fila {index + 2}: Fecha inválida")
                     continue
 
