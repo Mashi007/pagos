@@ -11,6 +11,7 @@ from app.models.configuracion_sistema import ConfiguracionSistema
 from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.notificacion import Notificacion
 from app.models.pago import Pago
+from app.models.pago_auditoria import PagoAuditoria
 from app.models.prestamo import Prestamo
 from app.models.prestamo_auditoria import PrestamoAuditoria
 from app.models.prestamo_evaluacion import PrestamoEvaluacion
@@ -24,6 +25,7 @@ __all__ = [
     "PrestamoAuditoria",
     "PrestamoEvaluacion",
     "Pago",
+    "PagoAuditoria",
     "Cuota",
     "Aprobacion",
     "ConfiguracionSistema",

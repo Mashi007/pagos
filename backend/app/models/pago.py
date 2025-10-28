@@ -26,9 +26,13 @@ class Pago(Base):
     cedula_cliente = Column(String(CEDULA_LENGTH), nullable=False, index=True)
 
     # DATOS DEL PAGO
-    fecha_pago = Column(DateTime, nullable=False)
+    prestamo_id = Column(Integer, nullable=True, index=True)  # ID del crédito
+    fecha_pago = Column(DateTime, nullable=False)  # Fecha de pago (manual)
+    fecha_registro = Column(DateTime, default=func.now(), nullable=False)  # Fecha de registro (automático)
     monto_pagado = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
     numero_documento = Column(String(DOCUMENTO_LENGTH), nullable=False, index=True)
+    institucion_bancaria = Column(String(100), nullable=True)  # Institución bancaria
+    referencia_pago = Column(String(100), nullable=False)  # Referencia de pago (alphanumeric)
 
     # DOCUMENTO ADJUNTO
     documento_nombre = Column(String(DOCUMENTO_NOMBRE_LENGTH), nullable=True)
@@ -41,11 +45,14 @@ class Pago(Base):
     # ESTADO DE CONCILIACIÓN
     conciliado = Column(Boolean, default=False, nullable=False)
     fecha_conciliacion = Column(DateTime, nullable=True)
+    
+    # ESTADO DEL PAGO
+    estado = Column(String(20), default="PAGADO", nullable=False, index=True)  # PENDIENTE, PAGADO, PARCIAL, ADELANTADO
 
     # CONTROL Y AUDITORÍA
     activo = Column(Boolean, default=True, nullable=False)
     notas = Column(Text, nullable=True)
-    fecha_registro = Column(DateTime, default=func.now(), nullable=False)
+    usuario_registro = Column(String(100), nullable=False)  # Email del usuario que registró el pago
     fecha_actualizacion = Column(
         DateTime, default=func.now(), onupdate=func.now(), nullable=False
     )

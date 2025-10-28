@@ -1,136 +1,89 @@
-from typing import Optional
+"""
+Schemas para Pagos
+"""
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from datetime import datetime
+from decimal import Decimal
 
-# Constantes de validación
-MIN_CEDULA_LENGTH = 8
-MAX_CEDULA_LENGTH = 20
-MIN_DOCUMENTO_LENGTH = 1
-MAX_DOCUMENTO_LENGTH = 100
-MAX_DOCUMENTO_NOMBRE_LENGTH = 255
-MAX_DOCUMENTO_TIPO_LENGTH = 10
-MAX_DOCUMENTO_RUTA_LENGTH = 500
-MAX_NOTA_LENGTH = 1000
+from pydantic import BaseModel, Field
+
+from app.models.cuota import Cuota
+from app.models.pago import Pago
 
 
 class PagoBase(BaseModel):
+    """Schema base para pagos"""
 
-    cedula_cliente: str = Field(
-        ...,
-        min_length=MIN_CEDULA_LENGTH,
-        max_length=MAX_CEDULA_LENGTH,
-        description="Cédula del cliente",
-    )
-    monto_pagado: float = Field(..., gt=0, description="Monto pagado")
-    numero_documento: str = Field(
-        ...,
-        min_length=MIN_DOCUMENTO_LENGTH,
-        max_length=MAX_DOCUMENTO_LENGTH,
-        description="Número del documento",
-    )
-    documento_nombre: Optional[str] = Field(
-        None, max_length=MAX_DOCUMENTO_NOMBRE_LENGTH, description="Nombre del documento"
-    )
-    documento_tipo: Optional[str] = Field(
-        None, max_length=MAX_DOCUMENTO_TIPO_LENGTH, description="Tipo del documento"
-    )
-    documento_tamaño: Optional[int] = Field(
-        None, gt=0, description="Tamaño del documento en bytes"
-    )
-    documento_ruta: Optional[str] = Field(
-        None, max_length=MAX_DOCUMENTO_RUTA_LENGTH, description="Ruta del documento"
-    )
-    notas: Optional[str] = Field(None, description="Notas adicionales")
-
-    @field_validator("cedula_cliente")
-    @classmethod
-    def validate_cedula(cls, v):
-        if not v or len(v.strip()) < MIN_CEDULA_LENGTH:
-            raise ValueError
-        return v.strip().upper()
-
-    @field_validator("numero_documento")
-    @classmethod
-    def validate_numero_documento(cls, v):
-        if not v or len(v.strip()) < MIN_DOCUMENTO_LENGTH:
-            raise ValueError("Número de documento es requerido")
-        return v.strip()
-
-    @field_validator("documento_tipo")
-    @classmethod
-    def validate_documento_tipo(cls, v):
-        if v and v.upper() not in ["PNG", "JPG", "PDF"]:
-            raise ValueError("Tipo de documento debe ser PNG, JPG o PDF")
-        return v.upper() if v else v
+    cedula_cliente: str = Field(..., description="Cédula del cliente")
+    prestamo_id: int | None = Field(None, description="ID del préstamo")
+    fecha_pago: datetime = Field(..., description="Fecha de pago")
+    monto_pagado: Decimal = Field(..., description="Monto pagado")
+    numero_documento: str = Field(..., description="Número de documento")
+    institucion_bancaria: str | None = Field(None, description="Institución bancaria")
+    referencia_pago: str = Field(..., description="Referencia de pago")
+    notas: str | None = Field(None, description="Notas adicionales")
 
 
 class PagoCreate(PagoBase):
     """Schema para crear un pago"""
 
+    pass
+
 
 class PagoUpdate(BaseModel):
     """Schema para actualizar un pago"""
 
-    monto_pagado: Optional[float] = Field(None, gt=0)
-    numero_documento: Optional[str] = Field(None, min_length=1, max_length=100)
-    documento_nombre: Optional[str] = Field(None, max_length=255)
-    documento_tipo: Optional[str] = Field(None, max_length=10)
-    documento_tamaño: Optional[int] = Field(None, ge=0)
-    documento_ruta: Optional[str] = Field(None, max_length=500)
-    notas: Optional[str] = None
-    activo: Optional[bool] = None
+    fecha_pago: datetime | None = None
+    monto_pagado: Decimal | None = None
+    numero_documento: str | None = None
+    institucion_bancaria: str | None = None
+    referencia_pago: str | None = None
+    notas: str | None = None
 
 
 class PagoResponse(PagoBase):
-    """Schema para respuesta de pago"""
+    """Schema para respuesta de un pago"""
 
     id: int
+    fecha_registro: datetime
+    estado: str
     conciliado: bool
+    fecha_conciliacion: datetime | None
+    documento_nombre: str | None
+    documento_tipo: str | None
+    documento_ruta: str | None
+    usuario_registro: str
     activo: bool
+    fecha_actualizacion: datetime
 
-    model_config = ConfigDict(from_attributes=True)
-
-
-class PagoListResponse(BaseModel):
-
-    total: int
-    pagina: int
-    por_pagina: int
-    total_paginas: int
+    class Config:
+        from_attributes = True
 
 
-class ConciliacionBase(BaseModel):
-    """Schema base para conciliación"""
+class PagoWithCuotas(PagoResponse):
+    """Schema para pago con información de cuotas asociadas"""
 
-    cedula_cliente: str = Field(..., min_length=8, max_length=20)
-    numero_documento_anterior: str = Field(..., min_length=1, max_length=100)
-    numero_documento_nuevo: str = Field(..., min_length=1, max_length=100)
-    cedula_nueva: str = Field(..., min_length=8, max_length=20)
-    nota: str = Field(..., min_length=1, description="Nota explicativa")
+    cuotas: list["CuotaResponse"] = []
 
-
-class ConciliacionCreate(ConciliacionBase):
-    """Schema para crear conciliación"""
+    class Config:
+        from_attributes = True
 
 
-class ConciliacionResponse(ConciliacionBase):
-    """Schema para respuesta de conciliación"""
+class CuotaResponse(BaseModel):
+    """Schema para respuesta de cuota"""
 
     id: int
-    responsable: str
-    pago_id: int
+    prestamo_id: int
+    numero_cuota: int
+    fecha_vencimiento: datetime
+    fecha_pago: datetime | None
+    monto_cuota: Decimal
+    total_pagado: Decimal
+    estado: str
 
-    model_config = ConfigDict(from_attributes=True)
-
-    total_dolares: float
-    cantidad_conciliada: int
-    cantidad_no_conciliada: int
+    class Config:
+        from_attributes = True
 
 
-class ResumenCliente(BaseModel):
-
-    cedula_cliente: str
-    total_pagado: float
-    total_conciliado: float
-    total_pendiente: float
-    estado_conciliacion: str  # CONCILIADO, PENDIENTE, PARCIAL
+# Actualizar referencias circulares
+PagoWithCuotas.model_rebuild()

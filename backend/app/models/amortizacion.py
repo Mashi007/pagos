@@ -74,7 +74,7 @@ class Cuota(Base):
     # Estado
     estado = Column(
         String(20), nullable=False, default="PENDIENTE", index=True
-    )  # PENDIENTE, PAGADA, VENCIDA, PARCIAL
+    )  # PENDIENTE, PAGADO, ATRASADO, PARCIAL, ADELANTADO
 
     # Información adicional
     observaciones = Column(String(500), nullable=True)
