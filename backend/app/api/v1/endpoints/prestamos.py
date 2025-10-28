@@ -797,14 +797,14 @@ def evaluar_riesgo_prestamo(
             # Aplicar condiciones
             # NOTA: No cambiar numero_cuotas, mantener el original del préstamo
             # El plazo_maximo solo es informativo, no se aplica para aprobación automática
-            
+
             if condiciones.get("tasa_interes"):
                 prestamo.tasa_interes = Decimal(str(condiciones["tasa_interes"]))
-            
+
             if condiciones.get("fecha_base_calculo"):
                 fecha_str = condiciones["fecha_base_calculo"]
                 prestamo.fecha_base_calculo = date_parser.parse(fecha_str).date()
-            
+
             # Cambiar estado a APROBADO (sin modificar numero_cuotas)
             procesar_cambio_estado(
                 prestamo,
