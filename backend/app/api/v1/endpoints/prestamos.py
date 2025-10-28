@@ -188,7 +188,7 @@ def procesar_cambio_estado(
 
                 generar_amortizacion(prestamo, fecha, db)
                 logger.info(
-                    f"Tabla de amortización generada para préstamo {prestamo.id}"
+                    f"Tabla de amortización generada para préstamo {prestamo.id} con fecha de desembolso: {fecha}"
                 )
             except Exception as e:
                 logger.error(f"Error generando amortización: {str(e)}")

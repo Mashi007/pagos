@@ -493,6 +493,77 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                   </div>
                 </div>
 
+                {prestamo && prestamo.estado === 'APROBADO' && (
+                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <h4 className="font-semibold text-blue-900 mb-2">📅 Fecha de Desembolso (Día/Mes/Año)</h4>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Día <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={formData.fecha_base_calculo ? formData.fecha_base_calculo.split('-')[2] : ''}
+                          onChange={(e) => {
+                            const dia = parseInt(e.target.value) || 1
+                            const fechaActual = formData.fecha_base_calculo || getCurrentDate()
+                            const [año, mes] = fechaActual.split('-')
+                            const nuevaFecha = `${año}-${mes}-${String(dia).padStart(2, '0')}`
+                            setFormData({ ...formData, fecha_base_calculo: nuevaFecha })
+                          }}
+                          disabled={isReadOnly}
+                          placeholder="DD"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Mes <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          type="number"
+                          min="1"
+                          max="12"
+                          value={formData.fecha_base_calculo ? formData.fecha_base_calculo.split('-')[1] : ''}
+                          onChange={(e) => {
+                            const mes = parseInt(e.target.value) || 1
+                            const fechaActual = formData.fecha_base_calculo || getCurrentDate()
+                            const [año, , dia] = fechaActual.split('-')
+                            const nuevaFecha = `${año}-${String(mes).padStart(2, '0')}-${dia}`
+                            setFormData({ ...formData, fecha_base_calculo: nuevaFecha })
+                          }}
+                          disabled={isReadOnly}
+                          placeholder="MM"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Año <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          type="number"
+                          min="2024"
+                          max="2030"
+                          value={formData.fecha_base_calculo ? formData.fecha_base_calculo.split('-')[0] : ''}
+                          onChange={(e) => {
+                            const año = parseInt(e.target.value) || new Date().getFullYear()
+                            const fechaActual = formData.fecha_base_calculo || getCurrentDate()
+                            const [, mes, dia] = fechaActual.split('-')
+                            const nuevaFecha = `${año}-${mes}-${dia}`
+                            setFormData({ ...formData, fecha_base_calculo: nuevaFecha })
+                          }}
+                          disabled={isReadOnly}
+                          placeholder="YYYY"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-blue-700 mt-2">
+                      Esta es la fecha desde la cual se calcularán las cuotas de la tabla de amortización
+                    </p>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">Producto</label>
