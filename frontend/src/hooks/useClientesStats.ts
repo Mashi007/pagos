@@ -31,7 +31,8 @@ export function useClientesStats() {
       
       return stats
     },
-    staleTime: STALE_TIME_STATS,
-    refetchOnWindowFocus: false
+    staleTime: 0, // Cambiado a 0 para que siempre se actualice
+    refetchOnWindowFocus: true, // Refrescar cuando el usuario vuelve a la ventana
+    refetchOnMount: true // Refrescar cuando el componente se monta
   })
 }
