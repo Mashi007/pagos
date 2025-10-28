@@ -263,6 +263,51 @@ def registrar_auditoria_pago(
     db.commit()
 
 
+@router.get("/stats")
+def obtener_estadisticas_pagos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Obtener estadísticas de pagos
+    """
+    try:
+        # Total de pagos
+        total_pagos = db.query(Pago).count()
+
+        # Pagos por estado
+        pagos_por_estado = (
+            db.query(Pago.estado, func.count(Pago.id)).group_by(Pago.estado).all()
+        )
+
+        # Monto total pagado
+        total_pagado = db.query(func.sum(Pago.monto_pagado)).scalar() or Decimal("0.00")
+
+        # Pagos del día actual
+        hoy = datetime.now().date()
+        pagos_hoy = db.query(func.sum(Pago.monto_pagado)).filter(
+            func.date(Pago.fecha_pago) == hoy
+        ).scalar() or Decimal("0.00")
+
+        # Cuotas pagadas vs pendientes
+        cuotas_pagadas = db.query(Cuota).filter(Cuota.estado == "PAGADO").count()
+        cuotas_pendientes = db.query(Cuota).filter(Cuota.estado == "PENDIENTE").count()
+        cuotas_atrasadas = db.query(Cuota).filter(Cuota.estado == "ATRASADO").count()
+
+        return {
+            "total_pagos": total_pagos,
+            "pagos_por_estado": {estado: count for estado, count in pagos_por_estado},
+            "total_pagado": float(total_pagado),
+            "pagos_hoy": float(pagos_hoy),
+            "cuotas_pagadas": cuotas_pagadas,
+            "cuotas_pendientes": cuotas_pendientes,
+            "cuotas_atrasadas": cuotas_atrasadas,
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo estadísticas: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
 @router.get("/auditoria/{pago_id}", response_model=list[dict])
 def obtener_auditoria_pago(
     pago_id: int,
