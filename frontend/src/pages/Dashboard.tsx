@@ -32,6 +32,8 @@ import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { formatCurrency, formatPercentage } from '@/utils'
 import { apiClient } from '@/services/api'
 import { userService, User } from '@/services/userService'
+import { PagosKPIs } from '@/components/pagos/PagosKPIs'
+import { pagoService } from '@/services/pagoService'
 
 // Tipos para Dashboard
 interface DashboardData {
@@ -316,6 +318,13 @@ export function Dashboard() {
 
   const progressPercentage = (mockData.avance_meta / mockData.meta_mensual) * 100
 
+  // Query para estadísticas de pagos
+  const { data: pagosStats, isLoading: pagosStatsLoading } = useQuery({
+    queryKey: ['pagos-stats'],
+    queryFn: () => pagoService.getStats(),
+    refetchInterval: 60000, // Refrescar cada minuto
+  })
+
   return (
     <div className="space-y-6">
       {/* Header con controles */}
@@ -396,6 +405,19 @@ export function Dashboard() {
           </motion.div>
         ))}
       </div>
+
+      {/* KPIs de Pagos */}
+      {pagosStats && (
+        <PagosKPIs
+          totalPagos={pagosStats.total_pagos}
+          totalPagado={pagosStats.total_pagado}
+          pagosHoy={pagosStats.pagos_hoy}
+          cuotasPagadas={pagosStats.cuotas_pagadas}
+          cuotasPendientes={pagosStats.cuotas_pendientes}
+          cuotasAtrasadas={pagosStats.cuotas_atrasadas}
+          isLoading={pagosStatsLoading}
+        />
+      )}
 
       {/* Métricas Financieras Detalladas */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

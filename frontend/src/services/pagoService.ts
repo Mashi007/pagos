@@ -79,6 +79,18 @@ class PagoService {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   }
+
+  async getStats(): Promise<{
+    total_pagos: number
+    pagos_por_estado: Record<string, number>
+    total_pagado: number
+    pagos_hoy: number
+    cuotas_pagadas: number
+    cuotas_pendientes: number
+    cuotas_atrasadas: number
+  }> {
+    return await apiClient.get(`${this.baseUrl}/stats`)
+  }
 }
 
 export const pagoService = new PagoService()
