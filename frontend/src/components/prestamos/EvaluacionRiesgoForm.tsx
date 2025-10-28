@@ -213,6 +213,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
 
       const response = await prestamoService.evaluarRiesgo(prestamo.id, datosEvaluacion)
       setResultado(response)
+      // Cambiar automáticamente a la pestaña de resultado
+      setTimeout(() => setShowSection('resultado'), 100)
       toast.success('✅ Evaluación completada exitosamente')
     } catch (error: any) {
       toast.error(error.message || 'Error al evaluar riesgo')
@@ -229,6 +231,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     { id: 'criterio5', label: 'Criterio 5: Perfil Sociodemográfico', puntos: '17' },
     { id: 'criterio6', label: 'Criterio 6: Edad', puntos: '10' },
     { id: 'criterio7', label: 'Criterio 7: Capacidad de Maniobra', puntos: '5' },
+    ...(resultado ? [{ id: 'resultado', label: 'Resultado de Evaluación', puntos: '' }] : []),
   ]
 
   return (
@@ -272,7 +275,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     : 'bg-white text-gray-600 hover:bg-gray-100'
                 }`}
               >
-                {seccion.label.split(':')[0]} ({seccion.puntos} pts)
+                {seccion.label.split(':')[0]} {seccion.puntos ? `(${seccion.puntos} pts)` : ''}
               </button>
             ))}
           </div>
@@ -1054,9 +1057,9 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
           </Card>
           )}
 
-          {/* RESULTADO */}
-          {resultado && (
-            <Card className="border-green-300 bg-green-50 mt-4">
+          {/* RESULTADO - Nueva Pestaña */}
+          {showSection === 'resultado' && resultado && (
+            <Card className="border-green-300 bg-green-50">
                 <CardHeader>
                 <CardTitle className="text-green-700">Resultado de la Evaluación</CardTitle>
                 </CardHeader>
@@ -1080,13 +1083,77 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                         {resultado.decision_final}
                       </Badge>
                     </div>
-                    </div>
+                </div>
                 {resultado.requisitos_adicionales && (
                   <div className="bg-white p-3 rounded border">
                     <p className="text-sm font-medium mb-2">Requisitos Adicionales:</p>
                     <p className="text-sm">{resultado.requisitos_adicionales}</p>
-                    </div>
+                  </div>
                 )}
+                <div className="bg-white p-3 rounded border">
+                  <h5 className="font-semibold mb-2">Detalle de Criterios:</h5>
+                  <ul className="list-disc list-inside text-sm space-y-1">
+                    <li>
+                      <strong>1. Capacidad de Pago:</strong>{' '}
+                      {resultado.detalle_criterios?.ratio_endeudamiento?.puntos?.toFixed(1)} pts (Endeudamiento) +{' '}
+                      {resultado.detalle_criterios?.ratio_cobertura?.puntos?.toFixed(1)} pts (Cobertura)
+                      (Total: {(resultado.detalle_criterios?.ratio_endeudamiento?.puntos + resultado.detalle_criterios?.ratio_cobertura?.puntos).toFixed(1)}/29 pts)
+                    </li>
+                    <li>
+                      <strong>2. Estabilidad Laboral:</strong>{' '}
+                      {resultado.detalle_criterios?.antiguedad_trabajo?.puntos?.toFixed(1)} pts (Antigüedad) +{' '}
+                      {resultado.detalle_criterios?.tipo_empleo?.puntos?.toFixed(1)} pts (Tipo Empleo) +{' '}
+                      {resultado.detalle_criterios?.sector_economico?.puntos?.toFixed(1)} pts (Sector)
+                      (Total: {(resultado.detalle_criterios?.antiguedad_trabajo?.puntos + resultado.detalle_criterios?.tipo_empleo?.puntos + resultado.detalle_criterios?.sector_economico?.puntos).toFixed(1)}/23 pts)
+                    </li>
+                    <li>
+                      <strong>3. Referencias Personales:</strong>{' '}
+                      {resultado.detalle_criterios?.referencias?.puntos?.toFixed(1)}/9 pts
+                      (Ref1: {resultado.detalle_criterios?.referencias?.referencia1_calificacion}, Ref2: {resultado.detalle_criterios?.referencias?.referencia2_calificacion}, Ref3: {resultado.detalle_criterios?.referencias?.referencia3_calificacion})
+                    </li>
+                    <li>
+                      <strong>4. Arraigo Geográfico:</strong>{' '}
+                      {resultado.detalle_criterios?.arraigo_vivienda?.toFixed(1)} pts (Vivienda) +{' '}
+                      {resultado.detalle_criterios?.arraigo_laboral?.toFixed(1)} pts (Laboral)
+                      (Total: {(resultado.detalle_criterios?.arraigo_familiar + resultado.detalle_criterios?.arraigo_laboral).toFixed(1)}/7 pts)
+                    </li>
+                    <li>
+                      <strong>5. Perfil Sociodemográfico:</strong>{' '}
+                      {resultado.detalle_criterios?.vivienda?.puntos?.toFixed(1)} pts (Vivienda) +{' '}
+                      {resultado.detalle_criterios?.estado_civil?.puntos?.toFixed(1)} pts (Estado Civil) +{' '}
+                      {resultado.detalle_criterios?.hijos?.puntos?.toFixed(1)} pts (Hijos)
+                      (Total: {(resultado.detalle_criterios?.vivienda?.puntos + resultado.detalle_criterios?.estado_civil?.puntos + resultado.detalle_criterios?.hijos?.puntos).toFixed(1)}/17 pts)
+                    </li>
+                    <li>
+                      <strong>6. Edad del Cliente:</strong>{' '}
+                      {resultado.detalle_criterios?.edad?.puntos?.toFixed(1)}/10 pts ({resultado.detalle_criterios?.edad?.cliente} años)
+                    </li>
+                    <li>
+                      <strong>7. Capacidad de Maniobra:</strong>{' '}
+                      {resultado.detalle_criterios?.capacidad_maniobra?.puntos?.toFixed(1)}/5 pts ({resultado.detalle_criterios?.capacidad_maniobra?.porcentaje_residual?.toFixed(2)}% residual)
+                    </li>
+                  </ul>
+                </div>
+                <div className="grid grid-cols-2 gap-4 bg-blue-50 p-3 rounded border border-blue-200">
+                    <div>
+                    <label className="text-sm text-gray-600">Tasa de Interés Aplicada</label>
+                    <p className="text-lg font-semibold text-blue-700">
+                      {resultado.tasa_interes_aplicada?.toFixed(2) || 'N/A'}%
+                      </p>
+                    </div>
+                    <div>
+                    <label className="text-sm text-gray-600">Plazo Máximo (meses)</label>
+                    <p className="text-lg font-semibold text-blue-700">
+                      {resultado.plazo_maximo || 'N/A'}
+                    </p>
+                    </div>
+                    <div>
+                    <label className="text-sm text-gray-600">Enganche Mínimo (%)</label>
+                    <p className="text-lg font-semibold text-blue-700">
+                      {resultado.enganche_minimo?.toFixed(2) || 'N/A'}%
+                    </p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
           )}
