@@ -450,9 +450,7 @@ async def enviar_notificacion_con_plantilla(
             raise HTTPException(status_code=404, detail="Plantilla no encontrada")
 
         if not plantilla.activa:
-            raise HTTPException(
-                status_code=400, detail="La plantilla no está activa"
-            )
+            raise HTTPException(status_code=400, detail="La plantilla no está activa")
 
         # Obtener cliente
         cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
