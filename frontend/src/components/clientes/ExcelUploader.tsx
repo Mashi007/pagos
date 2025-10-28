@@ -796,21 +796,46 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         }
         return { isValid: true }
 
-      case 'direccion':
-        if (!value.trim()) return { isValid: false, message: 'Dirección requerida' }
-        if (value.trim().length < 5) return { isValid: false, message: 'Mínimo 5 caracteres' }
-        return { isValid: true }
-
       case 'fecha_nacimiento':
         if (!value.trim()) return { isValid: false, message: 'Fecha requerida' }
-        const fechaNac = new Date(value)
-        const hoyNac = new Date()
-        if (isNaN(fechaNac.getTime())) {
-          return { isValid: false, message: 'Formato de fecha inválido' }
+        
+        // Validar formato DD/MM/YYYY
+        const fechaFormatRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/
+        if (!fechaFormatRegex.test(value.trim())) {
+          return { isValid: false, message: 'Formato: DD/MM/YYYY (ej: 01/01/2025)' }
         }
+        
+        // Extraer día, mes y año
+        const [, dia, mes, ano] = value.trim().match(fechaFormatRegex)!
+        const diaNum = parseInt(dia, 10)
+        const mesNum = parseInt(mes, 10)
+        const anoNum = parseInt(ano, 10)
+        
+        // Validar rangos
+        if (diaNum < 1 || diaNum > 31) {
+          return { isValid: false, message: 'Día inválido (1-31)' }
+        }
+        if (mesNum < 1 || mesNum > 12) {
+          return { isValid: false, message: 'Mes inválido (1-12)' }
+        }
+        if (anoNum < 1900 || anoNum > 2100) {
+          return { isValid: false, message: 'Año inválido (1900-2100)' }
+        }
+        
+        // Crear fecha y validar que sea pasada
+        const fechaNac = new Date(anoNum, mesNum - 1, diaNum)
+        const hoyNac = new Date()
+        hoyNac.setHours(0, 0, 0, 0)
+        
         if (fechaNac >= hoyNac) {
           return { isValid: false, message: 'Debe ser una fecha pasada' }
         }
+        
+        // Validar que la fecha sea válida (ej: no 31/02/2025)
+        if (fechaNac.getDate() !== diaNum || fechaNac.getMonth() !== mesNum - 1 || fechaNac.getFullYear() !== anoNum) {
+          return { isValid: false, message: 'Fecha inválida (ej: 31/02 no existe)' }
+        }
+        
         return { isValid: true }
 
       case 'ocupacion':
@@ -1597,9 +1622,29 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                             {/* Fecha Nacimiento */}
                             <td className="border p-2">
                               <input
-                                type="date"
+                                type="text"
                                 value={row.fecha_nacimiento}
-                                onChange={(e) => updateCellValue(index, 'fecha_nacimiento', e.target.value)}
+                                onChange={(e) => {
+                                  let value = e.target.value
+                                  // Solo permitir dígitos
+                                  value = value.replace(/\D/g, '')
+                                  // Aplicar formato DD/MM/YYYY
+                                  if (value.length <= 2) {
+                                    // Solo día
+                                    updateCellValue(index, 'fecha_nacimiento', value)
+                                  } else if (value.length <= 4) {
+                                    // Día y mes: DD/MM
+                                    updateCellValue(index, 'fecha_nacimiento', value.slice(0, 2) + '/' + value.slice(2))
+                                  } else if (value.length <= 8) {
+                                    // Día, mes y año: DD/MM/YYYY
+                                    updateCellValue(index, 'fecha_nacimiento', value.slice(0, 2) + '/' + value.slice(2, 4) + '/' + value.slice(4, 8))
+                                  } else {
+                                    // Limitar a 8 dígitos (10 caracteres con barras)
+                                    updateCellValue(index, 'fecha_nacimiento', value.slice(0, 2) + '/' + value.slice(2, 4) + '/' + value.slice(4, 8))
+                                  }
+                                }}
+                                placeholder="DD/MM/YYYY"
+                                maxLength={10}
                                 className={`w-full text-sm p-2 border rounded min-w-[80px] ${
                                   row._validation.fecha_nacimiento?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
