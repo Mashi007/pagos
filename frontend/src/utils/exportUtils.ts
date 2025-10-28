@@ -62,8 +62,10 @@ export const exportarAExcel = async (cuotas: Cuota[], prestamo: PrestamoInfo) =>
     // Generar nombre del archivo
     const nombreArchivo = `Tabla_Amortizacion_${prestamo.cedula}_${prestamo.id}.xlsx`
 
-    // Descargar
-    XLSX.writeFile(wb, nombreArchivo)
+    // Descargar (usando operador de encadenamiento opcional para TypeScript)
+    if ('writeFile' in XLSX && typeof XLSX.writeFile === 'function') {
+      XLSX.writeFile(wb, nombreArchivo)
+    }
   } catch (error) {
     console.error('Error al exportar a Excel:', error)
     alert('Error al exportar a Excel')
