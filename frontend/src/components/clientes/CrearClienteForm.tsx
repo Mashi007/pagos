@@ -152,13 +152,30 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       // Dividir nombres si vienen unificados de la BD
       let nombresValue = cliente.nombres || ''
       
+      // Función local para convertir fecha
+      const convertirFechaLocal = (fechaISO: string): string => {
+        // Si ya está en formato DD/MM/YYYY, devolverla tal cual
+        if (fechaISO.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+          return fechaISO
+        }
+        // Si está en formato ISO (YYYY-MM-DD), convertir
+        if (fechaISO.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          const partes = fechaISO.split('-')
+          if (partes.length === 3) {
+            const [ano, mes, dia] = partes
+            return `${dia}/${mes}/${ano}`
+          }
+        }
+        return fechaISO
+      }
+      
       setFormData({
         cedula: cliente.cedula || '',
         nombres: nombresValue,  // ✅ nombres unificados
         telefono: cliente.telefono || '',
         email: cliente.email || '',
         direccion: cliente.direccion || '',
-        fechaNacimiento: convertirFechaDeISO(cliente.fecha_nacimiento || ''), // ✅ Convertir ISO a DD/MM/YYYY
+        fechaNacimiento: convertirFechaLocal(cliente.fecha_nacimiento || ''), // ✅ Convertir ISO a DD/MM/YYYY
         ocupacion: cliente.ocupacion || '',
         modeloVehiculo: cliente.modelo_vehiculo || '',
         concesionario: cliente.concesionario || '',
@@ -167,7 +184,8 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         notas: cliente.notas || 'NA'
       })
     }
-  }, [cliente, convertirFechaDeISO])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cliente])
   
   // Datos de configuración
   const [concesionarios, setConcesionarios] = useState<Concesionario[]>([])
