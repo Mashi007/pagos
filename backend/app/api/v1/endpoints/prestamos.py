@@ -776,33 +776,35 @@ def evaluar_riesgo_prestamo(
         # Si la decisión es APROBADO_AUTOMATICO, actualizar estado automáticamente
         if evaluacion.decision_final == "APROBADO_AUTOMATICO":
             logger.info(f"Aprobación automática detectada para préstamo {prestamo_id}")
-            
+
             # Aplicar condiciones desde la evaluación
             condiciones = {
                 "plazo_maximo": evaluacion.plazo_maximo,
                 "tasa_interes": float(evaluacion.tasa_interes_aplicada or 0),
                 "estado": "APROBADO",
-                "observaciones": f"Aprobación automática por evaluación de riesgo (Puntuación: {evaluacion.puntuacion_total}/100, Riesgo: {evaluacion.clasificacion_riesgo})"
+                "observaciones": f"Aprobación automática por evaluación de riesgo (Puntuación: {evaluacion.puntuacion_total}/100, Riesgo: {evaluacion.clasificacion_riesgo})",
             }
-            
+
             # Establecer fecha_base_calculo si no existe (fecha actual + 1 mes)
             if not prestamo.fecha_base_calculo:
                 fecha_calculo = date.today() + relativedelta(months=1)
                 prestamo.fecha_base_calculo = fecha_calculo
                 condiciones["fecha_base_calculo"] = fecha_calculo.isoformat()
                 logger.info(f"Fecha base de cálculo establecida: {fecha_calculo}")
-            
+
             # Aplicar condiciones
             if condiciones.get("plazo_maximo"):
-                actualizar_cuotas_segun_plazo_maximo(prestamo, condiciones["plazo_maximo"], db)
-            
+                actualizar_cuotas_segun_plazo_maximo(
+                    prestamo, condiciones["plazo_maximo"], db
+                )
+
             if condiciones.get("tasa_interes"):
                 prestamo.tasa_interes = Decimal(str(condiciones["tasa_interes"]))
-            
+
             if condiciones.get("fecha_base_calculo"):
                 fecha_str = condiciones["fecha_base_calculo"]
                 prestamo.fecha_base_calculo = date_parser.parse(fecha_str).date()
-            
+
             # Cambiar estado a APROBADO
             procesar_cambio_estado(
                 prestamo,
@@ -810,14 +812,18 @@ def evaluar_riesgo_prestamo(
                 current_user,
                 db,
                 plazo_maximo_meses=condiciones.get("plazo_maximo"),
-                tasa_interes=Decimal(str(condiciones["tasa_interes"])) if condiciones.get("tasa_interes") else None,
+                tasa_interes=(
+                    Decimal(str(condiciones["tasa_interes"]))
+                    if condiciones.get("tasa_interes")
+                    else None
+                ),
                 fecha_base_calculo=prestamo.fecha_base_calculo,
             )
-            
+
             # Guardar cambios
             db.commit()
             db.refresh(prestamo)
-            
+
             logger.info(f"Préstamo {prestamo_id} aprobado automáticamente")
 
         return {
