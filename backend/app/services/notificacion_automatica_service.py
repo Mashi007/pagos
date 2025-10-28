@@ -7,8 +7,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from sqlalchemy.orm import Session
 from pytz import timezone
+from sqlalchemy.orm import Session
 
 from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
