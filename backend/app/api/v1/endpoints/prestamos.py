@@ -839,7 +839,9 @@ def evaluar_riesgo_prestamo(
                 # Criterio 7: Capacidad de Maniobra (5 puntos)
                 "capacidad_maniobra": {
                     "puntos": float(evaluacion.enganche_garantias_puntos or 0),
-                    "porcentaje_residual": float(evaluacion.enganche_garantias_calculo or 0),
+                    "porcentaje_residual": float(
+                        evaluacion.enganche_garantias_calculo or 0
+                    ),
                 },
             },
         }
