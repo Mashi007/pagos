@@ -9,8 +9,14 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
 from app.models.notificacion import Notificacion
+from app.models.notificacion_plantilla import NotificacionPlantilla
 from app.models.prestamo import Prestamo
 from app.models.user import User
+from app.schemas.notificacion_plantilla import (
+    NotificacionPlantillaCreate,
+    NotificacionPlantillaResponse,
+    NotificacionPlantillaUpdate,
+)
 from app.services.email_service import EmailService
 from app.services.whatsapp_service import WhatsAppService
 
@@ -261,6 +267,242 @@ def obtener_estadisticas_notificaciones(
 
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
+
+
+# ============================================
+# PLANTILLAS DE NOTIFICACIONES
+# ============================================
+
+
+@router.get("/plantillas", response_model=list[NotificacionPlantillaResponse])
+def listar_plantillas(
+    tipo: Optional[str] = Query(None, description="Filtrar por tipo"),
+    solo_activas: bool = Query(True, description="Solo plantillas activas"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Listar plantillas de notificaciones"""
+    try:
+        query = db.query(NotificacionPlantilla)
+
+        if solo_activas:
+            query = query.filter(NotificacionPlantilla.activa == True)
+
+        if tipo:
+            query = query.filter(NotificacionPlantilla.tipo == tipo)
+
+        plantillas = query.order_by(NotificacionPlantilla.nombre).all()
+        return plantillas
+
+    except Exception as e:
+        logger.error(f"Error listando plantillas: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.post("/plantillas", response_model=NotificacionPlantillaResponse)
+def crear_plantilla(
+    plantilla: NotificacionPlantillaCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Crear nueva plantilla de notificación"""
+    try:
+        # Verificar si ya existe una plantilla con el mismo nombre
+        existe = (
+            db.query(NotificacionPlantilla)
+            .filter(NotificacionPlantilla.nombre == plantilla.nombre)
+            .first()
+        )
+        if existe:
+            raise HTTPException(
+                status_code=400, detail="Ya existe una plantilla con este nombre"
+            )
+
+        nueva_plantilla = NotificacionPlantilla(**plantilla.model_dump())
+        db.add(nueva_plantilla)
+        db.commit()
+        db.refresh(nueva_plantilla)
+
+        return nueva_plantilla
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creando plantilla: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.put("/plantillas/{plantilla_id}", response_model=NotificacionPlantillaResponse)
+def actualizar_plantilla(
+    plantilla_id: int,
+    plantilla: NotificacionPlantillaUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Actualizar plantilla de notificación"""
+    try:
+        plantilla_existente = (
+            db.query(NotificacionPlantilla)
+            .filter(NotificacionPlantilla.id == plantilla_id)
+            .first()
+        )
+
+        if not plantilla_existente:
+            raise HTTPException(status_code=404, detail="Plantilla no encontrada")
+
+        # Actualizar solo campos proporcionados
+        update_data = plantilla.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(plantilla_existente, key, value)
+
+        db.commit()
+        db.refresh(plantilla_existente)
+
+        return plantilla_existente
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error actualizando plantilla: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.delete("/plantillas/{plantilla_id}")
+def eliminar_plantilla(
+    plantilla_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Eliminar plantilla de notificación"""
+    try:
+        plantilla = (
+            db.query(NotificacionPlantilla)
+            .filter(NotificacionPlantilla.id == plantilla_id)
+            .first()
+        )
+
+        if not plantilla:
+            raise HTTPException(status_code=404, detail="Plantilla no encontrada")
+
+        db.delete(plantilla)
+        db.commit()
+
+        return {"mensaje": "Plantilla eliminada exitosamente"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error eliminando plantilla: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/plantillas/{plantilla_id}", response_model=NotificacionPlantillaResponse)
+def obtener_plantilla(
+    plantilla_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener plantilla específica"""
+    try:
+        plantilla = (
+            db.query(NotificacionPlantilla)
+            .filter(NotificacionPlantilla.id == plantilla_id)
+            .first()
+        )
+
+        if not plantilla:
+            raise HTTPException(status_code=404, detail="Plantilla no encontrada")
+
+        return plantilla
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error obteniendo plantilla: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.post("/plantillas/{plantilla_id}/enviar")
+async def enviar_notificacion_con_plantilla(
+    plantilla_id: int,
+    cliente_id: int,
+    variables: dict,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Enviar notificación usando una plantilla"""
+    try:
+        # Obtener plantilla
+        plantilla = (
+            db.query(NotificacionPlantilla)
+            .filter(NotificacionPlantilla.id == plantilla_id)
+            .first()
+        )
+
+        if not plantilla:
+            raise HTTPException(status_code=404, detail="Plantilla no encontrada")
+
+        if not plantilla.activa:
+            raise HTTPException(
+                status_code=400, detail="La plantilla no está activa"
+            )
+
+        # Obtener cliente
+        cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+
+        if not cliente:
+            raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+        # Reemplazar variables en el asunto y cuerpo
+        asunto = plantilla.asunto
+        cuerpo = plantilla.cuerpo
+
+        for key, value in variables.items():
+            asunto = asunto.replace(f"{{{{{key}}}}}", str(value))
+            cuerpo = cuerpo.replace(f"{{{{{key}}}}}", str(value))
+
+        # Crear registro de notificación
+        nueva_notif = Notificacion(
+            cliente_id=cliente_id,
+            tipo=plantilla.tipo,
+            mensaje=cuerpo,
+            estado="PENDIENTE",
+        )
+        db.add(nueva_notif)
+        db.commit()
+        db.refresh(nueva_notif)
+
+        # Enviar email en background
+        if cliente.email:
+            email_service = EmailService()
+            background_tasks.add_task(
+                email_service.send_email,
+                to_emails=[str(cliente.email)],
+                subject=asunto,
+                body=cuerpo,
+                is_html=True,
+            )
+
+        logger.info(f"Notificación enviada usando plantilla {plantilla_id}")
+
+        return {
+            "mensaje": "Notificación enviada",
+            "cliente_id": cliente_id,
+            "asunto": asunto,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error enviando notificación con plantilla: {e}")
         raise HTTPException(
             status_code=500, detail=f"Error interno del servidor: {str(e)}"
         )
