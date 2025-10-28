@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Settings,
@@ -110,11 +111,20 @@ const mockConfiguracion = {
 }
 
 export function Configuracion() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [configuracion, setConfiguracion] = useState(mockConfiguracion)
   const [configuracionGeneral, setConfiguracionGeneral] = useState<ConfiguracionGeneral | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [seccionActiva, setSeccionActiva] = useState('general')
+  
+  // Leer el parámetro tab de la URL
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab === 'email') {
+      setSeccionActiva('emailConfig')
+    }
+  }, [searchParams])
   const [mostrarPassword, setMostrarPassword] = useState(false)
   const [cambiosPendientes, setCambiosPendientes] = useState(false)
   const [submenuAbierto, setSubmenuAbierto] = useState(false)

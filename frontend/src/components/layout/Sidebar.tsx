@@ -25,6 +25,7 @@ import {
   Building,
   Car,
   CheckCircle,
+  Mail,
 } from 'lucide-react'
 import { cn } from '@/utils'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
@@ -108,6 +109,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       children: [
         { title: 'General', href: '/configuracion', icon: Settings },
         { title: 'Validadores', href: '/validadores', icon: CheckCircle },
+        { title: 'Configuración Email', href: '/configuracion?tab=email', icon: Mail },
         { title: 'Analistas', href: '/analistas', icon: Users },
         { title: 'Concesionarios', href: '/concesionarios', icon: Building },
         { title: 'Modelos de Vehículos', href: '/modelos-vehiculos', icon: Car },
