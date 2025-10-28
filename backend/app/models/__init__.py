@@ -10,6 +10,7 @@ from app.models.concesionario import Concesionario
 from app.models.configuracion_sistema import ConfiguracionSistema
 from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.notificacion import Notificacion
+from app.models.notificacion_plantilla import NotificacionPlantilla
 from app.models.pago import Pago
 from app.models.pago_auditoria import PagoAuditoria
 from app.models.prestamo import Prestamo
@@ -31,6 +32,7 @@ __all__ = [
     "ConfiguracionSistema",
     "Auditoria",
     "Notificacion",
+    "NotificacionPlantilla",
     "Concesionario",
     "Analista",
     "ModeloVehiculo",
