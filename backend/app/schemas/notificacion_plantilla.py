@@ -16,7 +16,9 @@ class NotificacionPlantillaBase(BaseModel):
     tipo: str = Field(..., description="Tipo de notificación")
     asunto: str = Field(..., min_length=1, max_length=200)
     cuerpo: str = Field(..., min_length=1)
-    variables_disponibles: Optional[str] = Field(None, description="Variables disponibles en JSON")
+    variables_disponibles: Optional[str] = Field(
+        None, description="Variables disponibles en JSON"
+    )
     activa: bool = True
     zona_horaria: str = Field(default="America/Caracas", max_length=50)
 
@@ -55,4 +57,6 @@ class EnviarNotificacionRequest(BaseModel):
 
     template_id: int
     cliente_id: int
-    variables: dict = Field(default_factory=dict, description="Valores para las variables de la plantilla")
+    variables: dict = Field(
+        default_factory=dict, description="Valores para las variables de la plantilla"
+    )

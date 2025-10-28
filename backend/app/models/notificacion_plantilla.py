@@ -24,14 +24,18 @@ class NotificacionPlantilla(Base):
     descripcion = Column(Text, nullable=True)
 
     # Tipo de notificación
-    tipo = Column(String(20), nullable=False)  # PAGO_5_DIAS_ANTES, PAGO_DIA_0, MORA_1_DIA, etc.
+    tipo = Column(
+        String(20), nullable=False
+    )  # PAGO_5_DIAS_ANTES, PAGO_DIA_0, MORA_1_DIA, etc.
 
     # Contenido
     asunto = Column(String(200), nullable=False)
     cuerpo = Column(Text, nullable=False)  # Con variables {{nombre}}, {{monto}}, etc.
 
     # Variables disponibles (JSON en texto para simplicidad)
-    variables_disponibles = Column(Text, nullable=True)  # {"nombre", "monto", "fecha", etc}
+    variables_disponibles = Column(
+        Text, nullable=True
+    )  # {"nombre", "monto", "fecha", etc}
 
     # Estado y control
     activa = Column(Boolean, default=True, nullable=False)
@@ -39,7 +43,9 @@ class NotificacionPlantilla(Base):
 
     # Timestamps
     fecha_creacion = Column(DateTime, server_default=func.now(), nullable=False)
-    fecha_actualizacion = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    fecha_actualizacion = Column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     def __repr__(self):
         return f"<NotificacionPlantilla(id={self.id}, nombre='{self.nombre}', tipo='{self.tipo}')>"
@@ -56,6 +62,12 @@ class NotificacionPlantilla(Base):
             "variables_disponibles": self.variables_disponibles,
             "activa": self.activa,
             "zona_horaria": self.zona_horaria,
-            "fecha_creacion": self.fecha_creacion.isoformat() if self.fecha_creacion else None,
-            "fecha_actualizacion": self.fecha_actualizacion.isoformat() if self.fecha_actualizacion else None,
+            "fecha_creacion": (
+                self.fecha_creacion.isoformat() if self.fecha_creacion else None
+            ),
+            "fecha_actualizacion": (
+                self.fecha_actualizacion.isoformat()
+                if self.fecha_actualizacion
+                else None
+            ),
         }
