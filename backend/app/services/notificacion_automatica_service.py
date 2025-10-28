@@ -63,8 +63,12 @@ class NotificacionAutomaticaService:
         """
         try:
             hoy = datetime.now(CARACAS_TZ).date()
-            fecha_venc = fecha_vencimiento.date() if isinstance(fecha_vencimiento, datetime) else fecha_vencimiento
-            
+            fecha_venc = (
+                fecha_vencimiento.date()
+                if isinstance(fecha_vencimiento, datetime)
+                else fecha_vencimiento
+            )
+
             dias = (fecha_venc - hoy).days
             return dias
 
@@ -87,7 +91,7 @@ class NotificacionAutomaticaService:
                 self.db.query(NotificacionPlantilla)
                 .filter(
                     NotificacionPlantilla.tipo == tipo,
-                    NotificacionPlantilla.activa == True
+                    NotificacionPlantilla.activa == True,
                 )
                 .first()
             )
@@ -114,8 +118,10 @@ class NotificacionAutomaticaService:
         """
         try:
             # Obtener información del préstamo
-            prestamo = self.db.query(Prestamo).filter(Prestamo.id == cuota.prestamo_id).first()
-            
+            prestamo = (
+                self.db.query(Prestamo).filter(Prestamo.id == cuota.prestamo_id).first()
+            )
+
             if not prestamo:
                 logger.error(f"Préstamo {cuota.prestamo_id} no encontrado")
                 return False
@@ -124,7 +130,11 @@ class NotificacionAutomaticaService:
             variables = {
                 "nombre": cliente.nombres or "Cliente",
                 "monto": f"{cuota.monto_cuota:.2f}",
-                "fecha_vencimiento": cuota.fecha_vencimiento.strftime("%d/%m/%Y") if cuota.fecha_vencimiento else "N/A",
+                "fecha_vencimiento": (
+                    cuota.fecha_vencimiento.strftime("%d/%m/%Y")
+                    if cuota.fecha_vencimiento
+                    else "N/A"
+                ),
                 "numero_cuota": str(cuota.numero_cuota),
                 "credito_id": str(prestamo.id),
                 "cedula": cliente.cedula or "N/A",
@@ -132,7 +142,9 @@ class NotificacionAutomaticaService:
 
             # Calcular días de atraso si aplica
             if cuota.fecha_vencimiento:
-                dias_diferencia = self.calcular_dias_para_vencimiento(cuota.fecha_vencimiento)
+                dias_diferencia = self.calcular_dias_para_vencimiento(
+                    cuota.fecha_vencimiento
+                )
                 if dias_diferencia < 0:
                     variables["dias_atraso"] = str(abs(dias_diferencia))
                 else:
@@ -152,13 +164,15 @@ class NotificacionAutomaticaService:
                 self.db.query(Notificacion)
                 .filter(
                     Notificacion.cliente_id == cliente.id,
-                    Notificacion.tipo == plantilla.tipo
+                    Notificacion.tipo == plantilla.tipo,
                 )
                 .first()
             )
 
             if notificacion_existente:
-                logger.info(f"Notificación {plantilla.tipo} ya fue enviada a cliente {cliente.id}")
+                logger.info(
+                    f"Notificación {plantilla.tipo} ya fue enviada a cliente {cliente.id}"
+                )
                 return False
 
             # Crear registro de notificación
@@ -189,7 +203,9 @@ class NotificacionAutomaticaService:
                     return True
                 else:
                     nueva_notif.estado = "FALLIDA"
-                    nueva_notif.error_mensaje = resultado.get("message", "Error desconocido")
+                    nueva_notif.error_mensaje = resultado.get(
+                        "message", "Error desconocido"
+                    )
                     self.db.commit()
                     logger.error(f"Error enviando email: {resultado.get('message')}")
                     return False
@@ -264,9 +280,7 @@ class NotificacionAutomaticaService:
 
                     if not plantilla:
                         stats["sin_plantilla"] += 1
-                        logger.warning(
-                            f"No hay plantilla para tipo {tipo_plantilla}"
-                        )
+                        logger.warning(f"No hay plantilla para tipo {tipo_plantilla}")
                         continue
 
                     # Enviar notificación
@@ -288,4 +302,3 @@ class NotificacionAutomaticaService:
             logger.error(f"Error en procesamiento automático: {e}")
             stats["errores"] += 1
             return stats
-
