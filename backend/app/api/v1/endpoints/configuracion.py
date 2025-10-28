@@ -310,7 +310,8 @@ def obtener_configuracion_email(
     """Obtener configuración de email"""
     if not current_user.is_admin:
         raise HTTPException(
-            status_code=403, detail="Solo administradores pueden ver configuración de email"
+            status_code=403,
+            detail="Solo administradores pueden ver configuración de email",
         )
 
     try:
@@ -352,7 +353,8 @@ def actualizar_configuracion_email(
     """Actualizar configuración de email"""
     if not current_user.is_admin:
         raise HTTPException(
-            status_code=403, detail="Solo administradores pueden actualizar configuración"
+            status_code=403,
+            detail="Solo administradores pueden actualizar configuración",
         )
 
     try:
@@ -406,7 +408,8 @@ def probar_configuracion_email(
     """Probar configuración de email enviando un email de prueba"""
     if not current_user.is_admin:
         raise HTTPException(
-            status_code=403, detail="Solo administradores pueden probar configuración de email"
+            status_code=403,
+            detail="Solo administradores pueden probar configuración de email",
         )
 
     try:
@@ -418,9 +421,7 @@ def probar_configuracion_email(
         )
 
         if not configs:
-            raise HTTPException(
-                status_code=400, detail="No hay configuración de email"
-            )
+            raise HTTPException(status_code=400, detail="No hay configuración de email")
 
         config_dict = {config.clave: config.valor for config in configs}
 
@@ -446,7 +447,10 @@ def probar_configuracion_email(
         )
 
         if result.get("success"):
-            return {"mensaje": "Email de prueba enviado exitosamente", "detalle": result}
+            return {
+                "mensaje": "Email de prueba enviado exitosamente",
+                "detalle": result,
+            }
         else:
             return {
                 "mensaje": "Error enviando email de prueba",
