@@ -51,8 +51,8 @@ def listar_clientes(
         if estado:
             query = query.filter(Cliente.estado == estado)
 
-        # Ordenamiento por fecha de creación descendente (más recientes primero)
-        query = query.order_by(Cliente.created_at.desc())
+        # Ordenamiento por fecha de registro descendente (más recientes primero)
+        query = query.order_by(Cliente.fecha_registro.desc())
 
         # Contar total
         total = query.count()
