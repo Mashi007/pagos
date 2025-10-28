@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { apiClient } from '@/services/api'
 
 export interface AuditoriaEntry {
   id: number
@@ -15,12 +15,11 @@ export interface AuditoriaEntry {
 }
 
 export const useAuditoriaPrestamo = (prestamoId: number | null) => {
-  return useQuery({
+  return useQuery<AuditoriaEntry[]>({
     queryKey: ['auditoria-prestamo', prestamoId],
     queryFn: async () => {
       if (!prestamoId) return []
-      const { data } = await api.get<AuditoriaEntry[]>(`/prestamos/auditoria/${prestamoId}`)
-      return data
+      return await apiClient.get<AuditoriaEntry[]>(`/api/v1/prestamos/auditoria/${prestamoId}`)
     },
     enabled: !!prestamoId,
   })
