@@ -28,6 +28,7 @@ from . import (
     modelos_vehiculos,
     notificaciones,
     pagos,
+    pagos_upload,
     predictive_analyzer,
     predictive_token_analyzer,
     prestamos,
