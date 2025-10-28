@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '20251028_pagos'
-down_revision = None  # Actualizar con la última migración
+down_revision = 'fix_campo_resultado'
 branch_labels = None
 depends_on = None
 
