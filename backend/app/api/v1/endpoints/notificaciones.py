@@ -18,6 +18,9 @@ from app.schemas.notificacion_plantilla import (
     NotificacionPlantillaUpdate,
 )
 from app.services.email_service import EmailService
+from app.services.notificacion_automatica_service import (
+    NotificacionAutomaticaService,
+)
 from app.services.whatsapp_service import WhatsAppService
 
 logger = logging.getLogger(__name__)
