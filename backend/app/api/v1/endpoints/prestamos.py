@@ -207,7 +207,7 @@ def procesar_cambio_estado(
             db.commit()
             logger.info(f"Registro de aprobación creado para préstamo {prestamo.id}")
         except Exception as e:
-            logger.error(f"Error creando registro de aprobación: {str(e)}")
+            logger.warning(f"Error creando registro de aprobación (no crítico): {str(e)}")
             db.rollback()
             # No fallar el préstamo si falla la creación de aprobación
 
