@@ -793,25 +793,23 @@ def evaluar_riesgo_prestamo(
                 logger.info(f"Fecha base de cálculo establecida: {fecha_calculo}")
 
             # Aplicar condiciones
-            if condiciones.get("plazo_maximo"):
-                actualizar_cuotas_segun_plazo_maximo(
-                    prestamo, condiciones["plazo_maximo"], db
-                )
-
+            # NOTA: No cambiar numero_cuotas, mantener el original del préstamo
+            # El plazo_maximo solo es informativo, no se aplica para aprobación automática
+            
             if condiciones.get("tasa_interes"):
                 prestamo.tasa_interes = Decimal(str(condiciones["tasa_interes"]))
-
+            
             if condiciones.get("fecha_base_calculo"):
                 fecha_str = condiciones["fecha_base_calculo"]
                 prestamo.fecha_base_calculo = date_parser.parse(fecha_str).date()
-
-            # Cambiar estado a APROBADO
+            
+            # Cambiar estado a APROBADO (sin modificar numero_cuotas)
             procesar_cambio_estado(
                 prestamo,
                 "APROBADO",
                 current_user,
                 db,
-                plazo_maximo_meses=condiciones.get("plazo_maximo"),
+                plazo_maximo_meses=None,  # NO aplicar plazo_maximo en aprobación automática
                 tasa_interes=(
                     Decimal(str(condiciones["tasa_interes"]))
                     if condiciones.get("tasa_interes")
