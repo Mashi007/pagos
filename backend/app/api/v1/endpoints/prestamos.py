@@ -775,62 +775,36 @@ def evaluar_riesgo_prestamo(
     try:
         evaluacion = crear_evaluacion_prestamo(datos_evaluacion, db)
 
-        # Si la decisión es APROBADO_AUTOMATICO, actualizar estado automáticamente
+        # IMPORTANTE: La evaluación solo genera SUGERENCIAS
+        # El humano (admin) debe decidir si aprobar o rechazar
+        # NO se aprueba automáticamente, solo se marca como candidato para aprobación
         if evaluacion.decision_final == "APROBADO_AUTOMATICO":
-            logger.info(f"Aprobación automática detectada para préstamo {prestamo_id}")
-
-            # Aplicar condiciones desde la evaluación
-            condiciones = {
-                "plazo_maximo": evaluacion.plazo_maximo,
-                "tasa_interes": float(evaluacion.tasa_interes_aplicada or 0),
-                "estado": "APROBADO",
-                "observaciones": f"Aprobación automática por evaluación de riesgo (Puntuación: {evaluacion.puntuacion_total}/100, Riesgo: {evaluacion.clasificacion_riesgo})",
-            }
-
-            # Establecer fecha_base_calculo si no existe (fecha actual + 1 mes)
-            if not prestamo.fecha_base_calculo:
-                fecha_calculo = date.today() + relativedelta(months=1)
-                prestamo.fecha_base_calculo = fecha_calculo
-                condiciones["fecha_base_calculo"] = fecha_calculo.isoformat()
-                logger.info(f"Fecha base de cálculo establecida: {fecha_calculo}")
-
-            # Aplicar condiciones
-            # NOTA: No cambiar numero_cuotas, mantener el original del préstamo
-            # El plazo_maximo solo es informativo, no se aplica para aprobación automática
-            
-            if condiciones.get("tasa_interes"):
-                prestamo.tasa_interes = Decimal(str(condiciones["tasa_interes"]))
-            
-            if condiciones.get("fecha_base_calculo"):
-                fecha_str = condiciones["fecha_base_calculo"]
-                prestamo.fecha_base_calculo = date_parser.parse(fecha_str).date()
-            
-            # Cambiar estado a APROBADO (sin modificar numero_cuotas)
-            procesar_cambio_estado(
-                prestamo,
-                "APROBADO",
-                current_user,
-                db,
-                plazo_maximo_meses=None,  # NO aplicar plazo_maximo en aprobación automática
-                tasa_interes=(
-                    Decimal(str(condiciones["tasa_interes"]))
-                    if condiciones.get("tasa_interes")
-                    else None
-                ),
-                fecha_base_calculo=prestamo.fecha_base_calculo,
+            logger.info(
+                f"Préstamo {prestamo_id} es candidato para aprobación automática "
+                f"(Riesgo: {evaluacion.clasificacion_riesgo}, Puntuación: {evaluacion.puntuacion_total}/100)"
             )
-
-            # Guardar cambios
-            db.commit()
-            db.refresh(prestamo)
-
-            logger.info(f"Préstamo {prestamo_id} aprobado automáticamente")
+            logger.info(
+                "⚠️ El sistema SUGIERE aprobar, pero requiere decisión humana. "
+                "Usar endpoint '/aplicar-condiciones-aprobacion' para aprobar manualmente."
+            )
 
         return {
             "prestamo_id": prestamo_id,
             "puntuacion_total": float(evaluacion.puntuacion_total or 0),
             "clasificacion_riesgo": evaluacion.clasificacion_riesgo,
             "decision_final": evaluacion.decision_final,
+            "requiere_aprobacion_manual": evaluacion.decision_final == "APROBADO_AUTOMATICO",
+            "mensaje": (
+                "✅ Préstamo candidato para aprobación. Debe ser aprobado manualmente con tasa sugerida."
+                if evaluacion.decision_final == "APROBADO_AUTOMATICO"
+                else "⚠️ Revisar antes de aprobar"
+            ),
+            "sugerencias": {
+                "tasa_interes_sugerida": float(evaluacion.tasa_interes_aplicada or 0),
+                "plazo_maximo_sugerido": evaluacion.plazo_maximo,
+                "enganche_minimo_sugerido": float(evaluacion.enganche_minimo or 0),
+                "requisitos_adicionales": evaluacion.requisitos_adicionales,
+            },
             "tasa_interes_aplicada": float(evaluacion.tasa_interes_aplicada or 0),
             "plazo_maximo": evaluacion.plazo_maximo,
             "enganche_minimo": float(evaluacion.enganche_minimo or 0),
