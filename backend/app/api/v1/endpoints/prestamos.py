@@ -24,9 +24,7 @@ from app.services.prestamo_amortizacion_service import (
     generar_tabla_amortizacion as generar_amortizacion,
     obtener_cuotas_prestamo as obtener_cuotas_service,
 )
-from app.services.prestamo_evaluacion_service import (
-    crear_evaluacion_prestamo,
-)
+from app.services.prestamo_evaluacion_service import crear_evaluacion_prestamo
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
