@@ -769,26 +769,26 @@ def evaluar_riesgo_prestamo(
 
         return {
             "prestamo_id": prestamo_id,
-            "puntuacion_total": float(evaluacion.puntuacion_total),
+            "puntuacion_total": float(evaluacion.puntuacion_total or 0),
             "clasificacion_riesgo": evaluacion.clasificacion_riesgo,
             "decision_final": evaluacion.decision_final,
-            "tasa_interes_aplicada": float(evaluacion.tasa_interes_aplicada),
+            "tasa_interes_aplicada": float(evaluacion.tasa_interes_aplicada or 0),
             "plazo_maximo": evaluacion.plazo_maximo,
-            "enganche_minimo": float(evaluacion.enganche_minimo),
+            "enganche_minimo": float(evaluacion.enganche_minimo or 0),
             "requisitos_adicionales": evaluacion.requisitos_adicionales,
             "detalle_criterios": {
-                # Criterio 1: Capacidad de Pago (33 puntos)
+                # Criterio 1: Capacidad de Pago (29 puntos)
                 "ratio_endeudamiento": {
-                    "puntos": float(evaluacion.ratio_endeudamiento_puntos),
-                    "calculo": float(evaluacion.ratio_endeudamiento_calculo),
+                    "puntos": float(evaluacion.ratio_endeudamiento_puntos or 0),
+                    "calculo": float(evaluacion.ratio_endeudamiento_calculo or 0),
                 },
                 "ratio_cobertura": {
-                    "puntos": float(evaluacion.ratio_cobertura_puntos),
-                    "calculo": float(evaluacion.ratio_cobertura_calculo),
+                    "puntos": float(evaluacion.ratio_cobertura_puntos or 0),
+                    "calculo": float(evaluacion.ratio_cobertura_calculo or 0),
                 },
                 # Criterio 2: Estabilidad Laboral (23 puntos)
                 "antiguedad_trabajo": {
-                    "puntos": float(evaluacion.antiguedad_trabajo_puntos),
+                    "puntos": float(evaluacion.antiguedad_trabajo_puntos or 0),
                     "meses": (
                         float(evaluacion.meses_trabajo)
                         if evaluacion.meses_trabajo
@@ -796,44 +796,50 @@ def evaluar_riesgo_prestamo(
                     ),
                 },
                 "tipo_empleo": {
-                    "puntos": float(evaluacion.tipo_empleo_puntos),
+                    "puntos": float(evaluacion.tipo_empleo_puntos or 0),
                     "descripcion": evaluacion.tipo_empleo_descripcion,
                 },
                 "sector_economico": {
-                    "puntos": float(evaluacion.sector_economico_puntos),
+                    "puntos": float(evaluacion.sector_economico_puntos or 0),
                     "descripcion": evaluacion.sector_economico_descripcion,
                 },
                 # Criterio 3: Referencias (9 puntos)
                 "referencias": {
-                    "puntos": float(evaluacion.referencias_puntos),
+                    "puntos": float(evaluacion.referencias_puntos or 0),
                     "descripcion": evaluacion.referencias_descripcion,
+                    "referencia1_calificacion": evaluacion.referencia1_calificacion,
+                    "referencia1_observaciones": evaluacion.referencia1_observaciones,
+                    "referencia2_calificacion": evaluacion.referencia2_calificacion,
+                    "referencia2_observaciones": evaluacion.referencia2_observaciones,
+                    "referencia3_calificacion": evaluacion.referencia3_calificacion,
+                    "referencia3_observaciones": evaluacion.referencia3_observaciones,
                 },
-                # Criterio 4: Arraigo Geográfico (12 puntos)
-                "arraigo_vivienda": float(evaluacion.arraigo_vivienda_puntos),
-                "arraigo_familiar": float(evaluacion.arraigo_familiar_puntos),
-                "arraigo_laboral": float(evaluacion.arraigo_laboral_puntos),
+                # Criterio 4: Arraigo Geográfico (7 puntos)
+                "arraigo_vivienda": float(evaluacion.arraigo_vivienda_puntos or 0),
+                "arraigo_familiar": float(evaluacion.arraigo_familiar_puntos or 0),
+                "arraigo_laboral": float(evaluacion.arraigo_laboral_puntos or 0),
                 # Criterio 5: Perfil Sociodemográfico (17 puntos)
                 "vivienda": {
-                    "puntos": float(evaluacion.vivienda_puntos),
+                    "puntos": float(evaluacion.vivienda_puntos or 0),
                     "descripcion": evaluacion.vivienda_descripcion,
                 },
                 "estado_civil": {
-                    "puntos": float(evaluacion.estado_civil_puntos),
+                    "puntos": float(evaluacion.estado_civil_puntos or 0),
                     "descripcion": evaluacion.estado_civil_descripcion,
                 },
                 "hijos": {
-                    "puntos": float(evaluacion.hijos_puntos),
+                    "puntos": float(evaluacion.hijos_puntos or 0),
                     "descripcion": evaluacion.hijos_descripcion,
                 },
-                # Criterio 6: Edad (5 puntos)
+                # Criterio 6: Edad (10 puntos)
                 "edad": {
-                    "puntos": float(evaluacion.edad_puntos),
+                    "puntos": float(evaluacion.edad_puntos or 0),
                     "cliente": evaluacion.edad_cliente,
                 },
-                # Criterio 7: Enganche (5 puntos)
-                "enganche": {
-                    "puntos": float(evaluacion.enganche_garantias_puntos),
-                    "calculo": float(evaluacion.enganche_garantias_calculo),
+                # Criterio 7: Capacidad de Maniobra (5 puntos)
+                "capacidad_maniobra": {
+                    "puntos": float(evaluacion.enganche_garantias_puntos or 0),
+                    "porcentaje_residual": float(evaluacion.enganche_garantias_calculo or 0),
                 },
             },
         }
