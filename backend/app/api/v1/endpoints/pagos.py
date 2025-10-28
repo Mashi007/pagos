@@ -41,7 +41,7 @@ def listar_pagos(
     """
     try:
         query = db.query(Pago)
-        
+
         # Filtros
         if cedula:
             query = query.filter(Pago.cedula_cliente == cedula)
@@ -53,14 +53,14 @@ def listar_pagos(
             query = query.filter(Pago.fecha_pago <= fecha_hasta)
         if analista:
             query = query.join(Prestamo).filter(Prestamo.usuario_proponente == analista)
-        
+
         # Ordenar por fecha de pago descendente
         query = query.order_by(Pago.fecha_pago.desc())
-        
+
         # Paginación
         offset = (page - 1) * per_page
         pagos = query.offset(offset).limit(per_page).all()
-        
+
         return pagos
     except Exception as e:
         logger.error(f"Error en listar_pagos: {e}")
@@ -78,20 +78,22 @@ def crear_pago(
     """
     try:
         # Verificar que el cliente existe
-        cliente = db.query(Cliente).filter(Cliente.cedula == pago_data.cedula_cliente).first()
+        cliente = (
+            db.query(Cliente).filter(Cliente.cedula == pago_data.cedula_cliente).first()
+        )
         if not cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
-        
+
         # Crear el pago
         pago_dict = pago_data.model_dump()
         pago_dict["usuario_registro"] = current_user.email
         pago_dict["fecha_registro"] = datetime.now()
-        
+
         nuevo_pago = Pago(**pago_dict)
         db.add(nuevo_pago)
         db.commit()
         db.refresh(nuevo_pago)
-        
+
         # Registrar auditoría
         registrar_auditoria_pago(
             pago_id=nuevo_pago.id,
@@ -100,12 +102,12 @@ def crear_pago(
             campo_modificado="pago_completo",
             valor_anterior="N/A",
             valor_nuevo=f"Pago de {pago_data.monto_pagado} registrado",
-            db=db
+            db=db,
         )
-        
+
         # Aplicar pago a cuotas
         aplicar_pago_a_cuotas(nuevo_pago, db, current_user)
-        
+
         return nuevo_pago
     except HTTPException:
         raise
@@ -129,7 +131,7 @@ def actualizar_pago(
         pago = db.query(Pago).filter(Pago.id == pago_id).first()
         if not pago:
             raise HTTPException(status_code=404, detail="Pago no encontrado")
-        
+
         # Registrar cambios para auditoría
         update_data = pago_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -143,13 +145,13 @@ def actualizar_pago(
                     campo_modificado=field,
                     valor_anterior=str(old_value) if old_value else "N/A",
                     valor_nuevo=str(value) if value else "N/A",
-                    db=db
+                    db=db,
                 )
-        
+
         pago.fecha_actualizacion = datetime.now()
         db.commit()
         db.refresh(pago)
-        
+
         return pago
     except HTTPException:
         raise
@@ -165,54 +167,72 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User):
     """
     if not pago.prestamo_id:
         return
-    
+
     # Obtener cuotas pendientes del préstamo, ordenadas por número
-    cuotas = db.query(Cuota).filter(
-        Cuota.prestamo_id == pago.prestamo_id,
-        or_(
-            Cuota.estado == "PENDIENTE",
-            Cuota.estado == "ATRASADO",
-            Cuota.estado == "PARCIAL"
+    cuotas = (
+        db.query(Cuota)
+        .filter(
+            Cuota.prestamo_id == pago.prestamo_id,
+            or_(
+                Cuota.estado == "PENDIENTE",
+                Cuota.estado == "ATRASADO",
+                Cuota.estado == "PARCIAL",
+            ),
         )
-    ).order_by(Cuota.numero_cuota).all()
-    
+        .order_by(Cuota.numero_cuota)
+        .all()
+    )
+
     saldo_restante = pago.monto_pagado
-    
+
     for cuota in cuotas:
         if saldo_restante <= 0:
             break
-        
+
         # Calcular cuanto se puede aplicar a esta cuota
         monto_aplicar = min(saldo_restante, cuota.total_pendiente)
-        
+
         # Actualizar cuota
-        cuota.capital_pagado += monto_aplicar * (cuota.capital_pendiente / cuota.monto_cuota)
-        cuota.interes_pagado += monto_aplicar * (cuota.interes_pendiente / cuota.monto_cuota)
+        cuota.capital_pagado += monto_aplicar * (
+            cuota.capital_pendiente / cuota.monto_cuota
+        )
+        cuota.interes_pagado += monto_aplicar * (
+            cuota.interes_pendiente / cuota.monto_cuota
+        )
         cuota.total_pagado += monto_aplicar
-        cuota.capital_pendiente = max(Decimal("0.00"), cuota.capital_pendiente - monto_aplicar)
-        cuota.interes_pendiente = max(Decimal("0.00"), cuota.interes_pendiente - monto_aplicar)
+        cuota.capital_pendiente = max(
+            Decimal("0.00"), cuota.capital_pendiente - monto_aplicar
+        )
+        cuota.interes_pendiente = max(
+            Decimal("0.00"), cuota.interes_pendiente - monto_aplicar
+        )
         cuota.fecha_pago = pago.fecha_pago
-        
+
         # Actualizar estado
         if cuota.total_pendiente <= Decimal("0.01"):
             cuota.estado = "PAGADO"
         elif cuota.total_pagado > Decimal("0.00"):
             cuota.estado = "PARCIAL"
-        
+
         saldo_restante -= monto_aplicar
-    
+
     # Si queda saldo, es un pago adelantado
     if saldo_restante > 0:
         # Buscar siguiente cuota pendiente
-        siguiente_cuota = db.query(Cuota).filter(
-            Cuota.prestamo_id == pago.prestamo_id,
-            Cuota.estado == "PENDIENTE",
-            Cuota.numero_cuota > cuotas[-1].numero_cuota
-        ).order_by(Cuota.numero_cuota).first()
-        
+        siguiente_cuota = (
+            db.query(Cuota)
+            .filter(
+                Cuota.prestamo_id == pago.prestamo_id,
+                Cuota.estado == "PENDIENTE",
+                Cuota.numero_cuota > cuotas[-1].numero_cuota,
+            )
+            .order_by(Cuota.numero_cuota)
+            .first()
+        )
+
         if siguiente_cuota:
             siguiente_cuota.estado = "ADELANTADO"
-    
+
     db.commit()
 
 
@@ -224,7 +244,7 @@ def registrar_auditoria_pago(
     valor_anterior: str,
     valor_nuevo: str,
     observaciones: Optional[str] = None,
-    db: Session = None
+    db: Session = None,
 ):
     """
     Registra un cambio en la auditoría de pagos
@@ -237,7 +257,7 @@ def registrar_auditoria_pago(
         valor_nuevo=valor_nuevo,
         accion=accion,
         observaciones=observaciones,
-        fecha_cambio=datetime.now()
+        fecha_cambio=datetime.now(),
     )
     db.add(auditoria)
     db.commit()
@@ -252,10 +272,13 @@ def obtener_auditoria_pago(
     """
     Obtener historial de auditoría de un pago
     """
-    auditorias = db.query(PagoAuditoria).filter(
-        PagoAuditoria.pago_id == pago_id
-    ).order_by(PagoAuditoria.fecha_cambio.desc()).all()
-    
+    auditorias = (
+        db.query(PagoAuditoria)
+        .filter(PagoAuditoria.pago_id == pago_id)
+        .order_by(PagoAuditoria.fecha_cambio.desc())
+        .all()
+    )
+
     return [
         {
             "id": a.id,
