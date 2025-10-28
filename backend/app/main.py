@@ -25,6 +25,7 @@ from app.api.v1.endpoints import (
     modelos_vehiculos,
     notificaciones,
     pagos,
+    pagos_upload,
     prestamos,
     reportes,
     solicitudes,
@@ -152,6 +153,7 @@ app.include_router(
 )
 app.include_router(prestamos.router, prefix="/api/v1/prestamos", tags=["prestamos"])
 app.include_router(pagos.router, prefix="/api/v1/pagos", tags=["pagos"])
+app.include_router(pagos_upload.router, prefix="/api/v1/pagos", tags=["pagos"])
 app.include_router(
     amortizacion.router, prefix="/api/v1/amortizacion", tags=["amortizacion"]
 )

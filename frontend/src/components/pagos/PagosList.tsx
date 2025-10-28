@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { pagoService, type Pago } from '@/services/pagoService'
 import { RegistrarPagoForm } from './RegistrarPagoForm'
+import { ExcelUploader } from './ExcelUploader'
 import { toast } from 'sonner'
 
 export function PagosList() {
@@ -33,6 +34,7 @@ export function PagosList() {
     analista: '',
   })
   const [showRegistrarPago, setShowRegistrarPago] = useState(false)
+  const [showExcelUploader, setShowExcelUploader] = useState(false)
   const queryClient = useQueryClient()
 
   // Query para obtener pagos
@@ -68,10 +70,16 @@ export function PagosList() {
           <h1 className="text-3xl font-bold text-gray-900">Módulo de Pagos</h1>
           <p className="text-gray-500 mt-1">Gestión de pagos de clientes</p>
         </div>
-        <Button onClick={() => setShowRegistrarPago(true)}>
-          <Plus className="w-5 h-5 mr-2" />
-          Registrar Pago
-        </Button>
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={() => setShowExcelUploader(true)}>
+            <Upload className="w-5 h-5 mr-2" />
+            Cargar Excel
+          </Button>
+          <Button onClick={() => setShowRegistrarPago(true)}>
+            <Plus className="w-5 h-5 mr-2" />
+            Registrar Pago
+          </Button>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -188,6 +196,17 @@ export function PagosList() {
             setShowRegistrarPago(false)
             queryClient.invalidateQueries({ queryKey: ['pagos'] })
             toast.success('Pago registrado exitosamente')
+          }}
+        />
+      )}
+
+      {/* Excel Uploader Modal */}
+      {showExcelUploader && (
+        <ExcelUploader
+          onClose={() => setShowExcelUploader(false)}
+          onSuccess={() => {
+            setShowExcelUploader(false)
+            queryClient.invalidateQueries({ queryKey: ['pagos'] })
           }}
         />
       )}
