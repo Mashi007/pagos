@@ -75,12 +75,34 @@ interface CrearClienteFormProps {
 export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated }: CrearClienteFormProps) {
   // ✅ Función para convertir DD/MM/YYYY a YYYY-MM-DD
   const convertirFechaAISO = (fechaDDMMYYYY: string): string => {
+    // Si la fecha ya está en formato ISO (YYYY-MM-DD), devolverla tal cual
+    if (fechaDDMMYYYY.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      return fechaDDMMYYYY
+    }
+    // Si está en formato DD/MM/YYYY, convertir
     const partes = fechaDDMMYYYY.split('/')
     if (partes.length === 3) {
       const [dia, mes, ano] = partes
       return `${ano}-${mes}-${dia}`
     }
     return fechaDDMMYYYY
+  }
+
+  // Función para convertir fecha de ISO a DD/MM/YYYY
+  const convertirFechaDeISO = (fechaISO: string): string => {
+    // Si ya está en formato DD/MM/YYYY, devolverla tal cual
+    if (fechaISO.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+      return fechaISO
+    }
+    // Si está en formato ISO (YYYY-MM-DD), convertir
+    if (fechaISO.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const partes = fechaISO.split('-')
+      if (partes.length === 3) {
+        const [ano, mes, dia] = partes
+        return `${dia}/${mes}/${ano}`
+      }
+    }
+    return fechaISO
   }
 
   // ✅ Función para obtener fecha de hoy en formato DD/MM/YYYY
@@ -136,7 +158,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         telefono: cliente.telefono || '',
         email: cliente.email || '',
         direccion: cliente.direccion || '',
-        fechaNacimiento: cliente.fecha_nacimiento || '',
+        fechaNacimiento: convertirFechaDeISO(cliente.fecha_nacimiento || ''), // ✅ Convertir ISO a DD/MM/YYYY
         ocupacion: cliente.ocupacion || '',
         modeloVehiculo: cliente.modelo_vehiculo || '',
         concesionario: cliente.concesionario || '',
@@ -145,7 +167,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         notas: cliente.notas || 'NA'
       })
     }
-  }, [cliente])
+  }, [cliente, convertirFechaDeISO])
   
   // Datos de configuración
   const [concesionarios, setConcesionarios] = useState<Concesionario[]>([])
