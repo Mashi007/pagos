@@ -611,7 +611,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     type="text"
                     value={formData.cedula}
                     onChange={(e) => handleInputChange('cedula', e.target.value)}
-                    className={`pl-10 ${getFieldValidation('cedula')?.isValid === false ? 'border-red-500' : ''}`}
+                    className={`pl-10 ${getFieldValidation('cedula')?.isValid === false ? 'border-red-500' : ''} ${cliente ? 'bg-white' : ''}`}
                     placeholder="12345678"
                   />
                 </div>
@@ -667,7 +667,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                               type="tel"
                               value={formData.telefono}
                               onChange={(e) => handleInputChange('telefono', e.target.value)}
-                              className={`pl-10 ${getFieldValidation('telefono')?.isValid === false ? 'border-red-500' : ''}`}
+                              className={`pl-10 ${getFieldValidation('telefono')?.isValid === false ? 'border-red-500' : ''} ${cliente ? 'bg-white' : ''}`}
                               placeholder="+58 1234567890"
                             />
                 </div>
@@ -695,7 +695,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     type="email"
                     value={formData.email}
                     onChange={(e) => handleInputChange('email', e.target.value)}
-                    className={`pl-10 ${getFieldValidation('email')?.isValid === false ? 'border-red-500' : ''}`}
+                    className={`pl-10 ${getFieldValidation('email')?.isValid === false ? 'border-red-500' : ''} ${cliente ? 'bg-white' : ''}`}
                     placeholder="juan@email.com"
                   />
                 </div>
@@ -724,7 +724,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     value={formData.fechaNacimiento}
                     onChange={(e) => handleInputChange('fechaNacimiento', e.target.value)}
                     placeholder="DD/MM/YYYY"
-                    className={`pl-10 ${getFieldValidation('fechaNacimiento')?.isValid === false ? 'border-red-500' : ''}`}
+                    className={`pl-10 ${getFieldValidation('fechaNacimiento')?.isValid === false ? 'border-red-500' : ''} ${cliente ? 'bg-white' : ''}`}
                   />
                 </div>
                 {getFieldValidation('fechaNacimiento') && (
@@ -750,7 +750,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                   <Textarea
                     value={formData.direccion}
                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleInputChange('direccion', e.target.value)}
-                    className={`pl-10 ${getFieldValidation('direccion')?.isValid === false ? 'border-red-500' : ''}`}
+                    className={`pl-10 ${getFieldValidation('direccion')?.isValid === false ? 'border-red-500' : ''} ${cliente ? 'bg-white' : ''}`}
                     placeholder="Dirección completa del cliente"
                     rows={2}
                   />
