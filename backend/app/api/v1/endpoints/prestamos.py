@@ -115,6 +115,22 @@ def aplicar_cambios_prestamo(prestamo: Prestamo, prestamo_data: PrestamoUpdate):
             prestamo.total_financiamiento, prestamo.modalidad_pago
         )
 
+    # Aplicar cambios directos de numero_cuotas y cuota_periodo si se proporcionan
+    if prestamo_data.numero_cuotas is not None:
+        prestamo.numero_cuotas = prestamo_data.numero_cuotas
+    
+    if prestamo_data.cuota_periodo is not None:
+        prestamo.cuota_periodo = prestamo_data.cuota_periodo
+    
+    if prestamo_data.tasa_interes is not None:
+        prestamo.tasa_interes = prestamo_data.tasa_interes
+    
+    if prestamo_data.fecha_base_calculo is not None:
+        prestamo.fecha_base_calculo = prestamo_data.fecha_base_calculo
+    
+    if prestamo_data.fecha_requerimiento is not None:
+        prestamo.fecha_requerimiento = prestamo_data.fecha_requerimiento
+
     if prestamo_data.observaciones is not None:
         prestamo.observaciones = prestamo_data.observaciones
 
