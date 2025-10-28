@@ -99,12 +99,19 @@ export function useUpdatePrestamo() {
     mutationFn: ({ id, data }: { id: number; data: Partial<PrestamoForm> }) =>
       prestamoService.updatePrestamo(id, data),
     onSuccess: (data, variables) => {
-      // Invalidar queries específicas
-      queryClient.invalidateQueries({ queryKey: prestamoKeys.detail(variables.id) })
-      queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
+      // Actualizar datos del cache directamente con la respuesta del servidor
+      queryClient.setQueryData(prestamoKeys.detail(variables.id), data)
+      
+      // Invalidar todas las queries para forzar refetch
       queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
-      // Refetch manual para asegurar actualización
-      queryClient.refetchQueries({ queryKey: prestamoKeys.all })
+      queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
+      
+      // Refetch específico para asegurar actualización
+      queryClient.refetchQueries({ 
+        queryKey: prestamoKeys.all,
+        exact: false 
+      })
+      
       toast.success('Préstamo actualizado exitosamente')
     },
     onError: (error: any) => {
