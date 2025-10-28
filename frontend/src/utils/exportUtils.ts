@@ -29,7 +29,8 @@ export const exportarAExcel = async (cuotas: Cuota[], prestamo: PrestamoInfo) =>
   try {
     // Importar dinámicamente xlsx
     const XLSXModule = await import('xlsx')
-    const XLSX = XLSXModule as any
+    // @ts-ignore - xlsx es un CommonJS module, necesitamos usar 'as any'
+    const XLSX: any = XLSXModule
     
     // Crear datos para Excel
     const datos = cuotas.map(cuota => ({

@@ -82,29 +82,35 @@ export function AuditoriaPrestamo({ prestamoId }: AuditoriaPrestamoProps) {
               </div>
 
               {entry.estado_anterior && entry.estado_nuevo && (
-              <div className="flex items-start space-x-2">
-                <Edit className="h-4 w-4 text-gray-400 mt-0.5" />
-                <div>
-                    <span className="font-medium text-gray-600">Cambio de estado:</span>
-                    <p className="text-gray-800">
-                      <span className="line-through text-red-600">{entry.estado_anterior}</span>{' '}
-                      → <span className="text-green-600 font-semibold">{entry.estado_nuevo}</span>
-                    </p>
-                  </div>
+              <div className="flex items-start space-x-2 mb-2">
+                <Edit className="h-4 w-4 text-blue-500 mt-0.5" />
+                <div className="flex-1">
+                    <span className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Cambio de estado</span>
+                    <div className="flex items-center space-x-3 mt-1">
+                      <span className="px-3 py-1 bg-red-50 text-red-700 rounded-md font-medium border border-red-200">
+                        {entry.estado_anterior}
+                      </span>
+                      <span className="text-gray-400">→</span>
+                      <span className="px-3 py-1 bg-green-50 text-green-700 rounded-md font-medium border border-green-200">
+                        {entry.estado_nuevo}
+                      </span>
+                    </div>
                 </div>
+              </div>
               )}
             </div>
 
             {entry.valor_anterior && entry.valor_nuevo && (
-              <div className="mt-3 p-3 bg-gray-50 rounded-md text-sm">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <span className="font-medium text-gray-600">Valor anterior:</span>
-                    <p className="text-gray-700 line-through">{entry.valor_anterior}</p>
+              <div className="mt-3 space-y-2">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Detalles del cambio</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-red-50 p-3 rounded-lg border border-red-200">
+                    <div className="text-xs font-semibold text-red-600 mb-1">VALOR ANTERIOR</div>
+                    <div className="text-sm text-red-700 break-words">{entry.valor_anterior}</div>
                   </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Valor nuevo:</span>
-                    <p className="text-green-700 font-semibold">{entry.valor_nuevo}</p>
+                  <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                    <div className="text-xs font-semibold text-green-600 mb-1">VALOR NUEVO</div>
+                    <div className="text-sm text-green-700 break-words">{entry.valor_nuevo}</div>
                   </div>
                 </div>
               </div>
