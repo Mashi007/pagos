@@ -611,8 +611,9 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     type="text"
                     value={formData.cedula}
                     onChange={(e) => handleInputChange('cedula', e.target.value)}
-                    className={`pl-10 ${getFieldValidation('cedula')?.isValid === false ? 'border-red-500' : ''} ${cliente ? 'bg-white' : ''}`}
+                    className={`pl-10 ${getFieldValidation('cedula')?.isValid === false ? 'border-red-500' : ''} ${cliente ? 'bg-white cursor-pointer' : ''}`}
                     placeholder="12345678"
+                    readOnly={false}
                   />
                 </div>
                 {getFieldValidation('cedula') && (
@@ -641,6 +642,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     onChange={(e) => handleInputChange('nombres', e.target.value)}
                     className={`pl-10 ${getFieldValidation('nombres')?.isValid === false ? 'border-red-500' : ''}`}
                     placeholder="Ejemplo: Juan Carlos Pérez González"
+                    readOnly={false}
                   />
                 </div>
                 {getFieldValidation('nombres') && (
@@ -669,6 +671,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                               onChange={(e) => handleInputChange('telefono', e.target.value)}
                               className={`pl-10 ${getFieldValidation('telefono')?.isValid === false ? 'border-red-500' : ''} ${cliente ? 'bg-white' : ''}`}
                               placeholder="+58 1234567890"
+                              readOnly={false}
                             />
                 </div>
                 {getFieldValidation('telefono') && (
@@ -697,6 +700,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     onChange={(e) => handleInputChange('email', e.target.value)}
                     className={`pl-10 ${getFieldValidation('email')?.isValid === false ? 'border-red-500' : ''} ${cliente ? 'bg-white' : ''}`}
                     placeholder="juan@email.com"
+                    readOnly={false}
                   />
                 </div>
                 {getFieldValidation('email') && (
@@ -725,6 +729,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     onChange={(e) => handleInputChange('fechaNacimiento', e.target.value)}
                     placeholder="DD/MM/YYYY"
                     className={`pl-10 ${getFieldValidation('fechaNacimiento')?.isValid === false ? 'border-red-500' : ''} ${cliente ? 'bg-white' : ''}`}
+                    readOnly={false}
                   />
                 </div>
                 {getFieldValidation('fechaNacimiento') && (
@@ -753,6 +758,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     className={`pl-10 ${getFieldValidation('direccion')?.isValid === false ? 'border-red-500' : ''} ${cliente ? 'bg-white' : ''}`}
                     placeholder="Dirección completa del cliente"
                     rows={2}
+                    readOnly={false}
                   />
                 </div>
                 {getFieldValidation('direccion') && (
@@ -781,6 +787,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     onChange={(e) => handleInputChange('ocupacion', e.target.value)}
                     className={`pl-10 w-full ${getFieldValidation('ocupacion')?.isValid === false ? 'border-red-500' : ''}`}
                     placeholder="Ejemplo: Ingeniero, Gerente General"
+                    readOnly={false}
                   />
                 </div>
                 {getFieldValidation('ocupacion') && (
@@ -938,6 +945,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleInputChange('notas', e.target.value)}
                   placeholder="Notas adicionales sobre el cliente"
                   rows={3}
+                  readOnly={false}
                 />
               </div>
             </CardContent>
