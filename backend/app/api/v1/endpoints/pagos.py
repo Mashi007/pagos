@@ -12,11 +12,11 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
 from app.models.pago import Pago
 from app.models.pago_auditoria import PagoAuditoria
 from app.models.prestamo import Prestamo
-from app.models.cuota import Cuota
 from app.models.user import User
 from app.schemas.pago import PagoCreate, PagoUpdate, PagoResponse
 
