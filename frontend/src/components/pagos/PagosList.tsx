@@ -96,7 +96,6 @@ export function PagosList() {
               placeholder="Cédula de identidad"
               value={filters.cedula}
               onChange={e => handleFilterChange('cedula', e.target.value)}
-              icon={<Search className="w-4 h-4" />}
             />
             <Select value={filters.estado} onValueChange={value => handleFilterChange('estado', value)}>
               <SelectTrigger>
