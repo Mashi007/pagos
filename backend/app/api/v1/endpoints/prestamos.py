@@ -793,7 +793,8 @@ def evaluar_riesgo_prestamo(
             "puntuacion_total": float(evaluacion.puntuacion_total or 0),
             "clasificacion_riesgo": evaluacion.clasificacion_riesgo,
             "decision_final": evaluacion.decision_final,
-            "requiere_aprobacion_manual": evaluacion.decision_final == "APROBADO_AUTOMATICO",
+            "requiere_aprobacion_manual": evaluacion.decision_final
+            == "APROBADO_AUTOMATICO",
             "mensaje": (
                 "✅ Préstamo candidato para aprobación. Debe ser aprobado manualmente con tasa sugerida."
                 if evaluacion.decision_final == "APROBADO_AUTOMATICO"
