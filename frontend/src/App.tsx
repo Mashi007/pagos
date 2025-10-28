@@ -27,9 +27,6 @@ const Login = lazy(() => import('@/pages/Login').then(module => ({ default: modu
 const Dashboard = lazy(() => import('@/pages/Dashboard').then(module => ({ default: module.Dashboard })))
 const Clientes = lazy(() => import('@/pages/Clientes').then(module => ({ default: module.Clientes })))
 const Prestamos = lazy(() => import('@/pages/Prestamos').then(module => ({ default: module.Prestamos })))
-const Pagos = lazy(() => import('@/pages/Pagos').then(module => ({ default: module.Pagos })))
-const NuevoPago = lazy(() => import('@/pages/NuevoPago').then(module => ({ default: module.NuevoPago })))
-const ConciliacionBancaria = lazy(() => import('@/pages/ConciliacionBancaria').then(module => ({ default: module.ConciliacionBancaria })))
 const Amortizacion = lazy(() => import('@/pages/Amortizacion').then(module => ({ default: module.Amortizacion })))
 const Reportes = lazy(() => import('@/pages/Reportes').then(module => ({ default: module.Reportes })))
 const Aprobaciones = lazy(() => import('@/pages/Aprobaciones').then(module => ({ default: module.Aprobaciones })))
@@ -157,11 +154,8 @@ function App() {
           />
 
           {/* Pagos */}
-          <Route path="pagos" element={<Pagos />} />
-          <Route path="pagos/nuevo" element={<NuevoPago />} />
-          <Route path="pagos/conciliacion" element={<ConciliacionBancaria />} />
-          <Route path="pagos/:id" element={<Pagos />} />
-          <Route path="pagos/:id/editar" element={<NuevoPago />} />
+          <Route path="pagos" element={<PagosPage />} />
+          <Route path="pagos/:id" element={<PagosPage />} />
 
           {/* Amortización */}
           <Route path="amortizacion" element={<AmortizacionPage />} />
