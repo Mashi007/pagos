@@ -35,6 +35,7 @@ import { ValidadoresConfig } from '@/components/configuracion/ValidadoresConfig'
 import { ConcesionariosConfig } from '@/components/configuracion/ConcesionariosConfig'
 import { AnalistasConfig } from '@/components/configuracion/AnalistasConfig'
 import { ModelosVehiculosConfig } from '@/components/configuracion/ModelosVehiculosConfig'
+import { EmailConfig } from '@/components/configuracion/EmailConfig'
 import { configuracionGeneralService, ConfiguracionGeneral } from '@/services/configuracionGeneralService'
 import { toast } from 'sonner'
 import UsuariosConfig from '@/components/configuracion/UsuariosConfig'
@@ -198,6 +199,7 @@ export function Configuracion() {
       submenu: true,
       items: [
         { id: 'notificaciones', nombre: 'Notificaciones', icono: Bell },
+        { id: 'emailConfig', nombre: 'Configuración Email', icono: Mail },
         { id: 'programador', nombre: 'Programador', icono: Calendar },
         { id: 'auditoria', nombre: 'Auditoría', icono: FileText },
       ]
@@ -1058,6 +1060,7 @@ export function Configuracion() {
     switch (seccionActiva) {
       case 'general': return renderSeccionGeneral()
       case 'notificaciones': return renderSeccionNotificaciones()
+      case 'emailConfig': return <EmailConfig />
       case 'programador': return renderSeccionProgramador()
       case 'auditoria': return renderSeccionAuditoria()
       // case 'seguridad': return renderSeccionSeguridad() // OCULTO
