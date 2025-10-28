@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { usePrestamos, useDeletePrestamo } from '@/hooks/usePrestamos'
+import { usePrestamos, useDeletePrestamo, prestamoKeys } from '@/hooks/usePrestamos'
 import { useQueryClient } from '@tanstack/react-query'
 import { usePermissions } from '@/hooks/usePermissions'
 import { CrearPrestamoForm } from './CrearPrestamoForm'
@@ -100,9 +100,11 @@ export function PrestamosList() {
         onSuccess={() => {
           setShowEvaluacion(false)
           setEvaluacionPrestamo(null)
-          // Invalidar queries para refrescar la lista y reflejar cambios de estado
-          queryClient.invalidateQueries({ queryKey: ['prestamos'] })
-          queryClient.refetchQueries({ queryKey: ['prestamos'] })
+          // Invalidar TODAS las queries de préstamos para refrescar dashboard y lista
+          queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+          queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
+          // Refetch para actualización inmediata
+          queryClient.refetchQueries({ queryKey: prestamoKeys.all })
         }}
       />
     )
