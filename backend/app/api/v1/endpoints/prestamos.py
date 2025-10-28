@@ -697,13 +697,13 @@ def evaluar_riesgo_prestamo(
     Requiere datos del cliente y del préstamo.
 
     Sistema de 100 puntos:
-    - Criterio 1: Capacidad de Pago (33 pts)
-    - Criterio 2: Estabilidad Laboral (23 pts)
-    - Criterio 3: Referencias Personales (5 pts)
-    - Criterio 4: Arraigo Geográfico (12 pts)
-    - Criterio 5: Perfil Sociodemográfico (17 pts)
-    - Criterio 6: Edad (5 pts)
-    - Criterio 7: Enganche (5 pts)
+    - Criterio 1: Capacidad de Pago (29 pts) - 14 pts Endeudamiento + 15 pts Cobertura
+    - Criterio 2: Estabilidad Laboral (23 pts) - 9 pts Antigüedad + 8 pts Tipo Empleo + 6 pts Sector
+    - Criterio 3: Referencias Personales (9 pts) - 3 referencias × 3 pts c/u
+    - Criterio 4: Arraigo Geográfico (7 pts) - 4 pts Familiar + 3 pts Laboral
+    - Criterio 5: Perfil Sociodemográfico (17 pts) - 6 pts Vivienda + 6 pts Estado Civil + 5 pts Hijos
+    - Criterio 6: Edad del Cliente (10 pts)
+    - Criterio 7: Capacidad de Maniobra (5 pts)
 
     FASE 2: Después de la evaluación, se determina el plazo máximo
     que se usará para recalcular las cuotas.
