@@ -25,10 +25,11 @@ export interface PrestamoInfo {
 /**
  * Exporta tabla de amortización a Excel
  */
-export const exportarAExcel = (cuotas: Cuota[], prestamo: PrestamoInfo) => {
-  // Importar dinámicamente xlsx
-  import('xlsx').then((XLSXModule) => {
-    const XLSX = XLSXModule.default
+export const exportarAExcel = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
+  try {
+    // Importar dinámicamente xlsx
+    const XLSX = await import('xlsx')
+    
     // Crear datos para Excel
     const datos = cuotas.map(cuota => ({
       'Cuota': cuota.numero_cuota,
@@ -63,10 +64,10 @@ export const exportarAExcel = (cuotas: Cuota[], prestamo: PrestamoInfo) => {
 
     // Descargar
     XLSX.writeFile(wb, nombreArchivo)
-  }).catch(error => {
-    console.error('Error al importar xlsx:', error)
-    alert('Error: Debes instalar la librería xlsx. Ejecuta: npm install xlsx')
-  })
+  } catch (error) {
+    console.error('Error al exportar a Excel:', error)
+    alert('Error al exportar a Excel')
+  }
 }
 
 /**

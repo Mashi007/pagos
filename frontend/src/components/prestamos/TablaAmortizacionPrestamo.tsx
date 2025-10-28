@@ -64,7 +64,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
     return labels[estado] || estado
   }
 
-  const exportarExcel = () => {
+  const exportarExcel = async () => {
     if (!cuotas) {
       toast.error('No hay datos para exportar')
       return
@@ -81,7 +81,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
     }
     
     try {
-      exportarAExcel(cuotas, prestamoInfo)
+      await exportarAExcel(cuotas, prestamoInfo)
       toast.success('Exportando a Excel...')
     } catch (error) {
       toast.error('Error al exportar a Excel')
