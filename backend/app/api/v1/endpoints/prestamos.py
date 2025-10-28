@@ -780,7 +780,7 @@ def evaluar_riesgo_prestamo(
         # NO se aprueba automáticamente, solo se marca como candidato para aprobación
         if evaluacion.decision_final == "APROBADO_AUTOMATICO":
             logger.info(
-                f"Préstamo {prestamo_id} es candidato para aprobación automática "
+                f"Préstamo {prestamo_id} es candidato para aprobación "
                 f"(Riesgo: {evaluacion.clasificacion_riesgo}, Puntuación: {evaluacion.puntuacion_total}/100)"
             )
             logger.info(
