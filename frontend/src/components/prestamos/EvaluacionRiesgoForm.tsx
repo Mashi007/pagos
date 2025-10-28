@@ -26,6 +26,7 @@ import { Badge } from '@/components/ui/badge'
 import { usePermissions } from '@/hooks/usePermissions'
 import { Prestamo } from '@/types'
 import { prestamoService } from '@/services/prestamoService'
+import { clienteService } from '@/services/clienteService'
 import { toast } from 'sonner'
 
 interface EvaluacionRiesgoFormProps {
@@ -93,46 +94,39 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
   useEffect(() => {
     const calcularEdad = async () => {
       try {
-        // Obtener información del cliente por su cédula
-        const clienteResponse = await fetch(`/api/v1/clientes/?cedula=${prestamo.cedula}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        })
+        // Obtener información del cliente por su cédula usando el servicio
+        const clientes = await clienteService.getClientes({ cedula: prestamo.cedula })
         
-        if (clienteResponse.ok) {
-          const data = await clienteResponse.json()
-          if (data.data && data.data.length > 0) {
-            const cliente = data.data[0]
-            if (cliente.fecha_nacimiento) {
-              // Calcular edad desde fecha de nacimiento
-              const hoy = new Date()
-              const nacimiento = new Date(cliente.fecha_nacimiento)
-              let años = hoy.getFullYear() - nacimiento.getFullYear()
-              const diferenciaMeses = hoy.getMonth() - nacimiento.getMonth()
-              
-              if (diferenciaMeses < 0 || (diferenciaMeses === 0 && hoy.getDate() < nacimiento.getDate())) {
-                años -= 1
-              }
-              
-              // Calcular meses adicionales
-              let meses = 0
-              if (hoy.getMonth() >= nacimiento.getMonth()) {
-                meses = hoy.getMonth() - nacimiento.getMonth()
-                if (hoy.getDate() < nacimiento.getDate()) {
-                  meses -= 1
-                }
-              } else {
-                meses = (12 - nacimiento.getMonth()) + hoy.getMonth()
-                if (hoy.getDate() < nacimiento.getDate()) {
-                  meses -= 1
-                }
-              }
-              
-              // Edad en años decimales
-              const edadDecimal = años + (meses / 12)
-              setClienteEdad(edadDecimal)
+        if (clientes && clientes.length > 0) {
+          const cliente = clientes[0]
+          if (cliente.fecha_nacimiento) {
+            // Calcular edad desde fecha de nacimiento
+            const hoy = new Date()
+            const nacimiento = new Date(cliente.fecha_nacimiento)
+            let años = hoy.getFullYear() - nacimiento.getFullYear()
+            const diferenciaMeses = hoy.getMonth() - nacimiento.getMonth()
+            
+            if (diferenciaMeses < 0 || (diferenciaMeses === 0 && hoy.getDate() < nacimiento.getDate())) {
+              años -= 1
             }
+            
+            // Calcular meses adicionales
+            let meses = 0
+            if (hoy.getMonth() >= nacimiento.getMonth()) {
+              meses = hoy.getMonth() - nacimiento.getMonth()
+              if (hoy.getDate() < nacimiento.getDate()) {
+                meses -= 1
+              }
+            } else {
+              meses = (12 - nacimiento.getMonth()) + hoy.getMonth()
+              if (hoy.getDate() < nacimiento.getDate()) {
+                meses -= 1
+              }
+            }
+            
+            // Edad en años decimales
+            const edadDecimal = años + (meses / 12)
+            setClienteEdad(edadDecimal)
           }
         }
       } catch (error) {
@@ -1138,12 +1132,12 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                         {resultado.decision_final}
                       </Badge>
                     </div>
-                </div>
+                    </div>
                 {resultado.requisitos_adicionales && (
                   <div className="bg-white p-3 rounded border">
                     <p className="text-sm font-medium mb-2">Requisitos Adicionales:</p>
                     <p className="text-sm">{resultado.requisitos_adicionales}</p>
-                  </div>
+                    </div>
                 )}
                 <div className="bg-white p-3 rounded border">
                   <h5 className="font-semibold mb-2">Detalle de Criterios:</h5>
@@ -1188,9 +1182,9 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       {resultado.detalle_criterios?.capacidad_maniobra?.puntos?.toFixed(1)}/5 pts ({resultado.detalle_criterios?.capacidad_maniobra?.porcentaje_residual?.toFixed(2)}% residual)
                     </li>
                   </ul>
-                </div>
-              </CardContent>
-            </Card>
+                  </div>
+                </CardContent>
+              </Card>
           )}
 
           {/* Botones */}
