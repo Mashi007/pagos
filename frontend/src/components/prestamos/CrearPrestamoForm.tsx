@@ -177,6 +177,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
         ...formData,
         numero_cuotas: numeroCuotas,
         cuota_periodo: cuotaPeriodo,
+        fecha_base_calculo: formData.fecha_base_calculo, // Fecha de desembolso
       }
       
       if (prestamo) {

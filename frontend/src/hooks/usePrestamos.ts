@@ -30,7 +30,7 @@ export function usePrestamos(
   return useQuery({
     queryKey: prestamoKeys.list(filters),
     queryFn: () => prestamoService.getPrestamos(filters, page, perPage),
-    staleTime: STALE_TIME_MEDIUM,
+    staleTime: STALE_TIME_SHORT, // 2 minutos para reflejar cambios más rápido
   })
 }
 
