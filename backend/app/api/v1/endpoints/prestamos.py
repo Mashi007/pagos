@@ -3,7 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from dateutil import parser as date_parser
+from dateutil.parser import parse as date_parse
 from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_
@@ -175,9 +175,7 @@ def procesar_cambio_estado(
             try:
                 # Convertir a date si es necesario
                 if isinstance(prestamo.fecha_base_calculo, str):
-                    from dateutil import parser as date_parser
-
-                    fecha = date_parser.parse(prestamo.fecha_base_calculo).date()
+                    fecha = date_parse(prestamo.fecha_base_calculo).date()
                 else:
                     fecha = prestamo.fecha_base_calculo
 
@@ -940,7 +938,7 @@ def aplicar_condiciones_aprobacion(
         # Aplicar fecha base de cálculo (SI VIENE)
         if "fecha_base_calculo" in condiciones:
             fecha_str = condiciones["fecha_base_calculo"]
-            prestamo.fecha_base_calculo = date_parser.parse(fecha_str).date()
+            prestamo.fecha_base_calculo = date_parse(fecha_str).date()
 
         # Aplicar observaciones
         if "observaciones" in condiciones:
