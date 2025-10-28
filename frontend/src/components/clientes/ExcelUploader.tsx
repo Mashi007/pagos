@@ -27,7 +27,7 @@ import { useQueryClient } from '@tanstack/react-query'
 
 interface ExcelData {
   cedula: string
-  nombres: string  // ✅ CARGA MASIVA: Solo 2 palabras exactamente (nombre + apellido)
+  nombres: string  // ✅ CARGA MASIVA: Entre 2-4 palabras
   telefono: string
   email: string
   direccion: string
@@ -36,11 +36,6 @@ interface ExcelData {
   modelo_vehiculo: string | null
   concesionario: string | null
   analista: string | null
-  total_financiamiento: string
-  cuota_inicial: string
-  numero_amortizaciones: string
-  modalidad_pago: string
-  fecha_entrega: string
   estado: string
   activo: string
   notas: string
@@ -314,11 +309,6 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         modelo_vehiculo: row.modelo_vehiculo || undefined,
         concesionario: row.concesionario || undefined,
         analista: row.analista || undefined,
-        total_financiamiento: parseFloat(row.total_financiamiento) || 0,
-        cuota_inicial: parseFloat(row.cuota_inicial) || 0,
-        numero_amortizaciones: parseInt(row.numero_amortizaciones) || 0,
-        modalidad_pago: row.modalidad_pago,
-        fecha_entrega: row.fecha_entrega,
         estado: row.estado,
         activo: row.activo === 'TRUE',
         notas: row.notas
@@ -460,11 +450,6 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         modelo_vehiculo: row.modelo_vehiculo || undefined,
         concesionario: row.concesionario || undefined,
         analista: row.analista || undefined,
-        total_financiamiento: parseFloat(row.total_financiamiento) || 0,
-        cuota_inicial: parseFloat(row.cuota_inicial) || 0,
-        numero_amortizaciones: parseInt(row.numero_amortizaciones) || 0,
-        modalidad_pago: row.modalidad_pago,
-        fecha_entrega: row.fecha_entrega,
         estado: row.estado,
         activo: row.activo === 'TRUE',
         notas: row.notas
@@ -789,30 +774,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         }
         return { isValid: true }
 
-      case 'total_financiamiento':
-        if (!value.trim()) return { isValid: false, message: 'Total requerido' }
-        const total = parseFloat(value.replace(/[^\d.-]/g, ''))
-        if (isNaN(total) || total <= 0) return { isValid: false, message: 'Debe ser un número positivo' }
-        if (total < 1 || total > 50000000) return { isValid: false, message: 'Entre $1 y $50,000,000' }
-        return { isValid: true }
-
-      case 'numero_amortizaciones':
-        if (!value.trim()) return { isValid: false, message: 'Número requerido' }
-        const amortizaciones = parseInt(value)
-        if (isNaN(amortizaciones) || amortizaciones < 1 || amortizaciones > 60) {
-          return { isValid: false, message: 'Entre 1 y 60 cuotas' }
-        }
-        return { isValid: true }
-
-      case 'modalidad_pago':
-        if (!value.trim()) return { isValid: false, message: 'Modalidad requerida' }
-        const modalidades = ['SEMANAL', 'QUINCENAL', 'MENSUAL']
-        if (!modalidades.includes(value.toUpperCase())) {
-          return { isValid: false, message: 'Debe ser SEMANAL, QUINCENAL o MENSUAL' }
-        }
-        return { isValid: true }
-
-      case 'fecha_entrega':
+      case 'direccion':
         if (!value.trim()) return { isValid: false, message: 'Fecha requerida' }
         
         // ✅ NUEVO: Detectar números de serie de Excel
@@ -977,7 +939,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           _validation: {},
           _hasErrors: false,
           cedula: row[0]?.toString() || '',
-          nombres: formatNombres(`${row[1]?.toString() || ''} ${row[2]?.toString() || ''}`.trim()),  // ✅ Unificar y formatear nombres + apellidos
+          nombres: `${row[1]?.toString() || ''} ${row[2]?.toString() || ''}`.trim(),  // ✅ Unificar nombres + apellidos (sin formatear)
           telefono: row[3]?.toString() || '',
           email: row[4]?.toString() || '',
           direccion: row[5]?.toString() || '',
@@ -986,14 +948,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           modelo_vehiculo: row[8]?.toString() || null,
           concesionario: row[9]?.toString() || null,
           analista: row[10]?.toString() || null,
-          total_financiamiento: row[11]?.toString() || '',
-          cuota_inicial: row[12]?.toString() || '',
-          numero_amortizaciones: row[13]?.toString() || '',
-          modalidad_pago: row[14]?.toString() || '',
-          fecha_entrega: row[15]?.toString() || '',
-          estado: row[16]?.toString() || 'ACTIVO', // ✅ Por defecto siempre ACTIVO
-          activo: row[17]?.toString() || 'TRUE', // ✅ Por defecto siempre TRUE
-          notas: row[18]?.toString() || ''
+          estado: row[11]?.toString() || 'ACTIVO', // ✅ Por defecto siempre ACTIVO
+          activo: row[12]?.toString() || 'TRUE', // ✅ Por defecto siempre TRUE
+          notas: row[13]?.toString() || ''
         }
         
         // Validar campos requeridos
