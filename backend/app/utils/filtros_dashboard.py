@@ -30,7 +30,7 @@ class FiltrosDashboard:
     ) -> Query:
         """
         Aplica filtros comunes a queries de préstamos
-        
+
         Uso:
             query = db.query(Prestamo).filter(Prestamo.activo.is_(True))
             query = FiltrosDashboard.aplicar_filtros_prestamo(
@@ -41,17 +41,14 @@ class FiltrosDashboard:
             query = query.filter(
                 or_(
                     Prestamo.analista == analista,
-                    Prestamo.producto_financiero == analista
+                    Prestamo.producto_financiero == analista,
                 )
             )
         if concesionario:
             query = query.filter(Prestamo.concesionario == concesionario)
         if modelo:
             query = query.filter(
-                or_(
-                    Prestamo.producto == modelo,
-                    Prestamo.modelo_vehiculo == modelo
-                )
+                or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
             )
         if fecha_inicio:
             query = query.filter(Prestamo.fecha_registro >= fecha_inicio)
@@ -70,7 +67,7 @@ class FiltrosDashboard:
     ) -> Query:
         """
         Aplica filtros comunes a queries de pagos (requiere join con Prestamo)
-        
+
         Uso:
             query = db.query(func.sum(Pago.monto_pagado))
             if analista or concesionario or modelo:
@@ -83,29 +80,26 @@ class FiltrosDashboard:
         if analista or concesionario or modelo:
             if not any(str(Prestamo) in str(query) for _ in [None]):
                 query = query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
-            
+
             if analista:
                 query = query.filter(
                     or_(
                         Prestamo.analista == analista,
-                        Prestamo.producto_financiero == analista
+                        Prestamo.producto_financiero == analista,
                     )
                 )
             if concesionario:
                 query = query.filter(Prestamo.concesionario == concesionario)
             if modelo:
                 query = query.filter(
-                    or_(
-                        Prestamo.producto == modelo,
-                        Prestamo.modelo_vehiculo == modelo
-                    )
+                    or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
                 )
-        
+
         if fecha_inicio:
             query = query.filter(func.date(Pago.fecha_pago) >= fecha_inicio)
         if fecha_fin:
             query = query.filter(func.date(Pago.fecha_pago) <= fecha_fin)
-        
+
         return query
 
     @staticmethod
@@ -119,7 +113,7 @@ class FiltrosDashboard:
     ) -> Query:
         """
         Aplica filtros comunes a queries de cuotas (requiere join con Prestamo)
-        
+
         Uso:
             query = db.query(func.count(Cuota.id)).join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             query = FiltrosDashboard.aplicar_filtros_cuota(
@@ -131,23 +125,20 @@ class FiltrosDashboard:
             query = query.filter(
                 or_(
                     Prestamo.analista == analista,
-                    Prestamo.producto_financiero == analista
+                    Prestamo.producto_financiero == analista,
                 )
             )
         if concesionario:
             query = query.filter(Prestamo.concesionario == concesionario)
         if modelo:
             query = query.filter(
-                or_(
-                    Prestamo.producto == modelo,
-                    Prestamo.modelo_vehiculo == modelo
-                )
+                or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
             )
         if fecha_inicio:
             query = query.filter(Prestamo.fecha_registro >= fecha_inicio)
         if fecha_fin:
             query = query.filter(Prestamo.fecha_registro <= fecha_fin)
-        
+
         return query
 
     @staticmethod
@@ -164,16 +155,15 @@ class FiltrosDashboard:
         """
         params = {}
         if analista:
-            params['analista'] = analista
+            params["analista"] = analista
         if concesionario:
-            params['concesionario'] = concesionario
+            params["concesionario"] = concesionario
         if modelo:
-            params['modelo'] = modelo
+            params["modelo"] = modelo
         if fecha_inicio:
-            params['fecha_inicio'] = fecha_inicio
+            params["fecha_inicio"] = fecha_inicio
         if fecha_fin:
-            params['fecha_fin'] = fecha_fin
+            params["fecha_fin"] = fecha_fin
         if consolidado:
-            params['consolidado'] = consolidado
+            params["consolidado"] = consolidado
         return params
-

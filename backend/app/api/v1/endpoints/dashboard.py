@@ -43,7 +43,9 @@ def obtener_opciones_filtros(
             )
             .all()
         )
-        productos_list = [p[0] for p in productos_fin if p[0] and p[0] not in analistas_list]
+        productos_list = [
+            p[0] for p in productos_fin if p[0] and p[0] not in analistas_list
+        ]
         analistas_list.extend(productos_list)
 
         # Concesionarios únicos
@@ -65,13 +67,13 @@ def obtener_opciones_filtros(
         # También modelo_vehiculo
         modelos_vehiculo = (
             db.query(func.distinct(Prestamo.modelo_vehiculo))
-            .filter(Prestamo.modelo_vehiculo.isnot(None), Prestamo.modelo_vehiculo != "")
+            .filter(
+                Prestamo.modelo_vehiculo.isnot(None), Prestamo.modelo_vehiculo != ""
+            )
             .all()
         )
         modelos_vehiculo_list = [
-            mv[0]
-            for mv in modelos_vehiculo
-            if mv[0] and mv[0] not in modelos_producto
+            mv[0] for mv in modelos_vehiculo if mv[0] and mv[0] not in modelos_producto
         ]
         modelos_list = modelos_producto + modelos_vehiculo_list
 
@@ -123,7 +125,9 @@ def dashboard_administrador(
     modelo: Optional[str] = Query(None, description="Filtrar por modelo de vehículo"),
     fecha_inicio: Optional[date] = Query(None, description="Fecha inicio del rango"),
     fecha_fin: Optional[date] = Query(None, description="Fecha fin del rango"),
-    consolidado: Optional[bool] = Query(False, description="Agrupar datos consolidados"),
+    consolidado: Optional[bool] = Query(
+        False, description="Agrupar datos consolidados"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -198,16 +202,23 @@ def dashboard_administrador(
 
         # ✅ Aplicar filtros usando clase centralizada (automático)
         if analista or concesionario or modelo:
-            pagos_hoy_query = pagos_hoy_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            pagos_hoy_query = pagos_hoy_query.join(
+                Prestamo, Pago.prestamo_id == Prestamo.id
+            )
             monto_pagos_hoy_query = monto_pagos_hoy_query.join(
                 Prestamo, Pago.prestamo_id == Prestamo.id
             )
-        
+
         pagos_hoy_query = FiltrosDashboard.aplicar_filtros_pago(
             pagos_hoy_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
         monto_pagos_hoy_query = FiltrosDashboard.aplicar_filtros_pago(
-            monto_pagos_hoy_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+            monto_pagos_hoy_query,
+            analista,
+            concesionario,
+            modelo,
+            fecha_inicio,
+            fecha_fin,
         )
 
         pagos_hoy = pagos_hoy_query.scalar() or 0
@@ -215,8 +226,9 @@ def dashboard_administrador(
 
         # 6. CLIENTES ACTIVOS - Clientes con préstamos activos
         clientes_activos = (
-            base_prestamo_query.with_entities(func.count(func.distinct(Prestamo.cedula)))
-            .scalar()
+            base_prestamo_query.with_entities(
+                func.count(func.distinct(Prestamo.cedula))
+            ).scalar()
             or 0
         )
 
@@ -461,12 +473,18 @@ def dashboard_administrador(
                 )
 
             # ✅ Cartera del mes con filtros
-            cartera_mes_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-                Prestamo.activo.is_(True), 
-                func.date(Prestamo.fecha_creacion) <= mes_fin
+            cartera_mes_query = db.query(
+                func.sum(Prestamo.total_financiamiento)
+            ).filter(
+                Prestamo.activo.is_(True), func.date(Prestamo.fecha_creacion) <= mes_fin
             )
             cartera_mes_query = FiltrosDashboard.aplicar_filtros_prestamo(
-                cartera_mes_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+                cartera_mes_query,
+                analista,
+                concesionario,
+                modelo,
+                fecha_inicio,
+                fecha_fin,
             )
             cartera_mes = cartera_mes_query.scalar() or Decimal("0")
 
@@ -476,9 +494,16 @@ def dashboard_administrador(
                 func.date(Pago.fecha_pago) <= mes_fin,
             )
             if analista or concesionario or modelo:
-                cobrado_mes_query = cobrado_mes_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+                cobrado_mes_query = cobrado_mes_query.join(
+                    Prestamo, Pago.prestamo_id == Prestamo.id
+                )
             cobrado_mes_query = FiltrosDashboard.aplicar_filtros_pago(
-                cobrado_mes_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+                cobrado_mes_query,
+                analista,
+                concesionario,
+                modelo,
+                fecha_inicio,
+                fecha_fin,
             )
             cobrado_mes = cobrado_mes_query.scalar() or Decimal("0")
 
@@ -493,7 +518,12 @@ def dashboard_administrador(
                 )
             )
             cuotas_vencidas_mes_query = FiltrosDashboard.aplicar_filtros_cuota(
-                cuotas_vencidas_mes_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+                cuotas_vencidas_mes_query,
+                analista,
+                concesionario,
+                modelo,
+                fecha_inicio,
+                fecha_fin,
             )
             cuotas_vencidas_mes = cuotas_vencidas_mes_query.scalar() or 0
 

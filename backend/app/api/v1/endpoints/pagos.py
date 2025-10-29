@@ -420,7 +420,9 @@ def obtener_estadisticas_pagos(
         # ✅ Base query para pagos - usar FiltrosDashboard
         base_pago_query = db.query(Pago)
         if analista or concesionario or modelo:
-            base_pago_query = base_pago_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            base_pago_query = base_pago_query.join(
+                Prestamo, Pago.prestamo_id == Prestamo.id
+            )
         base_pago_query = FiltrosDashboard.aplicar_filtros_pago(
             base_pago_query,
             analista,
@@ -437,7 +439,10 @@ def obtener_estadisticas_pagos(
         pagos_por_estado_query = base_pago_query.subquery()
         if analista or concesionario or modelo:
             pagos_por_estado = (
-                db.query(pagos_por_estado_query.c.estado, func.count(pagos_por_estado_query.c.id))
+                db.query(
+                    pagos_por_estado_query.c.estado,
+                    func.count(pagos_por_estado_query.c.id),
+                )
                 .group_by(pagos_por_estado_query.c.estado)
                 .all()
             )
@@ -447,15 +452,15 @@ def obtener_estadisticas_pagos(
             )
 
         # Monto total pagado
-        total_pagado = (
-            base_pago_query.with_entities(func.sum(Pago.monto_pagado)).scalar() or Decimal("0.00")
-        )
+        total_pagado = base_pago_query.with_entities(
+            func.sum(Pago.monto_pagado)
+        ).scalar() or Decimal("0.00")
 
         # Pagos del día actual
         pagos_hoy_query = base_pago_query.filter(func.date(Pago.fecha_pago) == hoy)
-        pagos_hoy = (
-            pagos_hoy_query.with_entities(func.sum(Pago.monto_pagado)).scalar() or Decimal("0.00")
-        )
+        pagos_hoy = pagos_hoy_query.with_entities(
+            func.sum(Pago.monto_pagado)
+        ).scalar() or Decimal("0.00")
 
         # ✅ Cuotas pagadas vs pendientes - usar FiltrosDashboard
         cuotas_query = db.query(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id)
