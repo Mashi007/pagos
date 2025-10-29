@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, Calculator, CheckCircle2 } from 'lucide-react'
+import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, Calculator, CheckCircle2, FileCheck } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +13,7 @@ import { CrearPrestamoForm } from './CrearPrestamoForm'
 import { PrestamosKPIs } from './PrestamosKPIs'
 import { EvaluacionRiesgoForm } from './EvaluacionRiesgoForm'
 import { PrestamoDetalleModal } from './PrestamoDetalleModal'
+import { FormularioAprobacionCondiciones } from './FormularioAprobacionCondiciones'
 import { formatDate } from '@/utils'
 
 export function PrestamosList() {
@@ -22,8 +23,10 @@ export function PrestamosList() {
   const [showCrearPrestamo, setShowCrearPrestamo] = useState(false)
   const [showEvaluacion, setShowEvaluacion] = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
+  const [showAprobacionCondiciones, setShowAprobacionCondiciones] = useState(false)
   const [editingPrestamo, setEditingPrestamo] = useState<any>(null)
   const [evaluacionPrestamo, setEvaluacionPrestamo] = useState<any>(null)
+  const [aprobacionPrestamo, setAprobacionPrestamo] = useState<any>(null)
   const [viewingPrestamo, setViewingPrestamo] = useState<any>(null)
   const [deletePrestamoId, setDeletePrestamoId] = useState<number | null>(null)
 
@@ -36,6 +39,7 @@ export function PrestamosList() {
     const badges = {
       DRAFT: 'bg-gray-100 text-gray-800 border-gray-300',
       EN_REVISION: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+      EVALUADO: 'bg-blue-100 text-blue-800 border-blue-300',
       APROBADO: 'bg-green-100 text-green-800 border-green-300',
       RECHAZADO: 'bg-red-100 text-red-800 border-red-300',
     }
@@ -46,6 +50,7 @@ export function PrestamosList() {
     const labels: Record<string, string> = {
       DRAFT: 'Borrador',
       EN_REVISION: 'En Revisión',
+      EVALUADO: 'Evaluado',
       APROBADO: 'Aprobado',
       RECHAZADO: 'Rechazado',
     }
@@ -60,6 +65,11 @@ export function PrestamosList() {
   const handleEvaluarRiesgo = (prestamo: any) => {
     setEvaluacionPrestamo(prestamo)
     setShowEvaluacion(true)
+  }
+
+  const handleAprobarCredito = (prestamo: any) => {
+    setAprobacionPrestamo(prestamo)
+    setShowAprobacionCondiciones(true)
   }
 
   const handleView = (prestamo: any) => {
@@ -100,6 +110,34 @@ export function PrestamosList() {
         onSuccess={async () => {
           setShowEvaluacion(false)
           setEvaluacionPrestamo(null)
+          // Remover cache stale para forzar refetch completo
+          queryClient.removeQueries({ queryKey: prestamoKeys.lists() })
+          queryClient.removeQueries({ queryKey: prestamoKeys.all })
+          // Invalidar todas las queries
+          queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+          queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
+          // Forzar refetch inmediato ignorando staleTime
+          await queryClient.refetchQueries({ 
+            queryKey: prestamoKeys.all,
+            exact: false,
+            type: 'active'
+          })
+        }}
+      />
+    )
+  }
+
+  if (showAprobacionCondiciones) {
+    return (
+      <FormularioAprobacionCondiciones
+        prestamo={aprobacionPrestamo}
+        onClose={() => {
+          setShowAprobacionCondiciones(false)
+          setAprobacionPrestamo(null)
+        }}
+        onSuccess={async () => {
+          setShowAprobacionCondiciones(false)
+          setAprobacionPrestamo(null)
           // Remover cache stale para forzar refetch completo
           queryClient.removeQueries({ queryKey: prestamoKeys.lists() })
           queryClient.removeQueries({ queryKey: prestamoKeys.all })
@@ -259,16 +297,29 @@ export function PrestamosList() {
                                           <Eye className="h-4 w-4" />
                                         </Button>
 
-                                        {/* Botón Evaluar Riesgo y Aprobar - Solo Admin (DRAFT o EN_REVISION) */}
+                                        {/* Botón Evaluar Riesgo - Solo Admin (DRAFT o EN_REVISION) */}
                                         {canViewEvaluacionRiesgo() && (prestamo.estado === 'DRAFT' || prestamo.estado === 'EN_REVISION') && (
                                           <Button
                                             variant="ghost"
                                             size="sm"
                                             onClick={() => handleEvaluarRiesgo(prestamo)}
-                                            title="Evaluar riesgo y aprobar préstamo (genera tabla de amortización)"
+                                            title="Evaluar riesgo del préstamo"
                                             className="hover:bg-blue-50"
                                           >
                                             <Calculator className="h-4 w-4 text-blue-600" />
+                                          </Button>
+                                        )}
+
+                                        {/* Botón Aprobar Crédito - Solo Admin (EVALUADO) */}
+                                        {canViewEvaluacionRiesgo() && prestamo.estado === 'EVALUADO' && (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleAprobarCredito(prestamo)}
+                                            title="Aprobar crédito con condiciones (genera tabla de amortización)"
+                                            className="hover:bg-green-50"
+                                          >
+                                            <FileCheck className="h-4 w-4 text-green-600" />
                                           </Button>
                                         )}
 

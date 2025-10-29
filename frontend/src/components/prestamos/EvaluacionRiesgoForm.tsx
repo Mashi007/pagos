@@ -160,6 +160,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
         fecha_base_calculo: new Date().toISOString().split('T')[0],
         observaciones: `Aprobado después de evaluación de riesgo. Puntuación: ${resultado.puntuacion_total?.toFixed(2)}/100, Riesgo: ${resultado.clasificacion_riesgo}`
       })
+      // Mostrar automáticamente el formulario de aprobación cuando hay resultado
+      setShowFormularioAprobacion(true)
     }
   }, [resultado])
   
@@ -1384,6 +1386,13 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     type="button"
                     className="bg-green-600 hover:bg-green-700 text-white"
                     onClick={async () => {
+                      // Si el formulario no está visible, mostrarlo primero con un mensaje
+                      if (!showFormularioAprobacion) {
+                        setShowFormularioAprobacion(true)
+                        toast.info('Por favor, edite las condiciones de aprobación (Tasa de Interés y Fecha de Desembolso) antes de continuar')
+                        return
+                      }
+                      
                       // Validar condiciones antes de aprobar
                       if (!condicionesAprobacion.fecha_base_calculo) {
                         toast.error('Debe seleccionar una fecha de desembolso')
@@ -1398,12 +1407,11 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                         return
                       }
                       
-                      const mensajeConfirmacion = showFormularioAprobacion
-                        ? `¿Desea aprobar este préstamo con las siguientes condiciones?\n\n` +
-                          `• Tasa de Interés: ${condicionesAprobacion.tasa_interes}%\n` +
-                          `• Plazo Máximo: ${condicionesAprobacion.plazo_maximo} meses\n` +
-                          `• Fecha de Desembolso: ${new Date(condicionesAprobacion.fecha_base_calculo).toLocaleDateString()}`
-                        : '¿Desea aprobar este préstamo con las condiciones sugeridas?'
+                      const mensajeConfirmacion = 
+                        `¿Desea aprobar este préstamo con las siguientes condiciones?\n\n` +
+                        `• Tasa de Interés: ${condicionesAprobacion.tasa_interes}%\n` +
+                        `• Plazo Máximo: ${condicionesAprobacion.plazo_maximo} meses\n` +
+                        `• Fecha de Desembolso: ${new Date(condicionesAprobacion.fecha_base_calculo).toLocaleDateString()}`
                       
                       if (window.confirm(mensajeConfirmacion)) {
                         setIsAprobando(true)

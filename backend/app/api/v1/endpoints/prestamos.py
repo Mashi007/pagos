@@ -770,6 +770,15 @@ def evaluar_riesgo_prestamo(
     try:
         evaluacion = crear_evaluacion_prestamo(datos_evaluacion, db)
 
+        # IMPORTANTE: Cambiar estado a EVALUADO después de completar la evaluación
+        # Esto permite que aparezca el icono de "Aprobar Crédito" en el dashboard
+        if prestamo.estado in ["DRAFT", "EN_REVISION"]:
+            prestamo.estado = "EVALUADO"
+            db.commit()
+            logger.info(
+                f"Préstamo {prestamo_id} cambiado a estado EVALUADO después de evaluación de riesgo"
+            )
+
         # IMPORTANTE: La evaluación solo genera SUGERENCIAS
         # El humano (admin) debe decidir si aprobar o rechazar
         # NO se aprueba automáticamente, solo se marca como candidato para aprobación
