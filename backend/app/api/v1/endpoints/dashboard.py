@@ -4,12 +4,14 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func
+from sqlalchemy import func, and_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
+from app.models.pago import Pago
+from app.models.amortizacion import Cuota
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -18,92 +20,158 @@ router = APIRouter()
 
 @router.get("/admin")
 def dashboard_administrador(
-    fecha_inicio: Optional[date] = Query(None, description="Fecha de inicio"),
-    fecha_fin: Optional[date] = Query(None, description="Fecha de fin"),
+    periodo: Optional[str] = Query("mes", description="Periodo: dia, semana, mes, año"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # DASHBOARD ADMINISTRADOR - ACCESO COMPLETO AL SISTEMA
-    # Acceso: TODO el sistema
-    # Vista Dashboard:
-    # - Gráfico de mora vs al día
-    # - Estadísticas globales
-    if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Acceso denegado. Solo administradores."
+    """
+    Dashboard para administradores con datos reales de la base de datos
+    """
+    try:
+        if not current_user.is_admin:
+            raise HTTPException(
+                status_code=403, detail="Acceso denegado. Solo administradores."
+            )
+
+        hoy = date.today()
+
+        # 1. CARTERA TOTAL - Suma de todos los préstamos activos
+        cartera_total = (
+            db.query(func.sum(Prestamo.total_financiamiento))
+            .filter(Prestamo.activo == True)
+            .scalar() or Decimal("0")
         )
 
-    hoy = date.today()
-
-    # KPIs PRINCIPALES
-    cartera_total = db.query(func.sum(Cliente.total_financiamiento)).filter(
-        Cliente.activo, Cliente.total_financiamiento.isnot(None)
-    ).scalar() or Decimal("0")
-
-    clientes_al_dia = (
-        db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora == 0).count()
-    )
-
-    clientes_en_mora = (
-        db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).count()
-    )
-
-    porcentaje_mora = (
-        (clientes_en_mora / (clientes_al_dia + clientes_en_mora) * 100)
-        if (clientes_al_dia + clientes_en_mora) > 0
-        else 0
-    )
-
-    # Evolución de cartera (últimos 6 meses)
-    evolucion_cartera = []
-    for i in range(6):
-        fecha_mes = hoy - timedelta(days=30 * i)
-        evolucion_cartera.append(
-            {
-                "mes": fecha_mes.strftime("%Y-%m"),
-                "cartera": float(cartera_total) - (i * 50000),
-            }
+        # 2. CARTERA VENCIDA - Monto de préstamos con cuotas vencidas (no pagadas)
+        cartera_vencida = (
+            db.query(func.sum(Cuota.monto_cuota))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                and_(
+                    Cuota.fecha_vencimiento < hoy,
+                    Cuota.estado != "PAGADO",
+                    Prestamo.activo == True
+                )
+            )
+            .scalar() or Decimal("0")
         )
 
-    # Top 5 clientes con mayor financiamiento
-    top_clientes = (
-        db.query(Cliente)
-        .filter(Cliente.activo)
-        .order_by(Cliente.total_financiamiento.desc())
-        .limit(5)
-        .all()
-    )
+        # 3. CARTERA AL DÍA - Cartera total menos cartera vencida
+        cartera_al_dia = cartera_total - cartera_vencida
 
-    top_clientes_data = []
-    for cliente in top_clientes:
-        top_clientes_data.append(
-            {
-                "cedula": cliente.cedula,
-                "nombre": cliente.nombre,
-                "total_financiamiento": float(cliente.total_financiamiento or 0),
-                "dias_mora": cliente.dias_mora or 0,
-            }
+        # 4. PORCENTAJE DE MORA
+        porcentaje_mora = (
+            (float(cartera_vencida) / float(cartera_total) * 100)
+            if cartera_total > 0
+            else 0
         )
 
-    # Estadísticas de préstamos
-    prestamos_activos = db.query(Prestamo).filter(Prestamo.activo).count()
-    prestamos_pagados = db.query(Prestamo).filter(Prestamo.estado == "PAGADO").count()
-    prestamos_vencidos = db.query(Prestamo).filter(Prestamo.estado == "VENCIDO").count()
+        # 5. PAGOS DE HOY
+        pagos_hoy = db.query(func.count(Pago.id)).filter(
+            func.date(Pago.fecha_pago) == hoy
+        ).scalar() or 0
 
-    return {
-        "kpis": {
+        monto_pagos_hoy = (
+            db.query(func.sum(Pago.monto_pagado))
+            .filter(func.date(Pago.fecha_pago) == hoy)
+            .scalar() or Decimal("0")
+        )
+
+        # 6. CLIENTES ACTIVOS - Clientes con préstamos activos
+        clientes_activos = (
+            db.query(func.count(func.distinct(Prestamo.cedula)))
+            .filter(Prestamo.activo == True)
+            .scalar() or 0
+        )
+
+        # 7. CLIENTES EN MORA - Clientes con cuotas vencidas
+        clientes_en_mora = (
+            db.query(func.count(func.distinct(Prestamo.cedula)))
+            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                and_(
+                    Cuota.fecha_vencimiento < hoy,
+                    Cuota.estado != "PAGADO",
+                    Prestamo.activo == True
+                )
+            )
+            .scalar() or 0
+        )
+
+        # 8. PRÉSTAMOS ACTIVOS
+        prestamos_activos = db.query(func.count(Prestamo.id)).filter(
+            Prestamo.activo == True
+        ).scalar() or 0
+
+        # 9. PRÉSTAMOS PAGADOS
+        prestamos_pagados = db.query(func.count(Prestamo.id)).filter(
+            Prestamo.estado == "PAGADO"
+        ).scalar() or 0
+
+        # 10. PRÉSTAMOS VENCIDOS
+        prestamos_vencidos = (
+            db.query(func.count(func.distinct(Prestamo.id)))
+            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                and_(
+                    Cuota.fecha_vencimiento < hoy,
+                    Cuota.estado != "PAGADO",
+                    Prestamo.activo == True
+                )
+            )
+            .scalar() or 0
+        )
+
+        # 11. TOTAL PAGADO (histórico)
+        total_cobrado = (
+            db.query(func.sum(Pago.monto_pagado)).scalar() or Decimal("0")
+        )
+
+        # 12. CUOTAS PAGADAS TOTALES
+        cuotas_pagadas = db.query(func.count(Cuota.id)).filter(
+            Cuota.estado == "PAGADO"
+        ).scalar() or 0
+
+        # 13. CUOTAS PENDIENTES
+        cuotas_pendientes = db.query(func.count(Cuota.id)).filter(
+            Cuota.estado == "PENDIENTE"
+        ).scalar() or 0
+
+        # 14. CUOTAS ATRASADAS
+        cuotas_atrasadas = db.query(func.count(Cuota.id)).filter(
+            and_(
+                Cuota.estado == "ATRASADO",
+                Cuota.fecha_vencimiento < hoy
+            )
+        ).scalar() or 0
+
+        return {
             "cartera_total": float(cartera_total),
-            "clientes_al_dia": clientes_al_dia,
-            "clientes_en_mora": clientes_en_mora,
+            "cartera_anterior": 0,  # TODO: Calcular con período anterior
+            "cartera_al_dia": float(cartera_al_dia),
+            "cartera_vencida": float(cartera_vencida),
             "porcentaje_mora": round(porcentaje_mora, 2),
+            "porcentaje_mora_anterior": 0,
+            "pagos_hoy": pagos_hoy,
+            "monto_pagos_hoy": float(monto_pagos_hoy),
+            "clientes_activos": clientes_activos,
+            "clientes_mora": clientes_en_mora,
+            "clientes_anterior": 0,
+            "meta_mensual": 500000,  # TODO: Configurable
+            "avance_meta": float(total_cobrado),
             "prestamos_activos": prestamos_activos,
             "prestamos_pagados": prestamos_pagados,
             "prestamos_vencidos": prestamos_vencidos,
-        },
-        "evolucion_cartera": evolucion_cartera,
-        "top_clientes": top_clientes_data,
-        "fecha_consulta": hoy.isoformat(),
-    }
+            "total_cobrado": float(total_cobrado),
+            "cuotas_pagadas": cuotas_pagadas,
+            "cuotas_pendientes": cuotas_pendientes,
+            "cuotas_atrasadas": cuotas_atrasadas,
+            "fecha_consulta": hoy.isoformat(),
+        }
+
+    except Exception as e:
+        logger.error(f"Error en dashboard admin: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
 @router.get("/analista")
