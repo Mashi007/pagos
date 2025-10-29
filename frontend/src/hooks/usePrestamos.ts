@@ -30,7 +30,9 @@ export function usePrestamos(
   return useQuery({
     queryKey: prestamoKeys.list(filters),
     queryFn: () => prestamoService.getPrestamos(filters, page, perPage),
-    staleTime: STALE_TIME_SHORT, // 2 minutos para reflejar cambios más rápido
+    staleTime: 0, // Siempre refetch cuando se invalida (mejor para actualización inmediata de estado)
+    refetchOnMount: true, // Refetch cuando el componente se monta
+    refetchOnWindowFocus: false, // No refetch en focus (evita requests innecesarios)
   })
 }
 
@@ -98,21 +100,29 @@ export function useUpdatePrestamo() {
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<PrestamoForm> }) =>
       prestamoService.updatePrestamo(id, data),
-    onSuccess: (data, variables) => {
+    onSuccess: async (data, variables) => {
       // Actualizar datos del cache directamente con la respuesta del servidor
       queryClient.setQueryData(prestamoKeys.detail(variables.id), data)
       
-      // Invalidar todas las queries para forzar refetch
+      // Si el estado cambió a APROBADO, actualizar todas las listas
+      if (data.estado === 'APROBADO') {
+        // Remover cache stale para forzar refetch
+        queryClient.removeQueries({ queryKey: prestamoKeys.lists() })
+        queryClient.removeQueries({ queryKey: prestamoKeys.all })
+      }
+      
+      // Invalidar todas las queries
       queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
       queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
       
-      // Refetch específico para asegurar actualización
-      queryClient.refetchQueries({ 
+      // Forzar refetch inmediato ignorando staleTime
+      await queryClient.refetchQueries({ 
         queryKey: prestamoKeys.all,
-        exact: false 
+        exact: false,
+        type: 'active'
       })
       
-      toast.success('Préstamo actualizado exitosamente')
+      toast.success('Préstamo actualizado exitosamente. El dashboard se ha actualizado.')
     },
     onError: (error: any) => {
       const errorMessage = error.response?.data?.detail || 'Error al actualizar préstamo'
@@ -173,18 +183,23 @@ export function useAplicarCondicionesAprobacion() {
   return useMutation({
     mutationFn: ({ prestamoId, condiciones }: { prestamoId: number; condiciones: any }) =>
       prestamoService.aplicarCondicionesAprobacion(prestamoId, condiciones),
-    onSuccess: (data, variables) => {
+    onSuccess: async (data, variables) => {
       // Actualizar datos del cache directamente con la respuesta del servidor
       queryClient.setQueryData(prestamoKeys.detail(variables.prestamoId), data)
       
-      // Invalidar todas las queries para forzar refetch del dashboard
+      // Remover cache stale para forzar refetch (especialmente importante cuando estado = APROBADO)
+      queryClient.removeQueries({ queryKey: prestamoKeys.lists() })
+      queryClient.removeQueries({ queryKey: prestamoKeys.all })
+      
+      // Invalidar todas las queries
       queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
       queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
       
-      // Refetch específico para asegurar actualización inmediata del dashboard
-      queryClient.refetchQueries({ 
+      // Forzar refetch inmediato ignorando staleTime
+      await queryClient.refetchQueries({ 
         queryKey: prestamoKeys.all,
-        exact: false 
+        exact: false,
+        type: 'active'
       })
       
       toast.success('Préstamo aprobado exitosamente. El dashboard se ha actualizado.')

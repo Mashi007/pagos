@@ -97,14 +97,21 @@ export function PrestamosList() {
           setShowEvaluacion(false)
           setEvaluacionPrestamo(null)
         }}
-        onSuccess={() => {
+        onSuccess={async () => {
           setShowEvaluacion(false)
           setEvaluacionPrestamo(null)
-          // Invalidar TODAS las queries de préstamos para refrescar dashboard y lista
+          // Remover cache stale para forzar refetch completo
+          queryClient.removeQueries({ queryKey: prestamoKeys.lists() })
+          queryClient.removeQueries({ queryKey: prestamoKeys.all })
+          // Invalidar todas las queries
           queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
           queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
-          // Refetch para actualización inmediata
-          queryClient.refetchQueries({ queryKey: prestamoKeys.all })
+          // Forzar refetch inmediato ignorando staleTime
+          await queryClient.refetchQueries({ 
+            queryKey: prestamoKeys.all,
+            exact: false,
+            type: 'active'
+          })
         }}
       />
     )
