@@ -1,3 +1,7 @@
+"""
+Endpoints para el módulo de Préstamos
+"""
+
 import logging
 from datetime import date, datetime
 from decimal import Decimal
