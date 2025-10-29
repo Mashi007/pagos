@@ -546,25 +546,31 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       addToast('success', `Cliente ${row.nombres} guardado exitosamente`)
       
       // Eliminar la fila de la lista después de guardar exitosamente
-      setExcelData(prev => prev.filter(r => r._rowIndex !== row._rowIndex))
-      
-      // Verificar si quedan filas pendientes
-      const remainingRows = excelData.filter(r => r._rowIndex !== row._rowIndex)
-      if (remainingRows.length === 0) {
-        addToast('success', '🎉 ¡Todos los clientes han sido guardados exitosamente!')
-        notifyDashboardUpdate(getSavedClientsCount())
+      setExcelData(prev => {
+        const remaining = prev.filter(r => r._rowIndex !== row._rowIndex)
         
-        // Mostrar mensaje informativo sobre navegación automática
-        addToast('success', '🔄 Redirigiendo al Dashboard de Clientes en 2 segundos...')
+        // ✅ Solo cerrar automáticamente si YA NO HAY filas pendientes
+        if (remaining.length === 0) {
+          addToast('success', '🎉 ¡Todos los clientes han sido guardados exitosamente!')
+          notifyDashboardUpdate(getSavedClientsCount())
+          
+          // Mostrar mensaje informativo sobre navegación automática
+          addToast('success', '🔄 Redirigiendo al Dashboard de Clientes en 2 segundos...')
+          
+          // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
+          setTimeout(() => {
+            // Cerrar el modal de Carga Masiva
+            onClose()
+            // Navegar directamente al Dashboard de Clientes
+            navigate('/clientes')
+          }, 2000)
+        } else {
+          // ✅ HAY clientes pendientes, mostrar información
+          addToast('info', `${remaining.length} clientes pendientes`)
+        }
         
-        // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
-        setTimeout(() => {
-          // Cerrar el modal de Carga Masiva
-          onClose()
-          // Navegar directamente al Dashboard de Clientes
-          navigate('/clientes')
-        }, 2000)
-      }
+        return remaining
+      })
       
       return true
       
@@ -633,21 +639,28 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         notifyDashboardUpdate(successful)
         
         // Eliminar las filas guardadas de la lista
-        setExcelData(prev => prev.filter(r => !successfulRowIndexes.includes(r._rowIndex)))
-        
-        // Solo navegar si realmente se guardaron clientes
-        if (successful > 0) {
-          // Mostrar mensaje informativo sobre navegación automática
-          addToast('success', '🔄 Redirigiendo al Dashboard de Clientes en 2 segundos...')
+        setExcelData(prev => {
+          const remaining = prev.filter(r => !successfulRowIndexes.includes(r._rowIndex))
           
-          // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
-          setTimeout(() => {
-            // Cerrar el modal de Carga Masiva
-            onClose()
-            // Navegar directamente al Dashboard de Clientes
-            navigate('/clientes')
-          }, 2000)
-        }
+          // ✅ Solo cerrar automáticamente si YA NO HAY filas pendientes
+          if (remaining.length === 0) {
+            // Mostrar mensaje informativo sobre navegación automática
+            addToast('success', '🎉 ¡Todos los clientes guardados! Cerrando en 2 segundos...')
+            
+            // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
+            setTimeout(() => {
+              // Cerrar el modal de Carga Masiva
+              onClose()
+              // Navegar directamente al Dashboard de Clientes
+              navigate('/clientes')
+            }, 2000)
+          } else {
+            // ✅ HAY clientes pendientes, mostrar advertencia
+            addToast('warning', `⚠️ Quedan ${remaining.length} clientes por verificar`)
+          }
+          
+          return remaining
+        })
       }
       
       if (failed > 0) {
