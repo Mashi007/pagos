@@ -462,54 +462,58 @@ def obtener_resumen_prestamos_cliente(
     from datetime import date
     from sqlalchemy import func, and_
     from decimal import Decimal
-    
+
     prestamos = db.query(Prestamo).filter(Prestamo.cedula == cedula).all()
-    
+
     if not prestamos:
-        return {
-            "tiene_prestamos": False,
-            "total_prestamos": 0,
-            "prestamos": []
-        }
-    
+        return {"tiene_prestamos": False, "total_prestamos": 0, "prestamos": []}
+
     resumen_prestamos = []
     total_saldo = Decimal("0.00")
     total_cuotas_mora = 0
-    
+
     for prestamo in prestamos:
         # Obtener cuotas del préstamo
         cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).all()
-        
+
         # Calcular saldo pendiente (suma de capital_pendiente + interes_pendiente + monto_mora)
         saldo_pendiente = Decimal("0.00")
         cuotas_en_mora = 0
-        
+
         for cuota in cuotas:
-            saldo_pendiente += cuota.capital_pendiente + cuota.interes_pendiente + cuota.monto_mora
-            
+            saldo_pendiente += (
+                cuota.capital_pendiente + cuota.interes_pendiente + cuota.monto_mora
+            )
+
             # Contar cuotas en mora (vencidas y no pagadas)
             if cuota.fecha_vencimiento < date.today() and cuota.estado != "PAGADO":
                 cuotas_en_mora += 1
-        
+
         total_saldo += saldo_pendiente
         total_cuotas_mora += cuotas_en_mora
-        
-        resumen_prestamos.append({
-            "id": prestamo.id,
-            "modelo_vehiculo": prestamo.modelo_vehiculo or prestamo.producto,
-            "total_financiamiento": float(prestamo.total_financiamiento),
-            "saldo_pendiente": float(saldo_pendiente),
-            "cuotas_en_mora": cuotas_en_mora,
-            "estado": prestamo.estado,
-            "fecha_registro": prestamo.fecha_registro.isoformat() if prestamo.fecha_registro else None,
-        })
-    
+
+        resumen_prestamos.append(
+            {
+                "id": prestamo.id,
+                "modelo_vehiculo": prestamo.modelo_vehiculo or prestamo.producto,
+                "total_financiamiento": float(prestamo.total_financiamiento),
+                "saldo_pendiente": float(saldo_pendiente),
+                "cuotas_en_mora": cuotas_en_mora,
+                "estado": prestamo.estado,
+                "fecha_registro": (
+                    prestamo.fecha_registro.isoformat()
+                    if prestamo.fecha_registro
+                    else None
+                ),
+            }
+        )
+
     return {
         "tiene_prestamos": True,
         "total_prestamos": len(prestamos),
         "total_saldo_pendiente": float(total_saldo),
         "total_cuotas_mora": total_cuotas_mora,
-        "prestamos": resumen_prestamos
+        "prestamos": resumen_prestamos,
     }
 
 
