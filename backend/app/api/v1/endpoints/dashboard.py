@@ -36,24 +36,21 @@ def dashboard_administrador(
         hoy = date.today()
 
         # 1. CARTERA TOTAL - Suma de todos los préstamos activos
-        cartera_total = (
-            db.query(func.sum(Prestamo.total_financiamiento))
-            .filter(Prestamo.activo == True)
-            .scalar() or Decimal("0")
-        )
+        cartera_total = db.query(func.sum(Prestamo.total_financiamiento)).filter(
+            Prestamo.activo == True
+        ).scalar() or Decimal("0")
 
         # 2. CARTERA VENCIDA - Monto de préstamos con cuotas vencidas (no pagadas)
-        cartera_vencida = (
-            db.query(func.sum(Cuota.monto_cuota))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                and_(
-                    Cuota.fecha_vencimiento < hoy,
-                    Cuota.estado != "PAGADO",
-                    Prestamo.activo == True
-                )
+        cartera_vencida = db.query(func.sum(Cuota.monto_cuota)).join(
+            Prestamo, Cuota.prestamo_id == Prestamo.id
+        ).filter(
+            and_(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
+                Prestamo.activo == True,
             )
-            .scalar() or Decimal("0")
+        ).scalar() or Decimal(
+            "0"
         )
 
         # 3. CARTERA AL DÍA - Cartera total menos cartera vencida
@@ -67,21 +64,23 @@ def dashboard_administrador(
         )
 
         # 5. PAGOS DE HOY
-        pagos_hoy = db.query(func.count(Pago.id)).filter(
-            func.date(Pago.fecha_pago) == hoy
-        ).scalar() or 0
-
-        monto_pagos_hoy = (
-            db.query(func.sum(Pago.monto_pagado))
+        pagos_hoy = (
+            db.query(func.count(Pago.id))
             .filter(func.date(Pago.fecha_pago) == hoy)
-            .scalar() or Decimal("0")
+            .scalar()
+            or 0
         )
+
+        monto_pagos_hoy = db.query(func.sum(Pago.monto_pagado)).filter(
+            func.date(Pago.fecha_pago) == hoy
+        ).scalar() or Decimal("0")
 
         # 6. CLIENTES ACTIVOS - Clientes con préstamos activos
         clientes_activos = (
             db.query(func.count(func.distinct(Prestamo.cedula)))
             .filter(Prestamo.activo == True)
-            .scalar() or 0
+            .scalar()
+            or 0
         )
 
         # 7. CLIENTES EN MORA - Clientes con cuotas vencidas
@@ -92,21 +91,26 @@ def dashboard_administrador(
                 and_(
                     Cuota.fecha_vencimiento < hoy,
                     Cuota.estado != "PAGADO",
-                    Prestamo.activo == True
+                    Prestamo.activo == True,
                 )
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
 
         # 8. PRÉSTAMOS ACTIVOS
-        prestamos_activos = db.query(func.count(Prestamo.id)).filter(
-            Prestamo.activo == True
-        ).scalar() or 0
+        prestamos_activos = (
+            db.query(func.count(Prestamo.id)).filter(Prestamo.activo == True).scalar()
+            or 0
+        )
 
         # 9. PRÉSTAMOS PAGADOS
-        prestamos_pagados = db.query(func.count(Prestamo.id)).filter(
-            Prestamo.estado == "PAGADO"
-        ).scalar() or 0
+        prestamos_pagados = (
+            db.query(func.count(Prestamo.id))
+            .filter(Prestamo.estado == "PAGADO")
+            .scalar()
+            or 0
+        )
 
         # 10. PRÉSTAMOS VENCIDOS
         prestamos_vencidos = (
@@ -116,34 +120,35 @@ def dashboard_administrador(
                 and_(
                     Cuota.fecha_vencimiento < hoy,
                     Cuota.estado != "PAGADO",
-                    Prestamo.activo == True
+                    Prestamo.activo == True,
                 )
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
 
         # 11. TOTAL PAGADO (histórico)
-        total_cobrado = (
-            db.query(func.sum(Pago.monto_pagado)).scalar() or Decimal("0")
-        )
+        total_cobrado = db.query(func.sum(Pago.monto_pagado)).scalar() or Decimal("0")
 
         # 12. CUOTAS PAGADAS TOTALES
-        cuotas_pagadas = db.query(func.count(Cuota.id)).filter(
-            Cuota.estado == "PAGADO"
-        ).scalar() or 0
+        cuotas_pagadas = (
+            db.query(func.count(Cuota.id)).filter(Cuota.estado == "PAGADO").scalar()
+            or 0
+        )
 
         # 13. CUOTAS PENDIENTES
-        cuotas_pendientes = db.query(func.count(Cuota.id)).filter(
-            Cuota.estado == "PENDIENTE"
-        ).scalar() or 0
+        cuotas_pendientes = (
+            db.query(func.count(Cuota.id)).filter(Cuota.estado == "PENDIENTE").scalar()
+            or 0
+        )
 
         # 14. CUOTAS ATRASADAS
-        cuotas_atrasadas = db.query(func.count(Cuota.id)).filter(
-            and_(
-                Cuota.estado == "ATRASADO",
-                Cuota.fecha_vencimiento < hoy
-            )
-        ).scalar() or 0
+        cuotas_atrasadas = (
+            db.query(func.count(Cuota.id))
+            .filter(and_(Cuota.estado == "ATRASADO", Cuota.fecha_vencimiento < hoy))
+            .scalar()
+            or 0
+        )
 
         return {
             "cartera_total": float(cartera_total),
