@@ -82,6 +82,11 @@ export function useCreateCliente() {
     onSuccess: (newCliente) => {
       // Invalidar y refetch queries relacionadas
       queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
+      // ✅ Invalidar también búsquedas de clientes (usadas en formularios de préstamos)
+      queryClient.invalidateQueries({ 
+        queryKey: ['clientes', 'search'],
+        exact: false  // Invalida todas las búsquedas: ['clientes', 'search', ...]
+      })
       
       toast.success(`Cliente ${newCliente.nombres} ${newCliente.apellidos} creado exitosamente`)
     },
@@ -107,6 +112,11 @@ export function useUpdateCliente() {
       
       // Invalidar listas
       queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
+      // ✅ Invalidar también búsquedas de clientes (usadas en formularios de préstamos)
+      queryClient.invalidateQueries({ 
+        queryKey: ['clientes', 'search'],
+        exact: false  // Invalida todas las búsquedas: ['clientes', 'search', ...]
+      })
       
       toast.success(`Cliente ${updatedCliente.nombres} ${updatedCliente.apellidos} actualizado`)
     },

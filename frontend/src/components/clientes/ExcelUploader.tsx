@@ -482,12 +482,17 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
   // 🔄 FUNCIONES PARA CONEXIÓN CON DASHBOARD
   const refreshDashboardClients = () => {
-    // Invalidar cache de clientes para refrescar Dashboard
+    // Invalidar cache de clientes para refrescar Dashboard y formularios de préstamos
     queryClient.invalidateQueries({ queryKey: ['clientes'] })
     queryClient.invalidateQueries({ queryKey: ['clientes-list'] })
     queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
+    // ✅ Invalidar también búsquedas de clientes (usadas en formularios de préstamos)
+    queryClient.invalidateQueries({ 
+      queryKey: ['clientes', 'search'],
+      exact: false  // Invalida todas las búsquedas: ['clientes', 'search', ...]
+    })
     
-    console.log('🔄 Cache de Dashboard de Clientes invalidado')
+    console.log('🔄 Cache de Dashboard de Clientes y búsquedas invalidado')
   }
 
   const notifyDashboardUpdate = (clientCount: number) => {
