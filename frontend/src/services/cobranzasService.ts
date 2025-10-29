@@ -110,7 +110,7 @@ class CobranzasService {
     const url = `${this.baseUrl}/informes/rendimiento-analista?formato=${formato}`
     
     if (formato === 'pdf' || formato === 'excel') {
-      const axiosInstance = apiClientRaw.getAxiosInstance()
+      const axiosInstance = apiClient.getAxiosInstance()
       const response = await axiosInstance.get(url, { responseType: 'blob' })
       const blob = new Blob([response.data], {
         type: formato === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -167,7 +167,7 @@ class CobranzasService {
     const url = `${this.baseUrl}/informes/antiguedad-saldos?formato=${formato}`
     
     if (formato === 'pdf' || formato === 'excel') {
-      const axiosInstance = apiClientRaw.getAxiosInstance()
+      const axiosInstance = apiClient.getAxiosInstance()
       const response = await axiosInstance.get(url, { responseType: 'blob' })
       const blob = new Blob([response.data], {
         type: formato === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -191,7 +191,7 @@ class CobranzasService {
     const url = `${this.baseUrl}/informes/resumen-ejecutivo?formato=${formato}`
     
     if (formato === 'pdf' || formato === 'excel') {
-      const axiosInstance = apiClientRaw.getAxiosInstance()
+      const axiosInstance = apiClient.getAxiosInstance()
       const response = await axiosInstance.get(url, { responseType: 'blob' })
       const blob = new Blob([response.data], {
         type: formato === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
