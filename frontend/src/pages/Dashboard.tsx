@@ -35,7 +35,6 @@ import { userService, User } from '@/services/userService'
 import { PagosKPIs } from '@/components/pagos/PagosKPIs'
 import { pagoService } from '@/services/pagoService'
 import {
-  LineChart as RechartsLineChart,
   BarChart,
   Bar,
   PieChart as RechartsPieChart,
@@ -369,12 +368,18 @@ export function Dashboard() {
   })
 
   // Datos para gráficos
-  const evolucionMensual = data.evolucion_mensual || mockEvolucionMensual
-  const datosIngresos = data.financieros ? [
+  const evolucionMensual = (data.evolucion_mensual && data.evolucion_mensual.length > 0) 
+    ? data.evolucion_mensual 
+    : mockEvolucionMensual
+  const datosIngresos = data.financieros && data.financieros.ingresosCapital > 0 ? [
     { name: 'Capital', value: data.financieros.ingresosCapital, color: '#3b82f6' },
     { name: 'Intereses', value: data.financieros.ingresosInteres, color: '#10b981' },
     { name: 'Mora', value: data.financieros.ingresosMora, color: '#ef4444' },
-  ] : []
+  ] : [
+    { name: 'Capital', value: mockData.financieros.ingresosCapital, color: '#3b82f6' },
+    { name: 'Intereses', value: mockData.financieros.ingresosInteres, color: '#10b981' },
+    { name: 'Mora', value: mockData.financieros.ingresosMora, color: '#ef4444' },
+  ]
 
   return (
     <div className="space-y-6">
@@ -656,7 +661,7 @@ export function Dashboard() {
 
       {/* Gráficos y Análisis */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Evolución Mensual */}
+        {/* Evolución Mensual - Gráfico de Líneas */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -666,78 +671,82 @@ export function Dashboard() {
             <CardDescription>Comparativo de cartera, cobrado y morosidad</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {mockEvolucionMensual.map((mes, index) => (
-                <div key={mes.mes} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-bold text-blue-600">{mes.mes}</span>
-                    </div>
-                    <div>
-                      <div className="font-medium text-gray-900">Enero - Julio</div>
-                      <div className="text-sm text-gray-500">Período {index + 1}</div>
-                    </div>
-                  </div>
-                  <div className="flex space-x-6 text-sm">
-                    <div className="text-center">
-                      <div className="text-gray-500">Cartera</div>
-                      <div className="font-semibold text-gray-900">{formatCurrency(mes.cartera)}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-gray-500">Cobrado</div>
-                      <div className="font-semibold text-green-600">{formatCurrency(mes.cobrado)}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-gray-500">Mora</div>
-                      <div className="font-semibold text-red-600">{mes.morosidad}%</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={evolucionMensual}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="mes" />
+                <YAxis yAxisId="left" />
+                <YAxis yAxisId="right" orientation="right" />
+                <Tooltip 
+                  formatter={(value: any, name: string) => {
+                    if (name === 'Morosidad %') return `${value}%`
+                    return formatCurrency(value)
+                  }}
+                />
+                <Legend />
+                <Area 
+                  yAxisId="left"
+                  type="monotone" 
+                  dataKey="cartera" 
+                  stroke="#6366f1" 
+                  fill="#6366f1" 
+                  fillOpacity={0.3}
+                  name="Cartera"
+                />
+                <Area 
+                  yAxisId="left"
+                  type="monotone" 
+                  dataKey="cobrado" 
+                  stroke="#10b981" 
+                  fill="#10b981" 
+                  fillOpacity={0.3}
+                  name="Cobrado"
+                />
+                <Area 
+                  yAxisId="right"
+                  type="monotone" 
+                  dataKey="morosidad" 
+                  stroke="#ef4444" 
+                  fill="#ef4444" 
+                  fillOpacity={0.1}
+                  name="Morosidad %"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {/* Top Asesores */}
+        {/* Distribución de Ingresos - Gráfico de Barras */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Award className="mr-2 h-5 w-5" />
-              Top Asesores
+              <BarChart3 className="mr-2 h-5 w-5" />
+              Distribución de Ingresos
             </CardTitle>
-            <CardDescription>Ranking por ventas y rendimiento</CardDescription>
+            <CardDescription>Desglose por tipo de ingreso</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {mockTopAsesores.map((analista, index) => (
-                <div key={analista.nombre} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                      index === 0 ? 'bg-yellow-500 text-white' : 
-                      index === 1 ? 'bg-gray-400 text-white' : 
-                      index === 2 ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-600'
-                    }`}>
-                      {index + 1}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900">{analista.nombre}</div>
-                      <div className="text-sm text-gray-500">{analista.clientes} clientes • {analista.ventas} ventas</div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-semibold text-gray-900">{formatCurrency(analista.monto)}</div>
-                    <div className="text-sm text-green-600">{analista.tasaConversion}% conversión</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={datosIngresos}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                <Legend />
+                <Bar dataKey="value" fill="#8884d8" name="Monto">
+                  {datosIngresos.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
 
       {/* Métricas Detalladas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Ingresos por Tipo */}
+        {/* Ingresos por Tipo - Gráfico de Pastel */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -747,30 +756,50 @@ export function Dashboard() {
             <CardDescription>Desglose de ingresos por categoría</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-                <span className="font-medium text-blue-900">Capital</span>
+            <ResponsiveContainer width="100%" height={250}>
+              <RechartsPieChart>
+                <Pie
+                  data={datosIngresos}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {datosIngresos.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                <Legend />
+              </RechartsPieChart>
+            </ResponsiveContainer>
+            <div className="mt-4 space-y-2">
+              <div className="flex justify-between items-center p-2 bg-blue-50 rounded-lg">
+                <span className="text-sm font-medium text-blue-900">Capital</span>
                 <Badge variant="outline" className="bg-blue-100 text-blue-800">
-                  {formatCurrency(mockData.financieros.ingresosCapital)}
+                  {formatCurrency(data.financieros?.ingresosCapital || 0)}
                 </Badge>
               </div>
-              <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                <span className="font-medium text-green-900">Intereses</span>
+              <div className="flex justify-between items-center p-2 bg-green-50 rounded-lg">
+                <span className="text-sm font-medium text-green-900">Intereses</span>
                 <Badge variant="outline" className="bg-green-100 text-green-800">
-                  {formatCurrency(mockData.financieros.ingresosInteres)}
+                  {formatCurrency(data.financieros?.ingresosInteres || 0)}
                 </Badge>
               </div>
-              <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                <span className="font-medium text-red-900">Mora</span>
+              <div className="flex justify-between items-center p-2 bg-red-50 rounded-lg">
+                <span className="text-sm font-medium text-red-900">Mora</span>
                 <Badge variant="outline" className="bg-red-100 text-red-800">
-                  {formatCurrency(mockData.financieros.ingresosMora)}
+                  {formatCurrency(data.financieros?.ingresosMora || 0)}
                 </Badge>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Métricas de Cobranza */}
+        {/* Métricas de Cobranza - Gráfico de Barras */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -780,23 +809,53 @@ export function Dashboard() {
             <CardDescription>Indicadores de eficiencia</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <span className="font-medium">Promedio días mora</span>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={[
+                { 
+                  name: 'Cumplimiento', 
+                  valor: data.cobranza?.porcentajeCumplimiento || 0,
+                  color: '#10b981'
+                },
+                { 
+                  name: 'Prom. Días Mora', 
+                  valor: data.cobranza?.promedioDiasMora || 0,
+                  color: '#f59e0b'
+                },
+                { 
+                  name: 'Clientes Mora', 
+                  valor: data.cobranza?.clientesMora || 0,
+                  color: '#ef4444'
+                }
+              ]}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="valor" fill="#8884d8">
+                  {[data.cobranza?.porcentajeCumplimiento || 0, data.cobranza?.promedioDiasMora || 0, data.cobranza?.clientesMora || 0].map((_, index) => {
+                    const colors = ['#10b981', '#f59e0b', '#ef4444']
+                    return <Cell key={`cell-${index}`} fill={colors[index]} />
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="mt-4 space-y-2">
+              <div className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+                <span className="text-sm font-medium">Promedio días mora</span>
                 <Badge variant="outline">
-                  {mockData.cobranza.promedioDiasMora} días
+                  {data.cobranza?.promedioDiasMora?.toFixed(1) || 0} días
                 </Badge>
               </div>
-              <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                <span className="font-medium text-green-900">% Cumplimiento</span>
+              <div className="flex justify-between items-center p-2 bg-green-50 rounded-lg">
+                <span className="text-sm font-medium text-green-900">% Cumplimiento</span>
                 <Badge className="bg-green-600 text-white">
-                  {mockData.cobranza.porcentajeCumplimiento}%
+                  {data.cobranza?.porcentajeCumplimiento?.toFixed(1) || 0}%
                 </Badge>
               </div>
-              <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                <span className="font-medium text-red-900">Clientes en mora</span>
+              <div className="flex justify-between items-center p-2 bg-red-50 rounded-lg">
+                <span className="text-sm font-medium text-red-900">Clientes en mora</span>
                 <Badge className="bg-red-600 text-white">
-                  {mockData.cobranza.clientesMora}
+                  {data.cobranza?.clientesMora || 0}
                 </Badge>
               </div>
             </div>
@@ -815,23 +874,45 @@ export function Dashboard() {
           <CardContent>
             <div className="space-y-4">
               <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-                <span className="font-medium text-blue-900">Modelo más vendido</span>
+                <span className="text-sm font-medium text-blue-900">Modelo más vendido</span>
                 <Badge variant="outline" className="bg-blue-100 text-blue-800">
-                  {mockData.productos.modeloMasVendido}
+                  {data.productos?.modeloMasVendido || 'N/A'}
                 </Badge>
               </div>
               <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                <span className="font-medium text-green-900">Ventas del modelo</span>
+                <span className="text-sm font-medium text-green-900">Ventas del modelo</span>
                 <Badge variant="outline" className="bg-green-100 text-green-800">
-                  {mockData.productos.ventasModeloMasVendido}
+                  {data.productos?.ventasModeloMasVendido || 0}
                 </Badge>
               </div>
               <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
-                <span className="font-medium text-purple-900">Ticket promedio</span>
+                <span className="text-sm font-medium text-purple-900">Ticket promedio</span>
                 <Badge variant="outline" className="bg-purple-100 text-purple-800">
-                  {formatCurrency(mockData.productos.ticketPromedio)}
+                  {formatCurrency(data.productos?.ticketPromedio || 0)}
                 </Badge>
               </div>
+              {data.productos?.ticketPromedio && (
+                <div className="mt-4 pt-4 border-t">
+                  <div className="text-xs text-gray-500 mb-1">Variación vs período anterior</div>
+                  <div className="flex items-center">
+                    {(() => {
+                      const variacion = calcularVariacion(
+                        data.productos.ticketPromedio,
+                        data.productos.ticketPromedioAnterior
+                      )
+                      const IconComponent = variacion.icono
+                      return (
+                        <>
+                          <IconComponent className={`h-4 w-4 mr-1 ${variacion.color}`} />
+                          <span className={`text-sm font-medium ${variacion.color}`}>
+                            {Math.abs(variacion.valor).toFixed(1)}%
+                          </span>
+                        </>
+                      )
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
