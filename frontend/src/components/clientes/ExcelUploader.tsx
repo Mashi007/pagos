@@ -456,6 +456,12 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
   const saveIndividualClient = async (row: ExcelRow): Promise<boolean> => {
     try {
+      // ✅ VALIDACIÓN PREVIA: Verificar que NO hay errores antes de intentar guardar
+      if (row._hasErrors) {
+        alert('⚠️ NO SE PUEDE GUARDAR: Hay campos vacíos o con errores en esta fila.\n\nPor favor, complete todos los campos obligatorios en la tabla antes de guardar.')
+        return false
+      }
+      
       setSavingProgress(prev => ({ ...prev, [row._rowIndex]: true }))
       
       const clienteData = {
@@ -1118,8 +1124,14 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       
       // Recalcular si tiene errores (excluyendo notas que es opcional)
       const fieldsToCheck = Object.keys(row._validation).filter(field => field !== 'notas')
-      const hasErrors = fieldsToCheck.some(field => !row._validation[field]?.isValid)
-      row._hasErrors = hasErrors
+      const hasValidationErrors = fieldsToCheck.some(field => !row._validation[field]?.isValid)
+      
+      // ✅ Validar dropdowns explícitamente
+      const hasDropdownErrors = !row.concesionario?.trim() || 
+                                !row.analista?.trim() || 
+                                !row.modelo_vehiculo?.trim()
+      
+      row._hasErrors = hasValidationErrors || hasDropdownErrors
       
       setExcelData(newData)
       
