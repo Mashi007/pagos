@@ -17,7 +17,6 @@ class PagoBase(BaseModel):
     monto_pagado: Decimal = Field(..., description="Monto pagado")
     numero_documento: str = Field(..., description="Número de documento")
     institucion_bancaria: str | None = Field(None, description="Institución bancaria")
-    referencia_pago: str = Field(..., description="Referencia de pago")
     notas: str | None = Field(None, description="Notas adicionales")
 
 
@@ -34,7 +33,6 @@ class PagoUpdate(BaseModel):
     monto_pagado: Decimal | None = None
     numero_documento: str | None = None
     institucion_bancaria: str | None = None
-    referencia_pago: str | None = None
     notas: str | None = None
 
 

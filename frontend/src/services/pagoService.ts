@@ -9,7 +9,6 @@ export interface Pago {
   monto_pagado: number
   numero_documento: string
   institucion_bancaria: string | null
-  referencia_pago: string
   estado: string
   conciliado: boolean
   notas: string | null
@@ -25,7 +24,6 @@ export interface PagoCreate {
   monto_pagado: number
   numero_documento: string
   institucion_bancaria: string | null
-  referencia_pago: string
   notas?: string | null
 }
 

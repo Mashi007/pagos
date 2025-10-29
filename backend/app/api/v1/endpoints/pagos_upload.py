@@ -94,7 +94,6 @@ async def upload_pagos_excel(
                     monto_pagado=monto_pagado,
                     numero_documento=numero_documento,
                     institucion_bancaria=None,
-                    referencia_pago=f"AUTO-{cedula}-{numero_documento}",
                     estado="PAGADO",
                     usuario_registro=current_user.email,
                     conciliado=False,

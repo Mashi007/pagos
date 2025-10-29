@@ -33,7 +33,6 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial }: Registrar
     monto_pagado: pagoInicial?.monto_pagado || 0,
     numero_documento: pagoInicial?.numero_documento || '',
     institucion_bancaria: pagoInicial?.institucion_bancaria || null,
-    referencia_pago: pagoInicial?.referencia_pago || '',
     notas: pagoInicial?.notas || null,
   })
   
@@ -72,7 +71,6 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial }: Registrar
     
     if (!formData.monto_pagado || formData.monto_pagado <= 0) newErrors.monto_pagado = 'Monto inválido'
     if (!formData.numero_documento) newErrors.numero_documento = 'Número de documento requerido'
-    if (!formData.referencia_pago) newErrors.referencia_pago = 'Referencia requerida'
     
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
@@ -252,42 +250,24 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial }: Registrar
               </div>
             </div>
 
-            {/* Número de Documento y Referencia */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Número de Documento <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <FileText className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input
-                    type="text"
-                    value={formData.numero_documento}
-                    onChange={e => setFormData({ ...formData, numero_documento: e.target.value })}
-                    className={`pl-10 ${errors.numero_documento ? 'border-red-500' : ''}`}
-                    placeholder="Número de referencia"
-                  />
-                </div>
-                {errors.numero_documento && (
-                  <p className="text-sm text-red-600">{errors.numero_documento}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Referencia de Pago <span className="text-red-500">*</span>
-                </label>
+            {/* Número de Documento */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">
+                Número de Documento <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <FileText className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
                   type="text"
-                  value={formData.referencia_pago}
-                  onChange={e => setFormData({ ...formData, referencia_pago: e.target.value })}
-                  className={errors.referencia_pago ? 'border-red-500' : ''}
-                  placeholder="Ref-123ABC"
+                  value={formData.numero_documento}
+                  onChange={e => setFormData({ ...formData, numero_documento: e.target.value })}
+                  className={`pl-10 ${errors.numero_documento ? 'border-red-500' : ''}`}
+                  placeholder="Número de referencia"
                 />
-                {errors.referencia_pago && (
-                  <p className="text-sm text-red-600">{errors.referencia_pago}</p>
-                )}
               </div>
+              {errors.numero_documento && (
+                <p className="text-sm text-red-600">{errors.numero_documento}</p>
+              )}
             </div>
 
             {/* Notas */}

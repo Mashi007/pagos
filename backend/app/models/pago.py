@@ -34,9 +34,6 @@ class Pago(Base):
     monto_pagado = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
     numero_documento = Column(String(DOCUMENTO_LENGTH), nullable=False, index=True)
     institucion_bancaria = Column(String(100), nullable=True)  # Institución bancaria
-    referencia_pago = Column(
-        String(100), nullable=False
-    )  # Referencia de pago (alphanumeric)
 
     # DOCUMENTO ADJUNTO
     documento_nombre = Column(String(DOCUMENTO_NOMBRE_LENGTH), nullable=True)
