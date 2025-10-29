@@ -164,7 +164,7 @@ export function PagosList() {
                         <td className="px-4 py-3">{pago.prestamo_id || 'N/A'}</td>
                         <td className="px-4 py-3">{getEstadoBadge(pago.estado)}</td>
                         <td className="px-4 py-3">0</td>
-                        <td className="px-4 py-3">${pago.monto_pagado.toFixed(2)}</td>
+                        <td className="px-4 py-3">${typeof pago.monto_pagado === 'number' ? pago.monto_pagado.toFixed(2) : parseFloat(String(pago.monto_pagado || 0)).toFixed(2)}</td>
                         <td className="px-4 py-3">{new Date(pago.fecha_pago).toLocaleDateString()}</td>
                         <td className="px-4 py-3">
                           <div className="flex gap-2">

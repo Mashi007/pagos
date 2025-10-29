@@ -6,7 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, field_serializer
 
 
 class PagoBase(BaseModel):
@@ -117,6 +117,14 @@ class PagoResponse(PagoBase):
     usuario_registro: str
     activo: bool
     fecha_actualizacion: datetime
+
+    @field_serializer("monto_pagado")
+    @classmethod
+    def serialize_monto(cls, v):
+        """Serializar Decimal como float"""
+        if isinstance(v, Decimal):
+            return float(v)
+        return v
 
     class Config:
         from_attributes = True
