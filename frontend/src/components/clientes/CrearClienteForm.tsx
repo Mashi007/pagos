@@ -270,6 +270,11 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       return { field: 'ocupacion', isValid: false, message: 'Ocupación requerida' }
     }
     
+    // Validar longitud mínima
+    if (ocupacion.trim().length < 2) {
+      return { field: 'ocupacion', isValid: false, message: 'Mínimo 2 caracteres' }
+    }
+    
     const words = ocupacion.trim().split(/\s+/).filter(w => w.length > 0)
     
     if (words.length > 2) {
@@ -319,17 +324,17 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       return { field: 'fechaNacimiento', isValid: false, message: 'Año inválido (1900-2100)' }
     }
     
-    // Validar que la fecha sea válida
+    // Validar que la fecha sea válida (ej: no 31/02/2025)
     const fechaNac = new Date(anoNum, mesNum - 1, diaNum)
     if (fechaNac.getDate() !== diaNum || fechaNac.getMonth() !== mesNum - 1 || fechaNac.getFullYear() !== anoNum) {
       return { field: 'fechaNacimiento', isValid: false, message: 'Fecha inválida (ej: 31/02 no existe)' }
     }
     
-    // Validar que la fecha sea pasada
+    // ✅ CORRECCIÓN: Validar que la fecha sea pasada (no futura ni hoy)
     const hoy = new Date()
     hoy.setHours(0, 0, 0, 0)
     if (fechaNac >= hoy) {
-      return { field: 'fechaNacimiento', isValid: false, message: 'La fecha no puede ser futura' }
+      return { field: 'fechaNacimiento', isValid: false, message: 'La fecha de nacimiento no puede ser futura o de hoy' }
     }
     
     return { field: 'fechaNacimiento', isValid: true, message: 'Fecha válida' }
@@ -518,6 +523,20 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
+    // ✅ VALIDACIÓN: Asegurar que campos requeridos NO estén vacíos
+    if (!formData.direccion || !formData.direccion.trim()) {
+      alert('⚠️ ERROR: Debe completar el campo Dirección')
+      return
+    }
+    if (!formData.fechaNacimiento || !formData.fechaNacimiento.trim()) {
+      alert('⚠️ ERROR: Debe completar el campo Fecha de Nacimiento')
+      return
+    }
+    if (!formData.ocupacion || !formData.ocupacion.trim()) {
+      alert('⚠️ ERROR: Debe completar el campo Ocupación')
+      return
+    }
+    
     if (!isFormValid()) {
       return
     }
@@ -539,6 +558,8 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         estado: formData.estado,
         notas: formData.notas || 'NA'
       }
+
+      console.log('🔍 DEBUG - Datos a enviar al backend:', clienteData)
 
       if (cliente) {
         // Editar cliente existente

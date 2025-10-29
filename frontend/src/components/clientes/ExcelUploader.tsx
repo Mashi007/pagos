@@ -905,18 +905,18 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           return { isValid: false, message: 'Año inválido (1900-2100)' }
         }
         
-        // Crear fecha y validar que sea pasada
+        // Validar que la fecha sea válida (ej: no 31/02/2025)
         const fechaNac = new Date(anoNum, mesNum - 1, diaNum)
+        if (fechaNac.getDate() !== diaNum || fechaNac.getMonth() !== mesNum - 1 || fechaNac.getFullYear() !== anoNum) {
+          return { isValid: false, message: 'Fecha inválida (ej: 31/02 no existe)' }
+        }
+        
+        // ✅ CORRECCIÓN: Validar que la fecha sea pasada (no futura)
         const hoyNac = new Date()
         hoyNac.setHours(0, 0, 0, 0)
         
         if (fechaNac >= hoyNac) {
-          return { isValid: false, message: 'Fecha de nacimiento no puede ser futura' }
-        }
-        
-        // Validar que la fecha sea válida (ej: no 31/02/2025)
-        if (fechaNac.getDate() !== diaNum || fechaNac.getMonth() !== mesNum - 1 || fechaNac.getFullYear() !== anoNum) {
-          return { isValid: false, message: 'Fecha inválida (ej: 31/02 no existe)' }
+          return { isValid: false, message: 'La fecha de nacimiento no puede ser futura o de hoy' }
         }
         
         return { isValid: true }
