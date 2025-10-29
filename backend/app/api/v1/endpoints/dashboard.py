@@ -125,13 +125,13 @@ def obtener_cobros_diarios(
             )
 
         hoy = date.today()
-        
+
         # Calcular fecha inicio (dias días atrás o fecha_inicio si está definida)
         if fecha_inicio:
             fecha_inicio_query = fecha_inicio
         else:
             fecha_inicio_query = hoy - timedelta(days=dias)
-        
+
         if fecha_fin:
             fecha_fin_query = fecha_fin
         else:
@@ -384,33 +384,33 @@ def dashboard_administrador(
         )
         clientes_en_mora = clientes_mora_query.scalar() or 0
 
-        # 8. PRÉSTAMOS ACTIVOS
-        prestamos_activos = (
-            base_prestamo_query.with_entities(func.count(Prestamo.id)).scalar() or 0
-        )
+        # 8. PRÉSTAMOS ACTIVOS (calculado pero no usado actualmente en respuesta)
+        # prestamos_activos = (
+        #     base_prestamo_query.with_entities(func.count(Prestamo.id)).scalar() or 0
+        # )
 
-        # 9. PRÉSTAMOS PAGADOS
-        prestamos_pagados = (
-            db.query(func.count(Prestamo.id))
-            .filter(Prestamo.estado == "PAGADO")
-            .scalar()
-            or 0
-        )
+        # 9. PRÉSTAMOS PAGADOS (calculado pero no usado actualmente en respuesta)
+        # prestamos_pagados = (
+        #     db.query(func.count(Prestamo.id))
+        #     .filter(Prestamo.estado == "PAGADO")
+        #     .scalar()
+        #     or 0
+        # )
 
-        # 10. PRÉSTAMOS VENCIDOS
-        prestamos_vencidos = (
-            db.query(func.count(func.distinct(Prestamo.id)))
-            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                and_(
-                    Cuota.fecha_vencimiento < hoy,
-                    Cuota.estado != "PAGADO",
-                    Prestamo.activo.is_(True),
-                )
-            )
-            .scalar()
-            or 0
-        )
+        # 10. PRÉSTAMOS VENCIDOS (calculado pero no usado actualmente en respuesta)
+        # prestamos_vencidos = (
+        #     db.query(func.count(func.distinct(Prestamo.id)))
+        #     .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+        #     .filter(
+        #         and_(
+        #             Cuota.fecha_vencimiento < hoy,
+        #             Cuota.estado != "PAGADO",
+        #             Prestamo.activo.is_(True),
+        #         )
+        #     )
+        #     .scalar()
+        #     or 0
+        # )
 
         # 11. TOTAL PAGADO (histórico o con filtros)
         # ✅ USAR FiltrosDashboard para aplicar filtros automáticamente
@@ -427,7 +427,8 @@ def dashboard_administrador(
             fecha_inicio,
             fecha_fin,
         )
-        total_cobrado = total_cobrado_query.scalar() or Decimal("0")
+        # total_cobrado se calcula pero no se usa en la respuesta actual
+        # total_cobrado = total_cobrado_query.scalar() or Decimal("0")
 
         # 12. CUOTAS PAGADAS TOTALES
         cuotas_pagadas_query = (
@@ -481,8 +482,9 @@ def dashboard_administrador(
         )
 
         cuotas_pagadas = cuotas_pagadas_query.scalar() or 0
-        cuotas_pendientes = cuotas_pendientes_query.scalar() or 0
-        cuotas_atrasadas = cuotas_atrasadas_query.scalar() or 0
+        # Variables calculadas pero no usadas actualmente en la respuesta
+        # cuotas_pendientes = cuotas_pendientes_query.scalar() or 0
+        # cuotas_atrasadas = cuotas_atrasadas_query.scalar() or 0
 
         # 15. CÁLCULO DE PERÍODOS ANTERIORES
         if periodo == "mes":
@@ -505,9 +507,10 @@ def dashboard_administrador(
             fecha_fin_periodo_anterior = hoy - timedelta(days=1)
 
         # Cartera anterior (mes anterior)
-        cartera_anterior_query = db.query(
-            func.sum(Prestamo.total_financiamiento)
-        ).filter(Prestamo.activo.is_(True))
+        # cartera_anterior_query no se usa actualmente, se calcula valor estimado
+        # cartera_anterior_query = db.query(
+        #     func.sum(Prestamo.total_financiamiento)
+        # ).filter(Prestamo.activo.is_(True))
         if periodo in ["mes", "semana", "año"]:
             # Para períodos anteriores, usar valores históricos estimados
             # En producción, esto debería calcularse desde histórico de cartera

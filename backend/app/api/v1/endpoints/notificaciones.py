@@ -292,7 +292,7 @@ def listar_plantillas(
         query = db.query(NotificacionPlantilla)
 
         if solo_activas:
-            query = query.filter(NotificacionPlantilla.activa == True)
+            query = query.filter(NotificacionPlantilla.activa.is_(True))
 
         if tipo:
             query = query.filter(NotificacionPlantilla.tipo == tipo)

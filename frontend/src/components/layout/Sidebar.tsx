@@ -53,7 +53,6 @@ interface MenuItem {
 export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   const location = useLocation()
   const { user, logout, refreshUser } = useSimpleAuth()
-  const userRole = user?.is_admin ? 'ADMIN' : 'USER'  // Cambio clave: rol → is_admin
   const [openSubmenus, setOpenSubmenus] = useState<string[]>([])
   const [showUserMenu, setShowUserMenu] = useState(false)
 
@@ -355,21 +354,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
             </div>
           </nav>
 
-          {/* Footer con información de usuario y sistema */}
-          <div className="p-4 border-t border-gray-200 space-y-2">
-            {/* Información del Sistema */}
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3">
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-sm font-medium text-gray-700">
-                  Sistema Activo
-                </span>
-              </div>
-              <p className="text-xs text-gray-600 mt-1">
-                Rol: <span className="font-medium">{userRole}</span>
-              </p>
-            </div>
-
+          {/* Footer con información de usuario */}
+          <div className="p-4 border-t border-gray-200">
             {/* Perfil de Usuario */}
             <div className="relative">
               <button

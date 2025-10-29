@@ -423,8 +423,6 @@ def probar_configuracion_email(
         if not configs:
             raise HTTPException(status_code=400, detail="No hay configuración de email")
 
-        config_dict = {config.clave: config.valor for config in configs}
-
         # Enviar email de prueba
         from app.services.email_service import EmailService
 

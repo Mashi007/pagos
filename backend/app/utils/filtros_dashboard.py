@@ -9,9 +9,9 @@ from typing import Optional
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Query
 
-from app.models.prestamo import Prestamo
-from app.models.pago import Pago
 from app.models.amortizacion import Cuota
+from app.models.pago import Pago
+from app.models.prestamo import Prestamo
 
 
 class FiltrosDashboard:

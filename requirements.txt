@@ -97,6 +97,15 @@ pytest-cov==4.1.0
 faker==22.6.0
 
 # ============================================
+# CODE QUALITY & LINTING
+# ============================================
+flake8==7.0.0
+flake8-docstrings==1.7.0
+flake8-bugbear==24.2.6
+flake8-import-order==0.18.2
+mccabe==0.7.0
+
+# ============================================
 # DEPENDENCIAS ADICIONALES RECOMENDADAS
 # ============================================
 

@@ -280,24 +280,42 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     
     // Dividir en palabras, filtrando espacios vacíos y espacios múltiples
     const words = nombres.trim().split(/\s+/).filter(w => w.length > 0)
+    const wordCount = words.length
     
-    // Validar mínimo 2 palabras
-    if (words.length < 2) {
+    // Si está escribiendo (palabra incompleta al final), no contar esa última palabra si no tiene espacio después
+    // Esto permite escribir libremente hasta 4 palabras completas
+    const textEndsWithSpace = nombres.trim().endsWith(' ')
+    
+    // Validar mínimo 2 palabras (solo cuando el usuario ha terminado de escribir)
+    // Si está escribiendo la primera o segunda palabra, permitir continuar
+    if (wordCount < 2 && textEndsWithSpace) {
       return { field: 'nombres', isValid: false, message: 'Mínimo 2 palabras requeridas (nombre + apellido)' }
     }
     
     // Validar máximo 4 palabras
-    if (words.length > 4) {
-      return { field: 'nombres', isValid: false, message: 'Máximo 4 palabras permitidas' }
+    // Solo mostrar error si hay más de 4 palabras completas (con espacios)
+    if (wordCount > 4) {
+      return { field: 'nombres', isValid: false, message: `Máximo 4 palabras permitidas (tienes ${wordCount})` }
     }
     
-    // Validar que cada palabra tenga mínimo 2 caracteres
-    const invalidWords = words.filter(w => w.length < 2)
-    if (invalidWords.length > 0) {
-      return { field: 'nombres', isValid: false, message: 'Cada palabra debe tener mínimo 2 caracteres' }
+    // Si hay exactamente 4 palabras o menos y cumple mínimo, validar estructura
+    if (wordCount >= 2 && wordCount <= 4) {
+      // Validar que cada palabra tenga mínimo 2 caracteres
+      const invalidWords = words.filter(w => w.length < 2)
+      if (invalidWords.length > 0) {
+        return { field: 'nombres', isValid: false, message: 'Cada palabra debe tener mínimo 2 caracteres' }
+      }
+      
+      // Si tiene entre 2 y 4 palabras válidas, está correcto
+      return { field: 'nombres', isValid: true, message: `${wordCount} palabra${wordCount > 1 ? 's' : ''} - Válido` }
     }
     
-    return { field: 'nombres', isValid: true, message: 'Nombres válidos' }
+    // Si está escribiendo la primera palabra, solo mostrar mensaje informativo, no error
+    if (wordCount === 1 && !textEndsWithSpace) {
+      return { field: 'nombres', isValid: false, message: 'Agrega más palabras (mínimo 2, máximo 4)' }
+    }
+    
+    return { field: 'nombres', isValid: false, message: 'Mínimo 2 palabras requeridas (nombre + apellido)' }
   }
   
   const validateOcupacion = (ocupacion: string): ValidationResult => {
@@ -905,8 +923,9 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     type="text"
                     value={formData.nombres}
                     onChange={(e) => handleInputChange('nombres', e.target.value)}
-                    className={`pl-10 ${getFieldValidation('nombres')?.isValid === false ? 'border-red-500' : ''}`}
+                    className={`pl-10 ${getFieldValidation('nombres')?.isValid === false ? 'border-red-500' : getFieldValidation('nombres')?.isValid ? 'border-green-500' : ''}`}
                     placeholder="Ejemplo: Juan Carlos Pérez González"
+                    autoComplete="name"
                   />
                 </div>
                 {getFieldValidation('nombres') && (

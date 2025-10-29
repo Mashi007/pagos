@@ -61,6 +61,18 @@ interface OpcionesFiltros {
   modelos: string[]
 }
 
+interface CobroDiario {
+  fecha: string
+  dia: string
+  dia_semana: string
+  total_a_cobrar: number
+  total_cobrado: number
+}
+
+interface CobrosDiariosResponse {
+  datos: CobroDiario[]
+}
+
 interface DashboardData {
   cartera_total: number
   cartera_anterior?: number
@@ -225,7 +237,7 @@ export function Dashboard() {
     data: opcionesFiltros, 
     isLoading: loadingOpcionesFiltros,
     error: errorOpcionesFiltros 
-  } = useQuery<OpcionesFiltros>({
+  } = useQuery({
     queryKey: ['dashboard-filtros-opciones'],
     queryFn: async (): Promise<OpcionesFiltros> => {
       try {
@@ -388,9 +400,9 @@ export function Dashboard() {
   })
 
   // Query para cobros diarios - usa filtros automáticos
-  const { data: cobrosDiarios, isLoading: loadingCobrosDiarios } = useQuery({
+  const { data: cobrosDiarios, isLoading: loadingCobrosDiarios } = useQuery<CobroDiario[]>({
     queryKey: ['cobros-diarios', filtros],
-    queryFn: async () => {
+    queryFn: async (): Promise<CobroDiario[]> => {
       try {
         const params = construirFiltrosObject()
         const queryParams = new URLSearchParams()
@@ -401,7 +413,7 @@ export function Dashboard() {
         const queryString = queryParams.toString()
         const response = await apiClient.get(
           `/api/v1/dashboard/cobros-diarios?${queryString}`
-        )
+        ) as CobrosDiariosResponse
         return response?.datos || []
       } catch (error) {
         console.error('Error cargando cobros diarios:', error)

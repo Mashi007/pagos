@@ -235,8 +235,9 @@ def actualizar_cliente(
                         raise HTTPException(
                             status_code=400,
                             detail=(
-                                f"No se puede actualizar el cliente a tener la misma cédula ({nueva_cedula}) "
-                                f"y el mismo nombre ({nuevos_nombres}) que otro cliente existente (ID: {otro_cliente.id})."
+                                f"No se puede actualizar el cliente a tener la misma cédula "
+                                f"({nueva_cedula}) y el mismo nombre ({nuevos_nombres}) "
+                                f"que otro cliente existente (ID: {otro_cliente.id})."
                             ),
                         )
 

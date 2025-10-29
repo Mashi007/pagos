@@ -91,7 +91,7 @@ class NotificacionAutomaticaService:
                 self.db.query(NotificacionPlantilla)
                 .filter(
                     NotificacionPlantilla.tipo == tipo,
-                    NotificacionPlantilla.activa == True,
+                    NotificacionPlantilla.activa.is_(True),
                 )
                 .first()
             )
@@ -159,7 +159,6 @@ class NotificacionAutomaticaService:
                 cuerpo = cuerpo.replace(f"{{{{{key}}}}}", str(value))
 
             # Verificar si ya existe una notificación similar hoy
-            hoy = datetime.now(CARACAS_TZ).date()
             notificacion_existente = (
                 self.db.query(Notificacion)
                 .filter(

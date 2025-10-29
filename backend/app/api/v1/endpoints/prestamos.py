@@ -18,7 +18,11 @@ from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.prestamo_auditoria import PrestamoAuditoria
 from app.models.user import User
-from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate
+from app.schemas.prestamo import (
+    PrestamoCreate,
+    PrestamoResponse,
+    PrestamoUpdate,
+)
 from app.services.prestamo_amortizacion_service import (
     generar_tabla_amortizacion as generar_amortizacion,
     obtener_cuotas_prestamo as obtener_cuotas_service,
@@ -356,10 +360,10 @@ def listar_prestamos(
             # Hacer rollback si hay error de transacción
             try:
                 db.rollback()
-            except:
+            except Exception:
                 pass
             total = 0
-        
+
         skip = (page - 1) * per_page
         try:
             prestamos = (
@@ -373,7 +377,7 @@ def listar_prestamos(
             # Hacer rollback si hay error de transacción
             try:
                 db.rollback()
-            except:
+            except Exception:
                 pass
             prestamos = []
 
