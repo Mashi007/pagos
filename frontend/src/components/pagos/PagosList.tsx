@@ -38,7 +38,7 @@ export function PagosList() {
   const queryClient = useQueryClient()
 
   // Query para obtener pagos
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ['pagos', page, perPage, filters],
     queryFn: () => pagoService.getAllPagos(page, perPage, filters),
   })
@@ -190,9 +190,12 @@ export function PagosList() {
       {showRegistrarPago && (
         <RegistrarPagoForm
           onClose={() => setShowRegistrarPago(false)}
-          onSuccess={() => {
+          onSuccess={async () => {
             setShowRegistrarPago(false)
-            queryClient.invalidateQueries({ queryKey: ['pagos'] })
+            // Invalidar todas las queries relacionadas con pagos
+            await queryClient.invalidateQueries({ queryKey: ['pagos'] })
+            // Refetch la query actual para actualizar la lista inmediatamente
+            await refetch()
             toast.success('Pago registrado exitosamente')
           }}
         />
@@ -202,9 +205,11 @@ export function PagosList() {
       {showExcelUploader && (
         <ExcelUploader
           onClose={() => setShowExcelUploader(false)}
-          onSuccess={() => {
+          onSuccess={async () => {
             setShowExcelUploader(false)
-            queryClient.invalidateQueries({ queryKey: ['pagos'] })
+            await queryClient.invalidateQueries({ queryKey: ['pagos'] })
+            await refetch()
+            toast.success('Pagos cargados exitosamente')
           }}
         />
       )}
