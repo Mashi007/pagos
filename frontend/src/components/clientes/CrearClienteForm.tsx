@@ -453,6 +453,23 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     // Aplicar Title Case a ocupación también
     return toTitleCase(text)
   }
+
+  // ✅ Función para formatear cédula: convertir letra inicial (E, J, V) a mayúscula
+  const formatCedula = (text: string): string => {
+    if (!text || text.trim() === '') return text
+    
+    // Si el primer carácter es una letra (e, j, v), convertirla a mayúscula
+    const firstChar = text.charAt(0).toUpperCase()
+    const validLetters = ['E', 'J', 'V']
+    
+    // Si la primera letra es E, J o V (en minúscula o mayúscula), convertirla a mayúscula
+    if (validLetters.includes(firstChar)) {
+      return firstChar + text.slice(1)
+    }
+    
+    // Si no es una letra válida al inicio, devolver tal cual (puede ser solo números)
+    return text
+  }
   
   // Validaciones usando el servicio de validadores del backend
   const validateField = async (field: string, value: string): Promise<ValidationResult> => {
@@ -718,7 +735,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       })
       
       const clienteData = {
-        cedula: formData.cedula,
+        cedula: formatCedula(formData.cedula.trim()),  // ✅ Cédula con letra inicial en mayúscula
         nombres: nombresFormateado,  // ✅ nombres formateados con Title Case
         telefono: telefonoCompleto,  // ✅ Formato: +581234567890
         email: formData.email.trim().toLowerCase(),  // Email en minúsculas
