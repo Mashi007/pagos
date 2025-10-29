@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X,
@@ -9,11 +9,15 @@ import {
   Building2,
   Upload,
   Loader2,
+  CheckCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { pagoService, type PagoCreate } from '@/services/pagoService'
+import { usePrestamosByCedula } from '@/hooks/usePrestamos'
+import { useDebounce } from '@/hooks/useDebounce'
 
 interface RegistrarPagoFormProps {
   onClose: () => void
@@ -35,6 +39,24 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial }: Registrar
   
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  
+  // Debounce de la cédula para buscar préstamos
+  const debouncedCedula = useDebounce(formData.cedula_cliente, 500)
+  
+  // Buscar préstamos cuando cambia la cédula (con al menos 2 caracteres)
+  const { data: prestamos, isLoading: isLoadingPrestamos } = usePrestamosByCedula(
+    debouncedCedula.length >= 2 ? debouncedCedula : ''
+  )
+  
+  // Auto-seleccionar préstamo si hay solo uno disponible
+  useEffect(() => {
+    if (prestamos && prestamos.length === 1 && !formData.prestamo_id) {
+      setFormData(prev => ({ ...prev, prestamo_id: prestamos[0].id }))
+    } else if (prestamos && prestamos.length === 0) {
+      // Limpiar ID si no hay préstamos
+      setFormData(prev => ({ ...prev, prestamo_id: null }))
+    }
+  }, [prestamos])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -42,6 +64,12 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial }: Registrar
     // Validar
     const newErrors: Record<string, string> = {}
     if (!formData.cedula_cliente) newErrors.cedula_cliente = 'Cédula requerida'
+    
+    // Si hay préstamos disponibles, el ID de préstamo es obligatorio
+    if (prestamos && prestamos.length > 0 && !formData.prestamo_id) {
+      newErrors.prestamo_id = 'Debe seleccionar un crédito'
+    }
+    
     if (!formData.monto_pagado || formData.monto_pagado <= 0) newErrors.monto_pagado = 'Monto inválido'
     if (!formData.numero_documento) newErrors.numero_documento = 'Número de documento requerido'
     if (!formData.referencia_pago) newErrors.referencia_pago = 'Referencia requerida'
@@ -105,7 +133,9 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial }: Registrar
                   <Input
                     type="text"
                     value={formData.cedula_cliente}
-                    onChange={e => setFormData({ ...formData, cedula_cliente: e.target.value })}
+                    onChange={e => {
+                      setFormData({ ...formData, cedula_cliente: e.target.value, prestamo_id: null })
+                    }}
                     className={`pl-10 ${errors.cedula_cliente ? 'border-red-500' : ''}`}
                     placeholder="V12345678"
                   />
@@ -113,18 +143,57 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial }: Registrar
                 {errors.cedula_cliente && (
                   <p className="text-sm text-red-600">{errors.cedula_cliente}</p>
                 )}
+                {isLoadingPrestamos && formData.cedula_cliente.length >= 2 && (
+                  <p className="text-xs text-blue-600 flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Buscando préstamos...
+                  </p>
+                )}
+                {!isLoadingPrestamos && prestamos && prestamos.length > 0 && formData.cedula_cliente.length >= 2 && (
+                  <p className="text-xs text-green-600 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    {prestamos.length} préstamo{prestamos.length !== 1 ? 's' : ''} encontrado{prestamos.length !== 1 ? 's' : ''}
+                  </p>
+                )}
+                {!isLoadingPrestamos && prestamos && prestamos.length === 0 && formData.cedula_cliente.length >= 2 && (
+                  <p className="text-xs text-yellow-600">
+                    No se encontraron préstamos para esta cédula
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
-                  ID Crédito
+                  ID Crédito {formData.cedula_cliente && prestamos && prestamos.length > 0 && <span className="text-red-500">*</span>}
                 </label>
-                <Input
-                  type="number"
-                  value={formData.prestamo_id || ''}
-                  onChange={e => setFormData({ ...formData, prestamo_id: e.target.value ? parseInt(e.target.value) : null })}
-                  placeholder="ID del crédito"
-                />
+                {prestamos && prestamos.length > 0 ? (
+                  <Select
+                    value={formData.prestamo_id?.toString() || ''}
+                    onValueChange={(value) => setFormData({ ...formData, prestamo_id: parseInt(value) })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccione un crédito" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {prestamos.map((prestamo) => (
+                        <SelectItem key={prestamo.id} value={prestamo.id.toString()}>
+                          ID {prestamo.id} - ${prestamo.total_financiamiento?.toFixed(2)} - {prestamo.estado}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    type="number"
+                    value={formData.prestamo_id || ''}
+                    onChange={e => setFormData({ ...formData, prestamo_id: e.target.value ? parseInt(e.target.value) : null })}
+                    placeholder="ID del crédito"
+                    disabled={!formData.cedula_cliente}
+                  />
+                )}
+                {(errors.prestamo_id || (formData.cedula_cliente && prestamos && prestamos.length > 0 && !formData.prestamo_id)) && (
+                  <p className="text-sm text-red-600">{errors.prestamo_id || 'Debe seleccionar un crédito'}</p>
+                )}
               </div>
             </div>
 
