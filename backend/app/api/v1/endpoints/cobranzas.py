@@ -31,7 +31,9 @@ logger = logging.getLogger(__name__)
 
 @router.get("/clientes-atrasados")
 def obtener_clientes_atrasados(
-    dias_retraso: Optional[int] = Query(None, description="Días de retraso para filtrar"),
+    dias_retraso: Optional[int] = Query(
+        None, description="Días de retraso para filtrar"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -512,7 +514,7 @@ def informe_rendimiento_analista(
                     case(
                         (
                             Cuota.fecha_vencimiento < hoy,
-                            func.extract("day", hoy - Cuota.fecha_vencimiento)
+                            func.extract("day", hoy - Cuota.fecha_vencimiento),
                         ),
                         else_=0,
                     )
