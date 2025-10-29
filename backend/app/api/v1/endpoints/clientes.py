@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 
@@ -186,7 +187,6 @@ def crear_cliente(
                 logger.info(
                     f"Cliente duplicado detectado - Cédula: {cliente_data.cedula}, Préstamos: {len(prestamos_info)}"
                 )
-                from fastapi.responses import JSONResponse
 
                 return JSONResponse(
                     status_code=409,
