@@ -15,7 +15,7 @@ import {
 import { cobranzasService } from '@/services/cobranzasService'
 import { useQuery } from '@tanstack/react-query'
 import type { ClienteAtrasado, CobranzasPorAnalista, MontosPorMes } from '@/services/cobranzasService'
-import * as XLSX from 'xlsx'
+import XLSX from 'xlsx'
 
 export function Cobranzas() {
   const [tabActiva, setTabActiva] = useState('resumen')
