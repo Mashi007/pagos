@@ -3,11 +3,13 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
+from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
 
@@ -106,7 +108,7 @@ def obtener_cliente(
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
-@router.post("/", response_model=ClienteResponse)
+@router.post("/", response_model=None)
 def crear_cliente(
     cliente_data: ClienteCreate,
     db: Session = Depends(get_db),
@@ -115,6 +117,75 @@ def crear_cliente(
     # Crear nuevo cliente
     try:
         logger.info(f"Crear cliente - Usuario: {current_user.email}")
+
+        # ✅ Verificar si ya existe un cliente con la misma cédula
+        cliente_existente = db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
+        
+        if cliente_existente:
+            # Verificar si el usuario confirmó explícitamente el duplicado
+            if not cliente_data.confirm_duplicate:
+                # Buscar todos los préstamos de este cliente
+                prestamos_cliente = db.query(Prestamo).filter(
+                    Prestamo.cedula == cliente_data.cedula
+                ).all()
+                
+                # Preparar información de préstamos con estadísticas de cuotas
+                prestamos_info = []
+                for prestamo in prestamos_cliente:
+                    # Contar cuotas por estado
+                    cuotas_pagadas = db.query(func.count(Cuota.id)).filter(
+                        Cuota.prestamo_id == prestamo.id,
+                        Cuota.estado == "PAGADO"
+                    ).scalar() or 0
+                    
+                    cuotas_pendientes = db.query(func.count(Cuota.id)).filter(
+                        Cuota.prestamo_id == prestamo.id,
+                        Cuota.estado.in_(["PENDIENTE", "ATRASADO", "PARCIAL"])
+                    ).scalar() or 0
+                    
+                    # Determinar estado resumido
+                    if cuotas_pendientes == 0:
+                        estado_resumen = "AL DÍA"
+                    elif cuotas_pagadas > 0 and cuotas_pendientes > 0:
+                        estado_resumen = "EN PAGO"
+                    else:
+                        estado_resumen = prestamo.estado
+                    
+                    prestamos_info.append({
+                        "id": prestamo.id,
+                        "monto_financiamiento": float(prestamo.total_financiamiento),
+                        "estado": estado_resumen,
+                        "modalidad_pago": prestamo.modalidad_pago,
+                        "fecha_registro": prestamo.fecha_registro.isoformat() if prestamo.fecha_registro else None,
+                        "cuotas_pagadas": cuotas_pagadas,
+                        "cuotas_pendientes": cuotas_pendientes
+                    })
+                
+                # Retornar error 409 con datos del cliente existente Y sus préstamos
+                logger.info(f"Cliente duplicado detectado - Cédula: {cliente_data.cedula}, Préstamos: {len(prestamos_info)}")
+                from fastapi.responses import JSONResponse
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "detail": {
+                            "error": "CLIENTE_DUPLICADO",
+                            "message": f"Ya existe un cliente con la cédula {cliente_data.cedula}",
+                            "cedula": cliente_data.cedula,
+                            "cliente_existente": {
+                                "id": cliente_existente.id,
+                                "cedula": cliente_existente.cedula,
+                                "nombres": cliente_existente.nombres,
+                                "telefono": cliente_existente.telefono,
+                                "email": cliente_existente.email,
+                                "fecha_registro": cliente_existente.fecha_registro.isoformat()
+                            },
+                            "prestamos": prestamos_info
+                        }
+                    }
+                )
+            else:
+                # Usuario confirmó explícitamente - permitir crear duplicado
+                logger.info(f"Usuario confirmó cliente duplicado - Cédula: {cliente_data.cedula}")
 
         # Preparar datos
         cliente_dict = cliente_data.model_dump(exclude={"confirm_duplicate"})

@@ -108,6 +108,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const [clienteDuplicado, setClienteDuplicado] = useState<{
     existente: any
     nuevo: any
+    prestamos?: any[] // Préstamos del cliente existente
     rowIndex: number
   } | null>(null)
 
@@ -464,6 +465,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         if (error.response?.status === 409 && 
             error.response?.data?.detail?.error === 'CLIENTE_DUPLICADO') {
           const clienteExistente = error.response?.data?.detail?.cliente_existente
+          const prestamos = error.response?.data?.detail?.prestamos || []
           
           // ✅ CORRECCIÓN CRÍTICA: Validar que clienteExistente existe antes del spread
           if (!clienteExistente) {
@@ -483,6 +485,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
               telefono: row.telefono,
               email: row.email
             },
+            prestamos: prestamos,  // ✅ Incluir préstamos del cliente existente
             rowIndex: row._rowIndex
           })
           
@@ -1969,6 +1972,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           onConfirm={handleConfirmarDuplicado}
           clienteExistente={clienteDuplicado.existente}
           clienteNuevo={clienteDuplicado.nuevo}
+          prestamos={clienteDuplicado.prestamos}
         />
       )}
     </motion.div>

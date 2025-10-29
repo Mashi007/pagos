@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
-import { AlertTriangle, User, Calendar, Phone, Mail } from 'lucide-react'
+import { AlertTriangle, User, Calendar, Phone, Mail, DollarSign } from 'lucide-react'
 
 interface ClienteExistente {
   id: number
@@ -10,6 +10,16 @@ interface ClienteExistente {
   telefono: string
   email: string
   fecha_registro: string
+}
+
+interface Prestamo {
+  id: number
+  monto_financiamiento: number
+  estado: string
+  modalidad_pago: string
+  fecha_registro?: string
+  cuotas_pagadas?: number
+  cuotas_pendientes?: number
 }
 
 interface ConfirmacionDuplicadoModalProps {
@@ -23,6 +33,7 @@ interface ConfirmacionDuplicadoModalProps {
     telefono: string
     email: string
   }
+  prestamos?: Prestamo[]
 }
 
 export function ConfirmacionDuplicadoModal({
@@ -30,7 +41,8 @@ export function ConfirmacionDuplicadoModal({
   onClose,
   onConfirm,
   clienteExistente,
-  clienteNuevo
+  clienteNuevo,
+  prestamos = []
 }: ConfirmacionDuplicadoModalProps) {
   const [comentarios, setComentarios] = useState('')
   const [isConfirming, setIsConfirming] = useState(false)
@@ -156,6 +168,55 @@ export function ConfirmacionDuplicadoModal({
                 </div>
               </div>
             </div>
+
+            {/* Tabla de préstamos existentes */}
+            {prestamos && prestamos.length > 0 && (
+              <div>
+                <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
+                  <DollarSign className="h-4 w-4 mr-2" />
+                  Préstamos del Cliente Existente ({prestamos.length})
+                </h4>
+                <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-700">ID</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-700">Monto</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-700">Estado</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-700">Modalidad</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {prestamos.map((prestamo) => (
+                        <tr key={prestamo.id} className="border-t border-gray-200 hover:bg-gray-50">
+                          <td className="px-3 py-2 font-mono text-xs">{prestamo.id}</td>
+                          <td className="px-3 py-2">
+                            {new Intl.NumberFormat('es-VE', {
+                              style: 'currency',
+                              currency: 'USD'
+                            }).format(prestamo.monto_financiamiento)}
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              prestamo.estado === 'AL DÍA' ? 'bg-green-100 text-green-800' :
+                              prestamo.estado === 'EN PAGO' ? 'bg-blue-100 text-blue-800' :
+                              prestamo.estado === 'PAGADO' ? 'bg-gray-100 text-gray-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {prestamo.estado}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-xs">{prestamo.modalidad_pago}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Este cliente ya tiene {prestamos.length} préstamo(s) registrado(s) en el sistema.
+                </p>
+              </div>
+            )}
 
             {/* Campo de comentarios */}
             <div>
