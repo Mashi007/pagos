@@ -35,13 +35,13 @@ def dashboard_kpis_principales(
 ):
     """
     KPIs principales del dashboard
-    
+
     ✅ SOPORTA FILTROS AUTOMÁTICOS:
     - analista: Filtrar por analista
     - concesionario: Filtrar por concesionario
     - modelo: Filtrar por modelo
     - fecha_inicio/fecha_fin: Rango de fechas
-    
+
     Cualquier KPI nuevo agregado aquí debe usar FiltrosDashboard para aplicar filtros automáticamente.
     """
     if not fecha_corte:
@@ -83,10 +83,7 @@ def dashboard_kpis_principales(
     cuotas_query = (
         db.query(func.count(Cuota.id))
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-        .filter(
-            Cuota.fecha_vencimiento < fecha_corte,
-            Cuota.estado == "PENDIENTE"
-        )
+        .filter(Cuota.fecha_vencimiento < fecha_corte, Cuota.estado == "PENDIENTE")
     )
     cuotas_query = FiltrosDashboard.aplicar_filtros_cuota(
         cuotas_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
