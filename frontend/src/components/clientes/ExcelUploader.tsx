@@ -294,12 +294,18 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const handleConfirmarDuplicado = async (comentarios: string) => {
     if (!clienteDuplicado) return
 
-    // ✅ CORRECCIÓN DEFINITIVA: Guardar rowIndex antes de limpiar clienteDuplicado
-    const currentRowIndex = clienteDuplicado.rowIndex
+    // ✅ CORRECCIÓN DEFINITIVA: Buscar fila por _rowIndex (no por índice del array)
+    const targetRowIndex = clienteDuplicado.rowIndex
+    const row = excelData.find(r => r._rowIndex === targetRowIndex)
+      
+    if (!row) {
+      console.error('❌ ERROR: No se encontró la fila con _rowIndex:', targetRowIndex)
+      alert('⚠️ ERROR: No se pudo encontrar la fila en los datos. Por favor, recarga la página e intenta nuevamente.')
+      setClienteDuplicado(null)
+      return
+    }
 
     try {
-      const row = excelData[currentRowIndex]
-      
       // 🔍 DEBUG: Log completo de la fila actual
       console.log('🔍 DEBUG - Fila completa desde la interfaz:', row)
       console.log('🔍 DEBUG - direccion:', row.direccion)
@@ -837,9 +843,11 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     switch (field) {
       case 'cedula':
         if (!value.trim()) return { isValid: false, message: 'Cédula requerida' }
+        // Limpiar caracteres no permitidos (como : al final)
+        const cedulaLimpia = value.trim().replace(/:$/, '').replace(/:/g, '')
         const cedulaPattern = /^[VEJ]\d{7,10}$/
-        if (!cedulaPattern.test(value.toUpperCase())) {
-          return { isValid: false, message: 'Formato: V/E/J + 7-10 dígitos' }
+        if (!cedulaPattern.test(cedulaLimpia.toUpperCase())) {
+          return { isValid: false, message: 'Formato: V/E/J + 7-10 dígitos (sin :)' }
         }
         return { isValid: true }
 
