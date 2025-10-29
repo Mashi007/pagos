@@ -169,7 +169,6 @@ class ClienteCreate(BaseModel):
     )
     activo: Optional[bool] = Field(True, description="Cliente activo")
     notas: Optional[str] = Field("NA", description="Notas adicionales")
-    confirm_duplicate: bool = Field(False, description="Confirmar si es duplicado")
 
 
 class ClienteCreateWithConfirmation(BaseModel):

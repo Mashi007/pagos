@@ -77,7 +77,7 @@ class ClienteService {
 
   // Obtener clientes por analista (usando filtros en endpoint principal)
   async getClientesByAnalista(analistaId: string): Promise<Cliente[]> {
-    const filters: ClienteFilters = { analista_config_id: parseInt(analistaId) }
+    const filters: ClienteFilters = {}
     const response = await this.getClientes(filters, 1, 100)
     return response.data
   }
@@ -125,13 +125,10 @@ class ClienteService {
     return response.data
   }
 
-  // Asignar analista a cliente
+  // Asignar analista a cliente (FUNCIÓN OBSOLETA - eliminado)
   async asignarAsesor(clienteId: string, analistaId: string): Promise<Cliente> {
-    const response = await apiClient.patch<ApiResponse<Cliente>>(
-      `${this.baseUrl}/${clienteId}/analista`,
-       { analista_config_id: analistaId }
-    )
-    return response.data
+    // Función eliminada - ya no se asignan analistas a clientes
+    throw new Error('La asignación de analistas a clientes ha sido eliminada')
   }
 
   // Exportar clientes (usando endpoint de carga masiva)

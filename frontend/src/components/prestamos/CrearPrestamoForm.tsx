@@ -24,6 +24,9 @@ import { clienteService } from '@/services/clienteService'
 import { useCreatePrestamo, useUpdatePrestamo } from '@/hooks/usePrestamos'
 import { useSearchClientes } from '@/hooks/useClientes'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useConcesionariosActivos } from '@/hooks/useConcesionarios'
+import { useAnalistasActivos } from '@/hooks/useAnalistas'
+import { useModelosVehiculosActivos } from '@/hooks/useModelosVehiculos'
 import { Prestamo, PrestamoForm } from '@/types'
 
 interface CrearPrestamoFormProps {
@@ -53,9 +56,17 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     fecha_requerimiento: prestamo?.fecha_requerimiento || getCurrentDate(), // Fecha actual por defecto para nuevos préstamos
     producto: prestamo?.producto || '',
     producto_financiero: prestamo?.producto_financiero || '',
+    concesionario: prestamo?.concesionario || '',
+    analista: prestamo?.analista || '',
+    modelo_vehiculo: prestamo?.modelo_vehiculo || '',
     tasa_interes: prestamo?.tasa_interes || 0,
     observaciones: prestamo?.observaciones || '',
   })
+  
+  // Obtener datos de configuración
+  const { data: concesionarios = [] } = useConcesionariosActivos()
+  const { data: analistas = [] } = useAnalistasActivos()
+  const { data: modelosVehiculos = [] } = useModelosVehiculosActivos()
 
   const [valorActivo, setValorActivo] = useState<number>(0)
   const [anticipo, setAnticipo] = useState<number>(0)
@@ -110,6 +121,10 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
         ...prev,
         producto: cliente.modelo_vehiculo || '',
         producto_financiero: cliente.analista || '',
+        // También llenar nuevos campos si están disponibles en el cliente
+        modelo_vehiculo: cliente.modelo_vehiculo || prev.modelo_vehiculo || '',
+        analista: cliente.analista || prev.analista || '',
+        concesionario: cliente.concesionario || prev.concesionario || '',
       }))
     } else if (formData.cedula && formData.cedula.length >= 2 && clienteInfo && clienteInfo.length === 0) {
       // Cliente no encontrado
@@ -575,7 +590,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                         producto: e.target.value 
                       })}
                       disabled={isReadOnly || !!clienteData}
-                      placeholder="Modelo de vehículo"
+                      placeholder="Producto financiero"
                     />
                   </div>
 
@@ -588,8 +603,89 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                         producto_financiero: e.target.value 
                       })}
                       disabled={isReadOnly || !!clienteData}
-                      placeholder="Nombre del analista"
+                      placeholder="Producto financiero"
                     />
+                  </div>
+                </div>
+
+                {/* Nuevos campos de configuración */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Concesionario
+                    </label>
+                    <Select
+                      value={formData.concesionario || ''}
+                      onValueChange={(value) => setFormData({ 
+                        ...formData, 
+                        concesionario: value || undefined
+                      })}
+                      disabled={isReadOnly}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar concesionario" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Sin concesionario</SelectItem>
+                        {concesionarios.map((concesionario) => (
+                          <SelectItem key={concesionario.id} value={concesionario.nombre}>
+                            {concesionario.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Analista
+                    </label>
+                    <Select
+                      value={formData.analista || ''}
+                      onValueChange={(value) => setFormData({ 
+                        ...formData, 
+                        analista: value || undefined
+                      })}
+                      disabled={isReadOnly}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar analista" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Sin analista</SelectItem>
+                        {analistas.map((analista) => (
+                          <SelectItem key={analista.id} value={analista.nombre}>
+                            {analista.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Modelo de Vehículo
+                    </label>
+                    <Select
+                      value={formData.modelo_vehiculo || ''}
+                      onValueChange={(value) => setFormData({ 
+                        ...formData, 
+                        modelo_vehiculo: value || undefined
+                      })}
+                      disabled={isReadOnly}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar modelo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Sin modelo</SelectItem>
+                        {modelosVehiculos.map((modelo) => (
+                          <SelectItem key={modelo.id} value={modelo.modelo}>
+                            {modelo.modelo}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 

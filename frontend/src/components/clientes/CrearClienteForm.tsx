@@ -31,7 +31,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { clienteService } from '@/services/clienteService'
 import { validadoresService } from '@/services/validadoresService'
 import { ExcelUploader } from './ExcelUploader'
-import { ConfirmacionDuplicadoModal } from './ConfirmacionDuplicadoModal'
 
 interface FormData {
   // Datos personales - OBLIGATORIOS
@@ -120,18 +119,6 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   const [validations, setValidations] = useState<ValidationResult[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showExcelUploader, setShowExcelUploader] = useState(false)
-  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false)
-  const [duplicateCedula, setDuplicateCedula] = useState('')
-  const [clienteExistente, setClienteExistente] = useState<any>(null)
-  
-  // DEBUG: Log de cambios de estado
-  useEffect(() => {
-    // Debug logs removidos según normas
-  }, [showDuplicateWarning])
-  
-  useEffect(() => {
-    // Debug logs removidos según normas
-  }, [duplicateCedula])
   
   // Pre-cargar datos del cliente si se está editando
   useEffect(() => {
@@ -525,58 +512,19 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         message: error?.response?.data?.message
       })
       
-      // Verificar si es error de cédula duplicada (CORREGIDO: ahora es 409)
-      if (error.response?.status === 409 && 
-          error.response?.data?.detail?.error === 'CLIENTE_DUPLICADO') {
-        
-        console.log('✅ DEBUG - Activando popup de duplicados (status 409)')
-        console.log('✅ DEBUG - Datos del cliente existente:', error.response?.data?.detail?.cliente_existente)
-        console.log('🔍 DEBUG - formData ANTES de mostrar modal:', formData)
-        
-        // ✅ VALIDACIÓN: Verificar que los campos necesarios están llenos
-        if (!formData.direccion || !formData.direccion.trim()) {
-          alert('⚠️ ERROR: Debe completar el campo Dirección antes de continuar')
-          setIsSubmitting(false)
-          return
-        }
-        if (!formData.fechaNacimiento || !formData.fechaNacimiento.trim()) {
-          alert('⚠️ ERROR: Debe completar el campo Fecha de Nacimiento antes de continuar')
-          setIsSubmitting(false)
-          return
-        }
-        if (!formData.ocupacion || !formData.ocupacion.trim()) {
-          alert('⚠️ ERROR: Debe completar el campo Ocupación antes de continuar')
-          setIsSubmitting(false)
-          return
-        }
-        
-        // Mostrar popup de advertencia con datos del cliente existente
-        setDuplicateCedula(formData.cedula)
-        setClienteExistente(error.response?.data?.detail?.cliente_existente)
-        setShowDuplicateWarning(true)
-        setIsSubmitting(false) // ✅ CORRECCIÓN: Mover aquí antes del return
-        return // ✅ CORRECCIÓN CRÍTICA: Prevenir propagación de la promesa rechazada
+      // Mostrar mensaje de error al usuario
+      let errorMessage = 'Error al crear el cliente. Por favor, intente nuevamente.'
+      
+      if (error.response?.status === 400) {
+        // Error de cliente duplicado (misma cédula y mismo nombre)
+        errorMessage = error.response?.data?.detail || 'No se puede crear un cliente con la misma cédula y el mismo nombre. Ya existe un cliente con estos datos.'
+      } else if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message
       }
       
-      // Fallback para el formato anterior (503) por compatibilidad
-      if (error.response?.status === 503 && 
-          typeof error.response?.data?.detail === 'string' &&
-          (error.response?.data?.detail?.includes('duplicate key') ||
-           error.response?.data?.detail?.includes('already exists') ||
-           error.response?.data?.message?.includes('duplicate key') ||
-           error.response?.data?.message?.includes('already exists'))) {
-        
-        console.log('✅ DEBUG - Activando popup de duplicados (fallback 503)')
-        setDuplicateCedula(formData.cedula)
-        setShowDuplicateWarning(true)
-        setIsSubmitting(false)
-        return // ✅ CORRECCIÓN CRÍTICA: Prevenir propagación de la promesa rechazada
-      }
-      
-      console.log('❌ DEBUG - Error no es de duplicado, status:', error.response?.status)
-      
-      // Otros errores
-      console.error('Error no manejado:', error)
+      alert(`⚠️ ${errorMessage}`)
     } finally {
       // ✅ CORRECCIÓN: Siempre ejecutar setIsSubmitting(false) en finally
       // El manejo específico de duplicados ya se hizo en el catch block
@@ -584,73 +532,6 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     }
   }
 
-  const handleConfirmDuplicate = async (comentarios: string) => {
-    setIsSubmitting(true)
-    setShowDuplicateWarning(false)
-    
-    try {
-      // 🔍 DEBUG: Log completo de formData antes de validar
-      console.log('🔍 DEBUG - formData completo:', formData)
-      console.log('🔍 DEBUG - direccion:', formData.direccion)
-      console.log('🔍 DEBUG - fechaNacimiento:', formData.fechaNacimiento)
-      console.log('🔍 DEBUG - ocupacion:', formData.ocupacion)
-      
-      // Validar que todos los campos requeridos estén llenos
-      if (!formData.direccion || !formData.direccion.trim()) {
-        console.error('❌ ERROR - direccion vacía')
-        alert('La dirección es requerida')
-        setIsSubmitting(false)
-        setShowDuplicateWarning(true)
-        return
-      }
-      if (!formData.fechaNacimiento || !formData.fechaNacimiento.trim()) {
-        console.error('❌ ERROR - fechaNacimiento vacía')
-        alert('La fecha de nacimiento es requerida')
-        setIsSubmitting(false)
-        setShowDuplicateWarning(true)
-        return
-      }
-      if (!formData.ocupacion || !formData.ocupacion.trim()) {
-        console.error('❌ ERROR - ocupacion vacía')
-        alert('La ocupación es requerida')
-        setIsSubmitting(false)
-        setShowDuplicateWarning(true)
-        return
-      }
-      
-      const fechaConvertida = convertirFechaAISO(formData.fechaNacimiento)
-      console.log('🔍 DEBUG - fecha convertida:', fechaConvertida)
-      
-      const clienteData = {
-        cedula: formData.cedula,
-        nombres: formData.nombres,  // ✅ nombres unificados (nombres + apellidos)
-        telefono: formData.telefono,
-        email: formData.email,
-        direccion: formData.direccion,
-        fecha_nacimiento: fechaConvertida, // ✅ Convertir DD/MM/YYYY → YYYY-MM-DD
-        ocupacion: formData.ocupacion,
-        estado: formData.estado,
-        notas: formData.notas || 'NA',
-        confirm_duplicate: true
-      }
-
-      console.log('➕ Creando cliente con cédula duplicada (confirmado por usuario):', clienteData)
-      await clienteService.createClienteWithConfirmation(
-        clienteData, 
-        comentarios || `Usuario confirmó crear cliente con cédula duplicada: ${formData.cedula}`
-      )
-      console.log('✅ Cliente creado exitosamente (duplicado permitido)')
-      
-      onSuccess()
-      onClienteCreated?.()
-      onClose()
-    } catch (error) {
-      console.error('❌ ERROR creando cliente duplicado:', error)
-      setShowDuplicateWarning(true)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
 
   const getFieldValidation = (field: string) => {
     // ✅ En modo edición, no mostrar mensajes de validación
@@ -986,29 +867,6 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
             </Button>
           </div>
         </form>
-        
-        {/* Popup de confirmación para cédulas duplicadas */}
-        {showDuplicateWarning && clienteExistente && (
-          <ConfirmacionDuplicadoModal
-            isOpen={showDuplicateWarning}
-            onClose={() => setShowDuplicateWarning(false)}
-            onConfirm={handleConfirmDuplicate}
-            clienteExistente={{
-              id: clienteExistente.id,
-              nombres: clienteExistente.nombres,  // ✅ nombres unificados
-              cedula: duplicateCedula,
-              telefono: clienteExistente.telefono,
-              email: clienteExistente.email,
-              fecha_registro: new Date().toISOString() // Usar fecha actual como fallback
-            }}
-            clienteNuevo={{
-              nombres: formData.nombres,  // ✅ nombres unificados
-              cedula: formData.cedula,
-              telefono: formData.telefono,
-              email: formData.email
-            }}
-          />
-        )}
       </motion.div>
     </motion.div>
   )

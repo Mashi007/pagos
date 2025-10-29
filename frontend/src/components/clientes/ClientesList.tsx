@@ -136,8 +136,7 @@ export function ClientesList() {
       telefono: '+1234567890',
       estado: 'ACTIVO',
       saldo_pendiente: 5000,
-      fecha_ultimo_pago: '2024-01-15',
-       analista_config_id: 1  // Ahora es ID numérico de tabla analistaes
+      fecha_ultimo_pago: '2024-01-15'
     },
     {
       id: '2',
@@ -146,8 +145,7 @@ export function ClientesList() {
       telefono: '+1234567891',
       estado: 'MORA',
       saldo_pendiente: 3000,
-      fecha_ultimo_pago: '2024-01-10',
-       analista_config_id: 2  // Ahora es ID numérico de tabla analistaes
+      fecha_ultimo_pago: '2024-01-10'
     }
   ]
 

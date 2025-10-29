@@ -93,6 +93,9 @@ export interface Prestamo {
   fecha_base_calculo?: string
   producto: string
   producto_financiero: string
+  concesionario?: string
+  analista?: string
+  modelo_vehiculo?: string
   estado: 'DRAFT' | 'EN_REVISION' | 'APROBADO' | 'RECHAZADO'
   usuario_proponente: string
   usuario_aprobador?: string
@@ -109,6 +112,9 @@ export interface PrestamoForm {
   fecha_requerimiento: string
   producto: string
   producto_financiero: string
+  concesionario?: string
+  analista?: string
+  modelo_vehiculo?: string
   numero_cuotas?: number  // Número de cuotas manual del formulario
   cuota_periodo?: number  // Cuota calculada
   tasa_interes?: number

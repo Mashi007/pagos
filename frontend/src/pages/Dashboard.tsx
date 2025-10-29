@@ -21,7 +21,6 @@ import {
   Zap,
   Award,
   Building2,
-  Car,
   Shield
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -81,15 +80,6 @@ interface DashboardData {
     porcentajeCumplimientoAnterior: number
     clientesMora: number
   }
-  analistaes?: any
-  productos?: {
-    modeloMasVendido: string
-    ventasModeloMasVendido: number
-    ticketPromedio: number
-    ticketPromedioAnterior: number
-    totalModelos: number
-    modeloMenosVendido: string
-  }
   evolucion_mensual?: Array<{
     mes: string
     cartera: number
@@ -135,26 +125,6 @@ const mockData: DashboardData = {
     clientesMora: 23,
   },
   
-  // Métricas de Asesores
-  analistaes: {
-    totalAsesores: 8,
-    analistaesActivos: 7,
-    ventasMejorAsesor: 12,
-    montoMejorAsesor: 75000.00,
-    promedioVentas: 8.5,
-    tasaConversion: 23.4,
-    tasaConversionAnterior: 21.8,
-  },
-  
-  // Métricas de Productos
-  productos: {
-    modeloMasVendido: 'Toyota Corolla',
-    ventasModeloMasVendido: 25,
-    ticketPromedio: 18500.00,
-    ticketPromedioAnterior: 17200.00,
-    totalModelos: 12,
-    modeloMenosVendido: 'Nissan Versa',
-  }
 }
 
 const mockEvolucionMensual = [
@@ -167,13 +137,6 @@ const mockEvolucionMensual = [
   { mes: 'Jul', cartera: 485750, cobrado: 125400, morosidad: 12.5 },
 ]
 
-const mockTopAsesores = [
-  { nombre: 'Carlos Mendoza', ventas: 12, monto: 75000, clientes: 15, tasaConversion: 28.5 },
-  { nombre: 'María González', ventas: 10, monto: 65000, clientes: 13, tasaConversion: 25.2 },
-  { nombre: 'Luis Rodríguez', ventas: 9, monto: 58000, clientes: 11, tasaConversion: 22.8 },
-  { nombre: 'Ana Pérez', ventas: 8, monto: 52000, clientes: 10, tasaConversion: 21.5 },
-  { nombre: 'José Silva', ventas: 7, monto: 45000, clientes: 9, tasaConversion: 19.8 },
-]
 
 const mockRecentPayments = [
   { id: 1, cliente: 'Juan Pérez', monto: 850, fecha: '2024-01-15', estado: 'confirmado' },
@@ -749,7 +712,7 @@ export function Dashboard() {
       </div>
 
       {/* Métricas Detalladas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Ingresos por Tipo - Gráfico de Pastel */}
         <Card>
           <CardHeader>
@@ -870,62 +833,6 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Métricas de Productos */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Car className="mr-2 h-5 w-5" />
-              Métricas de Productos
-            </CardTitle>
-            <CardDescription>Análisis de modelos</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-                <span className="text-sm font-medium text-blue-900">Modelo más vendido</span>
-                <Badge variant="outline" className="bg-blue-100 text-blue-800">
-                  {data.productos?.modeloMasVendido || 'N/A'}
-                </Badge>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                <span className="text-sm font-medium text-green-900">Ventas del modelo</span>
-                <Badge variant="outline" className="bg-green-100 text-green-800">
-                  {data.productos?.ventasModeloMasVendido || 0}
-                </Badge>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
-                <span className="text-sm font-medium text-purple-900">Ticket promedio</span>
-                <Badge variant="outline" className="bg-purple-100 text-purple-800">
-                  {formatCurrency(data.productos?.ticketPromedio || 0)}
-                </Badge>
-              </div>
-              {data.productos?.ticketPromedio && (
-                <div className="mt-4 pt-4 border-t">
-                  <div className="text-xs text-gray-500 mb-1">Variación vs período anterior</div>
-                  <div className="flex items-center">
-                    {(() => {
-                      const ticketPromedio = data.productos?.ticketPromedio ?? mockData.productos?.ticketPromedio ?? 0
-                      const ticketPromedioAnterior = data.productos?.ticketPromedioAnterior ?? mockData.productos?.ticketPromedioAnterior
-                      const variacion = calcularVariacion(
-                        ticketPromedio,
-                        ticketPromedioAnterior
-                      )
-                      const IconComponent = variacion.icono
-                      return (
-                        <>
-                          <IconComponent className={`h-4 w-4 mr-1 ${variacion.color}`} />
-                          <span className={`text-sm font-medium ${variacion.color}`}>
-                            {Math.abs(variacion.valor).toFixed(1)}%
-                          </span>
-                        </>
-                      )
-                    })()}
-                  </div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Alertas y Actividad Reciente */}

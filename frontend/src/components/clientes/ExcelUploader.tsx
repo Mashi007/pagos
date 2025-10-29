@@ -17,7 +17,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { SearchableSelect } from '@/components/ui/searchable-select'
-import { ConfirmacionDuplicadoModal } from './ConfirmacionDuplicadoModal'
 import * as XLSX from 'xlsx'
 import { clienteService } from '@/services/clienteService'
 import { useQueryClient } from '@tanstack/react-query'
@@ -303,13 +302,12 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         ocupacion: row.ocupacion,
         estado: row.estado.toUpperCase().trim(), // ✅ Normalizar estado
         activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
-        notas: row.notas || 'NA',
-        confirm_duplicate: true
+        notas: row.notas || 'NA'
       }
       
       console.log('🔍 DEBUG - Datos a enviar al backend desde Excel:', clienteData)
 
-      await clienteService.createClienteWithConfirmation(clienteData, comentarios)
+      await clienteService.createCliente(clienteData)
       
       // Marcar como guardado usando el _rowIndex de la fila encontrada
       setSavedClients(prev => new Set([...prev, row._rowIndex]))
@@ -1514,12 +1512,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
                         <div className="space-y-4 max-h-[50vh] overflow-y-auto">
                           {excelData.filter(row => {
-                            // Incluir filas con errores de validación O con dropdowns sin seleccionar
+                            // Incluir filas con errores de validación
                             const hasValidationErrors = row._hasErrors
-                            const hasDropdownErrors = !row.concesionario || !row.analista || !row.modelo_vehiculo ||
-                              row.concesionario.trim() === '' || row.analista.trim() === '' || row.modelo_vehiculo.trim() === ''
                             
-                            return hasValidationErrors || hasDropdownErrors
+                            return hasValidationErrors
                           }).map((row, index) => (
                             <div key={index} className="border border-red-200 rounded-lg p-4 bg-red-50">
                               <div className="flex items-center justify-between mb-3">
@@ -1527,10 +1523,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                   Fila {row._rowIndex}: {row.nombres}
                                 </h3>
                                 <Badge variant="outline" className="text-red-600 border-red-300">
-                                  {Object.keys(row._validation).filter(field => !row._validation[field]?.isValid).length + 
-                                   (dropdownErrors[`concesionario_${index}`] ? 1 : 0) +
-                                   (dropdownErrors[`analista_${index}`] ? 1 : 0) +
-                                   (dropdownErrors[`modelo_${index}`] ? 1 : 0)} errores
+                                  {Object.keys(row._validation).filter(field => !row._validation[field]?.isValid).length} errores
                                 </Badge>
                               </div>
 
