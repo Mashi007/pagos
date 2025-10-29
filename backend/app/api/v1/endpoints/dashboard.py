@@ -8,7 +8,6 @@ from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-
 from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
 from app.models.pago import Pago
