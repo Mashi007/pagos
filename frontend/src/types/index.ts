@@ -27,18 +27,6 @@ export interface Cliente {
   fecha_nacimiento?: string
   ocupacion?: string
   
-  // Datos del vehículo (coincide con backend)
-  modelo_vehiculo?: string
-  marca_vehiculo?: string
-  anio_vehiculo?: number
-  color_vehiculo?: string
-  chasis?: string
-  motor?: string
-  
-  // Concesionario
-  concesionario?: string
-  vendedor_concesionario?: string
-  
   // Datos del financiamiento (coincide con backend)
   total_financiamiento?: number
   cuota_inicial?: number
@@ -78,18 +66,6 @@ export interface ClienteForm {
   direccion?: string
   fecha_nacimiento?: string
   ocupacion?: string
-  
-  // Datos del vehículo (coincide con backend)
-  modelo_vehiculo?: string
-  marca_vehiculo?: string
-  anio_vehiculo?: number
-  color_vehiculo?: string
-  chasis?: string
-  motor?: string
-  
-  // Concesionario
-  concesionario?: string
-  vendedor_concesionario?: string
   
   // Datos del financiamiento (coincide con backend)
   total_financiamiento?: number

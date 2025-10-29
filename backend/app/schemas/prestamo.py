@@ -38,6 +38,9 @@ class PrestamoCreate(PrestamoBase):
     cuota_periodo: Optional[Decimal] = (
         None  # Si se envía, se usa; si no, se calcula automáticamente
     )
+    concesionario: Optional[str] = Field(None, max_length=100)
+    analista: Optional[str] = Field(None, max_length=100)
+    modelo_vehiculo: Optional[str] = Field(None, max_length=100)
 
 
 class PrestamoUpdate(BaseModel):
@@ -52,6 +55,9 @@ class PrestamoUpdate(BaseModel):
     fecha_base_calculo: Optional[date] = None
     estado: Optional[str] = None
     observaciones: Optional[str] = None
+    concesionario: Optional[str] = Field(None, max_length=100)
+    analista: Optional[str] = Field(None, max_length=100)
+    modelo_vehiculo: Optional[str] = Field(None, max_length=100)
 
 
 # ============================================
@@ -73,6 +79,9 @@ class PrestamoResponse(PrestamoBase):
     fecha_base_calculo: Optional[date] = None
     producto: str
     producto_financiero: str
+    concesionario: Optional[str] = None
+    analista: Optional[str] = None
+    modelo_vehiculo: Optional[str] = None
     estado: str
     usuario_proponente: str
     usuario_aprobador: Optional[str] = None

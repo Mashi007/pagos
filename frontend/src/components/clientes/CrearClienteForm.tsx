@@ -6,7 +6,6 @@ import {
   CreditCard,
   Phone,
   Mail,
-  Car,
   DollarSign,
   Calendar,
   Users,
@@ -29,9 +28,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
-import { concesionarioService, type Concesionario } from '@/services/concesionarioService'
-import { analistaService, type Analista } from '@/services/analistaService'
-import { modeloVehiculoService, type ModeloVehiculo } from '@/services/modeloVehiculoService'
 import { clienteService } from '@/services/clienteService'
 import { validadoresService } from '@/services/validadoresService'
 import { ExcelUploader } from './ExcelUploader'
@@ -46,11 +42,6 @@ interface FormData {
   direccion: string
   fechaNacimiento: string
   ocupacion: string  // ✅ MÁXIMO 2 palabras
-  
-  // Datos del vehículo - OBLIGATORIOS
-  modeloVehiculo: string
-  concesionario: string
-  analista: string
   
   // Estado - OBLIGATORIO
   estado: 'ACTIVO' | 'INACTIVO' | 'FINALIZADO'
@@ -122,9 +113,6 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     direccion: '',
     fechaNacimiento: getTodayDate(), // ✅ Fecha por defecto: hoy
     ocupacion: '',
-    modeloVehiculo: '',
-    concesionario: '',
-    analista: '',
     estado: 'ACTIVO',
     notas: 'NA'  // ✅ Default 'NA'
   })
@@ -178,9 +166,6 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         direccion: cliente.direccion || '',
         fechaNacimiento: convertirFechaLocal(cliente.fecha_nacimiento || ''), // ✅ Convertir ISO a DD/MM/YYYY
         ocupacion: cliente.ocupacion || '',
-        modeloVehiculo: cliente.modelo_vehiculo || '',
-        concesionario: cliente.concesionario || '',
-        analista: cliente.analista || '',
         estado: cliente.estado || 'ACTIVO',
         notas: cliente.notas || 'NA'
       }
@@ -192,53 +177,6 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cliente])
   
-  // Datos de configuración
-  const [concesionarios, setConcesionarios] = useState<Concesionario[]>([])
-  const [analistas, setAnalistas] = useState<Analista[]>([])
-  const [modelosVehiculos, setModelosVehiculos] = useState<ModeloVehiculo[]>([])
-
-  // Cargar datos de configuración
-  useEffect(() => {
-    const cargarDatosConfiguracion = async () => {
-      try {
-        logger.info('Cargando datos de configuración', {
-          action: 'load_config_data',
-          component: 'CrearClienteForm'
-        })
-        
-        const [concesionariosData, analistasData, modelosData] = await Promise.all([
-          concesionarioService.getConcesionarios(),
-          analistaService.getAnalistas(),
-          modeloVehiculoService.getModelosVehiculos()
-        ])
-        
-        logger.info('Datos de configuración cargados exitosamente', {
-          action: 'config_data_loaded',
-          component: 'CrearClienteForm',
-          concesionarios: concesionariosData.length,
-          analistas: analistasData.length,
-          modelos: modelosData.length
-        })
-        
-        setConcesionarios(concesionariosData)
-        setAnalistas(analistasData)
-        setModelosVehiculos(modelosData)
-        
-        logger.info('Estados actualizados correctamente', {
-          action: 'states_updated',
-          component: 'CrearClienteForm'
-        })
-      } catch (error) {
-        logger.error('Error cargando datos de configuración', {
-          action: 'load_config_error',
-          component: 'CrearClienteForm',
-          error: error instanceof Error ? error.message : String(error)
-        })
-      }
-    }
-
-    cargarDatosConfiguracion()
-  }, [])
 
   // ✅ Validaciones personalizadas para nombres y ocupacion
   const validateNombres = (nombres: string): ValidationResult => {
@@ -462,8 +400,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     
     const requiredFields: (keyof FormData)[] = [
       'cedula', 'nombres', 'telefono', 'email', 
-      'direccion', 'fechaNacimiento', 'ocupacion', 'modeloVehiculo', 
-      'concesionario', 'analista'
+      'direccion', 'fechaNacimiento', 'ocupacion'
     ]
     
     // ✅ Solo en modo creación: validar nombres, ocupacion, direccion y fechaNacimiento con funciones personalizadas
@@ -558,9 +495,6 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         direccion: formData.direccion,
         fecha_nacimiento: convertirFechaAISO(formData.fechaNacimiento), // ✅ Convertir DD/MM/YYYY → YYYY-MM-DD
         ocupacion: formData.ocupacion,
-        modelo_vehiculo: formData.modeloVehiculo,
-        concesionario: formData.concesionario,
-        analista: formData.analista,
         estado: formData.estado,
         notas: formData.notas || 'NA'
       }
@@ -695,9 +629,6 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         direccion: formData.direccion,
         fecha_nacimiento: fechaConvertida, // ✅ Convertir DD/MM/YYYY → YYYY-MM-DD
         ocupacion: formData.ocupacion,
-        modelo_vehiculo: formData.modeloVehiculo,
-        concesionario: formData.concesionario,
-        analista: formData.analista,
         estado: formData.estado,
         notas: formData.notas || 'NA',
         confirm_duplicate: true
@@ -990,108 +921,6 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Datos del Vehículo */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Car className="w-5 h-5" />
-                Datos del Vehículo
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Modelo de Vehículo <span className="text-red-500">*</span>
-                  </label>
-                <SearchableSelect
-                  options={modelosVehiculos
-                    .filter(modelo => modelo.modelo) // ✅ CORREGIDO: campo 'modelo', no 'nombre'
-                    .map(modelo => ({
-                      value: modelo.modelo,          // ✅ CORREGIDO: campo 'modelo', no 'nombre'
-                      label: modelo.modelo           // ✅ CORREGIDO: campo 'modelo', no 'nombre'
-                    }))}
-                  value={formData.modeloVehiculo || ''}
-                  onChange={(value) => handleInputChange('modeloVehiculo', value)}
-                  placeholder="Buscar modelo de vehículo..."
-                  className={getFieldValidation('modeloVehiculo')?.isValid === false ? 'border-red-500' : ''}
-                />
-                {/* Debug: Modelos disponibles */}
-                {(() => {
-                  console.log('🔍 Modelos disponibles para SearchableSelect:', modelosVehiculos.map(m => m.modelo)) // ✅ CORREGIDO: campo 'modelo'
-                  return null
-                })()}
-                {getFieldValidation('modeloVehiculo') && (
-                  <div className={`text-xs flex items-center gap-1 ${
-                    getFieldValidation('modeloVehiculo')?.isValid ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {getFieldValidation('modeloVehiculo')?.isValid ? (
-                      <CheckCircle className="w-3 h-3" />
-                    ) : (
-                      <XCircle className="w-3 h-3" />
-                    )}
-                    {getFieldValidation('modeloVehiculo')?.message}
-                </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Concesionario <span className="text-red-500">*</span>
-                  </label>
-                <SearchableSelect
-                  options={concesionarios.map(concesionario => ({
-                    value: concesionario.nombre,
-                    label: concesionario.nombre
-                  }))}
-                  value={formData.concesionario}
-                  onChange={(value) => handleInputChange('concesionario', value)}
-                  placeholder="Buscar concesionario..."
-                  className={getFieldValidation('concesionario')?.isValid === false ? 'border-red-500' : ''}
-                />
-                {getFieldValidation('concesionario') && (
-                  <div className={`text-xs flex items-center gap-1 ${
-                    getFieldValidation('concesionario')?.isValid ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {getFieldValidation('concesionario')?.isValid ? (
-                      <CheckCircle className="w-3 h-3" />
-                    ) : (
-                      <XCircle className="w-3 h-3" />
-                    )}
-                    {getFieldValidation('concesionario')?.message}
-                </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Analista <span className="text-red-500">*</span>
-                  </label>
-                <SearchableSelect
-                  options={analistas.map(analista => ({
-                    value: analista.nombre,
-                    label: analista.nombre
-                  }))}
-                  value={formData.analista}
-                  onChange={(value) => handleInputChange('analista', value)}
-                  placeholder="Buscar analista..."
-                  className={getFieldValidation('analista')?.isValid === false ? 'border-red-500' : ''}
-                />
-                {getFieldValidation('analista') && (
-                  <div className={`text-xs flex items-center gap-1 ${
-                    getFieldValidation('analista')?.isValid ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {getFieldValidation('analista')?.isValid ? (
-                      <CheckCircle className="w-3 h-3" />
-                    ) : (
-                      <XCircle className="w-3 h-3" />
-                    )}
-                    {getFieldValidation('analista')?.message}
-                  </div>
-                  )}
-                </div>
             </CardContent>
           </Card>
 

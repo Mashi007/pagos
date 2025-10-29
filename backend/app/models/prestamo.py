@@ -47,6 +47,13 @@ class Prestamo(Base):
     producto_financiero = Column(String(100), nullable=False)  # Analista asignado
 
     # ============================================
+    # INFORMACIÓN ADICIONAL
+    # ============================================
+    concesionario = Column(String(100), nullable=True)  # Concesionario
+    analista = Column(String(100), nullable=True)  # Analista
+    modelo_vehiculo = Column(String(100), nullable=True)  # Modelo del vehículo
+
+    # ============================================
     # ESTADO Y APROBACIÓN
     # ============================================
     estado = Column(String(20), nullable=False, default="DRAFT", index=True)

@@ -10,7 +10,6 @@ import {
   MoreHorizontal,
   Phone,
   Mail,
-  Car,
   User,
   AlertCircle
 } from 'lucide-react'
@@ -273,22 +272,7 @@ export function ClientesList() {
                   </select>
                 </div>
                 
-                <div>
-                  <label className="text-sm font-medium text-gray-700 mb-2 block">
-                    Asesor
-                  </label>
-                  <select
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                     value={filters.analista_config_id || ''}
-                     onChange={(e) => handleFilterChange('analista_config_id', e.target.value || undefined)}
-                  >
-                    <option value="">Todos</option>
-                    <option value="analista1">Asesor 1</option>
-                    <option value="analista2">Asesor 2</option>
-                  </select>
-                </div>
-                
-                <div className="flex items-end">
+                <div className="flex items-end col-span-2">
                   <Button variant="outline" onClick={clearFilters} className="w-full">
                     Limpiar Filtros
                   </Button>
@@ -309,8 +293,6 @@ export function ClientesList() {
                   <TableHead>Cliente</TableHead>
                   <TableHead>Contacto</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead>Vehículo & Analista</TableHead>
-                  <TableHead>Concesionario</TableHead>
                   <TableHead>Fecha Creación</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -346,22 +328,6 @@ export function ClientesList() {
                       >
                         {cliente.estado}
                       </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="text-sm text-gray-600">
-                          <Car className="w-3 h-3 inline mr-1" />
-                          {cliente.modelo_vehiculo || 'Sin asignar'}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          Analista: {cliente.analista || 'Sin asignar'}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm text-gray-900">
-                        {cliente.concesionario || 'Sin asignar'}
-                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="text-sm text-gray-600">

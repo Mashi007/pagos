@@ -19,9 +19,6 @@ import { Badge } from '@/components/ui/badge'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import { ConfirmacionDuplicadoModal } from './ConfirmacionDuplicadoModal'
 import * as XLSX from 'xlsx'
-import { concesionarioService, type Concesionario } from '@/services/concesionarioService'
-import { analistaService, type Analista } from '@/services/analistaService'
-import { modeloVehiculoService, type ModeloVehiculo } from '@/services/modeloVehiculoService'
 import { clienteService } from '@/services/clienteService'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -33,9 +30,6 @@ interface ExcelData {
   direccion: string
   fecha_nacimiento: string
   ocupacion: string
-  modelo_vehiculo: string | null
-  concesionario: string | null
-  analista: string | null
   estado: string
   activo: string
   notas: string
@@ -72,10 +66,6 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const [showValidationModal, setShowValidationModal] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Estados para listas desplegables
-  const [concesionarios, setConcesionarios] = useState<Concesionario[]>([])
-  const [analistas, setAnalistas] = useState<Analista[]>([])
-  const [modelosVehiculos, setModelosVehiculos] = useState<ModeloVehiculo[]>([])
 
   // Estado para tracking de errores en dropdowns
   const [dropdownErrors, setDropdownErrors] = useState<{[key: string]: boolean}>({})
@@ -133,10 +123,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       email: rowData.email,
       direccion: rowData.direccion,
       fecha_nacimiento: rowData.fecha_nacimiento,
-      ocupacion: rowData.ocupacion,
-      modelo_vehiculo: rowData.modelo_vehiculo,
-      concesionario: rowData.concesionario,
-      analista: rowData.analista
+      ocupacion: rowData.ocupacion
     })
 
     // Si los datos de la fila cambiaron, resetear el contador
@@ -229,36 +216,6 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     setToasts(prev => prev.filter(toast => toast.id !== toastId))
   }
 
-  // Cargar datos de configuración
-  useEffect(() => {
-    const cargarDatosConfiguracion = async () => {
-      try {
-        console.log('🔄 Cargando datos de configuración para ExcelUploader...')
-        
-        const [concesionariosData, analistasData, modelosData] = await Promise.all([
-          concesionarioService.getConcesionarios(),
-          analistaService.getAnalistas(),
-          modeloVehiculoService.getModelosVehiculos()
-        ])
-        
-        console.log('📊 Datos cargados para ExcelUploader:')
-        console.log('  - Concesionarios:', concesionariosData.length)
-        console.log('  - Analistas:', analistasData.length)
-        console.log('  - Modelos:', modelosData.length)
-        
-        setConcesionarios(concesionariosData)
-        setAnalistas(analistasData)
-        setModelosVehiculos(modelosData)
-        
-        console.log('✅ Estados actualizados correctamente en ExcelUploader')
-      } catch (error) {
-        console.error('❌ Error cargando datos de configuración en ExcelUploader:', error)
-      }
-    }
-
-    cargarDatosConfiguracion()
-  }, [])
-
   // Validar dropdowns cuando cambien los datos de Excel
   useEffect(() => {
     if (excelData.length > 0) {
@@ -323,9 +280,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       
       // ✅ VALIDACIÓN FINAL: Verificar que TODOS los campos estén completos y válidos
       // Esto usa el estado de validación de la interfaz
-      const hasDropdownErrors = !row.concesionario?.trim() || 
-                                !row.analista?.trim() || 
-                                !row.modelo_vehiculo?.trim()
+      const hasDropdownErrors = false
       
       // Recalcular _hasErrors incluyendo dropdowns
       const fieldsToCheck = Object.keys(row._validation).filter(field => field !== 'notas')
@@ -346,9 +301,6 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         direccion: row.direccion,
         fecha_nacimiento: convertirFechaParaBackend(row.fecha_nacimiento),  // ✅ Convertir DD/MM/YYYY a YYYY-MM-DD
         ocupacion: row.ocupacion,
-        modelo_vehiculo: row.modelo_vehiculo || '',  // ✅ Enviar vacío en lugar de undefined
-        concesionario: row.concesionario || '',      // ✅ Enviar vacío en lugar de undefined
-        analista: row.analista || '',                // ✅ Enviar vacío en lugar de undefined
         estado: row.estado.toUpperCase().trim(), // ✅ Normalizar estado
         activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
         notas: row.notas || 'NA',
@@ -544,9 +496,6 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         direccion: row.direccion,
         fecha_nacimiento: convertirFechaParaBackend(row.fecha_nacimiento),  // ✅ Convertir DD/MM/YYYY a YYYY-MM-DD
         ocupacion: row.ocupacion,
-        modelo_vehiculo: row.modelo_vehiculo || undefined,
-        concesionario: row.concesionario || undefined,
-        analista: row.analista || undefined,
         estado: row.estado.toUpperCase().trim(), // ✅ Normalizar estado
         activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
         notas: row.notas || 'NA'
@@ -831,12 +780,6 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         return `Ejemplo: "8741236589" (10 dígitos sin 0 inicial)`
       case 'email':
         return `Ejemplo: "usuario@dominio.com"`
-      case 'concesionario':
-        return `Selecciona un concesionario de la lista`
-      case 'analista':
-        return `Selecciona un analista de la lista`
-      case 'modelo_vehiculo':
-        return `Selecciona un modelo de vehículo de la lista`
       case 'estado':
         return `Ejemplo: "ACTIVO", "INACTIVO" o "FINALIZADO"`
       case 'activo':
@@ -1047,27 +990,6 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         if (value.trim().length < 2) return { isValid: false, message: 'Mínimo 2 caracteres' }
         return { isValid: true }
 
-      case 'modelo_vehiculo':
-        if (!value || value === null || !value.trim()) return { isValid: false, message: 'Modelo requerido' }
-        // Verificar si el valor existe en la lista de modelos disponibles
-        const modeloExists = modelosVehiculos.some(modelo => modelo.modelo === value.trim())
-        if (!modeloExists) return { isValid: false, message: 'Modelo no válido' }
-        return { isValid: true }
-
-      case 'concesionario':
-        if (!value || value === null || !value.trim()) return { isValid: false, message: 'Concesionario requerido' }
-        // Verificar si el valor existe en la lista de concesionarios disponibles
-        const concesionarioExists = concesionarios.some(concesionario => concesionario.nombre === value.trim())
-        if (!concesionarioExists) return { isValid: false, message: 'Concesionario no válido' }
-        return { isValid: true }
-
-      case 'analista':
-        if (!value || value === null || !value.trim()) return { isValid: false, message: 'Analista requerido' }
-        // Verificar si el valor existe en la lista de analistas disponibles
-        const analistaExists = analistas.some(analista => analista.nombre === value.trim())
-        if (!analistaExists) return { isValid: false, message: 'Analista no válido' }
-        return { isValid: true }
-
       case 'notas':
         // Notas es opcional, siempre válido
         return { isValid: true }
@@ -1117,18 +1039,14 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           direccion: row[4]?.toString() || '',                // Columna E
           fecha_nacimiento: convertirFechaExcel(row[5]),       // Columna F - ✅ Convertir de Excel a DD/MM/YYYY
           ocupacion: row[6]?.toString() || '',                // Columna G
-          modelo_vehiculo: row[7]?.toString() || null,        // Columna H
-          concesionario: row[8]?.toString() || null,          // Columna I
-          analista: row[9]?.toString() || null,               // Columna J
-          estado: row[10]?.toString() || 'ACTIVO',            // Columna K - Por defecto siempre ACTIVO
-          activo: row[11]?.toString() || 'TRUE',              // Columna L - Por defecto siempre TRUE
-          notas: row[12]?.toString() || ''                    // Columna M
+          estado: row[7]?.toString() || 'ACTIVO',            // Columna H - Por defecto siempre ACTIVO
+          activo: row[8]?.toString() || 'TRUE',              // Columna I - Por defecto siempre TRUE
+          notas: row[9]?.toString() || ''                    // Columna J
         }
         
         // Validar campos requeridos
         const requiredFields = ['cedula', 'nombres', 'telefono', 'email', 
-                              'direccion', 'fecha_nacimiento', 'ocupacion', 'modelo_vehiculo', 
-                              'concesionario', 'analista', 'estado', 'activo']
+                              'direccion', 'fecha_nacimiento', 'ocupacion', 'estado', 'activo']
         
         let hasErrors = false
         for (const field of requiredFields) {
@@ -1225,9 +1143,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       const hasValidationErrors = fieldsToCheck.some(field => !row._validation[field]?.isValid)
       
       // ✅ Validar dropdowns explícitamente
-      const hasDropdownErrors = !row.concesionario?.trim() || 
-                                !row.analista?.trim() || 
-                                !row.modelo_vehiculo?.trim()
+      const hasDropdownErrors = false
       
       row._hasErrors = hasValidationErrors || hasDropdownErrors
       
@@ -1254,15 +1170,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     
     data.forEach((row, index) => {
       // Validar dropdowns específicos - SIEMPRE mostrar error si está vacío
-      if (!row.concesionario || row.concesionario.trim() === '') {
-        errors[`concesionario_${index}`] = true
-      }
-      if (!row.analista || row.analista.trim() === '') {
-        errors[`analista_${index}`] = true
-      }
-      if (!row.modelo_vehiculo || row.modelo_vehiculo.trim() === '') {
-        errors[`modelo_${index}`] = true
-      }
+      // Campos eliminados: modelo_vehiculo, concesionario, analista
     })
     
     console.log('🔍 Actualizando errores de dropdowns:', errors)
@@ -1274,11 +1182,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     // Filtrar solo registros completamente válidos
     const validData = excelData.filter(row => {
       const hasNoErrors = !row._hasErrors
-      const hasConcesionario = row.concesionario && row.concesionario.trim() !== ''
-      const hasAnalista = row.analista && row.analista.trim() !== ''
-      const hasModelo = row.modelo_vehiculo && row.modelo_vehiculo.trim() !== ''
       
-      return hasNoErrors && hasConcesionario && hasAnalista && hasModelo
+      return hasNoErrors
     })
     
     if (validData.length === 0) {
@@ -1317,9 +1222,6 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
             direccion: row.direccion,
             fecha_nacimiento: convertirFechaParaBackend(row.fecha_nacimiento),  // ✅ Convertir DD/MM/YYYY a YYYY-MM-DD
             ocupacion: row.ocupacion,
-            modelo_vehiculo: row.modelo_vehiculo || '',
-            concesionario: row.concesionario || '',
-            analista: row.analista || '',
             estado: row.estado.toUpperCase().trim(), // ✅ Normalizar estado
             activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
             notas: row.notas || 'NA'
@@ -1382,11 +1284,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   // 🎯 CONTAR REGISTROS VÁLIDOS (sin errores + dropdowns seleccionados)
   const validRows = excelData.filter(row => {
     const hasNoErrors = !row._hasErrors
-    const hasConcesionario = row.concesionario && row.concesionario.trim() !== ''
-    const hasAnalista = row.analista && row.analista.trim() !== ''
-    const hasModelo = row.modelo_vehiculo && row.modelo_vehiculo.trim() !== ''
     
-    return hasNoErrors && hasConcesionario && hasAnalista && hasModelo
+    return hasNoErrors
   }).length
   
   const totalRows = excelData.length
@@ -1609,7 +1508,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                             <strong>No se puede guardar:</strong> Se encontraron {totalRows - validRows} registros con errores que deben corregirse antes de continuar.
                           </p>
                           <p className="text-sm text-red-600 mt-1">
-                            <strong>Errores incluyen:</strong> Campos de validación inválidos y/o dropdowns sin seleccionar (Concesionario, Analista, Modelo Vehículo).
+                            <strong>Errores incluyen:</strong> Campos de validación inválidos.
                           </p>
                         </div>
 
@@ -1647,38 +1546,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                       </div>
                                     </div>
                                   );
-                                })}
-                                
-                                {/* Mostrar errores de dropdowns */}
-                                {dropdownErrors[`concesionario_${index}`] && (
-                                  <div className="flex items-start space-x-2">
-                                    <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                                    <div className="flex-1">
-                                      <span className="text-sm font-medium text-gray-700">Concesionario:</span>
-                                      <div className="text-sm text-red-600 mt-1">Debe seleccionar un concesionario</div>
-                                    </div>
-                                  </div>
-                                )}
-                                
-                                {dropdownErrors[`analista_${index}`] && (
-                                  <div className="flex items-start space-x-2">
-                                    <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                                    <div className="flex-1">
-                                      <span className="text-sm font-medium text-gray-700">Analista:</span>
-                                      <div className="text-sm text-red-600 mt-1">Debe seleccionar un analista</div>
-                                    </div>
-                                  </div>
-                                )}
-                                
-                                {dropdownErrors[`modelo_${index}`] && (
-                                  <div className="flex items-start space-x-2">
-                                    <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                                    <div className="flex-1">
-                                      <span className="text-sm font-medium text-gray-700">Modelo Vehículo:</span>
-                                      <div className="text-sm text-red-600 mt-1">Debe seleccionar un modelo de vehículo</div>
-                                    </div>
-                                  </div>
-                                )}
+                                }                                )}
                               </div>
                             </div>
                           ))}
@@ -1744,9 +1612,6 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-48">Dirección</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">Fecha Nac.</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-32">Ocupación</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-40">Modelo Veh.</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-40">Concesionario</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-32">Analista</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">Estado</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-20">Activo</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-48">Notas</th>
@@ -1915,54 +1780,6 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 onChange={(e) => updateCellValue(index, 'ocupacion', e.target.value)}
                                 className={`w-full text-sm p-2 border rounded min-w-[80px] ${
                                   row._validation.ocupacion?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
-                                }`}
-                              />
-                            </td>
-                            
-                            {/* Modelo Vehículo */}
-                            <td className="border p-2">
-                              <SearchableSelect
-                                options={modelosVehiculos.map(modelo => ({
-                                  value: modelo.modelo,
-                                  label: modelo.modelo
-                                }))}
-                                value={row.modelo_vehiculo || ''}
-                                onChange={(value) => updateCellValue(index, 'modelo_vehiculo', value)}
-                                placeholder="Seleccionar modelo..."
-                                className={`w-full text-sm min-w-[120px] ${
-                                  row._validation.modelo_vehiculo?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
-                                }`}
-                              />
-                            </td>
-                            
-                            {/* Concesionario */}
-                            <td className="border p-2">
-                              <SearchableSelect
-                                options={concesionarios.map(concesionario => ({
-                                  value: concesionario.nombre,
-                                  label: concesionario.nombre
-                                }))}
-                                value={row.concesionario || ''}
-                                onChange={(value) => updateCellValue(index, 'concesionario', value)}
-                                placeholder="Seleccionar concesionario..."
-                                className={`w-full text-sm min-w-[120px] ${
-                                  row._validation.concesionario?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
-                                }`}
-                              />
-                            </td>
-                            
-                            {/* Analista */}
-                            <td className="border p-2">
-                              <SearchableSelect
-                                options={analistas.map(analista => ({
-                                  value: analista.nombre,
-                                  label: analista.nombre
-                                }))}
-                                value={row.analista || ''}
-                                onChange={(value) => updateCellValue(index, 'analista', value)}
-                                placeholder="Seleccionar analista..."
-                                className={`w-full text-sm min-w-[120px] ${
-                                  row._validation.analista?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               />
                             </td>
