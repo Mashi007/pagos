@@ -49,8 +49,9 @@ class PrestamoService {
 
   // Buscar préstamos por cédula
   async getPrestamosByCedula(cedula: string): Promise<Prestamo[]> {
-    const response = await apiClient.get<ApiResponse<Prestamo[]>>(`${this.baseUrl}/cedula/${cedula}`)
-    return response.data
+    // El endpoint devuelve directamente una lista, no envuelta en ApiResponse
+    const response = await apiClient.get<Prestamo[]>(`${this.baseUrl}/cedula/${cedula}`)
+    return response || []
   }
 
   // Obtener historial de auditoría de un préstamo
