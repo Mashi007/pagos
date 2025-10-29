@@ -1684,21 +1684,67 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.fecha_nacimiento}
                                 onChange={(e) => {
                                   let value = e.target.value
-                                  // Solo permitir dígitos
-                                  value = value.replace(/\D/g, '')
-                                  // Aplicar formato DD/MM/YYYY
-                                  if (value.length <= 2) {
-                                    // Solo día
-                                    updateCellValue(index, 'fecha_nacimiento', value)
-                                  } else if (value.length <= 4) {
-                                    // Día y mes: DD/MM
-                                    updateCellValue(index, 'fecha_nacimiento', value.slice(0, 2) + '/' + value.slice(2))
-                                  } else if (value.length <= 8) {
-                                    // Día, mes y año: DD/MM/YYYY
-                                    updateCellValue(index, 'fecha_nacimiento', value.slice(0, 2) + '/' + value.slice(2, 4) + '/' + value.slice(4, 8))
-                                  } else {
-                                    // Limitar a 8 dígitos (10 caracteres con barras)
-                                    updateCellValue(index, 'fecha_nacimiento', value.slice(0, 2) + '/' + value.slice(2, 4) + '/' + value.slice(4, 8))
+                                  // Limpiar todos los caracteres no numéricos y barras
+                                  const onlyDigits = value.replace(/\D/g, '')
+                                  
+                                  // Solo procesar si hay dígitos
+                                  if (onlyDigits.length === 0) {
+                                    updateCellValue(index, 'fecha_nacimiento', '')
+                                    return
+                                  }
+                                  
+                                  // Auto-formatear a DD/MM/YYYY
+                                  let formatted = ''
+                                  const digits = onlyDigits.substring(0, 8) // Limitar a 8 dígitos
+                                  
+                                  if (digits.length === 1) {
+                                    // Solo un dígito: no formatear aún
+                                    formatted = digits
+                                  } else if (digits.length === 2) {
+                                    // Dos dígitos: DD
+                                    formatted = digits.substring(0, 2)
+                                  } else if (digits.length === 3) {
+                                    // Tres dígitos: DD/M
+                                    formatted = digits.substring(0, 2) + '/' + digits.substring(2, 3)
+                                  } else if (digits.length === 4) {
+                                    // Cuatro dígitos: DD/MM
+                                    formatted = digits.substring(0, 2) + '/' + digits.substring(2, 4)
+                                  } else if (digits.length >= 5) {
+                                    // Cinco o más dígitos: DD/MM/YYYY
+                                    const dia = digits.substring(0, 2)
+                                    const mes = digits.substring(2, 4)
+                                    const ano = digits.substring(4, 8)
+                                    formatted = dia + '/' + mes + '/' + ano
+                                  }
+                                  
+                                  updateCellValue(index, 'fecha_nacimiento', formatted)
+                                }}
+                                onBlur={(e) => {
+                                  // Al perder el foco, auto-completar con 0 si falta
+                                  let value = e.target.value
+                                  if (!value) return
+                                  
+                                  // Si no tiene barras, no formatear
+                                  if (!value.includes('/')) {
+                                    return
+                                  }
+                                  
+                                  const parts = value.split('/')
+                                  if (parts.length === 3) {
+                                    // Auto-completar día con 0 si solo tiene un dígito
+                                    if (parts[0].length === 1 && parseInt(parts[0]) <= 3) {
+                                      parts[0] = '0' + parts[0]
+                                    }
+                                    // Auto-completar mes con 0 si solo tiene un dígito
+                                    if (parts[1].length === 1) {
+                                      parts[1] = '0' + parts[1]
+                                    }
+                                    // Auto-completar año con 0 si es necesario
+                                    if (parts[2].length < 4) {
+                                      parts[2] = parts[2].padStart(4, '0')
+                                    }
+                                    const autoFormatted = parts.join('/')
+                                    updateCellValue(index, 'fecha_nacimiento', autoFormatted)
                                   }
                                 }}
                                 placeholder="DD/MM/YYYY"
