@@ -123,18 +123,18 @@ def crear_cliente(
         # ✅ Validar: NO permitir misma cédula + mismo nombre+apellido (nombres unificados)
         # Normalizar nombres para comparación (trim y case-insensitive)
         nombres_normalizados = cliente_data.nombres.strip()
-        
+
         # Buscar cliente existente con misma cédula
         cliente_misma_cedula = (
-            db.query(Cliente)
-            .filter(Cliente.cedula == cliente_data.cedula)
-            .all()
+            db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).all()
         )
-        
+
         # Verificar si alguno de los clientes con la misma cédula tiene el mismo nombre
         for cliente_existente in cliente_misma_cedula:
-            nombres_existentes_normalizados = cliente_existente.nombres.strip() if cliente_existente.nombres else ""
-            
+            nombres_existentes_normalizados = (
+                cliente_existente.nombres.strip() if cliente_existente.nombres else ""
+            )
+
             # Comparación case-insensitive y normalizada
             if nombres_existentes_normalizados.lower() == nombres_normalizados.lower():
                 # NO PERMITIR: misma cédula + mismo nombre+apellido
@@ -201,26 +201,31 @@ def actualizar_cliente(
         if "cedula" in update_data or "nombres" in update_data:
             nueva_cedula = update_data.get("cedula", cliente.cedula)
             nuevos_nombres = update_data.get("nombres", cliente.nombres)
-            
+
             if nuevos_nombres:
                 nuevos_nombres_normalizados = nuevos_nombres.strip()
-                
+
                 # Buscar otros clientes con la misma cédula (excluyendo el actual)
                 otros_clientes_misma_cedula = (
                     db.query(Cliente)
                     .filter(
                         Cliente.cedula == nueva_cedula,
-                        Cliente.id != cliente_id  # Excluir el cliente actual
+                        Cliente.id != cliente_id,  # Excluir el cliente actual
                     )
                     .all()
                 )
-                
+
                 # Verificar si algún otro cliente con la misma cédula tiene el mismo nombre
                 for otro_cliente in otros_clientes_misma_cedula:
-                    nombres_existentes_normalizados = otro_cliente.nombres.strip() if otro_cliente.nombres else ""
-                    
+                    nombres_existentes_normalizados = (
+                        otro_cliente.nombres.strip() if otro_cliente.nombres else ""
+                    )
+
                     # Comparación case-insensitive y normalizada
-                    if nombres_existentes_normalizados.lower() == nuevos_nombres_normalizados.lower():
+                    if (
+                        nombres_existentes_normalizados.lower()
+                        == nuevos_nombres_normalizados.lower()
+                    ):
                         # NO PERMITIR: misma cédula + mismo nombre+apellido en otro cliente
                         logger.warning(
                             f"❌ Intento de actualizar cliente {cliente_id} a duplicado - "
