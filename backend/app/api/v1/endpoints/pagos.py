@@ -88,6 +88,10 @@ def crear_pago(
         pago_dict = pago_data.model_dump()
         pago_dict["usuario_registro"] = current_user.email
         pago_dict["fecha_registro"] = datetime.now()
+        
+        # Eliminar cualquier campo que no exista en el modelo (por ejemplo, referencia_pago si la migración no se ha ejecutado)
+        campos_validos = [col.key for col in Pago.__table__.columns]
+        pago_dict = {k: v for k, v in pago_dict.items() if k in campos_validos}
 
         nuevo_pago = Pago(**pago_dict)
         db.add(nuevo_pago)
@@ -112,9 +116,9 @@ def crear_pago(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error en crear_pago: {e}")
+        logger.error(f"Error en crear_pago: {e}", exc_info=True)
         db.rollback()
-        raise HTTPException(status_code=500, detail="Error interno del servidor")
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.put("/{pago_id}", response_model=PagoResponse)
