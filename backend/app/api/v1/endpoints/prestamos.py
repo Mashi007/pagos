@@ -21,6 +21,7 @@ from app.services.prestamo_amortizacion_service import (
 )
 from app.services.prestamo_evaluacion_service import crear_evaluacion_prestamo
 
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
