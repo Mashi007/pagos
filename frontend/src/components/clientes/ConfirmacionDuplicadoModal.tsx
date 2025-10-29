@@ -183,7 +183,6 @@ export function ConfirmacionDuplicadoModal({
                         <th className="px-3 py-2 text-left font-semibold text-gray-700">ID</th>
                         <th className="px-3 py-2 text-left font-semibold text-gray-700">Monto</th>
                         <th className="px-3 py-2 text-left font-semibold text-gray-700">Estado</th>
-                        <th className="px-3 py-2 text-left font-semibold text-gray-700">Modalidad</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -206,7 +205,6 @@ export function ConfirmacionDuplicadoModal({
                               {prestamo.estado}
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-xs">{prestamo.modalidad_pago}</td>
                         </tr>
                       ))}
                     </tbody>
