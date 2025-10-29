@@ -409,7 +409,16 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       clearContradictoryToasts()
       
       // Manejar diferentes tipos de errores
-      if (error.response?.status === 503) {
+      if (error.response?.status === 409) {
+        // ✅ Error 409: Cliente duplicado detectado nuevamente
+        const mensaje = error.response?.data?.detail?.message || 
+                       `El cliente con cédula ${row.cedula} ya existe. Verifica los datos.`
+        addToast('error', `⚠️ Cliente duplicado: ${mensaje}`)
+        console.error('❌ ERROR 409 al confirmar duplicado:', {
+          cedula: row.cedula,
+          detalle: error.response?.data?.detail
+        })
+      } else if (error.response?.status === 503) {
         addToast('error', '🚨 SERVICIO NO DISPONIBLE: El backend está caído. Contacta al administrador.')
       } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
         addToast('error', '🚨 ERROR DE RED: No se puede conectar al servidor. Verifica tu conexión.')
