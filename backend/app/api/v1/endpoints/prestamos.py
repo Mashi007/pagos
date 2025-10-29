@@ -10,11 +10,14 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.prestamo_auditoria import PrestamoAuditoria
 from app.models.user import User
+
 from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate
+
 from app.services.prestamo_amortizacion_service import (
     generar_tabla_amortizacion as generar_amortizacion,
     obtener_cuotas_prestamo as obtener_cuotas_service,
