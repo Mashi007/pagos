@@ -143,7 +143,7 @@ class CobranzasService {
     const url = `${this.baseUrl}/informes/montos-vencidos-periodo?${searchParams.toString()}`
     
     if (params?.formato === 'pdf' || params?.formato === 'excel') {
-      const axiosInstance = apiClientRaw.getAxiosInstance()
+      const axiosInstance = apiClient.getAxiosInstance()
       const response = await axiosInstance.get(url, { responseType: 'blob' })
       const blob = new Blob([response.data], {
         type: params.formato === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
