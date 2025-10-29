@@ -359,7 +359,7 @@ def listar_prestamos(
             except:
                 pass
             total = 0
-        
+
         skip = (page - 1) * per_page
         try:
             prestamos = (

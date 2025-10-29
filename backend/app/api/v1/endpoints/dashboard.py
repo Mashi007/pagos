@@ -125,13 +125,13 @@ def obtener_cobros_diarios(
             )
 
         hoy = date.today()
-        
+
         # Calcular fecha inicio (dias días atrás o fecha_inicio si está definida)
         if fecha_inicio:
             fecha_inicio_query = fecha_inicio
         else:
             fecha_inicio_query = hoy - timedelta(days=dias)
-        
+
         if fecha_fin:
             fecha_fin_query = fecha_fin
         else:
