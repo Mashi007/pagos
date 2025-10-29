@@ -354,7 +354,7 @@ def listar_prestamos(
         except Exception as e:
             logger.error(f"Error contando préstamos: {str(e)}", exc_info=True)
             total = 0
-        
+
         skip = (page - 1) * per_page
         try:
             prestamos = (
@@ -383,7 +383,7 @@ def listar_prestamos(
                 )
                 # Continuar con el siguiente préstamo en lugar de fallar completamente
                 continue
-        
+
         # Si no se pudo serializar ningún préstamo pero hay préstamos en BD, es un error crítico
         if prestamos and not prestamos_serializados:
             logger.error(
@@ -403,9 +403,12 @@ def listar_prestamos(
     except Exception as e:
         error_msg = str(e)
         logger.error(f"Error en listar_prestamos: {error_msg}", exc_info=True)
-        
+
         # Mensaje más descriptivo si es un error de esquema de BD
-        if "column" in error_msg.lower() and ("does not exist" in error_msg.lower() or "no such column" in error_msg.lower()):
+        if "column" in error_msg.lower() and (
+            "does not exist" in error_msg.lower()
+            or "no such column" in error_msg.lower()
+        ):
             detail_msg = (
                 f"Error de esquema de base de datos. "
                 f"Es posible que falten migraciones. "
@@ -413,7 +416,7 @@ def listar_prestamos(
             )
             logger.error(detail_msg)
             raise HTTPException(status_code=500, detail=detail_msg)
-        
+
         raise HTTPException(status_code=500, detail=f"Error interno: {error_msg}")
 
 
@@ -565,7 +568,8 @@ def obtener_resumen_prestamos_cliente(
         resumen_prestamos.append(
             {
                 "id": prestamo.id,
-                "modelo_vehiculo": getattr(prestamo, 'modelo_vehiculo', None) or prestamo.producto,
+                "modelo_vehiculo": getattr(prestamo, "modelo_vehiculo", None)
+                or prestamo.producto,
                 "total_financiamiento": float(prestamo.total_financiamiento),
                 "saldo_pendiente": float(saldo_pendiente),
                 "cuotas_en_mora": cuotas_en_mora,
