@@ -279,6 +279,18 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     return { field: 'ocupacion', isValid: true, message: 'Ocupación válida' }
   }
   
+  const validateDireccion = (direccion: string): ValidationResult => {
+    if (!direccion || direccion.trim() === '') {
+      return { field: 'direccion', isValid: false, message: 'Dirección requerida' }
+    }
+    
+    if (direccion.trim().length < 5) {
+      return { field: 'direccion', isValid: false, message: 'La dirección debe tener mínimo 5 caracteres' }
+    }
+    
+    return { field: 'direccion', isValid: true, message: 'Dirección válida' }
+  }
+  
   // ✅ Formato automático deshabilitado - respetar formato original del usuario
   const formatNombres = (text: string): string => {
     return text // Mantener formato original
@@ -373,6 +385,8 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       validation = validateNombres(formattedValue)
     } else if (field === 'ocupacion') {
       validation = validateOcupacion(formattedValue)
+    } else if (field === 'direccion') {
+      validation = validateDireccion(formattedValue)
     } else {
       validation = await validateField(field, formattedValue)
     }
@@ -395,13 +409,15 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       'concesionario', 'analista'
     ]
     
-    // ✅ Solo en modo creación: validar nombres y ocupacion con funciones personalizadas
+    // ✅ Solo en modo creación: validar nombres, ocupacion y direccion con funciones personalizadas
     const nombresValidation = validateNombres(formData.nombres)
     const ocupacionValidation = validateOcupacion(formData.ocupacion)
+    const direccionValidation = validateDireccion(formData.direccion)
     
     // Agregar validaciones personalizadas al estado
     const nombresValidationResult = validations.find(v => v.field === 'nombres')
     const ocupacionValidationResult = validations.find(v => v.field === 'ocupacion')
+    const direccionValidationResult = validations.find(v => v.field === 'direccion')
     
     if (!nombresValidationResult || nombresValidationResult.isValid !== nombresValidation.isValid) {
       setValidations(prev => {
@@ -417,13 +433,23 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       })
     }
     
+    if (!direccionValidationResult || direccionValidationResult.isValid !== direccionValidation.isValid) {
+      setValidations(prev => {
+        const filtered = prev.filter(v => v.field !== 'direccion')
+        return [...filtered, direccionValidation]
+      })
+    }
+    
     return requiredFields.every(field => {
-      // Usar validaciones personalizadas para nombres y ocupacion
+      // Usar validaciones personalizadas para nombres, ocupacion y direccion
       if (field === 'nombres') {
         return nombresValidation.isValid && formData[field]
       }
       if (field === 'ocupacion') {
         return ocupacionValidation.isValid && formData[field]
+      }
+      if (field === 'direccion') {
+        return direccionValidation.isValid && formData[field]
       }
       
       const validation = validations.find(v => v.field === field)

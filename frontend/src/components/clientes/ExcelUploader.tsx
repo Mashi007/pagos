@@ -307,9 +307,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         direccion: row.direccion,
         fecha_nacimiento: convertirFechaParaBackend(row.fecha_nacimiento),  // ✅ Convertir DD/MM/YYYY a YYYY-MM-DD
         ocupacion: row.ocupacion,
-        modelo_vehiculo: row.modelo_vehiculo || undefined,
-        concesionario: row.concesionario || undefined,
-        analista: row.analista || undefined,
+        modelo_vehiculo: row.modelo_vehiculo || '',
+        concesionario: row.concesionario || '',
+        analista: row.analista || '',
         estado: row.estado.toUpperCase().trim(), // ✅ Normalizar estado
         activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
         notas: row.notas || 'NA'
@@ -1181,9 +1181,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
             direccion: row.direccion,
             fecha_nacimiento: convertirFechaParaBackend(row.fecha_nacimiento),  // ✅ Convertir DD/MM/YYYY a YYYY-MM-DD
             ocupacion: row.ocupacion,
-            modelo_vehiculo: row.modelo_vehiculo || undefined,
-            concesionario: row.concesionario || undefined,
-            analista: row.analista || undefined,
+            modelo_vehiculo: row.modelo_vehiculo || '',
+            concesionario: row.concesionario || '',
+            analista: row.analista || '',
             estado: row.estado.toUpperCase().trim(), // ✅ Normalizar estado
             activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
             notas: row.notas || 'NA'
