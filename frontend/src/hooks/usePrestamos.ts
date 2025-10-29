@@ -174,9 +174,20 @@ export function useAplicarCondicionesAprobacion() {
     mutationFn: ({ prestamoId, condiciones }: { prestamoId: number; condiciones: any }) =>
       prestamoService.aplicarCondicionesAprobacion(prestamoId, condiciones),
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: prestamoKeys.detail(variables.prestamoId) })
+      // Actualizar datos del cache directamente con la respuesta del servidor
+      queryClient.setQueryData(prestamoKeys.detail(variables.prestamoId), data)
+      
+      // Invalidar todas las queries para forzar refetch del dashboard
       queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
-      toast.success('Condiciones aplicadas exitosamente')
+      queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
+      
+      // Refetch específico para asegurar actualización inmediata del dashboard
+      queryClient.refetchQueries({ 
+        queryKey: prestamoKeys.all,
+        exact: false 
+      })
+      
+      toast.success('Préstamo aprobado exitosamente. El dashboard se ha actualizado.')
     },
     onError: (error: any) => {
       const errorMessage = error.response?.data?.detail || 'Error al aplicar condiciones'
