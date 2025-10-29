@@ -16,6 +16,7 @@ from app.schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
 
 # Endpoints de gestion de clientes - VERSION CON AUDITORIA AUTOMATICA
 # Sistema completo de gestion de clientes con validaciones y auditoria
+# Datos del dashboard ahora son calculados desde la base de datos en tiempo real
 
 
 router = APIRouter()
