@@ -183,21 +183,24 @@ def actualizar_pago(
 
 def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User):
     """
-    Aplica un pago a las cuotas correspondientes
+    Aplica un pago a las cuotas correspondientes según la regla de negocio:
+    - Los pagos se aplican secuencialmente, cuota por cuota
+    - Una cuota está "ATRASADO" hasta que esté completamente pagada (monto_cuota)
+    - Solo cuando total_pagado >= monto_cuota, se marca como "PAGADO"
+    - Si un pago cubre completamente una cuota y sobra, el exceso se aplica a la siguiente
     """
     if not pago.prestamo_id:
         return
 
-    # Obtener cuotas pendientes del préstamo, ordenadas por número
+    from datetime import date
+
+    # Obtener TODAS las cuotas no pagadas del préstamo, ordenadas por número
+    # (incluyendo PENDIENTE, ATRASADO, PARCIAL para aplicar pagos secuenciales)
     cuotas = (
         db.query(Cuota)
         .filter(
             Cuota.prestamo_id == pago.prestamo_id,
-            or_(
-                Cuota.estado == "PENDIENTE",
-                Cuota.estado == "ATRASADO",
-                Cuota.estado == "PARCIAL",
-            ),
+            Cuota.estado != "PAGADO",  # Solo cuotas no pagadas completamente
         )
         .order_by(Cuota.numero_cuota)
         .all()
@@ -206,52 +209,109 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User):
     saldo_restante = pago.monto_pagado
 
     for cuota in cuotas:
-        if saldo_restante <= 0:
+        if saldo_restante <= Decimal("0.00"):
             break
 
-        # Calcular cuanto se puede aplicar a esta cuota
-        monto_aplicar = min(saldo_restante, cuota.total_pendiente)
+        # Calcular cuánto se puede aplicar a esta cuota (lo que falta para completarla)
+        monto_faltante = cuota.monto_cuota - cuota.total_pagado
+        monto_aplicar = min(saldo_restante, monto_faltante)
+
+        # Si no hay nada que aplicar a esta cuota (ya está pagada), continuar con la siguiente
+        if monto_aplicar <= Decimal("0.00"):
+            continue
+
+        # Actualizar montos pagados proporcionalmente (capital e interés)
+        # Aplicar el pago proporcionalmente según lo que falta de capital e interés
+        total_pendiente_cuota = cuota.capital_pendiente + cuota.interes_pendiente
+        if total_pendiente_cuota > Decimal("0.00"):
+            # Proporción según lo que falta pagar de cada uno
+            capital_aplicar = monto_aplicar * (cuota.capital_pendiente / total_pendiente_cuota)
+            interes_aplicar = monto_aplicar * (cuota.interes_pendiente / total_pendiente_cuota)
+        else:
+            # Si no hay pendiente (no debería pasar), aplicar todo al capital
+            capital_aplicar = monto_aplicar
+            interes_aplicar = Decimal("0.00")
 
         # Actualizar cuota
-        cuota.capital_pagado += monto_aplicar * (
-            cuota.capital_pendiente / cuota.monto_cuota
-        )
-        cuota.interes_pagado += monto_aplicar * (
-            cuota.interes_pendiente / cuota.monto_cuota
-        )
+        cuota.capital_pagado += capital_aplicar
+        cuota.interes_pagado += interes_aplicar
         cuota.total_pagado += monto_aplicar
         cuota.capital_pendiente = max(
-            Decimal("0.00"), cuota.capital_pendiente - monto_aplicar
+            Decimal("0.00"), cuota.capital_pendiente - capital_aplicar
         )
         cuota.interes_pendiente = max(
-            Decimal("0.00"), cuota.interes_pendiente - monto_aplicar
+            Decimal("0.00"), cuota.interes_pendiente - interes_aplicar
         )
-        cuota.fecha_pago = pago.fecha_pago
+        
+        # Actualizar fecha de pago solo si es el último pago recibido
+        if monto_aplicar > Decimal("0.00"):
+            cuota.fecha_pago = pago.fecha_pago
 
-        # Actualizar estado
-        if cuota.total_pendiente <= Decimal("0.01"):
+        # ACTUALIZAR ESTADO según la regla de negocio:
+        # - Si la cuota está completamente pagada (total_pagado >= monto_cuota) → PAGADO
+        # - Si tiene pago parcial pero NO está completa → ATRASADO (si vencida) o PENDIENTE (si no vencida)
+        fecha_hoy = date.today()
+        if cuota.total_pagado >= cuota.monto_cuota:
+            # Cuota completamente pagada
             cuota.estado = "PAGADO"
         elif cuota.total_pagado > Decimal("0.00"):
-            cuota.estado = "PARCIAL"
+            # Cuota con pago parcial pero no completa
+            # Si está vencida → ATRASADO, si no → PENDIENTE
+            if cuota.fecha_vencimiento and cuota.fecha_vencimiento < fecha_hoy:
+                cuota.estado = "ATRASADO"
+            else:
+                cuota.estado = "PENDIENTE"
+        else:
+            # Cuota sin pago (no debería pasar, pero por seguridad)
+            if cuota.fecha_vencimiento and cuota.fecha_vencimiento < fecha_hoy:
+                cuota.estado = "ATRASADO"
+            else:
+                cuota.estado = "PENDIENTE"
 
         saldo_restante -= monto_aplicar
 
-    # Si queda saldo, es un pago adelantado
-    if saldo_restante > 0:
-        # Buscar siguiente cuota pendiente
+    # Si queda saldo después de aplicar a todas las cuotas pendientes, es un pago adelantado
+    # Aplicar el exceso a la siguiente cuota que esté PENDIENTE
+    if saldo_restante > Decimal("0.00"):
+        # Buscar la siguiente cuota pendiente (la primera que no esté pagada)
         siguiente_cuota = (
             db.query(Cuota)
             .filter(
                 Cuota.prestamo_id == pago.prestamo_id,
-                Cuota.estado == "PENDIENTE",
-                Cuota.numero_cuota > cuotas[-1].numero_cuota,
+                Cuota.estado != "PAGADO",
             )
             .order_by(Cuota.numero_cuota)
             .first()
         )
 
         if siguiente_cuota:
-            siguiente_cuota.estado = "ADELANTADO"
+            # Aplicar el saldo restante a la siguiente cuota
+            monto_faltante = siguiente_cuota.monto_cuota - siguiente_cuota.total_pagado
+            monto_aplicar_exceso = min(saldo_restante, monto_faltante)
+            
+            if monto_aplicar_exceso > Decimal("0.00"):
+                # Aplicar proporcionalmente según lo que falta de capital e interés
+                total_pendiente_siguiente = siguiente_cuota.capital_pendiente + siguiente_cuota.interes_pendiente
+                if total_pendiente_siguiente > Decimal("0.00"):
+                    capital_exceso = monto_aplicar_exceso * (siguiente_cuota.capital_pendiente / total_pendiente_siguiente)
+                    interes_exceso = monto_aplicar_exceso * (siguiente_cuota.interes_pendiente / total_pendiente_siguiente)
+                else:
+                    capital_exceso = monto_aplicar_exceso
+                    interes_exceso = Decimal("0.00")
+                
+                siguiente_cuota.capital_pagado += capital_exceso
+                siguiente_cuota.interes_pagado += interes_exceso
+                siguiente_cuota.total_pagado += monto_aplicar_exceso
+                siguiente_cuota.capital_pendiente = max(Decimal("0.00"), siguiente_cuota.capital_pendiente - capital_exceso)
+                siguiente_cuota.interes_pendiente = max(Decimal("0.00"), siguiente_cuota.interes_pendiente - interes_exceso)
+                
+                fecha_hoy = date.today()
+                if siguiente_cuota.total_pagado >= siguiente_cuota.monto_cuota:
+                    siguiente_cuota.estado = "PAGADO"
+                elif siguiente_cuota.fecha_vencimiento and siguiente_cuota.fecha_vencimiento < fecha_hoy:
+                    siguiente_cuota.estado = "ATRASADO"
+                else:
+                    siguiente_cuota.estado = "ADELANTADO"
 
     db.commit()
 

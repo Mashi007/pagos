@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, Calculator } from 'lucide-react'
+import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, Calculator, CheckCircle2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -259,13 +259,14 @@ export function PrestamosList() {
                                           <Eye className="h-4 w-4" />
                                         </Button>
 
-                                        {/* Botón Evaluar Riesgo - Solo Admin (DRAFT o EN_REVISION) */}
+                                        {/* Botón Evaluar Riesgo y Aprobar - Solo Admin (DRAFT o EN_REVISION) */}
                                         {canViewEvaluacionRiesgo() && (prestamo.estado === 'DRAFT' || prestamo.estado === 'EN_REVISION') && (
                                           <Button
                                             variant="ghost"
                                             size="sm"
                                             onClick={() => handleEvaluarRiesgo(prestamo)}
-                                            title="Evaluar riesgo"
+                                            title="Evaluar riesgo y aprobar préstamo (genera tabla de amortización)"
+                                            className="hover:bg-blue-50"
                                           >
                                             <Calculator className="h-4 w-4 text-blue-600" />
                                           </Button>

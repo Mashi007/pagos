@@ -91,6 +91,15 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
   const [resultado, setResultado] = useState<any>(null)
   const [showSection, setShowSection] = useState<string>('criterio1')
   const [clienteEdad, setClienteEdad] = useState<number>(0)
+  const [showFormularioAprobacion, setShowFormularioAprobacion] = useState(false)
+  
+  // Estado para condiciones editables de aprobación
+  const [condicionesAprobacion, setCondicionesAprobacion] = useState({
+    tasa_interes: 8.0,
+    plazo_maximo: 36,
+    fecha_base_calculo: new Date().toISOString().split('T')[0],
+    observaciones: ''
+  })
   
   const aplicarCondiciones = useAplicarCondicionesAprobacion()
   const updatePrestamo = useUpdatePrestamo()
@@ -141,6 +150,18 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     
     calcularEdad()
   }, [prestamo.cedula])
+
+  // Actualizar condiciones de aprobación cuando hay resultado de evaluación
+  useEffect(() => {
+    if (resultado?.sugerencias) {
+      setCondicionesAprobacion({
+        tasa_interes: resultado.sugerencias.tasa_interes_sugerida || 8.0,
+        plazo_maximo: resultado.sugerencias.plazo_maximo_sugerido || 36,
+        fecha_base_calculo: new Date().toISOString().split('T')[0],
+        observaciones: `Aprobado después de evaluación de riesgo. Puntuación: ${resultado.puntuacion_total?.toFixed(2)}/100, Riesgo: ${resultado.clasificacion_riesgo}`
+      })
+    }
+  }, [resultado])
   
   if (!isAdmin) {
     return null
@@ -1139,24 +1160,126 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     </div>
                     </div>
                 
-                {/* Mostrar condiciones sugeridas */}
+                {/* Mostrar y editar condiciones de aprobación */}
                 {resultado.sugerencias && (
                   <div className="bg-blue-50 p-4 rounded border border-blue-200">
-                    <h5 className="font-semibold mb-3 text-blue-900">📋 Condiciones Sugeridas para Aprobación:</h5>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <label className="text-xs text-blue-700">Tasa de Interés:</label>
-                        <p className="text-lg font-bold text-blue-900">{resultado.sugerencias.tasa_interes_sugerida || 8.0}%</p>
-                      </div>
-                      <div>
-                        <label className="text-xs text-blue-700">Plazo Máximo:</label>
-                        <p className="text-lg font-bold text-blue-900">{resultado.sugerencias.plazo_maximo_sugerido || 36} meses</p>
-                      </div>
-                      <div>
-                        <label className="text-xs text-blue-700">Enganche Mínimo:</label>
-                        <p className="text-lg font-bold text-blue-900">{resultado.sugerencias.enganche_minimo_sugerido || 15.0}%</p>
-                      </div>
+                    <div className="flex justify-between items-center mb-3">
+                      <h5 className="font-semibold text-blue-900">📋 Condiciones para Aprobación:</h5>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowFormularioAprobacion(!showFormularioAprobacion)}
+                      >
+                        {showFormularioAprobacion ? 'Ocultar Edición' : 'Editar Condiciones'}
+                      </Button>
                     </div>
+                    
+                    {!showFormularioAprobacion ? (
+                      // Vista de solo lectura
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <label className="text-xs text-blue-700">Tasa de Interés Sugerida:</label>
+                          <p className="text-lg font-bold text-blue-900">{resultado.sugerencias.tasa_interes_sugerida || 8.0}%</p>
+                        </div>
+                        <div>
+                          <label className="text-xs text-blue-700">Plazo Máximo Sugerido:</label>
+                          <p className="text-lg font-bold text-blue-900">{resultado.sugerencias.plazo_maximo_sugerido || 36} meses</p>
+                        </div>
+                        <div>
+                          <label className="text-xs text-blue-700">Enganche Mínimo:</label>
+                          <p className="text-lg font-bold text-blue-900">{resultado.sugerencias.enganche_minimo_sugerido || 15.0}%</p>
+                        </div>
+                      </div>
+                    ) : (
+                      // Formulario editable
+                      <div className="bg-white p-4 rounded border border-blue-300 space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">
+                              Tasa de Interés (%) <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative">
+                              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                              <Input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max="100"
+                                value={condicionesAprobacion.tasa_interes}
+                                onChange={(e) => setCondicionesAprobacion({
+                                  ...condicionesAprobacion,
+                                  tasa_interes: parseFloat(e.target.value) || 0
+                                })}
+                                className="pl-10"
+                                placeholder={resultado.sugerencias.tasa_interes_sugerida?.toString() || '8.0'}
+                              />
+                            </div>
+                            <p className="text-xs text-gray-500">
+                              Sugerido: {resultado.sugerencias.tasa_interes_sugerida || 8.0}%
+                            </p>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">
+                              Plazo Máximo (meses) <span className="text-red-500">*</span>
+                            </label>
+                            <Input
+                              type="number"
+                              step="1"
+                              min="1"
+                              value={condicionesAprobacion.plazo_maximo}
+                              onChange={(e) => setCondicionesAprobacion({
+                                ...condicionesAprobacion,
+                                plazo_maximo: parseInt(e.target.value) || 36
+                              })}
+                              placeholder={resultado.sugerencias.plazo_maximo_sugerido?.toString() || '36'}
+                            />
+                            <p className="text-xs text-gray-500">
+                              Sugerido: {resultado.sugerencias.plazo_maximo_sugerido || 36} meses
+                            </p>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">
+                              Fecha de Desembolso <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative">
+                              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                              <Input
+                                type="date"
+                                value={condicionesAprobacion.fecha_base_calculo}
+                                onChange={(e) => setCondicionesAprobacion({
+                                  ...condicionesAprobacion,
+                                  fecha_base_calculo: e.target.value
+                                })}
+                                className="pl-10"
+                                min={new Date().toISOString().split('T')[0]}
+                              />
+                            </div>
+                            <p className="text-xs text-gray-500">
+                              Fecha desde la cual se calcularán las cuotas
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-gray-700">
+                            Observaciones
+                          </label>
+                          <textarea
+                            value={condicionesAprobacion.observaciones}
+                            onChange={(e) => setCondicionesAprobacion({
+                              ...condicionesAprobacion,
+                              observaciones: e.target.value
+                            })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            rows={3}
+                            placeholder="Aprobado después de evaluación de riesgo..."
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 
@@ -1261,15 +1384,37 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     type="button"
                     className="bg-green-600 hover:bg-green-700 text-white"
                     onClick={async () => {
-                      if (window.confirm('¿Desea aprobar este préstamo con las condiciones sugeridas?')) {
+                      // Validar condiciones antes de aprobar
+                      if (!condicionesAprobacion.fecha_base_calculo) {
+                        toast.error('Debe seleccionar una fecha de desembolso')
+                        return
+                      }
+                      if (condicionesAprobacion.tasa_interes <= 0 || condicionesAprobacion.tasa_interes > 100) {
+                        toast.error('La tasa de interés debe estar entre 0 y 100%')
+                        return
+                      }
+                      if (condicionesAprobacion.plazo_maximo <= 0) {
+                        toast.error('El plazo máximo debe ser mayor a 0 meses')
+                        return
+                      }
+                      
+                      const mensajeConfirmacion = showFormularioAprobacion
+                        ? `¿Desea aprobar este préstamo con las siguientes condiciones?\n\n` +
+                          `• Tasa de Interés: ${condicionesAprobacion.tasa_interes}%\n` +
+                          `• Plazo Máximo: ${condicionesAprobacion.plazo_maximo} meses\n` +
+                          `• Fecha de Desembolso: ${new Date(condicionesAprobacion.fecha_base_calculo).toLocaleDateString()}`
+                        : '¿Desea aprobar este préstamo con las condiciones sugeridas?'
+                      
+                      if (window.confirm(mensajeConfirmacion)) {
                         setIsAprobando(true)
                         try {
                           const condiciones = {
                             estado: 'APROBADO',
-                            tasa_interes: resultado.sugerencias?.tasa_interes_sugerida || 8.0,
-                            plazo_maximo: resultado.sugerencias?.plazo_maximo_sugerido || 36,
-                            fecha_base_calculo: new Date().toISOString().split('T')[0],
-                            observaciones: `Aprobado después de evaluación de riesgo. Puntuación: ${resultado.puntuacion_total?.toFixed(2)}/100, Riesgo: ${resultado.clasificacion_riesgo}`
+                            tasa_interes: condicionesAprobacion.tasa_interes,
+                            plazo_maximo: condicionesAprobacion.plazo_maximo,
+                            fecha_base_calculo: condicionesAprobacion.fecha_base_calculo,
+                            observaciones: condicionesAprobacion.observaciones || 
+                              `Aprobado después de evaluación de riesgo. Puntuación: ${resultado.puntuacion_total?.toFixed(2)}/100, Riesgo: ${resultado.clasificacion_riesgo}`
                           }
                           
                           await aplicarCondiciones.mutateAsync({
@@ -1277,7 +1422,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                             condiciones
                           })
                           
-                          toast.success('Préstamo aprobado exitosamente')
+                          toast.success('✅ Préstamo aprobado exitosamente. La tabla de amortización ha sido generada automáticamente.')
                           onSuccess()
                           onClose()
                         } catch (error: any) {

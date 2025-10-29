@@ -202,7 +202,7 @@ export function useAplicarCondicionesAprobacion() {
         type: 'active'
       })
       
-      toast.success('Préstamo aprobado exitosamente. El dashboard se ha actualizado.')
+      toast.success('Préstamo aprobado exitosamente. La tabla de amortización ha sido generada. El dashboard se ha actualizado.')
     },
     onError: (error: any) => {
       const errorMessage = error.response?.data?.detail || 'Error al aplicar condiciones'
