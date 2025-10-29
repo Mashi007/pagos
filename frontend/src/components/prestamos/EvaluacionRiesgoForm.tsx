@@ -292,7 +292,15 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
       setResultado(response)
       // Cambiar automáticamente a la pestaña de resultado
       setTimeout(() => setShowSection('resultado'), 100)
-      toast.success('✅ Evaluación completada exitosamente')
+      toast.success('✅ Fase 1 Completada: Evaluación de Riesgo guardada. El préstamo ahora está en estado EVALUADO.')
+      
+      // IMPORTANTE: onSuccess actualiza el dashboard y cambia el icono de calculadora a aprobación
+      // Esperar 2 segundos para que el usuario vea el resultado antes de cerrar
+      setTimeout(() => {
+        onSuccess() // Esto actualizará el dashboard y cambiará el icono
+        onClose() // Cierra el formulario
+        toast.info('🔄 Ahora puede usar el nuevo icono en el dashboard para proceder con la Aprobación (Fase 2)')
+      }, 2000)
     } catch (error: any) {
       toast.error(error.message || 'Error al evaluar riesgo')
     } finally {
@@ -1352,103 +1360,57 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
             </div>
           )}
           {resultado && (
-            <div className="flex justify-between gap-3 pt-4 border-t">
-              <div className="flex gap-2">
+            <div className="space-y-4 pt-4 border-t">
+              {/* Mensaje informativo */}
+              <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg border-2 border-blue-300">
+                <div className="flex items-start gap-3">
+                  <CheckCircle className="h-6 w-6 text-green-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <h3 className="text-base font-bold text-blue-900 mb-2">
+                      ✅ FASE 1 COMPLETADA: Evaluación de Riesgo
+                    </h3>
+                    <div className="space-y-2 text-sm text-blue-800">
+                      <p>
+                        • <strong>Estado actualizado:</strong> El préstamo ahora está marcado como <span className="font-bold text-blue-600">EVALUADO</span>
+                      </p>
+                      <p>
+                        • <strong>Puntuación obtenida:</strong> {resultado.puntuacion_total?.toFixed(2) || 'N/A'}/100 puntos
+                      </p>
+                      <p>
+                        • <strong>Clasificación de riesgo:</strong> <span className="font-semibold">{resultado.clasificacion_riesgo || 'N/A'}</span>
+                      </p>
+                      <div className="mt-3 pt-3 border-t border-blue-300">
+                        <p className="font-semibold text-purple-700 mb-1">🔄 SIGUIENTE PASO: Fase 2 - Aprobación</p>
+                        <p className="text-xs">
+                          El icono de <strong>calculadora (Calculator)</strong> en el dashboard desaparecerá y será reemplazado 
+                          por el icono de <strong>verde (CheckCircle2)</strong> para "Aprobar Crédito". 
+                          Haga clic en ese nuevo icono para continuar con la asignación de:
+                        </p>
+                        <ul className="list-disc list-inside mt-2 space-y-1 text-xs text-blue-700">
+                          <li>Tasa de interés</li>
+                          <li>Fecha de desembolso</li>
+                          <li>Plazo máximo</li>
+                          <li>Observaciones</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Botones de acción */}
+              <div className="flex justify-end gap-3">
                 <Button 
                   type="button" 
-                  variant="destructive"
-                  onClick={async () => {
-                    if (window.confirm('¿Está seguro de rechazar este préstamo?')) {
-                      setIsAprobando(true)
-                      try {
-                        await updatePrestamo.mutateAsync({
-                          id: prestamo.id,
-                          data: { estado: 'RECHAZADO' }
-                        })
-                        toast.success('Préstamo rechazado exitosamente')
-                        onSuccess()
-                        onClose()
-                      } catch (error: any) {
-                        toast.error(error.response?.data?.detail || 'Error al rechazar préstamo')
-                      } finally {
-                        setIsAprobando(false)
-                      }
-                    }
+                  variant="outline" 
+                  onClick={() => {
+                    onSuccess() // Actualizar dashboard
+                    onClose() // Cerrar formulario
                   }}
-                  disabled={isAprobando || prestamo.estado === 'RECHAZADO'}
                 >
-                  {isAprobando ? 'Rechazando...' : 'Rechazar Préstamo'}
+                  Continuar al Dashboard
                 </Button>
-                {(resultado.decision_final === 'APROBADO_AUTOMATICO' || 
-                  resultado.decision_final === 'APROBADO' ||
-                  resultado.puntuacion_total >= 70) && (
-                  <Button 
-                    type="button"
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                    onClick={async () => {
-                      // Si el formulario no está visible, mostrarlo primero con un mensaje
-                      if (!showFormularioAprobacion) {
-                        setShowFormularioAprobacion(true)
-                        toast.info('Por favor, edite las condiciones de aprobación (Tasa de Interés y Fecha de Desembolso) antes de continuar')
-                        return
-                      }
-                      
-                      // Validar condiciones antes de aprobar
-                      if (!condicionesAprobacion.fecha_base_calculo) {
-                        toast.error('Debe seleccionar una fecha de desembolso')
-                        return
-                      }
-                      if (condicionesAprobacion.tasa_interes <= 0 || condicionesAprobacion.tasa_interes > 100) {
-                        toast.error('La tasa de interés debe estar entre 0 y 100%')
-                        return
-                      }
-                      if (condicionesAprobacion.plazo_maximo <= 0) {
-                        toast.error('El plazo máximo debe ser mayor a 0 meses')
-                        return
-                      }
-                      
-                      const mensajeConfirmacion = 
-                        `¿Desea aprobar este préstamo con las siguientes condiciones?\n\n` +
-                        `• Tasa de Interés: ${condicionesAprobacion.tasa_interes}%\n` +
-                        `• Plazo Máximo: ${condicionesAprobacion.plazo_maximo} meses\n` +
-                        `• Fecha de Desembolso: ${new Date(condicionesAprobacion.fecha_base_calculo).toLocaleDateString()}`
-                      
-                      if (window.confirm(mensajeConfirmacion)) {
-                        setIsAprobando(true)
-                        try {
-                          const condiciones = {
-                            estado: 'APROBADO',
-                            tasa_interes: condicionesAprobacion.tasa_interes,
-                            plazo_maximo: condicionesAprobacion.plazo_maximo,
-                            fecha_base_calculo: condicionesAprobacion.fecha_base_calculo,
-                            observaciones: condicionesAprobacion.observaciones || 
-                              `Aprobado después de evaluación de riesgo. Puntuación: ${resultado.puntuacion_total?.toFixed(2)}/100, Riesgo: ${resultado.clasificacion_riesgo}`
-                          }
-                          
-                          await aplicarCondiciones.mutateAsync({
-                            prestamoId: prestamo.id,
-                            condiciones
-                          })
-                          
-                          toast.success('✅ Préstamo aprobado exitosamente. La tabla de amortización ha sido generada automáticamente.')
-                          onSuccess()
-                          onClose()
-                        } catch (error: any) {
-                          toast.error(error.response?.data?.detail || 'Error al aprobar préstamo')
-                        } finally {
-                          setIsAprobando(false)
-                        }
-                      }
-                    }}
-                    disabled={isAprobando || prestamo.estado === 'APROBADO'}
-                  >
-                    {isAprobando ? 'Aprobando...' : 'Aprobar Préstamo'}
-                  </Button>
-                )}
               </div>
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cerrar
-              </Button>
             </div>
           )}
         </form>
