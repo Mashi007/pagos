@@ -107,12 +107,12 @@ def reporte_cartera(
             .group_by("rango")
             .all()
         )
-        
+
         distribucion_por_monto = [
             {
                 "rango": item.rango,
                 "cantidad": item.cantidad,
-                "monto": float(item.monto) if item.monto else 0.0
+                "monto": float(item.monto) if item.monto else 0.0,
             }
             for item in distribucion_por_monto_query
         ]

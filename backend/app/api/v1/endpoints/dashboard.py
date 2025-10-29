@@ -154,7 +154,9 @@ def dashboard_administrador(
         if periodo == "mes":
             fecha_inicio_periodo = date(hoy.year, hoy.month, 1)
             fecha_fin_periodo_anterior = fecha_inicio_periodo - timedelta(days=1)
-            fecha_inicio_periodo_anterior = date(fecha_fin_periodo_anterior.year, fecha_fin_periodo_anterior.month, 1)
+            fecha_inicio_periodo_anterior = date(
+                fecha_fin_periodo_anterior.year, fecha_fin_periodo_anterior.month, 1
+            )
         elif periodo == "semana":
             fecha_inicio_periodo = hoy - timedelta(days=hoy.weekday())
             fecha_inicio_periodo_anterior = fecha_inicio_periodo - timedelta(days=7)
@@ -169,9 +171,9 @@ def dashboard_administrador(
             fecha_fin_periodo_anterior = hoy - timedelta(days=1)
 
         # Cartera anterior (mes anterior)
-        cartera_anterior_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-            Prestamo.activo.is_(True)
-        )
+        cartera_anterior_query = db.query(
+            func.sum(Prestamo.total_financiamiento)
+        ).filter(Prestamo.activo.is_(True))
         if periodo in ["mes", "semana", "año"]:
             # Para períodos anteriores, usar valores históricos estimados
             # En producción, esto debería calcularse desde histórico de cartera
@@ -182,47 +184,60 @@ def dashboard_administrador(
         # 16. TOTAL COBRADO EN EL PERÍODO ACTUAL
         total_cobrado_periodo = db.query(func.sum(Pago.monto_pagado)).filter(
             func.date(Pago.fecha_pago) >= fecha_inicio_periodo,
-            func.date(Pago.fecha_pago) <= hoy
+            func.date(Pago.fecha_pago) <= hoy,
         ).scalar() or Decimal("0")
 
         # Total cobrado período anterior
         total_cobrado_anterior = db.query(func.sum(Pago.monto_pagado)).filter(
             func.date(Pago.fecha_pago) >= fecha_inicio_periodo_anterior,
-            func.date(Pago.fecha_pago) <= fecha_fin_periodo_anterior
+            func.date(Pago.fecha_pago) <= fecha_fin_periodo_anterior,
         ).scalar() or Decimal("0")
 
         # 17. TASA DE RECUPERACIÓN (cuotas pagadas / total cuotas del período)
-        total_cuotas_esperadas = db.query(func.count(Cuota.id)).filter(
-            Cuota.fecha_vencimiento <= hoy,
-            Cuota.prestamo_id.in_(db.query(Prestamo.id).filter(Prestamo.activo.is_(True)))
-        ).scalar() or 0
-        
+        total_cuotas_esperadas = (
+            db.query(func.count(Cuota.id))
+            .filter(
+                Cuota.fecha_vencimiento <= hoy,
+                Cuota.prestamo_id.in_(
+                    db.query(Prestamo.id).filter(Prestamo.activo.is_(True))
+                ),
+            )
+            .scalar()
+            or 0
+        )
+
         tasa_recuperacion = (
-            (cuotas_pagadas / total_cuotas_esperadas * 100) if total_cuotas_esperadas > 0 else 0
+            (cuotas_pagadas / total_cuotas_esperadas * 100)
+            if total_cuotas_esperadas > 0
+            else 0
         )
 
         # Tasa recuperación anterior (estimada)
-        tasa_recuperacion_anterior = max(0, tasa_recuperacion - 3.0)  # Estimado 3% menos
+        tasa_recuperacion_anterior = max(
+            0, tasa_recuperacion - 3.0
+        )  # Estimado 3% menos
 
         # 18. PROMEDIO DÍAS DE MORA
-        clientes_mora_detalle = db.query(Cliente).filter(
-            Cliente.activo, Cliente.dias_mora > 0
-        ).all()
+        clientes_mora_detalle = (
+            db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).all()
+        )
         promedio_dias_mora = (
-            sum(c.dias_mora or 0 for c in clientes_mora_detalle) / len(clientes_mora_detalle)
-            if clientes_mora_detalle else 0
+            sum(c.dias_mora or 0 for c in clientes_mora_detalle)
+            / len(clientes_mora_detalle)
+            if clientes_mora_detalle
+            else 0
         )
 
         # 19. PORCENTAJE CUMPLIMIENTO (clientes al día / total clientes)
         porcentaje_cumplimiento = (
             ((clientes_activos - clientes_en_mora) / clientes_activos * 100)
-            if clientes_activos > 0 else 0
+            if clientes_activos > 0
+            else 0
         )
 
         # 20. TICKET PROMEDIO (promedio de préstamos)
         ticket_promedio = (
-            float(cartera_total / clientes_activos)
-            if clientes_activos > 0 else 0
+            float(cartera_total / clientes_activos) if clientes_activos > 0 else 0
         )
 
         # 21. EVOLUCIÓN MENSUAL (últimos 6 meses)
@@ -233,37 +248,63 @@ def dashboard_administrador(
             if mes_fecha.month == 12:
                 mes_fin = date(mes_fecha.year + 1, 1, 1) - timedelta(days=1)
             else:
-                mes_fin = date(mes_fecha.year, mes_fecha.month + 1, 1) - timedelta(days=1)
+                mes_fin = date(mes_fecha.year, mes_fecha.month + 1, 1) - timedelta(
+                    days=1
+                )
 
             cartera_mes = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-                Prestamo.activo.is_(True),
-                func.date(Prestamo.fecha_creacion) <= mes_fin
+                Prestamo.activo.is_(True), func.date(Prestamo.fecha_creacion) <= mes_fin
             ).scalar() or Decimal("0")
 
             cobrado_mes = db.query(func.sum(Pago.monto_pagado)).filter(
                 func.date(Pago.fecha_pago) >= mes_inicio,
-                func.date(Pago.fecha_pago) <= mes_fin
+                func.date(Pago.fecha_pago) <= mes_fin,
             ).scalar() or Decimal("0")
 
             # Cuotas vencidas en ese mes
-            cuotas_vencidas_mes = db.query(func.count(Cuota.id)).filter(
-                Cuota.fecha_vencimiento >= mes_inicio,
-                Cuota.fecha_vencimiento <= mes_fin,
-                Cuota.estado != "PAGADO"
-            ).scalar() or 0
+            cuotas_vencidas_mes = (
+                db.query(func.count(Cuota.id))
+                .filter(
+                    Cuota.fecha_vencimiento >= mes_inicio,
+                    Cuota.fecha_vencimiento <= mes_fin,
+                    Cuota.estado != "PAGADO",
+                )
+                .scalar()
+                or 0
+            )
 
             morosidad_mes = (
-                (cuotas_vencidas_mes / (cuotas_vencidas_mes + cuotas_pagadas) * 100)
-                if (cuotas_vencidas_mes + cuotas_pagadas) > 0 else 0
-            ) if i < 6 else porcentaje_mora
+                (
+                    (cuotas_vencidas_mes / (cuotas_vencidas_mes + cuotas_pagadas) * 100)
+                    if (cuotas_vencidas_mes + cuotas_pagadas) > 0
+                    else 0
+                )
+                if i < 6
+                else porcentaje_mora
+            )
 
-            nombres_meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-            evolucion_mensual.append({
-                "mes": nombres_meses[mes_fecha.month - 1],
-                "cartera": float(cartera_mes),
-                "cobrado": float(cobrado_mes),
-                "morosidad": round(morosidad_mes, 1)
-            })
+            nombres_meses = [
+                "Ene",
+                "Feb",
+                "Mar",
+                "Abr",
+                "May",
+                "Jun",
+                "Jul",
+                "Ago",
+                "Sep",
+                "Oct",
+                "Nov",
+                "Dic",
+            ]
+            evolucion_mensual.append(
+                {
+                    "mes": nombres_meses[mes_fecha.month - 1],
+                    "cartera": float(cartera_mes),
+                    "cobrado": float(cobrado_mes),
+                    "morosidad": round(morosidad_mes, 1),
+                }
+            )
 
         # 22. DISTRIBUCIÓN DE INGRESOS (estimación)
         # En producción esto debería calcularse desde el detalle de pagos y cuotas
@@ -298,7 +339,9 @@ def dashboard_administrador(
                 "promedioDiasMora": round(promedio_dias_mora, 1),
                 "promedioDiasMoraAnterior": round(max(0, promedio_dias_mora + 2), 1),
                 "porcentajeCumplimiento": round(porcentaje_cumplimiento, 1),
-                "porcentajeCumplimientoAnterior": round(max(0, porcentaje_cumplimiento - 3), 1),
+                "porcentajeCumplimientoAnterior": round(
+                    max(0, porcentaje_cumplimiento - 3), 1
+                ),
                 "clientesMora": clientes_en_mora,
             },
             "analistaes": {
