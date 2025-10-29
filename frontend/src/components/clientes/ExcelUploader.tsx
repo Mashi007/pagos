@@ -299,6 +299,30 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
     try {
       const row = excelData[currentRowIndex]
+      
+      // 🔍 DEBUG: Log completo de la fila del Excel
+      console.log('🔍 DEBUG - Fila completa del Excel:', row)
+      console.log('🔍 DEBUG - direccion desde Excel:', row.direccion)
+      console.log('🔍 DEBUG - fecha_nacimiento desde Excel:', row.fecha_nacimiento)
+      console.log('🔍 DEBUG - ocupacion desde Excel:', row.ocupacion)
+      
+      // ✅ VALIDACIÓN: Asegurar que campos requeridos NO estén vacíos
+      if (!row.direccion || !row.direccion.trim()) {
+        alert('⚠️ ERROR: El campo Dirección está vacío en la fila del Excel. Por favor, complete este campo.')
+        setClienteDuplicado(null)
+        return
+      }
+      if (!row.fecha_nacimiento || !row.fecha_nacimiento.trim()) {
+        alert('⚠️ ERROR: El campo Fecha de Nacimiento está vacío en la fila del Excel. Por favor, complete este campo.')
+        setClienteDuplicado(null)
+        return
+      }
+      if (!row.ocupacion || !row.ocupacion.trim()) {
+        alert('⚠️ ERROR: El campo Ocupación está vacío en la fila del Excel. Por favor, complete este campo.')
+        setClienteDuplicado(null)
+        return
+      }
+      
       const clienteData: any = {
         cedula: row.cedula,
         nombres: formatNombres(row.nombres),  // ✅ Aplicar formato Title Case y ya unificados (nombres + apellidos)
@@ -307,22 +331,16 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         direccion: row.direccion,
         fecha_nacimiento: convertirFechaParaBackend(row.fecha_nacimiento),  // ✅ Convertir DD/MM/YYYY a YYYY-MM-DD
         ocupacion: row.ocupacion,
+        modelo_vehiculo: row.modelo_vehiculo || '',  // ✅ Enviar vacío en lugar de undefined
+        concesionario: row.concesionario || '',      // ✅ Enviar vacío en lugar de undefined
+        analista: row.analista || '',                // ✅ Enviar vacío en lugar de undefined
         estado: row.estado.toUpperCase().trim(), // ✅ Normalizar estado
         activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
         notas: row.notas || 'NA',
         confirm_duplicate: true
       }
       
-      // Solo incluir estos campos si tienen valor
-      if (row.modelo_vehiculo && row.modelo_vehiculo.trim()) {
-        clienteData.modelo_vehiculo = row.modelo_vehiculo
-      }
-      if (row.concesionario && row.concesionario.trim()) {
-        clienteData.concesionario = row.concesionario
-      }
-      if (row.analista && row.analista.trim()) {
-        clienteData.analista = row.analista
-      }
+      console.log('🔍 DEBUG - Datos a enviar al backend desde Excel:', clienteData)
 
       await clienteService.createClienteWithConfirmation(clienteData, comentarios)
       

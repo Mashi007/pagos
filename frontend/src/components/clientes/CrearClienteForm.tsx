@@ -912,18 +912,18 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     value={formData.fechaNacimiento}
                     onChange={(e) => handleInputChange('fechaNacimiento', e.target.value)}
                     placeholder="DD/MM/YYYY"
-                    className={`pl-10 ${getFieldValidation('fechaNacimiento')?.isValid === false ? 'border-red-500' : ''}`}
+                    className={`pl-10 ${getFieldValidation('fechaNacimiento')?.isValid === false ? 'border-red-500 border-2 bg-red-50' : ''}`}
                   />
                 </div>
-                {getFieldValidation('fechaNacimiento') && (
-                  <div className={`text-xs flex items-center gap-1 ${
-                    getFieldValidation('fechaNacimiento')?.isValid ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {getFieldValidation('fechaNacimiento')?.isValid ? (
-                      <CheckCircle className="w-3 h-3" />
-                    ) : (
-                      <XCircle className="w-3 h-3" />
-                    )}
+                {getFieldValidation('fechaNacimiento') && getFieldValidation('fechaNacimiento')?.isValid === false && (
+                  <div className="text-xs flex items-center gap-1 text-red-600 font-medium">
+                    <XCircle className="w-3 h-3" />
+                    <span className="font-semibold">{getFieldValidation('fechaNacimiento')?.message}</span>
+                  </div>
+                )}
+                {getFieldValidation('fechaNacimiento')?.isValid && (
+                  <div className="text-xs flex items-center gap-1 text-green-600">
+                    <CheckCircle className="w-3 h-3" />
                     {getFieldValidation('fechaNacimiento')?.message}
                   </div>
                 )}
@@ -938,20 +938,20 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                   <Textarea
                     value={formData.direccion}
                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleInputChange('direccion', e.target.value)}
-                    className={`pl-10 ${getFieldValidation('direccion')?.isValid === false ? 'border-red-500' : ''}`}
+                    className={`pl-10 ${getFieldValidation('direccion')?.isValid === false ? 'border-red-500 border-2 bg-red-50' : ''}`}
                     placeholder="Dirección completa del cliente"
                     rows={2}
                   />
                 </div>
-                {getFieldValidation('direccion') && (
-                  <div className={`text-xs flex items-center gap-1 ${
-                    getFieldValidation('direccion')?.isValid ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {getFieldValidation('direccion')?.isValid ? (
-                      <CheckCircle className="w-3 h-3" />
-                    ) : (
-                      <XCircle className="w-3 h-3" />
-                    )}
+                {getFieldValidation('direccion') && getFieldValidation('direccion')?.isValid === false && (
+                  <div className="text-xs flex items-center gap-1 text-red-600 font-medium">
+                    <XCircle className="w-3 h-3" />
+                    <span className="font-semibold">{getFieldValidation('direccion')?.message}</span>
+                  </div>
+                )}
+                {getFieldValidation('direccion')?.isValid && (
+                  <div className="text-xs flex items-center gap-1 text-green-600">
+                    <CheckCircle className="w-3 h-3" />
                     {getFieldValidation('direccion')?.message}
                   </div>
                 )}
@@ -967,19 +967,19 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     type="text"
                     value={formData.ocupacion}
                     onChange={(e) => handleInputChange('ocupacion', e.target.value)}
-                    className={`pl-10 w-full ${getFieldValidation('ocupacion')?.isValid === false ? 'border-red-500' : ''}`}
+                    className={`pl-10 w-full ${getFieldValidation('ocupacion')?.isValid === false ? 'border-red-500 border-2 bg-red-50' : ''}`}
                     placeholder="Ejemplo: Ingeniero, Gerente General"
                   />
                 </div>
-                {getFieldValidation('ocupacion') && (
-                  <div className={`text-xs flex items-center gap-1 ${
-                    getFieldValidation('ocupacion')?.isValid ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {getFieldValidation('ocupacion')?.isValid ? (
-                      <CheckCircle className="w-3 h-3" />
-                    ) : (
-                      <XCircle className="w-3 h-3" />
-                    )}
+                {getFieldValidation('ocupacion') && getFieldValidation('ocupacion')?.isValid === false && (
+                  <div className="text-xs flex items-center gap-1 text-red-600 font-medium">
+                    <XCircle className="w-3 h-3" />
+                    <span className="font-semibold">{getFieldValidation('ocupacion')?.message}</span>
+                  </div>
+                )}
+                {getFieldValidation('ocupacion')?.isValid && (
+                  <div className="text-xs flex items-center gap-1 text-green-600">
+                    <CheckCircle className="w-3 h-3" />
                     {getFieldValidation('ocupacion')?.message}
                   </div>
                 )}
