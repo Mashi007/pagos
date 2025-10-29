@@ -118,7 +118,9 @@ class ReporteService {
       })
       
       // Crear un enlace temporal para descargar
-      const blob = response.data as Blob
+      const blob = new Blob([response.data as BlobPart], {
+        type: response.headers['content-type'] || 'application/octet-stream'
+      })
       const downloadUrl = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = downloadUrl

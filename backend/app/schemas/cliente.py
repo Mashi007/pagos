@@ -55,16 +55,6 @@ class ClienteBase(BaseModel):
         description="Ocupación del cliente (máximo 2 palabras)",
     )
 
-    modelo_vehiculo: str = Field(
-        ..., min_length=1, max_length=100, description="Modelo del vehículo"
-    )
-    concesionario: str = Field(
-        ..., min_length=1, max_length=100, description="Concesionario"
-    )
-    analista: str = Field(
-        ..., min_length=1, max_length=100, description="Analista asignado"
-    )
-
     # Estado - OBLIGATORIO
     estado: str = Field(
         ...,
@@ -174,9 +164,6 @@ class ClienteCreate(BaseModel):
         max_length=MAX_NAME_LENGTH,
         description="Ocupación",
     )
-    modelo_vehiculo: Optional[str] = Field(None, description="Modelo del vehículo")
-    concesionario: Optional[str] = Field(None, description="Concesionario")
-    analista: Optional[str] = Field(None, description="Analista asignado")
     estado: str = Field(
         ..., pattern="^(ACTIVO|INACTIVO|FINALIZADO)$", description="Estado del cliente"
     )
@@ -210,10 +197,6 @@ class ClienteUpdate(BaseModel):
     ocupacion: Optional[str] = Field(
         None, min_length=2, max_length=100
     )  # Max 2 palabras validado
-
-    modelo_vehiculo: Optional[str] = Field(None, min_length=1, max_length=100)
-    concesionario: Optional[str] = Field(None, min_length=1, max_length=100)
-    analista: Optional[str] = Field(None, min_length=1, max_length=100)
 
     # Estado
     estado: Optional[str] = Field(None, pattern="^(ACTIVO|INACTIVO|FINALIZADO)$")
@@ -297,9 +280,6 @@ class ClienteSearchFilters(BaseModel):
 
     estado: Optional[str] = Field(None, pattern="^(ACTIVO|INACTIVO|FINALIZADO)$")
     activo: Optional[bool] = None
-    analista: Optional[str] = None
-    concesionario: Optional[str] = None
-    modelo_vehiculo: Optional[str] = None
 
     fecha_registro_desde: Optional[date] = None
     fecha_registro_hasta: Optional[date] = None

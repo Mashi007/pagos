@@ -47,10 +47,6 @@ export interface Cliente {
   numero_amortizaciones?: number
   modalidad_pago?: string
   
-  // Asignación y gestión
-  analista_config_id?: number
-  fecha_asignacion?: string
-  
   // Estados (coincide con backend)
   estado: 'ACTIVO' | 'INACTIVO' | 'MORA' | 'FINALIZADO'
   activo: boolean
@@ -101,9 +97,6 @@ export interface ClienteForm {
   fecha_entrega?: string
   numero_amortizaciones?: number
   modalidad_pago?: string
-  
-  // Asignación
-  analista_config_id?: number
   
   // Notas
   notas?: string
@@ -175,7 +168,6 @@ export interface ClienteFilters {
   cedula?: string
   estado?: 'ACTIVO' | 'INACTIVO' | 'MORA' | 'FINALIZADO'
   estado_financiero?: string
-  analista_config_id?: number
   fecha_desde?: string
   fecha_hasta?: string
   per_page?: number

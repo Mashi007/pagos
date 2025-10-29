@@ -376,9 +376,9 @@ export function Dashboard() {
     { name: 'Intereses', value: data.financieros.ingresosInteres, color: '#10b981' },
     { name: 'Mora', value: data.financieros.ingresosMora, color: '#ef4444' },
   ] : (mockData.financieros ? [
-    { name: 'Capital', value: mockData.financieros.ingresosCapital, color: '#3b82f6' },
-    { name: 'Intereses', value: mockData.financieros.ingresosInteres, color: '#10b981' },
-    { name: 'Mora', value: mockData.financieros.ingresosMora, color: '#ef4444' },
+    { name: 'Capital', value: mockData.financieros.ingresosCapital || 0, color: '#3b82f6' },
+    { name: 'Intereses', value: mockData.financieros.ingresosInteres || 0, color: '#10b981' },
+    { name: 'Mora', value: mockData.financieros.ingresosMora || 0, color: '#ef4444' },
   ] : [
     { name: 'Capital', value: 0, color: '#3b82f6' },
     { name: 'Intereses', value: 0, color: '#10b981' },
@@ -817,17 +817,17 @@ export function Dashboard() {
               <BarChart data={[
                 { 
                   name: 'Cumplimiento', 
-                  valor: data.cobranza?.porcentajeCumplimiento || 0,
+                  valor: data.cobranza?.porcentajeCumplimiento ?? mockData.cobranza?.porcentajeCumplimiento ?? 0,
                   color: '#10b981'
                 },
                 { 
                   name: 'Prom. Días Mora', 
-                  valor: data.cobranza?.promedioDiasMora || 0,
+                  valor: data.cobranza?.promedioDiasMora ?? mockData.cobranza?.promedioDiasMora ?? 0,
                   color: '#f59e0b'
                 },
                 { 
                   name: 'Clientes Mora', 
-                  valor: data.cobranza?.clientesMora || 0,
+                  valor: data.cobranza?.clientesMora ?? mockData.cobranza?.clientesMora ?? 0,
                   color: '#ef4444'
                 }
               ]}>
@@ -836,7 +836,11 @@ export function Dashboard() {
                 <YAxis />
                 <Tooltip />
                 <Bar dataKey="valor" fill="#8884d8">
-                  {[data.cobranza?.porcentajeCumplimiento || 0, data.cobranza?.promedioDiasMora || 0, data.cobranza?.clientesMora || 0].map((_, index) => {
+                  {[
+                    data.cobranza?.porcentajeCumplimiento ?? mockData.cobranza?.porcentajeCumplimiento ?? 0,
+                    data.cobranza?.promedioDiasMora ?? mockData.cobranza?.promedioDiasMora ?? 0,
+                    data.cobranza?.clientesMora ?? mockData.cobranza?.clientesMora ?? 0
+                  ].map((_, index) => {
                     const colors = ['#10b981', '#f59e0b', '#ef4444']
                     return <Cell key={`cell-${index}`} fill={colors[index]} />
                   })}
@@ -900,9 +904,11 @@ export function Dashboard() {
                   <div className="text-xs text-gray-500 mb-1">Variación vs período anterior</div>
                   <div className="flex items-center">
                     {(() => {
+                      const ticketPromedio = data.productos?.ticketPromedio ?? mockData.productos?.ticketPromedio ?? 0
+                      const ticketPromedioAnterior = data.productos?.ticketPromedioAnterior ?? mockData.productos?.ticketPromedioAnterior
                       const variacion = calcularVariacion(
-                        data.productos.ticketPromedio,
-                        data.productos.ticketPromedioAnterior
+                        ticketPromedio,
+                        ticketPromedioAnterior
                       )
                       const IconComponent = variacion.icono
                       return (

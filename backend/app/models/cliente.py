@@ -8,9 +8,6 @@ NAME_LENGTH = 100
 PHONE_LENGTH = 15
 EMAIL_LENGTH = 100
 OCCUPATION_LENGTH = 100
-VEHICLE_MODEL_LENGTH = 100
-DEALER_LENGTH = 100
-ANALYST_LENGTH = 100
 STATE_LENGTH = 20
 USER_LENGTH = 100
 
@@ -37,19 +34,6 @@ class Cliente(Base):
     direccion = Column(Text, nullable=False)  # Libre
     fecha_nacimiento = Column(Date, nullable=False)  # Validado por validadores
     ocupacion = Column(String(OCCUPATION_LENGTH), nullable=False)  # Texto libre
-
-    # ============================================
-    # DATOS DEL VEHÍCULO Y FINANCIAMIENTO - OBLIGATORIOS
-    # ============================================
-    modelo_vehiculo = Column(
-        String(VEHICLE_MODEL_LENGTH), nullable=False, index=True
-    )  # Configuración
-    concesionario = Column(
-        String(DEALER_LENGTH), nullable=False, index=True
-    )  # Configuración
-    analista = Column(
-        String(ANALYST_LENGTH), nullable=False, index=True
-    )  # Configuración
 
     # Estado y control - OBLIGATORIOS
     estado = Column(
