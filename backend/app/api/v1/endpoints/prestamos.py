@@ -532,9 +532,6 @@ def obtener_resumen_prestamos_cliente(
 ):
     """Obtener resumen de préstamos del cliente: saldo, cuotas en mora, etc."""
     from app.models.amortizacion import Cuota
-    from datetime import date
-    from sqlalchemy import func, and_
-    from decimal import Decimal
 
     prestamos = db.query(Prestamo).filter(Prestamo.cedula == cedula).all()
 

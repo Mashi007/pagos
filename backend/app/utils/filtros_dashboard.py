@@ -5,8 +5,9 @@ Cualquier KPI nuevo debe usar estas funciones para aplicar filtros automáticame
 
 from datetime import date
 from typing import Optional
+
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Query
-from sqlalchemy import func, and_, or_
 
 from app.models.prestamo import Prestamo
 from app.models.pago import Pago
