@@ -299,7 +299,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
     try {
       const row = excelData[currentRowIndex]
-      const clienteData = {
+      const clienteData: any = {
         cedula: row.cedula,
         nombres: formatNombres(row.nombres),  // ✅ Aplicar formato Title Case y ya unificados (nombres + apellidos)
         telefono: row.telefono,
@@ -307,12 +307,21 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         direccion: row.direccion,
         fecha_nacimiento: convertirFechaParaBackend(row.fecha_nacimiento),  // ✅ Convertir DD/MM/YYYY a YYYY-MM-DD
         ocupacion: row.ocupacion,
-        modelo_vehiculo: row.modelo_vehiculo || '',
-        concesionario: row.concesionario || '',
-        analista: row.analista || '',
         estado: row.estado.toUpperCase().trim(), // ✅ Normalizar estado
         activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
-        notas: row.notas || 'NA'
+        notas: row.notas || 'NA',
+        confirm_duplicate: true
+      }
+      
+      // Solo incluir estos campos si tienen valor
+      if (row.modelo_vehiculo && row.modelo_vehiculo.trim()) {
+        clienteData.modelo_vehiculo = row.modelo_vehiculo
+      }
+      if (row.concesionario && row.concesionario.trim()) {
+        clienteData.concesionario = row.concesionario
+      }
+      if (row.analista && row.analista.trim()) {
+        clienteData.analista = row.analista
       }
 
       await clienteService.createClienteWithConfirmation(clienteData, comentarios)
