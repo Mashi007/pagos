@@ -214,18 +214,35 @@ export function Dashboard() {
     cargarUsuarios()
   }, [])
 
-  // Cargar opciones de filtros
-  const { data: opcionesFiltros } = useQuery({
+  // Cargar opciones de filtros - con manejo de errores mejorado
+  const { 
+    data: opcionesFiltros, 
+    isLoading: loadingOpcionesFiltros,
+    error: errorOpcionesFiltros 
+  } = useQuery({
     queryKey: ['dashboard-filtros-opciones'],
     queryFn: async () => {
       try {
-        return await apiClient.get('/api/v1/dashboard/opciones-filtros')
+        const response = await apiClient.get('/api/v1/dashboard/opciones-filtros')
+        // Asegurar que las listas sean arrays y eliminar duplicados en el frontend
+        return {
+          analistas: Array.isArray(response?.analistas) 
+            ? [...new Set(response.analistas.filter((v: any) => v && v.trim()))].sort()
+            : [],
+          concesionarios: Array.isArray(response?.concesionarios)
+            ? [...new Set(response.concesionarios.filter((v: any) => v && v.trim()))].sort()
+            : [],
+          modelos: Array.isArray(response?.modelos)
+            ? [...new Set(response.modelos.filter((v: any) => v && v.trim()))].sort()
+            : [],
+        }
       } catch (error) {
-        console.warn('Error cargando opciones de filtros:', error)
+        console.error('Error cargando opciones de filtros:', error)
         return { analistas: [], concesionarios: [], modelos: [] }
       }
     },
     staleTime: 30 * 60 * 1000, // 30 minutos - las opciones no cambian frecuentemente
+    retry: 2, // Reintentar 2 veces si falla
   })
 
   // ✅ Usar función centralizada del hook para construir parámetros
@@ -459,15 +476,28 @@ export function Dashboard() {
                   <Select 
                     value={filtros.analista || ''} 
                     onValueChange={(value) => setFiltros(prev => ({ ...prev, analista: value || undefined }))}
+                    disabled={loadingOpcionesFiltros}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Todos los analistas" />
+                      <SelectValue placeholder={
+                        loadingOpcionesFiltros 
+                          ? "Cargando..." 
+                          : errorOpcionesFiltros 
+                          ? "Error al cargar"
+                          : "Todos los analistas"
+                      } />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="">Todos los analistas</SelectItem>
-                      {opcionesFiltros?.analistas?.map((a: string) => (
-                        <SelectItem key={a} value={a}>{a}</SelectItem>
-                      ))}
+                      {loadingOpcionesFiltros ? (
+                        <SelectItem value="" disabled>Cargando opciones...</SelectItem>
+                      ) : opcionesFiltros?.analistas && opcionesFiltros.analistas.length > 0 ? (
+                        opcionesFiltros.analistas.map((a: string) => (
+                          <SelectItem key={a} value={a}>{a}</SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="" disabled>No hay opciones disponibles</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -478,15 +508,28 @@ export function Dashboard() {
                   <Select 
                     value={filtros.concesionario || ''} 
                     onValueChange={(value) => setFiltros(prev => ({ ...prev, concesionario: value || undefined }))}
+                    disabled={loadingOpcionesFiltros}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Todos los concesionarios" />
+                      <SelectValue placeholder={
+                        loadingOpcionesFiltros 
+                          ? "Cargando..." 
+                          : errorOpcionesFiltros 
+                          ? "Error al cargar"
+                          : "Todos los concesionarios"
+                      } />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="">Todos los concesionarios</SelectItem>
-                      {opcionesFiltros?.concesionarios?.map((c: string) => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
-                      ))}
+                      {loadingOpcionesFiltros ? (
+                        <SelectItem value="" disabled>Cargando opciones...</SelectItem>
+                      ) : opcionesFiltros?.concesionarios && opcionesFiltros.concesionarios.length > 0 ? (
+                        opcionesFiltros.concesionarios.map((c: string) => (
+                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="" disabled>No hay opciones disponibles</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -497,15 +540,28 @@ export function Dashboard() {
                   <Select 
                     value={filtros.modelo || ''} 
                     onValueChange={(value) => setFiltros(prev => ({ ...prev, modelo: value || undefined }))}
+                    disabled={loadingOpcionesFiltros}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Todos los modelos" />
+                      <SelectValue placeholder={
+                        loadingOpcionesFiltros 
+                          ? "Cargando..." 
+                          : errorOpcionesFiltros 
+                          ? "Error al cargar"
+                          : "Todos los modelos"
+                      } />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="">Todos los modelos</SelectItem>
-                      {opcionesFiltros?.modelos?.map((m: string) => (
-                        <SelectItem key={m} value={m}>{m}</SelectItem>
-                      ))}
+                      {loadingOpcionesFiltros ? (
+                        <SelectItem value="" disabled>Cargando opciones...</SelectItem>
+                      ) : opcionesFiltros?.modelos && opcionesFiltros.modelos.length > 0 ? (
+                        opcionesFiltros.modelos.map((m: string) => (
+                          <SelectItem key={m} value={m}>{m}</SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="" disabled>No hay opciones disponibles</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>

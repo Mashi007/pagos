@@ -24,18 +24,35 @@ def obtener_opciones_filtros(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Obtener opciones disponibles para filtros del dashboard"""
+    """Obtener opciones disponibles para filtros del dashboard - Sin duplicados"""
     try:
-        # Analistas únicos
-        analistas = (
+        def normalizar_valor(valor: Optional[str]) -> Optional[str]:
+            """Normaliza un valor: trim, validar no vacío"""
+            if not valor:
+                return None
+            valor_limpio = str(valor).strip()
+            return valor_limpio if valor_limpio else None
+
+        def obtener_valores_unicos(query_result) -> set:
+            """Extrae valores únicos normalizados de una query"""
+            valores = set()
+            for item in query_result:
+                valor = item[0] if isinstance(item, tuple) else item
+                valor_limpio = normalizar_valor(valor)
+                if valor_limpio:
+                    valores.add(valor_limpio)
+            return valores
+
+        # 1. ANALISTAS - Combinar analista y producto_financiero sin duplicados
+        analistas_query = (
             db.query(func.distinct(Prestamo.analista))
             .filter(Prestamo.analista.isnot(None), Prestamo.analista != "")
             .all()
         )
-        analistas_list = [a[0] for a in analistas if a[0]]
+        analistas_set = obtener_valores_unicos(analistas_query)
 
-        # También productos financieros (pueden ser analistas)
-        productos_fin = (
+        # Productos financieros (pueden ser analistas)
+        productos_fin_query = (
             db.query(func.distinct(Prestamo.producto_financiero))
             .filter(
                 Prestamo.producto_financiero.isnot(None),
@@ -43,47 +60,48 @@ def obtener_opciones_filtros(
             )
             .all()
         )
-        productos_list = [
-            p[0] for p in productos_fin if p[0] and p[0] not in analistas_list
-        ]
-        analistas_list.extend(productos_list)
+        productos_set = obtener_valores_unicos(productos_fin_query)
+        
+        # Combinar sin duplicados
+        analistas_final = sorted(analistas_set | productos_set)
 
-        # Concesionarios únicos
-        concesionarios = (
+        # 2. CONCESIONARIOS - Únicos y normalizados
+        concesionarios_query = (
             db.query(func.distinct(Prestamo.concesionario))
             .filter(Prestamo.concesionario.isnot(None), Prestamo.concesionario != "")
             .all()
         )
-        concesionarios_list = [c[0] for c in concesionarios if c[0]]
+        concesionarios_set = obtener_valores_unicos(concesionarios_query)
+        concesionarios_final = sorted(concesionarios_set)
 
-        # Modelos únicos
-        modelos = (
+        # 3. MODELOS - Combinar producto y modelo_vehiculo sin duplicados
+        modelos_producto_query = (
             db.query(func.distinct(Prestamo.producto))
             .filter(Prestamo.producto.isnot(None), Prestamo.producto != "")
             .all()
         )
-        modelos_producto = [m[0] for m in modelos if m[0]]
+        modelos_producto_set = obtener_valores_unicos(modelos_producto_query)
 
         # También modelo_vehiculo
-        modelos_vehiculo = (
+        modelos_vehiculo_query = (
             db.query(func.distinct(Prestamo.modelo_vehiculo))
             .filter(
                 Prestamo.modelo_vehiculo.isnot(None), Prestamo.modelo_vehiculo != ""
             )
             .all()
         )
-        modelos_vehiculo_list = [
-            mv[0] for mv in modelos_vehiculo if mv[0] and mv[0] not in modelos_producto
-        ]
-        modelos_list = modelos_producto + modelos_vehiculo_list
+        modelos_vehiculo_set = obtener_valores_unicos(modelos_vehiculo_query)
+        
+        # Combinar sin duplicados
+        modelos_final = sorted(modelos_producto_set | modelos_vehiculo_set)
 
         return {
-            "analistas": sorted(analistas_list),
-            "concesionarios": sorted(concesionarios_list),
-            "modelos": sorted(modelos_list),
+            "analistas": analistas_final,
+            "concesionarios": concesionarios_final,
+            "modelos": modelos_final,
         }
     except Exception as e:
-        logger.error(f"Error obteniendo opciones de filtros: {e}")
+        logger.error(f"Error obteniendo opciones de filtros: {e}", exc_info=True)
         return {"analistas": [], "concesionarios": [], "modelos": []}
 
 
