@@ -125,7 +125,7 @@ def crear_cliente(
             db.query(Cliente)
             .filter(
                 Cliente.cedula == cliente_data.cedula,
-                Cliente.nombres == cliente_data.nombres
+                Cliente.nombres == cliente_data.nombres,
             )
             .first()
         )
@@ -137,7 +137,7 @@ def crear_cliente(
             )
             raise HTTPException(
                 status_code=400,
-                detail=f"No se puede crear un cliente con la misma cédula ({cliente_data.cedula}) y el mismo nombre ({cliente_data.nombres}). Ya existe un cliente con estos datos."
+                detail=f"No se puede crear un cliente con la misma cédula ({cliente_data.cedula}) y el mismo nombre ({cliente_data.nombres}). Ya existe un cliente con estos datos.",
             )
 
         # Preparar datos
