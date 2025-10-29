@@ -55,6 +55,12 @@ import {
 } from 'recharts'
 
 // Tipos para Dashboard
+interface OpcionesFiltros {
+  analistas: string[]
+  concesionarios: string[]
+  modelos: string[]
+}
+
 interface DashboardData {
   cartera_total: number
   cartera_anterior?: number
@@ -219,21 +225,21 @@ export function Dashboard() {
     data: opcionesFiltros, 
     isLoading: loadingOpcionesFiltros,
     error: errorOpcionesFiltros 
-  } = useQuery({
+  } = useQuery<OpcionesFiltros>({
     queryKey: ['dashboard-filtros-opciones'],
-    queryFn: async () => {
+    queryFn: async (): Promise<OpcionesFiltros> => {
       try {
-        const response = await apiClient.get('/api/v1/dashboard/opciones-filtros')
+        const response = await apiClient.get('/api/v1/dashboard/opciones-filtros') as OpcionesFiltros
         // Asegurar que las listas sean arrays y eliminar duplicados en el frontend
         return {
           analistas: Array.isArray(response?.analistas) 
-            ? [...new Set(response.analistas.filter((v: any) => v && v.trim()))].sort()
+            ? [...new Set(response.analistas.filter((v: any) => v && typeof v === 'string' && v.trim()))].sort()
             : [],
           concesionarios: Array.isArray(response?.concesionarios)
-            ? [...new Set(response.concesionarios.filter((v: any) => v && v.trim()))].sort()
+            ? [...new Set(response.concesionarios.filter((v: any) => v && typeof v === 'string' && v.trim()))].sort()
             : [],
           modelos: Array.isArray(response?.modelos)
-            ? [...new Set(response.modelos.filter((v: any) => v && v.trim()))].sort()
+            ? [...new Set(response.modelos.filter((v: any) => v && typeof v === 'string' && v.trim()))].sort()
             : [],
         }
       } catch (error) {
