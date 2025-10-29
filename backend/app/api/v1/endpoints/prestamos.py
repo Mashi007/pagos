@@ -332,10 +332,37 @@ def listar_prestamos(
         prestamos_serializados = []
         for prestamo in prestamos:
             try:
-                prestamo_dict = PrestamoResponse.model_validate(prestamo).model_dump()
+                # Crear diccionario con todos los campos posibles (manejar campos que pueden no existir)
+                prestamo_data = {
+                    "id": prestamo.id,
+                    "cliente_id": prestamo.cliente_id,
+                    "cedula": prestamo.cedula,
+                    "nombres": prestamo.nombres,
+                    "total_financiamiento": prestamo.total_financiamiento,
+                    "fecha_requerimiento": prestamo.fecha_requerimiento,
+                    "modalidad_pago": prestamo.modalidad_pago,
+                    "numero_cuotas": prestamo.numero_cuotas,
+                    "cuota_periodo": prestamo.cuota_periodo,
+                    "tasa_interes": prestamo.tasa_interes,
+                    "fecha_base_calculo": prestamo.fecha_base_calculo,
+                    "producto": prestamo.producto,
+                    "producto_financiero": prestamo.producto_financiero,
+                    "concesionario": getattr(prestamo, 'concesionario', None),
+                    "analista": getattr(prestamo, 'analista', None),
+                    "modelo_vehiculo": getattr(prestamo, 'modelo_vehiculo', None),
+                    "estado": prestamo.estado,
+                    "usuario_proponente": prestamo.usuario_proponente,
+                    "usuario_aprobador": prestamo.usuario_aprobador,
+                    "usuario_autoriza": getattr(prestamo, 'usuario_autoriza', None),
+                    "observaciones": prestamo.observaciones,
+                    "fecha_registro": prestamo.fecha_registro,
+                    "fecha_aprobacion": prestamo.fecha_aprobacion,
+                    "fecha_actualizacion": prestamo.fecha_actualizacion,
+                }
+                prestamo_dict = PrestamoResponse.model_validate(prestamo_data).model_dump()
                 prestamos_serializados.append(prestamo_dict)
             except Exception as e:
-                logger.error(f"Error serializando préstamo {prestamo.id}: {str(e)}")
+                logger.error(f"Error serializando préstamo {prestamo.id}: {str(e)}", exc_info=True)
                 continue
 
         return {

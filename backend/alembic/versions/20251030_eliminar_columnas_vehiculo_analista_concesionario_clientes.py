@@ -29,8 +29,17 @@ def upgrade():
     columns = [col['name'] for col in inspector.get_columns('clientes')]
     indexes = [idx['name'] for idx in inspector.get_indexes('clientes')]
     
-    # Eliminar índice y columna modelo_vehiculo si existe
+    # Primero, hacer las columnas NULLABLE si están como NOT NULL (para poder eliminarlas)
+    from sqlalchemy import text
+    
+    # Hacer modelo_vehiculo nullable si existe
     if 'modelo_vehiculo' in columns:
+        try:
+            op.execute(text("ALTER TABLE clientes ALTER COLUMN modelo_vehiculo DROP NOT NULL"))
+            print("✅ Columna 'modelo_vehiculo' ahora es nullable")
+        except Exception as e:
+            print(f"⚠️ No se pudo hacer nullable modelo_vehiculo (puede que ya sea nullable): {e}")
+        
         # Eliminar índice si existe
         if 'idx_clientes_modelo_vehiculo' in indexes:
             try:
@@ -39,11 +48,18 @@ def upgrade():
             except Exception as e:
                 print(f"⚠️ No se pudo eliminar el índice: {e}")
         
+        # Ahora eliminar la columna
         op.drop_column('clientes', 'modelo_vehiculo')
         print("✅ Columna 'modelo_vehiculo' eliminada de tabla clientes")
     
-    # Eliminar índice y columna concesionario si existe
+    # Hacer concesionario nullable si existe
     if 'concesionario' in columns:
+        try:
+            op.execute(text("ALTER TABLE clientes ALTER COLUMN concesionario DROP NOT NULL"))
+            print("✅ Columna 'concesionario' ahora es nullable")
+        except Exception as e:
+            print(f"⚠️ No se pudo hacer nullable concesionario (puede que ya sea nullable): {e}")
+        
         # Eliminar índice si existe
         if 'idx_clientes_concesionario' in indexes:
             try:
@@ -52,11 +68,18 @@ def upgrade():
             except Exception as e:
                 print(f"⚠️ No se pudo eliminar el índice: {e}")
         
+        # Ahora eliminar la columna
         op.drop_column('clientes', 'concesionario')
         print("✅ Columna 'concesionario' eliminada de tabla clientes")
     
-    # Eliminar índice y columna analista si existe
+    # Hacer analista nullable si existe
     if 'analista' in columns:
+        try:
+            op.execute(text("ALTER TABLE clientes ALTER COLUMN analista DROP NOT NULL"))
+            print("✅ Columna 'analista' ahora es nullable")
+        except Exception as e:
+            print(f"⚠️ No se pudo hacer nullable analista (puede que ya sea nullable): {e}")
+        
         # Eliminar índice si existe
         if 'idx_clientes_analista' in indexes:
             try:
@@ -65,6 +88,7 @@ def upgrade():
             except Exception as e:
                 print(f"⚠️ No se pudo eliminar el índice: {e}")
         
+        # Ahora eliminar la columna
         op.drop_column('clientes', 'analista')
         print("✅ Columna 'analista' eliminada de tabla clientes")
 

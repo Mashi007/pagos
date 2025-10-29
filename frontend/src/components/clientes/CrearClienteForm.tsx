@@ -394,13 +394,29 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     return { field: 'fechaNacimiento', isValid: true, message: 'Fecha válida' }
   }
   
-  // ✅ Formato automático deshabilitado - respetar formato original del usuario
-  const formatNombres = (text: string): string => {
-    return text // Mantener formato original
+  // ✅ Función para formatear texto a Title Case (primera letra mayúscula)
+  const toTitleCase = (text: string): string => {
+    if (!text || text.trim() === '') return text
+    
+    return text
+      .toLowerCase()
+      .split(' ')
+      .map(word => {
+        if (word.length === 0) return word
+        // Primera letra en mayúscula, resto en minúscula
+        return word.charAt(0).toUpperCase() + word.slice(1)
+      })
+      .join(' ')
+      .trim()
   }
-  
+
+  // ✅ Formato automático deshabilitado - respetar formato original del usuario durante edición
+  const formatNombres = (text: string): string => {
+    return text // Mantener formato original durante edición
+  }
+
   const formatOcupacion = (text: string): string => {
-    return text // Mantener formato original
+    return text // Mantener formato original durante edición
   }
   
   // Validaciones usando el servicio de validadores del backend
@@ -652,25 +668,29 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       // ✅ Concatenar +58 con el número de teléfono
       const telefonoCompleto = `+58${formData.telefono.replace(/\D/g, '').slice(0, 10)}`
       
-      // ✅ Construir dirección como JSON estructurado
+      // ✅ Formatear campos a Title Case antes de guardar
+      const nombresFormateado = toTitleCase(formData.nombres.trim())
+      const ocupacionFormateada = toTitleCase(formData.ocupacion.trim())
+      
+      // ✅ Construir dirección como JSON estructurado con formateo Title Case
       const direccionCompleta = JSON.stringify({
-        callePrincipal: formData.callePrincipal.trim(),
-        calleTransversal: formData.calleTransversal.trim() || null,
-        descripcion: formData.descripcion.trim() || null,
-        parroquia: formData.parroquia.trim(),
-        municipio: formData.municipio.trim(),
-        ciudad: formData.ciudad.trim(),
-        estado: formData.estadoDireccion.trim()
+        callePrincipal: toTitleCase(formData.callePrincipal.trim()),
+        calleTransversal: formData.calleTransversal.trim() ? toTitleCase(formData.calleTransversal.trim()) : null,
+        descripcion: formData.descripcion.trim() || null,  // ✅ Descripción sin formatear
+        parroquia: toTitleCase(formData.parroquia.trim()),
+        municipio: toTitleCase(formData.municipio.trim()),
+        ciudad: toTitleCase(formData.ciudad.trim()),
+        estado: toTitleCase(formData.estadoDireccion.trim())
       })
       
       const clienteData = {
         cedula: formData.cedula,
-        nombres: formData.nombres,  // ✅ nombres unificados (nombres + apellidos)
+        nombres: nombresFormateado,  // ✅ nombres formateados con Title Case
         telefono: telefonoCompleto,  // ✅ Formato: +581234567890
-        email: formData.email,
-        direccion: direccionCompleta,  // ✅ Dirección estructurada como JSON
+        email: formData.email.trim().toLowerCase(),  // Email en minúsculas
+        direccion: direccionCompleta,  // ✅ Dirección estructurada como JSON con Title Case
         fecha_nacimiento: convertirFechaAISO(formData.fechaNacimiento), // ✅ Convertir DD/MM/YYYY → YYYY-MM-DD
-        ocupacion: formData.ocupacion,
+        ocupacion: ocupacionFormateada,  // ✅ Ocupación formateada con Title Case
         estado: formData.estado,
         notas: formData.notas || 'NA'
       }
