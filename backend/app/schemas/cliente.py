@@ -142,17 +142,44 @@ class ClienteBase(BaseModel):
 
 
 class ClienteCreate(BaseModel):
-    cedula: str = Field(..., min_length=MIN_CEDULA_LENGTH, max_length=MAX_CEDULA_LENGTH, description="Cédula del cliente")
-    nombres: str = Field(..., min_length=MIN_NAME_LENGTH, max_length=MAX_NAME_LENGTH, description="Nombres del cliente")
-    telefono: str = Field(..., min_length=MIN_PHONE_LENGTH, max_length=MAX_PHONE_LENGTH, description="Teléfono")
+    cedula: str = Field(
+        ...,
+        min_length=MIN_CEDULA_LENGTH,
+        max_length=MAX_CEDULA_LENGTH,
+        description="Cédula del cliente",
+    )
+    nombres: str = Field(
+        ...,
+        min_length=MIN_NAME_LENGTH,
+        max_length=MAX_NAME_LENGTH,
+        description="Nombres del cliente",
+    )
+    telefono: str = Field(
+        ...,
+        min_length=MIN_PHONE_LENGTH,
+        max_length=MAX_PHONE_LENGTH,
+        description="Teléfono",
+    )
     email: EmailStr = Field(..., description="Email del cliente")
-    direccion: str = Field(..., min_length=MIN_ADDRESS_LENGTH, max_length=MAX_ADDRESS_LENGTH, description="Dirección")
+    direccion: str = Field(
+        ...,
+        min_length=MIN_ADDRESS_LENGTH,
+        max_length=MAX_ADDRESS_LENGTH,
+        description="Dirección",
+    )
     fecha_nacimiento: date = Field(..., description="Fecha de nacimiento")
-    ocupacion: str = Field(..., min_length=MIN_NAME_LENGTH, max_length=MAX_NAME_LENGTH, description="Ocupación")
+    ocupacion: str = Field(
+        ...,
+        min_length=MIN_NAME_LENGTH,
+        max_length=MAX_NAME_LENGTH,
+        description="Ocupación",
+    )
     modelo_vehiculo: Optional[str] = Field(None, description="Modelo del vehículo")
     concesionario: Optional[str] = Field(None, description="Concesionario")
     analista: Optional[str] = Field(None, description="Analista asignado")
-    estado: str = Field(..., pattern="^(ACTIVO|INACTIVO|FINALIZADO)$", description="Estado del cliente")
+    estado: str = Field(
+        ..., pattern="^(ACTIVO|INACTIVO|FINALIZADO)$", description="Estado del cliente"
+    )
     activo: Optional[bool] = Field(True, description="Cliente activo")
     notas: Optional[str] = Field("NA", description="Notas adicionales")
     confirm_duplicate: bool = Field(False, description="Confirmar si es duplicado")
