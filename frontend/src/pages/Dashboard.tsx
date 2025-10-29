@@ -400,7 +400,7 @@ export function Dashboard() {
   })
 
   // Query para cobros diarios - usa filtros automáticos
-  const { data: cobrosDiarios, isLoading: loadingCobrosDiarios } = useQuery<CobroDiario[]>({
+  const { data: cobrosDiarios, isLoading: loadingCobrosDiarios } = useQuery({
     queryKey: ['cobros-diarios', filtros],
     queryFn: async (): Promise<CobroDiario[]> => {
       try {
