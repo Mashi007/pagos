@@ -11,7 +11,6 @@ import {
   BarChart3,
   Settings,
   Bell,
-  CheckSquare,
   Search,
   Upload,
   Brain,
@@ -85,12 +84,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       title: 'Reportes',
       href: '/reportes',
       icon: FileText,
-    },
-    {
-      title: 'Aprobaciones',
-      href: '/aprobaciones',
-      icon: CheckSquare,
-      badge: '3',
     },
     {
       title: 'Herramientas',
