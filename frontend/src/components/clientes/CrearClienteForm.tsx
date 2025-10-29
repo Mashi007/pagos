@@ -552,6 +552,26 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     setShowDuplicateWarning(false)
     
     try {
+      // Validar que todos los campos requeridos estén llenos
+      if (!formData.direccion || !formData.direccion.trim()) {
+        alert('La dirección es requerida')
+        setIsSubmitting(false)
+        setShowDuplicateWarning(true)
+        return
+      }
+      if (!formData.fechaNacimiento || !formData.fechaNacimiento.trim()) {
+        alert('La fecha de nacimiento es requerida')
+        setIsSubmitting(false)
+        setShowDuplicateWarning(true)
+        return
+      }
+      if (!formData.ocupacion || !formData.ocupacion.trim()) {
+        alert('La ocupación es requerida')
+        setIsSubmitting(false)
+        setShowDuplicateWarning(true)
+        return
+      }
+      
       const clienteData = {
         cedula: formData.cedula,
         nombres: formData.nombres,  // ✅ nombres unificados (nombres + apellidos)
@@ -564,10 +584,11 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         concesionario: formData.concesionario,
         analista: formData.analista,
         estado: formData.estado,
-        notas: formData.notas || 'NA'
+        notas: formData.notas || 'NA',
+        confirm_duplicate: true
       }
 
-      console.log('➕ Creando cliente con cédula duplicada (confirmado por usuario)')
+      console.log('➕ Creando cliente con cédula duplicada (confirmado por usuario):', clienteData)
       await clienteService.createClienteWithConfirmation(
         clienteData, 
         comentarios || `Usuario confirmó crear cliente con cédula duplicada: ${formData.cedula}`
@@ -579,6 +600,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       onClose()
     } catch (error) {
       console.error('Error creando cliente duplicado:', error)
+      setShowDuplicateWarning(true)
     } finally {
       setIsSubmitting(false)
     }
