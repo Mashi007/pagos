@@ -27,6 +27,7 @@ class Pago(Base):
 
     # DATOS DEL PAGO
     prestamo_id = Column(Integer, nullable=True, index=True)  # ID del crédito
+    numero_cuota = Column(Integer, nullable=True)  # Número de cuota asociada (opcional)
     fecha_pago = Column(DateTime, nullable=False)  # Fecha de pago (manual)
     fecha_registro = Column(
         DateTime, default=func.now(), nullable=False
