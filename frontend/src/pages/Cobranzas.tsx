@@ -15,7 +15,6 @@ import {
 import { cobranzasService } from '@/services/cobranzasService'
 import { useQuery } from '@tanstack/react-query'
 import type { ClienteAtrasado, CobranzasPorAnalista, MontosPorMes } from '@/services/cobranzasService'
-import * as XLSX from 'xlsx'
 
 export function Cobranzas() {
   const [tabActiva, setTabActiva] = useState('resumen')
@@ -49,7 +48,7 @@ export function Cobranzas() {
   const exportarClientesAnalista = async (nombreAnalista: string) => {
     try {
       const clientes = await cobranzasService.getClientesPorAnalista(nombreAnalista)
-      exportarAExcel(
+      await exportarAExcel(
         clientes,
         `clientes-${nombreAnalista.replace('@', '')}`,
         ['cedula', 'nombres', 'telefono', 'prestamo_id', 'cuotas_vencidas', 'total_adeudado', 'fecha_primera_vencida']
@@ -61,13 +60,18 @@ export function Cobranzas() {
   }
 
   // Función para exportar a Excel
-  const exportarAExcel = (data: any[], nombre: string, columnas?: string[]) => {
+  const exportarAExcel = async (data: any[], nombre: string, columnas?: string[]) => {
     if (!data || data.length === 0) {
       alert('No hay datos para exportar')
       return
     }
 
     try {
+      // Importar dinámicamente xlsx
+      const XLSXModule = await import('xlsx')
+      // @ts-ignore - xlsx es un CommonJS module, necesitamos usar 'as any'
+      const XLSX: any = XLSXModule
+      
       // Obtener columnas del primer objeto si no se especifican
       const keys = columnas || Object.keys(data[0])
       
@@ -177,15 +181,15 @@ export function Cobranzas() {
                     Listado de todos los clientes con cuotas vencidas
                   </CardDescription>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => exportarAExcel(
-                    clientesAtrasados || [],
-                    'clientes-atrasados',
-                    ['cedula', 'nombres', 'analista', 'prestamo_id', 'cuotas_vencidas', 'total_adeudado', 'fecha_primera_vencida']
-                  )}
-                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => await exportarAExcel(
+                      clientesAtrasados || [],
+                      'clientes-atrasados',
+                      ['cedula', 'nombres', 'analista', 'prestamo_id', 'cuotas_vencidas', 'total_adeudado', 'fecha_primera_vencida']
+                    )}
+                  >
                   <Download className="h-4 w-4 mr-2" />
                   Exportar Excel
                 </Button>
@@ -444,7 +448,7 @@ export function Cobranzas() {
                   
                   <Button
                     variant="outline"
-                    onClick={() => exportarAExcel(
+                    onClick={async () => await exportarAExcel(
                       montosPorMes || [],
                       'montos-por-mes',
                       ['mes', 'mes_display', 'cantidad_cuotas', 'monto_total']
