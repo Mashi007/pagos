@@ -300,25 +300,16 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     try {
       const row = excelData[currentRowIndex]
       
-      // 🔍 DEBUG: Log completo de la fila del Excel
-      console.log('🔍 DEBUG - Fila completa del Excel:', row)
-      console.log('🔍 DEBUG - direccion desde Excel:', row.direccion)
-      console.log('🔍 DEBUG - fecha_nacimiento desde Excel:', row.fecha_nacimiento)
-      console.log('🔍 DEBUG - ocupacion desde Excel:', row.ocupacion)
+      // 🔍 DEBUG: Log completo de la fila actual
+      console.log('🔍 DEBUG - Fila completa desde la interfaz:', row)
+      console.log('🔍 DEBUG - direccion:', row.direccion)
+      console.log('🔍 DEBUG - fecha_nacimiento:', row.fecha_nacimiento)
+      console.log('🔍 DEBUG - ocupacion:', row.ocupacion)
       
-      // ✅ VALIDACIÓN: Asegurar que campos requeridos NO estén vacíos
-      if (!row.direccion || !row.direccion.trim()) {
-        alert('⚠️ ERROR: El campo Dirección está vacío en la fila del Excel. Por favor, complete este campo.')
-        setClienteDuplicado(null)
-        return
-      }
-      if (!row.fecha_nacimiento || !row.fecha_nacimiento.trim()) {
-        alert('⚠️ ERROR: El campo Fecha de Nacimiento está vacío en la fila del Excel. Por favor, complete este campo.')
-        setClienteDuplicado(null)
-        return
-      }
-      if (!row.ocupacion || !row.ocupacion.trim()) {
-        alert('⚠️ ERROR: El campo Ocupación está vacío en la fila del Excel. Por favor, complete este campo.')
+      // ✅ VALIDACIÓN FINAL: Verificar que TODOS los campos estén completos y válidos
+      // Esto usa el estado de validación de la interfaz
+      if (row._hasErrors) {
+        alert('⚠️ NO SE PUEDE GUARDAR: Hay campos vacíos o con errores en esta fila.\n\nPor favor, complete todos los campos obligatorios en la tabla antes de confirmar.')
         setClienteDuplicado(null)
         return
       }
@@ -929,12 +920,20 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           return { isValid: false, message: 'Fecha inválida (ej: 31/02 no existe)' }
         }
         
-        // ✅ CORRECCIÓN: Validar que la fecha sea pasada (no futura)
+        // ✅ Validar que la fecha sea pasada (no futura)
         const hoyNac = new Date()
         hoyNac.setHours(0, 0, 0, 0)
         
         if (fechaNac >= hoyNac) {
           return { isValid: false, message: 'La fecha de nacimiento no puede ser futura o de hoy' }
+        }
+        
+        // ✅ Validar que tenga al menos 18 años exactos
+        const edad = hoyNac.getFullYear() - anoNum
+        const fecha18 = new Date(anoNum + 18, mesNum - 1, diaNum)
+        
+        if (fecha18 > hoyNac) {
+          return { isValid: false, message: 'Debe tener al menos 18 años cumplidos' }
         }
         
         return { isValid: true }

@@ -330,11 +330,17 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       return { field: 'fechaNacimiento', isValid: false, message: 'Fecha inválida (ej: 31/02 no existe)' }
     }
     
-    // ✅ CORRECCIÓN: Validar que la fecha sea pasada (no futura ni hoy)
+    // ✅ Validar que la fecha sea pasada (no futura ni hoy)
     const hoy = new Date()
     hoy.setHours(0, 0, 0, 0)
     if (fechaNac >= hoy) {
       return { field: 'fechaNacimiento', isValid: false, message: 'La fecha de nacimiento no puede ser futura o de hoy' }
+    }
+    
+    // ✅ Validar que tenga al menos 18 años exactos
+    const fecha18 = new Date(anoNum + 18, mesNum - 1, diaNum)
+    if (fecha18 > hoy) {
+      return { field: 'fechaNacimiento', isValid: false, message: 'Debe tener al menos 18 años cumplidos' }
     }
     
     return { field: 'fechaNacimiento', isValid: true, message: 'Fecha válida' }
