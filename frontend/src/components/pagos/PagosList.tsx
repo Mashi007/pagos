@@ -38,7 +38,7 @@ export function PagosList() {
   const queryClient = useQueryClient()
 
   // Query para obtener pagos
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['pagos', page, perPage, filters],
     queryFn: () => pagoService.getAllPagos(page, perPage, filters),
   })
@@ -192,11 +192,17 @@ export function PagosList() {
           onClose={() => setShowRegistrarPago(false)}
           onSuccess={async () => {
             setShowRegistrarPago(false)
+            // Remover cache stale para forzar refetch completo
+            queryClient.removeQueries({ queryKey: ['pagos'], exact: false })
             // Invalidar todas las queries relacionadas con pagos
-            await queryClient.invalidateQueries({ queryKey: ['pagos'] })
-            // Refetch la query actual para actualizar la lista inmediatamente
-            await refetch()
-            toast.success('Pago registrado exitosamente')
+            await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+            // Forzar refetch inmediato de todas las queries activas de pagos
+            await queryClient.refetchQueries({ 
+              queryKey: ['pagos'],
+              exact: false,
+              type: 'active'
+            })
+            toast.success('Pago registrado exitosamente. El dashboard se ha actualizado.')
           }}
         />
       )}
@@ -207,9 +213,17 @@ export function PagosList() {
           onClose={() => setShowExcelUploader(false)}
           onSuccess={async () => {
             setShowExcelUploader(false)
-            await queryClient.invalidateQueries({ queryKey: ['pagos'] })
-            await refetch()
-            toast.success('Pagos cargados exitosamente')
+            // Remover cache stale para forzar refetch completo
+            queryClient.removeQueries({ queryKey: ['pagos'], exact: false })
+            // Invalidar todas las queries relacionadas con pagos
+            await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+            // Forzar refetch inmediato de todas las queries activas de pagos
+            await queryClient.refetchQueries({ 
+              queryKey: ['pagos'],
+              exact: false,
+              type: 'active'
+            })
+            toast.success('Pagos cargados exitosamente. El dashboard se ha actualizado.')
           }}
         />
       )}
