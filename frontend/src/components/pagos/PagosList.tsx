@@ -191,18 +191,32 @@ export function PagosList() {
         <RegistrarPagoForm
           onClose={() => setShowRegistrarPago(false)}
           onSuccess={async () => {
+            console.log('🔄 onSuccess llamado - Iniciando actualización de dashboard...')
             setShowRegistrarPago(false)
-            // Remover cache stale para forzar refetch completo
-            queryClient.removeQueries({ queryKey: ['pagos'], exact: false })
-            // Invalidar todas las queries relacionadas con pagos
-            await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
-            // Forzar refetch inmediato de todas las queries activas de pagos
-            await queryClient.refetchQueries({ 
-              queryKey: ['pagos'],
-              exact: false,
-              type: 'active'
-            })
-            toast.success('Pago registrado exitosamente. El dashboard se ha actualizado.')
+            
+            try {
+              // Remover cache stale para forzar refetch completo
+              console.log('🗑️ Removiendo queries stale...')
+              queryClient.removeQueries({ queryKey: ['pagos'], exact: false })
+              
+              // Invalidar todas las queries relacionadas con pagos
+              console.log('🔀 Invalidando queries...')
+              await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+              
+              // Forzar refetch inmediato de todas las queries activas de pagos
+              console.log('🔁 Ejecutando refetch...')
+              const result = await queryClient.refetchQueries({ 
+                queryKey: ['pagos'],
+                exact: false,
+                type: 'active'
+              })
+              console.log('✅ Refetch completado:', result)
+              
+              toast.success('Pago registrado exitosamente. El dashboard se ha actualizado.')
+            } catch (error) {
+              console.error('❌ Error actualizando dashboard:', error)
+              toast.error('Pago registrado, pero hubo un error al actualizar el dashboard')
+            }
           }}
         />
       )}

@@ -79,11 +79,13 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial }: Registrar
 
     setIsSubmitting(true)
     try {
-      await pagoService.createPago(formData)
+      console.log('🔄 Iniciando registro de pago...', formData)
+      const result = await pagoService.createPago(formData)
+      console.log('✅ Pago registrado exitosamente:', result)
       onSuccess()
     } catch (error: any) {
-      console.error('Error registrando pago:', error)
-      setErrors({ general: error.message || 'Error al registrar el pago' })
+      console.error('❌ Error registrando pago:', error)
+      setErrors({ general: error.response?.data?.detail || error.message || 'Error al registrar el pago' })
     } finally {
       setIsSubmitting(false)
     }

@@ -24,7 +24,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/", response_model=list[PagoResponse])
+@router.get("/", response_model=dict)
 def listar_pagos(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -37,7 +37,7 @@ def listar_pagos(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Listar pagos con filtros
+    Listar pagos con filtros y paginación
     """
     try:
         query = db.query(Pago)
@@ -54,6 +54,9 @@ def listar_pagos(
         if analista:
             query = query.join(Prestamo).filter(Prestamo.usuario_proponente == analista)
 
+        # Contar total antes de aplicar paginación
+        total = query.count()
+
         # Ordenar por fecha de pago descendente
         query = query.order_by(Pago.fecha_pago.desc())
 
@@ -61,9 +64,18 @@ def listar_pagos(
         offset = (page - 1) * per_page
         pagos = query.offset(offset).limit(per_page).all()
 
-        return pagos
+        # Serializar pagos
+        pagos_serializados = [PagoResponse.model_validate(pago).model_dump() for pago in pagos]
+
+        return {
+            "pagos": pagos_serializados,
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": (total + per_page - 1) // per_page if total > 0 else 0,
+        }
     except Exception as e:
-        logger.error(f"Error en listar_pagos: {e}")
+        logger.error(f"Error en listar_pagos: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
