@@ -347,22 +347,27 @@ def listar_prestamos(
                     "fecha_base_calculo": prestamo.fecha_base_calculo,
                     "producto": prestamo.producto,
                     "producto_financiero": prestamo.producto_financiero,
-                    "concesionario": getattr(prestamo, 'concesionario', None),
-                    "analista": getattr(prestamo, 'analista', None),
-                    "modelo_vehiculo": getattr(prestamo, 'modelo_vehiculo', None),
+                    "concesionario": getattr(prestamo, "concesionario", None),
+                    "analista": getattr(prestamo, "analista", None),
+                    "modelo_vehiculo": getattr(prestamo, "modelo_vehiculo", None),
                     "estado": prestamo.estado,
                     "usuario_proponente": prestamo.usuario_proponente,
                     "usuario_aprobador": prestamo.usuario_aprobador,
-                    "usuario_autoriza": getattr(prestamo, 'usuario_autoriza', None),
+                    "usuario_autoriza": getattr(prestamo, "usuario_autoriza", None),
                     "observaciones": prestamo.observaciones,
                     "fecha_registro": prestamo.fecha_registro,
                     "fecha_aprobacion": prestamo.fecha_aprobacion,
                     "fecha_actualizacion": prestamo.fecha_actualizacion,
                 }
-                prestamo_dict = PrestamoResponse.model_validate(prestamo_data).model_dump()
+                prestamo_dict = PrestamoResponse.model_validate(
+                    prestamo_data
+                ).model_dump()
                 prestamos_serializados.append(prestamo_dict)
             except Exception as e:
-                logger.error(f"Error serializando préstamo {prestamo.id}: {str(e)}", exc_info=True)
+                logger.error(
+                    f"Error serializando préstamo {prestamo.id}: {str(e)}",
+                    exc_info=True,
+                )
                 continue
 
         return {
