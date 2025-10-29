@@ -225,8 +225,12 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User):
         total_pendiente_cuota = cuota.capital_pendiente + cuota.interes_pendiente
         if total_pendiente_cuota > Decimal("0.00"):
             # Proporción según lo que falta pagar de cada uno
-            capital_aplicar = monto_aplicar * (cuota.capital_pendiente / total_pendiente_cuota)
-            interes_aplicar = monto_aplicar * (cuota.interes_pendiente / total_pendiente_cuota)
+            capital_aplicar = monto_aplicar * (
+                cuota.capital_pendiente / total_pendiente_cuota
+            )
+            interes_aplicar = monto_aplicar * (
+                cuota.interes_pendiente / total_pendiente_cuota
+            )
         else:
             # Si no hay pendiente (no debería pasar), aplicar todo al capital
             capital_aplicar = monto_aplicar
@@ -242,7 +246,7 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User):
         cuota.interes_pendiente = max(
             Decimal("0.00"), cuota.interes_pendiente - interes_aplicar
         )
-        
+
         # Actualizar fecha de pago solo si es el último pago recibido
         if monto_aplicar > Decimal("0.00"):
             cuota.fecha_pago = pago.fecha_pago
@@ -288,27 +292,41 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User):
             # Aplicar el saldo restante a la siguiente cuota
             monto_faltante = siguiente_cuota.monto_cuota - siguiente_cuota.total_pagado
             monto_aplicar_exceso = min(saldo_restante, monto_faltante)
-            
+
             if monto_aplicar_exceso > Decimal("0.00"):
                 # Aplicar proporcionalmente según lo que falta de capital e interés
-                total_pendiente_siguiente = siguiente_cuota.capital_pendiente + siguiente_cuota.interes_pendiente
+                total_pendiente_siguiente = (
+                    siguiente_cuota.capital_pendiente
+                    + siguiente_cuota.interes_pendiente
+                )
                 if total_pendiente_siguiente > Decimal("0.00"):
-                    capital_exceso = monto_aplicar_exceso * (siguiente_cuota.capital_pendiente / total_pendiente_siguiente)
-                    interes_exceso = monto_aplicar_exceso * (siguiente_cuota.interes_pendiente / total_pendiente_siguiente)
+                    capital_exceso = monto_aplicar_exceso * (
+                        siguiente_cuota.capital_pendiente / total_pendiente_siguiente
+                    )
+                    interes_exceso = monto_aplicar_exceso * (
+                        siguiente_cuota.interes_pendiente / total_pendiente_siguiente
+                    )
                 else:
                     capital_exceso = monto_aplicar_exceso
                     interes_exceso = Decimal("0.00")
-                
+
                 siguiente_cuota.capital_pagado += capital_exceso
                 siguiente_cuota.interes_pagado += interes_exceso
                 siguiente_cuota.total_pagado += monto_aplicar_exceso
-                siguiente_cuota.capital_pendiente = max(Decimal("0.00"), siguiente_cuota.capital_pendiente - capital_exceso)
-                siguiente_cuota.interes_pendiente = max(Decimal("0.00"), siguiente_cuota.interes_pendiente - interes_exceso)
-                
+                siguiente_cuota.capital_pendiente = max(
+                    Decimal("0.00"), siguiente_cuota.capital_pendiente - capital_exceso
+                )
+                siguiente_cuota.interes_pendiente = max(
+                    Decimal("0.00"), siguiente_cuota.interes_pendiente - interes_exceso
+                )
+
                 fecha_hoy = date.today()
                 if siguiente_cuota.total_pagado >= siguiente_cuota.monto_cuota:
                     siguiente_cuota.estado = "PAGADO"
-                elif siguiente_cuota.fecha_vencimiento and siguiente_cuota.fecha_vencimiento < fecha_hoy:
+                elif (
+                    siguiente_cuota.fecha_vencimiento
+                    and siguiente_cuota.fecha_vencimiento < fecha_hoy
+                ):
                     siguiente_cuota.estado = "ATRASADO"
                 else:
                     siguiente_cuota.estado = "ADELANTADO"
