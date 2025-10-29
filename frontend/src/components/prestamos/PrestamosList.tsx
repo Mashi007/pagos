@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, Calculator, CheckCircle2, FileCheck } from 'lucide-react'
+import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, Calculator, CheckCircle2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -319,7 +319,7 @@ export function PrestamosList() {
                                             title="Aprobar crédito con condiciones (genera tabla de amortización)"
                                             className="hover:bg-green-50"
                                           >
-                                            <FileCheck className="h-4 w-4 text-green-600" />
+                                            <CheckCircle2 className="h-4 w-4 text-green-600" />
                                           </Button>
                                         )}
 
