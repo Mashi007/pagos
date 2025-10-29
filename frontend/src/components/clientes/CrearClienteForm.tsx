@@ -449,6 +449,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     const ocupacionValidationResult = validations.find(v => v.field === 'ocupacion')
     const direccionValidationResult = validations.find(v => v.field === 'direccion')
     const fechaNacimientoValidationResult = validations.find(v => v.field === 'fechaNacimiento')
+    const telefonoValidationResult = validations.find(v => v.field === 'telefono')
     
     if (!nombresValidationResult || nombresValidationResult.isValid !== nombresValidation.isValid) {
       setValidations(prev => {
@@ -478,8 +479,15 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       })
     }
     
+    if (!telefonoValidationResult || telefonoValidationResult.isValid !== telefonoValidation.isValid) {
+      setValidations(prev => {
+        const filtered = prev.filter(v => v.field !== 'telefono')
+        return [...filtered, telefonoValidation]
+      })
+    }
+    
     return requiredFields.every(field => {
-      // Usar validaciones personalizadas para nombres, ocupacion, direccion y fechaNacimiento
+      // Usar validaciones personalizadas para nombres, ocupacion, direccion, fechaNacimiento y telefono
       if (field === 'nombres') {
         return nombresValidation.isValid && formData[field]
       }
@@ -491,6 +499,9 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       }
       if (field === 'fechaNacimiento') {
         return fechaNacimientoValidation.isValid && formData[field]
+      }
+      if (field === 'telefono') {
+        return telefonoValidation.isValid && formData[field]
       }
       
       const validation = validations.find(v => v.field === field)
@@ -522,10 +533,13 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     setIsSubmitting(true)
     
     try {
+      // ✅ Concatenar +58 con el número de teléfono
+      const telefonoCompleto = `+58${formData.telefono.replace(/\D/g, '').slice(0, 10)}`
+      
       const clienteData = {
         cedula: formData.cedula,
         nombres: formData.nombres,  // ✅ nombres unificados (nombres + apellidos)
-        telefono: formData.telefono,
+        telefono: telefonoCompleto,  // ✅ Formato: +581234567890
         email: formData.email,
         direccion: formData.direccion,
         fecha_nacimiento: convertirFechaAISO(formData.fechaNacimiento), // ✅ Convertir DD/MM/YYYY → YYYY-MM-DD
@@ -715,15 +729,28 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                 <label className="text-sm font-medium text-gray-700">
                   Teléfono <span className="text-red-500">*</span>
                   </label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                            <Input
-                              type="tel"
-                              value={formData.telefono}
-                              onChange={(e) => handleInputChange('telefono', e.target.value)}
-                              className={`pl-10 ${getFieldValidation('telefono')?.isValid === false ? 'border-red-500' : ''}`}
-                              placeholder="+58 1234567890"
-                            />
+                <div className="flex items-center gap-2">
+                  {/* Prefijo fijo +58 */}
+                  <div className="flex items-center px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 font-medium">
+                    <Phone className="w-4 h-4 mr-2 text-gray-600" />
+                    +58
+                  </div>
+                  {/* Input para el número (10 dígitos) */}
+                  <div className="flex-1 relative">
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={formData.telefono}
+                      onChange={(e) => {
+                        // Solo permitir números
+                        const value = e.target.value.replace(/\D/g, '').slice(0, 10)
+                        handleInputChange('telefono', value)
+                      }}
+                      className={`${getFieldValidation('telefono')?.isValid === false ? 'border-red-500 border-2 bg-red-50' : ''}`}
+                      placeholder="1234567890"
+                      maxLength={10}
+                    />
+                  </div>
                 </div>
                 {getFieldValidation('telefono') && (
                   <div className={`text-xs flex items-center gap-1 ${
