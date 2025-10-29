@@ -375,11 +375,15 @@ export function Dashboard() {
     { name: 'Capital', value: data.financieros.ingresosCapital, color: '#3b82f6' },
     { name: 'Intereses', value: data.financieros.ingresosInteres, color: '#10b981' },
     { name: 'Mora', value: data.financieros.ingresosMora, color: '#ef4444' },
-  ] : [
+  ] : (mockData.financieros ? [
     { name: 'Capital', value: mockData.financieros.ingresosCapital, color: '#3b82f6' },
     { name: 'Intereses', value: mockData.financieros.ingresosInteres, color: '#10b981' },
     { name: 'Mora', value: mockData.financieros.ingresosMora, color: '#ef4444' },
-  ]
+  ] : [
+    { name: 'Capital', value: 0, color: '#3b82f6' },
+    { name: 'Intereses', value: 0, color: '#10b981' },
+    { name: 'Mora', value: 0, color: '#ef4444' },
+  ])
 
   return (
     <div className="space-y-6">

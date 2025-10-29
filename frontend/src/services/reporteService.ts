@@ -112,12 +112,13 @@ class ReporteService {
     filename: string
   ): Promise<void> {
     try {
-      const response = await apiClient.get(url, {
+      const axiosInstance = apiClient.getAxiosInstance()
+      const response = await axiosInstance.get(url, {
         responseType: 'blob',
       })
       
       // Crear un enlace temporal para descargar
-      const blob = response instanceof Blob ? response : new Blob([response])
+      const blob = response.data as Blob
       const downloadUrl = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = downloadUrl
