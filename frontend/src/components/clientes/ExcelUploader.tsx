@@ -569,7 +569,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           }, 2000)
         } else {
           // ✅ HAY clientes pendientes, mostrar información
-          addToast('info', `${remaining.length} clientes pendientes`)
+          addToast('warning', `${remaining.length} clientes pendientes`)
         }
         
         return remaining
