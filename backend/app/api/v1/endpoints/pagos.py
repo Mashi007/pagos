@@ -65,7 +65,9 @@ def listar_pagos(
         pagos = query.offset(offset).limit(per_page).all()
 
         # Serializar pagos
-        pagos_serializados = [PagoResponse.model_validate(pago).model_dump() for pago in pagos]
+        pagos_serializados = [
+            PagoResponse.model_validate(pago).model_dump() for pago in pagos
+        ]
 
         return {
             "pagos": pagos_serializados,
