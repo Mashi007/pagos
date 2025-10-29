@@ -42,7 +42,7 @@ def obtener_clientes_atrasados(
             db.query(
                 Cliente.cedula,
                 Cliente.nombres,
-                Prestamo.analista,
+                Prestamo.usuario_proponente.label("analista"),
                 Prestamo.id.label("prestamo_id"),
                 func.count(Cuota.id).label("cuotas_vencidas"),
                 func.sum(Cuota.monto_cuota).label("total_adeudado"),
@@ -51,7 +51,7 @@ def obtener_clientes_atrasados(
             .join(Prestamo, Prestamo.cedula == Cliente.cedula)
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
-            .group_by(Cliente.cedula, Cliente.nombres, Prestamo.analista, Prestamo.id)
+            .group_by(Cliente.cedula, Cliente.nombres, Prestamo.usuario_proponente, Prestamo.id)
         )
 
         # Si se especifica días de retraso, filtrar por rango
@@ -105,14 +105,14 @@ def obtener_clientes_por_cantidad_pagos_atrasados(
             db.query(
                 Cliente.cedula,
                 Cliente.nombres,
-                Prestamo.analista,
+                Prestamo.usuario_proponente.label("analista"),
                 Prestamo.id.label("prestamo_id"),
                 func.sum(Cuota.monto_cuota).label("total_adeudado"),
             )
             .join(Prestamo, Prestamo.cedula == Cliente.cedula)
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
-            .group_by(Cliente.cedula, Cliente.nombres, Prestamo.analista, Prestamo.id)
+            .group_by(Cliente.cedula, Cliente.nombres, Prestamo.usuario_proponente, Prestamo.id)
             .having(func.count(Cuota.id) == cantidad_pagos)
         )
 
@@ -154,7 +154,7 @@ def obtener_cobranzas_por_analista(
 
         query = (
             db.query(
-                Prestamo.analista.label("nombre_analista"),
+                Prestamo.usuario_proponente.label("nombre_analista"),
                 func.count(func.distinct(Cliente.cedula)).label("cantidad_clientes"),
                 func.sum(Cuota.monto_cuota).label("monto_total"),
             )
@@ -163,9 +163,9 @@ def obtener_cobranzas_por_analista(
             .filter(
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
-                Prestamo.analista.isnot(None),
+                Prestamo.usuario_proponente.isnot(None),
             )
-            .group_by(Prestamo.analista)
+            .group_by(Prestamo.usuario_proponente)
             .having(func.count(func.distinct(Cliente.cedula)) > 0)
         )
 
@@ -213,7 +213,7 @@ def obtener_clientes_por_analista(
             .join(Prestamo, Prestamo.cedula == Cliente.cedula)
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .filter(
-                Prestamo.analista == analista,
+                Prestamo.usuario_proponente == analista,
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
             )
