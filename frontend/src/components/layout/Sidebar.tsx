@@ -25,6 +25,7 @@ import {
   Car,
   CheckCircle,
   Mail,
+  AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/utils'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
