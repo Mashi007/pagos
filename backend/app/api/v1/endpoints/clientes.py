@@ -120,25 +120,36 @@ def crear_cliente(
     try:
         logger.info(f"Crear cliente - Usuario: {current_user.email}")
 
-        # ✅ Verificar si ya existe un cliente con la misma cédula Y el mismo nombre
-        cliente_existente = (
+        # ✅ Validar: NO permitir misma cédula + mismo nombre+apellido (nombres unificados)
+        # Normalizar nombres para comparación (trim y case-insensitive)
+        nombres_normalizados = cliente_data.nombres.strip()
+        
+        # Buscar cliente existente con misma cédula
+        cliente_misma_cedula = (
             db.query(Cliente)
-            .filter(
-                Cliente.cedula == cliente_data.cedula,
-                Cliente.nombres == cliente_data.nombres,
-            )
-            .first()
+            .filter(Cliente.cedula == cliente_data.cedula)
+            .all()
         )
-
-        if cliente_existente:
-            # Rechazar creación de cliente duplicado (misma cédula y mismo nombre)
-            logger.warning(
-                f"Intento de crear cliente duplicado - Cédula: {cliente_data.cedula}, Nombres: {cliente_data.nombres}"
-            )
-            raise HTTPException(
-                status_code=400,
-                detail=f"No se puede crear un cliente con la misma cédula ({cliente_data.cedula}) y el mismo nombre ({cliente_data.nombres}). Ya existe un cliente con estos datos.",
-            )
+        
+        # Verificar si alguno de los clientes con la misma cédula tiene el mismo nombre
+        for cliente_existente in cliente_misma_cedula:
+            nombres_existentes_normalizados = cliente_existente.nombres.strip() if cliente_existente.nombres else ""
+            
+            # Comparación case-insensitive y normalizada
+            if nombres_existentes_normalizados.lower() == nombres_normalizados.lower():
+                # NO PERMITIR: misma cédula + mismo nombre+apellido
+                logger.warning(
+                    f"❌ Intento de crear cliente duplicado - Cédula: {cliente_data.cedula}, "
+                    f"Nombres: {cliente_data.nombres} (ya existe ID: {cliente_existente.id})"
+                )
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"No se puede crear un cliente con la misma cédula ({cliente_data.cedula}) "
+                        f"y el mismo nombre ({cliente_data.nombres}). "
+                        f"Ya existe un cliente (ID: {cliente_existente.id}) con estos datos."
+                    ),
+                )
 
         # Preparar datos
         cliente_dict = cliente_data.model_dump()
@@ -184,6 +195,45 @@ def actualizar_cliente(
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
         update_data = cliente_data.model_dump(exclude_unset=True)
+
+        # ✅ Validar: NO permitir actualizar a misma cédula + mismo nombre+apellido de OTRO cliente
+        # Solo validar si se está actualizando cédula o nombres
+        if "cedula" in update_data or "nombres" in update_data:
+            nueva_cedula = update_data.get("cedula", cliente.cedula)
+            nuevos_nombres = update_data.get("nombres", cliente.nombres)
+            
+            if nuevos_nombres:
+                nuevos_nombres_normalizados = nuevos_nombres.strip()
+                
+                # Buscar otros clientes con la misma cédula (excluyendo el actual)
+                otros_clientes_misma_cedula = (
+                    db.query(Cliente)
+                    .filter(
+                        Cliente.cedula == nueva_cedula,
+                        Cliente.id != cliente_id  # Excluir el cliente actual
+                    )
+                    .all()
+                )
+                
+                # Verificar si algún otro cliente con la misma cédula tiene el mismo nombre
+                for otro_cliente in otros_clientes_misma_cedula:
+                    nombres_existentes_normalizados = otro_cliente.nombres.strip() if otro_cliente.nombres else ""
+                    
+                    # Comparación case-insensitive y normalizada
+                    if nombres_existentes_normalizados.lower() == nuevos_nombres_normalizados.lower():
+                        # NO PERMITIR: misma cédula + mismo nombre+apellido en otro cliente
+                        logger.warning(
+                            f"❌ Intento de actualizar cliente {cliente_id} a duplicado - "
+                            f"Cédula: {nueva_cedula}, Nombres: {nuevos_nombres} "
+                            f"(ya existe ID: {otro_cliente.id})"
+                        )
+                        raise HTTPException(
+                            status_code=400,
+                            detail=(
+                                f"No se puede actualizar el cliente a tener la misma cédula ({nueva_cedula}) "
+                                f"y el mismo nombre ({nuevos_nombres}) que otro cliente existente (ID: {otro_cliente.id})."
+                            ),
+                        )
 
         # Sincronizar estado y activo SI se actualiza el estado
         if "estado" in update_data:

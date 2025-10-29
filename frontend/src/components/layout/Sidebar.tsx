@@ -190,7 +190,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         variants={sidebarVariants}
         initial="closed"
         animate={isOpen ? "open" : "closed"}
-        className="fixed left-0 top-0 z-50 h-full w-64 bg-white border-r border-gray-200 shadow-lg lg:relative lg:translate-x-0"
+        className="fixed left-0 top-0 z-50 h-screen w-64 bg-white border-r border-gray-200 shadow-lg lg:relative lg:translate-x-0 lg:h-full"
       >
         <div className="flex flex-col h-full">
           {/* Header */}

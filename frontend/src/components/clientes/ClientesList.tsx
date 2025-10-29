@@ -59,9 +59,21 @@ export function ClientesList() {
     console.log('Ver cliente:', cliente)
   }
 
-  const handleEditarCliente = (cliente: any) => {
-    setClienteSeleccionado(cliente)
-    setShowEditarCliente(true)
+  const handleEditarCliente = async (cliente: any) => {
+    try {
+      // ✅ Obtener cliente completo desde la API para asegurar todos los campos
+      console.log('📝 Obteniendo datos completos del cliente ID:', cliente.id)
+      const clienteCompleto = await clienteService.getCliente(String(cliente.id))
+      console.log('📝 Cliente completo obtenido:', clienteCompleto)
+      
+      setClienteSeleccionado(clienteCompleto)
+      setShowEditarCliente(true)
+    } catch (error) {
+      console.error('❌ Error al obtener cliente completo:', error)
+      // Si falla, usar el cliente de la lista como fallback
+      setClienteSeleccionado(cliente)
+      setShowEditarCliente(true)
+    }
   }
 
   const handleEliminarCliente = (cliente: any) => {

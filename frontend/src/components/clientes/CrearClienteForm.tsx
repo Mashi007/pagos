@@ -133,10 +133,24 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showExcelUploader, setShowExcelUploader] = useState(false)
   
+  // ✅ Función para extraer el número de teléfono de la BD (+581234567890 → 1234567890)
+  const extraerNumeroTelefono = (telefonoCompleto: string): string => {
+    if (!telefonoCompleto) return ''
+    
+    // Si empieza con +58, eliminar el prefijo
+    if (telefonoCompleto.startsWith('+58')) {
+      return telefonoCompleto.substring(3)
+    }
+    
+    // Si ya es solo el número, devolverlo
+    return telefonoCompleto.replace(/\D/g, '').slice(0, 10)
+  }
+  
   // Pre-cargar datos del cliente si se está editando
   useEffect(() => {
     if (cliente) {
-      console.log('📝 MOD訂 EDITAR - Cargando datos del cliente:', cliente)
+      console.log('📝 MODO EDITAR - Cargando datos del cliente:', cliente)
+      console.log('📝 Datos completos del cliente recibidos:', JSON.stringify(cliente, null, 2))
       
       // Dividir nombres si vienen unificados de la BD
       let nombresValue = cliente.nombres || ''
@@ -225,11 +239,35 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         notas: cliente.notas || 'NA'
       }
       
-      console.log('📝 MOD訂 EDITAR - Datos formateados:', newFormData)
+      console.log('📝 MODO EDITAR - Datos formateados para cargar:', newFormData)
       
+      // ✅ Asegurar que los datos se carguen correctamente
       setFormData(newFormData)
+      
+      // ✅ Limpiar validaciones previas al cargar datos de edición
+      setValidations([])
+      
+      console.log('✅ MODO EDITAR - Formulario cargado con datos del cliente')
+    } else {
+      // ✅ Si no hay cliente, resetear el formulario a valores por defecto
+      setFormData({
+        cedula: '',
+        nombres: '',
+        telefono: '',
+        email: '',
+        callePrincipal: '',
+        calleTransversal: '',
+        descripcion: '',
+        parroquia: '',
+        municipio: '',
+        ciudad: '',
+        estadoDireccion: '',
+        fechaNacimiento: getTodayDate(),
+        ocupacion: '',
+        estado: 'ACTIVO',
+        notas: 'NA'
+      })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cliente])
   
 
@@ -324,20 +362,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     
     return { field: 'telefono', isValid: true, message: 'Teléfono válido' }
   }
-  
-  // ✅ Función para extraer el número de teléfono de la BD (+581234567890 → 1234567890)
-  const extraerNumeroTelefono = (telefonoCompleto: string): string => {
-    if (!telefonoCompleto) return ''
-    
-    // Si empieza con +58, eliminar el prefijo
-    if (telefonoCompleto.startsWith('+58')) {
-      return telefonoCompleto.substring(3)
-    }
-    
-    // Si ya es solo el número, devolverlo
-    return telefonoCompleto.replace(/\D/g, '').slice(0, 10)
-  }
-  
+
   const validateFechaNacimiento = (fecha: string): ValidationResult => {
     if (!fecha || fecha.trim() === '') {
       return { field: 'fechaNacimiento', isValid: false, message: 'Fecha de nacimiento requerida' }
@@ -410,13 +435,19 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       .trim()
   }
 
-  // ✅ Formato automático deshabilitado - respetar formato original del usuario durante edición
+  // ✅ Función para formatear nombres a Title Case en tiempo real (primera letra mayúscula)
   const formatNombres = (text: string): string => {
-    return text // Mantener formato original durante edición
+    if (!text || text.trim() === '') return text
+    
+    // Aplicar Title Case: primera letra de cada palabra en mayúscula
+    return toTitleCase(text)
   }
 
   const formatOcupacion = (text: string): string => {
-    return text // Mantener formato original durante edición
+    if (!text || text.trim() === '') return text
+    
+    // Aplicar Title Case a ocupación también
+    return toTitleCase(text)
   }
   
   // Validaciones usando el servicio de validadores del backend
@@ -477,25 +508,20 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     
     let formattedValue = value
     
-    // ✅ En modo edición, permitir reescribir sin validar
-    if (cliente) {
-      console.log('🔧 Modo edición - actualizando directamente sin validar')
-      setFormData(prev => {
-        const updated = { ...prev, [field]: formattedValue }
-        console.log(`🔧 Estado actualizado para ${field}:`, updated)
-        return updated
-      })
-      return
-    }
-    
-    // ✅ Solo en modo creación: aplicar autoformato y validar
+    // ✅ Aplicar autoformato en tiempo real (tanto creación como edición)
     if (field === 'nombres') {
       formattedValue = formatNombres(value)
     } else if (field === 'ocupacion') {
       formattedValue = formatOcupacion(value)
     }
     
+    // ✅ Actualizar el estado del formulario
     setFormData(prev => ({ ...prev, [field]: formattedValue }))
+    
+    // ✅ En modo edición, solo actualizar sin validar en tiempo real
+    if (cliente) {
+      return
+    }
     
     // ✅ Validar con funciones personalizadas o backend según el campo
     let validation: ValidationResult

@@ -349,14 +349,23 @@ def listar_prestamos(
             query = query.filter(Prestamo.estado == estado)
 
         # Paginación
-        total = query.count()
+        try:
+            total = query.count()
+        except Exception as e:
+            logger.error(f"Error contando préstamos: {str(e)}", exc_info=True)
+            total = 0
+        
         skip = (page - 1) * per_page
-        prestamos = (
-            query.order_by(Prestamo.fecha_registro.desc())
-            .offset(skip)
-            .limit(per_page)
-            .all()
-        )
+        try:
+            prestamos = (
+                query.order_by(Prestamo.fecha_registro.desc())
+                .offset(skip)
+                .limit(per_page)
+                .all()
+            )
+        except Exception as e:
+            logger.error(f"Error obteniendo préstamos: {str(e)}", exc_info=True)
+            prestamos = []
 
         # Serializar préstamos usando PrestamoResponse
         prestamos_serializados = []
@@ -370,7 +379,17 @@ def listar_prestamos(
                     f"Error serializando préstamo {prestamo.id}: {str(e)}",
                     exc_info=True,
                 )
+                # Continuar con el siguiente préstamo en lugar de fallar completamente
                 continue
+        
+        # Si no se pudo serializar ningún préstamo pero hay préstamos en BD, es un error crítico
+        if prestamos and not prestamos_serializados:
+            logger.error(
+                f"No se pudo serializar ninguno de los {len(prestamos)} préstamos. "
+                "Posible problema de esquema de base de datos."
+            )
+            # Retornar lista vacía en lugar de fallar
+            prestamos_serializados = []
 
         return {
             "data": prestamos_serializados,
@@ -380,8 +399,20 @@ def listar_prestamos(
             "total_pages": (total + per_page - 1) // per_page if total > 0 else 0,
         }
     except Exception as e:
-        logger.error(f"Error en listar_prestamos: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        error_msg = str(e)
+        logger.error(f"Error en listar_prestamos: {error_msg}", exc_info=True)
+        
+        # Mensaje más descriptivo si es un error de esquema de BD
+        if "column" in error_msg.lower() and ("does not exist" in error_msg.lower() or "no such column" in error_msg.lower()):
+            detail_msg = (
+                f"Error de esquema de base de datos. "
+                f"Es posible que falten migraciones. "
+                f"Error: {error_msg}"
+            )
+            logger.error(detail_msg)
+            raise HTTPException(status_code=500, detail=detail_msg)
+        
+        raise HTTPException(status_code=500, detail=f"Error interno: {error_msg}")
 
 
 @router.post("", response_model=PrestamoResponse)
@@ -535,7 +566,7 @@ def obtener_resumen_prestamos_cliente(
         resumen_prestamos.append(
             {
                 "id": prestamo.id,
-                "modelo_vehiculo": prestamo.modelo_vehiculo or prestamo.producto,
+                "modelo_vehiculo": getattr(prestamo, 'modelo_vehiculo', None) or prestamo.producto,
                 "total_financiamiento": float(prestamo.total_financiamiento),
                 "saldo_pendiente": float(saldo_pendiente),
                 "cuotas_en_mora": cuotas_en_mora,
