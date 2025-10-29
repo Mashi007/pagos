@@ -308,7 +308,16 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       
       // ✅ VALIDACIÓN FINAL: Verificar que TODOS los campos estén completos y válidos
       // Esto usa el estado de validación de la interfaz
-      if (row._hasErrors) {
+      const hasDropdownErrors = !row.concesionario?.trim() || 
+                                !row.analista?.trim() || 
+                                !row.modelo_vehiculo?.trim()
+      
+      // Recalcular _hasErrors incluyendo dropdowns
+      const fieldsToCheck = Object.keys(row._validation).filter(field => field !== 'notas')
+      const hasValidationErrors = fieldsToCheck.some(field => !row._validation[field]?.isValid)
+      const hasErrors = hasValidationErrors || hasDropdownErrors
+      
+      if (hasErrors) {
         alert('⚠️ NO SE PUEDE GUARDAR: Hay campos vacíos o con errores en esta fila.\n\nPor favor, complete todos los campos obligatorios en la tabla antes de confirmar.')
         setClienteDuplicado(null)
         return
