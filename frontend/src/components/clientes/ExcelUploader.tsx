@@ -725,6 +725,48 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       .join(' ')  // Unir con espacios
   }
 
+  // 📅 FUNCIÓN PARA CONVERTIR FECHA DE EXCEL A DD/MM/YYYY
+  const convertirFechaExcel = (value: any): string => {
+    if (!value) return ''
+    
+    const strValue = value.toString().trim()
+    
+    // Si es un número serial de Excel (ej: 45940, 45941)
+    if (/^\d{4,}$/.test(strValue)) {
+      try {
+        const numeroSerie = parseInt(strValue, 10)
+        // Excel cuenta desde 1900-01-01, pero tiene un bug del año bisiesto
+        // Fórmula: fecha = new Date(1900, 0, 1) + (numeroSerie - 2) días
+        const fechaBase = new Date(1900, 0, 1)
+        fechaBase.setDate(fechaBase.getDate() + numeroSerie - 2)
+        
+        // Convertir a DD/MM/YYYY
+        const dia = String(fechaBase.getDate()).padStart(2, '0')
+        const mes = String(fechaBase.getMonth() + 1).padStart(2, '0')
+        const ano = String(fechaBase.getFullYear())
+        
+        return `${dia}/${mes}/${ano}`
+      } catch (error) {
+        console.warn('Error convirtiendo fecha Excel:', strValue, error)
+        return strValue
+      }
+    }
+    
+    // Si ya está en formato DD/MM/YYYY, devolverlo tal cual
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(strValue)) {
+      return strValue
+    }
+    
+    // Si está en formato ISO (YYYY-MM-DD), convertir
+    if (/^\d{4}-\d{2}-\d{2}$/.test(strValue)) {
+      const [ano, mes, dia] = strValue.split('-')
+      return `${dia}/${mes}/${ano}`
+    }
+    
+    // Formato desconocido, devolver tal cual (se validará después)
+    return strValue
+  }
+
   // 🔍 VALIDAR CAMPO INDIVIDUAL
   const validateField = async (field: string, value: string): Promise<ValidationResult> => {
     switch (field) {
@@ -911,7 +953,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           telefono: row[3]?.toString() || '',
           email: row[4]?.toString() || '',
           direccion: row[5]?.toString() || '',
-          fecha_nacimiento: row[6]?.toString() || '',
+          fecha_nacimiento: convertirFechaExcel(row[6]),  // ✅ Convertir de Excel a DD/MM/YYYY
           ocupacion: row[7]?.toString() || '',
           modelo_vehiculo: row[8]?.toString() || null,
           concesionario: row[9]?.toString() || null,
