@@ -366,7 +366,10 @@ def listar_prestamos(
                 prestamo_dict = PrestamoResponse.model_validate(prestamo_data).model_dump()
                 prestamos_serializados.append(prestamo_dict)
             except Exception as e:
-                logger.error(f"Error serializando préstamo {prestamo.id}: {str(e)}", exc_info=True)
+                logger.error(
+                    f"Error serializando préstamo {prestamo.id}: {str(e)}",
+                    exc_info=True,
+                )
                 continue
 
         return {
