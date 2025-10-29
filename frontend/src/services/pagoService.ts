@@ -55,11 +55,13 @@ class PagoService {
       ...(filters?.fechaHasta && { fecha_hasta: filters.fechaHasta }),
       ...(filters?.analista && { analista: filters.analista }),
     })
-    return await apiClient.get(this.baseUrl + '?' + params.toString())
+    // Usar barra final para coincidir con el endpoint del backend
+    return await apiClient.get(`${this.baseUrl}/?${params.toString()}`)
   }
 
   async createPago(data: PagoCreate): Promise<Pago> {
-    return await apiClient.post(this.baseUrl, data)
+    // Usar barra final para coincidir con el endpoint del backend
+    return await apiClient.post(`${this.baseUrl}/`, data)
   }
 
   async updatePago(id: number, data: Partial<PagoCreate>): Promise<Pago> {
