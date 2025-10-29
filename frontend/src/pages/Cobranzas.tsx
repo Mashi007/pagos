@@ -15,7 +15,7 @@ import {
 import { cobranzasService } from '@/services/cobranzasService'
 import { useQuery } from '@tanstack/react-query'
 import type { ClienteAtrasado, CobranzasPorAnalista, MontosPorMes } from '@/services/cobranzasService'
-import * as XLSX from 'xlsx'
+import { utils, writeFile } from 'xlsx'
 
 export function Cobranzas() {
   const [tabActiva, setTabActiva] = useState('resumen')
@@ -81,16 +81,16 @@ export function Cobranzas() {
       })
 
       // Crear workbook y worksheet
-      const ws = XLSX.utils.json_to_sheet(datosExcel)
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'Datos')
+      const ws = utils.json_to_sheet(datosExcel)
+      const wb = utils.book_new()
+      utils.book_append_sheet(wb, ws, 'Datos')
 
       // Generar fecha para nombre de archivo
       const fecha = new Date().toISOString().split('T')[0]
       const nombreArchivo = `${nombre}_${fecha}.xlsx`
 
       // Descargar
-      XLSX.writeFile(wb, nombreArchivo)
+      writeFile(wb, nombreArchivo)
     } catch (error) {
       console.error('Error exportando a Excel:', error)
       alert('Error al exportar a Excel')
