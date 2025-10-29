@@ -964,19 +964,19 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           _rowIndex: i + 1,
           _validation: {},
           _hasErrors: false,
-          cedula: row[0]?.toString() || '',
-          nombres: `${row[1]?.toString() || ''} ${row[2]?.toString() || ''}`.trim(),  // ✅ Unificar nombres + apellidos (sin formatear)
-          telefono: row[3]?.toString() || '',
-          email: row[4]?.toString() || '',
-          direccion: row[5]?.toString() || '',
-          fecha_nacimiento: convertirFechaExcel(row[6]),  // ✅ Convertir de Excel a DD/MM/YYYY
-          ocupacion: row[7]?.toString() || '',
-          modelo_vehiculo: row[8]?.toString() || null,
-          concesionario: row[9]?.toString() || null,
-          analista: row[10]?.toString() || null,
-          estado: row[11]?.toString() || 'ACTIVO', // ✅ Por defecto siempre ACTIVO
-          activo: row[12]?.toString() || 'TRUE', // ✅ Por defecto siempre TRUE
-          notas: row[13]?.toString() || ''
+          cedula: row[0]?.toString() || '',                    // Columna A
+          nombres: row[1]?.toString() || '',                  // Columna B (nombres completos en un solo campo)
+          telefono: row[2]?.toString() || '',                 // Columna C
+          email: row[3]?.toString() || '',                    // Columna D
+          direccion: row[4]?.toString() || '',                // Columna E
+          fecha_nacimiento: convertirFechaExcel(row[5]),       // Columna F - ✅ Convertir de Excel a DD/MM/YYYY
+          ocupacion: row[6]?.toString() || '',                // Columna G
+          modelo_vehiculo: row[7]?.toString() || null,        // Columna H
+          concesionario: row[8]?.toString() || null,          // Columna I
+          analista: row[9]?.toString() || null,               // Columna J
+          estado: row[10]?.toString() || 'ACTIVO',            // Columna K - Por defecto siempre ACTIVO
+          activo: row[11]?.toString() || 'TRUE',              // Columna L - Por defecto siempre TRUE
+          notas: row[12]?.toString() || ''                    // Columna M
         }
         
         // Validar campos requeridos
