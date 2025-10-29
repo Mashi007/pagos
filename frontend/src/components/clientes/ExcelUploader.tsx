@@ -300,18 +300,18 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       const row = excelData[currentRowIndex]
       const clienteData = {
         cedula: row.cedula,
-        nombres: row.nombres,  // ✅ Ya unificados (nombres + apellidos)
+        nombres: formatNombres(row.nombres),  // ✅ Aplicar formato Title Case y ya unificados (nombres + apellidos)
         telefono: row.telefono,
         email: row.email,
         direccion: row.direccion,
-        fecha_nacimiento: row.fecha_nacimiento,
+        fecha_nacimiento: convertirFechaParaBackend(row.fecha_nacimiento),  // ✅ Convertir DD/MM/YYYY a YYYY-MM-DD
         ocupacion: row.ocupacion,
         modelo_vehiculo: row.modelo_vehiculo || undefined,
         concesionario: row.concesionario || undefined,
         analista: row.analista || undefined,
-        estado: row.estado,
-        activo: row.activo === 'TRUE',
-        notas: row.notas
+        estado: row.estado.toUpperCase().trim(), // ✅ Normalizar estado
+        activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
+        notas: row.notas || 'NA'
       }
 
       await clienteService.createClienteWithConfirmation(clienteData, comentarios)
@@ -441,18 +441,18 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       
       const clienteData = {
         cedula: row.cedula,
-        nombres: row.nombres,  // ✅ Ya unificados (nombres + apellidos)
+        nombres: formatNombres(row.nombres),  // ✅ Aplicar formato Title Case y ya unificados (nombres + apellidos)
         telefono: row.telefono,
         email: row.email,
         direccion: row.direccion,
-        fecha_nacimiento: row.fecha_nacimiento,
+        fecha_nacimiento: convertirFechaParaBackend(row.fecha_nacimiento),  // ✅ Convertir DD/MM/YYYY a YYYY-MM-DD
         ocupacion: row.ocupacion,
         modelo_vehiculo: row.modelo_vehiculo || undefined,
         concesionario: row.concesionario || undefined,
         analista: row.analista || undefined,
-        estado: row.estado,
-        activo: row.activo === 'TRUE',
-        notas: row.notas
+        estado: row.estado.toUpperCase().trim(), // ✅ Normalizar estado
+        activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
+        notas: row.notas || 'NA'
       }
 
       try {
@@ -767,6 +767,22 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     return strValue
   }
 
+  // 🔄 FUNCIÓN PARA CONVERTIR DD/MM/YYYY A YYYY-MM-DD (formato que espera el backend)
+  const convertirFechaParaBackend = (fechaDDMMYYYY: string): string => {
+    if (!fechaDDMMYYYY || !fechaDDMMYYYY.trim()) return ''
+    
+    const fechaRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/
+    const match = fechaDDMMYYYY.trim().match(fechaRegex)
+    
+    if (!match) {
+      console.warn('Formato de fecha inválido para convertir:', fechaDDMMYYYY)
+      return fechaDDMMYYYY // Devolver tal cual si no es válido
+    }
+    
+    const [, dia, mes, ano] = match
+    return `${ano}-${mes}-${dia}`
+  }
+
   // 🔍 VALIDAR CAMPO INDIVIDUAL
   const validateField = async (field: string, value: string): Promise<ValidationResult> => {
     switch (field) {
@@ -870,7 +886,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         hoyNac.setHours(0, 0, 0, 0)
         
         if (fechaNac >= hoyNac) {
-          return { isValid: false, message: 'Debe ser una fecha pasada' }
+          return { isValid: false, message: 'Fecha de nacimiento no puede ser futura' }
         }
         
         // Validar que la fecha sea válida (ej: no 31/02/2025)
@@ -1147,7 +1163,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
             telefono: row.telefono,
             email: row.email,
             direccion: row.direccion,
-            fecha_nacimiento: row.fecha_nacimiento,
+            fecha_nacimiento: convertirFechaParaBackend(row.fecha_nacimiento),  // ✅ Convertir DD/MM/YYYY a YYYY-MM-DD
             ocupacion: row.ocupacion,
             modelo_vehiculo: row.modelo_vehiculo || undefined,
             concesionario: row.concesionario || undefined,
