@@ -51,7 +51,12 @@ def obtener_clientes_atrasados(
             .join(Prestamo, Prestamo.cedula == Cliente.cedula)
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
-            .group_by(Cliente.cedula, Cliente.nombres, Prestamo.usuario_proponente, Prestamo.id)
+            .group_by(
+                Cliente.cedula,
+                Cliente.nombres,
+                Prestamo.usuario_proponente,
+                Prestamo.id,
+            )
         )
 
         # Si se especifica días de retraso, filtrar por rango
@@ -112,7 +117,12 @@ def obtener_clientes_por_cantidad_pagos_atrasados(
             .join(Prestamo, Prestamo.cedula == Cliente.cedula)
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
-            .group_by(Cliente.cedula, Cliente.nombres, Prestamo.usuario_proponente, Prestamo.id)
+            .group_by(
+                Cliente.cedula,
+                Cliente.nombres,
+                Prestamo.usuario_proponente,
+                Prestamo.id,
+            )
             .having(func.count(Cuota.id) == cantidad_pagos)
         )
 
