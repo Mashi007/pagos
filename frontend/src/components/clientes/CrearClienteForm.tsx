@@ -272,17 +272,21 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   
 
   // ✅ Validaciones personalizadas para nombres y ocupacion
+  // Regla: Mínimo 2 palabras, máximo 4 palabras en nombres+apellidos
   const validateNombres = (nombres: string): ValidationResult => {
     if (!nombres || nombres.trim() === '') {
       return { field: 'nombres', isValid: false, message: 'Nombres y apellidos requeridos' }
     }
     
+    // Dividir en palabras, filtrando espacios vacíos y espacios múltiples
     const words = nombres.trim().split(/\s+/).filter(w => w.length > 0)
     
+    // Validar mínimo 2 palabras
     if (words.length < 2) {
       return { field: 'nombres', isValid: false, message: 'Mínimo 2 palabras requeridas (nombre + apellido)' }
     }
     
+    // Validar máximo 4 palabras
     if (words.length > 4) {
       return { field: 'nombres', isValid: false, message: 'Máximo 4 palabras permitidas' }
     }
@@ -509,7 +513,9 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     let formattedValue = value
     
     // ✅ Aplicar autoformato en tiempo real (tanto creación como edición)
-    if (field === 'nombres') {
+    if (field === 'cedula') {
+      formattedValue = formatCedula(value)
+    } else if (field === 'nombres') {
       formattedValue = formatNombres(value)
     } else if (field === 'ocupacion') {
       formattedValue = formatOcupacion(value)
@@ -518,15 +524,11 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     // ✅ Actualizar el estado del formulario
     setFormData(prev => ({ ...prev, [field]: formattedValue }))
     
-    // ✅ En modo edición, solo actualizar sin validar en tiempo real
-    if (cliente) {
-      return
-    }
-    
-    // ✅ Validar con funciones personalizadas o backend según el campo
+    // ✅ Validar con funciones personalizadas o backend según el campo (TANTO creación como edición)
     let validation: ValidationResult
     
     if (field === 'nombres') {
+      // ✅ Validar nombres DESPUÉS del formateo para verificar 2-4 palabras
       validation = validateNombres(formattedValue)
     } else if (field === 'ocupacion') {
       validation = validateOcupacion(formattedValue)
@@ -548,10 +550,16 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         // Retornar validación temporal
         validation = { field: 'direccion', isValid: true, message: '' }
       } else {
-        validation = await validateField(field, formattedValue)
+        // Solo validar con backend en modo creación
+        if (!cliente) {
+          validation = await validateField(field, formattedValue)
+        } else {
+          validation = { field, isValid: true, message: '' }
+        }
       }
     }
     
+    // ✅ Agregar validación al estado (tanto creación como edición)
     setValidations(prev => {
       const filtered = prev.filter(v => v.field !== field)
       return [...filtered, validation]

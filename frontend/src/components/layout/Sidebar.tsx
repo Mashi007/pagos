@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -26,6 +26,9 @@ import {
   CheckCircle,
   Mail,
   AlertTriangle,
+  User,
+  LogOut,
+  Menu,
 } from 'lucide-react'
 import { cn } from '@/utils'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
@@ -35,6 +38,7 @@ import { Badge } from '@/components/ui/badge'
 interface SidebarProps {
   isOpen: boolean
   onClose: () => void
+  onToggle?: () => void
 }
 
 interface MenuItem {
@@ -46,11 +50,26 @@ interface MenuItem {
   isSubmenu?: boolean
 }
 
-export function Sidebar({ isOpen, onClose }: SidebarProps) {
+export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   const location = useLocation()
-  const { user } = useSimpleAuth()
+  const { user, logout, refreshUser } = useSimpleAuth()
   const userRole = user?.is_admin ? 'ADMIN' : 'USER'  // Cambio clave: rol → is_admin
   const [openSubmenus, setOpenSubmenus] = useState<string[]>([])
+  const [showUserMenu, setShowUserMenu] = useState(false)
+
+  // Variables derivadas del usuario
+  const userInitials = user ? `${user.nombre?.charAt(0) || ''}${user.apellido?.charAt(0) || ''}`.toUpperCase() : 'U'
+  const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
+  const userRoleDisplay = user?.is_admin ? 'Administrador' : 'Usuario'
+
+  const handleLogout = async () => {
+    await logout()
+    setShowUserMenu(false)
+  }
+
+  const getRoleColor = (isAdmin: boolean) => {
+    return isAdmin ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+  }
 
   const toggleSubmenu = (title: string) => {
     setOpenSubmenus(prev =>
@@ -206,14 +225,26 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 <p className="text-xs text-gray-500">Sistema v1.0</p>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="lg:hidden"
-            >
-              <X className="h-5 w-5" />
-            </Button>
+            <div className="flex items-center space-x-2">
+              {onToggle && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onToggle}
+                  className="lg:hidden"
+                >
+                  <Menu className="h-5 w-5" />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                className="lg:hidden"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
 
           {/* Navigation */}
@@ -324,8 +355,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             </div>
           </nav>
 
-          {/* Footer */}
-          <div className="p-4 border-t border-gray-200">
+          {/* Footer con información de usuario y sistema */}
+          <div className="p-4 border-t border-gray-200 space-y-2">
+            {/* Información del Sistema */}
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3">
               <div className="flex items-center space-x-2">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
@@ -336,6 +368,97 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               <p className="text-xs text-gray-600 mt-1">
                 Rol: <span className="font-medium">{userRole}</span>
               </p>
+            </div>
+
+            {/* Perfil de Usuario */}
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors text-left"
+              >
+                <div className="w-10 h-10 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">
+                  {userInitials}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-gray-900 truncate">
+                    {userName}
+                  </div>
+                  <div className="text-xs text-gray-500 truncate">
+                    {userRoleDisplay}
+                  </div>
+                </div>
+                <ChevronDown className={cn(
+                  "h-4 w-4 text-gray-500 transition-transform flex-shrink-0",
+                  showUserMenu && "transform rotate-180"
+                )} />
+              </button>
+
+              {/* Menú desplegable del usuario */}
+              <AnimatePresence>
+                {showUserMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-2 bg-white rounded-lg border border-gray-200 shadow-lg">
+                      <div className="p-4 border-b border-gray-200">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-12 h-12 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-lg font-medium">
+                            {userInitials}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-gray-900 truncate">
+                              {userName}
+                            </div>
+                            <Badge className={cn("mt-1", getRoleColor(user?.is_admin || false))}>
+                              {userRoleDisplay}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="py-2">
+                        <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2">
+                          <User className="h-4 w-4" />
+                          <span>Mi Perfil</span>
+                        </button>
+                        <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2">
+                          <Settings className="h-4 w-4" />
+                          <span>Configuración</span>
+                        </button>
+                        {user?.is_admin === false && (
+                          <button 
+                            onClick={async () => {
+                              try {
+                                await refreshUser()
+                                window.location.reload()
+                              } catch (error) {
+                                // Error silencioso para evitar loops de logging
+                              }
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-blue-50 flex items-center space-x-2"
+                          >
+                            <span>🔄 Actualizar Rol</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="border-t border-gray-200 py-2">
+                        <button
+                          onClick={handleLogout}
+                          className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
+                        >
+                          <LogOut className="h-4 w-4" />
+                          <span>Cerrar Sesión</span>
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </div>

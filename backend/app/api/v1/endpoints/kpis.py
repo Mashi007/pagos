@@ -1,6 +1,7 @@
 import logging
 from decimal import Decimal
 from typing import Optional
+from datetime import date
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
@@ -11,7 +12,9 @@ from app.models.amortizacion import Cuota
 from app.models.analista import Analista
 from app.models.cliente import Cliente
 from app.models.pago import Pago
+from app.models.prestamo import Prestamo
 from app.models.user import User
+from app.utils.filtros_dashboard import FiltrosDashboard
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -22,40 +25,73 @@ def dashboard_kpis_principales(
     fecha_corte: Optional[str] = Query(
         None, description="Fecha de corte (default: hoy)"
     ),
+    analista: Optional[str] = Query(None, description="Filtrar por analista"),
+    concesionario: Optional[str] = Query(None, description="Filtrar por concesionario"),
+    modelo: Optional[str] = Query(None, description="Filtrar por modelo"),
+    fecha_inicio: Optional[date] = Query(None, description="Fecha inicio"),
+    fecha_fin: Optional[date] = Query(None, description="Fecha fin"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """KPIs principales del dashboard"""
-    from datetime import date
-
+    """
+    KPIs principales del dashboard
+    
+    ✅ SOPORTA FILTROS AUTOMÁTICOS:
+    - analista: Filtrar por analista
+    - concesionario: Filtrar por concesionario
+    - modelo: Filtrar por modelo
+    - fecha_inicio/fecha_fin: Rango de fechas
+    
+    Cualquier KPI nuevo agregado aquí debe usar FiltrosDashboard para aplicar filtros automáticamente.
+    """
     if not fecha_corte:
         fecha_corte = date.today()
+    elif isinstance(fecha_corte, str):
+        fecha_corte = date.fromisoformat(fecha_corte)
 
-    # Cartera total
-    cartera_total = db.query(func.sum(Cliente.total_financiamiento)).filter(
-        Cliente.total_financiamiento.isnot(None)
-    ).scalar() or Decimal("0")
-
-    # Clientes al día
-    clientes_al_dia = (
-        db.query(func.count(Cliente.id)).filter(Cliente.estado == "ACTIVO").scalar()
-        or 0
+    # ✅ Cartera total - usar filtros automáticos
+    cartera_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
+        Prestamo.activo.is_(True)
     )
+    cartera_query = FiltrosDashboard.aplicar_filtros_prestamo(
+        cartera_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+    )
+    cartera_total = cartera_query.scalar() or Decimal("0")
 
-    # Pagos del mes
-    pagos_mes = db.query(func.sum(Pago.monto)).filter(
+    # ✅ Clientes al día - usar filtros automáticos
+    clientes_query = db.query(func.count(func.distinct(Prestamo.cedula))).filter(
+        Prestamo.activo.is_(True)
+    )
+    clientes_query = FiltrosDashboard.aplicar_filtros_prestamo(
+        clientes_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+    )
+    clientes_al_dia = clientes_query.scalar() or 0
+
+    # ✅ Pagos del mes - usar filtros automáticos
+    pagos_query = db.query(func.sum(Pago.monto_pagado)).filter(
         func.date_trunc("month", Pago.fecha_pago)
         == func.date_trunc("month", fecha_corte)
-    ).scalar() or Decimal("0")
-
-    # Cuotas vencidas
-    cuotas_vencidas = (
-        db.query(func.count(Cuota.id))
-        .filter(Cuota.fecha_vencimiento < fecha_corte)
-        .filter(Cuota.estado == "PENDIENTE")
-        .scalar()
-        or 0
     )
+    if analista or concesionario or modelo:
+        pagos_query = pagos_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+    pagos_query = FiltrosDashboard.aplicar_filtros_pago(
+        pagos_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+    )
+    pagos_mes = pagos_query.scalar() or Decimal("0")
+
+    # ✅ Cuotas vencidas - usar filtros automáticos
+    cuotas_query = (
+        db.query(func.count(Cuota.id))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            Cuota.fecha_vencimiento < fecha_corte,
+            Cuota.estado == "PENDIENTE"
+        )
+    )
+    cuotas_query = FiltrosDashboard.aplicar_filtros_cuota(
+        cuotas_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+    )
+    cuotas_vencidas = cuotas_query.scalar() or 0
 
     return {
         "cartera_total": float(cartera_total),

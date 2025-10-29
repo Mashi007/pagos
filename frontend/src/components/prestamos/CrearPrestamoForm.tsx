@@ -66,11 +66,22 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     observaciones: prestamo?.observaciones || '',
   })
   
-  // Obtener datos de configuración
-  const { data: concesionarios = [] } = useConcesionariosActivos()
-  const { data: analistas = [] } = useAnalistasActivos()
-  const { data: modelosVehiculos = [] } = useModelosVehiculosActivos()
+  // Obtener datos de configuración con manejo de errores
+  const { data: concesionarios = [], error: errorConcesionarios } = useConcesionariosActivos()
+  const { data: analistas = [], error: errorAnalistas } = useAnalistasActivos()
+  const { data: modelosVehiculos = [], error: errorModelos } = useModelosVehiculosActivos()
   const { user } = useSimpleAuth()
+
+  // Log errores sin bloquear el renderizado
+  if (errorConcesionarios) {
+    console.warn('Error cargando concesionarios:', errorConcesionarios)
+  }
+  if (errorAnalistas) {
+    console.warn('Error cargando analistas:', errorAnalistas)
+  }
+  if (errorModelos) {
+    console.warn('Error cargando modelos de vehículos:', errorModelos)
+  }
 
   const [valorActivo, setValorActivo] = useState<number>(0)
   

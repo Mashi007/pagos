@@ -34,7 +34,14 @@ export function useModelosVehiculos(filters?: any) {
 export function useModelosVehiculosActivos() {
   return useQuery({
     queryKey: modeloVehiculoKeys.activos(),
-    queryFn: () => modeloVehiculoService.listarModelosActivos(),
+    queryFn: async () => {
+      try {
+        return await modeloVehiculoService.listarModelosActivos()
+      } catch (error) {
+        console.error('Error obteniendo modelos de vehículos activos:', error)
+        return [] // Devolver array vacío en caso de error
+      }
+    },
     staleTime: STALE_TIME_LONG,
     retry: RETRY_COUNT,
     retryDelay: RETRY_DELAY,

@@ -19,6 +19,7 @@ from app.models.pago_auditoria import PagoAuditoria
 from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.schemas.pago import PagoCreate, PagoResponse, PagoUpdate
+from app.utils.filtros_dashboard import FiltrosDashboard
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -402,34 +403,74 @@ def registrar_auditoria_pago(
 
 @router.get("/stats")
 def obtener_estadisticas_pagos(
+    analista: Optional[str] = Query(None, description="Filtrar por analista"),
+    concesionario: Optional[str] = Query(None, description="Filtrar por concesionario"),
+    modelo: Optional[str] = Query(None, description="Filtrar por modelo"),
+    fecha_inicio: Optional[date] = Query(None, description="Fecha inicio"),
+    fecha_fin: Optional[date] = Query(None, description="Fecha fin"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Obtener estadísticas de pagos
+    Obtener estadísticas de pagos con filtros opcionales
     """
     try:
-        # Total de pagos
-        total_pagos = db.query(Pago).count()
+        hoy = datetime.now().date()
 
-        # Pagos por estado
-        pagos_por_estado = (
-            db.query(Pago.estado, func.count(Pago.id)).group_by(Pago.estado).all()
+        # ✅ Base query para pagos - usar FiltrosDashboard
+        base_pago_query = db.query(Pago)
+        if analista or concesionario or modelo:
+            base_pago_query = base_pago_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+        base_pago_query = FiltrosDashboard.aplicar_filtros_pago(
+            base_pago_query,
+            analista,
+            concesionario,
+            modelo,
+            fecha_inicio,
+            fecha_fin,
         )
 
+        # Total de pagos
+        total_pagos = base_pago_query.count()
+
+        # Pagos por estado (requiere subquery si hay filtros)
+        pagos_por_estado_query = base_pago_query.subquery()
+        if analista or concesionario or modelo:
+            pagos_por_estado = (
+                db.query(pagos_por_estado_query.c.estado, func.count(pagos_por_estado_query.c.id))
+                .group_by(pagos_por_estado_query.c.estado)
+                .all()
+            )
+        else:
+            pagos_por_estado = (
+                db.query(Pago.estado, func.count(Pago.id)).group_by(Pago.estado).all()
+            )
+
         # Monto total pagado
-        total_pagado = db.query(func.sum(Pago.monto_pagado)).scalar() or Decimal("0.00")
+        total_pagado = (
+            base_pago_query.with_entities(func.sum(Pago.monto_pagado)).scalar() or Decimal("0.00")
+        )
 
         # Pagos del día actual
-        hoy = datetime.now().date()
-        pagos_hoy = db.query(func.sum(Pago.monto_pagado)).filter(
-            func.date(Pago.fecha_pago) == hoy
-        ).scalar() or Decimal("0.00")
+        pagos_hoy_query = base_pago_query.filter(func.date(Pago.fecha_pago) == hoy)
+        pagos_hoy = (
+            pagos_hoy_query.with_entities(func.sum(Pago.monto_pagado)).scalar() or Decimal("0.00")
+        )
 
-        # Cuotas pagadas vs pendientes
-        cuotas_pagadas = db.query(Cuota).filter(Cuota.estado == "PAGADO").count()
-        cuotas_pendientes = db.query(Cuota).filter(Cuota.estado == "PENDIENTE").count()
-        cuotas_atrasadas = db.query(Cuota).filter(Cuota.estado == "ATRASADO").count()
+        # ✅ Cuotas pagadas vs pendientes - usar FiltrosDashboard
+        cuotas_query = db.query(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        cuotas_query = FiltrosDashboard.aplicar_filtros_cuota(
+            cuotas_query,
+            analista,
+            concesionario,
+            modelo,
+            fecha_inicio,
+            fecha_fin,
+        )
+
+        cuotas_pagadas = cuotas_query.filter(Cuota.estado == "PAGADO").count()
+        cuotas_pendientes = cuotas_query.filter(Cuota.estado == "PENDIENTE").count()
+        cuotas_atrasadas = cuotas_query.filter(Cuota.estado == "ATRASADO").count()
 
         return {
             "total_pagos": total_pagos,

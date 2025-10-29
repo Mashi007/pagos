@@ -34,7 +34,14 @@ export function useAnalistas(filters?: any) {
 export function useAnalistasActivos() {
   return useQuery({
     queryKey: analistaKeys.activos(),
-    queryFn: () => analistaService.listarAnalistasActivos(),
+    queryFn: async () => {
+      try {
+        return await analistaService.listarAnalistasActivos()
+      } catch (error) {
+        console.error('Error obteniendo analistas activos:', error)
+        return [] // Devolver array vacío en caso de error
+      }
+    },
     staleTime: STALE_TIME_LONG,
     retry: RETRY_COUNT,
     retryDelay: RETRY_DELAY,

@@ -13,19 +13,123 @@ from app.models.cliente import Cliente
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.models.user import User
+from app.utils.filtros_dashboard import FiltrosDashboard
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get("/opciones-filtros")
+def obtener_opciones_filtros(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener opciones disponibles para filtros del dashboard"""
+    try:
+        # Analistas únicos
+        analistas = (
+            db.query(func.distinct(Prestamo.analista))
+            .filter(Prestamo.analista.isnot(None), Prestamo.analista != "")
+            .all()
+        )
+        analistas_list = [a[0] for a in analistas if a[0]]
+
+        # También productos financieros (pueden ser analistas)
+        productos_fin = (
+            db.query(func.distinct(Prestamo.producto_financiero))
+            .filter(
+                Prestamo.producto_financiero.isnot(None),
+                Prestamo.producto_financiero != "",
+            )
+            .all()
+        )
+        productos_list = [p[0] for p in productos_fin if p[0] and p[0] not in analistas_list]
+        analistas_list.extend(productos_list)
+
+        # Concesionarios únicos
+        concesionarios = (
+            db.query(func.distinct(Prestamo.concesionario))
+            .filter(Prestamo.concesionario.isnot(None), Prestamo.concesionario != "")
+            .all()
+        )
+        concesionarios_list = [c[0] for c in concesionarios if c[0]]
+
+        # Modelos únicos
+        modelos = (
+            db.query(func.distinct(Prestamo.producto))
+            .filter(Prestamo.producto.isnot(None), Prestamo.producto != "")
+            .all()
+        )
+        modelos_producto = [m[0] for m in modelos if m[0]]
+
+        # También modelo_vehiculo
+        modelos_vehiculo = (
+            db.query(func.distinct(Prestamo.modelo_vehiculo))
+            .filter(Prestamo.modelo_vehiculo.isnot(None), Prestamo.modelo_vehiculo != "")
+            .all()
+        )
+        modelos_vehiculo_list = [
+            mv[0]
+            for mv in modelos_vehiculo
+            if mv[0] and mv[0] not in modelos_producto
+        ]
+        modelos_list = modelos_producto + modelos_vehiculo_list
+
+        return {
+            "analistas": sorted(analistas_list),
+            "concesionarios": sorted(concesionarios_list),
+            "modelos": sorted(modelos_list),
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo opciones de filtros: {e}")
+        return {"analistas": [], "concesionarios": [], "modelos": []}
+
+
+# DEPRECATED: Usar FiltrosDashboard desde app.utils.filtros_dashboard
+# Estas funciones se mantienen por compatibilidad pero se recomienda usar la clase centralizada
+def aplicar_filtros_prestamo(
+    query,
+    analista: Optional[str] = None,
+    concesionario: Optional[str] = None,
+    modelo: Optional[str] = None,
+    fecha_inicio: Optional[date] = None,
+    fecha_fin: Optional[date] = None,
+):
+    """Aplica filtros comunes a queries de préstamos - DEPRECATED: Usar FiltrosDashboard"""
+    return FiltrosDashboard.aplicar_filtros_prestamo(
+        query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+    )
+
+
+def aplicar_filtros_pago(
+    query,
+    analista: Optional[str] = None,
+    concesionario: Optional[str] = None,
+    modelo: Optional[str] = None,
+    fecha_inicio: Optional[date] = None,
+    fecha_fin: Optional[date] = None,
+):
+    """Aplica filtros comunes a queries de pagos - DEPRECATED: Usar FiltrosDashboard"""
+    return FiltrosDashboard.aplicar_filtros_pago(
+        query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+    )
+
+
 @router.get("/admin")
 def dashboard_administrador(
     periodo: Optional[str] = Query("mes", description="Periodo: dia, semana, mes, año"),
+    analista: Optional[str] = Query(None, description="Filtrar por analista"),
+    concesionario: Optional[str] = Query(None, description="Filtrar por concesionario"),
+    modelo: Optional[str] = Query(None, description="Filtrar por modelo de vehículo"),
+    fecha_inicio: Optional[date] = Query(None, description="Fecha inicio del rango"),
+    fecha_fin: Optional[date] = Query(None, description="Fecha fin del rango"),
+    consolidado: Optional[bool] = Query(False, description="Agrupar datos consolidados"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     Dashboard para administradores con datos reales de la base de datos
+    Soporta filtros: analista, concesionario, modelo, rango de fechas
     """
     try:
         if not current_user.is_admin:
@@ -35,23 +139,44 @@ def dashboard_administrador(
 
         hoy = date.today()
 
+        # Aplicar filtros base a queries de préstamos (usando clase centralizada)
+        base_prestamo_query = db.query(Prestamo).filter(Prestamo.activo.is_(True))
+        base_prestamo_query = FiltrosDashboard.aplicar_filtros_prestamo(
+            base_prestamo_query,
+            analista,
+            concesionario,
+            modelo,
+            fecha_inicio,
+            fecha_fin,
+        )
+
         # 1. CARTERA TOTAL - Suma de todos los préstamos activos
-        cartera_total = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-            Prestamo.activo.is_(True)
+        cartera_total = base_prestamo_query.with_entities(
+            func.sum(Prestamo.total_financiamiento)
         ).scalar() or Decimal("0")
 
         # 2. CARTERA VENCIDA - Monto de préstamos con cuotas vencidas (no pagadas)
-        cartera_vencida = db.query(func.sum(Cuota.monto_cuota)).join(
-            Prestamo, Cuota.prestamo_id == Prestamo.id
-        ).filter(
-            and_(
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
-                Prestamo.activo.is_(True),
+        # ✅ USAR FiltrosDashboard para aplicar filtros automáticamente
+        cartera_vencida_query = (
+            db.query(func.sum(Cuota.monto_cuota))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                and_(
+                    Cuota.fecha_vencimiento < hoy,
+                    Cuota.estado != "PAGADO",
+                    Prestamo.activo.is_(True),
+                )
             )
-        ).scalar() or Decimal(
-            "0"
         )
+        cartera_vencida_query = FiltrosDashboard.aplicar_filtros_cuota(
+            cartera_vencida_query,
+            analista,
+            concesionario,
+            modelo,
+            fecha_inicio,
+            fecha_fin,
+        )
+        cartera_vencida = cartera_vencida_query.scalar() or Decimal("0")
 
         # 3. CARTERA AL DÍA - Cartera total menos cartera vencida
         cartera_al_dia = cartera_total - cartera_vencida
@@ -63,28 +188,41 @@ def dashboard_administrador(
             else 0
         )
 
-        # 5. PAGOS DE HOY
-        pagos_hoy = (
-            db.query(func.count(Pago.id))
-            .filter(func.date(Pago.fecha_pago) == hoy)
-            .scalar()
-            or 0
+        # 5. PAGOS DE HOY (con filtros)
+        pagos_hoy_query = db.query(func.count(Pago.id)).filter(
+            func.date(Pago.fecha_pago) == hoy
+        )
+        monto_pagos_hoy_query = db.query(func.sum(Pago.monto_pagado)).filter(
+            func.date(Pago.fecha_pago) == hoy
         )
 
-        monto_pagos_hoy = db.query(func.sum(Pago.monto_pagado)).filter(
-            func.date(Pago.fecha_pago) == hoy
-        ).scalar() or Decimal("0")
+        # ✅ Aplicar filtros usando clase centralizada (automático)
+        if analista or concesionario or modelo:
+            pagos_hoy_query = pagos_hoy_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            monto_pagos_hoy_query = monto_pagos_hoy_query.join(
+                Prestamo, Pago.prestamo_id == Prestamo.id
+            )
+        
+        pagos_hoy_query = FiltrosDashboard.aplicar_filtros_pago(
+            pagos_hoy_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+        monto_pagos_hoy_query = FiltrosDashboard.aplicar_filtros_pago(
+            monto_pagos_hoy_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+
+        pagos_hoy = pagos_hoy_query.scalar() or 0
+        monto_pagos_hoy = monto_pagos_hoy_query.scalar() or Decimal("0")
 
         # 6. CLIENTES ACTIVOS - Clientes con préstamos activos
         clientes_activos = (
-            db.query(func.count(func.distinct(Prestamo.cedula)))
-            .filter(Prestamo.activo.is_(True))
+            base_prestamo_query.with_entities(func.count(func.distinct(Prestamo.cedula)))
             .scalar()
             or 0
         )
 
         # 7. CLIENTES EN MORA - Clientes con cuotas vencidas
-        clientes_en_mora = (
+        # ✅ USAR FiltrosDashboard para aplicar filtros automáticamente
+        clientes_mora_query = (
             db.query(func.count(func.distinct(Prestamo.cedula)))
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .filter(
@@ -94,14 +232,20 @@ def dashboard_administrador(
                     Prestamo.activo.is_(True),
                 )
             )
-            .scalar()
-            or 0
         )
+        clientes_mora_query = FiltrosDashboard.aplicar_filtros_cuota(
+            clientes_mora_query,
+            analista,
+            concesionario,
+            modelo,
+            fecha_inicio,
+            fecha_fin,
+        )
+        clientes_en_mora = clientes_mora_query.scalar() or 0
 
         # 8. PRÉSTAMOS ACTIVOS
         prestamos_activos = (
-            db.query(func.count(Prestamo.id)).filter(Prestamo.activo.is_(True)).scalar()
-            or 0
+            base_prestamo_query.with_entities(func.count(Prestamo.id)).scalar() or 0
         )
 
         # 9. PRÉSTAMOS PAGADOS
@@ -127,28 +271,77 @@ def dashboard_administrador(
             or 0
         )
 
-        # 11. TOTAL PAGADO (histórico)
-        total_cobrado = db.query(func.sum(Pago.monto_pagado)).scalar() or Decimal("0")
+        # 11. TOTAL PAGADO (histórico o con filtros)
+        # ✅ USAR FiltrosDashboard para aplicar filtros automáticamente
+        total_cobrado_query = db.query(func.sum(Pago.monto_pagado))
+        if analista or concesionario or modelo:
+            total_cobrado_query = total_cobrado_query.join(
+                Prestamo, Pago.prestamo_id == Prestamo.id
+            )
+        total_cobrado_query = FiltrosDashboard.aplicar_filtros_pago(
+            total_cobrado_query,
+            analista,
+            concesionario,
+            modelo,
+            fecha_inicio,
+            fecha_fin,
+        )
+        total_cobrado = total_cobrado_query.scalar() or Decimal("0")
 
         # 12. CUOTAS PAGADAS TOTALES
-        cuotas_pagadas = (
-            db.query(func.count(Cuota.id)).filter(Cuota.estado == "PAGADO").scalar()
-            or 0
-        )
-
-        # 13. CUOTAS PENDIENTES
-        cuotas_pendientes = (
-            db.query(func.count(Cuota.id)).filter(Cuota.estado == "PENDIENTE").scalar()
-            or 0
-        )
-
-        # 14. CUOTAS ATRASADAS
-        cuotas_atrasadas = (
+        cuotas_pagadas_query = (
             db.query(func.count(Cuota.id))
-            .filter(and_(Cuota.estado == "ATRASADO", Cuota.fecha_vencimiento < hoy))
-            .scalar()
-            or 0
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(Cuota.estado == "PAGADO", Prestamo.activo.is_(True))
         )
+        # 13. CUOTAS PENDIENTES
+        cuotas_pendientes_query = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(Cuota.estado == "PENDIENTE", Prestamo.activo.is_(True))
+        )
+        # 14. CUOTAS ATRASADAS
+        cuotas_atrasadas_query = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                and_(
+                    Cuota.estado == "ATRASADO",
+                    Cuota.fecha_vencimiento < hoy,
+                    Prestamo.activo.is_(True),
+                )
+            )
+        )
+
+        # ✅ Aplicar filtros usando clase centralizada (automático para todas las cuotas)
+        cuotas_pagadas_query = FiltrosDashboard.aplicar_filtros_cuota(
+            cuotas_pagadas_query,
+            analista,
+            concesionario,
+            modelo,
+            fecha_inicio,
+            fecha_fin,
+        )
+        cuotas_pendientes_query = FiltrosDashboard.aplicar_filtros_cuota(
+            cuotas_pendientes_query,
+            analista,
+            concesionario,
+            modelo,
+            fecha_inicio,
+            fecha_fin,
+        )
+        cuotas_atrasadas_query = FiltrosDashboard.aplicar_filtros_cuota(
+            cuotas_atrasadas_query,
+            analista,
+            concesionario,
+            modelo,
+            fecha_inicio,
+            fecha_fin,
+        )
+
+        cuotas_pagadas = cuotas_pagadas_query.scalar() or 0
+        cuotas_pendientes = cuotas_pendientes_query.scalar() or 0
+        cuotas_atrasadas = cuotas_atrasadas_query.scalar() or 0
 
         # 15. CÁLCULO DE PERÍODOS ANTERIORES
         if periodo == "mes":
@@ -182,10 +375,24 @@ def dashboard_administrador(
             cartera_anterior_val = float(cartera_total)
 
         # 16. TOTAL COBRADO EN EL PERÍODO ACTUAL
-        total_cobrado_periodo = db.query(func.sum(Pago.monto_pagado)).filter(
+        # ✅ USAR FiltrosDashboard para aplicar filtros automáticamente
+        total_cobrado_periodo_query = db.query(func.sum(Pago.monto_pagado)).filter(
             func.date(Pago.fecha_pago) >= fecha_inicio_periodo,
             func.date(Pago.fecha_pago) <= hoy,
-        ).scalar() or Decimal("0")
+        )
+        if analista or concesionario or modelo:
+            total_cobrado_periodo_query = total_cobrado_periodo_query.join(
+                Prestamo, Pago.prestamo_id == Prestamo.id
+            )
+        total_cobrado_periodo_query = FiltrosDashboard.aplicar_filtros_pago(
+            total_cobrado_periodo_query,
+            analista,
+            concesionario,
+            modelo,
+            fecha_inicio,
+            fecha_fin,
+        )
+        total_cobrado_periodo = total_cobrado_periodo_query.scalar() or Decimal("0")
 
         # Total cobrado período anterior
         total_cobrado_anterior = db.query(func.sum(Pago.monto_pagado)).filter(
@@ -241,6 +448,7 @@ def dashboard_administrador(
         )
 
         # 21. EVOLUCIÓN MENSUAL (últimos 6 meses)
+        # ✅ Aplicar filtros automáticamente a evolución mensual
         evolucion_mensual = []
         for i in range(6, -1, -1):
             mes_fecha = hoy - timedelta(days=30 * i)
@@ -252,26 +460,42 @@ def dashboard_administrador(
                     days=1
                 )
 
-            cartera_mes = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-                Prestamo.activo.is_(True), func.date(Prestamo.fecha_creacion) <= mes_fin
-            ).scalar() or Decimal("0")
+            # ✅ Cartera del mes con filtros
+            cartera_mes_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
+                Prestamo.activo.is_(True), 
+                func.date(Prestamo.fecha_creacion) <= mes_fin
+            )
+            cartera_mes_query = FiltrosDashboard.aplicar_filtros_prestamo(
+                cartera_mes_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+            )
+            cartera_mes = cartera_mes_query.scalar() or Decimal("0")
 
-            cobrado_mes = db.query(func.sum(Pago.monto_pagado)).filter(
+            # ✅ Cobrado del mes con filtros
+            cobrado_mes_query = db.query(func.sum(Pago.monto_pagado)).filter(
                 func.date(Pago.fecha_pago) >= mes_inicio,
                 func.date(Pago.fecha_pago) <= mes_fin,
-            ).scalar() or Decimal("0")
+            )
+            if analista or concesionario or modelo:
+                cobrado_mes_query = cobrado_mes_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            cobrado_mes_query = FiltrosDashboard.aplicar_filtros_pago(
+                cobrado_mes_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+            )
+            cobrado_mes = cobrado_mes_query.scalar() or Decimal("0")
 
-            # Cuotas vencidas en ese mes
-            cuotas_vencidas_mes = (
+            # ✅ Cuotas vencidas en ese mes con filtros
+            cuotas_vencidas_mes_query = (
                 db.query(func.count(Cuota.id))
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .filter(
                     Cuota.fecha_vencimiento >= mes_inicio,
                     Cuota.fecha_vencimiento <= mes_fin,
                     Cuota.estado != "PAGADO",
                 )
-                .scalar()
-                or 0
             )
+            cuotas_vencidas_mes_query = FiltrosDashboard.aplicar_filtros_cuota(
+                cuotas_vencidas_mes_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+            )
+            cuotas_vencidas_mes = cuotas_vencidas_mes_query.scalar() or 0
 
             morosidad_mes = (
                 (

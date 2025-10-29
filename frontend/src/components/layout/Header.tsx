@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Bell, Search, Menu, LogOut, Settings, User, ChevronDown } from 'lucide-react'
+import { Bell, Menu, LogOut, Settings, User, ChevronDown } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 
 // Constantes de configuración
-const SEARCH_BAR_WIDTH = 96
 const NOTIFICATIONS_WIDTH = 80
 const USER_MENU_WIDTH = 64
 const NOTIFICATIONS_MAX_HEIGHT = 96
@@ -80,40 +78,21 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
           </Button>
 
           <div className="hidden lg:block">
-        <div className="flex items-center space-x-3">
-          <img 
-            src="/logo-compact.svg" 
-            alt="RAPICREDIT Logo" 
-            className="w-8 h-8"
-          />
-          <h1 className="text-xl font-semibold text-gray-900">
-            RAPICREDIT
-          </h1>
-        </div>
-          </div>
-
-          {/* Search bar */}
-          <div className={`hidden md:block w-${SEARCH_BAR_WIDTH}`}>
-            <Input
-              type="search"
-              placeholder="Buscar clientes, pagos, documentos..."
-              leftIcon={<Search className="h-4 w-4" />}
-              className="bg-gray-50 border-gray-200"
-            />
+            <div className="flex items-center space-x-3">
+              <img 
+                src="/logo-compact.svg" 
+                alt="RAPICREDIT Logo" 
+                className="w-8 h-8"
+              />
+              <h1 className="text-xl font-semibold text-gray-900">
+                RAPICREDIT
+              </h1>
+            </div>
           </div>
         </div>
 
         {/* Right side */}
         <div className="flex items-center space-x-3">
-          {/* Search button for mobile */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden"
-          >
-            <Search className="h-5 w-5" />
-          </Button>
-
           {/* Notifications */}
           <div className="relative">
             <Button
@@ -266,16 +245,6 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
             </AnimatePresence>
           </div>
         </div>
-      </div>
-
-      {/* Mobile search bar */}
-      <div className="md:hidden px-4 pb-3">
-        <Input
-          type="search"
-          placeholder="Buscar..."
-          leftIcon={<Search className="h-4 w-4" />}
-          className="bg-gray-50 border-gray-200"
-        />
       </div>
 
       {/* Click outside to close dropdowns */}

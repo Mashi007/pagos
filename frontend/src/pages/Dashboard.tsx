@@ -21,18 +21,23 @@ import {
   Zap,
   Award,
   Building2,
-  Shield
+  Shield,
+  Filter,
+  X
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { formatCurrency, formatPercentage } from '@/utils'
 import { apiClient } from '@/services/api'
 import { userService, User } from '@/services/userService'
 import { PagosKPIs } from '@/components/pagos/PagosKPIs'
 import { pagoService } from '@/services/pagoService'
+import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboardFiltros'
 import {
   BarChart,
   Bar,
@@ -164,6 +169,18 @@ export function Dashboard() {
   const [usuariosError, setUsuariosError] = useState<string | null>(null)
   const [periodo, setPeriodo] = useState('mes')
   const [isRefreshing, setIsRefreshing] = useState(false)
+  
+  // Estados para filtros (usar tipo centralizado)
+  const [filtros, setFiltros] = useState<DashboardFiltros>({})
+  const [showFiltros, setShowFiltros] = useState(false)
+  
+  // ✅ Hook centralizado para manejar filtros - cualquier KPI nuevo debe usar esto
+  const {
+    construirParams,
+    construirFiltrosObject,
+    tieneFiltrosActivos,
+    cantidadFiltrosActivos,
+  } = useDashboardFiltros(filtros)
 
   // Cargar usuarios reales
   useEffect(() => {
@@ -197,12 +214,30 @@ export function Dashboard() {
     cargarUsuarios()
   }, [])
 
+  // Cargar opciones de filtros
+  const { data: opcionesFiltros } = useQuery({
+    queryKey: ['dashboard-filtros-opciones'],
+    queryFn: async () => {
+      try {
+        return await apiClient.get('/api/v1/dashboard/opciones-filtros')
+      } catch (error) {
+        console.warn('Error cargando opciones de filtros:', error)
+        return { analistas: [], concesionarios: [], modelos: [] }
+      }
+    },
+    staleTime: 30 * 60 * 1000, // 30 minutos - las opciones no cambian frecuentemente
+  })
+
+  // ✅ Usar función centralizada del hook para construir parámetros
+  const construirParamsDashboard = () => construirParams(periodo)
+
   // ✅ CORRECCIÓN: Conectar a endpoints reales del backend con tipos explícitos
   const { data: dashboardData, isLoading: loadingDashboard, refetch: refetchDashboard } = useQuery({
-    queryKey: ['dashboard', periodo],
+    queryKey: ['dashboard', periodo, filtros],
     queryFn: async (): Promise<DashboardData> => {
       try {
-        const response = await apiClient.get(`/api/v1/dashboard/admin?periodo=${periodo}`)
+        const params = construirParamsDashboard()
+        const response = await apiClient.get(`/api/v1/dashboard/admin?${params}`)
         return response as DashboardData
       } catch (error) {
         console.warn('Error cargando dashboard desde backend, usando datos mock:', error)
@@ -214,11 +249,20 @@ export function Dashboard() {
     initialData: mockData, // Datos iniciales mientras carga
   })
 
+  // ✅ Query de KPIs adicionales - usa filtros automáticos del hook
   const { data: kpisData, isLoading: loadingKpis } = useQuery({
-    queryKey: ['kpis'],
+    queryKey: ['kpis', filtros],
     queryFn: async (): Promise<DashboardData> => {
       try {
-        const response = await apiClient.get('/api/v1/kpis/dashboard')
+        const params = construirFiltrosObject()
+        const queryParams = new URLSearchParams()
+        Object.entries(params).forEach(([key, value]) => {
+          if (value) queryParams.append(key, value.toString())
+        })
+        const queryString = queryParams.toString()
+        const response = await apiClient.get(
+          `/api/v1/kpis/dashboard${queryString ? '?' + queryString : ''}`
+        )
         return response as DashboardData
       } catch (error) {
         console.warn('Error cargando KPIs desde backend, usando datos mock:', error)
@@ -323,12 +367,16 @@ export function Dashboard() {
 
   const progressPercentage = (data.avance_meta / data.meta_mensual) * 100
 
-  // Query para estadísticas de pagos
+  // ✅ Query para estadísticas de pagos - usa filtros automáticos del hook
   const { data: pagosStats, isLoading: pagosStatsLoading } = useQuery({
-    queryKey: ['pagos-stats'],
-    queryFn: () => pagoService.getStats(),
+    queryKey: ['pagos-stats', filtros],
+    queryFn: () => pagoService.getStats(construirFiltrosObject()),
     refetchInterval: 60000, // Refrescar cada minuto
   })
+
+  const handleLimpiarFiltros = () => {
+    setFiltros({})
+  }
 
   // Datos para gráficos
   const evolucionMensual = (data.evolucion_mensual && data.evolucion_mensual.length > 0) 
@@ -375,6 +423,116 @@ export function Dashboard() {
               <SelectItem value="año">Este año</SelectItem>
             </SelectContent>
           </Select>
+          
+          {/* Popover de Filtros */}
+          <Popover open={showFiltros} onOpenChange={setShowFiltros}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Filter className="mr-2 h-4 w-4" />
+                Filtros
+                {tieneFiltrosActivos && (
+                  <Badge variant="secondary" className="ml-2">
+                    {cantidadFiltrosActivos}
+                  </Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-96" align="end">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold">Filtros Generales</h4>
+                  {tieneFiltrosActivos && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={handleLimpiarFiltros}
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Limpiar
+                    </Button>
+                  )}
+                </div>
+                
+                {/* Analista */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Analista</label>
+                  <Select 
+                    value={filtros.analista || ''} 
+                    onValueChange={(value) => setFiltros(prev => ({ ...prev, analista: value || undefined }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos los analistas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Todos los analistas</SelectItem>
+                      {opcionesFiltros?.analistas?.map((a: string) => (
+                        <SelectItem key={a} value={a}>{a}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Concesionario */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Concesionario</label>
+                  <Select 
+                    value={filtros.concesionario || ''} 
+                    onValueChange={(value) => setFiltros(prev => ({ ...prev, concesionario: value || undefined }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos los concesionarios" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Todos los concesionarios</SelectItem>
+                      {opcionesFiltros?.concesionarios?.map((c: string) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Modelo */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Modelo</label>
+                  <Select 
+                    value={filtros.modelo || ''} 
+                    onValueChange={(value) => setFiltros(prev => ({ ...prev, modelo: value || undefined }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos los modelos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Todos los modelos</SelectItem>
+                      {opcionesFiltros?.modelos?.map((m: string) => (
+                        <SelectItem key={m} value={m}>{m}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Rango de Fechas */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Fecha Desde</label>
+                    <Input 
+                      type="date"
+                      value={filtros.fecha_inicio || ''}
+                      onChange={(e) => setFiltros(prev => ({ ...prev, fecha_inicio: e.target.value || undefined }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Fecha Hasta</label>
+                    <Input 
+                      type="date"
+                      value={filtros.fecha_fin || ''}
+                      onChange={(e) => setFiltros(prev => ({ ...prev, fecha_fin: e.target.value || undefined }))}
+                    />
+                  </div>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+
           <Button 
             variant="outline" 
             size="sm" 
@@ -544,87 +702,6 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Sección de Usuarios del Sistema */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Users className="mr-2 h-5 w-5 text-blue-600" />
-            Usuarios del Sistema
-          </CardTitle>
-          <CardDescription>Resumen de usuarios y roles en el sistema</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {usuariosLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
-              <span className="text-gray-600">Cargando usuarios...</span>
-            </div>
-          ) : usuariosError ? (
-            <div className="flex items-center justify-center py-8">
-              <AlertTriangle className="h-6 w-6 text-red-600 mr-2" />
-              <span className="text-red-600">{usuariosError}</span>
-            </div>
-          ) : usuarios.length === 0 ? (
-            <div className="flex items-center justify-center py-8">
-              <Users className="h-6 w-6 text-gray-400 mr-2" />
-              <span className="text-gray-500">
-                {isAdmin ? 'No hay usuarios registrados' : 'Solo administradores pueden ver la lista de usuarios'}
-              </span>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Total Usuarios */}
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-blue-600">Total Usuarios</p>
-                    <p className="text-2xl font-bold text-blue-900">{usuarios.length}</p>
-                  </div>
-                  <Users className="h-8 w-8 text-blue-600" />
-                </div>
-              </div>
-
-              {/* Usuarios Activos */}
-              <div className="bg-green-50 p-4 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-green-600">Activos</p>
-                    <p className="text-2xl font-bold text-green-900">{usuariosActivos}</p>
-                    <p className="text-xs text-green-700">{porcentajeActivos.toFixed(1)}%</p>
-                  </div>
-                  <CheckCircle className="h-8 w-8 text-green-600" />
-                </div>
-              </div>
-
-              {/* Administradores */}
-              <div className="bg-red-50 p-4 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-red-600">Administradores</p>
-                    <p className="text-2xl font-bold text-red-900">{usuariosAdmin}</p>
-                  </div>
-                  <Shield className="h-8 w-8 text-red-600" />
-                </div>
-              </div>
-
-              {/* Usuarios Normales */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Usuarios Normales</p>
-                    <p className="text-2xl font-bold text-gray-900">{usuariosUser}</p>
-                    <p className="text-xs text-gray-700">
-                      Acceso limitado
-                    </p>
-                  </div>
-                  <Award className="h-8 w-8 text-gray-600" />
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Gráficos y Análisis */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

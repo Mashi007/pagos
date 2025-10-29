@@ -34,7 +34,14 @@ export function useConcesionarios(filters?: any) {
 export function useConcesionariosActivos() {
   return useQuery({
     queryKey: concesionarioKeys.activos(),
-    queryFn: () => concesionarioService.listarConcesionariosActivos(),
+    queryFn: async () => {
+      try {
+        return await concesionarioService.listarConcesionariosActivos()
+      } catch (error) {
+        console.error('Error obteniendo concesionarios activos:', error)
+        return [] // Devolver array vacío en caso de error
+      }
+    },
     staleTime: STALE_TIME_LONG,
     retry: RETRY_COUNT,
     retryDelay: RETRY_DELAY,

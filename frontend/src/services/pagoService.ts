@@ -80,7 +80,13 @@ class PagoService {
     })
   }
 
-  async getStats(): Promise<{
+  async getStats(filters?: {
+    analista?: string
+    concesionario?: string
+    modelo?: string
+    fecha_inicio?: string
+    fecha_fin?: string
+  }): Promise<{
     total_pagos: number
     pagos_por_estado: Record<string, number>
     total_pagado: number
@@ -89,7 +95,15 @@ class PagoService {
     cuotas_pendientes: number
     cuotas_atrasadas: number
   }> {
-    return await apiClient.get(`${this.baseUrl}/stats`)
+    const params = new URLSearchParams()
+    if (filters?.analista) params.append('analista', filters.analista)
+    if (filters?.concesionario) params.append('concesionario', filters.concesionario)
+    if (filters?.modelo) params.append('modelo', filters.modelo)
+    if (filters?.fecha_inicio) params.append('fecha_inicio', filters.fecha_inicio)
+    if (filters?.fecha_fin) params.append('fecha_fin', filters.fecha_fin)
+    
+    const queryString = params.toString()
+    return await apiClient.get(`${this.baseUrl}/stats${queryString ? '?' + queryString : ''}`)
   }
 }
 

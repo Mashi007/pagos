@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Header } from './Header'
 import { Sidebar } from './Sidebar'
 import { Footer } from './Footer'
 
@@ -38,13 +37,10 @@ export function Layout() {
   return (
     <div className="h-screen bg-gray-50 flex overflow-hidden">
       {/* Sidebar */}
-      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
+      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} onToggle={toggleSidebar} />
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <Header onMenuClick={toggleSidebar} isSidebarOpen={sidebarOpen} />
-
         {/* Page content */}
         <main className="flex-1 overflow-auto">
           <motion.div
