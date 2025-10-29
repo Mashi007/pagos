@@ -57,8 +57,9 @@ def listar_pagos(
         # Contar total antes de aplicar paginación
         total = query.count()
 
-        # Ordenar por fecha de pago descendente
-        query = query.order_by(Pago.fecha_pago.desc())
+        # Ordenar por fecha de registro descendente (más actual primero)
+        # Si hay misma fecha_registro, ordenar por ID descendente como criterio secundario
+        query = query.order_by(Pago.fecha_registro.desc(), Pago.id.desc())
 
         # Paginación
         offset = (page - 1) * per_page
@@ -124,7 +125,20 @@ def crear_pago(
         )
 
         # Aplicar pago a cuotas
-        aplicar_pago_a_cuotas(nuevo_pago, db, current_user)
+        cuotas_completadas = aplicar_pago_a_cuotas(nuevo_pago, db, current_user)
+        
+        # Actualizar estado del pago según regla de negocio:
+        # - Si el pago no tiene préstamo asociado, mantener estado por defecto "PAGADO"
+        # - Si tiene préstamo pero no completó ninguna cuota completamente → estado "PARCIAL" (abono parcial)
+        # - Si completó al menos una cuota completamente → estado "PAGADO"
+        if nuevo_pago.prestamo_id and cuotas_completadas == 0:
+            nuevo_pago.estado = "PARCIAL"
+        elif nuevo_pago.prestamo_id and cuotas_completadas > 0:
+            nuevo_pago.estado = "PAGADO"
+        # Si no tiene prestamo_id, mantener el estado por defecto "PAGADO"
+        
+        db.commit()
+        db.refresh(nuevo_pago)
 
         return nuevo_pago
     except HTTPException:
@@ -181,16 +195,19 @@ def actualizar_pago(
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
-def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User):
+def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
     """
     Aplica un pago a las cuotas correspondientes según la regla de negocio:
     - Los pagos se aplican secuencialmente, cuota por cuota
     - Una cuota está "ATRASADO" hasta que esté completamente pagada (monto_cuota)
     - Solo cuando total_pagado >= monto_cuota, se marca como "PAGADO"
     - Si un pago cubre completamente una cuota y sobra, el exceso se aplica a la siguiente
+    
+    Returns:
+        int: Número de cuotas que se completaron completamente con este pago
     """
     if not pago.prestamo_id:
-        return
+        return 0
 
     from datetime import date
 
@@ -207,6 +224,7 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User):
     )
 
     saldo_restante = pago.monto_pagado
+    cuotas_completadas = 0  # Contador de cuotas completadas con este pago
 
     for cuota in cuotas:
         if saldo_restante <= Decimal("0.00"):
@@ -236,6 +254,10 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User):
             capital_aplicar = monto_aplicar
             interes_aplicar = Decimal("0.00")
 
+        # Guardar estado previo ANTES de actualizar para detectar si se completó la cuota con este pago
+        total_pagado_previo = cuota.total_pagado
+        estado_previo_completo = total_pagado_previo >= cuota.monto_cuota
+        
         # Actualizar cuota
         cuota.capital_pagado += capital_aplicar
         cuota.interes_pagado += interes_aplicar
@@ -255,9 +277,13 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User):
         # - Si la cuota está completamente pagada (total_pagado >= monto_cuota) → PAGADO
         # - Si tiene pago parcial pero NO está completa → ATRASADO (si vencida) o PENDIENTE (si no vencida)
         fecha_hoy = date.today()
+        
         if cuota.total_pagado >= cuota.monto_cuota:
             # Cuota completamente pagada
             cuota.estado = "PAGADO"
+            # Si antes NO estaba completa y ahora sí, incrementar contador
+            if not estado_previo_completo:
+                cuotas_completadas += 1
         elif cuota.total_pagado > Decimal("0.00"):
             # Cuota con pago parcial pero no completa
             # Si está vencida → ATRASADO, si no → PENDIENTE
@@ -310,6 +336,10 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User):
                     capital_exceso = monto_aplicar_exceso
                     interes_exceso = Decimal("0.00")
 
+                # Guardar estado previo ANTES de actualizar para detectar si se completó la cuota
+                total_pagado_previo_siguiente = siguiente_cuota.total_pagado
+                estado_previo_siguiente_completo = total_pagado_previo_siguiente >= siguiente_cuota.monto_cuota
+                
                 siguiente_cuota.capital_pagado += capital_exceso
                 siguiente_cuota.interes_pagado += interes_exceso
                 siguiente_cuota.total_pagado += monto_aplicar_exceso
@@ -321,8 +351,12 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User):
                 )
 
                 fecha_hoy = date.today()
+                
                 if siguiente_cuota.total_pagado >= siguiente_cuota.monto_cuota:
                     siguiente_cuota.estado = "PAGADO"
+                    # Si antes NO estaba completa y ahora sí, incrementar contador
+                    if not estado_previo_siguiente_completo:
+                        cuotas_completadas += 1
                 elif (
                     siguiente_cuota.fecha_vencimiento
                     and siguiente_cuota.fecha_vencimiento < fecha_hoy
@@ -332,6 +366,9 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User):
                     siguiente_cuota.estado = "ADELANTADO"
 
     db.commit()
+    
+    # Retornar número de cuotas completadas con este pago
+    return cuotas_completadas
 
 
 def registrar_auditoria_pago(
