@@ -164,13 +164,39 @@ def dashboard_administrador(
             "clientes_anterior": 0,
             "meta_mensual": 500000,  # TODO: Configurable
             "avance_meta": float(total_cobrado),
-            "prestamos_activos": prestamos_activos,
-            "prestamos_pagados": prestamos_pagados,
-            "prestamos_vencidos": prestamos_vencidos,
-            "total_cobrado": float(total_cobrado),
-            "cuotas_pagadas": cuotas_pagadas,
-            "cuotas_pendientes": cuotas_pendientes,
-            "cuotas_atrasadas": cuotas_atrasadas,
+            "financieros": {
+                "totalCobrado": float(total_cobrado),
+                "totalCobradoAnterior": 0,
+                "ingresosCapital": 0,  # TODO: Calcular
+                "ingresosInteres": 0,  # TODO: Calcular
+                "ingresosMora": 0,  # TODO: Calcular
+                "tasaRecuperacion": 0,  # TODO: Calcular
+                "tasaRecuperacionAnterior": 0,
+            },
+            "cobranza": {
+                "promedioDiasMora": 0,  # TODO: Calcular
+                "promedioDiasMoraAnterior": 0,
+                "porcentajeCumplimiento": 0,  # TODO: Calcular
+                "porcentajeCumplimientoAnterior": 0,
+                "clientesMora": clientes_en_mora,
+            },
+            "analistaes": {
+                "totalAsesores": 0,  # TODO: Calcular
+                "analistaesActivos": 0,
+                "ventasMejorAsesor": 0,
+                "montoMejorAsesor": 0,
+                "promedioVentas": 0,
+                "tasaConversion": 0,
+                "tasaConversionAnterior": 0,
+            },
+            "productos": {
+                "modeloMasVendido": "N/A",
+                "ventasModeloMasVendido": 0,
+                "ticketPromedio": 0,  # TODO: Calcular
+                "ticketPromedioAnterior": 0,
+                "totalModelos": 0,
+                "modeloMenosVendido": "N/A",
+            },
             "fecha_consulta": hoy.isoformat(),
         }
 
