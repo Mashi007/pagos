@@ -714,7 +714,12 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       let failed = 0
       const successfulRowIndexes: number[] = []
       
-      for (const client of validClients) {
+      console.log(`🔄 Iniciando guardado masivo de ${validClients.length} clientes válidos`)
+      
+      for (let i = 0; i < validClients.length; i++) {
+        const client = validClients[i]
+        console.log(`📋 Procesando cliente ${i + 1}/${validClients.length}: ${client.cedula} - ${client.nombres}`)
+        
         try {
           // ✅ await esperará automáticamente si hay un duplicado y el usuario debe confirmar
           const result = await saveIndividualClient(client)
@@ -722,14 +727,26 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           if (result === true) {
             successful++
             successfulRowIndexes.push(client._rowIndex)
+            console.log(`✅ Cliente ${i + 1}/${validClients.length} guardado exitosamente: ${client.cedula}`)
           } else {
             failed++
+            console.log(`⚠️ Cliente ${i + 1}/${validClients.length} no se guardó (result: ${result}): ${client.cedula}`)
           }
-        } catch (error) {
+        } catch (error: any) {
           failed++
-          console.error('Error guardando cliente:', error)
+          console.error(`❌ Error guardando cliente ${i + 1}/${validClients.length} (${client.cedula}):`, error)
+          // Mostrar error específico al usuario
+          if (error.response?.status === 409) {
+            addToast('warning', `Cliente ${client.cedula} (${client.nombres}) duplicado - se canceló`)
+          } else {
+            addToast('error', `Error guardando ${client.cedula}: ${error.message || 'Error desconocido'}`)
+          }
         }
+        
+        console.log(`📊 Progreso: ${successful} exitosos, ${failed} fallidos, ${validClients.length - (i + 1)} pendientes`)
       }
+      
+      console.log(`✅ Guardado masivo completado: ${successful} exitosos, ${failed} fallidos`)
       
       if (successful > 0) {
         // Solo mostrar notificación de éxito si realmente se guardaron
