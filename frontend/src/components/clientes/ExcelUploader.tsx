@@ -92,19 +92,6 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const [serviceStatus, setServiceStatus] = useState<'unknown' | 'online' | 'offline'>('unknown')
   const [showOnlyPending, setShowOnlyPending] = useState(false)
 
-  // Estado para modal de confirmación de duplicados
-  const [showConfirmacionModal, setShowConfirmacionModal] = useState(false)
-  const [clienteDuplicado, setClienteDuplicado] = useState<{
-    existente: any
-    nuevo: any
-    prestamos?: any[] // Préstamos del cliente existente
-    rowIndex: number
-  } | null>(null)
-  // Promise resolver para esperar confirmación de duplicado en guardado masivo
-  const [duplicadoResolver, setDuplicadoResolver] = useState<{
-    resolve: (value: boolean) => void
-    reject: (error: any) => void
-  } | null>(null)
 
   // Función para manejar notificaciones de validación por fila completa
   const handleRowValidationNotification = (rowIndex: number, rowData: ExcelRow) => {
@@ -452,30 +439,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     )
   }
 
-  // ✅ Helper para limpiar savingProgress y resolver Promise del duplicado
-  const clearSavingProgressAndResolve = (success: boolean, rowIndex?: number) => {
-    if (!duplicadoResolver) return
-    
-    if (rowIndex !== undefined) {
-      setSavingProgress(prev => ({ ...prev, [rowIndex]: false }))
-    }
-    duplicadoResolver.resolve(success)
-    setDuplicadoResolver(null)
-  }
-
-  // ✅ Helper para limpiar savingProgress y rechazar Promise del duplicado
-  const clearSavingProgressAndReject = (error: any, rowIndex?: number) => {
-    if (!duplicadoResolver) return
-    
-    if (rowIndex !== undefined) {
-      setSavingProgress(prev => ({ ...prev, [rowIndex]: false }))
-    }
-    duplicadoResolver.reject(error)
-    setDuplicadoResolver(null)
-  }
 
   const saveIndividualClient = async (row: ExcelRow): Promise<boolean> => {
-    let pendingPromise = false // ✅ Rastrear si retornamos una Promise pendiente
     
     try {
       // ✅ VALIDACIÓN PREVIA: Verificar que NO hay errores antes de intentar guardar
@@ -504,83 +469,24 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       } catch (error: any) {
         console.error('Error guardando cliente individual:', error)
         
-        // Manejar error de cliente duplicado (CORREGIDO: usar la nueva estructura)
-        if (error.response?.status === 409 && 
-            error.response?.data?.detail?.error === 'CLIENTE_DUPLICADO') {
-          const clienteExistente = error.response?.data?.detail?.cliente_existente
-          const prestamos = error.response?.data?.detail?.prestamos || []
-          
-          // ✅ CORRECCIÓN CRÍTICA: Validar que clienteExistente existe antes del spread
-          if (!clienteExistente) {
-            console.error('❌ ERROR: clienteExistente es undefined en respuesta 409')
-            console.error('❌ Respuesta completa:', error.response?.data)
-            return false
-          }
-          
-          // ✅ Crear objeto de cliente duplicado una sola vez
-          const clienteDuplicadoData = {
-            existente: {
-              ...clienteExistente,
-              cedula: error.response?.data?.detail?.cedula || row.cedula
-            },
-            nuevo: {
-              nombres: row.nombres,
-              cedula: row.cedula,
-              telefono: row.telefono,
-              email: row.email
-            },
-            prestamos: prestamos,
-            rowIndex: row._rowIndex
-          }
-          
-          setClienteDuplicado(clienteDuplicadoData)
-          console.log('🔍 DEBUG - clienteDuplicado establecido:', clienteDuplicadoData)
-          
-          setShowConfirmacionModal(true)
-          
-          // ✅ Si estamos en guardado masivo, crear Promise para esperar confirmación del usuario
-          if (isSavingIndividual) {
-            // Esperar a que el usuario confirme o cancele el modal
-            // NO limpiar savingProgress aquí, se limpiará cuando se resuelva la Promise
-            pendingPromise = true // ✅ Marcar que retornamos una Promise pendiente
-            return new Promise<boolean>((resolve, reject) => {
-              setDuplicadoResolver({ resolve, reject })
-              // El savingProgress se mantendrá activo hasta que la Promise se resuelva
-              // Se limpiará en handleConfirmarDuplicado o en onClose del modal
-            })
-          }
-          
-          // Para guardado individual (no masivo), limpiar progreso y retornar false
-          setSavingProgress(prev => ({ ...prev, [row._rowIndex]: false }))
-          return false
-        }
-        
-        // Manejar error 503 - Servicio no disponible
-        if (error.response?.status === 503) {
+        // Manejar diferentes tipos de errores
+        if (error.response?.status === 400 || error.response?.status === 409) {
+          // Error de cliente duplicado (misma cédula y mismo nombre)
+          const errorMessage = error.response?.data?.detail || error.response?.data?.message || 'No se puede crear un cliente con la misma cédula y el mismo nombre.'
+          addToast('error', `Error en fila ${row._rowIndex}: ${errorMessage}`)
+        } else if (error.response?.status === 503) {
           addToast('error', '🚨 SERVICIO NO DISPONIBLE: El backend está caído. Contacta al administrador.')
-          return false
-        }
-        
-        // Manejar otros errores de red
-        if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
+        } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
           addToast('error', '🚨 ERROR DE RED: No se puede conectar al servidor. Verifica tu conexión.')
-          return false
-        }
-        
-        // Manejar errores de validación
-        if (error.response?.status === 400) {
-          addToast('error', `Error de validación: ${error.response?.data?.detail || error.message}`)
-          return false
-        }
-        
-        // Manejar otros errores del servidor
-        if (error.response?.status >= 500) {
+        } else if (error.response?.status >= 500) {
           addToast('error', 'Error del servidor. Contacta al administrador.')
-          return false
+        } else {
+          const errorMessage = error.response?.data?.detail || error.response?.data?.message || error.message || 'Error desconocido'
+          addToast('error', `Error guardando cliente en fila ${row._rowIndex}: ${errorMessage}`)
         }
         
-        // Error genérico
-        addToast('error', `Error guardando cliente: ${error.response?.data?.detail || error.message}`)
+        // Limpiar progreso
+        setSavingProgress(prev => ({ ...prev, [row._rowIndex]: false }))
         return false
       }
       
@@ -642,11 +548,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       
       return false
     } finally {
-      // ✅ NO limpiar savingProgress si retornamos una Promise pendiente (se limpiará cuando se resuelva)
-      // El savingProgress se limpiará en handleConfirmarDuplicado o en onClose del modal
-      if (!pendingPromise) {
-        setSavingProgress(prev => ({ ...prev, [row._rowIndex]: false }))
-      }
+      // Limpiar progreso
+      setSavingProgress(prev => ({ ...prev, [row._rowIndex]: false }))
     }
   }
 
@@ -1234,24 +1137,19 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         } catch (error: any) {
           console.error(`❌ Error creando cliente en fila ${row._rowIndex}:`, error)
           
-          // Manejar error de cliente duplicado (CORREGIDO: usar la nueva estructura)
-          if (error.response?.status === 409 && 
-              error.response?.data?.detail?.error === 'CLIENTE_DUPLICADO') {
-            console.log(`⚠️ Cliente duplicado detectado en fila ${row._rowIndex}: ${row.cedula}`)
-            resultados.push({ 
-              success: false, 
-              error: `Cliente duplicado: ${error.response?.data?.detail?.message || 'Cédula ya existe'}`, 
-              fila: row._rowIndex,
-              cedula: row.cedula
-            })
-          } else {
-            resultados.push({ 
-              success: false, 
-              error: error instanceof Error ? error.message : 'Error desconocido', 
-              fila: row._rowIndex,
-              cedula: row.cedula
-            })
+          // Manejar error de cliente duplicado (misma cédula y mismo nombre)
+          let errorMessage = error instanceof Error ? error.message : 'Error desconocido'
+          
+          if (error.response?.status === 400 || error.response?.status === 409) {
+            errorMessage = error.response?.data?.detail || error.response?.data?.message || 'Cliente duplicado: Ya existe un cliente con la misma cédula y el mismo nombre'
           }
+          
+          resultados.push({ 
+            success: false, 
+            error: errorMessage,
+            fila: row._rowIndex,
+            cedula: row.cedula
+          })
         }
       }
       
@@ -1907,22 +1805,6 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         </AnimatePresence>
       </div>
 
-      {/* Modal de confirmación de duplicados */}
-      {showConfirmacionModal && clienteDuplicado && clienteDuplicado.existente && clienteDuplicado.existente.cedula && (
-        <ConfirmacionDuplicadoModal
-          isOpen={showConfirmacionModal}
-          onClose={() => {
-            // ✅ Si hay un resolver activo (guardado masivo), resolver la Promise con false (cancelado)
-            clearSavingProgressAndResolve(false, clienteDuplicado?.rowIndex)
-            setShowConfirmacionModal(false)
-            setClienteDuplicado(null)
-          }}
-          onConfirm={handleConfirmarDuplicado}
-          clienteExistente={clienteDuplicado.existente}
-          clienteNuevo={clienteDuplicado.nuevo}
-          prestamos={clienteDuplicado.prestamos}
-        />
-      )}
     </motion.div>
   )
 }

@@ -187,12 +187,14 @@ class ApiClient {
           toast.error('Error interno del servidor')
           break
         case 409:
-          if (data?.detail?.error === 'CLIENTE_DUPLICADO' || 
-              data?.detail?.action === 'SHOW_DUPLICATE_POPUP') {
-            // No mostrar toast, dejar que el componente maneje el popup
-            return Promise.reject(error) // ✅ CORRECCIÓN: Asegurar que se propague el error
+          toast.error(data?.message || 'Conflicto de datos. Verifica la información.')
+          break
+        case 400:
+          // Error de validación o cliente duplicado (misma cédula y mismo nombre)
+          if (typeof data?.detail === 'string') {
+            toast.error(data.detail)
           } else {
-            toast.error(data?.message || 'Conflicto de datos. Verifica la información.')
+            toast.error(data?.message || 'Error de validación')
           }
           break
         case 503:
