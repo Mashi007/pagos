@@ -8,10 +8,10 @@ from sqlalchemy import func, and_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.models.cliente import Cliente
-from app.models.prestamo import Prestamo
-from app.models.pago import Pago
 from app.models.amortizacion import Cuota
+from app.models.cliente import Cliente
+from app.models.pago import Pago
+from app.models.prestamo import Prestamo
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ def dashboard_administrador(
 
         # 1. CARTERA TOTAL - Suma de todos los préstamos activos
         cartera_total = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-            Prestamo.activo == True
+            Prestamo.activo.is_(True)
         ).scalar() or Decimal("0")
 
         # 2. CARTERA VENCIDA - Monto de préstamos con cuotas vencidas (no pagadas)
@@ -47,7 +47,7 @@ def dashboard_administrador(
             and_(
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
-                Prestamo.activo == True,
+                Prestamo.activo.is_(True),
             )
         ).scalar() or Decimal(
             "0"
@@ -78,7 +78,7 @@ def dashboard_administrador(
         # 6. CLIENTES ACTIVOS - Clientes con préstamos activos
         clientes_activos = (
             db.query(func.count(func.distinct(Prestamo.cedula)))
-            .filter(Prestamo.activo == True)
+            .filter(Prestamo.activo.is_(True))
             .scalar()
             or 0
         )
@@ -91,7 +91,7 @@ def dashboard_administrador(
                 and_(
                     Cuota.fecha_vencimiento < hoy,
                     Cuota.estado != "PAGADO",
-                    Prestamo.activo == True,
+                    Prestamo.activo.is_(True),
                 )
             )
             .scalar()
@@ -100,7 +100,7 @@ def dashboard_administrador(
 
         # 8. PRÉSTAMOS ACTIVOS
         prestamos_activos = (
-            db.query(func.count(Prestamo.id)).filter(Prestamo.activo == True).scalar()
+            db.query(func.count(Prestamo.id)).filter(Prestamo.activo.is_(True)).scalar()
             or 0
         )
 
@@ -120,7 +120,7 @@ def dashboard_administrador(
                 and_(
                     Cuota.fecha_vencimiento < hoy,
                     Cuota.estado != "PAGADO",
-                    Prestamo.activo == True,
+                    Prestamo.activo.is_(True),
                 )
             )
             .scalar()
