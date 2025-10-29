@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   FileText,
@@ -13,6 +14,7 @@ import {
   Clock,
   Search,
   RefreshCw,
+  Loader2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -21,6 +23,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatCurrency, formatDate } from '@/utils'
+import { reporteService } from '@/services/reporteService'
+import { toast } from 'sonner'
 
 // Mock data para reportes
 const mockReportes = [
@@ -92,7 +96,65 @@ export function Reportes() {
   const [filterTipo, setFilterTipo] = useState('Todos')
   const [filterEstado, setFilterEstado] = useState('Todos')
   const [selectedPeriodo, setSelectedPeriodo] = useState('mes')
+  const [generandoReporte, setGenerandoReporte] = useState<string | null>(null)
 
+  // Obtener resumen del dashboard para KPIs
+  const { data: resumenData, isLoading: loadingResumen } = useQuery({
+    queryKey: ['reportes-resumen'],
+    queryFn: () => reporteService.getResumenDashboard(),
+    staleTime: 5 * 60 * 1000, // 5 minutos
+  })
+
+  // Funciones para generar reportes
+  const generarReporte = async (tipo: string, formato: 'excel' | 'pdf' = 'excel') => {
+    try {
+      setGenerandoReporte(tipo)
+      toast.loading(`Generando reporte de ${tipo}...`)
+
+      if (tipo === 'CARTERA') {
+        const fechaCorte = new Date().toISOString().split('T')[0]
+        const blob = await reporteService.exportarReporteCartera(formato, fechaCorte)
+        
+        // Crear enlace de descarga
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `reporte_cartera_${fechaCorte}.${formato === 'excel' ? 'xlsx' : 'pdf'}`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+        
+        toast.dismiss()
+        toast.success(`Reporte de ${tipo} generado exitosamente`)
+      } else if (tipo === 'PAGOS') {
+        // Para pagos, necesitamos fechas de inicio y fin
+        const fechaFin = new Date()
+        const fechaInicio = new Date()
+        fechaInicio.setMonth(fechaInicio.getMonth() - 1)
+        
+        const reporte = await reporteService.getReportePagos(
+          fechaInicio.toISOString().split('T')[0],
+          fechaFin.toISOString().split('T')[0]
+        )
+        
+        toast.dismiss()
+        toast.success(`Reporte de ${tipo} obtenido exitosamente`)
+        console.log('Reporte de pagos:', reporte)
+      } else {
+        toast.dismiss()
+        toast.info(`Generación de reporte ${tipo} próximamente disponible`)
+      }
+    } catch (error: any) {
+      console.error('Error generando reporte:', error)
+      toast.dismiss()
+      toast.error(error.response?.data?.detail || `Error al generar reporte de ${tipo}`)
+    } finally {
+      setGenerandoReporte(null)
+    }
+  }
+
+  // Filtrar reportes mock (por ahora mantenemos los datos mock para la tabla)
   const filteredReportes = mockReportes.filter((reporte) => {
     const matchesSearch =
       reporte.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -108,6 +170,11 @@ export function Reportes() {
   const reportesProcesando = mockReportes.filter((r) => r.estado === 'PROCESANDO').length
   const totalDescargas = mockReportes.reduce((sum, r) => sum + r.descargas, 0)
 
+  // KPIs desde el backend
+  const kpiCartera = resumenData?.cartera_activa || 0
+  const kpiPrestamosMora = resumenData?.prestamos_mora || 0
+  const kpiTotalPrestamos = resumenData?.total_prestamos || 0
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -122,42 +189,60 @@ export function Reportes() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Reportes</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Cartera Activa</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalReportes}</div>
-            <p className="text-xs text-muted-foreground">Reportes generados</p>
+            {loadingResumen ? (
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            ) : (
+              <div className="text-2xl font-bold">{formatCurrency(kpiCartera)}</div>
+            )}
+            <p className="text-xs text-muted-foreground">Total en cartera</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Disponibles</CardTitle>
-            <Download className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{reportesDisponibles}</div>
-            <p className="text-xs text-muted-foreground">Listos para descargar</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Procesando</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{reportesProcesando}</div>
-            <p className="text-xs text-muted-foreground">En generación</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Descargas</CardTitle>
+            <CardTitle className="text-sm font-medium">Préstamos en Mora</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalDescargas}</div>
-            <p className="text-xs text-muted-foreground">Total descargados</p>
+            {loadingResumen ? (
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            ) : (
+              <div className="text-2xl font-bold text-red-600">{kpiPrestamosMora}</div>
+            )}
+            <p className="text-xs text-muted-foreground">Requieren atención</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Préstamos</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {loadingResumen ? (
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            ) : (
+              <div className="text-2xl font-bold">{kpiTotalPrestamos}</div>
+            )}
+            <p className="text-xs text-muted-foreground">Préstamos activos</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pagos del Mes</CardTitle>
+            <Download className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {loadingResumen ? (
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            ) : (
+              <div className="text-2xl font-bold text-green-600">
+                {formatCurrency(resumenData?.pagos_mes || 0)}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">Este mes</p>
           </CardContent>
         </Card>
       </div>
@@ -174,15 +259,37 @@ export function Reportes() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {tiposReporte.map((tipo) => {
               const IconComponent = tipo.icon
+              const isGenerando = generandoReporte === tipo.value
+              const isDisponible = tipo.value === 'CARTERA' || tipo.value === 'PAGOS'
+              
               return (
-                <Card key={tipo.value} className="cursor-pointer hover:shadow-md transition-shadow">
+                <Card
+                  key={tipo.value}
+                  className={`cursor-pointer hover:shadow-md transition-shadow ${
+                    !isDisponible ? 'opacity-60' : ''
+                  }`}
+                  onClick={() => {
+                    if (isDisponible && !isGenerando) {
+                      generarReporte(tipo.value, 'excel')
+                    } else if (!isDisponible) {
+                      toast.info(`El reporte de ${tipo.label} estará disponible próximamente`)
+                    }
+                  }}
+                >
                   <CardContent className="p-4">
-                    <div className="flex items-center space-x-3">
-                      <IconComponent className="h-8 w-8 text-blue-600" />
-                      <div>
-                        <h3 className="font-semibold">{tipo.label}</h3>
-                        <p className="text-sm text-gray-600">Generar reporte</p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <IconComponent className="h-8 w-8 text-blue-600" />
+                        <div>
+                          <h3 className="font-semibold">{tipo.label}</h3>
+                          <p className="text-sm text-gray-600">
+                            {isGenerando ? 'Generando...' : 'Generar reporte'}
+                          </p>
+                        </div>
                       </div>
+                      {isGenerando && (
+                        <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -301,7 +408,23 @@ export function Reportes() {
                     </TableCell>
                     <TableCell className="text-right">
                       {reporte.estado === 'DISPONIBLE' && (
-                        <Button variant="outline" size="sm">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              if (reporte.tipo === 'CARTERA') {
+                                const fecha = reporte.fechaGeneracion
+                                const formato = reporte.formato.toLowerCase() === 'pdf' ? 'pdf' : 'excel'
+                                await generarReporte('CARTERA', formato)
+                              } else {
+                                toast.info('La descarga de este reporte estará disponible próximamente')
+                              }
+                            } catch (error) {
+                              console.error('Error descargando reporte:', error)
+                            }
+                          }}
+                        >
                           <Download className="mr-2 h-4 w-4" /> Descargar
                         </Button>
                       )}

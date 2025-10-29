@@ -34,6 +34,22 @@ import { apiClient } from '@/services/api'
 import { userService, User } from '@/services/userService'
 import { PagosKPIs } from '@/components/pagos/PagosKPIs'
 import { pagoService } from '@/services/pagoService'
+import {
+  LineChart as RechartsLineChart,
+  BarChart,
+  Bar,
+  PieChart as RechartsPieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  AreaChart,
+  Area
+} from 'recharts'
 
 // Tipos para Dashboard
 interface DashboardData {
@@ -50,10 +66,37 @@ interface DashboardData {
   clientes_anterior?: number
   meta_mensual: number
   avance_meta: number
-  financieros?: any
-  cobranza?: any
+  financieros?: {
+    totalCobrado: number
+    totalCobradoAnterior: number
+    ingresosCapital: number
+    ingresosInteres: number
+    ingresosMora: number
+    tasaRecuperacion: number
+    tasaRecuperacionAnterior: number
+  }
+  cobranza?: {
+    promedioDiasMora: number
+    promedioDiasMoraAnterior: number
+    porcentajeCumplimiento: number
+    porcentajeCumplimientoAnterior: number
+    clientesMora: number
+  }
   analistaes?: any
-  productos?: any
+  productos?: {
+    modeloMasVendido: string
+    ventasModeloMasVendido: number
+    ticketPromedio: number
+    ticketPromedioAnterior: number
+    totalModelos: number
+    modeloMenosVendido: string
+  }
+  evolucion_mensual?: Array<{
+    mes: string
+    cartera: number
+    cobrado: number
+    morosidad: number
+  }>
 }
 
 // Mock data integrado - en producción vendría del backend
@@ -316,7 +359,7 @@ export function Dashboard() {
     }
   ]
 
-  const progressPercentage = (mockData.avance_meta / mockData.meta_mensual) * 100
+  const progressPercentage = (data.avance_meta / data.meta_mensual) * 100
 
   // Query para estadísticas de pagos
   const { data: pagosStats, isLoading: pagosStatsLoading } = useQuery({
@@ -324,6 +367,14 @@ export function Dashboard() {
     queryFn: () => pagoService.getStats(),
     refetchInterval: 60000, // Refrescar cada minuto
   })
+
+  // Datos para gráficos
+  const evolucionMensual = data.evolucion_mensual || mockEvolucionMensual
+  const datosIngresos = data.financieros ? [
+    { name: 'Capital', value: data.financieros.ingresosCapital, color: '#3b82f6' },
+    { name: 'Intereses', value: data.financieros.ingresosInteres, color: '#10b981' },
+    { name: 'Mora', value: data.financieros.ingresosMora, color: '#ef4444' },
+  ] : []
 
   return (
     <div className="space-y-6">
@@ -432,13 +483,13 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600 mb-2">
-              {formatCurrency(mockData.financieros.totalCobrado)}
+              {formatCurrency(data.financieros?.totalCobrado || 0)}
             </div>
             <div className="flex items-center text-sm">
               {(() => {
                 const variacion = calcularVariacion(
-                  mockData.financieros.totalCobrado,
-                  mockData.financieros.totalCobradoAnterior
+                  data.financieros?.totalCobrado || 0,
+                  data.financieros?.totalCobradoAnterior
                 )
                 const IconComponent = variacion.icono
                 return (
@@ -465,13 +516,13 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600 mb-2">
-              {mockData.financieros.tasaRecuperacion}%
+              {data.financieros?.tasaRecuperacion?.toFixed(1) || 0}%
             </div>
             <div className="flex items-center text-sm">
               {(() => {
                 const variacion = calcularVariacion(
-                  mockData.financieros.tasaRecuperacion,
-                  mockData.financieros.tasaRecuperacionAnterior
+                  data.financieros?.tasaRecuperacion || 0,
+                  data.financieros?.tasaRecuperacionAnterior
                 )
                 const IconComponent = variacion.icono
                 return (
@@ -500,10 +551,10 @@ export function Dashboard() {
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">
-                  Recaudado: {formatCurrency(mockData.avance_meta)}
+                  Recaudado: {formatCurrency(data.avance_meta)}
                 </span>
                 <span className="text-gray-600">
-                  Meta: {formatCurrency(mockData.meta_mensual)}
+                  Meta: {formatCurrency(data.meta_mensual)}
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">

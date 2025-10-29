@@ -12,7 +12,7 @@ from reportlab.lib.pagesizes import A4
 
 # Imports para reportes PDF
 from reportlab.pdfgen import canvas
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -90,24 +90,32 @@ def reporte_cartera(
         )
 
         # Distribución por monto
-        distribucion_por_monto = (
+        distribucion_por_monto_query = (
             db.query(
+                case(
+                    (Prestamo.monto_total <= 1000, "Hasta $1,000"),
+                    (Prestamo.monto_total <= 5000, "$1,001 - $5,000"),
+                    (Prestamo.monto_total <= 10000, "$5,001 - $10,000"),
+                    else_="Más de $10,000",
+                ).label("rango"),
                 func.count(Prestamo.id).label("cantidad"),
                 func.sum(Prestamo.monto_total).label("monto"),
             )
             .filter(
                 Prestamo.estado.in_([EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA])
             )
-            .group_by(
-                func.case(
-                    (Prestamo.monto_total <= 1000, "Hasta $1,000"),
-                    (Prestamo.monto_total <= 5000, "$1,001 - $5,000"),
-                    (Prestamo.monto_total <= 10000, "$5,001 - $10,000"),
-                    else_="Más de $10,000",
-                )
-            )
+            .group_by("rango")
             .all()
         )
+        
+        distribucion_por_monto = [
+            {
+                "rango": item.rango,
+                "cantidad": item.cantidad,
+                "monto": float(item.monto) if item.monto else 0.0
+            }
+            for item in distribucion_por_monto_query
+        ]
 
         # Distribución por mora
         rangos_mora = [
@@ -151,10 +159,7 @@ def reporte_cartera(
             mora_total=mora_total,
             cantidad_prestamos_activos=cantidad_prestamos_activos,
             cantidad_prestamos_mora=cantidad_prestamos_mora,
-            distribucion_por_monto=[
-                {"rango": item[0], "cantidad": item[1], "monto": item[2]}
-                for item in distribucion_por_monto
-            ],
+            distribucion_por_monto=distribucion_por_monto,
             distribucion_por_mora=distribucion_por_mora,
         )
 

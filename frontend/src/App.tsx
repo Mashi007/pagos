@@ -166,7 +166,7 @@ function App() {
           {/* Reportes */}
           <Route
             path="reportes"
-            element={<ReportesPage />}
+            element={<Reportes />}
           />
 
           {/* Cobranzas */}
