@@ -26,6 +26,7 @@ def obtener_opciones_filtros(
 ):
     """Obtener opciones disponibles para filtros del dashboard - Sin duplicados"""
     try:
+
         def normalizar_valor(valor: Optional[str]) -> Optional[str]:
             """Normaliza un valor: trim, validar no vacío"""
             if not valor:
@@ -61,7 +62,7 @@ def obtener_opciones_filtros(
             .all()
         )
         productos_set = obtener_valores_unicos(productos_fin_query)
-        
+
         # Combinar sin duplicados
         analistas_final = sorted(analistas_set | productos_set)
 
@@ -91,7 +92,7 @@ def obtener_opciones_filtros(
             .all()
         )
         modelos_vehiculo_set = obtener_valores_unicos(modelos_vehiculo_query)
-        
+
         # Combinar sin duplicados
         modelos_final = sorted(modelos_producto_set | modelos_vehiculo_set)
 
