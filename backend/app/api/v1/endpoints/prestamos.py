@@ -226,6 +226,36 @@ def procesar_cambio_estado(
     )
 
 
+def serializar_prestamo(prestamo: Prestamo) -> dict:
+    """Serializa un préstamo de forma segura, manejando campos que pueden no existir en BD"""
+    return {
+        "id": prestamo.id,
+        "cliente_id": prestamo.cliente_id,
+        "cedula": prestamo.cedula,
+        "nombres": prestamo.nombres,
+        "total_financiamiento": prestamo.total_financiamiento,
+        "fecha_requerimiento": prestamo.fecha_requerimiento,
+        "modalidad_pago": prestamo.modalidad_pago,
+        "numero_cuotas": prestamo.numero_cuotas,
+        "cuota_periodo": prestamo.cuota_periodo,
+        "tasa_interes": prestamo.tasa_interes,
+        "fecha_base_calculo": prestamo.fecha_base_calculo,
+        "producto": prestamo.producto,
+        "producto_financiero": prestamo.producto_financiero,
+        "concesionario": getattr(prestamo, 'concesionario', None),
+        "analista": getattr(prestamo, 'analista', None),
+        "modelo_vehiculo": getattr(prestamo, 'modelo_vehiculo', None),
+        "estado": prestamo.estado,
+        "usuario_proponente": prestamo.usuario_proponente,
+        "usuario_aprobador": prestamo.usuario_aprobador,
+        "usuario_autoriza": getattr(prestamo, 'usuario_autoriza', None),
+        "observaciones": prestamo.observaciones,
+        "fecha_registro": prestamo.fecha_registro,
+        "fecha_aprobacion": prestamo.fecha_aprobacion,
+        "fecha_actualizacion": prestamo.fecha_actualizacion,
+    }
+
+
 def crear_registro_auditoria(
     prestamo_id: int,
     cedula: str,
@@ -332,33 +362,7 @@ def listar_prestamos(
         prestamos_serializados = []
         for prestamo in prestamos:
             try:
-                # Crear diccionario con todos los campos posibles (manejar campos que pueden no existir)
-                prestamo_data = {
-                    "id": prestamo.id,
-                    "cliente_id": prestamo.cliente_id,
-                    "cedula": prestamo.cedula,
-                    "nombres": prestamo.nombres,
-                    "total_financiamiento": prestamo.total_financiamiento,
-                    "fecha_requerimiento": prestamo.fecha_requerimiento,
-                    "modalidad_pago": prestamo.modalidad_pago,
-                    "numero_cuotas": prestamo.numero_cuotas,
-                    "cuota_periodo": prestamo.cuota_periodo,
-                    "tasa_interes": prestamo.tasa_interes,
-                    "fecha_base_calculo": prestamo.fecha_base_calculo,
-                    "producto": prestamo.producto,
-                    "producto_financiero": prestamo.producto_financiero,
-                    "concesionario": getattr(prestamo, 'concesionario', None),
-                    "analista": getattr(prestamo, 'analista', None),
-                    "modelo_vehiculo": getattr(prestamo, 'modelo_vehiculo', None),
-                    "estado": prestamo.estado,
-                    "usuario_proponente": prestamo.usuario_proponente,
-                    "usuario_aprobador": prestamo.usuario_aprobador,
-                    "usuario_autoriza": getattr(prestamo, 'usuario_autoriza', None),
-                    "observaciones": prestamo.observaciones,
-                    "fecha_registro": prestamo.fecha_registro,
-                    "fecha_aprobacion": prestamo.fecha_aprobacion,
-                    "fecha_actualizacion": prestamo.fecha_actualizacion,
-                }
+                prestamo_data = serializar_prestamo(prestamo)
                 prestamo_dict = PrestamoResponse.model_validate(prestamo_data).model_dump()
                 prestamos_serializados.append(prestamo_dict)
             except Exception as e:
@@ -457,7 +461,9 @@ def crear_prestamo(
             db=db,
         )
 
-        return prestamo
+        # Serializar de forma segura antes de retornar
+        prestamo_data = serializar_prestamo(prestamo)
+        return PrestamoResponse.model_validate(prestamo_data)
 
     except HTTPException:
         raise
@@ -475,7 +481,11 @@ def buscar_prestamos_por_cedula(
 ):
     """Buscar préstamos por cédula del cliente"""
     prestamos = db.query(Prestamo).filter(Prestamo.cedula == cedula).all()
-    return prestamos
+    # Serializar de forma segura
+    return [
+        PrestamoResponse.model_validate(serializar_prestamo(p))
+        for p in prestamos
+    ]
 
 
 @router.get("/cedula/{cedula}/resumen", response_model=dict)
@@ -587,7 +597,9 @@ def obtener_prestamo(
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
-    return prestamo
+    # Serializar de forma segura
+    prestamo_data = serializar_prestamo(prestamo)
+    return PrestamoResponse.model_validate(prestamo_data)
 
 
 @router.put("/{prestamo_id}", response_model=PrestamoResponse)
@@ -639,7 +651,9 @@ def actualizar_prestamo(
             db=db,
         )
 
-        return prestamo
+        # Serializar de forma segura antes de retornar
+        prestamo_data = serializar_prestamo(prestamo)
+        return PrestamoResponse.model_validate(prestamo_data)
 
     except HTTPException:
         raise
