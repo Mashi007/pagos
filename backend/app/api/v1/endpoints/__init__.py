@@ -12,6 +12,7 @@ from . import (
     auth_flow_analyzer,
     carga_masiva,
     clientes,
+    cobranzas,
     comparative_analysis,
     concesionarios,
     conciliacion_bancaria,
@@ -81,4 +82,5 @@ __all__ = [
     "critical_error_monitor",
     "strategic_measurements",
     "validadores",
+    "cobranzas",
 ]

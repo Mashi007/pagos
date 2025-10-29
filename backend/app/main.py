@@ -18,6 +18,7 @@ from app.api.v1.endpoints import (
     aprobaciones,
     auth,
     clientes,
+    cobranzas,
     concesionarios,
     configuracion,
     dashboard,
@@ -167,6 +168,7 @@ app.include_router(
     notificaciones.router, prefix="/api/v1/notificaciones", tags=["notificaciones"]
 )
 app.include_router(reportes.router, prefix="/api/v1/reportes", tags=["reportes"])
+app.include_router(cobranzas.router, prefix="/api/v1/cobranzas", tags=["cobranzas"])
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])
 app.include_router(
     configuracion.router, prefix="/api/v1/configuracion", tags=["configuracion"]

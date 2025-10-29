@@ -81,6 +81,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       icon: CreditCard,
     },
     {
+      title: 'Cobranzas',
+      href: '/cobranzas',
+      icon: AlertTriangle,
+    },
+    {
       title: 'Reportes',
       href: '/reportes',
       icon: FileText,
