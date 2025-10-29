@@ -552,25 +552,37 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     setShowDuplicateWarning(false)
     
     try {
+      // 🔍 DEBUG: Log completo de formData antes de validar
+      console.log('🔍 DEBUG - formData completo:', formData)
+      console.log('🔍 DEBUG - direccion:', formData.direccion)
+      console.log('🔍 DEBUG - fechaNacimiento:', formData.fechaNacimiento)
+      console.log('🔍 DEBUG - ocupacion:', formData.ocupacion)
+      
       // Validar que todos los campos requeridos estén llenos
       if (!formData.direccion || !formData.direccion.trim()) {
+        console.error('❌ ERROR - direccion vacía')
         alert('La dirección es requerida')
         setIsSubmitting(false)
         setShowDuplicateWarning(true)
         return
       }
       if (!formData.fechaNacimiento || !formData.fechaNacimiento.trim()) {
+        console.error('❌ ERROR - fechaNacimiento vacía')
         alert('La fecha de nacimiento es requerida')
         setIsSubmitting(false)
         setShowDuplicateWarning(true)
         return
       }
       if (!formData.ocupacion || !formData.ocupacion.trim()) {
+        console.error('❌ ERROR - ocupacion vacía')
         alert('La ocupación es requerida')
         setIsSubmitting(false)
         setShowDuplicateWarning(true)
         return
       }
+      
+      const fechaConvertida = convertirFechaAISO(formData.fechaNacimiento)
+      console.log('🔍 DEBUG - fecha convertida:', fechaConvertida)
       
       const clienteData = {
         cedula: formData.cedula,
@@ -578,7 +590,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         telefono: formData.telefono,
         email: formData.email,
         direccion: formData.direccion,
-        fecha_nacimiento: convertirFechaAISO(formData.fechaNacimiento), // ✅ Convertir DD/MM/YYYY → YYYY-MM-DD
+        fecha_nacimiento: fechaConvertida, // ✅ Convertir DD/MM/YYYY → YYYY-MM-DD
         ocupacion: formData.ocupacion,
         modelo_vehiculo: formData.modeloVehiculo,
         concesionario: formData.concesionario,
@@ -599,7 +611,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       onClienteCreated?.()
       onClose()
     } catch (error) {
-      console.error('Error creando cliente duplicado:', error)
+      console.error('❌ ERROR creando cliente duplicado:', error)
       setShowDuplicateWarning(true)
     } finally {
       setIsSubmitting(false)

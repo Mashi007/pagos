@@ -49,6 +49,10 @@ class ClienteService {
       confirm_duplicate: true,
       notas: `${data.notas || ''}\n\n--- CONFIRMACIÓN DE DUPLICADO ---\nComentarios: ${comentarios}\nFecha: ${new Date().toISOString()}`
     }
+    
+    // 🔍 DEBUG: Log de datos antes de enviar
+    console.log('🔍 DEBUG - Datos enviados a backend:', clienteDataWithConfirmation)
+    
     const response = await apiClient.post<ApiResponse<Cliente>>(this.baseUrl, clienteDataWithConfirmation)
     return response.data
   }
