@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useAplicarCondicionesAprobacion, useUpdatePrestamo } from '@/hooks/usePrestamos'
 import { Prestamo } from '@/types'
 import { prestamoService } from '@/services/prestamoService'
 import { clienteService } from '@/services/clienteService'
@@ -86,9 +87,13 @@ interface EvaluacionFormData {
 export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: EvaluacionRiesgoFormProps) {
   const { isAdmin } = usePermissions()
   const [isLoading, setIsLoading] = useState(false)
+  const [isAprobando, setIsAprobando] = useState(false)
   const [resultado, setResultado] = useState<any>(null)
   const [showSection, setShowSection] = useState<string>('criterio1')
   const [clienteEdad, setClienteEdad] = useState<number>(0)
+  
+  const aplicarCondiciones = useAplicarCondicionesAprobacion()
+  const updatePrestamo = useUpdatePrestamo()
   
   // Calcular edad automáticamente desde la cédula del préstamo
   useEffect(() => {
@@ -1133,6 +1138,28 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       </Badge>
                     </div>
                     </div>
+                
+                {/* Mostrar condiciones sugeridas */}
+                {resultado.sugerencias && (
+                  <div className="bg-blue-50 p-4 rounded border border-blue-200">
+                    <h5 className="font-semibold mb-3 text-blue-900">📋 Condiciones Sugeridas para Aprobación:</h5>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-xs text-blue-700">Tasa de Interés:</label>
+                        <p className="text-lg font-bold text-blue-900">{resultado.sugerencias.tasa_interes_sugerida || 8.0}%</p>
+                      </div>
+                      <div>
+                        <label className="text-xs text-blue-700">Plazo Máximo:</label>
+                        <p className="text-lg font-bold text-blue-900">{resultado.sugerencias.plazo_maximo_sugerido || 36} meses</p>
+                      </div>
+                      <div>
+                        <label className="text-xs text-blue-700">Enganche Mínimo:</label>
+                        <p className="text-lg font-bold text-blue-900">{resultado.sugerencias.enganche_minimo_sugerido || 15.0}%</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 {resultado.requisitos_adicionales && (
                   <div className="bg-white p-3 rounded border">
                     <p className="text-sm font-medium mb-2">Requisitos Adicionales:</p>
@@ -1200,7 +1227,72 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
             </div>
           )}
           {resultado && (
-            <div className="flex justify-end gap-3 pt-4 border-t">
+            <div className="flex justify-between gap-3 pt-4 border-t">
+              <div className="flex gap-2">
+                <Button 
+                  type="button" 
+                  variant="destructive"
+                  onClick={async () => {
+                    if (window.confirm('¿Está seguro de rechazar este préstamo?')) {
+                      setIsAprobando(true)
+                      try {
+                        await updatePrestamo.mutateAsync({
+                          id: prestamo.id,
+                          data: { estado: 'RECHAZADO' }
+                        })
+                        toast.success('Préstamo rechazado exitosamente')
+                        onSuccess()
+                        onClose()
+                      } catch (error: any) {
+                        toast.error(error.response?.data?.detail || 'Error al rechazar préstamo')
+                      } finally {
+                        setIsAprobando(false)
+                      }
+                    }
+                  }}
+                  disabled={isAprobando || prestamo.estado === 'RECHAZADO'}
+                >
+                  {isAprobando ? 'Rechazando...' : 'Rechazar Préstamo'}
+                </Button>
+                {(resultado.decision_final === 'APROBADO_AUTOMATICO' || 
+                  resultado.decision_final === 'APROBADO' ||
+                  resultado.puntuacion_total >= 70) && (
+                  <Button 
+                    type="button"
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    onClick={async () => {
+                      if (window.confirm('¿Desea aprobar este préstamo con las condiciones sugeridas?')) {
+                        setIsAprobando(true)
+                        try {
+                          const condiciones = {
+                            estado: 'APROBADO',
+                            tasa_interes: resultado.sugerencias?.tasa_interes_sugerida || 8.0,
+                            plazo_maximo: resultado.sugerencias?.plazo_maximo_sugerido || 36,
+                            fecha_base_calculo: new Date().toISOString().split('T')[0],
+                            observaciones: `Aprobado después de evaluación de riesgo. Puntuación: ${resultado.puntuacion_total?.toFixed(2)}/100, Riesgo: ${resultado.clasificacion_riesgo}`
+                          }
+                          
+                          await aplicarCondiciones.mutateAsync({
+                            prestamoId: prestamo.id,
+                            condiciones
+                          })
+                          
+                          toast.success('Préstamo aprobado exitosamente')
+                          onSuccess()
+                          onClose()
+                        } catch (error: any) {
+                          toast.error(error.response?.data?.detail || 'Error al aprobar préstamo')
+                        } finally {
+                          setIsAprobando(false)
+                        }
+                      }
+                    }}
+                    disabled={isAprobando || prestamo.estado === 'APROBADO'}
+                  >
+                    {isAprobando ? 'Aprobando...' : 'Aprobar Préstamo'}
+                  </Button>
+                )}
+              </div>
               <Button type="button" variant="outline" onClick={onClose}>
                 Cerrar
               </Button>
