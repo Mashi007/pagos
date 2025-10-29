@@ -242,13 +242,13 @@ def serializar_prestamo(prestamo: Prestamo) -> dict:
         "fecha_base_calculo": prestamo.fecha_base_calculo,
         "producto": prestamo.producto,
         "producto_financiero": prestamo.producto_financiero,
-        "concesionario": getattr(prestamo, 'concesionario', None),
-        "analista": getattr(prestamo, 'analista', None),
-        "modelo_vehiculo": getattr(prestamo, 'modelo_vehiculo', None),
+        "concesionario": getattr(prestamo, "concesionario", None),
+        "analista": getattr(prestamo, "analista", None),
+        "modelo_vehiculo": getattr(prestamo, "modelo_vehiculo", None),
         "estado": prestamo.estado,
         "usuario_proponente": prestamo.usuario_proponente,
         "usuario_aprobador": prestamo.usuario_aprobador,
-        "usuario_autoriza": getattr(prestamo, 'usuario_autoriza', None),
+        "usuario_autoriza": getattr(prestamo, "usuario_autoriza", None),
         "observaciones": prestamo.observaciones,
         "fecha_registro": prestamo.fecha_registro,
         "fecha_aprobacion": prestamo.fecha_aprobacion,
@@ -372,7 +372,9 @@ def listar_prestamos(
         for prestamo in prestamos:
             try:
                 prestamo_data = serializar_prestamo(prestamo)
-                prestamo_dict = PrestamoResponse.model_validate(prestamo_data).model_dump()
+                prestamo_dict = PrestamoResponse.model_validate(
+                    prestamo_data
+                ).model_dump()
                 prestamos_serializados.append(prestamo_dict)
             except Exception as e:
                 logger.error(
@@ -516,10 +518,7 @@ def buscar_prestamos_por_cedula(
     """Buscar préstamos por cédula del cliente"""
     prestamos = db.query(Prestamo).filter(Prestamo.cedula == cedula).all()
     # Serializar de forma segura
-    return [
-        PrestamoResponse.model_validate(serializar_prestamo(p))
-        for p in prestamos
-    ]
+    return [PrestamoResponse.model_validate(serializar_prestamo(p)) for p in prestamos]
 
 
 @router.get("/cedula/{cedula}/resumen", response_model=dict)
