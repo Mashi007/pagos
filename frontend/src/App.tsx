@@ -29,7 +29,7 @@ const Clientes = lazy(() => import('@/pages/Clientes').then(module => ({ default
 const Prestamos = lazy(() => import('@/pages/Prestamos').then(module => ({ default: module.Prestamos })))
 const Amortizacion = lazy(() => import('@/pages/Amortizacion').then(module => ({ default: module.Amortizacion })))
 const Reportes = lazy(() => import('@/pages/Reportes').then(module => ({ default: module.Reportes })))
-const Aprobaciones = lazy(() => import('@/pages/Aprobaciones').then(module => ({ default: module.Aprobaciones })))
+// const Aprobaciones = lazy(() => import('@/pages/Aprobaciones').then(module => ({ default: module.Aprobaciones })))  // MODULO APROBACIONES DESHABILITADO
 const Auditoria = lazy(() => import('@/pages/Auditoria').then(module => ({ default: module.Auditoria })))
 const Notificaciones = lazy(() => import('@/pages/Notificaciones').then(module => ({ default: module.Notificaciones })))
 const Programador = lazy(() => import('@/pages/Programador').then(module => ({ default: module.Programador })))
@@ -169,11 +169,11 @@ function App() {
           />
 
 
-          {/* Aprobaciones */}
-          <Route
+          {/* MODULO APROBACIONES DESHABILITADO */}
+          {/* <Route
             path="aprobaciones"
             element={<Aprobaciones />}
-          />
+          /> */}
 
           {/* Auditoría */}
           <Route

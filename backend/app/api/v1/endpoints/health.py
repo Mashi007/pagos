@@ -25,7 +25,7 @@ DISK_THRESHOLD_PERCENT = 90
 
 # Tablas críticas para verificar
 CRITICAL_TABLES = [
-    "aprobaciones",
+    # "aprobaciones",  # MODULO APROBACIONES DESHABILITADO
     "auditorias",
     "clientes",
     "users",

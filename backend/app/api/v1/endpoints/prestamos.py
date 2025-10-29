@@ -10,7 +10,7 @@ from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.models.aprobacion import Aprobacion
+# from app.models.aprobacion import Aprobacion  # MODULO APROBACIONES DESHABILITADO
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.prestamo_auditoria import PrestamoAuditoria
@@ -187,29 +187,27 @@ def procesar_cambio_estado(
                 logger.error(f"Error generando amortización: {str(e)}")
                 # No fallar el préstamo si falla la generación de cuotas
 
-        # Crear registro automático en Aprobaciones (conectado por cédula)
-        try:
-            aprobacion = Aprobacion(
-                solicitante_id=current_user.id,
-                revisor_id=current_user.id,
-                tipo_solicitud="PRESTAMO",
-                entidad="Cliente",
-                entidad_id=prestamo.cliente_id,
-                justificacion=f"Préstamo aprobado para {prestamo.nombres} (Cédula: {prestamo.cedula}). Monto: ${prestamo.total_financiamiento}, Cuotas: {prestamo.numero_cuotas}",
-                estado="APROBADA",
-                resultado=f"Préstamo #{prestamo.id} aprobado por {current_user.email}",
-                fecha_aprobacion=datetime.now(),
-                prioridad="NORMAL",
-            )
-            db.add(aprobacion)
-            db.commit()
-            logger.info(f"Registro de aprobación creado para préstamo {prestamo.id}")
-        except Exception as e:
-            logger.warning(
-                f"Error creando registro de aprobación (no crítico): {str(e)}"
-            )
-            db.rollback()
-            # No fallar el préstamo si falla la creación de aprobación
+        # MÓDULO APROBACIONES DESHABILITADO - Registro automático comentado
+        # try:
+        #     aprobacion = Aprobacion(
+        #         solicitante_id=current_user.id,
+        #         revisor_id=current_user.id,
+        #         tipo_solicitud="PRESTAMO",
+        #         entidad="Cliente",
+        #         entidad_id=prestamo.cliente_id,
+        #         justificacion=f"Préstamo aprobado para {prestamo.nombres} (Cédula: {prestamo.cedula}). Monto: ${prestamo.total_financiamiento}, Cuotas: {prestamo.numero_cuotas}",
+        #         estado="APROBADA",
+        #         resultado=f"Préstamo #{prestamo.id} aprobado por {current_user.email}",
+        #         fecha_aprobacion=datetime.now(),
+        #         prioridad="NORMAL",
+        #     )
+        #     db.add(aprobacion)
+        #     db.commit()
+        #     logger.info(f"Registro de aprobación creado para préstamo {prestamo.id}")
+        # except Exception as e:
+        #     logger.warning(
+        #         f"Error creando registro de aprobación (no crítico): {str(e)}"
+        #     )
 
     crear_registro_auditoria(
         prestamo_id=prestamo.id,
