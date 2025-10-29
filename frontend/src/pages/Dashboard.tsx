@@ -338,18 +338,8 @@ export function Dashboard() {
     }
   }
 
-  // KPIs Principales con tendencias (incluyendo datos reales de usuarios)
+  // KPIs Principales con tendencias (sin Total Usuarios - eliminado según solicitud)
   const kpiCards = [
-    {
-      title: 'Total Usuarios',
-      value: usuariosLoading ? '...' : usuarios.length.toString(),
-      description: usuariosError ? 'Error al cargar' : `${usuariosActivos} activos`,
-      icon: Users,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
-      variacion: { valor: 0, esPositivo: true, icono: TrendingUp, color: 'text-gray-600', bgColor: 'bg-gray-50' },
-      status: 'excellent'
-    },
     {
       title: 'Usuarios Activos',
       value: usuariosLoading ? '...' : usuariosActivos.toString(),
@@ -389,6 +379,30 @@ export function Dashboard() {
     queryKey: ['pagos-stats', filtros],
     queryFn: () => pagoService.getStats(construirFiltrosObject()),
     refetchInterval: 60000, // Refrescar cada minuto
+  })
+
+  // Query para cobros diarios - usa filtros automáticos
+  const { data: cobrosDiarios, isLoading: loadingCobrosDiarios } = useQuery({
+    queryKey: ['cobros-diarios', filtros],
+    queryFn: async () => {
+      try {
+        const params = construirFiltrosObject()
+        const queryParams = new URLSearchParams()
+        queryParams.append('dias', '30') // Últimos 30 días
+        Object.entries(params).forEach(([key, value]) => {
+          if (value) queryParams.append(key, value.toString())
+        })
+        const queryString = queryParams.toString()
+        const response = await apiClient.get(
+          `/api/v1/dashboard/cobros-diarios?${queryString}`
+        )
+        return response?.datos || []
+      } catch (error) {
+        console.error('Error cargando cobros diarios:', error)
+        return []
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutos
   })
 
   const handleLimpiarFiltros = () => {
@@ -602,7 +616,7 @@ export function Dashboard() {
       </motion.div>
 
       {/* KPIs Principales */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {kpiCards.map((kpi, index) => (
           <motion.div
             key={kpi.title}
@@ -642,6 +656,87 @@ export function Dashboard() {
           </motion.div>
         ))}
       </div>
+
+      {/* Gráfico de Cobros Diarios - Barras con total a cobrar y total cobrado */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <BarChart3 className="mr-2 h-5 w-5" />
+            Cobros Diarios
+          </CardTitle>
+          <CardDescription>
+            Total a cobrar por día (barras) y total cobrado embebido (últimos 30 días)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingCobrosDiarios ? (
+            <div className="flex items-center justify-center h-64">
+              <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+            </div>
+          ) : cobrosDiarios && cobrosDiarios.length > 0 ? (
+            <ResponsiveContainer width="100%" height={400}>
+              <BarChart 
+                data={cobrosDiarios}
+                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="dia" 
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                  interval={Math.floor(cobrosDiarios.length / 15)} // Mostrar ~15 fechas
+                />
+                <YAxis yAxisId="left" />
+                <Tooltip 
+                  formatter={(value: number, name: string) => {
+                    return formatCurrency(value)
+                  }}
+                  labelFormatter={(label) => {
+                    const item = cobrosDiarios.find((d: any) => d.dia === label)
+                    return item ? `${item.dia_semana} ${item.dia}` : label
+                  }}
+                />
+                <Legend />
+                {/* Barra principal: Total a cobrar (fondo rojo) */}
+                <Bar 
+                  yAxisId="left"
+                  dataKey="total_a_cobrar" 
+                  name="Total a Cobrar"
+                  fill="#ef4444"
+                  radius={[4, 4, 0, 0]}
+                >
+                  {cobrosDiarios.map((entry: any, index: number) => (
+                    <Cell 
+                      key={`cell-a-${index}`} 
+                      fill={entry.total_a_cobrar > 0 ? '#ef4444' : '#f3f4f6'} 
+                    />
+                  ))}
+                </Bar>
+                {/* Barra embebida: Total cobrado (verde, se superpone sobre la roja) */}
+                <Bar 
+                  yAxisId="left"
+                  dataKey="total_cobrado" 
+                  name="Total Cobrado"
+                  fill="#10b981"
+                  radius={[3, 3, 0, 0]}
+                >
+                  {cobrosDiarios.map((entry: any, index: number) => (
+                    <Cell 
+                      key={`cell-b-${index}`} 
+                      fill={entry.total_cobrado > 0 ? '#10b981' : 'transparent'} 
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-64 text-gray-500">
+              No hay datos disponibles
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* KPIs de Pagos */}
       {pagosStats && (

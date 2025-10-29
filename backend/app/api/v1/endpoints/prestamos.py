@@ -353,8 +353,13 @@ def listar_prestamos(
             total = query.count()
         except Exception as e:
             logger.error(f"Error contando préstamos: {str(e)}", exc_info=True)
+            # Hacer rollback si hay error de transacción
+            try:
+                db.rollback()
+            except:
+                pass
             total = 0
-
+        
         skip = (page - 1) * per_page
         try:
             prestamos = (
@@ -365,6 +370,11 @@ def listar_prestamos(
             )
         except Exception as e:
             logger.error(f"Error obteniendo préstamos: {str(e)}", exc_info=True)
+            # Hacer rollback si hay error de transacción
+            try:
+                db.rollback()
+            except:
+                pass
             prestamos = []
 
         # Serializar préstamos usando PrestamoResponse

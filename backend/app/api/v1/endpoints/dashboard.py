@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -103,6 +103,116 @@ def obtener_opciones_filtros(
     except Exception as e:
         logger.error(f"Error obteniendo opciones de filtros: {e}", exc_info=True)
         return {"analistas": [], "concesionarios": [], "modelos": []}
+
+
+@router.get("/cobros-diarios")
+def obtener_cobros_diarios(
+    dias: Optional[int] = Query(30, description="Número de días a mostrar"),
+    analista: Optional[str] = Query(None, description="Filtrar por analista"),
+    concesionario: Optional[str] = Query(None, description="Filtrar por concesionario"),
+    modelo: Optional[str] = Query(None, description="Filtrar por modelo"),
+    fecha_inicio: Optional[date] = Query(None, description="Fecha inicio"),
+    fecha_fin: Optional[date] = Query(None, description="Fecha fin"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener total a cobrar y total cobrado por día"""
+    try:
+        if not current_user.is_admin:
+            raise HTTPException(
+                status_code=403, detail="Acceso denegado. Solo administradores."
+            )
+
+        hoy = date.today()
+        
+        # Calcular fecha inicio (dias días atrás o fecha_inicio si está definida)
+        if fecha_inicio:
+            fecha_inicio_query = fecha_inicio
+        else:
+            fecha_inicio_query = hoy - timedelta(days=dias)
+        
+        if fecha_fin:
+            fecha_fin_query = fecha_fin
+        else:
+            fecha_fin_query = hoy
+
+        # Generar lista de fechas
+        fechas = []
+        current_date = fecha_inicio_query
+        while current_date <= fecha_fin_query:
+            fechas.append(current_date)
+            current_date += timedelta(days=1)
+
+        datos_diarios = []
+
+        for fecha_dia in fechas:
+            # Total a cobrar (cuotas vencidas y pendientes de ese día)
+            cuotas_dia_query = (
+                db.query(func.sum(Cuota.monto_cuota))
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .filter(
+                    and_(
+                        Cuota.fecha_vencimiento == fecha_dia,
+                        Cuota.estado != "PAGADO",
+                        Prestamo.activo.is_(True),
+                    )
+                )
+            )
+            cuotas_dia_query = FiltrosDashboard.aplicar_filtros_cuota(
+                cuotas_dia_query,
+                analista,
+                concesionario,
+                modelo,
+                None,  # No aplicar filtro de fecha en préstamo aquí
+                None,
+            )
+            total_a_cobrar = float(cuotas_dia_query.scalar() or Decimal("0"))
+
+            # Total cobrado ese día
+            pagos_dia_query = db.query(func.sum(Pago.monto_pagado)).filter(
+                func.date(Pago.fecha_pago) == fecha_dia
+            )
+            if analista or concesionario or modelo:
+                pagos_dia_query = pagos_dia_query.join(
+                    Prestamo, Pago.prestamo_id == Prestamo.id
+                )
+            # Aplicar filtros de préstamo pero no de fecha de pago (ya está filtrada)
+            if analista or concesionario or modelo:
+                if analista:
+                    pagos_dia_query = pagos_dia_query.filter(
+                        or_(
+                            Prestamo.analista == analista,
+                            Prestamo.producto_financiero == analista,
+                        )
+                    )
+                if concesionario:
+                    pagos_dia_query = pagos_dia_query.filter(
+                        Prestamo.concesionario == concesionario
+                    )
+                if modelo:
+                    pagos_dia_query = pagos_dia_query.filter(
+                        or_(
+                            Prestamo.producto == modelo,
+                            Prestamo.modelo_vehiculo == modelo,
+                        )
+                    )
+            total_cobrado = float(pagos_dia_query.scalar() or Decimal("0"))
+
+            datos_diarios.append(
+                {
+                    "fecha": fecha_dia.isoformat(),
+                    "dia": fecha_dia.strftime("%d/%m"),
+                    "dia_semana": fecha_dia.strftime("%a"),
+                    "total_a_cobrar": total_a_cobrar,
+                    "total_cobrado": total_cobrado,
+                }
+            )
+
+        return {"datos": datos_diarios}
+
+    except Exception as e:
+        logger.error(f"Error obteniendo cobros diarios: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
 # DEPRECATED: Usar FiltrosDashboard desde app.utils.filtros_dashboard
