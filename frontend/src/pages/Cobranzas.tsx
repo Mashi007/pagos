@@ -15,6 +15,8 @@ import {
 import { cobranzasService } from '@/services/cobranzasService'
 import { useQuery } from '@tanstack/react-query'
 import type { ClienteAtrasado, CobranzasPorAnalista, MontosPorMes } from '@/services/cobranzasService'
+import { InformesCobranzas } from '@/components/cobranzas/InformesCobranzas'
+import { toast } from 'sonner'
 
 export function Cobranzas() {
   const [tabActiva, setTabActiva] = useState('resumen')
@@ -163,11 +165,12 @@ export function Cobranzas() {
 
       {/* Tabs de análisis */}
       <Tabs value={tabActiva} onValueChange={setTabActiva}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="resumen">Resumen</TabsTrigger>
           <TabsTrigger value="por-dias">Por Días</TabsTrigger>
           <TabsTrigger value="por-analista">Por Analista</TabsTrigger>
           <TabsTrigger value="grafico">Gráfico</TabsTrigger>
+          <TabsTrigger value="informes">📊 Informes</TabsTrigger>
         </TabsList>
 
         {/* Tab Resumen - Clientes atrasados */}
@@ -462,6 +465,11 @@ export function Cobranzas() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Tab Informes */}
+        <TabsContent value="informes" className="space-y-4">
+          <InformesCobranzas />
         </TabsContent>
       </Tabs>
     </div>
