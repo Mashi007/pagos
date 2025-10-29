@@ -15,6 +15,7 @@ import {
 import { cobranzasService } from '@/services/cobranzasService'
 import { useQuery } from '@tanstack/react-query'
 import type { ClienteAtrasado, CobranzasPorAnalista, MontosPorMes } from '@/services/cobranzasService'
+import * as XLSX from 'xlsx'
 
 export function Cobranzas() {
   const [tabActiva, setTabActiva] = useState('resumen')
@@ -44,10 +45,56 @@ export function Cobranzas() {
     queryFn: () => cobranzasService.getMontosPorMes(),
   })
 
+  // Función para exportar clientes de un analista
+  const exportarClientesAnalista = async (nombreAnalista: string) => {
+    try {
+      const clientes = await cobranzasService.getClientesPorAnalista(nombreAnalista)
+      exportarAExcel(
+        clientes,
+        `clientes-${nombreAnalista.replace('@', '')}`,
+        ['cedula', 'nombres', 'telefono', 'prestamo_id', 'cuotas_vencidas', 'total_adeudado', 'fecha_primera_vencida']
+      )
+    } catch (error) {
+      console.error('Error obteniendo clientes del analista:', error)
+      alert('Error al obtener clientes del analista')
+    }
+  }
+
   // Función para exportar a Excel
-  const exportarAExcel = (data: any[], nombre: string) => {
-    // TODO: Implementar exportación a Excel
-    console.log('Exportar:', nombre, data)
+  const exportarAExcel = (data: any[], nombre: string, columnas?: string[]) => {
+    if (!data || data.length === 0) {
+      alert('No hay datos para exportar')
+      return
+    }
+
+    try {
+      // Obtener columnas del primer objeto si no se especifican
+      const keys = columnas || Object.keys(data[0])
+      
+      // Preparar datos para Excel
+      const datosExcel = data.map(item => {
+        const row: any = {}
+        keys.forEach(key => {
+          row[key] = item[key] ?? ''
+        })
+        return row
+      })
+
+      // Crear workbook y worksheet
+      const ws = XLSX.utils.json_to_sheet(datosExcel)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Datos')
+
+      // Generar fecha para nombre de archivo
+      const fecha = new Date().toISOString().split('T')[0]
+      const nombreArchivo = `${nombre}_${fecha}.xlsx`
+
+      // Descargar
+      XLSX.writeFile(wb, nombreArchivo)
+    } catch (error) {
+      console.error('Error exportando a Excel:', error)
+      alert('Error al exportar a Excel')
+    }
   }
 
   // Función para determinar color del badge según días de retraso
@@ -133,7 +180,11 @@ export function Cobranzas() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => exportarAExcel(clientesAtrasados, 'clientes-atrasados')}
+                  onClick={() => exportarAExcel(
+                    clientesAtrasados || [],
+                    'clientes-atrasados',
+                    ['cedula', 'nombres', 'analista', 'prestamo_id', 'cuotas_vencidas', 'total_adeudado', 'fecha_primera_vencida']
+                  )}
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Exportar Excel
@@ -282,7 +333,7 @@ export function Cobranzas() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => exportarAExcel([analista], `${analista.nombre}-clientes`)}
+                            onClick={() => exportarClientesAnalista(analista.nombre)}
                           >
                             <Download className="h-4 w-4 mr-2" />
                             Exportar
@@ -311,29 +362,94 @@ export function Cobranzas() {
                 <div className="text-center py-8">Cargando...</div>
               ) : (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {montosPorMes?.map((mes, index) => (
-                      <div key={index} className="border rounded-lg p-4">
-                        <h4 className="font-semibold mb-2">{mes.mes_display}</h4>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">{mes.cantidad_cuotas} cuotas</span>
-                          <span className="text-lg font-bold">
-                            ${mes.monto_total.toLocaleString('es-VE')}
-                          </span>
-                        </div>
-                        {/* Barra de progreso visual */}
-                        <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-blue-600 h-2 rounded-full"
-                            style={{ width: `${Math.min(100, (mes.cantidad_cuotas / 50) * 100)}%` }}
-                          />
+                  {/* Gráfico de barras mejorado */}
+                  {montosPorMes && montosPorMes.length > 0 ? (
+                    <>
+                      <div className="bg-gradient-to-b from-blue-50 to-white p-6 rounded-lg border-2 border-blue-100">
+                        <h3 className="text-lg font-semibold mb-4 text-gray-800">
+                          Distribución de Montos Vencidos por Mes
+                        </h3>
+                        <div className="space-y-3">
+                          {montosPorMes.map((mes, index) => {
+                            const maxMonto = Math.max(...(montosPorMes?.map(m => m.monto_total) || [0]))
+                            const porcentaje = maxMonto > 0 ? (mes.monto_total / maxMonto) * 100 : 0
+                            
+                            return (
+                              <div key={index} className="space-y-1">
+                                <div className="flex justify-between items-center mb-1">
+                                  <span className="text-sm font-medium text-gray-700">
+                                    {mes.mes_display}
+                                  </span>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-xs text-gray-500">
+                                      {mes.cantidad_cuotas} cuotas
+                                    </span>
+                                    <span className="text-sm font-bold text-blue-700">
+                                      ${mes.monto_total.toLocaleString('es-VE')}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-6 shadow-inner">
+                                  <div
+                                    className="bg-gradient-to-r from-blue-500 to-blue-600 h-6 rounded-full flex items-center justify-end pr-2 transition-all duration-500"
+                                    style={{ width: `${porcentaje}%` }}
+                                  >
+                                    {porcentaje > 10 && (
+                                      <span className="text-xs font-semibold text-white">
+                                        {porcentaje.toFixed(0)}%
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
-                    ))}
-                  </div>
+                      
+                      {/* Resumen numérico */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <Card>
+                          <CardContent className="pt-4">
+                            <p className="text-sm text-gray-600">Total Cuotas Vencidas</p>
+                            <p className="text-2xl font-bold text-gray-900">
+                              {montosPorMes.reduce((sum, m) => sum + m.cantidad_cuotas, 0)}
+                            </p>
+                          </CardContent>
+                        </Card>
+                        <Card>
+                          <CardContent className="pt-4">
+                            <p className="text-sm text-gray-600">Monto Total Vencido</p>
+                            <p className="text-2xl font-bold text-red-600">
+                              ${montosPorMes.reduce((sum, m) => sum + m.monto_total, 0).toLocaleString('es-VE')}
+                            </p>
+                          </CardContent>
+                        </Card>
+                        <Card>
+                          <CardContent className="pt-4">
+                            <p className="text-sm text-gray-600">Promedio por Mes</p>
+                            <p className="text-2xl font-bold text-blue-600">
+                              ${(montosPorMes.reduce((sum, m) => sum + m.monto_total, 0) / montosPorMes.length).toLocaleString('es-VE')}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center py-12 text-gray-500">
+                      <BarChart3 className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                      <p>No hay montos vencidos por mes para mostrar</p>
+                    </div>
+                  )}
+                  
                   <Button
                     variant="outline"
-                    onClick={() => exportarAExcel(montosPorMes, 'montos-por-mes')}
+                    onClick={() => exportarAExcel(
+                      montosPorMes || [],
+                      'montos-por-mes',
+                      ['mes', 'mes_display', 'cantidad_cuotas', 'monto_total']
+                    )}
+                    disabled={!montosPorMes || montosPorMes.length === 0}
                   >
                     <Download className="h-4 w-4 mr-2" />
                     Exportar Gráfico a Excel
