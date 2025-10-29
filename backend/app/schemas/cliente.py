@@ -291,9 +291,6 @@ class ClienteSearchFilters(BaseModel):
 class ClienteDetallado(ClienteResponse):
     """Cliente con información detallada"""
 
-    # Información del analista
-    analista_nombre: Optional[str] = None
-
     # Estadísticas
 
     model_config = ConfigDict(from_attributes=True)
